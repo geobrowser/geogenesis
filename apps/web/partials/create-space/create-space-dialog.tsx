@@ -269,7 +269,9 @@ function StepSelectType() {
                     setGovernanceType(null);
                     setStep('select-governance');
                   } else {
-                    setGovernanceType(spaceType.governance);
+                    if (spaceType.governance) {
+                      setGovernanceType(spaceType.governance);
+                    }
                     setStep('enter-profile');
                   }
                 }}
