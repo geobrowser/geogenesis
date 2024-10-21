@@ -24,7 +24,7 @@ import {
   getGovernancePluginInstallItem,
   getPersonalSpaceGovernancePluginInstallItem,
   getSpacePluginInstallItem,
-} from '../dao/encodings';
+} from '../api/space/deploy/encodings';
 
 export default function ImportSpace() {
   const [type, setSelectedSpaceType] = React.useState<SpaceGovernanceType>('PUBLIC');

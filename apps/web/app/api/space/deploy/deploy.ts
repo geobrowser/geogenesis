@@ -9,7 +9,7 @@ import {
 import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
-import { SYSTEM_IDS, VotingMode } from '@geogenesis/sdk';
+import { VotingMode } from '@geogenesis/sdk';
 import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
@@ -33,7 +33,7 @@ import {
   getGovernancePluginInstallItem,
   getPersonalSpaceGovernancePluginInstallItem,
   getSpacePluginInstallItem,
-} from '~/app/dao/encodings';
+} from './encodings';
 
 const deployParams = {
   network: SupportedNetworks.LOCAL, // I don't think this matters but is required by Aragon SDK
