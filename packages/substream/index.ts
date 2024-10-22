@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { Effect, Either, pipe } from 'effect';
 
 import { bootstrapRoot } from './sink/bootstrap-root';
-import { Environment } from './sink/environment';
+import { Environment, EnvironmentLive } from './sink/environment';
 import { getStreamConfiguration } from './sink/get-stream-configuration';
 import { runStream } from './sink/run-stream';
 import { Telemetry, TelemetryLive } from './sink/telemetry';
