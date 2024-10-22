@@ -57,12 +57,12 @@ export function ProposalDto(
 
   return {
     id: proposal.id,
-    editId: proposal.edit.id,
-    name: proposal.edit.name,
+    editId: proposal.edit?.id ?? '',
+    name: proposal.edit?.name ?? null,
+    createdAt: proposal.edit?.createdAt ?? 0,
+    createdAtBlock: proposal.edit?.createdAtBlock ?? '0',
     type: proposal.type,
     onchainProposalId: proposal.onchainProposalId,
-    createdAt: proposal.edit.createdAt,
-    createdAtBlock: proposal.edit.createdAtBlock,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
@@ -120,12 +120,12 @@ export function ProposalWithoutVotersDto(
 
   return {
     id: proposal.id,
-    editId: proposal.edit.id,
-    name: proposal.edit.name,
+    editId: proposal.edit?.id ?? '',
+    name: proposal.edit?.name ?? null,
+    createdAt: proposal.edit?.createdAt ?? 0,
+    createdAtBlock: proposal.edit?.createdAtBlock ?? '0',
     type: proposal.type,
     onchainProposalId: proposal.onchainProposalId,
-    createdAt: proposal.edit.createdAt,
-    createdAtBlock: proposal.edit.createdAtBlock,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
