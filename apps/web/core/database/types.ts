@@ -1,5 +1,7 @@
 import { DeleteTripleAppOp, OmitStrict, Relation, SetTripleAppOp, Triple } from '~/core/types';
 
+import { EntityId } from '../io/schema';
+
 export interface StoredTriple extends Triple {
   id: string;
 }
