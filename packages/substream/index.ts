@@ -1,18 +1,19 @@
 import { Command } from 'commander';
-import { Duration, Effect, Either, Predicate, Schedule, pipe } from 'effect';
+import { Effect, Either, pipe } from 'effect';
 
 import { bootstrapRoot } from './sink/bootstrap-root';
-import { Environment, EnvironmentLive } from './sink/environment';
+import { Environment } from './sink/environment';
 import { getStreamConfiguration } from './sink/get-stream-configuration';
 import { runStream } from './sink/run-stream';
 import { Telemetry, TelemetryLive } from './sink/telemetry';
 import { resetPublicTablesToGenesis } from './sink/utils/reset-public-tables-to-genesis';
-import { slog } from './sink/utils/slog';
 
-async function main() {
+const main = Effect.gen(function* (_) {
+  const TelemetryLive = yield* _(Telemetry);
+
   const program = new Command();
   program
-    .option('--start-block <number>', 'NOT IMPLEMENTED – Start from block number')
+    .option('--start-block <number>', 'Start from block number')
     .option('--reset-db', 'Reset public tables to genesis');
   program.parse(process.argv);
 
@@ -21,7 +22,7 @@ async function main() {
 
   if (options.resetDb) {
     console.info('Resetting public tables');
-    const reset = await pipe(resetPublicTablesToGenesis(), Effect.either, Effect.runPromise);
+    const reset = yield* _(pipe(resetPublicTablesToGenesis(), Effect.either));
 
     if (Either.isLeft(reset)) {
       TelemetryLive.captureMessage('Could not reset public tables');
@@ -33,9 +34,7 @@ async function main() {
       process.exit(1);
     }
 
-    const bootstrap = await pipe(
-      bootstrapRoot.pipe(Effect.provideService(Telemetry, TelemetryLive), Effect.either, Effect.runPromise)
-    );
+    const bootstrap = yield* _(pipe(bootstrapRoot, Effect.either));
 
     if (Either.isLeft(bootstrap)) {
       TelemetryLive.captureMessage('Could not bootstrap system entities');
@@ -85,48 +84,19 @@ async function main() {
             // If we've started the stream at least once, we want to start from the cursor, otherwise
             // default to the derived configuration value.
             shouldUseCursor: shouldUseCursor ? shouldUseCursor : config.shouldUseCursor,
-          }),
-          Effect.provideService(Telemetry, TelemetryLive),
-          Effect.provideService(Environment, EnvironmentLive)
+          })
         );
       }),
-      // Retry only while we have timeout errors. All other errors will bubble
-      // to the next caller.
-      Schedule.exponential(Duration.millis(100)).pipe(
-        Schedule.jittered,
-        Schedule.whileInput(Predicate.isTagged('TimeoutError')),
-        Schedule.tapInput(() =>
-          Effect.sync(() =>
-            slog({
-              message: 'Restarting stream after timeout period while waiting for firehose connection',
-              requestId: '-1',
-              level: 'warn',
-            })
-          )
-        )
-      )
+      {
+        while: error => {
+          return error._tag !== 'TimeoutError';
+        },
+        times: 5,
+      }
     );
 
-  const stream = await pipe(
-    getStreamConfiguration(options, blockNumberFromCache),
-    // Retry the stream for ~10 minutes. If it fails during indexing we will restart
-    // from the last indexed cursor. The cursor is read inside `configureStream` so that
-    // retries will try and read from the latest cursor state if available.
-    //
-    // If there is no cursor for some reason it will run using the passed in start
-    // block number. If neither the block number or cursor is available then it will
-    // throw an error.
-    config =>
-      Effect.retry(
-        runStreamWithConfiguration(config),
-        Schedule.exponential(Duration.millis(100)).pipe(
-          Schedule.jittered,
-          Schedule.compose(Schedule.elapsed),
-          Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.minutes(10)))
-        )
-      ),
-    Effect.either,
-    Effect.runPromise
+  const stream = yield* _(
+    pipe(getStreamConfiguration(options, blockNumberFromCache), runStreamWithConfiguration, Effect.either)
   );
 
   if (Either.isLeft(stream)) {
@@ -165,6 +135,8 @@ async function main() {
 
     process.exit(1);
   }
-}
+});
 
-main();
+Effect.runPromise(
+  main.pipe(Effect.provideService(Telemetry, TelemetryLive), Effect.provideService(Environment, EnvironmentLive))
+);
