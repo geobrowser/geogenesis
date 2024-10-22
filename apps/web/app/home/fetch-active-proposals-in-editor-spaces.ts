@@ -55,7 +55,6 @@ export async function getActiveProposalsForSpacesWhereEditor(
   const substreamQuery = `query {
     proposals(
       first: 10
-      orderBy: CREATED_AT_DESC
       filter: {
         ${proposalTypeFilter ?? ''}
         status: { equalTo: PROPOSED }
@@ -75,7 +74,28 @@ export async function getActiveProposalsForSpacesWhereEditor(
         id
         type
         onchainProposalId
-        name
+
+        edit {
+          id
+          name
+          createdAt
+          createdAtBlock
+        }
+
+        startTime
+        endTime
+        status
+
+        proposalVotes {
+          totalCount
+          nodes {
+            vote
+            account {
+              id
+            }
+          }
+        }
+
         space {
           id
           spacesMetadata {
@@ -92,11 +112,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
           }
         }
 
-        createdAtBlock
-        createdBy {
-          id
-        }
-        createdAt
+        createdById
         startTime
         endTime
         status
@@ -118,6 +134,8 @@ export async function getActiveProposalsForSpacesWhereEditor(
     endpoint: Environment.getConfig().api,
     query: substreamQuery,
   });
+
+  console.log('substream query', substreamQuery);
 
   const proposalsInSpacesWhereEditor = await Effect.runPromise(Effect.either(permissionlessSpacesEffect));
 

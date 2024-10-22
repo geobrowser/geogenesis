@@ -136,9 +136,9 @@ function ActiveProposalsDto(activeProposal: SubstreamActiveProposal, maybeProfil
 
   return {
     ...activeProposal,
-    name: activeProposal.edit.name,
-    createdAt: activeProposal.edit.createdAt,
-    createdAtBlock: activeProposal.edit.createdAtBlock,
+    name: activeProposal.edit?.name ?? null,
+    createdAt: activeProposal.edit?.createdAt ?? 0,
+    createdAtBlock: activeProposal.edit?.createdAtBlock ?? '0',
     createdBy: profile,
     userVotes: activeProposal.userVotes.nodes.map(v => v), // remove readonly
     proposalVotes: {

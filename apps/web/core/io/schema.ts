@@ -340,12 +340,14 @@ export const SubstreamProposal = Schema.Struct({
   startTime: Schema.Number,
   endTime: Schema.Number,
   status: ProposalStatus,
-  edit: Schema.Struct({
-    id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-    name: Schema.String,
-    createdAt: Schema.Number,
-    createdAtBlock: Schema.String,
-  }),
+  edit: Schema.NullOr(
+    Schema.Struct({
+      id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+      name: Schema.String,
+      createdAt: Schema.Number,
+      createdAtBlock: Schema.String,
+    })
+  ),
   proposalVotes: Schema.Struct({
     nodes: Schema.Array(SubstreamVote),
     totalCount: Schema.Number,

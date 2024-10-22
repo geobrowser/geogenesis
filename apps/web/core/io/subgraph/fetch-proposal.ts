@@ -25,8 +25,6 @@ export const getFetchProposalQuery = (id: string) => `query {
       createdAtBlock
     }
 
-    createdById
-
     startTime
     endTime
     status
