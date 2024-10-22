@@ -135,8 +135,6 @@ export async function getActiveProposalsForSpacesWhereEditor(
     query: substreamQuery,
   });
 
-  console.log('substream query', substreamQuery);
-
   const proposalsInSpacesWhereEditor = await Effect.runPromise(Effect.either(permissionlessSpacesEffect));
 
   if (Either.isLeft(proposalsInSpacesWhereEditor)) {
@@ -144,11 +142,11 @@ export async function getActiveProposalsForSpacesWhereEditor(
 
     switch (error._tag) {
       case 'GraphqlRuntimeError':
-        console.error(`Encountered runtime graphql error in getSpacesWhereEditor.`, error.message);
+        console.error(`Encountered runtime graphql error in getActiveProposalsForSpacesWhereEditor.`, error.message);
         break;
 
       default:
-        console.error(`${error._tag}: Unable to fetch spaces where editor controller`);
+        console.error(`${error._tag}: Unable to fetch proposals where editor`);
         break;
     }
 
