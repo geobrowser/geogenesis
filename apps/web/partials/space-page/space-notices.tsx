@@ -12,6 +12,7 @@ import { useCallback } from 'react';
 import { useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -33,12 +34,11 @@ type SpaceNoticesProps = {
 };
 
 export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps) => {
+  const { isEditor } = useAccessControl(spaceId);
   const isEditing = useUserIsEditing(spaceId);
 
-  if (!isEditing) return null;
-
-  switch (spaceType) {
-    case 'person':
+  if (spaceType === 'person') {
+    if (isEditor) {
       return (
         <NoticesContainer>
           <Notice
@@ -96,6 +96,12 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
           />
         </NoticesContainer>
       );
+    }
+  }
+
+  if (!isEditing) return null;
+
+  switch (spaceType) {
     case 'company':
       return (
         <NoticesContainer>
