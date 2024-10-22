@@ -39,6 +39,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
     // being upserted
     // @TODO: Which ops do we write here?
     const triples = Relations.createRelationshipTriples({
+      relationId: args.relation.id,
       fromId: args.relation.fromEntity.id,
       toId: args.relation.toEntity.id,
       typeOfId: args.relation.typeOf.id,

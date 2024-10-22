@@ -1,5 +1,6 @@
 import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
 
+import { EntityId } from '~/core/io/schema';
 import { Triple } from '~/core/types';
 
 export function indexValue(triple?: Triple): string | null {
@@ -34,6 +35,7 @@ export function toValue(triple?: Triple): string | null {
 }
 
 interface OpsToTriplesArgs {
+  relationId?: EntityId;
   toId: string;
   toIdName: string | null;
   fromId: string;
@@ -51,12 +53,14 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
     relationTypeId: typeOfId,
   });
 
+  const entityId = args.relationId ?? typeOp.triple.entity;
+
   return [
     {
       space: spaceId,
       attributeId: typeOp.triple.attribute,
       attributeName: 'Types',
-      entityId: typeOp.triple.entity,
+      entityId: entityId,
       entityName: null,
       value: {
         type: 'ENTITY',
@@ -68,7 +72,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       space: spaceId,
       attributeId: fromOp.triple.attribute,
       attributeName: 'From Entity',
-      entityId: fromOp.triple.entity,
+      entityId: entityId,
       entityName: null,
       value: {
         type: 'ENTITY',
@@ -80,7 +84,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       space: spaceId,
       attributeId: toOp.triple.attribute,
       attributeName: 'To Entity',
-      entityId: toOp.triple.entity,
+      entityId: entityId,
       entityName: null,
       value: {
         type: 'ENTITY',
@@ -92,7 +96,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       space: spaceId,
       attributeId: indexOp.triple.attribute,
       attributeName: 'Index',
-      entityId: indexOp.triple.entity,
+      entityId: entityId,
       entityName: null,
       value: {
         type: 'TEXT',
@@ -103,7 +107,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       space: spaceId,
       attributeId: typeOfOp.triple.attribute,
       attributeName: 'Relation type',
-      entityId: typeOfOp.triple.entity,
+      entityId: entityId,
       entityName: null,
       value: {
         type: 'ENTITY',

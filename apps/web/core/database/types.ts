@@ -12,4 +12,4 @@ export type UpsertOp = OmitStrict<WriteStoreOp, 'type'>;
 export type RemoveOp = OmitStrict<DeleteStoreOp, 'type'>;
 
 export type StoreOp = WriteStoreOp | DeleteStoreOp;
-export type StoreRelation = OmitStrict<Relation, 'id'>;
+export type StoreRelation = OmitStrict<Relation, 'id'> & { id?: EntityId };

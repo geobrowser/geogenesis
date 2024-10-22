@@ -57,6 +57,7 @@ export function makeInitialDataEntityRelations(
 }
 
 type CreateCollectionItemRelationArgs = {
+  relationId?: EntityId;
   collectionId: EntityId;
   spaceId: SpaceId;
   toEntity: {
@@ -73,16 +74,41 @@ type CreateCollectionItemRelationArgs = {
  * @params spaceId - The space id as a {@link SpaceId}
  * @params toEntity - The entity id and name of the ToEntity as an object with an id and name
  */
-export function upsertCollectionItemRelation({ collectionId, spaceId, toEntity }: CreateCollectionItemRelationArgs) {
+export function upsertCollectionItemRelation({
+  relationId,
+  collectionId,
+  spaceId,
+  toEntity,
+}: CreateCollectionItemRelationArgs) {
   // Create a relation for the Collection Item pointing from the collection to the new entity
   DB.upsertRelation({
-    relation: makeRelationForCollectionItem({
-      collectionId,
-      toEntityId: toEntity.id,
-      toEntityName: toEntity.name,
-    }),
+    relation: {
+      ...(relationId ? { id: relationId } : {}),
+      ...makeRelationForCollectionItem({
+        collectionId,
+        toEntityId: toEntity.id,
+        toEntityName: toEntity.name,
+      }),
+    },
     spaceId,
   });
+}
+
+export function upsertSourceSpaceOnCollectionItem(collectionItemId: EntityId, spaceId: EntityId) {
+  DB.upsert(
+    {
+      attributeId: SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE,
+      attributeName: 'Source Space',
+      entityId: collectionItemId,
+      entityName: null,
+      value: {
+        type: 'ENTITY',
+        name: null,
+        value: spaceId,
+      },
+    },
+    spaceId
+  );
 }
 
 type GetRelationForCollectionItemArgs = {

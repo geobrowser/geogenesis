@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
 import {
   ColumnDef,
   createColumnHelper,
@@ -227,7 +227,9 @@ export const TableBlockTable = React.memo(
 
     const onSelectCollectionItem = (entity: Pick<SearchResult, 'id' | 'name'>) => {
       if (source.type === 'COLLECTION') {
+        const id = createGeoId();
         upsertCollectionItemRelation({
+          relationId: EntityId(id),
           collectionId: EntityId(source.value),
           spaceId: SpaceId(space),
           toEntity: {
@@ -235,6 +237,10 @@ export const TableBlockTable = React.memo(
             name: entity.name,
           },
         });
+
+        // if (entity.space) {
+        //   upsertSourceSpaceOnCollectionItem(id, entity.space);
+        // }
       }
     };
 
