@@ -33,10 +33,10 @@ export const generateOpsForCompany = async (spaceConfigEntityId: string, spaceNa
       oldEntityId: SYSTEM_IDS.COMPANY_EVENTS_PAGE_TEMPLATE,
       entityName: 'Events',
     }),
-    // cloneEntity({
-    //   oldEntityId: SYSTEM_IDS.COMPANY_TEAM_PAGE_TEMPLATE,
-    //   entityName: 'Team',
-    // }),
+    cloneEntity({
+      oldEntityId: SYSTEM_IDS.COMPANY_TEAM_PAGE_TEMPLATE,
+      entityName: 'Team',
+    }),
     cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_JOBS_PAGE_TEMPLATE,
       entityName: 'Jobs',
