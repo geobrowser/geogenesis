@@ -283,7 +283,7 @@ export const SelectEntity = ({
                               onDone({
                                 id: result.id,
                                 name: result.name,
-                                space: SpaceId(space.spaceId),
+                                space: EntityId(space.spaceId),
                               });
                               onQueryChange('');
                             }}
