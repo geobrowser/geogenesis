@@ -102,8 +102,7 @@ export function upsertSourceSpaceOnCollectionItem(collectionItemId: EntityId, sp
       entityId: collectionItemId,
       entityName: null,
       value: {
-        type: 'ENTITY',
-        name: null,
+        type: 'TEXT',
         value: spaceId,
       },
     },
