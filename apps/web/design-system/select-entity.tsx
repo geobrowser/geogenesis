@@ -13,7 +13,7 @@ import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
-import { EntityId, SpaceId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/schema';
 import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
