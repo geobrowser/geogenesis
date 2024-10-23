@@ -48,14 +48,11 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
         }),
         Effect.tryPromise({
           try: () => CurrentVersions.upsert(currentVersions),
-          catch: error => new Error(`Failed to insert current versions. ${(error as Error).message}`),
-        }),
         writeEdits({
           versions: defaultVersions,
           opsByVersionId: mergedOpsByVersionId,
           edits: defaultEdits,
           block,
-          // @TODO: How do we handle imported edits? How do we know?
           editType: 'DEFAULT',
         }),
         ...ipfsProposals.map(proposal => {
@@ -81,6 +78,16 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
         block,
         edits: importedEdits,
         editType: 'IMPORT',
+      })
+    );
+
+    // Our `writeEdit` processing relies on reading the most previous valid version in order
+    // to merge relations correctly. We shouldn't update the most current valid version of
+    // an entity until after the writeEdits processing is finished.
+    yield* _(
+      Effect.tryPromise({
+        try: () => CurrentVersions.upsert(currentVersions),
+        catch: error => new Error(`Failed to insert current versions. ${(error as Error).message}`),
       })
     );
 
