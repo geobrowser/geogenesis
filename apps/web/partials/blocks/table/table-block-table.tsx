@@ -20,9 +20,11 @@ import { useState } from 'react';
 import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { upsertCollectionItemRelation } from '~/core/state/editor/data-entity';
+import { upsertSourceSpaceOnCollectionItem } from '~/core/state/editor/data-entity';
 import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Row, Schema } from '~/core/types';
@@ -225,9 +227,10 @@ export const TableBlockTable = React.memo(
       },
     });
 
-    const onSelectCollectionItem = (entity: Pick<SearchResult, 'id' | 'name'>) => {
+    const onSelectCollectionItem = (entity: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId }) => {
       if (source.type === 'COLLECTION') {
-        const id = createGeoId();
+        const id = ID.createEntityId();
+
         upsertCollectionItemRelation({
           relationId: EntityId(id),
           collectionId: EntityId(source.value),
@@ -238,9 +241,9 @@ export const TableBlockTable = React.memo(
           },
         });
 
-        // if (entity.space) {
-        //   upsertSourceSpaceOnCollectionItem(id, entity.space);
-        // }
+        if (entity.space) {
+          upsertSourceSpaceOnCollectionItem(EntityId(id), entity.space);
+        }
       }
     };
 
