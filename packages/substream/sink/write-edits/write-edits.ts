@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
+import { CurrentVersions, Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import type { BlockEvent, Op } from '../types';
 import { aggregateRelations } from './aggregate-relations';
@@ -112,6 +112,7 @@ export function writeEdits(args: PopulateContentArgs) {
     }
 
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
+
     const relations = yield* _(
       aggregateRelations({
         triples: triplesWithCreatedBy,
@@ -215,7 +216,7 @@ function aggregateTypesFromRelationsAndTriples({ relations, triples }: Aggregate
       Effect.all(
         typeEntityIdsFromTriples.map(entityId =>
           Effect.promise(() => {
-            return Versions.findLatestValid(entityId);
+            return CurrentVersions.selectOne({ entity_id: entityId });
           })
         )
       )
@@ -225,7 +226,7 @@ function aggregateTypesFromRelationsAndTriples({ relations, triples }: Aggregate
       // Find a version for the entity being used as the type
       const typeVersionId = versionsForTypeEntityIdsFromTriples
         .find(v => v.entity_id.toString() === triple.entity_value_id?.toString())
-        ?.id.toString();
+        ?.version_id.toString();
 
       if (typeVersionId) {
         const versionId = triple.version_id.toString();

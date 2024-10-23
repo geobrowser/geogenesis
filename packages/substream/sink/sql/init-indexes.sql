@@ -23,6 +23,9 @@ CREATE INDEX edits_created_by_id
 CREATE INDEX proposal_edit_id
     on proposals (edit_id);
 
+CREATE INDEX versions_id
+    on versions (id);
+
 CREATE INDEX versions_edit_id
     on versions (edit_id);
 

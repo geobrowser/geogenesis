@@ -2,7 +2,7 @@ import { SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
-import { Versions } from '../db';
+import { CurrentVersions, Versions } from '../db';
 import { Relations } from '../db/relations';
 import type { OpWithCreatedBy } from './map-triples';
 
@@ -68,13 +68,19 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
     const dbVersionsForEntitiesReferencedInBlock = (yield* _(
       Effect.all(
         referencedEntitiesInBlock.map(entityId => {
-          return Effect.promise(() => Versions.findLatestValid(entityId));
-        })
+          return Effect.retry(
+            Effect.promise(() => CurrentVersions.selectOne({ entity_id: entityId })),
+            { times: 5 }
+          );
+        }),
+        {
+          concurrency: 50,
+        }
       )
-    )).flatMap(v => (v ? [v] : []));
+    )).filter(v => !!v);
 
     const lastDbVersionByEntityId = dbVersionsForEntitiesReferencedInBlock.reduce((acc, v) => {
-      acc.set(v.entity_id.toString(), v.id.toString());
+      acc.set(v.entity_id.toString(), v.version_id.toString());
       return acc;
     }, new Map<string, string>());
 
@@ -84,11 +90,14 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
       Effect.all(
         [...lastDbVersionByEntityId.values()].map(version => {
           return Effect.promise(() => Relations.select({ from_version_id: version }));
-        })
+        }),
+        {
+          concurrency: 100,
+        }
       )
     ))
       // flattest of flattenings
-      .flatMap(r => (r ? [r] : []))
+      .filter(v => Boolean(v))
       .flat();
 
     // We process relations by edit id so that we can use either the latest or any version
@@ -107,7 +116,12 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
       // from the database. We favor any versions from the block over the versions in the
       // database.
       const allVersionsReferencedByRelations = [
-        ...dbVersionsForEntitiesReferencedInBlock,
+        ...dbVersionsForEntitiesReferencedInBlock.map(cv => {
+          return {
+            id: cv.version_id,
+            entity_id: cv.entity_id,
+          };
+        }),
 
         // If we're reading a set of imported edits we want to use all of the versions
         // from the set and not just the versions from the current edit. This is because

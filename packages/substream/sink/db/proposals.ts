@@ -3,9 +3,24 @@ import type * as S from 'zapatos/schema';
 
 import { getChecksumAddress } from '../utils/get-checksum-address';
 import { pool } from '../utils/pool';
+import { CHUNK_SIZE } from './constants';
 
 export class Proposals {
-  static async upsert(proposals: S.proposals.Insertable[]) {
+  static async upsert(proposals: S.proposals.Insertable[], options: { chunked?: boolean } = {}) {
+    if (options.chunked) {
+      for (let i = 0; i < proposals.length; i += CHUNK_SIZE) {
+        const chunk = proposals.slice(i, i + CHUNK_SIZE);
+
+        await db
+          .upsert('proposals', chunk, ['id'], {
+            updateColumns: db.doNothing,
+          })
+          .run(pool);
+      }
+
+      return;
+    }
+
     return await db
       .upsert('proposals', proposals, ['id'], {
         updateColumns: db.doNothing,
