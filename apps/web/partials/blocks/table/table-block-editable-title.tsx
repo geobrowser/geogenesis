@@ -16,7 +16,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const renderedSpaces = source.type === 'SPACES' ? (hasOverflow ? source.value.slice(0, 2) : source.value) : [];
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-grow items-center gap-2">
       {source.type === 'GEO' && (
         <img
           src={getImagePath(PLACEHOLDER_SPACE_IMAGE)}
@@ -70,7 +70,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
           <MouseCatch />
         </div>
       )}
-      <div className="relative z-0 text-button text-text">
+      <div className="relative z-0 w-full text-button text-text">
         {userCanEdit ? (
           <input
             onBlur={e => setName(e.currentTarget.value)}

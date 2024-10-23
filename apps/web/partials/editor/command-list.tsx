@@ -73,9 +73,9 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
               onClick={() => {
                 if (title === tableCommandItem.title) {
                   command({ ...tableCommandItem, spaceId });
+                } else {
+                  command(items[selectedIndex]);
                 }
-
-                command(items[selectedIndex]);
               }}
             >
               <div className="grid h-9 w-9 place-items-center bg-divider">{icon}</div>
