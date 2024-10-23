@@ -7,6 +7,11 @@ export async function readCursor() {
   return cursor?.cursor;
 }
 
+export async function readStartBlock() {
+  const cursor = await db.selectOne('cursors', { id: 0 }).run(pool);
+  return cursor?.block_number ?? null;
+}
+
 export async function writeCursor(cursor: string, block_number: number) {
   try {
     await db.upsert('cursors', { id: 0, cursor, block_number }, 'id').run(pool);

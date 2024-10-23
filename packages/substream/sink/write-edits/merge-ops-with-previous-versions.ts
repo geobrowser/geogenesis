@@ -1,7 +1,8 @@
 import { Effect } from 'effect';
+import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Triples, Versions } from '../db';
+import { CurrentVersions, Triples, Versions } from '../db';
 import type { Op } from '../types';
 import type { SchemaTripleEdit } from '../write-edits/map-triples';
 
@@ -22,6 +23,39 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
   return Effect.gen(function* (_) {
     const newOpsByVersionId = new Map<string, Op[]>();
 
+    const maybeLatestVersionForEntityIds = yield* _(
+      Effect.all(
+        versions.map(v =>
+          Effect.retry(
+            Effect.promise(async () => {
+              const latestVersion = await CurrentVersions.selectOne({ entity_id: v.entity_id.toString() });
+              if (!latestVersion) return null;
+              return [v.entity_id.toString(), latestVersion.version_id.toString()] as const;
+            }),
+            {
+              times: 5,
+              concurrency: 100,
+            }
+          )
+        )
+      )
+    );
+
+    // entity id -> version id
+    const lastVersionForEntityId = Object.fromEntries(maybeLatestVersionForEntityIds.filter(v => v !== null));
+    const triplesForLastVersionTuples = yield* _(
+      Effect.all(
+        Object.keys(lastVersionForEntityId).map(versionId =>
+          Effect.promise(async () => {
+            const lastVersionTriples = await Triples.select({ version_id: versionId });
+            return [versionId, lastVersionTriples] as const;
+          })
+        )
+      )
+    );
+
+    const triplesForLastVersion = Object.fromEntries(triplesForLastVersionTuples);
+
     for (const version of versions) {
       const editWithCreatedById: SchemaTripleEdit = {
         versonId: version.id.toString(),
@@ -30,11 +64,10 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
         ops: opsByVersionId.get(version.id.toString()) ?? [],
       };
 
-      // @TODO(performance): We probably want to prefetch this instead of doing it blocking in the loop
-      const lastVersion = yield* _(Effect.promise(() => Versions.findLatestValid(version.entity_id.toString())));
+      const lastVersionId = lastVersionForEntityId[version.entity_id.toString()];
 
-      if (lastVersion) {
-        const lastVersionTriples = yield* _(Effect.promise(() => Triples.select({ version_id: lastVersion.id })));
+      if (lastVersionId) {
+        const lastVersionTriples = triplesForLastVersion[lastVersionId] ?? [];
 
         // Make sure that we put the last version's ops before the new version's
         // ops so that when we squash the ops later they're ordered correctly.

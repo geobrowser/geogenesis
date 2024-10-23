@@ -11,4 +11,8 @@ export class CurrentVersions {
   static async selectOne(where: S.current_versions.Whereable) {
     return db.selectOne('current_versions', where).run(pool);
   }
+
+  static async select(where: S.current_versions.Whereable) {
+    return db.select('current_versions', where).run(pool);
+  }
 }

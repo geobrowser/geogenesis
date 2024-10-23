@@ -13,9 +13,10 @@ export const getStreamConfiguration: GetStreamConfigurationFn = (options, blockN
     };
   }
 
+  console.info(`Configured to start stream from cache using block ${blockNumberFromCache}.`);
+
   return {
-    // Default to using the value in .env. If there's no value in .env default to the Geo genesis block.
-    startBlockNumber: 620,
+    startBlockNumber: blockNumberFromCache,
 
     // We should always use cursor unless we specify a block number or have used the cache.
     shouldUseCursor: true,

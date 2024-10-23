@@ -69,40 +69,55 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
 
     slog({
       requestId: block.requestId,
-      message: `Writing ${schemaEditProposals.proposals.length} proposals for edits without proposals`,
+      message: `Writing ${schemaEditProposals.edits.length} edits for edits without proposals`,
     });
 
-    // @TODO: Put this in a transaction by edit id since all these writes are related
-    const writtenProposals = yield* _(
+    const editProposalsResult = yield* _(
       Effect.tryPromise({
-        try: async () => {
-          // @TODO: Transaction
-          await Promise.all([
-            Edits.upsert(schemaEditProposals.edits),
-            Proposals.upsert(schemaEditProposals.proposals),
-            Versions.upsert(schemaEditProposals.versions),
-          ]);
-        },
+        try: () => Edits.upsert(schemaEditProposals.edits, { chunked: true }),
         catch: error => {
           return new CouldNotWriteInitialSpaceProposalsError(String(error));
         },
       }),
-      retryEffect,
-      Effect.either
+      Effect.either,
+      retryEffect
     );
 
-    if (Either.isLeft(writtenProposals)) {
-      const error = writtenProposals.left;
-      telemetry.captureException(error);
-
-      slog({
-        requestId: block.requestId,
-        message: `Could not write proposals for edits without proposals ${error.message}`,
-        level: 'error',
-      });
-
+    if (Either.isLeft(editProposalsResult)) {
+      const error = editProposalsResult.left;
+      console.log('error', error);
       return;
     }
+
+    slog({
+      requestId: block.requestId,
+      message: `Writing ${schemaEditProposals.proposals.length} proposals for edits without proposals`,
+    });
+
+    yield* _(
+      Effect.tryPromise({
+        try: () => Proposals.upsert(schemaEditProposals.proposals, { chunked: true }),
+        catch: error => {
+          return new CouldNotWriteInitialSpaceProposalsError(String(error));
+        },
+      }),
+      retryEffect
+    );
+
+    slog({
+      requestId: block.requestId,
+      message: `Writing ${schemaEditProposals.versions.length} versions for edits without proposals`,
+    });
+
+    yield* _(
+      Effect.tryPromise({
+        try: () => Versions.upsert(schemaEditProposals.versions, { chunked: true }),
+        catch: error => {
+          return new CouldNotWriteInitialSpaceProposalsError(String(error));
+        },
+      }),
+      retryEffect
+    );
 
     const opsByVersionId = yield* _(
       mergeOpsWithPreviousVersions({
@@ -111,6 +126,11 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
         versions: schemaEditProposals.versions,
       })
     );
+
+    slog({
+      requestId: block.requestId,
+      message: `Writing content for edits without proposals`,
+    });
 
     const populateResult = yield* _(
       Effect.either(

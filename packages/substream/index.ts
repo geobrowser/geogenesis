@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { Effect, Either, pipe } from 'effect';
 
 import { bootstrapRoot } from './sink/bootstrap-root';
+import { readStartBlock } from './sink/cursor';
 import { Environment, EnvironmentLive } from './sink/environment';
 import { getStreamConfiguration } from './sink/get-stream-configuration';
 import { runStream } from './sink/run-stream';
@@ -47,7 +48,7 @@ const main = Effect.gen(function* (_) {
     }
   }
 
-  let blockNumberFromCache: number | undefined;
+  const blockNumberFromCache = yield* _(Effect.promise(() => readStartBlock()));
 
   /**
    * The stream has several "execution states" depending on whether we are running the stream
@@ -79,7 +80,7 @@ const main = Effect.gen(function* (_) {
 
         yield* _(
           runStream({
-            startBlockNumber: config.startBlockNumber,
+            startBlockNumber: config.startBlockNumber ?? blockNumberFromCache ?? undefined,
 
             // If we've started the stream at least once, we want to start from the cursor, otherwise
             // default to the derived configuration value.
@@ -96,7 +97,7 @@ const main = Effect.gen(function* (_) {
     );
 
   const stream = yield* _(
-    pipe(getStreamConfiguration(options, blockNumberFromCache), runStreamWithConfiguration, Effect.either)
+    pipe(getStreamConfiguration(options, blockNumberFromCache ?? undefined), runStreamWithConfiguration, Effect.either)
   );
 
   if (Either.isLeft(stream)) {
