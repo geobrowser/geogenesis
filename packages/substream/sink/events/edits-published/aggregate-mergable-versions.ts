@@ -7,6 +7,7 @@ interface AggregateMergableVersionsArgs {
   manyVersionsByEntityId: Map<string, S.versions.Insertable[]>;
   opsByVersionId: Map<string, Op[]>;
   block: BlockEvent;
+  editType: 'IMPORT' | 'DEFAULT';
 }
 
 export function aggregateMergableOps(args: AggregateMergableVersionsArgs) {
@@ -14,9 +15,9 @@ export function aggregateMergableOps(args: AggregateMergableVersionsArgs) {
   const newOpsByVersionId = new Map<string, Op[]>();
 
   const newVersions = [...manyVersionsByEntityId.values()].map((versionsByEntityId): S.versions.Insertable | null => {
+    // @TODO: EXPLAIN WHY
+    if (args.editType === 'DEFAULT' && versionsByEntityId.length === 1) return null;
     const newVersionId = createMergedVersionId(versionsByEntityId.map(v => v.id.toString()));
-
-    if (versionsByEntityId.length === 1) return null;
 
     for (const version of versionsByEntityId) {
       const opsForVersion = opsByVersionId.get(version.id.toString());
@@ -72,10 +73,10 @@ export function aggregateMergableVersions(versions: S.versions.Insertable[]): Ma
     const entityId = version.entity_id.toString();
     const versionsForEntity = manyVersionsByEntityId.get(entityId);
 
-    if (!versionsForEntity) {
-      manyVersionsByEntityId.set(entityId, [version]);
-    } else {
+    if (versionsForEntity) {
       manyVersionsByEntityId.set(entityId, [...versionsForEntity, version]);
+    } else {
+      manyVersionsByEntityId.set(entityId, [version]);
     }
   }
 
