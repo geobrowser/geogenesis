@@ -92,7 +92,7 @@ const ReviewChanges = () => {
       state.reviewState !== 'publishing-contract'
     ) {
       setIsReviewOpen(false);
-    } else {
+    } else if (dedupedSpacesWithActions.length === 1) {
       setActiveSpace(dedupedSpacesWithActions[0] ?? '');
     }
   }, [dedupedSpacesWithActions, setActiveSpace, setIsReviewOpen, state.reviewState]);
