@@ -302,25 +302,25 @@ export function TableBlockContextMenu({
                       </div>
                     }
                   /> */}
-                  <MenuItem>
-                    <Link
-                      href={NavUtils.toEntity(spaceId, entityId)}
-                      className="flex w-full items-center justify-between gap-2"
-                    >
-                      <span>View config</span>
-                      <Cog />
-                    </Link>
-                  </MenuItem>
-                  <MenuItem>
-                    <button onClick={onCopyBlockId} className="flex w-full items-center justify-between gap-2">
-                      <span>Copy block ID</span>
-                      <Copy />
-                    </button>
-                  </MenuItem>
                 </>
               )}
             </>
           )}
+          <MenuItem>
+            <Link
+              href={NavUtils.toEntity(spaceId, entityId)}
+              className="flex w-full items-center justify-between gap-2"
+            >
+              <span>View config</span>
+              <Cog />
+            </Link>
+          </MenuItem>
+          <MenuItem>
+            <button onClick={onCopyBlockId} className="flex w-full items-center justify-between gap-2">
+              <span>Copy block ID</span>
+              <Copy />
+            </button>
+          </MenuItem>
           {isEditingDataSource && <DataBlockSourceMenu onBack={() => setIsEditingDataSource(false)} />}
           {isEditingColumns && (
             <>
