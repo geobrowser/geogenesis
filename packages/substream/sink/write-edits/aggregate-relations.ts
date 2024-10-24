@@ -2,7 +2,7 @@ import { SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
-import { CurrentVersions, Versions } from '../db';
+import { CurrentVersions } from '../db';
 import { Relations } from '../db/relations';
 import type { OpWithCreatedBy } from './map-triples';
 
