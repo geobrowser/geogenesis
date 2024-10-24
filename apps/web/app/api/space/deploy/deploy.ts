@@ -169,15 +169,23 @@ const query = (daoAddress: string) => ` {
   spaces(filter: { daoAddress: { equalTo: "${getAddress(daoAddress)}" } }) {
     nodes {
       id
+
+      spacesMetadata {
+        nodes {
+          entityId
+        }
+      }
     }
   }
 }`;
 
 async function waitForSpaceToBeIndexed(daoAddress: string) {
+  console.log('Waiting for space to be indexed...');
+
   const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<{
-    spaces: { nodes: { id: string }[] };
+    spaces: { nodes: { id: string; spacesMetadata: { nodes: { entityId: string }[] } }[] };
   }>({
     endpoint,
     query: query(daoAddress),
@@ -216,6 +224,11 @@ async function waitForSpaceToBeIndexed(daoAddress: string) {
     const maybeSpace = resultOrError.right.spaces.nodes[0];
 
     if (!maybeSpace) {
+      yield* Effect.fail(new Error('Could not find deployed space'));
+      return null;
+    }
+
+    if (maybeSpace.spacesMetadata.nodes.length === 0) {
       yield* Effect.fail(new Error('Could not find deployed space'));
       return null;
     }
