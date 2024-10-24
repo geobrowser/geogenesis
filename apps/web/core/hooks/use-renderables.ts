@@ -23,15 +23,15 @@ import { useUserIsEditing } from './use-user-is-editing';
  *
  * Schemas are derived from the entity's types and are also a form of placeholders.
  */
-export function useRenderables(serverTriples: Triple[]) {
-  const isEditing = useUserIsEditing();
+export function useRenderables(serverTriples: Triple[], spaceId: string) {
+  const isEditing = useUserIsEditing(spaceId);
   const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
     usePlaceholderRenderables();
 
   // @TODO(relations): We may want to pass these in instead of reading from context so that
   // we can use the useRenderables hook for other contexts like tables. Alternatively we can
   // enforce that all consumers of useRenderables has the same context shape and wraps the hook.
-  const { triples: localTriples, relations, schema, name, id, spaceId } = useEntityPageStore();
+  const { triples: localTriples, relations, schema, name, id } = useEntityPageStore();
 
   const triplesFromSpace = useTriples(
     React.useMemo(() => {

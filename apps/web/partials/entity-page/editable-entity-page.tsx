@@ -36,7 +36,7 @@ interface Props {
 
 export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Props) {
   const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
-    useRenderables(serverTriples);
+    useRenderables(serverTriples, spaceId);
   const { name } = useEntityPageStore();
 
   const send = useEditEvents({

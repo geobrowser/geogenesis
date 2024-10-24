@@ -18,8 +18,8 @@ interface Props {
   spaceId: string;
 }
 
-export function ReadableEntityPage({ triples: serverTriples, id }: Props) {
-  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples);
+export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Props) {
+  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId);
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
