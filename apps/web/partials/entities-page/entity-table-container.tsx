@@ -11,7 +11,7 @@ import { PageContainer, PageNumberContainer } from '~/design-system/table/styles
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
 
-import { TableBlockPlaceholder } from '../blocks/table/table-block';
+import { TableBlockLoadingPlaceholder } from '../blocks/table/table-block';
 import { EntityInput } from './entity-input';
 import { EntityTable } from './entity-table';
 
@@ -51,7 +51,7 @@ export const EntityTableContainer = memo(function EntityTableContainer({ spaceId
           {entityTableStore.hydrated ? (
             <EntityTable space={spaceId} columns={entityTableStore.columns} rows={entityTableStore.rows} />
           ) : (
-            <TableBlockPlaceholder />
+            <TableBlockLoadingPlaceholder />
           )}
         </div>
         <Spacer height={12} />
