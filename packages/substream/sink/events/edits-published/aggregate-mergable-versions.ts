@@ -13,8 +13,10 @@ export function aggregateMergableOps(args: AggregateMergableVersionsArgs) {
   const { manyVersionsByEntityId, opsByVersionId, block } = args;
   const newOpsByVersionId = new Map<string, Op[]>();
 
-  const newVersions = [...manyVersionsByEntityId.values()].map((versionsByEntityId): S.versions.Insertable => {
+  const newVersions = [...manyVersionsByEntityId.values()].map((versionsByEntityId): S.versions.Insertable | null => {
     const newVersionId = createMergedVersionId(versionsByEntityId.map(v => v.id.toString()));
+
+    if (versionsByEntityId.length === 1) return null;
 
     for (const version of versionsByEntityId) {
       const opsForVersion = opsByVersionId.get(version.id.toString());
@@ -56,7 +58,7 @@ export function aggregateMergableOps(args: AggregateMergableVersionsArgs) {
   });
 
   return {
-    mergedVersions: newVersions,
+    mergedVersions: newVersions.filter(v => v !== null),
     mergedOpsByVersionId: newOpsByVersionId,
   };
 }

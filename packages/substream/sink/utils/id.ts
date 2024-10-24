@@ -18,7 +18,7 @@ export function createSpaceId({ network, address }: { network: string; address: 
   return createIdFromUniqueString(`${network}:${address}`);
 }
 
-function createIdFromUniqueString(text: string) {
+export function createIdFromUniqueString(text: string) {
   const hashed = createHash('md5').update(text).digest('hex');
   const bytes = hexToBytesArray(hashed);
   const uuid = v4({ random: bytes });
