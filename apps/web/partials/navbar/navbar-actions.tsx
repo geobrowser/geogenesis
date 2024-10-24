@@ -11,7 +11,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
 import { GeoConnectButton } from '~/core/wallet';
 
@@ -145,7 +145,7 @@ function ModeToggle() {
   const { editable, setEditable } = useEditable();
 
   const spaceId = useSpaceId();
-  const canUserEdit = useUserIsEditing(spaceId ?? '');
+  const canUserEdit = useCanUserEdit(spaceId ?? '');
 
   React.useEffect(() => {
     // If a user doesn't have edit access on the page, make sure we set the toggle

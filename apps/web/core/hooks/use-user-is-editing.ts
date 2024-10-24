@@ -9,3 +9,9 @@ export function useUserIsEditing(spaceId: string) {
 
   return editable && (isEditor || isMember);
 }
+
+export function useCanUserEdit(spaceId: string) {
+  const { isEditor, isMember } = useAccessControl(spaceId);
+
+  return isEditor || isMember;
+}
