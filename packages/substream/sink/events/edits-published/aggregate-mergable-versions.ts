@@ -15,7 +15,11 @@ export function aggregateMergableOps(args: AggregateMergableVersionsArgs) {
   const newOpsByVersionId = new Map<string, Op[]>();
 
   const newVersions = [...manyVersionsByEntityId.values()].map((versionsByEntityId): S.versions.Insertable | null => {
-    // @TODO: EXPLAIN WHY
+    // We handle mergable versions differently for imported edits vs default edits. For
+    // default edits we only want to create a mergable version if there is more than
+    // version for the same entity id in the block. For imports there might be only
+    // one version in the block, or there might be many and we don't know ahead of
+    // time, so we always create a mergable version.
     if (args.editType === 'DEFAULT' && versionsByEntityId.length === 1) return null;
     const newVersionId = createMergedVersionId(versionsByEntityId.map(v => v.id.toString()));
 
