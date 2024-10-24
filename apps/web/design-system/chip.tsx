@@ -6,8 +6,6 @@ import { cva } from 'class-variance-authority';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -46,6 +44,7 @@ export function LinkableChip({ href, children }: LinkableChipProps) {
 
 interface LinkableRelationChipProps {
   entityHref: string;
+  isEditing: boolean;
   relationHref: string;
   onDelete?: () => void;
   children: React.ReactNode;
@@ -125,8 +124,13 @@ const relationChipPopoverTriggerStyles = cva('px-1.5 focus-within:bg-text hover:
   },
 });
 
-export function LinkableRelationChip({ entityHref, relationHref, children, onDelete }: LinkableRelationChipProps) {
-  const isEditing = useUserIsEditing();
+export function LinkableRelationChip({
+  isEditing,
+  entityHref,
+  relationHref,
+  children,
+  onDelete,
+}: LinkableRelationChipProps) {
   const [isRelationHovered, setIsRelationHovered] = useState(false);
   const [isDeleteHovered, setIsDeleteHovered] = useState(false);
 

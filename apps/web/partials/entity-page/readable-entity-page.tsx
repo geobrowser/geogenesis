@@ -105,6 +105,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
             return (
               <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
                 <LinkableRelationChip
+                  isEditing={false}
                   entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
                   relationHref={NavUtils.toEntity(spaceId, relationId)}
                 >
