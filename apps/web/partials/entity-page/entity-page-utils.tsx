@@ -52,6 +52,10 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
 export function sortRenderables(renderables: RenderableProperty[]) {
   /* Visible triples includes both real triples and placeholder triples */
   return renderables.sort((renderableA, renderableB) => {
+    // Always put an empty, placeholder triple with no attribute id at the bottom
+    // of the list
+    if (renderableA.attributeId === '') return 1;
+
     const { attributeId: attributeIdA, attributeName: attributeNameA } = renderableA;
     const { attributeId: attributeIdB, attributeName: attributeNameB } = renderableB;
 
