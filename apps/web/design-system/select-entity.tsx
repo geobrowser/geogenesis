@@ -56,7 +56,7 @@ const inputStyles = cva('', {
   },
 });
 
-const containerStyles = cva('', {
+const containerStyles = cva('relative', {
   variants: {
     width: {
       clamped: 'w-[400px]',
