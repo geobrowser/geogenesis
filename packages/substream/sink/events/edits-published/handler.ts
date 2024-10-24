@@ -46,8 +46,6 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
           try: () => Versions.upsert(mergedVersions),
           catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
         }),
-        Effect.tryPromise({
-          try: () => CurrentVersions.upsert(currentVersions),
         writeEdits({
           versions: defaultVersions,
           opsByVersionId: mergedOpsByVersionId,
