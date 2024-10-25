@@ -72,6 +72,7 @@ describe('aggregateMergableOps', () => {
         requestId: '',
         timestamp: 0,
       },
+      editType: 'DEFAULT',
     });
 
     const expectedVersionOps = [...mergedOpsByVersionId.values()];
@@ -92,6 +93,7 @@ describe('aggregateMergableOps', () => {
         requestId: '',
         timestamp: 0,
       },
+      editType: 'DEFAULT',
     });
 
     expect(mergedVersions[0]?.id).to.not.equal(versions[0]?.id);

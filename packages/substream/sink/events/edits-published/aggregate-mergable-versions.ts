@@ -7,13 +7,20 @@ interface AggregateMergableVersionsArgs {
   manyVersionsByEntityId: Map<string, S.versions.Insertable[]>;
   opsByVersionId: Map<string, Op[]>;
   block: BlockEvent;
+  editType: 'IMPORT' | 'DEFAULT';
 }
 
 export function aggregateMergableOps(args: AggregateMergableVersionsArgs) {
   const { manyVersionsByEntityId, opsByVersionId, block } = args;
   const newOpsByVersionId = new Map<string, Op[]>();
 
-  const newVersions = [...manyVersionsByEntityId.values()].map((versionsByEntityId): S.versions.Insertable => {
+  const newVersions = [...manyVersionsByEntityId.values()].map((versionsByEntityId): S.versions.Insertable | null => {
+    // We handle mergable versions differently for imported edits vs default edits. For
+    // default edits we only want to create a mergable version if there is more than
+    // version for the same entity id in the block. For imports there might be only
+    // one version in the block, or there might be many and we don't know ahead of
+    // time, so we always create a mergable version.
+    if (args.editType === 'DEFAULT' && versionsByEntityId.length === 1) return null;
     const newVersionId = createMergedVersionId(versionsByEntityId.map(v => v.id.toString()));
 
     for (const version of versionsByEntityId) {
@@ -56,7 +63,7 @@ export function aggregateMergableOps(args: AggregateMergableVersionsArgs) {
   });
 
   return {
-    mergedVersions: newVersions,
+    mergedVersions: newVersions.filter(v => v !== null),
     mergedOpsByVersionId: newOpsByVersionId,
   };
 }
@@ -70,10 +77,10 @@ export function aggregateMergableVersions(versions: S.versions.Insertable[]): Ma
     const entityId = version.entity_id.toString();
     const versionsForEntity = manyVersionsByEntityId.get(entityId);
 
-    if (!versionsForEntity) {
-      manyVersionsByEntityId.set(entityId, [version]);
-    } else {
+    if (versionsForEntity) {
       manyVersionsByEntityId.set(entityId, [...versionsForEntity, version]);
+    } else {
+      manyVersionsByEntityId.set(entityId, [version]);
     }
   }
 

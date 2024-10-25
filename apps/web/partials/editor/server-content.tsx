@@ -3,7 +3,7 @@ import { Content } from '~/core/state/editor/types';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
-import { TableBlockPlaceholder } from '../blocks/table/table-block';
+import { TableBlockLoadingPlaceholder } from '../blocks/table/table-block';
 
 type ServerContentProps = {
   content: Content[];
@@ -110,7 +110,7 @@ const Block = ({ block }: BlockProps) => {
               <Skeleton className="h-4 w-4" />
               <Skeleton className="h-5 w-16" />
             </div>
-            <TableBlockPlaceholder />
+            <TableBlockLoadingPlaceholder />
           </div>
         </>
       );

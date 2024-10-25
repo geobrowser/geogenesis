@@ -28,9 +28,6 @@ export function useRenderables(serverTriples: Triple[], spaceId: string) {
   const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
     usePlaceholderRenderables();
 
-  // @TODO(relations): We may want to pass these in instead of reading from context so that
-  // we can use the useRenderables hook for other contexts like tables. Alternatively we can
-  // enforce that all consumers of useRenderables has the same context shape and wraps the hook.
   const { triples: localTriples, relations, schema, name, id } = useEntityPageStore();
 
   const triplesFromSpace = useTriples(

@@ -9,10 +9,6 @@ import { CONDUIT_TESTNET } from './conduit-chain';
 const config: PrivyClientConfig = {
   defaultChain: CONDUIT_TESTNET,
   supportedChains: [CONDUIT_TESTNET],
-  // embeddedWallets: {
-  // noPromptOnSignature: false,
-  // createOnLogin: 'users-without-wallets',
-  // },
   appearance: {
     showWalletLoginFirst: false,
     logo: '/static/favicon-320x180.png',

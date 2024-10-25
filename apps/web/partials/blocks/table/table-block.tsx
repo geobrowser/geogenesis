@@ -182,7 +182,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
       <motion.div layout="position" transition={{ duration: 0.15 }}>
         {isLoading ? (
-          <TableBlockPlaceholder />
+          <TableBlockLoadingPlaceholder />
         ) : (
           <TableBlockTable
             space={spaceId}
@@ -230,7 +230,7 @@ type TableBlockPlaceholderProps = {
   rows?: number;
 };
 
-export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }: TableBlockPlaceholderProps) {
+export function TableBlockLoadingPlaceholder({ className = '', columns = 3, rows = 10 }: TableBlockPlaceholderProps) {
   const PLACEHOLDER_COLUMNS = new Array(columns).fill(0);
   const PLACEHOLDER_ROWS = new Array(rows).fill(0);
 

@@ -2,7 +2,7 @@ import { SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
-import { CurrentVersions, Versions } from '../db';
+import { CurrentVersions } from '../db';
 import { Relations } from '../db/relations';
 import type { OpWithCreatedBy } from './map-triples';
 
@@ -103,11 +103,6 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
     // We process relations by edit id so that we can use either the latest or any version
     // in the specific edit when referencing to, from, and type within a relation. Otherwise
     // we can have relations referencing versions in different edits which doesn't make sense.
-    //
-    // @TODO we can run into a situation during space imports where we have entities referencing
-    // an entity that was created in a previous edit. Since imports are all processed in the same
-    // block, these entities aren't approved yet, so any logic that looks for previous versions
-    // of an entity (like relations) will fail.
     for (const edit of edits) {
       const latestVersionForChangedEntities: Record<string, string> = {};
       const blockVersionsForEdit = versions.filter(v => v.edit_id.toString() === edit.id.toString());
@@ -298,10 +293,8 @@ function getRelationFromTriples(
     return null;
   }
 
-  const relationId = createGeoId(); // Not deterministic
-
   return {
-    id: relationId,
+    id: createGeoId(),
     to_version_id: toVersion,
     from_version_id: fromVersion,
     entity_id: entityId,

@@ -19,7 +19,7 @@ export function useVote({ address, onchainProposalId }: Args) {
 
   const { mutate, status } = useMutation({
     mutationFn: async (option: SubstreamVote['vote']) => {
-      const txEffect = await tx(
+      const txEffect = tx(
         encodeFunctionData({
           abi: MainVotingAbi,
           functionName: 'vote',
