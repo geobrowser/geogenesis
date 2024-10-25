@@ -3,7 +3,7 @@
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { createMembershipProposal } from '@geogenesis/sdk/proto';
 import { useMutation } from '@tanstack/react-query';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { encodeFunctionData, getAddress, stringToHex } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -49,7 +49,12 @@ export function useRequestToBeMember(votingPluginAddress: string | null) {
         return writeTxHash;
       });
 
-      await Effect.runPromise(publishProgram);
+      const result = await Effect.runPromise(Effect.either(publishProgram));
+
+      Either.match(result, {
+        onLeft: error => console.error(error),
+        onRight: () => console.log('Successfully requested to be member'),
+      });
     },
   });
 

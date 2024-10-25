@@ -1,11 +1,12 @@
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
+import { OK } from 'zod';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
 import { CurrentVersions, Proposals, Versions } from '~/sink/db';
-import type { BlockEvent } from '~/sink/types';
+import type { BlockEvent, Op } from '~/sink/types';
 import { partition } from '~/sink/utils';
 import { slog } from '~/sink/utils/slog';
 import { writeEdits } from '~/sink/write-edits/write-edits';
@@ -26,31 +27,48 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
       message: `Updating processed proposals to accepted`,
     });
 
-    // See comment above function definition for more details as to why we do this.
-    const { mergedOpsByVersionId, mergedVersions, edits, versions } = aggregateMergedVersions(ipfsProposals, block);
+    const {
+      schemaEditProposals: { opsByVersionId, versions, edits },
+    } = mapIpfsProposalToSchemaProposalByType(ipfsProposals, block);
 
     /**
      * We treat imported edits and non-imported edits as separate units of work since
      * imports have separate requirements for how they handle merging data for versions.
      * See comment in {@link writeEdits} for more details.
      */
-    const currentVersions = aggregateCurrentVersions(versions, mergedVersions);
     const [importedEdits, defaultEdits] = partition(edits, e => createdSpaceIds.includes(e.space_id.toString()));
-    const [importedVersions, defaultVersions] = partition(mergedVersions, v =>
+    const [importedVersions, defaultVersions] = partition(versions, v =>
       importedEdits.some(e => e.id.toString() === v.edit_id.toString())
     );
+
+    const { mergedOpsByVersionId: defaultMergedOpsByVersionId, mergedVersions: defaultMergedVersions } =
+      aggregateMergedVersions({
+        block,
+        editType: 'DEFAULT',
+        opsByVersionId,
+        versions: defaultVersions,
+      });
+
+    const { mergedOpsByVersionId: importedMergedOpsByVersionId, mergedVersions: importedMergedVersions } =
+      aggregateMergedVersions({
+        block,
+        editType: 'IMPORT',
+        opsByVersionId,
+        versions: importedVersions,
+      });
+
+    const allMergedVersions = [...defaultMergedVersions, ...importedMergedVersions];
+    const currentVersions = aggregateCurrentVersions(versions, allMergedVersions);
 
     yield* _(
       Effect.all([
         Effect.tryPromise({
-          try: () => Versions.upsert(mergedVersions),
+          try: () => Versions.upsert(allMergedVersions),
           catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
         }),
-        Effect.tryPromise({
-          try: () => CurrentVersions.upsert(currentVersions),
         writeEdits({
-          versions: defaultVersions,
-          opsByVersionId: mergedOpsByVersionId,
+          versions: defaultMergedVersions,
+          opsByVersionId: defaultMergedOpsByVersionId,
           edits: defaultEdits,
           block,
           editType: 'DEFAULT',
@@ -73,8 +91,8 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
      */
     yield* _(
       writeEdits({
-        versions: importedVersions,
-        opsByVersionId: mergedOpsByVersionId,
+        versions: importedMergedVersions,
+        opsByVersionId: importedMergedOpsByVersionId,
         block,
         edits: importedEdits,
         editType: 'IMPORT',
@@ -118,6 +136,13 @@ function aggregateCurrentVersions(
   });
 }
 
+interface AggregateMergedVersionsArgs {
+  versions: S.versions.Insertable[];
+  opsByVersionId: Map<string, Op[]>;
+  block: BlockEvent;
+  editType: 'IMPORT' | 'DEFAULT';
+}
+
 /**
  * Merges versions from the same entity into a new version. If many versions change
  * the same entity in the same block we need to make sure that there exists a version
@@ -143,7 +168,7 @@ function aggregateCurrentVersions(
  * This function implements #2. The implementation might change in the future as we get more
  * feedback on our versioning mechanisms.
  */
-function aggregateMergedVersions(proposals: EditProposal[], block: BlockEvent) {
+function aggregateMergedVersions(args: AggregateMergedVersionsArgs) {
   // @NOTE:
   // We still use the re-fetched data from IPFS since we need to re-apply all of the ops
   // from each of the merged versions into the new version.
@@ -154,11 +179,9 @@ function aggregateMergedVersions(proposals: EditProposal[], block: BlockEvent) {
   // deleted in one of the merged versions still existing on the merged version. Alternatively
   // we could store the ops in the db as well, but for now we'll just re-fetch from IPFS since
   // we already have that workflow in place.
-  const {
-    schemaEditProposals: { opsByVersionId, versions, edits },
-  } = mapIpfsProposalToSchemaProposalByType(proposals, block);
-
+  //
   // Get the versions that have more than one version for the same entity id
+  const { versions, opsByVersionId, block, editType } = args;
   const manyVersionsByEntityId = aggregateMergableVersions(versions);
 
   // Merge the versions in this block with the same entity id into a new aggregated version
@@ -167,12 +190,11 @@ function aggregateMergedVersions(proposals: EditProposal[], block: BlockEvent) {
     manyVersionsByEntityId,
     opsByVersionId,
     block,
+    editType,
   });
 
   return {
     mergedVersions,
     mergedOpsByVersionId,
-    edits,
-    versions,
   };
 }
