@@ -16,7 +16,7 @@ export function SpaceEditorsJoinButton({ votingPluginAddress }: Props) {
 
   return (
     <button
-      onClick={requestToBeEditor}
+      onClick={() => requestToBeEditor()}
       disabled={status !== 'idle'}
       className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text"
     >
