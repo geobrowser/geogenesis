@@ -1,6 +1,8 @@
 'use client';
 
-import { atom, useAtomValue } from 'jotai';
+import equal from 'fast-deep-equal';
+import { useAtomValue } from 'jotai';
+import { atomFamily, selectAtom } from 'jotai/utils';
 
 import * as React from 'react';
 
@@ -14,18 +16,24 @@ interface UseRelationsArgs {
   includeDeleted?: boolean;
 }
 
-const makeLocalActionsAtomWithSelector = ({ selector, includeDeleted = false, mergeWith = [] }: UseRelationsArgs) => {
-  return atom(get => {
-    return get(createRelationsAtom(mergeWith)).filter(r => {
-      return (selector ? selector(r) : true) && (includeDeleted ? true : !r.isDeleted);
-    });
-  });
+const makeRelationsAtomFamily = atomFamily(createRelationsAtom, equal);
+
+const makeLocalRelationsAtomWithSelector = ({ selector, includeDeleted = false, mergeWith = [] }: UseRelationsArgs) => {
+  return selectAtom(
+    makeRelationsAtomFamily(mergeWith),
+    relations => {
+      return relations.filter(r => (selector ? selector(r) : true) && (includeDeleted ? true : !r.isDeleted));
+    },
+    equal
+  );
 };
 
 export function useRelations(args: UseRelationsArgs) {
-  return useAtomValue(React.useMemo(() => makeLocalActionsAtomWithSelector(args), [args]));
+  const memoizedArgs = React.useMemo(() => args, [args]);
+  const memoizedAtom = React.useMemo(() => makeLocalRelationsAtomWithSelector(memoizedArgs ?? {}), [memoizedArgs]);
+  return useAtomValue(memoizedAtom);
 }
 
 export function getRelations(args: UseRelationsArgs) {
-  return store.get(makeLocalActionsAtomWithSelector(args));
+  return store.get(makeLocalRelationsAtomWithSelector(args));
 }

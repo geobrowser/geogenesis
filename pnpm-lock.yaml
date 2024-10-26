@@ -110,6 +110,7 @@ importers:
       eslint-plugin-react-hooks: ^4.6.0
       ethers: ^5.0.0
       fake-indexeddb: ^4.0.2
+      fast-deep-equal: ^3.1.3
       framer-motion: ^10.18.0
       immer: ^9.0.16
       jotai: ^2.5.1
@@ -199,6 +200,7 @@ importers:
       diff: 5.1.0
       effect: 3.6.0
       ethers: 5.7.2
+      fast-deep-equal: 3.1.3
       framer-motion: 10.18.0_biqbaboplfbrettd7655fr4n2y
       immer: 9.0.16
       jotai: 2.5.1_o5ysialsahsznabqayk7pree4e
@@ -2633,7 +2635,7 @@ packages:
     engines: {node: '>=16.0.0'}
     dependencies:
       '@metamask/json-rpc-engine': 7.3.3
-      '@metamask/safe-event-emitter': 3.1.1
+      '@metamask/safe-event-emitter': 3.1.2
       '@metamask/utils': 8.5.0
       readable-stream: 3.6.2
     transitivePeerDependencies:
@@ -2851,10 +2853,10 @@ packages:
     dependencies:
       '@ethereumjs/tx': 4.2.0
       '@metamask/superstruct': 3.1.0
-      '@noble/hashes': 1.4.0
-      '@scure/base': 1.1.7
+      '@noble/hashes': 1.5.0
+      '@scure/base': 1.1.9
       '@types/debug': 4.1.12
-      debug: 4.3.5
+      debug: 4.3.7
       pony-cause: 2.1.11
       semver: 7.6.3
       uuid: 9.0.1
@@ -8509,7 +8511,7 @@ packages:
     resolution: {integrity: sha512-9Z0qLB0NIisTRt1DZ/8U2k12RJn8yls/nXMZLn+/N8hANT3TcYjKFKcwbw5zFQiN4NTde3TSY9zb79e1ij6j9Q==}
     dependencies:
       '@socket.io/component-emitter': 3.1.2
-      debug: 4.3.5
+      debug: 4.3.7
       engine.io-parser: 5.2.2
       ws: 8.11.0
       xmlhttprequest-ssl: 2.0.0
@@ -9857,7 +9859,7 @@ packages:
     resolution: {integrity: sha512-an2S5quJMiy5bnZKEf6AkfH/7r8CzHvhchU40gxN+OM6HPhe7Z9T1FUychcf2M9PpPOO0Hf7BAEfJkw2TDIBDw==}
     engines: {node: '>=12.0.0'}
     dependencies:
-      readable-stream: 3.6.2
+      readable-stream: 4.4.2
       webextension-polyfill: 0.10.0
     dev: false
 
@@ -13771,7 +13773,7 @@ packages:
     engines: {node: '>=10.0.0'}
     dependencies:
       '@socket.io/component-emitter': 3.1.2
-      debug: 4.3.5
+      debug: 4.3.7
     transitivePeerDependencies:
       - supports-color
     dev: false

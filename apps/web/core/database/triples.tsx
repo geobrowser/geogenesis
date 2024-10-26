@@ -1,6 +1,6 @@
 'use client';
 
-import { Hash } from 'effect';
+import equal from 'fast-deep-equal';
 import { useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 
@@ -28,7 +28,7 @@ function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeW
         return (selector ? selector(t) : true) && (includeDeleted ? true : isNotDeletedSelector(t));
       });
     },
-    (a, b) => Hash.array(a) === Hash.array(b)
+    equal
   );
 }
 
