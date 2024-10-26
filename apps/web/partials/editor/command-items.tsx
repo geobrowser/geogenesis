@@ -15,22 +15,19 @@ import { EditorText } from '~/design-system/icons/editor-text';
 export interface CommandSuggestionItem {
   title: string;
   icon: React.ReactElement;
-  command: (props: { editor: Editor; range: Range; props?: any }) => void;
+  command: (props: { editor: Editor; range: Range }) => void;
 }
 
 export const tableCommandItem: CommandSuggestionItem = {
   icon: <EditorTable />,
   title: 'Data',
-  command: ({ editor, range, props }) => {
+  command: ({ editor, range }) => {
     editor
       .chain()
       .focus()
-      .deleteRange({ from: range.from, to: range.to - 1 })
+      .deleteRange({ from: range.from, to: range.to })
       .insertContent({
         type: 'tableNode',
-        attrs: {
-          spaceId: props.spaceId,
-        },
       })
       .createParagraphNear()
       .blur()
@@ -42,16 +39,13 @@ export const tableCommandItem: CommandSuggestionItem = {
 export const textCommandItem: CommandSuggestionItem = {
   icon: <EditorText />,
   title: 'Text',
-  command: ({ editor, range, props }) => {
+  command: ({ editor, range }) => {
     editor
       .chain()
       .focus()
       .deleteRange(range)
       .insertContent({
         type: 'paragraph',
-        attrs: {
-          spaceId: props.spaceId,
-        },
       })
       .createParagraphNear()
       .blur()
