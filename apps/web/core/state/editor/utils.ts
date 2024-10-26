@@ -3,6 +3,8 @@ import pluralize from 'pluralize';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
+import * as Parser from './parser';
+
 /* Helper function for transforming a single node of TipTap's JSONContent structure into HTML */
 export const getTextNodeHtml = (node: JSONContent): string => {
   return generateHTML({ type: 'doc', content: [node] }, tiptapExtensions);
@@ -19,7 +21,7 @@ export const getNodeName = (node: JSONContent): string => {
   }
 
   const nodeHTML = getTextNodeHtml(node);
-  return htmlToPlainText(nodeHTML).slice(0, NODE_NAME_LENGTH);
+  return Parser.htmlToPlainText(nodeHTML).slice(0, NODE_NAME_LENGTH);
 };
 
 // Returns the id of the first paragraph even if nested inside of a list
@@ -29,10 +31,4 @@ export const getNodeId = (node: JSONContent): string => node.attrs?.id ?? node?.
 export const removeIdAttributes = (html: string) => {
   const regex = /\s*id\s*=\s*(['"])[^\0x1]*?\1/gi;
   return html.replace(regex, '');
-};
-
-const htmlToPlainText = (html: string) => {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return div.textContent || '';
 };

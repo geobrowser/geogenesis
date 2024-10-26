@@ -103,3 +103,9 @@ export function markdownToHtml(markdown: string): string {
 
   return html.trim();
 }
+
+export function htmlToPlainText(html: string) {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return div.textContent || '';
+}

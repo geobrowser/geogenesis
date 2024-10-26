@@ -3,7 +3,7 @@ import { JSONContent } from '@tiptap/core';
 
 import { UpsertOp } from '~/core/database/types';
 
-import { htmlToMarkdown } from './parser';
+import * as Parser from './parser';
 import { getNodeId, getNodeName, getTextNodeHtml } from './utils';
 
 interface UpsertNameOp extends UpsertOp {
@@ -22,7 +22,7 @@ export function getTextEntityOps(node: JSONContent): [UpsertNameOp, UpsertMarkdo
   const blockEntityId = getNodeId(node);
   const nodeHTML = getTextNodeHtml(node);
   const entityName = getNodeName(node);
-  let markdown = htmlToMarkdown(nodeHTML);
+  let markdown = Parser.htmlToMarkdown(nodeHTML);
 
   if (node.type === 'bulletList') {
     // @TODO: Do we need this with our custom parser? Previously only
