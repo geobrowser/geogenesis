@@ -98,8 +98,21 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
 };
 
 async function deleteRelation(relationId: string, spaceId: string) {
+  // @TODO we might need to delete any relations on a relation, too.
   const { triples } = await mergeEntityAsync(EntityId(relationId));
   removeMany(triples, spaceId);
+}
+
+export async function removeEntity(entityId: string, spaceId: string) {
+  const { triples, relationsOut } = await mergeEntityAsync(EntityId(entityId));
+  removeMany(triples, spaceId);
+
+  for (const relation of relationsOut) {
+    removeRelation({
+      relationId: relation.id,
+      spaceId,
+    });
+  }
 }
 
 export const upsert = (op: UpsertOp, spaceId: string) => {
@@ -249,4 +262,5 @@ export const DB = {
   removeMany,
   upsertRelation,
   removeRelation,
+  removeEntity,
 };

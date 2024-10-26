@@ -6,11 +6,9 @@ import cx from 'classnames';
 import * as React from 'react';
 import { ReactNode, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
-import { useEditorInstance } from '~/core/state/editor/editor-provider';
-
 import { Text } from '~/design-system/text';
 
-import { CommandSuggestionItem, tableCommandItem } from './command-items';
+import { CommandSuggestionItem } from './command-items';
 
 export interface CommandListRef {
   onKeyDown: (o: { event: KeyboardEvent }) => boolean;
@@ -25,7 +23,6 @@ export interface CommandListProps {
 
 export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ command, items }, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const { spaceId } = useEditorInstance();
 
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => setSelectedIndex(0), [items]);
@@ -70,13 +67,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
               key={index}
               data-index={index}
               onMouseOver={() => setSelectedIndex(index)}
-              onClick={() => {
-                if (title === tableCommandItem.title) {
-                  command({ ...tableCommandItem, spaceId });
-                } else {
-                  command(items[selectedIndex]);
-                }
-              }}
+              onClick={() => command(items[selectedIndex])}
             >
               <div className="grid h-9 w-9 place-items-center bg-divider">{icon}</div>
               <Text variant="metadataMedium">{title}</Text>
