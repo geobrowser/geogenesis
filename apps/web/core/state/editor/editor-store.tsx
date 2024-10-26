@@ -218,6 +218,10 @@ const upsertBlocksRelations = async ({ newBlockIds, blocks, spaceId, entityPageI
     //     spaceId
     //   );
     // }
+    console.log('block ids', { prevBlockIds, newBlockIds, addedBlockIds, removedBlockIds });
+    for (const blockId of removedBlockIds) {
+      DB.removeRelation({
+        relationId: EntityId(blockId),
   }
 };
 
