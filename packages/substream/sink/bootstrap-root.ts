@@ -109,6 +109,7 @@ const types: Record<string, string[]> = {
   [SYSTEM_IDS.SCHEMA_TYPE]: [SYSTEM_IDS.TEMPLATE_ATTRIBUTE],
   [SYSTEM_IDS.VIEW_TYPE]: [],
   [SYSTEM_IDS.TEXT]: [],
+  [SYSTEM_IDS.CHECKBOX]: [],
   [SYSTEM_IDS.RELATION]: [],
   [SYSTEM_IDS.IMAGE]: [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE],
   [SYSTEM_IDS.DATE]: [],
@@ -253,16 +254,4 @@ export const bootstrapRoot = Effect.gen(function* (_) {
   yield* _(handleInitialProposalsCreated([editProposal], INITIAL_BLOCK));
   yield* _(handleEditsPublished([editProposal], [SPACE_ID], INITIAL_BLOCK));
   yield* _(handleProposalsExecuted([editProposal], INITIAL_BLOCK));
-
-  /**
-    {
-              "id": "ab7d4b9e02f840dab9746d352acb0ac6",
-              "type": "PUBLIC",
-              "daoAddress": "0x9e2342C55080f2fCb6163c739a88c4F2915163C4",
-              "spacePluginAddress": "0x7a260AC2D569994AA22a259B19763c9F681Ff84c",
-              "mainVotingPluginAddress": "0x379408c230817DC7aA36033BEDC05DCBAcE7DF50",
-              "memberAccessPluginAddress": "0xd09225EAe465f562719B9cA07da2E8ab286DBB36",
-              "personalSpaceAdminPluginAddress": null
-            },
-    */
 });
