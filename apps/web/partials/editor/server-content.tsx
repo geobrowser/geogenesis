@@ -132,6 +132,8 @@ const getHeading = (level: 1 | 2 | 3 | 4 | 5 | 6) => {
       return 'h5';
     case 6:
       return 'h6';
+    default:
+      return 'p';
   }
 };
 
