@@ -14,7 +14,15 @@ export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string
 export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
   const squashedOps = squashOps(edit.ops, edit.spaceId, edit.versonId);
 
-  return squashedOps.map((op): OpWithCreatedBy => {
+  // Validating after squashing is an intentional decision to throw away ops
+  // with the _final_ state of the ops in an edit. If we validate before we
+  // squash then we can end up with an op that wasn't the final op in the edit,
+  // but it _was_ the final _valid_ op in an edit. For now we only take the
+  // final op and validate to better represent the intended final state of
+  // the set of edits.
+  const validOps = validateOps(squashedOps);
+
+  return validOps.map((op): OpWithCreatedBy => {
     const triple = getTripleFromOp(op, edit.spaceId, edit.versonId, block);
 
     return {
@@ -39,4 +47,17 @@ function squashOps(ops: Op[], spaceId: string, versionId: string): Op[] {
   }, new Map<string, Op>());
 
   return [...squashedOps.values()];
+}
+
+function validateOps(ops: Op[]) {
+  return ops.filter(o => {
+    const triple = o.triple;
+
+    switch (triple.value.type) {
+      case 'CHECKBOX':
+        return triple.value.value === '0' || triple.value.value === '1';
+      default:
+        return true;
+    }
+  });
 }
