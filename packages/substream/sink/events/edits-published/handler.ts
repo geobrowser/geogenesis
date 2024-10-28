@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
-import { OK } from 'zod';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';

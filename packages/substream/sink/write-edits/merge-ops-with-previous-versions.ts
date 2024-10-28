@@ -1,8 +1,7 @@
 import { Effect } from 'effect';
-import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { CurrentVersions, Triples, Versions } from '../db';
+import { CurrentVersions, Triples } from '../db';
 import type { Op } from '../types';
 import type { SchemaTripleEdit } from '../write-edits/map-triples';
 
@@ -45,8 +44,9 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
     const lastVersionForEntityId = Object.fromEntries(maybeLatestVersionForEntityIds.filter(v => v !== null));
     const triplesForLastVersionTuples = yield* _(
       Effect.all(
-        Object.keys(lastVersionForEntityId).map(versionId =>
+        Object.values(lastVersionForEntityId).map(versionId =>
           Effect.promise(async () => {
+            console.log('version id', versionId);
             const lastVersionTriples = await Triples.select({ version_id: versionId });
             return [versionId, lastVersionTriples] as const;
           })
