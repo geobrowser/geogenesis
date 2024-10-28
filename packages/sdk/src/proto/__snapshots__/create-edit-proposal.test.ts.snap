@@ -1,0 +1,33 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`create-edit-proposal > encodes and decodes Edit correctly 1`] = `
+[
+  {
+    "triple": {
+      "attribute": "dGVzdC1hdHRyaWJ1dGUtaWQ=",
+      "entity": "dGVzdC1lbnRpdHktaWQ=",
+      "value": {
+        "type": "TEXT",
+        "value": "dGVzdCB2YWx1ZQ==",
+      },
+    },
+    "type": "SET_TRIPLE",
+  },
+]
+`;
+
+exports[`create-edit-proposal > encodes and decodes Edit with upsert ops correctly 1`] = `
+[
+  {
+    "triple": {
+      "attribute": "dGVzdC1hdHRyaWJ1dGUtaWQ=",
+      "entity": "dGVzdC1lbnRpdHktaWQ=",
+      "value": {
+        "type": "TEXT",
+        "value": "dGVzdCB2YWx1ZQ==",
+      },
+    },
+    "type": "SET_TRIPLE",
+  },
+]
+`;

@@ -122,7 +122,8 @@ export const getValue = (triple: Triple): string | null => {
 
 export function prepareTriplesForPublishing(triples: Triple[], spaceId: string): Op[] {
   const triplesToPublish = triples.filter(
-    t => t.space === spaceId && !t.hasBeenPublished && t.attributeId !== '' && t.entityId !== '' && t.value.value !== ''
+    // Deleted ops have a value of ''. Make sure we don't filter those out
+    t => t.space === spaceId && !t.hasBeenPublished && t.attributeId !== '' && t.entityId !== ''
   );
   return triplesToPublish.map((t): Op => {
     if (t.isDeleted) {
