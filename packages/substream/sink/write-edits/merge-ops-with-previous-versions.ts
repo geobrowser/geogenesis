@@ -46,7 +46,6 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
       Effect.all(
         Object.values(lastVersionForEntityId).map(versionId =>
           Effect.promise(async () => {
-            console.log('version id', versionId);
             const lastVersionTriples = await Triples.select({ version_id: versionId });
             return [versionId, lastVersionTriples] as const;
           })
