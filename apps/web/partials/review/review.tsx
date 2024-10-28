@@ -51,6 +51,7 @@ const ReviewChanges = () => {
     React.useMemo(() => {
       return {
         selector: t => t.hasBeenPublished === false,
+        includeDeleted: true,
       };
     }, [])
   ).map(t => t.space);
@@ -126,6 +127,7 @@ const ReviewChanges = () => {
     React.useMemo(() => {
       return {
         selector: t => t.space === activeSpace,
+        includeDeleted: true,
       };
     }, [activeSpace])
   );
