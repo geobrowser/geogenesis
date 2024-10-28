@@ -49,7 +49,7 @@ function getValue(value_type: ValueType, value: { type: ValueType; value: string
     case 'CHECKBOX': {
       // We filter valid boolean values before this function call so we can assume that
       // any values we get here are either 0 or 1
-      const booleanValue = value.value === '0';
+      const booleanValue = value.value === '0' ? false : true;
 
       return {
         text_value: null,
