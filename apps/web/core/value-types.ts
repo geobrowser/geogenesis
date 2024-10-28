@@ -7,6 +7,7 @@ export const valueTypeIds: Record<TripleValueType, ValueTypeId> = {
   ENTITY: SYSTEM_IDS.RELATION,
   TIME: SYSTEM_IDS.DATE,
   URI: SYSTEM_IDS.WEB_URL,
+  CHECKBOX: SYSTEM_IDS.CHECKBOX,
 };
 
 export const valueTypes: Record<ValueTypeId, TripleValueType> = {
@@ -14,6 +15,7 @@ export const valueTypes: Record<ValueTypeId, TripleValueType> = {
   [SYSTEM_IDS.RELATION]: 'ENTITY',
   [SYSTEM_IDS.DATE]: 'TIME',
   [SYSTEM_IDS.WEB_URL]: 'URI',
+  [SYSTEM_IDS.CHECKBOX]: 'CHECKBOX',
 };
 
 export const valueTypeNames: Record<ValueTypeId, string> = {
@@ -21,4 +23,5 @@ export const valueTypeNames: Record<ValueTypeId, string> = {
   [SYSTEM_IDS.RELATION]: 'Relation',
   [SYSTEM_IDS.DATE]: 'Date',
   [SYSTEM_IDS.WEB_URL]: 'Web URL',
+  [SYSTEM_IDS.CHECKBOX]: 'Checkbox',
 };

@@ -1,131 +1,69 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
-import { Triple as TripleType } from '~/core/types';
+import { Triple } from '~/core/database/Triple';
 
-import { empty, withId, withLocalNames } from './triples';
+import { prepareTriplesForPublishing } from './triples';
 
-describe('Triple helpers', () => {
-  it('Triple.withId returns the same triple with an updated ID', () => {
-    const triple: TripleType = {
-      id: '',
-      entityId: 'entityId',
-      attributeId: 'attributeId',
-      attributeName: 'banana',
-      value: {
-        type: 'TEXT',
-        value: 'banana',
+const TRIPLE = Triple.make({
+  attributeId: 'test-attribute',
+  attributeName: 'test-attribute-name',
+  entityId: 'test-entity',
+  entityName: 'test-entity-name',
+  space: 'test-space',
+  value: {
+    type: 'TEXT',
+    value: 'test value',
+  },
+});
+
+describe('prepareTriplesForPublishing', () => {
+  it('maps triples to SET_TRIPLE op', () => {
+    const result = prepareTriplesForPublishing([TRIPLE], TRIPLE.space);
+    expect(result).toEqual([
+      {
+        type: 'SET_TRIPLE',
+        triple: {
+          entity: TRIPLE.entityId,
+          attribute: TRIPLE.attributeId,
+          value: {
+            type: TRIPLE.value.type,
+            value: TRIPLE.value.value,
+          },
+        },
       },
-      space: 'spaceId',
-      entityName: 'banana',
-    };
-
-    expect(withId(triple)).toEqual({
-      ...triple,
-      id: 'spaceId:entityId:attributeId:valueId',
-    });
+    ]);
   });
 
-  it('Triple.empty returns a unique, empty triple', () => {
-    expect(empty('space-id', 'banana-id')).not.toEqual(empty('space-id', 'banana-id'));
+  it('maps triples to DELETE op', () => {
+    const result = prepareTriplesForPublishing([{ ...TRIPLE, isDeleted: true }], TRIPLE.space);
+    expect(result).toEqual([
+      {
+        type: 'DELETE_TRIPLE',
+        triple: {
+          entity: TRIPLE.entityId,
+          attribute: TRIPLE.attributeId,
+        },
+      },
+    ]);
   });
 
-  it('Triple.withLocalNames returns triples whose entity names have been changed locally', () => {
-    const tripleInEntity: TripleType = {
-      id: '',
-      entityId: 'entityId',
-      attributeId: 'attributeId',
-      attributeName: 'banana',
-      value: {
-        type: 'TEXT',
-        value: 'banana',
-      },
-      space: 'spaceId',
-      entityName: 'banana',
-    };
+  it('filters triples from different space', () => {
+    const result = prepareTriplesForPublishing([TRIPLE], 'different test space');
+    expect(result.length).toEqual(0);
+  });
 
-    const editAction: ActionType = {
-      type: 'editTriple',
-      before: {
-        type: 'deleteTriple',
-        id: 'before',
-        entityId: 'entityId',
-        attributeId: SYSTEM_IDS.NAME,
-        attributeName: 'Name',
-        value: {
-          id: 'valueId',
-          type: 'string',
-          value: 'name-1',
-        },
-        space: 'spaceId',
-        entityName: 'entityName',
-      },
-      after: {
-        type: 'createTriple',
-        id: 'before',
-        entityId: 'entityId',
-        attributeId: SYSTEM_IDS.NAME,
-        attributeName: 'Name',
-        value: {
-          id: 'valueId',
-          type: 'string',
-          value: 'name-2',
-        },
-        space: 'spaceId',
-        entityName: 'name-2',
-      },
-    };
+  it('filters already-published triples', () => {
+    const result = prepareTriplesForPublishing([{ ...TRIPLE, hasBeenPublished: true }], TRIPLE.space);
+    expect(result.length).toEqual(0);
+  });
 
-    expect(withLocalNames([editAction], [tripleInEntity])).toStrictEqual([
-      {
-        ...tripleInEntity,
-        entityName: 'name-2',
-      },
-    ]);
+  it('filters triples with empty entity id', () => {
+    const result = prepareTriplesForPublishing([{ ...TRIPLE, entityId: '' }], TRIPLE.space);
+    expect(result.length).toEqual(0);
+  });
 
-    const tripleWithEntityInAttribute: TripleType = {
-      id: '',
-      entityId: 'someOtherEntityId',
-      attributeId: 'entityId',
-      attributeName: 'entityName',
-      value: {
-        id: 'valueId',
-        type: 'string',
-        value: 'banana',
-      },
-      space: 'spaceId',
-      entityName: 'banana',
-    };
-
-    expect(withLocalNames([editAction], [tripleWithEntityInAttribute])).toStrictEqual([
-      {
-        ...tripleWithEntityInAttribute,
-        attributeName: 'name-2',
-      },
-    ]);
-
-    const tripleWithEntityInValue: TripleType = {
-      id: '',
-      entityId: 'someOtherEntityName',
-      attributeId: 'attirbuteId',
-      attributeName: 'attributeName',
-      value: {
-        id: 'entityId',
-        type: 'entity',
-        name: 'valueName',
-      },
-      space: 'spaceId',
-      entityName: 'entityName',
-    };
-
-    expect(withLocalNames([editAction], [tripleWithEntityInValue])).toStrictEqual([
-      {
-        ...tripleWithEntityInValue,
-        value: {
-          ...tripleWithEntityInValue.value,
-          name: 'name-2',
-        },
-      },
-    ]);
+  it('filters triples with empty attribute id', () => {
+    const result = prepareTriplesForPublishing([{ ...TRIPLE, attributeId: '' }], TRIPLE.space);
+    expect(result.length).toEqual(0);
   });
 });

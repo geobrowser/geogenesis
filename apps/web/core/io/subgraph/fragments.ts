@@ -63,6 +63,7 @@ export const tripleFragment = `
   }
   numberValue
   textValue
+  booleanValue
   valueType
   space {
     id

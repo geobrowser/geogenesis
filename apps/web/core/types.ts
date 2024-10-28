@@ -5,12 +5,16 @@ import { EntityId } from './io/schema';
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type ValueType = 'TEXT' | 'ENTITY' | 'URI' | 'TIME';
-// | GEO_LOCATION
-// | 'CHECKBOX'
+export type ValueType =
+  | 'TEXT'
+  | 'ENTITY'
+  | 'URI'
+  | 'TIME'
+  // | GEO_LOCATION
+  | 'CHECKBOX';
 
 export type AppValue = {
-  type: 'TEXT' | 'URI' | 'TIME';
+  type: 'TEXT' | 'URI' | 'TIME' | 'CHECKBOX';
   value: string;
 };
 
@@ -132,7 +136,7 @@ export type RenderableProperty =
 // The types of renderables don't map 1:1 to the triple value types. We might
 // also render relations with a specific type, e.g., an Image entity or a
 // Person entity, etc.
-export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URI' | 'TIME' | 'IMAGE';
+export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URI' | 'TIME' | 'IMAGE' | 'CHECKBOX';
 
 export type ReviewState =
   | 'idle'
@@ -164,7 +168,8 @@ export type ValueTypeId =
   | typeof SYSTEM_IDS.TEXT
   | typeof SYSTEM_IDS.RELATION
   | typeof SYSTEM_IDS.DATE
-  | typeof SYSTEM_IDS.WEB_URL;
+  | typeof SYSTEM_IDS.WEB_URL
+  | typeof SYSTEM_IDS.CHECKBOX;
 
 export type GeoType = {
   entityId: string;

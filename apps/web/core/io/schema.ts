@@ -109,9 +109,22 @@ const SubstreamEntityValue = Schema.Struct({
   }),
 });
 
+const SubstreamCheckboxValue = Schema.Struct({
+  valueType: Schema.Literal('CHECKBOX'),
+  booleanValue: Schema.Boolean,
+});
+
+type SubstreamCheckboxValue = Schema.Schema.Type<typeof SubstreamCheckboxValue>;
+
 export type SubstreamEntityValue = Schema.Schema.Type<typeof SubstreamEntityValue>;
 
-const SubstreamValue = Schema.Union(SubstreamTextValue, SubstreamEntityValue, SubstreamTimeValue, SubstreamUriValue);
+const SubstreamValue = Schema.Union(
+  SubstreamTextValue,
+  SubstreamEntityValue,
+  SubstreamTimeValue,
+  SubstreamUriValue,
+  SubstreamCheckboxValue
+);
 type SubstreamValue = Schema.Schema.Type<typeof SubstreamValue>;
 
 const SpaceGovernanceType = Schema.Union(Schema.Literal('PUBLIC'), Schema.Literal('PERSONAL'));

@@ -3223,6 +3223,12 @@ declare module 'zapatos/schema' {
       */
       text_value: string | null;
       /**
+      * **triples.boolean_value**
+      * - `bool` in database
+      * - Nullable, no default
+      */
+      boolean_value: boolean | null;
+      /**
       * **triples.entity_value_id**
       * - `text` in database
       * - Nullable, no default
@@ -3284,6 +3290,12 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       text_value: string | null;
+      /**
+      * **triples.boolean_value**
+      * - `bool` in database
+      * - Nullable, no default
+      */
+      boolean_value: boolean | null;
       /**
       * **triples.entity_value_id**
       * - `text` in database
@@ -3347,6 +3359,12 @@ declare module 'zapatos/schema' {
       */
       text_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **triples.boolean_value**
+      * - `bool` in database
+      * - Nullable, no default
+      */
+      boolean_value?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **triples.entity_value_id**
       * - `text` in database
       * - Nullable, no default
@@ -3409,6 +3427,12 @@ declare module 'zapatos/schema' {
       */
       text_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
+      * **triples.boolean_value**
+      * - `bool` in database
+      * - Nullable, no default
+      */
+      boolean_value?: boolean | db.Parameter<boolean> | null | db.DefaultType | db.SQLFragment;
+      /**
       * **triples.entity_value_id**
       * - `text` in database
       * - Nullable, no default
@@ -3470,6 +3494,12 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       text_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **triples.boolean_value**
+      * - `bool` in database
+      * - Nullable, no default
+      */
+      boolean_value?: boolean | db.Parameter<boolean> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **triples.entity_value_id**
       * - `text` in database

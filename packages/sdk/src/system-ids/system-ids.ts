@@ -115,6 +115,7 @@ export const COLLECTION_VALUE_TYPE = 'v4611456b4444cab920d2245f59ce828';
 
 /* Example Usage: Address > VALUE_TYPE > TEXT */
 export const TEXT = '9edb6fcce4544aa5861139d7f024c010';
+export const CHECKBOX = 'beacbf8054c642ab98c2aa0062756e5d'
 
 // Date of Birth > VALUE_TYPE > DATE
 export const DATE = '167664f668f840e1976b20bd16ed8d47';

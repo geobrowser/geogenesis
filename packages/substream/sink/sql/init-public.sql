@@ -27,7 +27,7 @@ CREATE TABLE public.spaces (
     id text PRIMARY KEY,
     created_at_block integer NOT NULL,
     is_root_space boolean NOT NULL,
-    type space_type NOT NULL,   
+    type space_type NOT NULL,
     dao_address text NOT NULL,
     space_plugin_address text,
     main_voting_plugin_address text,
@@ -138,6 +138,7 @@ CREATE TABLE public.triples (
     value_type triple_value_type NOT NULL,
     number_value text,
     text_value text,
+    boolean_value boolean,
     entity_value_id text REFERENCES public.entities(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
@@ -251,4 +252,3 @@ ALTER TABLE
 
 ALTER TABLE
     public.space_editors DISABLE TRIGGER ALL;
-

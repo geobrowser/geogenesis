@@ -303,6 +303,14 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
                 }}
               />
             );
+          case 'CHECKBOX':
+            return (
+              <input
+                type="checkbox"
+                key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                checked={renderable.value === '1'}
+              />
+            );
           case 'TIME':
             return <DateField key={renderable.attributeId} isEditing={true} value={renderable.value} />;
           case 'URI':
