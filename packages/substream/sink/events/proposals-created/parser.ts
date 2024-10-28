@@ -159,7 +159,7 @@ const ZodEditSetTriplePayload = z.object({
 const ZodEditDeleteTriplePayload = z.object({
   entity: z.string(),
   attribute: z.string(),
-  value: z.object({}),
+  // value: z.object({}),
 });
 
 const ZodSetTripleOp = z.object({

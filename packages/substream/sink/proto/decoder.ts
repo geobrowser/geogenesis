@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Edit, ImportEdit, IpfsMetadata, Membership, Subspace } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 import { z } from 'zod';
