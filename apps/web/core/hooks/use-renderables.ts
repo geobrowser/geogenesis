@@ -34,6 +34,7 @@ export function useRenderables(serverTriples: Triple[], spaceId: string) {
     React.useMemo(() => {
       return {
         selector: t => t.space === spaceId,
+        includeDeleted: true,
       };
     }, [spaceId])
   );
