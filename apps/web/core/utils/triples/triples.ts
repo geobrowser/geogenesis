@@ -36,6 +36,10 @@ export function emptyValue(type: TripleValueType): Value {
       type: 'URI',
       value: '',
     },
+    CHECKBOX: {
+      type: 'CHECKBOX',
+      value: '0',
+    },
   };
 
   return tripleValue[type];
@@ -116,6 +120,7 @@ export const getValue = (triple: Triple): string | null => {
     case 'ENTITY':
     case 'TIME':
     case 'URI':
+    case 'CHECKBOX':
       return triple.value.value;
   }
 };

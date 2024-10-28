@@ -34,11 +34,6 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
 }
 
 function squashOps(ops: Op[], spaceId: string, versionId: string): Op[] {
-  if (ops === undefined) {
-    console.log('invalid edit', { versionId });
-    return [];
-  }
-
   // We take the last op for each (S,E,A,V) tuple
   const squashedOps = ops.reduce((acc, op) => {
     const idForOp = `${spaceId}:${op.triple.entity}:${op.triple.attribute}:${versionId}`;
@@ -50,7 +45,13 @@ function squashOps(ops: Op[], spaceId: string, versionId: string): Op[] {
 }
 
 function validateOps(ops: Op[]) {
+  if (ops === undefined) {
+    return [];
+  }
+
   return ops.filter(o => {
+    if (o.type === 'DELETE_TRIPLE') return true;
+
     const triple = o.triple;
 
     switch (triple.value.type) {

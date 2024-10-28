@@ -54,10 +54,24 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
                         {renderable.value}
                       </Text>
                     );
+                  case 'CHECKBOX':
+                    return <div key={`checkbox-${renderable.attributeId}-${renderable.value}`}>I NEED A COMPONENT</div>;
                   case 'TIME':
-                    return <DateField isEditing={false} value={renderable.value} />;
+                    return (
+                      <DateField
+                        key={`time-${renderable.attributeId}-${renderable.value}`}
+                        isEditing={false}
+                        value={renderable.value}
+                      />
+                    );
                   case 'URI':
-                    return <WebUrlField isEditing={false} value={renderable.value} />;
+                    return (
+                      <WebUrlField
+                        key={`uri-${renderable.attributeId}-${renderable.value}`}
+                        isEditing={false}
+                        value={renderable.value}
+                      />
+                    );
                   case 'ENTITY': {
                     return (
                       <div key={`entity-${renderable.attributeId}-${renderable.value.value}}`} className="mt-1">

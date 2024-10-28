@@ -300,6 +300,8 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           </div>
         );
       }
+      case 'CHECKBOX':
+        return <div key={attributeId}>I NEED A COMPONENT</div>;
       case 'RELATION':
       case 'ENTITY': {
         return (

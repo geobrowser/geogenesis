@@ -23,6 +23,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.RELATION]: 'Relation',
   [SYSTEM_IDS.COLLECTION_VALUE_TYPE]: 'Collection',
   [SYSTEM_IDS.TEXT]: 'Text',
+  [SYSTEM_IDS.CHECKBOX]: 'Checkbox',
 
   [SYSTEM_IDS.IMAGE]: 'Image',
   [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: 'Image URL',
