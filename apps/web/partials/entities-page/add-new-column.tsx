@@ -23,7 +23,9 @@ export const AddNewColumn = memo(function AddNewColumn({ selectedType, space }: 
   return (
     <button
       className="absolute right-0 top-0 border-b border-l border-grey-02 bg-white p-[13.5px] transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:outline-ctaPrimary active:text-text active:outline-ctaPrimary"
-      onClick={() => send({ type: 'ADD_NEW_COLUMN' })}
+      onClick={() => {
+        // @TODO add new column. This will go through the filter string
+      }}
     >
       <Plus />
     </button>

@@ -1,7 +1,7 @@
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { atom } from 'jotai';
 
-import { getAppTripleId } from '../id/create-id';
+import { createTripleId } from '../id/create-id';
 import { EntityId } from '../io/schema';
 import { store } from '../state/jotai-store';
 import { OmitStrict } from '../types';
@@ -156,7 +156,7 @@ export const restore = (ops: { op: StoreOp; spaceId: string }[]) => {
 
   for (const { op, spaceId } of ops) {
     const triple: StoredTriple = {
-      id: getAppTripleId(op, spaceId),
+      id: createTripleId({ ...op, space: spaceId }),
       entityId: op.entityId,
       attributeId: op.attributeId,
       // How do we make this work well with local image triples? We want
@@ -195,7 +195,7 @@ const writeMany = (ops: { op: StoreOp; spaceId: string }[]) => {
 
   for (const { op, spaceId } of ops) {
     const triple: StoredTriple = {
-      id: getAppTripleId(op, spaceId),
+      id: createTripleId({ ...op, space: spaceId }),
       entityId: op.entityId,
       attributeId: op.attributeId,
       // How do we make this work well with local image triples? We want

@@ -8,10 +8,6 @@ export function createEntityId() {
   return EntityId(createGeoId());
 }
 
-export function getAppTripleId(triple: Pick<Triple, 'entityId' | 'attributeId'>, spaceId: string) {
-  return `${spaceId}:${triple.entityId}:${triple.attributeId}`;
-}
-
 /**
  * Triple id encoding should match between client and network.
  * As a future improvement, we could try to run the same code between assemblyscript/typescript.
