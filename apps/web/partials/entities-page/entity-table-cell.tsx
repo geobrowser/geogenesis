@@ -58,6 +58,17 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
           return <DateField variant="tableCell" isEditing={false} key={renderable.value} value={renderable.value} />;
         }
 
+        if (renderable.type === 'CHECKBOX') {
+          return (
+            <input
+              type="checkbox"
+              disabled
+              key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+              checked={renderable.value === '1'}
+            />
+          );
+        }
+
         return <CellContent key={renderable.value} isExpanded={isExpanded} value={renderable.value} />;
       })}
     </div>

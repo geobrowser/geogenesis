@@ -189,7 +189,13 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               />
             );
           case 'CHECKBOX':
-            return <div key={renderable.attributeId}>I NEED A COMPONENT</div>;
+            return (
+              <input
+                type="checkbox"
+                key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                checked={renderable.value === '1'}
+              />
+            );
           case 'TIME':
             return <DateField key={renderable.attributeId} isEditing={true} value={renderable.value} />;
           case 'URI':

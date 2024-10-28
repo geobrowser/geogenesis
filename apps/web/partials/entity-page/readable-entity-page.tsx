@@ -55,7 +55,14 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
                       </Text>
                     );
                   case 'CHECKBOX':
-                    return <div key={`checkbox-${renderable.attributeId}-${renderable.value}`}>I NEED A COMPONENT</div>;
+                    return (
+                      <input
+                        type="checkbox"
+                        disabled
+                        key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                        checked={renderable.value === '1'}
+                      />
+                    );
                   case 'TIME':
                     return (
                       <DateField
