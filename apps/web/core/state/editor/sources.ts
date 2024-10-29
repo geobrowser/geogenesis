@@ -28,14 +28,16 @@ import { Source } from './types';
  * for the type of source as a {@link Source}. If no source is found, returns
  * a fallback source with a type of Spaces containing the current space id.
  */
-export function getSource(dataEntityRelations: Relation[], currentSpaceId: SpaceId): Source {
+export function getSource(blockId: string, dataEntityRelations: Relation[], currentSpaceId: SpaceId): Source {
   const sourceType = dataEntityRelations.find(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE)?.toEntity
     .id;
 
   if (sourceType === SYSTEM_IDS.COLLECTION_DATA_SOURCE) {
+    // We default to using the block as the collection source. Any defined collection items
+    // will point from the block itself.
     return {
       type: 'COLLECTION',
-      value: dataEntityRelations.find(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE)?.toEntity.id ?? '',
+      value: blockId,
     };
   }
 

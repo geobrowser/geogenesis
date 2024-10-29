@@ -33,7 +33,7 @@ export const DataBlockSourceMenu = ({
 }: DataBlockSourceMenuProps) => {
   const [view, setView] = useState<View>('initial');
   const { spaces } = useSpaces();
-  const { source, setSource } = useTableBlock();
+  const { source, setSource, blockEntity } = useTableBlock();
 
   return (
     <>
@@ -47,7 +47,7 @@ export const DataBlockSourceMenu = ({
           </div>
           <MenuItem active={source.type === 'COLLECTION'}>
             <button
-              onClick={() => setSource({ type: 'COLLECTION', value: ID.createEntityId() })}
+              onClick={() => setSource({ type: 'COLLECTION', value: blockEntity.id })}
               className="flex w-full items-center justify-between gap-2"
             >
               <span className="text-button text-text">{collectionName || 'New collection'}</span>

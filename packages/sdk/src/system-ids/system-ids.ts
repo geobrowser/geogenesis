@@ -14,7 +14,8 @@ export const ATTRIBUTE = '808a04ceb21c4d888ad12e240613e5ca';
  *
  * Relations are themselves entities, so can store any metadata about the relation
  * as triples. Currently Relation entities cannot have their own relations. This is a
- * technical limitation to avoid infinitely creating recursive relations.
+ * technical limitation to avoid infinitely creating recursive relations. We may
+ * eventually allow some n-depth of nested relations.
  *
  * ┌─────────────────────┐       ┌────────────────────┐      ┌──────────────────────┐
  * │                     │       │                    │      │                      │
@@ -52,12 +53,6 @@ export const RELATION_TYPE_ATTRIBUTE = 'd747a35a6aa14f468f76e6c2064c7036'
  * default, but we set all collection items to a default index value of 0.
  */
 export const RELATION_INDEX = 'ede47e6930b044998ea4aafbda449609';
-
-/**
- * Collection entity type. This is used when the Collection itself is an entity
- * vs. being a value in a Triple
- */
-export const COLLECTION_TYPE = 'c373a33052df47b3a6d2df552bda4b44';
 
 /**
  * Data entities in Geo can specify one or many data sources. These data sources

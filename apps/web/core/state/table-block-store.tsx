@@ -45,8 +45,8 @@ export function useTableBlock() {
   const blockEntity = useEntity(React.useMemo(() => EntityId(entityId), [entityId]));
 
   const source: Source = React.useMemo(() => {
-    return getSource(blockEntity.relationsOut, SpaceId(spaceId));
-  }, [blockEntity.relationsOut, spaceId]);
+    return getSource(blockEntity.id, blockEntity.relationsOut, SpaceId(spaceId));
+  }, [blockEntity.id, blockEntity.relationsOut, spaceId]);
 
   const collectionItems = useRelations(
     React.useMemo(() => {
@@ -56,7 +56,6 @@ export function useTableBlock() {
 
           // Return all local relations pointing to the collection id in the source block
           // @TODO(data blocks): Merge with any remote collection items
-          // @TODO: flatten collection items to point to data block instead of collection entity
           return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
         },
       };
@@ -202,6 +201,7 @@ export function useTableBlock() {
 
   const setSource = React.useCallback(
     (newSource: Source) => {
+      // @TODO: This should handle setting the source based on what user selected
       removeSources({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
       upsertSource({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
     },
