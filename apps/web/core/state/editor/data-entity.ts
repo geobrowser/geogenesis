@@ -20,10 +20,8 @@ import { makeRelationForSource, makeRelationForSourceType } from './sources';
  * @param blockId the id of the new data block as an {@link EntityId}
  * @returns an array of {@link StoreRelation} representing the data entity relations.
  */
-export function makeInitialDataEntityRelations(
-  blockId: EntityId
-): [StoreRelation, StoreRelation, StoreRelation, StoreRelation] {
-  const newCollectionId = ID.createEntityId();
+export function makeInitialDataEntityRelations(blockId: EntityId): [StoreRelation, StoreRelation] {
+  // @TODO: Make the source of the collection the block id instead of this new collection id
 
   return [
     // Create relation for the source type, e.g., Spaces, Collection, Geo, etc.
@@ -31,28 +29,6 @@ export function makeInitialDataEntityRelations(
 
     // Create the type relation for the block itself. e.g., Table, Image, Text, etc.
     getRelationForBlockType(blockId, SYSTEM_IDS.TABLE_BLOCK),
-    // Create the new collection entity by giving it a type of Collection.
-    {
-      index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
-      typeOf: {
-        id: EntityId(SYSTEM_IDS.TYPES),
-        name: 'Types',
-      },
-      toEntity: {
-        id: EntityId(SYSTEM_IDS.COLLECTION_TYPE),
-        renderableType: 'RELATION',
-        name: null,
-        value: EntityId(SYSTEM_IDS.COLLECTION_TYPE),
-      },
-      fromEntity: {
-        id: EntityId(newCollectionId),
-        name: null,
-      },
-    },
-
-    // Set the new collection as a data source. This points from the block entity to
-    // the collection entity.
-    makeRelationForSource(EntityId(newCollectionId), blockId),
   ];
 }
 

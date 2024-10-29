@@ -23,7 +23,7 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
-      message: `Updating processed proposals to accepted`,
+      message: `Updating ${ipfsProposals.length} processed proposals to accepted`,
     });
 
     const {
