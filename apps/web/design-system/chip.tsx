@@ -52,46 +52,25 @@ interface LinkableRelationChipProps {
 }
 
 const linkableRelationChipStyles = cva(
-  'group inline-flex break-words rounded border border-grey-02 bg-white pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  'group inline-flex break-words rounded border border-grey-02 bg-white py-0.5 pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
       shouldClamp: {
         false: 'items-center',
-        true: 'line-clamp-4 py-1',
-      },
-      isEditing: {
-        true: '',
+        true: 'line-clamp-4 items-start',
       },
       isDotsHovered: {
         true: '!border-grey-02',
       },
       isRelationHovered: {
-        true: '',
+        true: '!border-text !text-text',
       },
       isDeleteHovered: {
-        true: '',
+        true: '!border-text !text-text',
       },
     },
-    compoundVariants: [
-      {
-        isEditing: false,
-        isRelationHovered: true,
-        class: '!border-ctaPrimary !text-ctaPrimary',
-      },
-      {
-        isEditing: true,
-        isRelationHovered: true,
-        class: '!border-text !text-text',
-      },
-      {
-        isEditing: true,
-        isDeleteHovered: true,
-        class: '!border-text !text-text',
-      },
-    ],
     defaultVariants: {
       shouldClamp: false,
-      isEditing: false,
       isDotsHovered: false,
       isRelationHovered: false,
       isDeleteHovered: false,
@@ -116,30 +95,15 @@ const relationChipDeleteIconStyles = cva('p-1 text-grey-04', {
 
 const relationChipRelationIconStyles = cva('p-1 text-grey-04', {
   variants: {
-    isEditing: {
-      true: '',
-    },
     isRelationHovered: {
-      true: '',
+      true: '!text-text',
     },
     isDeleteHovered: {
       true: '!text-grey-03',
     },
   },
-  compoundVariants: [
-    {
-      isEditing: false,
-      isRelationHovered: true,
-      class: '',
-    },
-    {
-      isEditing: true,
-      isRelationHovered: true,
-      class: '!text-text',
-    },
-  ],
+
   defaultVariants: {
-    isEditing: false,
     isRelationHovered: false,
     isDeleteHovered: false,
   },
@@ -149,9 +113,6 @@ const relationChipPopoverStyles = cva(
   'flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider',
   {
     variants: {
-      isEditing: {
-        true: '',
-      },
       isDeleteHovered: {
         true: '',
       },
@@ -159,20 +120,7 @@ const relationChipPopoverStyles = cva(
         true: '',
       },
     },
-    compoundVariants: [
-      {
-        isEditing: false,
-        isRelationHovered: true,
-        class: '!border-ctaPrimary !bg-ctaTertiary',
-      },
-      {
-        isEditing: true,
-        isRelationHovered: true,
-        class: '',
-      },
-    ],
     defaultVariants: {
-      isEditing: false,
       isDeleteHovered: false,
       isRelationHovered: false,
     },
@@ -180,33 +128,17 @@ const relationChipPopoverStyles = cva(
 );
 
 const relationChipPopoverTriggerStyles = cva(
-  'relative flex items-start p-1.5 text-grey-03 focus-within:text-text group-hover:text-text',
+  'relative flex items-start px-1.5 py-1 text-grey-03 focus-within:text-text group-hover:text-text',
   {
     variants: {
-      isEditing: {
-        true: '',
-      },
       isDeleteHovered: {
         true: '!text-text',
       },
       isRelationHovered: {
-        true: '',
+        true: '!text-text',
       },
     },
-    compoundVariants: [
-      {
-        isEditing: false,
-        isRelationHovered: true,
-        class: '!text-ctaPrimary',
-      },
-      {
-        isEditing: true,
-        isRelationHovered: true,
-        class: '!text-text',
-      },
-    ],
     defaultVariants: {
-      isEditing: false,
       isDeleteHovered: false,
       isRelationHovered: false,
     },
@@ -224,39 +156,38 @@ export function LinkableRelationChip({
   const [isRelationHovered, setIsRelationHovered] = useState(false);
   const [isDeleteHovered, setIsDeleteHovered] = useState(false);
 
+  const shouldClamp = typeof children === 'string' && children.length >= 42;
+
   return (
     <div
       className={linkableRelationChipStyles({
-        shouldClamp: typeof children === 'string' && children.length >= 42,
-        isEditing,
+        shouldClamp,
         isDotsHovered,
         isRelationHovered,
         isDeleteHovered,
       })}
     >
       <Link href={entityHref}>{children}</Link>
-
       <Tooltip.Provider delayDuration={0}>
         <Tooltip.Root>
           <Tooltip.Trigger asChild>
             <button
               className={relationChipPopoverTriggerStyles({
-                isEditing,
                 isDeleteHovered,
                 isRelationHovered,
               })}
               onMouseEnter={() => setIsDotsHovered(true)}
               onMouseLeave={() => setIsDotsHovered(false)}
             >
+              {/* Expands hoverable area */}
               <div className="absolute -top-2 bottom-0 left-0 right-0" />
               <RelationDots color="current" />
             </button>
           </Tooltip.Trigger>
           <Tooltip.Portal>
             <Tooltip.Content
-              sideOffset={2}
+              sideOffset={0}
               className={relationChipPopoverStyles({
-                isEditing,
                 isDeleteHovered,
                 isRelationHovered,
               })}
@@ -265,7 +196,7 @@ export function LinkableRelationChip({
                 href={relationHref}
                 onMouseEnter={() => setIsRelationHovered(true)}
                 onMouseLeave={() => setIsRelationHovered(false)}
-                className={relationChipRelationIconStyles({ isEditing, isRelationHovered, isDeleteHovered })}
+                className={relationChipRelationIconStyles({ isRelationHovered, isDeleteHovered })}
               >
                 <RelationSmall />
               </Link>
