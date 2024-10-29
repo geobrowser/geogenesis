@@ -1,6 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Match } from 'effect';
 
 import * as React from 'react';
 
@@ -51,6 +50,7 @@ export function useTableBlock() {
   const collectionItems = useRelations(
     React.useMemo(() => {
       return {
+        mergeWith: blockEntity.relationsOut,
         selector: r => {
           if (source.type !== 'COLLECTION') return false;
 
@@ -59,7 +59,7 @@ export function useTableBlock() {
           return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
         },
       };
-    }, [source])
+    }, [blockEntity.relationsOut, source])
   );
 
   const filterTriple = React.useMemo(() => {
@@ -118,27 +118,18 @@ export function useTableBlock() {
         skip: pageNumber * PAGE_SIZE,
       };
 
-      // Depending on the source type we use different queries to aggregate the data
-      // for the data view.
-      return await Match.value(source).pipe(
-        Match.when({ type: 'COLLECTION' }, source => mergeCollectionItemEntitiesAsync(source.value)),
-        Match.when({ type: 'SPACES' }, () => mergeTableEntities({ options: params, source })),
-        Match.orElse(() => [])
-      );
+      if (source.type === 'SPACES') {
+        return await mergeTableEntities({ options: params, source });
+      }
+
+      if (source.type === 'COLLECTION') {
+        return await mergeCollectionItemEntitiesAsync(collectionItems.map(c => c.toEntity.id));
+      }
+
+      return [];
     },
   });
 
-  // @TODO:
-  // 1) We need a way to make each row reactive to changes made locally. This eventually
-  // gets rendered by table blocks, and we probably want to handle reactivity here instead
-  // of doing it in the table block.
-  //
-  // We know the entities in the table from first time querying. Future queries need to be
-  // reactive to any changes to entities in the list, however.
-  //
-  // 2) Alternatively we need to make render cells really cheap and let cells handle
-  // calculating their own merged state. Maybe we can do this by keeping track of local state
-  // of each cell and write any updates to the local state and not read the global state?
   const rows = React.useMemo(() => {
     if (!tableEntities || !columns) return [];
     return EntityTable.fromColumnsAndRows(tableEntities, columns);
