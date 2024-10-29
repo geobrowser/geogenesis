@@ -6,6 +6,7 @@ export type ColorValue = ColorThemeValue[ColorName];
 
 export const colors = {
   light: {
+    current: 'currentColor',
     white: '#FFFFFF',
     text: '#202020',
     ctaPrimary: '#3963FE',
@@ -27,6 +28,7 @@ export const colors = {
 } as const;
 
 export const textColors: Record<ColorName, string> = {
+  current: 'text-current',
   text: 'text-text',
   green: 'text-green',
   orange: 'text-orange',
