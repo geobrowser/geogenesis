@@ -113,6 +113,16 @@ export function writeEdits(args: PopulateContentArgs) {
 
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
 
+    /**
+     * Relations are written distinct from the current version of an entity. Right now
+     * we write relations to either the current version of an entity or to the version
+     * in the current edit.
+     *
+     * We should also handle deleting relations from the current version
+     * 1. If there are no new versions for the from/to entities, then delete the relation
+     *    from the db
+     * 2. If there are new versions for either the from/to, what do we do?
+     */
     const relations = yield* _(
       aggregateRelations({
         triples: triplesWithCreatedBy,
