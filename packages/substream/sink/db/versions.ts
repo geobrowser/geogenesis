@@ -1,10 +1,8 @@
-import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
 import { pool } from '../utils/pool';
 import { CHUNK_SIZE } from './constants';
-import { CurrentVersions } from './current-versions';
 
 export class Versions {
   static async upsert(versions: S.versions.Insertable[], options: { chunked?: boolean } = {}) {

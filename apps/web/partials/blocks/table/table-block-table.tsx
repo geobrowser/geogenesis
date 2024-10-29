@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import {
   ColumnDef,
   createColumnHelper,

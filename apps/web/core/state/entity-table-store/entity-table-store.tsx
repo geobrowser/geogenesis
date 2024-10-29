@@ -7,10 +7,10 @@ import { atom, useAtom } from 'jotai';
 import * as React from 'react';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '~/core/database/table';
+import { MergeTableEntitiesArgs, mergeTableEntities } from '~/core/database/table';
 import { useWriteOps } from '~/core/database/write';
-import { EntityId, SpaceId } from '~/core/io/schema';
-import { createForeignType as insertForeignType, createType as insertType } from '~/core/type/create-type';
+import { SpaceId } from '~/core/io/schema';
+import { createType as insertType } from '~/core/type/create-type';
 import { GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
 
@@ -30,7 +30,7 @@ export interface TableBlockFilter {
 }
 
 export function useEntityTable() {
-  const { space, initialSelectedType, spaceId } = useEntityTableStoreInstance();
+  const { initialSelectedType, spaceId } = useEntityTableStoreInstance();
   const { upsert } = useWriteOps();
 
   const [query, setQuery] = useAtom(queryAtom);
@@ -124,9 +124,7 @@ export function useEntityTable() {
     [setPageNumber]
   );
 
-  const createForeignType = (foreignType: TripleType) => {
-    insertForeignType(foreignType, spaceId, space?.spaceConfig?.id ?? null, upsert);
-  };
+  const createForeignType = (foreignType: TripleType) => {};
 
   const createType = (entityName: string) => {
     return insertType(entityName, spaceId, upsert);

@@ -1,7 +1,7 @@
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
-import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
+import { IPFS_GATEWAY_READ_PATH } from '~/core/constants';
 
 import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';
@@ -69,26 +69,6 @@ export function groupBy<T, U extends PropertyKey>(values: T[], projection: (valu
   }
 
   return result;
-}
-
-export function uniqueBy<T, U extends PropertyKey>(values: T[], projection: (value: T) => U) {
-  return values.reduce<Record<U, T>>(
-    (acc, value) => {
-      const key = projection(value);
-      acc[key] = value;
-      return acc;
-    },
-    {} as Record<U, T>
-  );
-}
-
-export function partition<T>(array: T[], predicate: (value: T) => boolean): [T[], T[]] {
-  return array.reduce<[T[], T[]]>(
-    ([pass, fail], item) => {
-      return predicate(item) ? [[...pass, item], fail] : [pass, [...fail, item]];
-    },
-    [[], []]
-  );
 }
 
 export function formatShortAddress(address: string): string {
@@ -285,11 +265,6 @@ export function slog({
 }
 
 export const sleep = (delay: number) => new Promise(resolve => setTimeout(resolve, delay));
-
-export function isPermissionlessSpace(spaceId: string) {
-  // @TODO: Ensure we are correctly capitalizing the space id in the substream
-  return !ALL_PUBLIC_SPACES.includes(spaceId);
-}
 
 export function toTitleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();

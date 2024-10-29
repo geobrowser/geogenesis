@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery } from '@tanstack/react-query';
+import { Array } from 'effect';
 import Image from 'next/legacy/image';
 
 import * as React from 'react';
@@ -14,7 +15,7 @@ import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
 import { Triple as TripleType } from '~/core/types';
-import { getImagePath, partition } from '~/core/utils/utils';
+import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { CheckCircleReview } from '~/design-system/icons/check-circle-review';
@@ -83,7 +84,10 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
 
   const allTriplesFromEntities = [...entityOneTriples, ...entityTwoTriples];
 
-  const [unmergedTriples, mergedTriples] = partition(allTriplesFromEntities, t => !mergedEntityTriples.includes(t));
+  const [unmergedTriples, mergedTriples] = Array.partition(
+    allTriplesFromEntities,
+    t => !mergedEntityTriples.includes(t)
+  );
 
   const handlePublish = React.useCallback(async () => {
     if (!wallet || !mergedEntityId) return;

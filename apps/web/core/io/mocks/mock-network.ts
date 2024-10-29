@@ -38,54 +38,6 @@ export const makeStubTripleWithAttributeAndValue = (
   };
 };
 
-export const makeStubTripleWithType = (typeId: string): Triple => {
-  return {
-    id: `id~${typeId}`,
-    entityId: `entityId~${typeId}`,
-    entityName: `entityName~${typeId}`,
-    attributeId: SYSTEM_IDS.TYPES,
-    attributeName: 'Types',
-    value: {
-      type: 'ENTITY',
-      name: `valueName~${typeId}`,
-      value: typeId,
-    },
-    space: 's',
-  };
-};
-
-export const makeStubTextAttribute = (name: string): Triple => {
-  return {
-    id: name,
-    entityId: name,
-    entityName: name,
-    attributeId: SYSTEM_IDS.ATTRIBUTE,
-    attributeName: 'Types',
-    value: {
-      type: 'ENTITY',
-      name: 'Text',
-      value: SYSTEM_IDS.TEXT,
-    },
-    space: 's',
-  };
-};
-
-export const makeStubRelationAttribute = (name: string): Triple => {
-  return {
-    id: name,
-    entityId: name,
-    entityName: name,
-    attributeId: SYSTEM_IDS.ATTRIBUTE,
-    attributeName: 'Types',
-    value: {
-      type: 'ENTITY',
-      name: 'Text',
-      value: SYSTEM_IDS.RELATION,
-    },
-    space: 's',
-  };
-};
-
 export const makeStubTripleWithStringValue = (value: string): TripleWithStringValue => {
   return {
     id: `id~${value}`,
@@ -128,30 +80,5 @@ export const makeStubTripleWithUrlValue = (value: string): TripleWithUrlValue =>
       value,
     },
     space: `space~${value}`,
-  };
-};
-
-export const makeStubSpace = (spaceId: string): Space => {
-  return {
-    id: SpaceId(spaceId),
-    type: 'PUBLIC',
-    editors: [],
-    members: [],
-    spaceConfig: {
-      id: EntityId(''),
-      spaceId: spaceId,
-      name: null,
-      description: null,
-      image: PLACEHOLDER_SPACE_IMAGE,
-      triples: [],
-      types: [],
-      nameTripleSpaces: [],
-      relationsOut: [],
-    },
-    daoAddress: Address(''),
-    mainVotingPluginAddress: null,
-    memberAccessPluginAddress: null,
-    spacePluginAddress: Address(''),
-    personalSpaceAdminPluginAddress: null,
   };
 };

@@ -6,7 +6,6 @@ import cx from 'classnames';
 import { diffWords } from 'diff';
 
 import * as React from 'react';
-import { useCallback } from 'react';
 
 import { EntityChange, RelationChange } from '~/core/utils/change/types';
 import { GeoDate, groupBy } from '~/core/utils/utils';

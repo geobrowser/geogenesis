@@ -79,7 +79,7 @@ export function useRenderables(serverTriples: Triple[], spaceId: string) {
   };
 }
 
-export function usePlaceholderRenderables() {
+function usePlaceholderRenderables() {
   const [placeholderRenderables, setPlaceholderRenderables] = React.useState<RenderableProperty[]>([]);
 
   const onAddPlaceholderRenderable = (renderable: RenderableProperty) => {
