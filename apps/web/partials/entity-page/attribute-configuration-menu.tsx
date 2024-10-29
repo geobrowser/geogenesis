@@ -8,8 +8,6 @@ import * as React from 'react';
 import { useWriteOps } from '~/core/database/write';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { useSearch } from '~/core/hooks/use-search';
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { Entity } from '~/core/io/dto/entities';
 import { OmitStrict, RelationValueType } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 

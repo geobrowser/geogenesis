@@ -30,7 +30,7 @@ export interface TableBlockFilter {
 }
 
 export function useEntityTable() {
-  const { space, initialSelectedType, spaceId } = useEntityTableStoreInstance();
+  const { initialSelectedType, spaceId } = useEntityTableStoreInstance();
   const { upsert } = useWriteOps();
 
   const [query, setQuery] = useAtom(queryAtom);

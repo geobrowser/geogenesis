@@ -1,6 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Entity } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
 import { Triple as ITriple, Relation, RenderableProperty, ValueTypeId } from '~/core/types';
 

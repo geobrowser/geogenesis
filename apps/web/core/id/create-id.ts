@@ -1,5 +1,4 @@
 import { createGeoId } from '@geogenesis/sdk';
-import { v4 } from 'uuid';
 
 import { EntityId } from '../io/schema';
 import { Triple } from '../types';

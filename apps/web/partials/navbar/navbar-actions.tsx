@@ -10,7 +10,7 @@ import * as React from 'react';
 import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
 import { GeoConnectButton } from '~/core/wallet';
 

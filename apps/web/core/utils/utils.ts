@@ -1,7 +1,7 @@
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
-import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
+import { IPFS_GATEWAY_READ_PATH } from '~/core/constants';
 
 import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';

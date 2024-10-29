@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEditProposal } from './create-edit-proposal';
-import { ActionType, Edit, Op } from './gen/src/proto/ipfs_pb';
+import { ActionType, Edit } from './gen/src/proto/ipfs_pb';
 
 describe("create-edit-proposal", () => {
   it("encodes and decodes Edit with upsert ops correctly", () => {
