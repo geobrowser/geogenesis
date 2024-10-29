@@ -1,38 +1,7 @@
-import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
+import { createRelationship } from '@geogenesis/sdk';
 
 import { EntityId } from '~/core/io/schema';
 import { Triple } from '~/core/types';
-
-export function indexValue(triple?: Triple): string | null {
-  if (!triple) {
-    return null;
-  }
-
-  const isIndexTriple = triple.attributeId === SYSTEM_IDS.RELATION_INDEX && triple.value.type === 'TEXT';
-
-  return isIndexTriple ? triple.value.value : null;
-}
-
-export function fromValue(triple?: Triple): string | null {
-  if (!triple) {
-    return null;
-  }
-
-  const isCollectionIdValue =
-    triple.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE && triple.value.type === 'ENTITY';
-
-  return isCollectionIdValue ? triple.value.value : null;
-}
-
-export function toValue(triple?: Triple): string | null {
-  if (!triple) {
-    return null;
-  }
-
-  const isCollectionIdValue = triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE && triple.value.type === 'ENTITY';
-
-  return isCollectionIdValue ? triple.value.value : null;
-}
 
 interface OpsToTriplesArgs {
   relationId?: EntityId;

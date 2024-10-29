@@ -3,7 +3,7 @@
 import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
-import { createPublicClient, http } from 'viem';
+import { http } from 'viem';
 
 import * as React from 'react';
 
@@ -35,11 +35,6 @@ import { CONDUIT_TESTNET } from './conduit-chain';
 //     },
 //   },
 // };
-
-export const publicClient = createPublicClient({
-  chain: CONDUIT_TESTNET,
-  transport: http(process.env.NEXT_PUBLIC_RPC_URL!, { batch: true }),
-});
 
 const realWalletConfig = createConfig({
   chains: [CONDUIT_TESTNET],

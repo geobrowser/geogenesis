@@ -10,28 +10,10 @@ export function nameOfEntityValue(triple?: Triple) {
   return triple.value.type === 'ENTITY' ? triple.value.name : null;
 }
 
-export function entityValue(triple: Triple) {
-  if (!triple) return null;
-
-  return triple.value.type === 'ENTITY' ? triple.value.value : null;
-}
-
 export function stringValue(triple?: Triple) {
   if (!triple) return null;
 
   return triple.value.type === 'TEXT' ? triple.value.value : null;
-}
-
-export function urlValue(triple?: Triple) {
-  if (!triple) return null;
-
-  return triple.value.type === 'URI' ? triple.value.value : null;
-}
-
-export function timeValue(triple?: Triple) {
-  if (!triple) return null;
-
-  return triple.value.type === 'TIME' ? triple.value.value : null;
 }
 
 // Get the image triple value from an image path
@@ -50,11 +32,6 @@ export function toImageValue(rawValue: string) {
   }
 }
 
-// @TODO(relations)
 export function isRelationValueType(t: Triple): t is Triple & { value: AppEntityValue } {
   return t.value.type === 'ENTITY' && t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE;
-}
-
-export function isRelationValue(t: Triple): t is Triple & { value: AppEntityValue } {
-  return t.value.type === 'ENTITY';
 }

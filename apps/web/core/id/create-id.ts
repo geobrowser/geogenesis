@@ -1,5 +1,5 @@
 import { createGeoId } from '@geogenesis/sdk';
-import { v4, validate, version } from 'uuid';
+import { v4 } from 'uuid';
 
 import { EntityId } from '../io/schema';
 import { Triple } from '../types';
@@ -16,16 +16,4 @@ export function createTripleId(triple: Pick<Triple, 'attributeId' | 'space' | 'e
   return `${triple.space}:${triple.entityId}:${triple.attributeId}`;
 }
 
-export function createValueId() {
-  return v4();
-}
-
 export const BUILTIN_ENTITY_IDS = ['name', 'type', 'attribute', 'space'];
-
-function isValidUuid(uuid: string) {
-  return validate(uuid) && version(uuid) === 4;
-}
-
-export function isValidEntityId(id: string) {
-  return isValidUuid(id) || BUILTIN_ENTITY_IDS.includes(id);
-}

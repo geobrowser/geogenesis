@@ -7,7 +7,6 @@ import { useParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';

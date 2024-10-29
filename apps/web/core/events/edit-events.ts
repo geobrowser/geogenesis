@@ -18,7 +18,7 @@ import { StoreRelation } from '../database/types';
 import { removeRelation, upsertRelation, useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
 
-export type EditEvent =
+type EditEvent =
   | {
       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE';
       payload: {

@@ -29,16 +29,16 @@ import { Tooltip } from '~/design-system/tooltip';
 
 import { Animation } from '~/partials/onboarding/dialog';
 
-export const spaceTypeAtom = atom<SpaceType | null>(null);
-export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
-export const nameAtom = atom<string>('');
-export const avatarAtom = atom<string>('');
-export const coverAtom = atom<string>('');
-export const spaceIdAtom = atom<string>('');
+const spaceTypeAtom = atom<SpaceType | null>(null);
+const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
+const nameAtom = atom<string>('');
+const avatarAtom = atom<string>('');
+const coverAtom = atom<string>('');
+const spaceIdAtom = atom<string>('');
 
 type Step = 'select-type' | 'select-governance' | 'enter-profile' | 'create-space' | 'completed';
 
-export const stepAtom = atom<Step>('select-type');
+const stepAtom = atom<Step>('select-type');
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 

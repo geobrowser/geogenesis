@@ -76,17 +76,3 @@ export function cover(relations?: Relation[]): string | null {
   if (!relations) return null;
   return relations.find(r => r.typeOf.id === EntityId(SYSTEM_IDS.COVER_ATTRIBUTE))?.toEntity.value ?? null;
 }
-
-/**
- * This function traverses through all the triples associated with a block entity and attempts to find the parent entity ID.
- */
-export const getParentEntityId = (triples: ITriple[] = []) => {
-  const parentEntityTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY);
-
-  // @TODO(relations)? Or are we using the normal entity value here since this is a block?
-  const parentEntityId = parentEntityTriple?.value.type === 'ENTITY' ? parentEntityTriple.value.value : null;
-
-  return parentEntityId;
-};
-
-export const isNonNull = (entity: Entity | null): entity is Entity => entity !== null;
