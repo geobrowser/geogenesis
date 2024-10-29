@@ -9,29 +9,36 @@ import { SubstreamEntity } from '../schema';
 import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
-const query = (collectionId: string) => {
-  return `{
-    relations(filter: { fromVersionId: { equalTo: "${collectionId}" } }) {
+const query = (entityIds: string[]) => {
+  return `query {
+    entities(
+      filter: { id: { in: ${JSON.stringify(entityIds)} } }
+    ) {
       nodes {
-        toVersion {
-          ${versionFragment}
+        id
+        currentVersion {
+          version {
+            ${versionFragment}
+          }
         }
       }
     }
   }`;
 };
 
+interface NetworkResult {
+  entities: { nodes: SubstreamEntity[] };
+}
+
 export async function fetchCollectionItemEntities(
-  collectionId: string,
+  entityIds: string[],
   signal?: AbortController['signal']
 ): Promise<Entity[]> {
   const queryId = v4();
 
-  const graphqlFetchEffect = graphql<{
-    relations: { nodes: { toEntity: SubstreamEntity }[] };
-  }>({
+  const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
-    query: query(collectionId),
+    query: query(entityIds),
     signal,
   });
 
@@ -49,9 +56,8 @@ export async function fetchCollectionItemEntities(
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchCollectionItemEntities. queryId: ${queryId} collectionId: ${collectionId}
-
-            queryString: ${query(collectionId)}
+            `Encountered runtime graphql error in fetchCollectionItemEntities. queryId: ${queryId}
+            queryString: ${query(entityIds)}
             `,
             error.message
           );
@@ -59,33 +65,29 @@ export async function fetchCollectionItemEntities(
           return [];
 
         default:
-          console.error(
-            `${error._tag}: Unable to fetch table collection item entities, queryId: ${queryId} collectionId: ${collectionId}`
-          );
-
+          console.error(`${error._tag}: Unable to fetch table collection item entities, queryId: ${queryId}`);
           return [];
       }
     }
 
-    return resultOrError.right.relations.nodes
-      .map(e => {
-        const decodedSpace = Schema.decodeEither(SubstreamEntity)(e.toEntity);
-
-        return Either.match(decodedSpace, {
-          onLeft: error => {
-            console.error(
-              `Unable to decode entity ${e.toEntity.id} for collection ${collectionId} with error ${error}`
-            );
-            return null;
-          },
-          onRight: entity => {
-            return EntityDto(entity);
-          },
-        });
-      })
-      .filter(e => e !== null);
+    return resultOrError.right.entities.nodes;
   });
 
-  // @TODO: Merge
-  return await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const unknownEntities = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+
+  return unknownEntities
+    .map(e => {
+      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
+
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Unable to decode collection item entity ${e.id} with error ${error}`);
+          return null;
+        },
+        onRight: entity => {
+          return EntityDto(entity);
+        },
+      });
+    })
+    .filter(e => e !== null);
 }
