@@ -66,6 +66,12 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.RELATION_INDEX]: 'Index',
   [SYSTEM_IDS.RELATION_TO_ATTRIBUTE]: 'To entity',
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: 'From entity',
+
+  [SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE]: 'Data Source',
+  [SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE]: 'Data Source Type',
+  [SYSTEM_IDS.COLLECTION_DATA_SOURCE]: 'Collection Data Source',
+  [SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE]: 'Geo Data Source',
+  [SYSTEM_IDS.QUERY_DATA_SOURCE]: 'Query Data Source',
 };
 
 const attributes: Record<string, string> = {
@@ -101,6 +107,9 @@ const attributes: Record<string, string> = {
 
   [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.WEB_URL,
   [SYSTEM_IDS.BROADER_SPACES]: SYSTEM_IDS.RELATION,
+
+  [SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
 };
 
 // These types include the default types and attributes for a given type. There might be more
