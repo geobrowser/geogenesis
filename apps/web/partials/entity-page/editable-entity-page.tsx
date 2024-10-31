@@ -13,6 +13,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { SquareButton } from '~/design-system/button';
+import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { DeletableChipButton, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -281,7 +282,7 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
     <div className="flex flex-wrap gap-2">
       {triples.map(renderable => {
         switch (renderable.type) {
-          case 'TEXT':
+          case 'TEXT': {
             return (
               <PageStringField
                 key={renderable.attributeId}
@@ -303,17 +304,36 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
                 }}
               />
             );
-          case 'CHECKBOX':
+          }
+          case 'CHECKBOX': {
+            const checked = getChecked(renderable.value);
+
             return (
-              <input
-                type="checkbox"
-                key={`checkbox-${renderable.attributeId}-${renderable.value}`}
-                checked={renderable.value === '1'}
-              />
+              <>
+                <Checkbox
+                  key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                  checked={checked}
+                  onChange={() => {
+                    send({
+                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                      payload: {
+                        renderable,
+                        value: {
+                          type: 'CHECKBOX',
+                          value: !checked ? '1' : '0',
+                        },
+                      },
+                    });
+                  }}
+                />
+              </>
             );
-          case 'TIME':
+          }
+          case 'TIME': {
             return <DateField key={renderable.attributeId} isEditing={true} value={renderable.value} />;
-          case 'URI':
+          }
+
+          case 'URI': {
             return (
               <WebUrlField
                 key={renderable.attributeId}
@@ -322,6 +342,7 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
                 value={renderable.value}
               />
             );
+          }
           case 'ENTITY': {
             if (renderable.value.value === '') {
               return (

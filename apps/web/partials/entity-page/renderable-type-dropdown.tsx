@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { SwitchableRenderableType } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
+import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
 import { RelationSmall } from '~/design-system/icons/relation-small';
@@ -25,7 +26,7 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   URI: Url,
   RELATION: RelationSmall,
   IMAGE: Image,
-  CHECKBOX: Image,
+  CHECKBOX: CheckboxChecked,
 };
 
 interface Props {

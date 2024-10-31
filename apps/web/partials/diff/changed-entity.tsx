@@ -10,6 +10,7 @@ import * as React from 'react';
 import { EntityChange, RelationChange } from '~/core/utils/change/types';
 import { GeoDate, groupBy } from '~/core/utils/utils';
 
+import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 
@@ -299,8 +300,37 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           </div>
         );
       }
-      case 'CHECKBOX':
-        return <div key={attributeId}>I NEED A COMPONENT</div>;
+      case 'CHECKBOX': {
+        return (
+          <div key={attributeId} className="-mt-px flex gap-8">
+            <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+              <div className="text-bodySemibold capitalize">{name}</div>
+              <div className="text-body">
+                {changes.map((c, index) => {
+                  if (!c.before) return null;
+
+                  const checked = getChecked(c.before.value);
+
+                  return <Checkbox key={index} checked={checked} />;
+                })}
+              </div>
+            </div>
+            <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
+              {renderAttributeStagingComponent?.(attributeId)}
+              <div className="text-bodySemibold capitalize">{name}</div>
+              <div className="text-body">
+                {changes.map((c, index) => {
+                  if (!c.after) return null;
+
+                  const checked = getChecked(c.after.value);
+
+                  return <Checkbox key={index} checked={checked} />;
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      }
       case 'RELATION':
       case 'ENTITY': {
         return (
