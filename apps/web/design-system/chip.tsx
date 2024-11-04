@@ -18,11 +18,12 @@ interface LinkableChipProps {
 }
 
 const linkableChipStyles = cva(
-  'inline-flex min-h-[1.5rem] items-center break-words rounded border border-grey-02 bg-white px-1.5 py-1 text-left text-metadataMedium !font-normal !leading-[1.125rem] hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  'inline-flex break-words rounded border border-grey-02 bg-white px-1.5 py-1 text-left text-metadataMedium !font-normal !leading-[1.125rem] hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
       shouldClamp: {
-        true: 'line-clamp-2',
+        false: 'items-center',
+        true: 'line-clamp-4',
       },
     },
     defaultVariants: {
@@ -51,78 +52,98 @@ interface LinkableRelationChipProps {
 }
 
 const linkableRelationChipStyles = cva(
-  'inline-flex h-6 items-center break-words rounded border border-grey-02 bg-white pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  'group inline-flex break-words rounded border border-grey-02 bg-white py-0.5 pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
       shouldClamp: {
-        true: 'line-clamp-2',
+        false: 'items-center',
+        true: 'line-clamp-4 items-start',
+      },
+      isDotsHovered: {
+        true: '!border-grey-02',
       },
       isRelationHovered: {
-        true: 'border-ctaPrimary text-ctaPrimary',
+        true: '!border-text !text-text',
       },
       isDeleteHovered: {
-        true: 'border-red-01 text-red-01',
+        true: '!border-text !text-text',
       },
     },
     defaultVariants: {
       shouldClamp: false,
+      isDotsHovered: false,
       isRelationHovered: false,
       isDeleteHovered: false,
     },
   }
 );
 
-const relationChipDeleteIconStyles = cva('stroke-current p-1', {
-  variants: {
-    isDeleteHovered: {
-      true: 'stroke-red-01',
-    },
-  },
-  defaultVariants: {
-    isDeleteHovered: false,
-  },
-});
-
-const relationChipRelationIconStyles = cva('stroke-current p-1', {
+const relationChipDeleteIconStyles = cva('p-1 text-grey-04', {
   variants: {
     isRelationHovered: {
-      true: 'stroke-ctaPrimary',
+      true: '!text-grey-03',
+    },
+    isDeleteHovered: {
+      true: '!text-text',
     },
   },
   defaultVariants: {
     isRelationHovered: false,
+    isDeleteHovered: false,
   },
 });
 
-const relationChipPopoverStyles = cva('flex items-center rounded-[7px] border border-grey-04 bg-white', {
+const relationChipRelationIconStyles = cva('p-1 text-grey-04', {
   variants: {
-    isDeleteHovered: {
-      true: 'border-red-01 text-red-01',
-    },
     isRelationHovered: {
-      true: 'border-ctaPrimary text-ctaPrimary',
+      true: '!text-text',
+    },
+    isDeleteHovered: {
+      true: '!text-grey-03',
     },
   },
+
   defaultVariants: {
-    isDeleteHovered: false,
     isRelationHovered: false,
+    isDeleteHovered: false,
   },
 });
 
-const relationChipPopoverTriggerStyles = cva('px-1.5 focus-within:bg-text hover:stroke-text', {
-  variants: {
-    isDeleteHovered: {
-      true: 'stroke-red-01',
+const relationChipPopoverStyles = cva(
+  'flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider',
+  {
+    variants: {
+      isDeleteHovered: {
+        true: '',
+      },
+      isRelationHovered: {
+        true: '',
+      },
     },
-    isRelationHovered: {
-      true: 'stroke-ctaPrimary',
+    defaultVariants: {
+      isDeleteHovered: false,
+      isRelationHovered: false,
     },
-  },
-  defaultVariants: {
-    isDeleteHovered: false,
-    isRelationHovered: false,
-  },
-});
+  }
+);
+
+const relationChipPopoverTriggerStyles = cva(
+  'relative flex items-start px-1.5 py-1 text-grey-03 focus-within:text-text group-hover:text-text',
+  {
+    variants: {
+      isDeleteHovered: {
+        true: '!text-text',
+      },
+      isRelationHovered: {
+        true: '!text-text',
+      },
+    },
+    defaultVariants: {
+      isDeleteHovered: false,
+      isRelationHovered: false,
+    },
+  }
+);
 
 export function LinkableRelationChip({
   isEditing,
@@ -131,63 +152,68 @@ export function LinkableRelationChip({
   children,
   onDelete,
 }: LinkableRelationChipProps) {
+  const [isDotsHovered, setIsDotsHovered] = useState(false);
   const [isRelationHovered, setIsRelationHovered] = useState(false);
   const [isDeleteHovered, setIsDeleteHovered] = useState(false);
+
+  const shouldClamp = typeof children === 'string' && children.length >= 42;
 
   return (
     <div
       className={linkableRelationChipStyles({
-        shouldClamp: typeof children === 'string' && children.length >= 42,
+        shouldClamp,
+        isDotsHovered,
         isRelationHovered,
         isDeleteHovered,
       })}
     >
-      <div className="flex items-center">
-        <Link href={entityHref}>{children}</Link>
-
-        <Tooltip.Provider delayDuration={0}>
-          <Tooltip.Root>
-            <Tooltip.Trigger asChild>
-              <button
-                className={relationChipPopoverTriggerStyles({
-                  isDeleteHovered,
-                  isRelationHovered,
-                })}
+      <Link href={entityHref}>{children}</Link>
+      <Tooltip.Provider delayDuration={0}>
+        <Tooltip.Root>
+          <Tooltip.Trigger asChild>
+            <button
+              className={relationChipPopoverTriggerStyles({
+                isDeleteHovered,
+                isRelationHovered,
+              })}
+              onMouseEnter={() => setIsDotsHovered(true)}
+              onMouseLeave={() => setIsDotsHovered(false)}
+            >
+              {/* Expands hoverable area */}
+              <div className="absolute -top-2 bottom-0 left-0 right-0" />
+              <RelationDots color="current" />
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              sideOffset={0}
+              className={relationChipPopoverStyles({
+                isDeleteHovered,
+                isRelationHovered,
+              })}
+            >
+              <Link
+                href={relationHref}
+                onMouseEnter={() => setIsRelationHovered(true)}
+                onMouseLeave={() => setIsRelationHovered(false)}
+                className={relationChipRelationIconStyles({ isRelationHovered, isDeleteHovered })}
               >
-                <RelationDots />
-              </button>
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Content
-                sideOffset={2}
-                className={relationChipPopoverStyles({
-                  isDeleteHovered,
-                  isRelationHovered,
-                })}
-              >
-                <Link
-                  href={relationHref}
-                  onMouseEnter={() => setIsRelationHovered(true)}
-                  onMouseLeave={() => setIsRelationHovered(false)}
-                  className={relationChipRelationIconStyles({ isRelationHovered })}
+                <RelationSmall />
+              </Link>
+              {isEditing && (
+                <button
+                  onClick={onDelete}
+                  className={relationChipDeleteIconStyles({ isRelationHovered, isDeleteHovered })}
+                  onMouseEnter={() => setIsDeleteHovered(true)}
+                  onMouseLeave={() => setIsDeleteHovered(false)}
                 >
-                  <RelationSmall fill={isRelationHovered ? 'ctaPrimary' : undefined} />
-                </Link>
-                {isEditing && (
-                  <button
-                    onClick={onDelete}
-                    className={relationChipDeleteIconStyles({ isDeleteHovered })}
-                    onMouseEnter={() => setIsDeleteHovered(true)}
-                    onMouseLeave={() => setIsDeleteHovered(false)}
-                  >
-                    <CheckCloseSmall />
-                  </button>
-                )}
-              </Tooltip.Content>
-            </Tooltip.Portal>
-          </Tooltip.Root>
-        </Tooltip.Provider>
-      </div>
+                  <CheckCloseSmall />
+                </button>
+              )}
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      </Tooltip.Provider>
     </div>
   );
 }
