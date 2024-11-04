@@ -2,6 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
+import type { EditEvent } from '~/core/events/edit-events';
 import { RenderableProperty, SwitchableRenderableType, ValueTypeId } from '~/core/types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
@@ -30,7 +31,8 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
 
 export const getRenderableTypeSelectorOptions = (
   renderable: RenderableProperty,
-  onSelect: (renderableType: RenderableProperty) => void
+  onSelect: (renderableType: RenderableProperty) => void,
+  send: (event: EditEvent) => void
 ): {
   label: React.ReactNode;
   value: SwitchableRenderableType;
@@ -77,9 +79,24 @@ export const getRenderableTypeSelectorOptions = (
           entityName: renderable.entityName,
           attributeId: renderable.attributeId,
           attributeName: renderable.attributeName,
-          value: '',
+          value: '0',
           spaceId: renderable.spaceId,
           placeholder: true,
+        });
+        send({
+          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+          payload: {
+            renderable: {
+              ...renderable,
+              type: 'CHECKBOX',
+              placeholder: false,
+              value: '0',
+            },
+            value: {
+              type: 'CHECKBOX',
+              value: '0',
+            },
+          },
         });
       },
     },

@@ -60,10 +60,14 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
             const renderableType = firstRenderable.type;
 
             // @TODO: We can abstract this away. We also don't need to pass in the first renderable to options func.
-            const selectorOptions = getRenderableTypeSelectorOptions(firstRenderable, placeholderRenderable => {
-              send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
-              addPlaceholderRenderable(placeholderRenderable);
-            });
+            const selectorOptions = getRenderableTypeSelectorOptions(
+              firstRenderable,
+              placeholderRenderable => {
+                send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+                addPlaceholderRenderable(placeholderRenderable);
+              },
+              send
+            );
 
             return (
               <div key={`${id}-${attributeId}`} className="relative break-words">
