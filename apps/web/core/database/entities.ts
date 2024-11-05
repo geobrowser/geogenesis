@@ -1,17 +1,23 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
+import { Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
+import { atom, useAtomValue } from 'jotai';
+import { unwrap } from 'jotai/utils';
 
 import * as React from 'react';
 
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
+import { fetchCollectionItemEntities } from '../io/subgraph/fetch-collection-items';
 import { queryClient } from '../query-client';
+import { store } from '../state/jotai-store';
 import { Relation, Schema, Triple, TripleWithEntityValue, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
 import { getTriples, useTriples } from './triples';
+import { localOpsAtom, localRelationsAtom } from './write';
 
 export type EntityWithSchema = Entity & { schema: Schema[] };
 
@@ -273,4 +279,58 @@ export function readTypes(triples: Triple[], relations: Relation[]): { id: Entit
     }));
 
   return dedupeWith([...typesViaTriples, ...typeIdsViaRelations], (a, b) => a.id === b.id);
+}
+
+const localEntitiesAtom = atom(async get => {
+  const tripleEntityIds = get(localOpsAtom).map(o => o.entityId);
+  const relationEntityIds = get(localRelationsAtom).map(r => r.fromEntity.id);
+
+  // @TODO: turn the entities into a local representation of an Entity
+  //        this basically looks like the useEntity hook above.
+  // @TODO: merge with a remote representation if it exists
+
+  const changedEntities = [...new Set([...tripleEntityIds, ...relationEntityIds])];
+  const entities: Entity[] = [];
+
+  // @TODO: fetch entity spaces. current version fragment only returns the
+  // types but not the spaces. Our search results expect the spaces as well.
+  const remoteVersionsOfEntities = await queryClient.fetchQuery({
+    queryKey: ['local-entities-merge-fetch', changedEntities],
+    queryFn: () => fetchCollectionItemEntities(changedEntities),
+    staleTime: Duration.toMillis(Duration.seconds(30)),
+  });
+
+  // @TODO merge local entities that don't have a remote version
+  // There's some mismatch between our search results and our entities. Our
+  // search results are a subset of the Entity type + the spaces filter. Might
+  // just need another atom for fetching results.
+  for (const entityId of changedEntities) {
+    // entities.push(await mergeEntityAsync(EntityId(entityId)));
+  }
+
+  console.log('data', { remoteVersionsOfEntities });
+  return groupEntitiesByEntityId(remoteVersionsOfEntities);
+});
+
+function groupEntitiesByEntityId(entities: Entity[]) {
+  return entities.reduce<Record<EntityId, Entity>>((acc, entity) => {
+    const entityId = EntityId(entity.id);
+
+    if (!acc[entityId]) {
+      acc[entityId] = entity;
+    }
+
+    return acc;
+  }, {});
+}
+
+// @TODO Should useEntity just read from useEntities with an id? Do we need an optional
+// getter or something?
+export function useEntities_experimental() {
+  const memoizedAtom = React.useMemo(() => unwrap(localEntitiesAtom, prev => prev ?? {}), []);
+  return useAtomValue(memoizedAtom);
+}
+
+export function getEntities_experimental() {
+  return store.get(localEntitiesAtom);
 }
