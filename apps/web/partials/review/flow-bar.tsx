@@ -6,7 +6,6 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 
-import { useEntities_experimental } from '~/core/database/entities';
 import { useTriples } from '~/core/database/triples';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
@@ -25,7 +24,6 @@ export const FlowBar = () => {
   const [toast] = useToast();
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
-  useEntities_experimental();
 
   const triples = useTriples(
     React.useMemo(() => ({ selector: t => t.hasBeenPublished === false, includeDeleted: true }), [])
