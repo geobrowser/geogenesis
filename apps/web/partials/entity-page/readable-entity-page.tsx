@@ -60,9 +60,7 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
                     const checked = getChecked(renderable.value);
 
                     return (
-                      <>
-                        <Checkbox key={`checkbox-${renderable.attributeId}-${renderable.value}`} checked={checked} />
-                      </>
+                      <Checkbox key={`checkbox-${renderable.attributeId}-${renderable.value}`} checked={checked} />
                     );
                   }
                   case 'TIME': {

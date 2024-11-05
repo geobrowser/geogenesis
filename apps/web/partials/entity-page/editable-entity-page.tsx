@@ -313,24 +313,22 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
             const checked = getChecked(renderable.value);
 
             return (
-              <>
-                <Checkbox
-                  key={`checkbox-${renderable.attributeId}-${renderable.value}`}
-                  checked={checked}
-                  onChange={() => {
-                    send({
-                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                      payload: {
-                        renderable,
-                        value: {
-                          type: 'CHECKBOX',
-                          value: !checked ? '1' : '0',
-                        },
+              <Checkbox
+                key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                checked={checked}
+                onChange={() => {
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      renderable,
+                      value: {
+                        type: 'CHECKBOX',
+                        value: !checked ? '1' : '0',
                       },
-                    });
-                  }}
-                />
-              </>
+                    },
+                  });
+                }}
+              />
             );
           }
           case 'TIME': {

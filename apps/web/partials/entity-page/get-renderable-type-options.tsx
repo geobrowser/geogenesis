@@ -83,6 +83,7 @@ export const getRenderableTypeSelectorOptions = (
           spaceId: renderable.spaceId,
           placeholder: true,
         });
+        // A triple is created to set the default state to false instead of indeterminate
         send({
           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
           payload: {
@@ -176,6 +177,8 @@ type IconWrapperProps = {
   children: React.ReactNode;
 };
 
+// Reserves a consistent amount of space for the icon
+// (ensures the accompanying label text is aligned)
 const IconWrapper = ({ children }: IconWrapperProps) => {
   return <div className="inline-flex w-5 items-center justify-center">{children}</div>;
 };
