@@ -27,9 +27,17 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
           try: async () =>
             // @TODO(database): merged
             await mergeSearchResults({
-              name: query,
+              filters: [
+                {
+                  type: 'NAME',
+                  value: query,
+                },
+                {
+                  type: 'TYPES',
+                  value: filterByTypes ?? [],
+                },
+              ],
               signal,
-              typeIds: filterByTypes,
               first: 10,
             }),
           catch: () => {
@@ -53,9 +61,10 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
         }
       }
 
+      console.log('resuts', resultOrError.right);
+
       return resultOrError.right;
     },
-    staleTime: 10,
   });
 
   return {

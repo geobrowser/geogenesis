@@ -27,6 +27,8 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
 
   if (!open) return null;
 
+  console.log('autocomplete results', autocomplete.results);
+
   const separatedResults = autocomplete.results.reduce((acc, result) => {
     for (const space of result.spaces ?? []) {
       acc.push({

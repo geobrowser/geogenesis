@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
-import { Duration } from 'effect';
+import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 import { atom, useAtomValue } from 'jotai';
 import { unwrap } from 'jotai/utils';
@@ -285,31 +285,21 @@ const localEntitiesAtom = atom(async get => {
   const tripleEntityIds = get(localOpsAtom).map(o => o.entityId);
   const relationEntityIds = get(localRelationsAtom).map(r => r.fromEntity.id);
 
-  // @TODO: turn the entities into a local representation of an Entity
-  //        this basically looks like the useEntity hook above.
-  // @TODO: merge with a remote representation if it exists
-
   const changedEntities = [...new Set([...tripleEntityIds, ...relationEntityIds])];
-  const entities: Entity[] = [];
 
-  // @TODO: fetch entity spaces. current version fragment only returns the
-  // types but not the spaces. Our search results expect the spaces as well.
   const remoteVersionsOfEntities = await queryClient.fetchQuery({
     queryKey: ['local-entities-merge-fetch', changedEntities],
     queryFn: () => fetchCollectionItemEntities(changedEntities),
     staleTime: Duration.toMillis(Duration.seconds(30)),
   });
 
-  // @TODO merge local entities that don't have a remote version
-  // There's some mismatch between our search results and our entities. Our
-  // search results are a subset of the Entity type + the spaces filter. Might
-  // just need another atom for fetching results.
-  for (const entityId of changedEntities) {
-    // entities.push(await mergeEntityAsync(EntityId(entityId)));
-  }
+  const merged = remoteVersionsOfEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
 
-  console.log('data', { remoteVersionsOfEntities });
-  return groupEntitiesByEntityId(remoteVersionsOfEntities);
+  const localVersionsOfEntitiesNotAlreadyMerged = changedEntities
+    .filter(entityId => !merged.some(m => m.id === entityId))
+    .map(entityId => mergeEntity({ id: entityId, mergeWith: null }));
+
+  return groupEntitiesByEntityId([...localVersionsOfEntitiesNotAlreadyMerged, ...merged]);
 });
 
 function groupEntitiesByEntityId(entities: Entity[]) {
@@ -331,6 +321,10 @@ export function useEntities_experimental() {
   return useAtomValue(memoizedAtom);
 }
 
-export function getEntities_experimental() {
+export async function getEntities_experimental() {
+  // @TODO For some reason using unwrap was returning {} for consumers of getEntities.
+  // Might have something to do with the first time being called so we are given the
+  // fallback?
+  // const atom = unwrap(localEntitiesAtom, prev => prev ?? {});
   return store.get(localEntitiesAtom);
 }
