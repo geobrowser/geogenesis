@@ -61,8 +61,6 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
         }
       }
 
-      console.log('resuts', resultOrError.right);
-
       return resultOrError.right;
     },
   });
