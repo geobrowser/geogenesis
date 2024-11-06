@@ -1,6 +1,5 @@
 'use client';
 
-import { A, S } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
@@ -9,15 +8,13 @@ import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 
-import { Services } from '../services';
+import { mergeSearchResults } from '../database/results';
 
 interface SearchOptions {
   filterByTypes?: string[];
 }
 
 export function useSearch({ filterByTypes }: SearchOptions = {}) {
-  const { subgraph } = Services.useServices();
-
   const [query, setQuery] = React.useState('');
 
   const { data: results, isLoading } = useQuery({
@@ -29,10 +26,18 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
         Effect.tryPromise({
           try: async () =>
             // @TODO(database): merged
-            await subgraph.fetchResults({
-              query,
+            await mergeSearchResults({
+              filters: [
+                {
+                  type: 'NAME',
+                  value: query,
+                },
+                {
+                  type: 'TYPES',
+                  value: filterByTypes ?? [],
+                },
+              ],
               signal,
-              typeIds: filterByTypes,
               first: 10,
             }),
           catch: () => {
@@ -58,14 +63,21 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
 
       return resultOrError.right;
     },
-    staleTime: 10,
   });
 
   return {
-    isEmpty: A.isEmpty(results ?? []) && S.isNotEmpty(query) && !isLoading,
+    isEmpty: isArrayEmpty(results ?? []) && !isStringEmpty(query) && !isLoading,
     isLoading,
     results: query ? results ?? [] : [],
     query,
     onQueryChange: setQuery,
   };
+}
+
+function isArrayEmpty<T>(array: T[]): boolean {
+  return array.length === 0;
+}
+
+function isStringEmpty(value: string): boolean {
+  return value === '';
 }

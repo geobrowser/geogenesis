@@ -1,5 +1,6 @@
 import { Op } from '@geogenesis/sdk';
 
+import { Triple as T } from '~/core/database/Triple';
 import { StoredTriple } from '~/core/database/types';
 import { createTripleId } from '~/core/id/create-id';
 import { Triple } from '~/core/types';
@@ -13,13 +14,7 @@ export function merge(local: StoredTriple[], remote: Triple[]): StoredTriple[] {
   const remoteTriplesWithoutLocalTriples = remote.filter(
     t => !localTripleIds.has(createTripleId({ ...t, space: t.space }))
   );
-  const remoteTriplesMappedToLocalTriples = remoteTriplesWithoutLocalTriples.map(t => ({
-    ...t,
-    hasBeenPublished: false,
-    isDeleted: false,
-    id: createTripleId({ ...t, space: t.space }),
-    timestamp: timestamp(),
-  }));
+  const remoteTriplesMappedToLocalTriples = remoteTriplesWithoutLocalTriples.map(T.make);
 
   return [...remoteTriplesMappedToLocalTriples, ...local];
 }
