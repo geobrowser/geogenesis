@@ -1,9 +1,9 @@
 import { Array, Duration } from 'effect';
 
+import { Entity } from '../io/dto/entities';
 import { SearchResult } from '../io/dto/search';
-import { SpaceMetadataDto } from '../io/dto/spaces';
 import { EntityId } from '../io/schema';
-import { fetchResults } from '../io/subgraph';
+import { fetchResults, fetchSpaces } from '../io/subgraph';
 import { queryClient } from '../query-client';
 import { getEntities_experimental } from './entities';
 
@@ -84,13 +84,30 @@ export async function mergeSearchResults(args: FetchResultsOptions) {
     merged.map(m => m.id)
   );
 
-  // @TODO fetch space for the local spaces
-  const localResults = localEntitiesThatDontExistRemotely.map((entityId): SearchResult => {
-    const entity = localEntities[EntityId(entityId)];
+  const localOnlyEntities = localEntitiesThatDontExistRemotely.map((entityId): Entity => {
+    return localEntities[EntityId(entityId)];
+  });
 
+  const localEntitySpaceIds = localOnlyEntities.flatMap(e => e.nameTripleSpaces);
+
+  // Is it more optimal to do this in parallel with the cachedRemoteResults? We might
+  // end up fetching more data but get the data we need sooner.
+  const localEntitySpaces = await queryClient.fetchQuery({
+    queryKey: ['merge-local-entity-spaces', localEntitySpaceIds],
+    queryFn: () => fetchSpaces({ spaceIds: localEntitySpaceIds }),
+    staleTime: Duration.toMillis(Duration.seconds(15)),
+  });
+
+  const localEntitySpacesBySpaceId = Object.fromEntries(localEntitySpaces.map(s => [s.id, s.spaceConfig]));
+
+  const localResults = localOnlyEntities.map((e): SearchResult => {
     return {
-      ...entity,
-      spaces: entity.nameTripleSpaces.map(s => SpaceMetadataDto(s, null)),
+      ...e,
+      spaces: e.nameTripleSpaces
+        .map(spaceId => {
+          return localEntitySpacesBySpaceId[spaceId] ?? null;
+        })
+        .filter(s => s !== null),
     };
   });
 
