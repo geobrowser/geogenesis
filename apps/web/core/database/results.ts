@@ -26,7 +26,7 @@ export interface FetchResultsOptions {
 export async function mergeSearchResults(args: FetchResultsOptions) {
   const localEntities = await getEntities_experimental();
 
-  const localEntitiesWithFilter = new Set(
+  const localOnlyEntitiesWithFilter = new Set(
     Object.values(localEntities)
       .filter(e => {
         const nameInsensitive = e.name?.toLowerCase() ?? '';
@@ -65,7 +65,7 @@ export async function mergeSearchResults(args: FetchResultsOptions) {
   // already merged the entity in localEntities and really only care about
   // adding any space metadata.
   const merged = cachedRemoteResults.map((e): SearchResult => {
-    const maybeLocalVersionExists = localEntitiesWithFilter.has(e.id);
+    const maybeLocalVersionExists = localOnlyEntitiesWithFilter.has(e.id);
 
     if (maybeLocalVersionExists) {
       const localEntity = localEntities[e.id];
@@ -79,22 +79,26 @@ export async function mergeSearchResults(args: FetchResultsOptions) {
     return e;
   });
 
-  const localEntitiesThatDontExistRemotely = Array.difference(
-    [...localEntitiesWithFilter],
+  /**
+   * Some entities might _only_ exist locally, so we need to map those
+   * into the {@link SearchResult} struct to return to the caller.
+   */
+  const localOnlyEntityIds = Array.difference(
+    [...localOnlyEntitiesWithFilter],
     merged.map(m => m.id)
   );
 
-  const localOnlyEntities = localEntitiesThatDontExistRemotely.map((entityId): Entity => {
+  const localOnlyEntities = localOnlyEntityIds.map((entityId): Entity => {
     return localEntities[EntityId(entityId)];
   });
 
-  const localEntitySpaceIds = localOnlyEntities.flatMap(e => e.nameTripleSpaces);
+  const localOnlyEntitySpaceIds = localOnlyEntities.flatMap(e => e.nameTripleSpaces);
 
-  // Is it more optimal to do this in parallel with the cachedRemoteResults? We might
-  // end up fetching more data but get the data we need sooner.
+  // Is it more optimal to do this in parallel with the cachedRemoteResults?
+  // We might end up fetching more data but get the data we need sooner.
   const localEntitySpaces = await queryClient.fetchQuery({
-    queryKey: ['merge-local-entity-spaces', localEntitySpaceIds],
-    queryFn: () => fetchSpaces({ spaceIds: localEntitySpaceIds }),
+    queryKey: ['merge-local-entity-spaces', localOnlyEntitySpaceIds],
+    queryFn: () => fetchSpaces({ spaceIds: localOnlyEntitySpaceIds }),
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
 
@@ -111,5 +115,5 @@ export async function mergeSearchResults(args: FetchResultsOptions) {
     };
   });
 
-  return [...localResults, ...cachedRemoteResults];
+  return [...localResults, ...merged];
 }
