@@ -2,8 +2,10 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ValueType as TripleValueType } from '~/core/types';
 
+import { mergeEntityAsync } from '../database/entities';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
+import { EntityId } from '../io/schema';
 import { Source } from '../state/editor/types';
 
 export function upsertName({
@@ -163,8 +165,7 @@ export function createGraphQLStringFromFilters(
  */
 export async function createFiltersFromGraphQLStringAndSource(
   graphQLString: string | null,
-  source: Source,
-  fetchEntity: (entityId: string) => Promise<Entity | null>
+  source: Source
 ): Promise<
   {
     columnId: string;
@@ -185,9 +186,10 @@ export async function createFiltersFromGraphQLStringAndSource(
     const typeMatch = graphQLString.match(typeRegex);
     const typeValue = typeMatch ? typeMatch[1] : null;
 
-    // @TODO: fix json parsing requirements
     if (typeValue) {
-      const maybeType = await fetchEntity(JSON.parse(typeValue));
+      // @TODO: fix json parsing requirements. Why do we need this?
+      const parsedTypeValue = JSON.parse(typeValue);
+      const maybeType = await mergeEntityAsync(EntityId(parsedTypeValue));
 
       if (maybeType) {
         filters.push({
@@ -221,7 +223,7 @@ export async function createFiltersFromGraphQLStringAndSource(
       const entityValue = match[2];
 
       if (attribute && entityValue) {
-        const maybeEntity = await fetchEntity(entityValue);
+        const maybeEntity = await mergeEntityAsync(EntityId(entityValue));
 
         if (maybeEntity) {
           filters.push({

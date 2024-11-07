@@ -1,17 +1,23 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
+import { Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
+import { atom, useAtomValue } from 'jotai';
+import { unwrap } from 'jotai/utils';
 
 import * as React from 'react';
 
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
+import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
+import { store } from '../state/jotai-store';
 import { Relation, Schema, Triple, TripleWithEntityValue, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
 import { getTriples, useTriples } from './triples';
+import { localOpsAtom, localRelationsAtom } from './write';
 
 export type EntityWithSchema = Entity & { schema: Schema[] };
 
@@ -273,4 +279,52 @@ export function readTypes(triples: Triple[], relations: Relation[]): { id: Entit
     }));
 
   return dedupeWith([...typesViaTriples, ...typeIdsViaRelations], (a, b) => a.id === b.id);
+}
+
+const localEntitiesAtom = atom(async get => {
+  const tripleEntityIds = get(localOpsAtom).map(o => o.entityId);
+  const relationEntityIds = get(localRelationsAtom).map(r => r.fromEntity.id);
+
+  const changedEntities = [...new Set([...tripleEntityIds, ...relationEntityIds])];
+
+  const remoteVersionsOfEntities = await queryClient.fetchQuery({
+    queryKey: ['local-entities-merge-fetch', changedEntities],
+    queryFn: () => fetchEntitiesBatch(changedEntities),
+    staleTime: Duration.toMillis(Duration.seconds(30)),
+  });
+
+  const merged = remoteVersionsOfEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
+
+  const localVersionsOfEntitiesNotAlreadyMerged = changedEntities
+    .filter(entityId => !merged.some(m => m.id === entityId))
+    .map(entityId => mergeEntity({ id: entityId, mergeWith: null }));
+
+  return groupEntitiesByEntityId([...localVersionsOfEntitiesNotAlreadyMerged, ...merged]);
+});
+
+function groupEntitiesByEntityId(entities: Entity[]) {
+  return entities.reduce<Record<EntityId, Entity>>((acc, entity) => {
+    const entityId = EntityId(entity.id);
+
+    if (!acc[entityId]) {
+      acc[entityId] = entity;
+    }
+
+    return acc;
+  }, {});
+}
+
+// @TODO Should useEntity just read from useEntities with an id? Do we need an optional
+// getter or something?
+export function useEntities_experimental() {
+  const memoizedAtom = React.useMemo(() => unwrap(localEntitiesAtom, prev => prev ?? {}), []);
+  return useAtomValue(memoizedAtom);
+}
+
+export async function getEntities_experimental() {
+  // @TODO For some reason using unwrap was returning {} for consumers of getEntities.
+  // Might have something to do with the first time being called so we are given the
+  // fallback?
+  // const atom = unwrap(localEntitiesAtom, prev => prev ?? {});
+  return store.get(localEntitiesAtom);
 }

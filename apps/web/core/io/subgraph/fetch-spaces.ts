@@ -10,13 +10,25 @@ import { SubstreamSpace } from '../schema';
 import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
 
-const getFetchSpacesQuery = () => `query {
-  spaces {
-    nodes {
-      ${spaceFragment}
-    }
+const getFetchSpacesQuery = (spaceIds?: string[]) => {
+  if (spaceIds) {
+    return `query {
+      spaces(filter: { id: { in: ${JSON.stringify(spaceIds)} } }) {
+        nodes {
+          ${spaceFragment}
+        }
+      }
+    }`;
   }
-}`;
+
+  return `query {
+    spaces {
+      nodes {
+        ${spaceFragment}
+      }
+    }
+  }`;
+};
 
 interface NetworkResult {
   spaces: {
@@ -24,13 +36,17 @@ interface NetworkResult {
   };
 }
 
-export async function fetchSpaces(): Promise<Space[]> {
+interface FetchSpacesArgs {
+  spaceIds: string[];
+}
+
+export async function fetchSpaces(args?: FetchSpacesArgs): Promise<Space[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchSpacesQuery(),
+    query: getFetchSpacesQuery(args?.spaceIds),
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {

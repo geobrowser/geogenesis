@@ -1,7 +1,7 @@
 'use client';
 
-import { A, S } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
+import { Duration } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
@@ -9,30 +9,38 @@ import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 
-import { Services } from '../services';
+import { mergeSearchResults } from '../database/results';
+import { useDebouncedValue } from './use-debounced-value';
 
 interface SearchOptions {
   filterByTypes?: string[];
 }
 
 export function useSearch({ filterByTypes }: SearchOptions = {}) {
-  const { subgraph } = Services.useServices();
-
   const [query, setQuery] = React.useState('');
+  const debouncedQuery = useDebouncedValue(query);
 
   const { data: results, isLoading } = useQuery({
-    queryKey: ['search', query, filterByTypes],
+    enabled: debouncedQuery !== '',
+    queryKey: ['search', debouncedQuery, filterByTypes],
     queryFn: async ({ signal }) => {
       if (query.length === 0) return [];
 
       const fetchResultsEffect = Effect.either(
         Effect.tryPromise({
           try: async () =>
-            // @TODO(database): merged
-            await subgraph.fetchResults({
-              query,
+            await mergeSearchResults({
+              filters: [
+                {
+                  type: 'NAME',
+                  value: debouncedQuery,
+                },
+                {
+                  type: 'TYPES',
+                  value: filterByTypes ?? [],
+                },
+              ],
               signal,
-              typeIds: filterByTypes,
               first: 10,
             }),
           catch: () => {
@@ -58,14 +66,25 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
 
       return resultOrError.right;
     },
-    staleTime: 10,
+    staleTime: Duration.toMillis(Duration.seconds(5)),
   });
 
+  const isQuerySyncing = query !== debouncedQuery;
+  const shouldSuspend = isQuerySyncing || isLoading;
+
   return {
-    isEmpty: A.isEmpty(results ?? []) && S.isNotEmpty(query) && !isLoading,
-    isLoading,
-    results: query ? results ?? [] : [],
+    isEmpty: isArrayEmpty(results ?? []) && !isStringEmpty(query) && !shouldSuspend,
+    isLoading: shouldSuspend,
+    results: results ?? [],
     query,
     onQueryChange: setQuery,
   };
+}
+
+function isArrayEmpty<T>(array: T[]): boolean {
+  return array.length === 0;
+}
+
+function isStringEmpty(value: string): boolean {
+  return value === '';
 }
