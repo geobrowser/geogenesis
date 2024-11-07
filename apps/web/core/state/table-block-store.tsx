@@ -9,7 +9,7 @@ import {
   createGraphQLStringFromFiltersV2,
   upsertName,
 } from '../blocks-sdk/table';
-import { mergeEntityAsync, useEntity } from '../database/entities';
+import { useEntity } from '../database/entities';
 import { useRelations } from '../database/relations';
 import {
   MergeTableEntitiesArgs,
@@ -17,10 +17,11 @@ import {
   mergeColumns,
   mergeTableEntities,
 } from '../database/table';
+import { StoredRelation } from '../database/types';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { ValueType as TripleValueType } from '../types';
+import { Schema, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
@@ -28,6 +29,24 @@ import { getSource, removeSources, upsertSource } from './editor/sources';
 import { Source } from './editor/types';
 
 export const PAGE_SIZE = 9;
+
+interface RowQueryArgs {
+  columns?: Schema[];
+  pageNumber: number;
+  entityId: string;
+  filterState?: Awaited<ReturnType<typeof createFiltersFromGraphQLStringAndSource>>;
+  source: Source;
+  collectionItems: StoredRelation[];
+}
+
+const queryKeys = {
+  filterState: (filterString: string | null, source: Source) =>
+    ['blocks', 'data', 'filter-state', filterString, source] as const,
+  columns: (filterState: Awaited<ReturnType<typeof createFiltersFromGraphQLStringAndSource>> | null) =>
+    ['blocks', 'data', 'columns', filterState] as const,
+  rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
+  relationTypes: (columns?: Schema[]) => ['blocks', 'data', 'relation-types', columns],
+};
 
 export interface TableBlockFilter {
   columnId: string;
@@ -82,13 +101,9 @@ export function useTableBlock() {
    * only includes _data_ filters, but not _where_ to query from.
    */
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
-    queryKey: ['table-block-filter-value', filterString, source],
+    queryKey: queryKeys.filterState(filterString, source),
     queryFn: async () => {
-      const filterState = await createFiltersFromGraphQLStringAndSource(
-        filterString,
-        source,
-        async id => await mergeEntityAsync(EntityId(id))
-      );
+      const filterState = await createFiltersFromGraphQLStringAndSource(filterString, source);
 
       return filterState;
     },
@@ -97,7 +112,7 @@ export function useTableBlock() {
   // We need the entities before we can fetch the columns since we need to know the
   // types of the entities when rendering a collection source.
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
-    queryKey: ['table-block-columns', filterState],
+    queryKey: queryKeys.columns(filterState ?? null),
     queryFn: async () => {
       const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES).map(f => f.value) ?? [];
       return await mergeColumns(typesInFilter);
@@ -105,8 +120,16 @@ export function useTableBlock() {
   });
 
   const { data: tableEntities, isLoading: isLoadingEntities } = useQuery({
+    enabled: columns !== undefined && filterState !== undefined,
     placeholderData: keepPreviousData,
-    queryKey: ['table-block-entities', columns, pageNumber, entityId, filterState, source, collectionItems],
+    queryKey: queryKeys.rows({
+      columns,
+      pageNumber,
+      collectionItems,
+      entityId,
+      source,
+      filterState,
+    }),
     queryFn: async () => {
       if (!columns || !filterState) return [];
 
@@ -136,7 +159,8 @@ export function useTableBlock() {
   }, [tableEntities, columns]);
 
   const { data: columnRelationTypes } = useQuery({
-    queryKey: ['table-block-column-relation-types', columns],
+    enabled: columns !== undefined,
+    queryKey: queryKeys.relationTypes(columns),
     queryFn: async () => {
       if (!columns) return {};
       // @TODO(database)

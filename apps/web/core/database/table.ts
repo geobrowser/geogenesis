@@ -16,8 +16,8 @@ import { getRelations } from './relations';
 
 const queryKeys = {
   remoteRows: (options: Parameters<typeof fetchTableRowEntities>[0]) =>
-    ['block', 'data', 'query', 'rows', options] as const,
-  localRows: (entityIds: string[]) => ['block', 'data', 'query', 'rows', 'merged', entityIds] as const,
+    ['blocks', 'data', 'query', 'rows', options] as const,
+  localRows: (entityIds: string[]) => ['blocks', 'data', 'query', 'rows', 'merged', entityIds] as const,
   columns: (typeIds: string[]) => ['blocks', 'data', 'query', 'columns', 'merging', typeIds] as const,
   remoteCollectionItems: (entityIds: string[]) => ['blocks', 'data', 'collection', 'merging', entityIds] as const,
 };
