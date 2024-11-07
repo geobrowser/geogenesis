@@ -23,6 +23,7 @@ import { Toggle } from '~/design-system/toggle';
 
 import { ArrowLeft } from './icons/arrow-left';
 import { Search } from './icons/search';
+import { ResizableContainer } from './resizable-container';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
@@ -175,7 +176,6 @@ export const SelectEntity = ({
                 event.stopPropagation();
               }}
               forceMount
-              asChild
             >
               <div className={cx(variant === 'fixed' && 'pt-1')}>
                 <div
@@ -186,52 +186,54 @@ export const SelectEntity = ({
                   )}
                 >
                   {!result ? (
-                    <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">
-                      {!results?.length && isLoading && (
-                        <div className="w-full border-b border-divider bg-white px-3 py-2">
-                          <div className="truncate text-button text-text">Loading...</div>
-                        </div>
-                      )}
-                      {isEmpty ? (
-                        <div className="w-full border-b border-divider bg-white px-3 py-2">
-                          <div className="truncate text-button text-text">No results.</div>
-                        </div>
-                      ) : (
-                        <div className="divider-y-divider bg-white">
-                          {results.map((result, index) => (
-                            <button
-                              key={index}
-                              onClick={() => setResult(result)}
-                              className="w-full px-3 py-2 hover:bg-grey-01"
-                            >
-                              <div className="truncate text-button text-text">{result.name}</div>
-                              {isShowingIds && (
-                                <div className="mb-2 mt-1 text-footnoteMedium text-grey-04">{result.id}</div>
-                              )}
-                              <div className="mt-1 flex items-center gap-1">
-                                <div className="inline-flex gap-0">
-                                  {(result.spaces ?? []).slice(0, 3).map(space => (
-                                    <div
-                                      key={space.spaceId}
-                                      className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                                    >
-                                      <img
-                                        src={getImagePath(space.image)}
-                                        alt=""
-                                        className="h-full w-full object-cover"
-                                      />
-                                    </div>
-                                  ))}
+                    <ResizableContainer>
+                      <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">
+                        {!results?.length && isLoading && (
+                          <div className="w-full border-b border-divider bg-white px-3 py-2">
+                            <div className="truncate text-button text-text">Loading...</div>
+                          </div>
+                        )}
+                        {isEmpty ? (
+                          <div className="w-full border-b border-divider bg-white px-3 py-2">
+                            <div className="truncate text-button text-text">No results.</div>
+                          </div>
+                        ) : (
+                          <div className="divider-y-divider bg-white">
+                            {results.map((result, index) => (
+                              <button
+                                key={index}
+                                onClick={() => setResult(result)}
+                                className="w-full px-3 py-2 hover:bg-grey-01"
+                              >
+                                <div className="truncate text-button text-text">{result.name}</div>
+                                {isShowingIds && (
+                                  <div className="mb-2 mt-1 text-footnoteMedium text-grey-04">{result.id}</div>
+                                )}
+                                <div className="mt-1 flex items-center gap-1">
+                                  <div className="inline-flex gap-0">
+                                    {(result.spaces ?? []).slice(0, 3).map(space => (
+                                      <div
+                                        key={space.spaceId}
+                                        className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                                      >
+                                        <img
+                                          src={getImagePath(space.image)}
+                                          alt=""
+                                          className="h-full w-full object-cover"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="text-[0.75rem] font-medium text-grey-04">
+                                    {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
+                                  </div>
                                 </div>
-                                <div className="text-[0.75rem] font-medium text-grey-04">
-                                  {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
-                                </div>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </ResizableContainer>
                   ) : (
                     <>
                       <div className="flex items-center justify-between border-b border-divider bg-white">
