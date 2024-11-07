@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
-import { Array, Duration } from 'effect';
+import { Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 import { atom, useAtomValue } from 'jotai';
 import { unwrap } from 'jotai/utils';
@@ -10,7 +10,7 @@ import * as React from 'react';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
-import { fetchCollectionItemEntities } from '../io/subgraph/fetch-collection-items';
+import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
 import { store } from '../state/jotai-store';
 import { Relation, Schema, Triple, TripleWithEntityValue, ValueTypeId } from '../types';
@@ -289,7 +289,7 @@ const localEntitiesAtom = atom(async get => {
 
   const remoteVersionsOfEntities = await queryClient.fetchQuery({
     queryKey: ['local-entities-merge-fetch', changedEntities],
-    queryFn: () => fetchCollectionItemEntities(changedEntities),
+    queryFn: () => fetchEntitiesBatch(changedEntities),
     staleTime: Duration.toMillis(Duration.seconds(30)),
   });
 

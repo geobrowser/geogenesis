@@ -18,6 +18,7 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
   const [query, setQuery] = React.useState('');
 
   const { data: results, isLoading } = useQuery({
+    enabled: query !== '',
     queryKey: ['search', query, filterByTypes],
     queryFn: async ({ signal }) => {
       if (query.length === 0) return [];
@@ -68,7 +69,7 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
   return {
     isEmpty: isArrayEmpty(results ?? []) && !isStringEmpty(query) && !isLoading,
     isLoading,
-    results: query ? results ?? [] : [],
+    results: results ?? [],
     query,
     onQueryChange: setQuery,
   };

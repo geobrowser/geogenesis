@@ -30,10 +30,7 @@ interface NetworkResult {
   entities: { nodes: SubstreamEntity[] };
 }
 
-export async function fetchCollectionItemEntities(
-  entityIds: string[],
-  signal?: AbortController['signal']
-): Promise<Entity[]> {
+export async function fetchEntitiesBatch(entityIds: string[], signal?: AbortController['signal']): Promise<Entity[]> {
   const queryId = v4();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
