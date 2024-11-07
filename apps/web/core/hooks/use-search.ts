@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { Duration } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
@@ -9,6 +10,7 @@ import * as React from 'react';
 import { Subgraph } from '~/core/io';
 
 import { mergeSearchResults } from '../database/results';
+import { useDebouncedValue } from './use-debounced-value';
 
 interface SearchOptions {
   filterByTypes?: string[];
@@ -16,21 +18,22 @@ interface SearchOptions {
 
 export function useSearch({ filterByTypes }: SearchOptions = {}) {
   const [query, setQuery] = React.useState('');
+  const debouncedQuery = useDebouncedValue(query);
 
   const { data: results, isLoading } = useQuery({
-    queryKey: ['search', query, filterByTypes],
+    enabled: debouncedQuery !== '',
+    queryKey: ['search', debouncedQuery, filterByTypes],
     queryFn: async ({ signal }) => {
       if (query.length === 0) return [];
 
       const fetchResultsEffect = Effect.either(
         Effect.tryPromise({
           try: async () =>
-            // @TODO(database): merged
             await mergeSearchResults({
               filters: [
                 {
                   type: 'NAME',
-                  value: query,
+                  value: debouncedQuery,
                 },
                 {
                   type: 'TYPES',
@@ -63,12 +66,16 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
 
       return resultOrError.right;
     },
+    staleTime: Duration.toMillis(Duration.seconds(5)),
   });
 
+  const isQuerySyncing = query !== debouncedQuery;
+  const shouldSuspend = isQuerySyncing || isLoading;
+
   return {
-    isEmpty: isArrayEmpty(results ?? []) && !isStringEmpty(query) && !isLoading,
-    isLoading,
-    results: query ? results ?? [] : [],
+    isEmpty: isArrayEmpty(results ?? []) && !isStringEmpty(query) && !shouldSuspend,
+    isLoading: shouldSuspend,
+    results: results ?? [],
     query,
     onQueryChange: setQuery,
   };
