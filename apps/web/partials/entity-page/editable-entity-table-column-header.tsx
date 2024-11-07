@@ -67,7 +67,8 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
       entityId,
       entityName: localName,
     })[0],
-    () => {}
+    () => {},
+    send
   );
   const value = getRenderableTypeFromValueType(valueType);
 

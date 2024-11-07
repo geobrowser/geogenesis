@@ -4,6 +4,7 @@ import { useRenderables } from '~/core/hooks/use-renderables';
 import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
+import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableChip, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
@@ -48,22 +49,21 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
             <div className="flex flex-wrap gap-2">
               {triples.map(renderable => {
                 switch (renderable.type) {
-                  case 'TEXT':
+                  case 'TEXT': {
                     return (
                       <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
                         {renderable.value}
                       </Text>
                     );
-                  case 'CHECKBOX':
+                  }
+                  case 'CHECKBOX': {
+                    const checked = getChecked(renderable.value);
+
                     return (
-                      <input
-                        type="checkbox"
-                        disabled
-                        key={`checkbox-${renderable.attributeId}-${renderable.value}`}
-                        checked={renderable.value === '1'}
-                      />
+                      <Checkbox key={`checkbox-${renderable.attributeId}-${renderable.value}`} checked={checked} />
                     );
-                  case 'TIME':
+                  }
+                  case 'TIME': {
                     return (
                       <DateField
                         key={`time-${renderable.attributeId}-${renderable.value}`}
@@ -71,7 +71,8 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
                         value={renderable.value}
                       />
                     );
-                  case 'URI':
+                  }
+                  case 'URI': {
                     return (
                       <WebUrlField
                         key={`uri-${renderable.attributeId}-${renderable.value}`}
@@ -79,6 +80,7 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
                         value={renderable.value}
                       />
                     );
+                  }
                   case 'ENTITY': {
                     return (
                       <div key={`entity-${renderable.attributeId}-${renderable.value.value}}`} className="mt-1">

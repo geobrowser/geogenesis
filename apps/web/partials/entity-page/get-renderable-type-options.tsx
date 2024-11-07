@@ -2,8 +2,10 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
+import type { EditEvent } from '~/core/events/edit-events';
 import { RenderableProperty, SwitchableRenderableType, ValueTypeId } from '~/core/types';
 
+import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { Text } from '~/design-system/icons/text';
@@ -13,6 +15,8 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
   switch (valueType) {
     case SYSTEM_IDS.TEXT:
       return 'TEXT';
+    case SYSTEM_IDS.CHECKBOX:
+      return 'CHECKBOX';
     case SYSTEM_IDS.DATE:
       return 'TIME';
     case SYSTEM_IDS.WEB_URL:
@@ -27,7 +31,8 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
 
 export const getRenderableTypeSelectorOptions = (
   renderable: RenderableProperty,
-  onSelect: (renderableType: RenderableProperty) => void
+  onSelect: (renderableType: RenderableProperty) => void,
+  send: (event: EditEvent) => void
 ): {
   label: React.ReactNode;
   value: SwitchableRenderableType;
@@ -37,7 +42,9 @@ export const getRenderableTypeSelectorOptions = (
     {
       label: (
         <div className="flex items-center gap-2">
-          <Text />
+          <IconWrapper>
+            <Text />
+          </IconWrapper>
           <p>Text</p>
         </div>
       ),
@@ -55,11 +62,52 @@ export const getRenderableTypeSelectorOptions = (
         });
       },
     },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <IconWrapper>
+            <CheckboxChecked />
+          </IconWrapper>
+          <p>Checkbox</p>
+        </div>
+      ),
+      value: 'CHECKBOX' as const,
+      onClick: () => {
+        onSelect({
+          type: 'CHECKBOX',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '0',
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        });
+        // A triple is created to set the default state to false instead of indeterminate
+        send({
+          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+          payload: {
+            renderable: {
+              ...renderable,
+              type: 'CHECKBOX',
+              placeholder: false,
+              value: '0',
+            },
+            value: {
+              type: 'CHECKBOX',
+              value: '0',
+            },
+          },
+        });
+      },
+    },
     // @TODO(relations): Add image support
     {
       label: (
         <div className="flex items-center gap-2">
-          <Date />
+          <IconWrapper>
+            <Date />
+          </IconWrapper>
           <p>Date</p>
         </div>
       ),
@@ -79,7 +127,9 @@ export const getRenderableTypeSelectorOptions = (
     {
       label: (
         <div className="flex items-center gap-2">
-          <Url />
+          <IconWrapper>
+            <Url />
+          </IconWrapper>
           <p>URI</p>
         </div>
       ),
@@ -99,7 +149,9 @@ export const getRenderableTypeSelectorOptions = (
     {
       label: (
         <div className="flex items-center gap-2">
-          <RelationSmall />
+          <IconWrapper>
+            <RelationSmall />
+          </IconWrapper>
           <p>Relation</p>
         </div>
       ),
@@ -119,4 +171,14 @@ export const getRenderableTypeSelectorOptions = (
         }),
     },
   ];
+};
+
+type IconWrapperProps = {
+  children: React.ReactNode;
+};
+
+// Reserves a consistent amount of space for the icon
+// (ensures the accompanying label text is aligned)
+const IconWrapper = ({ children }: IconWrapperProps) => {
+  return <div className="inline-flex w-5 items-center justify-center">{children}</div>;
 };
