@@ -119,6 +119,10 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       retryEffect
     );
 
+    // @TODO: All of this write flow is going to be redone to be oriented around
+    // edits + transactions as well as simplifying our data aggregation + write
+    // pipeline to be easier to reason about and test.
+
     const opsByVersionId = yield* _(
       mergeOpsWithPreviousVersions({
         edits: schemaEditProposals.edits,
