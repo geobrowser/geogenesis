@@ -5,7 +5,6 @@ import { dedupeWith } from 'effect/Array';
 import { createFiltersFromGraphQLStringAndSource } from '../blocks-sdk/table';
 import { Entity } from '../io/dto/entities';
 import { fetchColumns } from '../io/fetch-columns';
-import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
@@ -79,11 +78,7 @@ async function mergeTableRowEntitiesAsync(
 export async function mergeTableEntities({ options, source }: MergeTableEntitiesArgs) {
   const entities = await mergeTableRowEntitiesAsync(options);
 
-  const filterState = await createFiltersFromGraphQLStringAndSource(
-    options.filter ?? '',
-    source,
-    async id => await mergeEntityAsync(EntityId(id))
-  );
+  const filterState = await createFiltersFromGraphQLStringAndSource(options.filter ?? '', source);
 
   return entities.filter(entity => {
     for (const filter of filterState) {
