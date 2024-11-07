@@ -1,16 +1,26 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
 import { createFiltersFromGraphQLStringAndSource } from '../blocks-sdk/table';
+import { Entity } from '../io/dto/entities';
 import { fetchColumns } from '../io/fetch-columns';
 import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
-import { fetchCollectionItemEntities } from '../io/subgraph/fetch-collection-items';
+import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
 import { Source } from '../state/editor/types';
 import { Schema, Value } from '../types';
-import { EntityWithSchema, mergeEntity, mergeEntityAsync } from './entities';
+import { EntityWithSchema, getEntities_experimental, mergeEntity, mergeEntityAsync } from './entities';
 import { getRelations } from './relations';
+
+const queryKeys = {
+  remoteRows: (options: Parameters<typeof fetchTableRowEntities>[0]) =>
+    ['block', 'data', 'query', 'rows', options] as const,
+  localRows: (entityIds: string[]) => ['block', 'data', 'query', 'rows', 'merged', entityIds] as const,
+  columns: (typeIds: string[]) => ['blocks', 'data', 'query', 'columns', 'merging', typeIds] as const,
+  remoteCollectionItems: (entityIds: string[]) => ['blocks', 'data', 'collection', 'merging', entityIds] as const,
+};
 
 export interface MergeTableEntitiesArgs {
   source: Source;
@@ -31,7 +41,7 @@ async function mergeTableRowEntitiesAsync(
   options: Parameters<typeof fetchTableRowEntities>[0]
 ): Promise<EntityWithSchema[]> {
   const cachedEntities = await queryClient.fetchQuery({
-    queryKey: ['table-entities-for-merging', options],
+    queryKey: queryKeys.remoteRows(options),
     queryFn: ({ signal }) => fetchTableRowEntities({ ...options, signal }),
   });
 
@@ -59,7 +69,7 @@ async function mergeTableRowEntitiesAsync(
   // all the data needed to merge it with the local state, filter and render it.
   // @TODO(performance): Batch instead of fetching an unknown number of them at once.
   const localMergedEntities = await queryClient.fetchQuery({
-    queryKey: ['table-local-entities-for-merging', localEntities],
+    queryKey: queryKeys.localRows(localEntities),
     queryFn: () => Promise.all(localEntities.map(id => mergeEntityAsync(id))),
   });
 
@@ -96,7 +106,7 @@ export async function mergeTableEntities({ options, source }: MergeTableEntities
 
 export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
   const cachedColumns = await queryClient.fetchQuery({
-    queryKey: ['table-columns-for-merging', typeIds],
+    queryKey: queryKeys.columns(typeIds),
     queryFn: () => fetchColumns({ typeIds: typeIds }),
   });
 
@@ -120,14 +130,29 @@ export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
  * 2. Merge remote entities with local entities
  * 3. Filter them with a selector (either manual one or one derived from FilterState)
  */
-async function mergeCollectionRowEntitiesAsync(entityIds: string[]): Promise<EntityWithSchema[]> {
-  const cachedEntities = await queryClient.fetchQuery({
-    queryKey: ['collection-entities-for-merging', entityIds],
-    queryFn: ({ signal }) => fetchCollectionItemEntities(entityIds, signal),
+async function mergeCollectionRowEntitiesAsync(entityIds: string[]): Promise<Entity[]> {
+  const cachedRemoteEntities = await queryClient.fetchQuery({
+    queryKey: queryKeys.remoteCollectionItems(entityIds),
+    queryFn: ({ signal }) => fetchEntitiesBatch(entityIds, signal),
+    staleTime: Duration.toMillis(Duration.seconds(20)),
   });
 
-  // @TODO: We need to include locally created entities
-  return cachedEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
+  const merged = cachedRemoteEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
+
+  const localEntities = await getEntities_experimental();
+  const relevantLocalEntities = Object.values(localEntities).filter(l => entityIds.includes(l.id));
+  const localOnlyEntityIds = Array.difference(
+    relevantLocalEntities.map(e => e.id),
+    merged.map(m => m.id)
+  );
+
+  const localOnlyEntities = localOnlyEntityIds
+    .map(entityId => {
+      return localEntities[entityId] ?? null;
+    })
+    .filter(e => e !== null);
+
+  return [...localOnlyEntities, ...merged];
 }
 
 export async function mergeCollectionItemEntitiesAsync(entityIds: string[]) {
