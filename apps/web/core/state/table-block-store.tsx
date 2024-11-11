@@ -83,11 +83,13 @@ export function useTableBlock() {
     }, [blockEntity.relationsOut, source])
   );
 
+  const collectionItemIds = collectionItems?.map(c => c.id) ?? [];
+
   const { data: collectionItemEntities, isLoading: isLoadingCollectionItemEntities } = useQuery({
     enabled: collectionItems.length > 0,
-    queryKey: [queryKeys.collectionItemEntities(collectionItems?.map(c => c.id))],
+    queryKey: queryKeys.collectionItemEntities(collectionItemIds),
     queryFn: async () => {
-      const entities = await mergeCollectionItemEntitiesAsync(collectionItems?.map(c => c.id));
+      const entities = await mergeCollectionItemEntitiesAsync(collectionItemIds);
 
       return entities;
     },
