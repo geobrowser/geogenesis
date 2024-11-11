@@ -81,8 +81,10 @@ export async function fetchEntitiesBatch(entityIds: string[], signal?: AbortCont
           console.error(`Unable to decode collection item entity ${e.id} with error ${error}`);
           return null;
         },
-        onRight: entity => {
-          return EntityDto(entity);
+        onRight: substreamEntity => {
+          const entity = EntityDto(substreamEntity);
+
+          return entity;
         },
       });
     })

@@ -182,6 +182,7 @@ export const FOREIGN_TYPES = 'be74597305a94cd0a46d1c5538270faf';
 /* Example Usage: SF Config > TYPES > SPACE_CONFIGURATION */
 export const SPACE_CONFIGURATION = '1d5d0c2adb23466ca0b09abe879df457';
 export const SOURCE_SPACE_ATTRIBUTE = '315c23ed14414c378f14bd8b64f36702'
+export const VERIFIED_SOURCE_ATTRIBUTE = '0cf9ffb9295e4302b823b1d2c723f118'
 
 /* Example Usage: Block Entity > TYPES > TABLE_BLOCK */
 export const TABLE_BLOCK = '88d5925217ae4d9aa36724710129eb47';

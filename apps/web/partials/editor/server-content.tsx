@@ -10,6 +10,8 @@ type ServerContentProps = {
 };
 
 export const ServerContent = ({ content }: ServerContentProps) => {
+  if (!content) return null;
+
   return (
     <div className="tiptap ProseMirror !pb-[2rem]">
       {content.map((block, index) => (

@@ -5,7 +5,7 @@ import { Cell, Row, Schema } from '~/core/types';
 
 import { Entities } from '../entity';
 
-export function fromColumnsAndRows(entities: Entity[], columns: Schema[]): Row[] {
+export function fromColumnsAndRows(entities: Entity[], columns: Schema[], collectionItemEntities?: Entity[]): Row[] {
   return entities.map(({ name, triples, id, relationsOut, description }) => {
     const newColumns = columns.reduce(
       (acc, column) => {
@@ -20,9 +20,35 @@ export function fromColumnsAndRows(entities: Entity[], columns: Schema[]): Row[]
           name,
         };
 
-        if (column.id === SYSTEM_IDS.NAME) {
+        const isNameCell = column.id === SYSTEM_IDS.NAME;
+
+        if (isNameCell) {
           cell.description = description;
           cell.image = Entities.cover(relationsOut) || Entities.avatar(relationsOut) || null;
+
+          const collectionEntity = collectionItemEntities?.find(
+            entity =>
+              entity.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value ===
+              cell.entityId
+          );
+
+          if (collectionEntity) {
+            const sourceSpaceTriple = collectionEntity.triples.find(
+              triple => triple.attributeId === SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE
+            );
+
+            if (sourceSpaceTriple) {
+              cell.space = sourceSpaceTriple.value.value;
+
+              const verifiedSourceTriple = collectionEntity.triples.find(
+                triple => triple.attributeId === SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE
+              );
+
+              if (verifiedSourceTriple) {
+                cell.verified = verifiedSourceTriple.value.value === '1';
+              }
+            }
+          }
         }
 
         return {

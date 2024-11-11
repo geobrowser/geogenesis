@@ -20,14 +20,16 @@ import { getImagePath } from '~/core/utils/utils';
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { Tag } from '~/design-system/tag';
 import { Toggle } from '~/design-system/toggle';
+import { Tooltip } from '~/design-system/tooltip';
 
 import { ArrowLeft } from './icons/arrow-left';
+import { InfoSmall } from './icons/info-small';
 import { Search } from './icons/search';
 import { ResizableContainer } from './resizable-container';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
-  onDone: (result: { id: EntityId; name: string | null; space?: EntityId }) => void;
+  onDone: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
   spaceId: string;
   allowedTypes?: RelationValueType[];
   placeholder?: string;
@@ -88,6 +90,7 @@ export const SelectEntity = ({
   inputClassName = '',
   withSearchIcon = false,
 }: SelectEntityProps) => {
+  const [isVerified, setIsVerified] = useState<boolean>(false);
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
 
   const [result, setResult] = useState<SearchResult | null>(null);
@@ -243,10 +246,9 @@ export const SelectEntity = ({
                           </button>
                         </div>
                         <span className="p-2 text-smallButton text-grey-04">Select space version</span>
-                        {/* <div className="flex flex-1 justify-end">
-                     @TODO add settings
-                    <button className="p-2 text-smallButton text-grey-04">Settings</button>
-                  </div> */}
+                        <div className="flex flex-1 justify-end">
+                          <button className="p-2 text-smallButton text-grey-04">Settings</button>
+                        </div>
                       </div>
                       <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">
                         <button
@@ -286,6 +288,7 @@ export const SelectEntity = ({
                                 id: result.id,
                                 name: result.name,
                                 space: EntityId(space.spaceId),
+                                verified: isVerified,
                               });
                               onQueryChange('');
                             }}
@@ -307,7 +310,7 @@ export const SelectEntity = ({
                       </div>
                     </>
                   )}
-                  {!result && (
+                  {!result ? (
                     <div className="flex w-full items-center justify-between px-3 py-1.5">
                       <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
                         <Toggle checked={isShowingIds} />
@@ -316,6 +319,24 @@ export const SelectEntity = ({
                       <button onClick={onCreateNewEntity} className="text-smallButton text-grey-04">
                         Create new
                       </button>
+                    </div>
+                  ) : (
+                    <div className="flex w-full items-center justify-between px-3 py-1.5">
+                      <button onClick={() => setIsVerified(!isVerified)} className="inline-flex items-center gap-1.5">
+                        <Toggle checked={isVerified} />
+                        <div className="text-footnoteMedium text-grey-04">
+                          Set space as the verified source of truth
+                        </div>
+                      </button>
+                      <Tooltip
+                        trigger={
+                          <div className="*:size-[12px]">
+                            <InfoSmall color="grey-04" />
+                          </div>
+                        }
+                        label={`Different versions of the same entity can live in one or multiple spaces. You can select which version of that entity you feel is the source of truth for the most legitimate information.`}
+                        position="bottom"
+                      />
                     </div>
                   )}
                 </div>

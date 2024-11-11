@@ -40,6 +40,8 @@ interface RowQueryArgs {
 }
 
 const queryKeys = {
+  collectionItemEntities: (collectionItemIds: EntityId[]) =>
+    ['blocks', 'data', 'collection-items', collectionItemIds] as const,
   filterState: (filterString: string | null, source: Source) =>
     ['blocks', 'data', 'filter-state', filterString, source] as const,
   columns: (filterState: Awaited<ReturnType<typeof createFiltersFromGraphQLStringAndSource>> | null) =>
@@ -80,6 +82,18 @@ export function useTableBlock() {
       };
     }, [blockEntity.relationsOut, source])
   );
+
+  const collectionItemIds = collectionItems?.map(c => c.id) ?? [];
+
+  const { data: collectionItemEntities, isLoading: isLoadingCollectionItemEntities } = useQuery({
+    enabled: collectionItems.length > 0,
+    queryKey: queryKeys.collectionItemEntities(collectionItemIds),
+    queryFn: async () => {
+      const entities = await mergeCollectionItemEntitiesAsync(collectionItemIds);
+
+      return entities;
+    },
+  });
 
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
@@ -155,8 +169,8 @@ export function useTableBlock() {
 
   const rows = React.useMemo(() => {
     if (!tableEntities || !columns) return [];
-    return EntityTable.fromColumnsAndRows(tableEntities, columns);
-  }, [tableEntities, columns]);
+    return EntityTable.fromColumnsAndRows(tableEntities, columns, collectionItemEntities);
+  }, [tableEntities, columns, collectionItemEntities]);
 
   const { data: columnRelationTypes } = useQuery({
     enabled: columns !== undefined,
@@ -259,12 +273,13 @@ export function useTableBlock() {
     entityId,
     spaceId,
 
-    isLoading: isLoadingColumns || isLoadingEntities || isLoadingFilterState,
+    isLoading: isLoadingColumns || isLoadingEntities || isLoadingFilterState || isLoadingCollectionItemEntities,
 
     name: blockEntity.name,
     setName,
     view,
     placeholder,
+    collectionItems,
   };
 }
 

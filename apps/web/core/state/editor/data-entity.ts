@@ -3,11 +3,10 @@ import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
-import { ID } from '~/core/id';
 import { EntityId, SpaceId } from '~/core/io/schema';
 
 import { getRelationForBlockType } from './block-types';
-import { makeRelationForSource, makeRelationForSourceType } from './sources';
+import { makeRelationForSourceType } from './sources';
 
 /**
  * Returns the relations to create a data entity. Data entities require a type,
@@ -70,7 +69,17 @@ export function upsertCollectionItemRelation({
   });
 }
 
-export function upsertSourceSpaceOnCollectionItem(collectionItemId: EntityId, spaceId: EntityId) {
+type UpsertSourceSpaceCollectionItemArgs = {
+  collectionItemId: EntityId;
+  spaceId: SpaceId;
+  sourceSpace: string;
+};
+
+export function upsertSourceSpaceOnCollectionItem({
+  collectionItemId,
+  spaceId,
+  sourceSpace,
+}: UpsertSourceSpaceCollectionItemArgs) {
   DB.upsert(
     {
       attributeId: SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE,
@@ -79,7 +88,31 @@ export function upsertSourceSpaceOnCollectionItem(collectionItemId: EntityId, sp
       entityName: null,
       value: {
         type: 'TEXT',
-        value: spaceId,
+        value: sourceSpace,
+      },
+    },
+    spaceId
+  );
+}
+
+type UpsertVerifiedSourceCollectionItemArgs = {
+  collectionItemId: EntityId;
+  spaceId: SpaceId;
+};
+
+export function upsertVerifiedSourceOnCollectionItem({
+  collectionItemId,
+  spaceId,
+}: UpsertVerifiedSourceCollectionItemArgs) {
+  DB.upsert(
+    {
+      attributeId: SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE,
+      attributeName: 'Verified Source',
+      entityId: collectionItemId,
+      entityName: null,
+      value: {
+        type: 'CHECKBOX',
+        value: '1',
       },
     },
     spaceId
