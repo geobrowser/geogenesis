@@ -5,11 +5,7 @@ import { Cell, Row, Schema } from '~/core/types';
 
 import { Entities } from '../entity';
 
-export function fromColumnsAndRows(
-  entities: Entity[],
-  columns: Schema[],
-  collectionItemEntities: Entity[] | undefined
-): Row[] {
+export function fromColumnsAndRows(entities: Entity[], columns: Schema[], collectionItemEntities?: Entity[]): Row[] {
   return entities.map(({ name, triples, id, relationsOut, description }) => {
     const newColumns = columns.reduce(
       (acc, column) => {
