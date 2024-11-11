@@ -40,6 +40,8 @@ interface RowQueryArgs {
 }
 
 const queryKeys = {
+  collectionItemEntities: (collectionItemIds: EntityId[]) =>
+    ['blocks', 'data', 'collection-items', collectionItemIds] as const,
   filterState: (filterString: string | null, source: Source) =>
     ['blocks', 'data', 'filter-state', filterString, source] as const,
   columns: (filterState: Awaited<ReturnType<typeof createFiltersFromGraphQLStringAndSource>> | null) =>
@@ -81,10 +83,13 @@ export function useTableBlock() {
     }, [blockEntity.relationsOut, source])
   );
 
+  const collectionItemIds = collectionItems?.map(c => c.id) ?? [];
+
   const { data: collectionItemEntities, isLoading: isLoadingCollectionItemEntities } = useQuery({
-    queryKey: ['table-block-collection-item-entities', collectionItems.map(c => c.id).join('-')],
+    enabled: collectionItems.length > 0,
+    queryKey: [queryKeys.collectionItemEntities(collectionItemIds)],
     queryFn: async () => {
-      const entities = await mergeCollectionItemEntitiesAsync(collectionItems?.map(c => c.id));
+      const entities = await mergeCollectionItemEntitiesAsync(collectionItemIds);
 
       return entities;
     },

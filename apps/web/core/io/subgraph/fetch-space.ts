@@ -76,7 +76,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  if (!result?.space) {
+  if (!result.space) {
     return null;
   }
 
