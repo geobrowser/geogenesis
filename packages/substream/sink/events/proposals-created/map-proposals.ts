@@ -191,11 +191,15 @@ function mapEditProposalToSchema(
   versions: S.versions.Insertable[];
   edits: S.edits.Insertable[];
   opsByVersionId: Map<string, Op[]>;
+  opsByEntityId: Map<string, Op[]>;
+  opsByEditId: Map<string, Op[]>;
 } {
   const proposalsToWrite: S.proposals.Insertable[] = [];
   const versionsToWrite: S.versions.Insertable[] = [];
   const editsToWrite: S.edits.Insertable[] = [];
   const opsByVersionId = new Map<string, Op[]>();
+  const opsByEntityId = new Map<string, Op[]>();
+  const opsByEditId = new Map<string, Op[]>();
 
   for (const p of proposals) {
     const spaceId = p.space;
@@ -245,12 +249,11 @@ function mapEditProposalToSchema(
 
       const opsForEntityId = p.ops.filter(o => o.triple.entity === entityId);
 
-      if (opsForEntityId.length === 0) {
-        console.log('invalid edit ops', { id });
-      }
-
       opsByVersionId.set(id, opsForEntityId);
+      opsByEntityId.set(entityId, opsForEntityId);
     }
+
+    opsByEditId.set(p.proposalId, p.ops);
   }
 
   return {
@@ -258,6 +261,8 @@ function mapEditProposalToSchema(
     versions: versionsToWrite,
     edits: editsToWrite,
     opsByVersionId,
+    opsByEntityId,
+    opsByEditId,
   };
 }
 

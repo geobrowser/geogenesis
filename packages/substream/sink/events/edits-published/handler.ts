@@ -8,6 +8,7 @@ import { CurrentVersions, Proposals, Versions } from '~/sink/db';
 import type { BlockEvent, Op } from '~/sink/types';
 import { partition } from '~/sink/utils';
 import { slog } from '~/sink/utils/slog';
+import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { writeEdits } from '~/sink/write-edits/write-edits';
 
 export class ProposalDoesNotExistError extends Error {
@@ -27,8 +28,18 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
     });
 
     const {
-      schemaEditProposals: { opsByVersionId, versions, edits },
+      schemaEditProposals: { opsByVersionId, versions, edits, opsByEditId, opsByEntityId },
     } = mapIpfsProposalToSchemaProposalByType(ipfsProposals, block);
+
+    const versionsWithStaleEntities = yield* _(
+      aggregateNewVersions({
+        block,
+        edits: edits,
+        ipfsVersions: versions,
+        opsByEditId: opsByEditId,
+        opsByEntityId: opsByEntityId,
+      })
+    );
 
     /**
      * We treat imported edits and non-imported edits as separate units of work since
@@ -36,7 +47,7 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
      * See comment in {@link writeEdits} for more details.
      */
     const [importedEdits, defaultEdits] = partition(edits, e => createdSpaceIds.includes(e.space_id.toString()));
-    const [importedVersions, defaultVersions] = partition(versions, v =>
+    const [importedVersions, defaultVersions] = partition(versionsWithStaleEntities, v =>
       importedEdits.some(e => e.id.toString() === v.edit_id.toString())
     );
 
@@ -57,7 +68,7 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
       });
 
     const allMergedVersions = [...defaultMergedVersions, ...importedMergedVersions];
-    const currentVersions = aggregateCurrentVersions(versions, allMergedVersions);
+    const currentVersions = aggregateCurrentVersions(versionsWithStaleEntities, allMergedVersions);
 
     yield* _(
       Effect.all([
