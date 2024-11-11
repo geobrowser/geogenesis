@@ -53,7 +53,7 @@ export function TableCell({
       width={width}
     >
       <div className="relative flex h-full w-full items-center justify-between leading-none">
-        {children}
+        <div className="flex items-center gap-2">{children}</div>
         {isHovered && (
           <div className="absolute right-0 top-0 z-10 flex items-center gap-1">
             {isExpandable && (

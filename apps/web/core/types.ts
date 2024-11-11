@@ -221,6 +221,8 @@ export type Cell = {
   relations: Relation[];
   description?: string | null;
   image?: string | null;
+  space?: string;
+  verified?: boolean;
 };
 
 export type Row = {

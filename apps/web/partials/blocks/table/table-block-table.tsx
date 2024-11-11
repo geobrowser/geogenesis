@@ -23,7 +23,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { upsertCollectionItemRelation } from '~/core/state/editor/data-entity';
+import { upsertCollectionItemRelation, upsertVerifiedSourceOnCollectionItem } from '~/core/state/editor/data-entity';
 import { upsertSourceSpaceOnCollectionItem } from '~/core/state/editor/data-entity';
 import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
@@ -33,6 +33,7 @@ import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
+import { CheckCircle } from '~/design-system/icons/check-circle';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -227,7 +228,9 @@ export const TableBlockTable = React.memo(
       },
     });
 
-    const onSelectCollectionItem = (entity: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId }) => {
+    const onSelectCollectionItem = (
+      entity: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }
+    ) => {
       if (source.type === 'COLLECTION') {
         const id = ID.createEntityId();
 
@@ -242,7 +245,18 @@ export const TableBlockTable = React.memo(
         });
 
         if (entity.space) {
-          upsertSourceSpaceOnCollectionItem(EntityId(id), entity.space);
+          upsertSourceSpaceOnCollectionItem({
+            collectionItemId: EntityId(id),
+            spaceId: SpaceId(space),
+            sourceSpace: entity.space,
+          });
+
+          if (entity.verified) {
+            upsertVerifiedSourceOnCollectionItem({
+              collectionItemId: EntityId(id),
+              spaceId: SpaceId(space),
+            });
+          }
         }
       }
     };
@@ -323,14 +337,22 @@ export const TableBlockTable = React.memo(
                         {cells.map(cell => {
                           const cellId = `${row.original.entityId}-${cell.column.id}`;
                           const firstTriple = cell.getValue<Cell>()?.triples[0];
+
+                          const isNameCell = Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME);
                           const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
                           const isShown = shownColumnIds.includes(cell.column.id);
+
+                          const href = NavUtils.toEntity(
+                            isNameCell ? row.original.columns[SYSTEM_IDS.NAME]?.space ?? space : space,
+                            entityId
+                          );
+                          const { verified } = row.original.columns[SYSTEM_IDS.NAME];
 
                           return (
                             <TableCell
                               key={cellId}
-                              isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && isEditable}
-                              href={NavUtils.toEntity(space, entityId)}
+                              isLinkable={isNameCell && isEditable}
+                              href={href}
                               isExpandable={isExpandable}
                               isExpanded={expandedCells[cellId]}
                               width={cell.column.getSize()}
@@ -343,6 +365,11 @@ export const TableBlockTable = React.memo(
                               isShown={isShown}
                               isEditMode={isEditable}
                             >
+                              {isNameCell && verified && (
+                                <div>
+                                  <CheckCircle />
+                                </div>
+                              )}
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </TableCell>
                           );
@@ -360,11 +387,12 @@ export const TableBlockTable = React.memo(
           <div className="flex flex-col gap-4">
             {rows.map((row, index: number) => {
               const nameCell = row.columns[SYSTEM_IDS.NAME];
-              const { entityId, name, description, image } = nameCell;
+              const { entityId, name, description, image, verified } = nameCell;
+              const href = NavUtils.toEntity(nameCell?.space ?? space, entityId);
 
               return (
                 <div key={index}>
-                  <Link href={NavUtils.toEntity(space, entityId)} className="group inline-flex items-center gap-6 pr-6">
+                  <Link href={href} className="group inline-flex items-center gap-6 pr-6">
                     <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
                       {image && (
                         <Image
@@ -376,7 +404,14 @@ export const TableBlockTable = React.memo(
                       )}
                     </div>
                     <div>
-                      <div className="truncate text-mediumTitle font-medium text-text">{name}</div>
+                      <div className="flex items-center gap-2">
+                        {verified && (
+                          <div>
+                            <CheckCircle />
+                          </div>
+                        )}
+                        <div className="truncate text-mediumTitle font-medium text-text">{name}</div>
+                      </div>
                       {description && <div className="mt-0.5 text-metadata text-grey-04">{description}</div>}
                     </div>
                   </Link>
@@ -390,10 +425,11 @@ export const TableBlockTable = React.memo(
           <div className="grid grid-cols-3 gap-x-4 gap-y-10">
             {rows.map((row, index: number) => {
               const nameCell = row.columns[SYSTEM_IDS.NAME];
-              const { entityId, name, image } = nameCell;
+              const { entityId, name, image, verified } = nameCell;
+              const href = NavUtils.toEntity(nameCell?.space ?? space, entityId);
 
               return (
-                <Link key={index} href={NavUtils.toEntity(space, entityId)} className="group flex flex-col gap-3">
+                <Link key={index} href={href} className="group flex flex-col gap-3">
                   <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
                     {image && (
                       <Image
@@ -404,7 +440,14 @@ export const TableBlockTable = React.memo(
                       />
                     )}
                   </div>
-                  <div className="truncate text-mediumTitle font-medium text-text">{name}</div>
+                  <div className="flex items-center gap-2">
+                    {verified && (
+                      <div>
+                        <CheckCircle />
+                      </div>
+                    )}
+                    <div className="truncate text-mediumTitle font-medium text-text">{name}</div>
+                  </div>
                 </Link>
               );
             })}

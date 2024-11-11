@@ -81,6 +81,15 @@ export function useTableBlock() {
     }, [blockEntity.relationsOut, source])
   );
 
+  const { data: collectionItemEntities, isLoading: isLoadingCollectionItemEntities } = useQuery({
+    queryKey: ['table-block-collection-item-entities', collectionItems.map(c => c.id).join('-')],
+    queryFn: async () => {
+      const entities = await mergeCollectionItemEntitiesAsync(collectionItems?.map(c => c.id));
+
+      return entities;
+    },
+  });
+
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
   }, [blockEntity?.triples]);
@@ -155,8 +164,8 @@ export function useTableBlock() {
 
   const rows = React.useMemo(() => {
     if (!tableEntities || !columns) return [];
-    return EntityTable.fromColumnsAndRows(tableEntities, columns);
-  }, [tableEntities, columns]);
+    return EntityTable.fromColumnsAndRows(tableEntities, columns, collectionItemEntities);
+  }, [tableEntities, columns, collectionItemEntities]);
 
   const { data: columnRelationTypes } = useQuery({
     enabled: columns !== undefined,
@@ -259,12 +268,13 @@ export function useTableBlock() {
     entityId,
     spaceId,
 
-    isLoading: isLoadingColumns || isLoadingEntities || isLoadingFilterState,
+    isLoading: isLoadingColumns || isLoadingEntities || isLoadingFilterState || isLoadingCollectionItemEntities,
 
     name: blockEntity.name,
     setName,
     view,
     placeholder,
+    collectionItems,
   };
 }
 
