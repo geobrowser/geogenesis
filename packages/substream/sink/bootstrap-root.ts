@@ -33,7 +33,8 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.IMAGE_ATTRIBUTE]: 'Image',
   [SYSTEM_IDS.DESCRIPTION]: 'Description',
   [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
-  [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source space',
+  [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source Space',
+  [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: 'Verified Source',
   [SYSTEM_IDS.FOREIGN_TYPES]: 'Foreign Types',
 
   // Data blocks
@@ -85,6 +86,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.NAME]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.SPACE]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: SYSTEM_IDS.CHECKBOX,
 
   // Data blocks
   [SYSTEM_IDS.VIEW_ATTRIBUTE]: SYSTEM_IDS.RELATION,
@@ -185,11 +187,6 @@ const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds
     });
   });
 });
-
-const relationTypes: Record<string, string[]> = {
-  [SYSTEM_IDS.TYPES]: [SYSTEM_IDS.ATTRIBUTES],
-  [SYSTEM_IDS.ATTRIBUTES]: [SYSTEM_IDS.VALUE_TYPE],
-};
 
 export class BootstrapRootError extends Error {
   _tag: 'BootstrapRootError' = 'BootstrapRootError';
