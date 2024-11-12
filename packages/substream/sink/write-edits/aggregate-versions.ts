@@ -6,7 +6,7 @@ import {
   getStaleEntitiesFromDeletedRelations,
   getStaleEntitiesInEdit,
   maybeEntityOpsToRelation,
-} from './aggregate-relations-v2';
+} from './get-stale-entities-from-relations';
 import { makeVersionForStaleEntity } from './make-version-for-stale-entity';
 
 interface AggregateNewVersionsArgs {
