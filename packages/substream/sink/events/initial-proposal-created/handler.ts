@@ -18,7 +18,14 @@ class CouldNotWriteInitialSpaceProposalsError extends Error {
   _tag: 'CouldNotWriteInitialSpaceProposalsError' = 'CouldNotWriteInitialSpaceProposalsError';
 }
 
-export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[], block: BlockEvent) {
+interface InitialContentArgs {
+  editType: 'IMPORT' | 'DEFAULT';
+  proposals: EditProposal[];
+  block: BlockEvent;
+}
+
+export function createInitialContentForSpaces(args: InitialContentArgs) {
+  const { editType, proposals: proposalsFromIpfs, block } = args;
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
@@ -76,21 +83,17 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
         ipfsVersions: schemaEditProposals.versions,
         opsByEditId: schemaEditProposals.opsByEditId,
         opsByEntityId: schemaEditProposals.opsByEntityId,
-        // @TODO this isn't correct, we'll need two separate flows
-        editType: 'IMPORT',
+        editType,
       })
     );
-
-    // @TODO relationsByVersionId
 
     slog({
       requestId: block.requestId,
       message: `Writing edits, proposals, and versions for edits without proposals`,
     });
 
-    // 1. Orient the write flow based on processing edits in order.
-    //    If we do this right we can do all of the writing at once
-    //    as transactions while preserving the order with Effect.all.
+    // @TODO transactions are pretty slow for actual content writing for now, so
+    // we are skipping writing the actual content in a transaction for now.
     for (const edit of schemaEditProposals.edits) {
       // @TODO this is nested af
       const write = Effect.tryPromise({
@@ -116,7 +119,6 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
         catch: error => new CouldNotWriteInitialSpaceProposalsError(String(error)),
       });
 
-      // @TODO retry
       yield* _(write);
     }
 
@@ -139,13 +141,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
           versions: versionsWithStaleEntities,
           opsByVersionId: opsByNewVersions,
           block,
-
-          // We treat all edits that occur at the same time the space is created
-          // as imported edits.
-          //
-          // @TODO Should we be setting IMPORT for all edits in this handler?
-          // I don't think so...
-          editType: 'IMPORT',
+          editType,
           edits: schemaEditProposals.edits,
         })
       )
