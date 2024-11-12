@@ -18,7 +18,14 @@ class CouldNotWriteInitialSpaceProposalsError extends Error {
   _tag: 'CouldNotWriteInitialSpaceProposalsError' = 'CouldNotWriteInitialSpaceProposalsError';
 }
 
-export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[], block: BlockEvent) {
+interface InitialContentArgs {
+  editType: 'IMPORT' | 'DEFAULT';
+  proposals: EditProposal[];
+  block: BlockEvent;
+}
+
+export function createInitialContentForSpace(args: InitialContentArgs) {
+  const { editType, proposals: proposalsFromIpfs, block } = args;
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
@@ -76,8 +83,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
         ipfsVersions: schemaEditProposals.versions,
         opsByEditId: schemaEditProposals.opsByEditId,
         opsByEntityId: schemaEditProposals.opsByEntityId,
-        // @TODO this isn't correct, we'll need two separate flows
-        editType: 'IMPORT',
+        editType,
       })
     );
 
@@ -113,7 +119,6 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
         catch: error => new CouldNotWriteInitialSpaceProposalsError(String(error)),
       });
 
-      // @TODO retry
       yield* _(write);
     }
 
@@ -136,13 +141,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
           versions: versionsWithStaleEntities,
           opsByVersionId: opsByNewVersions,
           block,
-
-          // We treat all edits that occur at the same time the space is created
-          // as imported edits.
-          //
-          // @TODO Should we be setting IMPORT for all edits in this handler?
-          // I don't think so...
-          editType: 'IMPORT',
+          editType,
           edits: schemaEditProposals.edits,
         })
       )

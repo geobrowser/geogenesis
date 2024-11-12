@@ -16,14 +16,14 @@ import { ZodEditorRemovedStreamResponse } from './events/editor-removed/parser';
 import { getEditsProposalsFromIpfsUri } from './events/edits-published/get-edits-proposal-from-processed-proposal';
 import { handleEditsPublished } from './events/edits-published/handler';
 import { getDerivedSpaceIdsFromImportedSpaces } from './events/get-derived-space-ids-from-imported-spaces';
-import { getProposalsForSpaceIds } from './events/get-proposals-for-space-ids';
+import { getProposalsForSpaceId } from './events/get-proposals-for-space-ids';
 import { handleNewGeoBlock } from './events/handle-new-geo-block';
 import {
   handleInitialGovernanceSpaceEditorsAdded,
   handleInitialPersonalSpaceEditorsAdded,
 } from './events/initial-editors-added/handler';
 import { type InitialEditorsAdded, ZodInitialEditorsAddedStreamResponse } from './events/initial-editors-added/parser';
-import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
+import { createInitialContentForSpace } from './events/initial-proposal-created/handler';
 import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleMemberRemoved } from './events/member-removed/handler';
@@ -456,28 +456,52 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               )
             );
 
-            const personalSpaceIds = personalSpacesWithEdits.flatMap(s => (s ? [s] : []));
-
-            // Combine all the spaces by their uniue id that need proposals written ensuring that we order
-            // it correctly to process the created spaces data first. Alternatively we could model proposals
-            // as being optional and only write them for spaces that have voting. This might affect how we
-            // handle querying for versions.
-            const spaceIdsWithMissingProposals = [...(createdSpaceIds ?? []), ...personalSpaceIds];
+            /**
+             * Since we process created spaces and personal spaces separately, don't include any personal
+             * spaces in the list that were also created in the same block.
+             */
+            const personalSpaceIds = personalSpacesWithEdits
+              .filter(s => s !== null)
+              .filter(s => !createdSpaceIds?.includes(s));
 
             /**
              * We track the spaces that were created in this block and check if any of the proposals executed
-             * are from a created space. If they _are_ we need to create proposals for them before we can
-             * actually execute the proposal.
+             * are from a created space. If they are we need to create proposals for them before we can actually
+             * execute the proposal.
+             *
+             * We process newly created spaces differently than existing spaces, mostly due to the possibility
+             * of a created space containing an import.
              */
-            if (spaceIdsWithMissingProposals.length > 0) {
-              const initialProposalsToWrite = getProposalsForSpaceIds(spaceIdsWithMissingProposals, proposals);
+            for (const spaceId of createdSpaceIds ?? []) {
+              const initialProposalsToWrite = getProposalsForSpaceId(spaceId, proposals);
 
               yield* _(
-                handleInitialProposalsCreated(initialProposalsToWrite, {
-                  blockNumber,
-                  cursor,
-                  timestamp,
-                  requestId,
+                createInitialContentForSpace({
+                  proposals: initialProposalsToWrite,
+                  block: {
+                    blockNumber,
+                    cursor,
+                    timestamp,
+                    requestId,
+                  },
+                  editType: 'IMPORT',
+                })
+              );
+            }
+
+            for (const spaceId of personalSpaceIds) {
+              const initialProposalsToWrite = getProposalsForSpaceId(spaceId, proposals);
+
+              yield* _(
+                createInitialContentForSpace({
+                  proposals: initialProposalsToWrite,
+                  block: {
+                    blockNumber,
+                    cursor,
+                    timestamp,
+                    requestId,
+                  },
+                  editType: 'DEFAULT',
                 })
               );
             }

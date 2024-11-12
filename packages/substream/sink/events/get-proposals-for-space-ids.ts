@@ -9,6 +9,6 @@ import type { EditProposal } from './proposals-created/parser';
  * proposals, proposed versions, ops, etc. before we actually set the proposal as "ACCEPTED" and set
  * any downstream relations that point to the Proposal in the DB.
  */
-export function getProposalsForSpaceIds(spacesCreated: string[], proposals: EditProposal[]) {
-  return proposals.filter(p => spacesCreated.includes(p.space));
+export function getProposalsForSpaceId(spaceCreated: string, proposals: EditProposal[]) {
+  return proposals.filter(p => p.space === spaceCreated);
 }
