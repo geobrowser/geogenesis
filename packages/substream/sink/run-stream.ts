@@ -16,14 +16,14 @@ import { ZodEditorRemovedStreamResponse } from './events/editor-removed/parser';
 import { getEditsProposalsFromIpfsUri } from './events/edits-published/get-edits-proposal-from-processed-proposal';
 import { handleEditsPublished } from './events/edits-published/handler';
 import { getDerivedSpaceIdsFromImportedSpaces } from './events/get-derived-space-ids-from-imported-spaces';
-import { getProposalsForSpaceId } from './events/get-proposals-for-space-ids';
+import { getProposalsForSpaceIds } from './events/get-proposals-for-space-ids';
 import { handleNewGeoBlock } from './events/handle-new-geo-block';
 import {
   handleInitialGovernanceSpaceEditorsAdded,
   handleInitialPersonalSpaceEditorsAdded,
 } from './events/initial-editors-added/handler';
 import { type InitialEditorsAdded, ZodInitialEditorsAddedStreamResponse } from './events/initial-editors-added/parser';
-import { createInitialContentForSpace } from './events/initial-proposal-created/handler';
+import { createInitialContentForSpaces } from './events/initial-proposal-created/handler';
 import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleMemberRemoved } from './events/member-removed/handler';
@@ -473,10 +473,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
              * of a created space containing an import.
              */
             for (const spaceId of createdSpaceIds ?? []) {
-              const initialProposalsToWrite = getProposalsForSpaceId(spaceId, proposals);
+              const initialProposalsToWrite = getProposalsForSpaceIds([spaceId], proposals);
 
               yield* _(
-                createInitialContentForSpace({
+                createInitialContentForSpaces({
                   proposals: initialProposalsToWrite,
                   block: {
                     blockNumber,
@@ -489,11 +489,16 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               );
             }
 
-            for (const spaceId of personalSpaceIds) {
-              const initialProposalsToWrite = getProposalsForSpaceId(spaceId, proposals);
+            /**
+             * We run import spaces one-at-a-time but run default edits in spaces all at once. This is
+             * because imported spaces expect to read data from other edits in the import, while default
+             * edits are decoupled from any other edits, so it's safe to run them all at once.
+             */
+            if (personalSpaceIds.length > 0) {
+              const initialProposalsToWrite = getProposalsForSpaceIds(personalSpaceIds, proposals);
 
               yield* _(
-                createInitialContentForSpace({
+                createInitialContentForSpaces({
                   proposals: initialProposalsToWrite,
                   block: {
                     blockNumber,

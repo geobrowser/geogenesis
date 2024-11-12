@@ -24,7 +24,7 @@ interface InitialContentArgs {
   block: BlockEvent;
 }
 
-export function createInitialContentForSpace(args: InitialContentArgs) {
+export function createInitialContentForSpaces(args: InitialContentArgs) {
   const { editType, proposals: proposalsFromIpfs, block } = args;
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
