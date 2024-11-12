@@ -127,11 +127,11 @@ function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> 
 
       if (parseResult.success) {
         // @TODO(migration): For now we have some invalid ops while we still work on the data migration
-        const validOps = parseResult.data.ops.filter(
-          o => o.type === 'SET_TRIPLE' && (o.triple as unknown as any)?.value?.type !== 'FILTER_ME_OUT'
-        );
+        // const validOps = parseResult.data.ops.filter(
+        //   o => o.type === 'SET_TRIPLE' && (o.triple as unknown as any)?.value?.type !== 'FILTER_ME_OUT'
+        // );
 
-        parseResult.data.ops = validOps;
+        // parseResult.data.ops = validOps;
 
         return parseResult.data;
       }
