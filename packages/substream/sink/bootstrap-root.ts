@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
 import { handleEditsPublished } from './events/edits-published/handler';
 import { handleInitialGovernanceSpaceEditorsAdded } from './events/initial-editors-added/handler';
-import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
+import { createInitialContentForSpaces } from './events/initial-proposal-created/handler';
 import type { EditProposal } from './events/proposals-created/parser';
 import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
@@ -258,7 +258,7 @@ export const bootstrapRoot = Effect.gen(function* (_) {
     )
   );
 
-  yield* _(handleInitialProposalsCreated([editProposal], INITIAL_BLOCK));
+  yield* _(createInitialContentForSpaces({ proposals: [editProposal], block: INITIAL_BLOCK, editType: 'IMPORT' }));
   yield* _(handleEditsPublished([editProposal], [SPACE_ID], INITIAL_BLOCK));
   yield* _(handleProposalsExecuted([editProposal], INITIAL_BLOCK));
 });

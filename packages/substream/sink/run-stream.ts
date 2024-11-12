@@ -23,7 +23,7 @@ import {
   handleInitialPersonalSpaceEditorsAdded,
 } from './events/initial-editors-added/handler';
 import { type InitialEditorsAdded, ZodInitialEditorsAddedStreamResponse } from './events/initial-editors-added/parser';
-import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
+import { createInitialContentForSpaces } from './events/initial-proposal-created/handler';
 import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleMemberRemoved } from './events/member-removed/handler';
@@ -456,28 +456,57 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               )
             );
 
-            const personalSpaceIds = personalSpacesWithEdits.flatMap(s => (s ? [s] : []));
-
-            // Combine all the spaces by their uniue id that need proposals written ensuring that we order
-            // it correctly to process the created spaces data first. Alternatively we could model proposals
-            // as being optional and only write them for spaces that have voting. This might affect how we
-            // handle querying for versions.
-            const spaceIdsWithMissingProposals = [...(createdSpaceIds ?? []), ...personalSpaceIds];
+            /**
+             * Since we process created spaces and personal spaces separately, don't include any personal
+             * spaces in the list that were also created in the same block.
+             */
+            const personalSpaceIds = personalSpacesWithEdits
+              .filter(s => s !== null)
+              .filter(s => !createdSpaceIds?.includes(s));
 
             /**
              * We track the spaces that were created in this block and check if any of the proposals executed
-             * are from a created space. If they _are_ we need to create proposals for them before we can
-             * actually execute the proposal.
+             * are from a created space. If they are we need to create proposals for them before we can actually
+             * execute the proposal.
+             *
+             * We process newly created spaces differently than existing spaces, mostly due to the possibility
+             * of a created space containing an import.
              */
-            if (spaceIdsWithMissingProposals.length > 0) {
-              const initialProposalsToWrite = getProposalsForSpaceIds(spaceIdsWithMissingProposals, proposals);
+            for (const spaceId of createdSpaceIds ?? []) {
+              const initialProposalsToWrite = getProposalsForSpaceIds([spaceId], proposals);
 
               yield* _(
-                handleInitialProposalsCreated(initialProposalsToWrite, {
-                  blockNumber,
-                  cursor,
-                  timestamp,
-                  requestId,
+                createInitialContentForSpaces({
+                  proposals: initialProposalsToWrite,
+                  block: {
+                    blockNumber,
+                    cursor,
+                    timestamp,
+                    requestId,
+                  },
+                  editType: 'IMPORT',
+                })
+              );
+            }
+
+            /**
+             * We run import spaces one-at-a-time but run default edits in spaces all at once. This is
+             * because imported spaces expect to read data from other edits in the import, while default
+             * edits are decoupled from any other edits, so it's safe to run them all at once.
+             */
+            if (personalSpaceIds.length > 0) {
+              const initialProposalsToWrite = getProposalsForSpaceIds(personalSpaceIds, proposals);
+
+              yield* _(
+                createInitialContentForSpaces({
+                  proposals: initialProposalsToWrite,
+                  block: {
+                    blockNumber,
+                    cursor,
+                    timestamp,
+                    requestId,
+                  },
+                  editType: 'DEFAULT',
                 })
               );
             }

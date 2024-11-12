@@ -6,8 +6,8 @@ import type * as Schema from 'zapatos/schema';
 import { CurrentVersions, Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import type { BlockEvent, Op } from '../types';
-import { aggregateRelations } from './aggregate-relations';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
+import { aggregateRelations } from './relations/aggregate-relations';
 import { writeTriples } from './write-triples';
 
 interface PopulateContentArgs {

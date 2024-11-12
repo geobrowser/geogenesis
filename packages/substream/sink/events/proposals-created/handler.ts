@@ -16,6 +16,7 @@ import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
+import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { writeEdits } from '~/sink/write-edits/write-edits';
 
@@ -97,6 +98,17 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       return;
     }
 
+    const versionsWithStaleEntities = yield* _(
+      aggregateNewVersions({
+        block,
+        edits: schemaEditProposals.edits,
+        ipfsVersions: schemaEditProposals.versions,
+        opsByEditId: schemaEditProposals.opsByEditId,
+        opsByEntityId: schemaEditProposals.opsByEntityId,
+        editType: 'DEFAULT',
+      })
+    );
+
     // @TODO: Put this in a transaction since all these writes are related
     const writtenProposals = yield* _(
       Effect.tryPromise({
@@ -105,7 +117,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
             // Content proposals
             Edits.upsert(schemaEditProposals.edits),
             Proposals.upsert(schemaEditProposals.proposals),
-            Versions.upsert(schemaEditProposals.versions),
+            Versions.upsert(versionsWithStaleEntities),
 
             // Subspace proposals
             Proposals.upsert(schemaSubspaceProposals.proposals),
@@ -149,14 +161,14 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       mergeOpsWithPreviousVersions({
         edits: schemaEditProposals.edits,
         opsByVersionId: schemaEditProposals.opsByVersionId,
-        versions: schemaEditProposals.versions,
+        versions: versionsWithStaleEntities,
       })
     );
 
     const populateResult = yield* _(
       Effect.either(
         writeEdits({
-          versions: schemaEditProposals.versions,
+          versions: versionsWithStaleEntities,
           opsByVersionId,
           block,
           editType: 'DEFAULT',
