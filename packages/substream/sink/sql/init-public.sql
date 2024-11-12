@@ -115,6 +115,7 @@ CREATE TABLE public.current_versions (
 
 CREATE TABLE public.relations (
     id text PRIMARY KEY NOT NULL,
+    space_id text REFERENCES public.spaces(id) NOT NULL,
     type_of_id text REFERENCES public.versions(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
     to_version_id text REFERENCES public.versions(id) NOT NULL, -- the entity the relation is pointing to
     index text, -- the fractional index of the relation relative to other relations of the same type

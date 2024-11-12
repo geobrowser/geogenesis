@@ -161,6 +161,7 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
             //
             // If the type_of or to_version aren't changed in this edit then we
             // can fall back to the last version.
+            space_id: r.space_id,
             type_of_id: r.type_of?.entity_id
               ? latestVersionForChangedEntities[r.type_of.entity_id] ?? r.type_of_id
               : r.type_of_id,
@@ -264,10 +265,20 @@ function getRelationFromTriples(
   // collection_items table.
   const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
 
+  const isRelation = otherTriples.find(
+    t =>
+      t.triple.attribute_id.toString() === SYSTEM_IDS.TYPES &&
+      t.triple.value_type.toString() === 'ENTITY' &&
+      t.triple.entity_value_id?.toString() === SYSTEM_IDS.RELATION_TYPE
+  );
   const relationIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_INDEX);
   const to = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
   const from = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
   const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+
+  if (!isRelation || !from || !to || !type) {
+    return null;
+  }
 
   const indexValue = relationIndex?.triple.text_value?.toString();
   const toId = to?.triple.entity_value_id?.toString();
@@ -288,6 +299,7 @@ function getRelationFromTriples(
 
   return {
     id: createGeoId(),
+    space_id: isRelation.triple.space_id,
     to_version_id: toVersion,
     from_version_id: fromVersion,
     entity_id: entityId,

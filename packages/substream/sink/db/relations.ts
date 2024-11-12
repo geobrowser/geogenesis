@@ -12,7 +12,7 @@ export class Relations {
 
         await db
           .upsert('relations', chunk, ['id'], {
-            updateColumns: ['entity_id', 'id', 'from_version_id', 'to_version_id', 'type_of_id', 'index'],
+            updateColumns: ['entity_id', 'id', 'from_version_id', 'to_version_id', 'type_of_id', 'index', 'space_id'],
           })
           .run(pool);
       }
@@ -22,7 +22,7 @@ export class Relations {
 
     return await db
       .upsert('relations', relations, ['id'], {
-        updateColumns: ['entity_id', 'id', 'from_version_id', 'to_version_id', 'type_of_id', 'index'],
+        updateColumns: ['entity_id', 'id', 'from_version_id', 'to_version_id', 'type_of_id', 'index', 'space_id'],
       })
       .run(pool);
   }
@@ -42,7 +42,7 @@ export class Relations {
   static async selectOne(relation: S.relations.Whereable) {
     return await db
       .selectOne('relations', relation, {
-        columns: ['id', 'entity_id', 'from_version_id', 'to_version_id', 'type_of_id'],
+        columns: ['id', 'entity_id', 'from_version_id', 'to_version_id', 'type_of_id', 'space_id'],
       })
       .run(pool);
   }
@@ -50,7 +50,7 @@ export class Relations {
   static async select(relation: S.relations.Whereable) {
     return await db
       .select('relations', relation, {
-        columns: ['id', 'entity_id', 'from_version_id', 'to_version_id', 'type_of_id', 'index'],
+        columns: ['id', 'entity_id', 'from_version_id', 'to_version_id', 'type_of_id', 'index', 'space_id'],
         lateral: {
           to_entity: db.selectOne('versions', { id: db.parent('to_version_id') }, { columns: ['entity_id'] }),
           type_of: db.selectOne('versions', { id: db.parent('type_of_id') }, { columns: ['entity_id'] }),
