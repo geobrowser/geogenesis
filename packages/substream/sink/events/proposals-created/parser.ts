@@ -185,11 +185,6 @@ export const ZodEdit = z.object({
 
 export type ParsedEdit = z.infer<typeof ZodEdit>;
 
-// @TODO We should model edit proposals and imports
-// in the same data structure, but modeled as "many"
-// instead of "one". This is so we can use the type
-// as an IMPORT or DEFAULT based on this struct instead
-// of encoding the behavior in caller code.
 export type EditProposal = Proposal & {
   type: 'ADD_EDIT';
   name: string;
