@@ -81,16 +81,13 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       })
     );
 
-    // @TODO relationsByVersionId
-
     slog({
       requestId: block.requestId,
       message: `Writing edits, proposals, and versions for edits without proposals`,
     });
 
-    // 1. Orient the write flow based on processing edits in order.
-    //    If we do this right we can do all of the writing at once
-    //    as transactions while preserving the order with Effect.all.
+    // @TODO transactions are pretty slow for actual content writing for now, so
+    // we are skipping writing the actual content in a transaction for now.
     for (const edit of schemaEditProposals.edits) {
       // @TODO this is nested af
       const write = Effect.tryPromise({

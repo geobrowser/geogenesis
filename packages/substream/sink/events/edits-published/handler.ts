@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
@@ -99,11 +98,6 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
       })
     );
 
-    // @hmm
-    // We should only be writing merged versions in this handler. We've already written any stale
-    // versions. The tricky part is that this handler doesn't know about any stale versions created
-    // in the previous handlers, so we either need to query them or we need to re-calculate, which
-    // is what we're currently doing.
     const allMergedVersions = [...defaultMergedVersions, ...importedMergedVersions];
     const allCreatedVersions = [...defaultVersionsWithStaleEntities, ...importedVersionsWithStaleEntities];
     const currentVersions = aggregateCurrentVersions(allCreatedVersions, allMergedVersions);
