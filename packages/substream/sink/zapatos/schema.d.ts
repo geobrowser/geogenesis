@@ -2185,6 +2185,12 @@ declare module 'zapatos/schema' {
       */
       id: string;
       /**
+      * **relations.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string;
+      /**
       * **relations.type_of_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2222,6 +2228,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       id: string;
+      /**
+      * **relations.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string;
       /**
       * **relations.type_of_id**
       * - `text` in database
@@ -2261,6 +2273,12 @@ declare module 'zapatos/schema' {
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **relations.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **relations.type_of_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2299,6 +2317,12 @@ declare module 'zapatos/schema' {
       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
+      * **relations.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **relations.type_of_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2336,6 +2360,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **relations.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **relations.type_of_id**
       * - `text` in database
