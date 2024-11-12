@@ -1,9 +1,9 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
-import { Versions } from '../db';
-import { Relations } from '../db/relations';
-import type { Op } from '../types';
+import { getDeletedRelationsFromOps } from './get-deleted-relations-from-ops';
+import { Versions } from '~/sink/db';
+import type { Op } from '~/sink/types';
 
 type RelationWithEntities = {
   to: string;
@@ -67,27 +67,20 @@ export function getStaleEntitiesInEdit(args: {
 
 export function getStaleEntitiesFromDeletedRelations(ops: Op[]) {
   return Effect.gen(function* (_) {
-    // DELETE_TRIPLE ops don't store the value of the deleted op, so we have no way
-    // of knowing if the op being deleted here is actually a relation unless we query
-    // the Relations table with the entity id.
-    const entityIdsForDeletedTypeOps = ops
-      .filter(o => o.type === 'DELETE_TRIPLE' && o.triple.attribute === SYSTEM_IDS.TYPES)
-      .map(o => o.triple.entity);
-
-    const getRelations = Effect.all(
-      entityIdsForDeletedTypeOps.map(entityId =>
-        Effect.promise(() => {
-          return Relations.selectOne({
-            entity_id: entityId,
-          });
-        })
-      )
-    );
-
     // The relations we get here are unfortunately versions so we have to then query
     // the versions to get the entity ids. We could do a JOIN here with a special SQL
     // query but I've found it's super slow.
-    const relations = (yield* _(getRelations)).filter(r => r !== undefined);
+    const relations = yield* _(
+      getDeletedRelationsFromOps(
+        ops.map(o => {
+          return {
+            attribute: o.triple.attribute,
+            entity: o.triple.entity,
+            opType: o.type,
+          };
+        })
+      )
+    );
 
     const getEntityIdOfFromRelations = Effect.all(
       relations.map(relation =>

@@ -2,9 +2,10 @@ import { SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
-import { CurrentVersions } from '../db';
-import { Relations } from '../db/relations';
-import type { OpWithCreatedBy } from './map-triples';
+import type { OpWithCreatedBy } from '../map-triples';
+import { getDeletedRelationsFromOps } from './get-deleted-relations-from-ops';
+import { CurrentVersions } from '~/sink/db';
+import { Relations } from '~/sink/db/relations';
 
 interface AggregateRelationsArgs {
   triples: OpWithCreatedBy[];
@@ -209,21 +210,19 @@ function collectDeletedRelationsEntityIds(schemaTriples: OpWithCreatedBy[]): Eff
     // DELETE_TRIPLE ops don't store the value of the deleted op, so we have no way
     // of knowing if the op being deleted here is actually a relation unless we query
     // the Relations table with the entity id.
-    const entityIdsForDeletedTypeOps = schemaTriples
-      .filter(o => o.op === 'DELETE_TRIPLE' && o.triple.attribute_id.toString() === SYSTEM_IDS.TYPES)
-      .map(o => o.triple.entity_id.toString());
-
-    const getRelations = Effect.all(
-      entityIdsForDeletedTypeOps.map(entityId =>
-        Effect.promise(() => {
-          return Relations.selectOne({
-            entity_id: entityId,
-          });
+    const deletedRelations = yield* _(
+      getDeletedRelationsFromOps(
+        schemaTriples.map(t => {
+          return {
+            attribute: t.triple.attribute_id.toString(),
+            entity: t.triple.entity_id.toString(),
+            opType: t.op,
+          };
         })
       )
     );
 
-    return new Set((yield* _(getRelations)).filter(r => r !== undefined).map(r => r.entity_id.toString()));
+    return new Set(deletedRelations.map(r => r.entity_id.toString()));
   });
 }
 

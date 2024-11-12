@@ -2,12 +2,12 @@ import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
 import type { BlockEvent, Op } from '../types';
+import { makeVersionForStaleEntity } from './make-version-for-stale-entity';
 import {
   getStaleEntitiesFromDeletedRelations,
   getStaleEntitiesInEdit,
   maybeEntityOpsToRelation,
-} from './get-stale-entities-from-relations';
-import { makeVersionForStaleEntity } from './make-version-for-stale-entity';
+} from './relations/get-stale-entities-from-relations';
 
 interface AggregateNewVersionsArgs {
   edits: Schema.edits.Insertable[];
@@ -19,15 +19,14 @@ interface AggregateNewVersionsArgs {
 }
 
 /**
- *  When aggregating relations there's two steps
- *  1. Gathering relations from previous version of an entity
- *  2. Filtering any relations deleted in the same edit
- *  3. Adding any new relations in the same edit
+ * Versions are created when any new ops change the triples for an entity. Additionally,
+ * a new Version should be created when a relation _from_ an entity is created or deleted.
  *
- * #3 is also used to see if we need to manually create any versions for
- * entities with new relations that don't have created versions.
+ * This function finds any entities that do not already have a version in the current edit,
+ * that also has one or more of its relations created or deleted.
+ *
+ * @TODO does changing a relation also require making a new version for the from entity?
  */
-// Can we parallelize in order? Effect.all
 export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
   const { edits, editType, opsByEditId, opsByEntityId, ipfsVersions, block } = args;
   const newVersions = ipfsVersions;
