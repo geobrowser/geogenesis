@@ -5,7 +5,12 @@ import { pool } from '../utils/pool';
 import { CHUNK_SIZE } from './constants';
 
 export class Edits {
-  static async upsert(edits: S.edits.Insertable[], options: { chunked?: boolean } = {}) {
+  static async upsert(
+    edits: S.edits.Insertable[],
+    options: { chunked?: boolean; client?: db.TxnClient<db.IsolationLevel.Serializable> } = {}
+  ) {
+    const client = options.client ?? pool;
+
     if (options.chunked) {
       for (let i = 0; i < edits.length; i += CHUNK_SIZE) {
         const chunk = edits.slice(i, i + CHUNK_SIZE);
@@ -13,7 +18,7 @@ export class Edits {
           .upsert('edits', chunk, ['id'], {
             updateColumns: db.doNothing,
           })
-          .run(pool);
+          .run(client);
       }
 
       return;
@@ -23,19 +28,24 @@ export class Edits {
       .upsert('edits', edits, ['id'], {
         updateColumns: db.doNothing,
       })
-      .run(pool);
+      .run(client);
   }
 
-  static async insert(edits: S.edits.Insertable[], options: { chunked?: boolean } = {}) {
+  static async insert(
+    edits: S.edits.Insertable[],
+    options: { chunked?: boolean; client?: db.TxnClient<db.IsolationLevel.Serializable> } = {}
+  ) {
+    const client = options.client ?? pool;
+
     if (options.chunked) {
       for (let i = 0; i < edits.length; i += CHUNK_SIZE) {
         const chunk = edits.slice(i, i + CHUNK_SIZE);
-        await db.insert('edits', chunk).run(pool);
+        await db.insert('edits', chunk).run(client);
       }
 
       return;
     }
 
-    return await db.insert('edits', edits).run(pool);
+    return await db.insert('edits', edits).run(client);
   }
 }

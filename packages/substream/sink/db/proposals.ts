@@ -6,7 +6,12 @@ import { pool } from '../utils/pool';
 import { CHUNK_SIZE } from './constants';
 
 export class Proposals {
-  static async upsert(proposals: S.proposals.Insertable[], options: { chunked?: boolean } = {}) {
+  static async upsert(
+    proposals: S.proposals.Insertable[],
+    options: { chunked?: boolean; client?: db.TxnClient<db.IsolationLevel.Serializable> } = {}
+  ) {
+    const client = options.client ?? pool;
+
     if (options.chunked) {
       for (let i = 0; i < proposals.length; i += CHUNK_SIZE) {
         const chunk = proposals.slice(i, i + CHUNK_SIZE);
@@ -15,7 +20,7 @@ export class Proposals {
           .upsert('proposals', chunk, ['id'], {
             updateColumns: db.doNothing,
           })
-          .run(pool);
+          .run(client);
       }
 
       return;
@@ -25,7 +30,7 @@ export class Proposals {
       .upsert('proposals', proposals, ['id'], {
         updateColumns: db.doNothing,
       })
-      .run(pool);
+      .run(client);
   }
 
   static async getOne({

@@ -4,11 +4,13 @@ import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-
 import type { EditProposal } from '../proposals-created/parser';
 import { Accounts, Proposals, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
+import { Transaction } from '~/sink/db/transaction';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
+import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { writeEdits } from '~/sink/write-edits/write-edits';
 
@@ -67,84 +69,82 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
     // @TODO: We need a special function to map a proposal endtime to be now
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposalsFromIpfs, block);
 
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${schemaEditProposals.edits.length} edits for edits without proposals`,
-    });
-
-    const editProposalsResult = yield* _(
-      Effect.tryPromise({
-        try: () => Edits.upsert(schemaEditProposals.edits, { chunked: true }),
-        catch: error => {
-          return new CouldNotWriteInitialSpaceProposalsError(String(error));
-        },
-      }),
-      Effect.either,
-      retryEffect
-    );
-
-    if (Either.isLeft(editProposalsResult)) {
-      const error = editProposalsResult.left;
-      console.log('error', error);
-      return;
-    }
-
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${schemaEditProposals.proposals.length} proposals for edits without proposals`,
-    });
-
-    yield* _(
-      Effect.tryPromise({
-        try: () => Proposals.upsert(schemaEditProposals.proposals, { chunked: true }),
-        catch: error => {
-          return new CouldNotWriteInitialSpaceProposalsError(String(error));
-        },
-      }),
-      retryEffect
-    );
-
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${schemaEditProposals.versions.length} versions for edits without proposals`,
-    });
-
-    yield* _(
-      Effect.tryPromise({
-        try: () => Versions.upsert(schemaEditProposals.versions, { chunked: true }),
-        catch: error => {
-          return new CouldNotWriteInitialSpaceProposalsError(String(error));
-        },
-      }),
-      retryEffect
-    );
-
-    // @TODO: All of this write flow is going to be redone to be oriented around
-    // edits + transactions as well as simplifying our data aggregation + write
-    // pipeline to be easier to reason about and test.
-
-    const opsByVersionId = yield* _(
-      mergeOpsWithPreviousVersions({
+    const versionsWithStaleEntities = yield* _(
+      aggregateNewVersions({
+        block,
         edits: schemaEditProposals.edits,
-        opsByVersionId: schemaEditProposals.opsByVersionId,
-        versions: schemaEditProposals.versions,
+        ipfsVersions: schemaEditProposals.versions,
+        opsByEditId: schemaEditProposals.opsByEditId,
+        opsByEntityId: schemaEditProposals.opsByEntityId,
+        // @TODO this isn't correct, we'll need two separate flows
+        editType: 'IMPORT',
       })
     );
+
+    // @TODO relationsByVersionId
+
+    slog({
+      requestId: block.requestId,
+      message: `Writing edits, proposals, and versions for edits without proposals`,
+    });
+
+    // 1. Orient the write flow based on processing edits in order.
+    //    If we do this right we can do all of the writing at once
+    //    as transactions while preserving the order with Effect.all.
+    for (const edit of schemaEditProposals.edits) {
+      // @TODO this is nested af
+      const write = Effect.tryPromise({
+        try: async () => {
+          return await Transaction.run(async client => {
+            // @TODO this can probably go into an effect somewhere that's defined after
+            // we aggregate all the appropriate data to write.
+            await Promise.all([
+              Edits.upsert([edit], { client }),
+              Proposals.upsert(
+                schemaEditProposals.proposals.filter(p => p.edit_id?.toString() === edit.id),
+                { client }
+              ),
+              Versions.upsert(
+                versionsWithStaleEntities.filter(v => v.edit_id.toString() === edit.id),
+                { chunked: true, client }
+              ),
+            ]);
+
+            return true;
+          });
+        },
+        catch: error => new CouldNotWriteInitialSpaceProposalsError(String(error)),
+      });
+
+      // @TODO retry
+      yield* _(write);
+    }
 
     slog({
       requestId: block.requestId,
       message: `Writing content for edits without proposals`,
     });
 
+    const opsByNewVersions = yield* _(
+      mergeOpsWithPreviousVersions({
+        edits: schemaEditProposals.edits,
+        opsByVersionId: schemaEditProposals.opsByVersionId,
+        versions: versionsWithStaleEntities,
+      })
+    );
+
     const populateResult = yield* _(
       Effect.either(
         writeEdits({
-          versions: schemaEditProposals.versions,
-          opsByVersionId,
+          versions: versionsWithStaleEntities,
+          opsByVersionId: opsByNewVersions,
           block,
 
           // We treat all edits that occur at the same time the space is created
           // as imported edits.
+          //
+          // @TODO Should we be setting IMPORT for all edits in this handler?
+          // I don't think so...
           editType: 'IMPORT',
           edits: schemaEditProposals.edits,
         })
