@@ -76,6 +76,8 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
         ipfsVersions: schemaEditProposals.versions,
         opsByEditId: schemaEditProposals.opsByEditId,
         opsByEntityId: schemaEditProposals.opsByEntityId,
+        // @TODO this isn't correct, we'll need two separate flows
+        editType: 'IMPORT',
       })
     );
 

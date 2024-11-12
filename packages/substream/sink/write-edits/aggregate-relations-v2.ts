@@ -57,15 +57,15 @@ export function maybeEntityOpsToRelation(ops: Op[], entityId: string): RelationW
 
 export function getStaleEntitiesInEdit(args: {
   createdRelations: RelationWithEntities[];
-  deletedRelations: string[];
+  entitiesFromDeletedRelations: string[];
   entityIds: Set<string>;
 }) {
-  const { createdRelations, deletedRelations, entityIds } = args;
+  const { createdRelations, entitiesFromDeletedRelations: deletedRelations, entityIds } = args;
   const createdRelationFromIds = createdRelations.map(r => r.from);
   return [...createdRelationFromIds, ...deletedRelations].filter(fromId => !entityIds.has(fromId));
 }
 
-export function getDeletedRelations(ops: Op[]) {
+export function getStaleEntitiesFromDeletedRelations(ops: Op[]) {
   return Effect.gen(function* (_) {
     // DELETE_TRIPLE ops don't store the value of the deleted op, so we have no way
     // of knowing if the op being deleted here is actually a relation unless we query
@@ -93,12 +93,13 @@ export function getDeletedRelations(ops: Op[]) {
       relations.map(relation =>
         Effect.promise(() => {
           return Versions.selectOne({
-            id: relation.entity_id,
+            id: relation.from_version_id,
           });
         })
       )
     );
 
-    return (yield* _(getEntityIdOfFromRelations)).filter(e => e !== undefined).map(r => r.entity_id);
+    const maybeEntityIds = yield* _(getEntityIdOfFromRelations);
+    return maybeEntityIds.filter(e => e !== undefined).map(r => r.entity_id);
   });
 }

@@ -133,10 +133,7 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
         latestVersionForChangedEntities[version.entity_id.toString()] = version.id.toString();
       }
 
-      const deletedRelationEntityIds = collectDeletedRelationsEntityIds(
-        triples,
-        new Set(...latestRelationsFromDbForVersions.map(r => r.entity_id))
-      );
+      const deletedRelationEntityIds = yield* _(collectDeletedRelationsEntityIds(triples));
 
       const nonDeletedDbRelations = latestRelationsFromDbForVersions.filter(
         r => !deletedRelationEntityIds.has(r.entity_id)
@@ -203,34 +200,31 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
  * heuristic + lookup to know if the triple we're deleting is for an entity
  * defined as a relation.
  *
- * To do this we look up all entity ids for relations in this block. If we
- * encounter a triple in this block that deletes a triple with an attribute id
- * of TYPES _and_ the entity id is for a relation entity, then we know that
- * we're deleting a relation. We only write relations if they have a triple
- * with an entity value type, therefore we know there's only one type triple
- * defined for each relation for each space.
- *
  * @TODO Relations should be scoped to a space, so this deleting step should
  * be space-aware so that we delete the correct relation in the case where
  * a relation entity has multiple triples in multiple spaces.
  */
-function collectDeletedRelationsEntityIds(
-  schemaTriples: OpWithCreatedBy[],
-  entityIdsForDbRelations: Set<string>
-): Set<string> {
-  const deletedIds = schemaTriples.flatMap(t => {
-    if (t.op === 'DELETE_TRIPLE' && t.triple.attribute_id === SYSTEM_IDS.TYPES) {
-      const deletedTripleEntityId = t.triple.entity_id.toString();
+function collectDeletedRelationsEntityIds(schemaTriples: OpWithCreatedBy[]): Effect.Effect<Set<string>> {
+  return Effect.gen(function* (_) {
+    // DELETE_TRIPLE ops don't store the value of the deleted op, so we have no way
+    // of knowing if the op being deleted here is actually a relation unless we query
+    // the Relations table with the entity id.
+    const entityIdsForDeletedTypeOps = schemaTriples
+      .filter(o => o.op === 'DELETE_TRIPLE' && o.triple.attribute_id.toString() === SYSTEM_IDS.TYPES)
+      .map(o => o.triple.entity_id.toString());
 
-      if (entityIdsForDbRelations.has(deletedTripleEntityId)) {
-        return [deletedTripleEntityId];
-      }
-    }
+    const getRelations = Effect.all(
+      entityIdsForDeletedTypeOps.map(entityId =>
+        Effect.promise(() => {
+          return Relations.selectOne({
+            entity_id: entityId,
+          });
+        })
+      )
+    );
 
-    return [];
+    return new Set((yield* _(getRelations)).filter(r => r !== undefined).map(r => r.entity_id.toString()));
   });
-
-  return new Set(deletedIds);
 }
 
 function getEntitiesReferencedByRelations(schemaTriples: OpWithCreatedBy[], entityId: string): string[] | null {

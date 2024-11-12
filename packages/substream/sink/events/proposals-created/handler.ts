@@ -105,6 +105,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
         ipfsVersions: schemaEditProposals.versions,
         opsByEditId: schemaEditProposals.opsByEditId,
         opsByEntityId: schemaEditProposals.opsByEntityId,
+        editType: 'DEFAULT',
       })
     );
 

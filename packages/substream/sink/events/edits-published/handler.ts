@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
@@ -9,6 +10,7 @@ import type { BlockEvent, Op } from '~/sink/types';
 import { partition } from '~/sink/utils';
 import { slog } from '~/sink/utils/slog';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
+import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { writeEdits } from '~/sink/write-edits/write-edits';
 
 export class ProposalDoesNotExistError extends Error {
@@ -31,44 +33,80 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
       schemaEditProposals: { opsByVersionId, versions, edits, opsByEditId, opsByEntityId },
     } = mapIpfsProposalToSchemaProposalByType(ipfsProposals, block);
 
-    const versionsWithStaleEntities = yield* _(
-      aggregateNewVersions({
-        block,
-        edits: edits,
-        ipfsVersions: versions,
-        opsByEditId: opsByEditId,
-        opsByEntityId: opsByEntityId,
-      })
-    );
-
     /**
      * We treat imported edits and non-imported edits as separate units of work since
      * imports have separate requirements for how they handle merging data for versions.
      * See comment in {@link writeEdits} for more details.
      */
     const [importedEdits, defaultEdits] = partition(edits, e => createdSpaceIds.includes(e.space_id.toString()));
-    const [importedVersions, defaultVersions] = partition(versionsWithStaleEntities, v =>
+    const [importedVersions, defaultVersions] = partition(versions, v =>
       importedEdits.some(e => e.id.toString() === v.edit_id.toString())
     );
 
-    const { mergedOpsByVersionId: defaultMergedOpsByVersionId, mergedVersions: defaultMergedVersions } =
+    /**
+     * There might be entities that aren't changed in an edit, and therefore don't
+     * have a new version. These entities, however, might have new relations coming
+     * from them. We treat any new relations from an entity as a new version, so
+     * we need to detect and create those entities.
+     *
+     * This is required due to the way versioning works as we only update the triples
+     * and relations on an entity whenever a new version is created.
+     */
+    const importedVersionsWithStaleEntities = yield* _(
+      aggregateNewVersions({
+        block,
+        edits: importedEdits,
+        ipfsVersions: importedVersions,
+        opsByEditId: opsByEditId,
+        opsByEntityId: opsByEntityId,
+        editType: 'IMPORT',
+      })
+    );
+
+    const defaultVersionsWithStaleEntities = yield* _(
+      aggregateNewVersions({
+        block,
+        edits: defaultEdits,
+        ipfsVersions: defaultVersions,
+        opsByEditId: opsByEditId,
+        opsByEntityId: opsByEntityId,
+        editType: 'DEFAULT',
+      })
+    );
+
+    /**
+     * If multiple versions for the same entity are approved in the same block we need to merge
+     * them into a new version that contains the contents of each version. This merged version
+     * is then set as the current version of the entity.
+     */
+    const { mergedOpsByVersionId: defaultMergedOpsByVersionId, mergedVersions: defaultMergedVersions } = yield* _(
       aggregateMergedVersions({
         block,
         editType: 'DEFAULT',
         opsByVersionId,
-        versions: defaultVersions,
-      });
+        versions: defaultVersionsWithStaleEntities,
+        edits: defaultEdits,
+      })
+    );
 
-    const { mergedOpsByVersionId: importedMergedOpsByVersionId, mergedVersions: importedMergedVersions } =
+    const { mergedOpsByVersionId: importedMergedOpsByVersionId, mergedVersions: importedMergedVersions } = yield* _(
       aggregateMergedVersions({
         block,
         editType: 'IMPORT',
         opsByVersionId,
-        versions: importedVersions,
-      });
+        versions: importedVersionsWithStaleEntities,
+        edits: importedEdits,
+      })
+    );
 
+    // @hmm
+    // We should only be writing merged versions in this handler. We've already written any stale
+    // versions. The tricky part is that this handler doesn't know about any stale versions created
+    // in the previous handlers, so we either need to query them or we need to re-calculate, which
+    // is what we're currently doing.
     const allMergedVersions = [...defaultMergedVersions, ...importedMergedVersions];
-    const currentVersions = aggregateCurrentVersions(versionsWithStaleEntities, allMergedVersions);
+    const allCreatedVersions = [...defaultVersionsWithStaleEntities, ...importedVersionsWithStaleEntities];
+    const currentVersions = aggregateCurrentVersions(allCreatedVersions, allMergedVersions);
 
     yield* _(
       Effect.all([
@@ -148,6 +186,7 @@ function aggregateCurrentVersions(
 
 interface AggregateMergedVersionsArgs {
   versions: S.versions.Insertable[];
+  edits: S.edits.Insertable[];
   opsByVersionId: Map<string, Op[]>;
   block: BlockEvent;
   editType: 'IMPORT' | 'DEFAULT';
@@ -191,20 +230,30 @@ function aggregateMergedVersions(args: AggregateMergedVersionsArgs) {
   // we already have that workflow in place.
   //
   // Get the versions that have more than one version for the same entity id
-  const { versions, opsByVersionId, block, editType } = args;
-  const manyVersionsByEntityId = aggregateMergableVersions(versions);
+  return Effect.gen(function* (_) {
+    const { versions, opsByVersionId, block, editType, edits } = args;
+    const manyVersionsByEntityId = aggregateMergableVersions(versions);
 
-  // Merge the versions in this block with the same entity id into a new aggregated version
-  // containing all the changes from each of the versions.
-  const { mergedOpsByVersionId, mergedVersions } = aggregateMergableOps({
-    manyVersionsByEntityId,
-    opsByVersionId,
-    block,
-    editType,
+    // Merge the versions in this block with the same entity id into a new aggregated version
+    // containing all the changes from each of the versions.
+    const { mergedOpsByVersionId, mergedVersions } = aggregateMergableOps({
+      manyVersionsByEntityId,
+      opsByVersionId,
+      block,
+      editType,
+    });
+
+    const opsMergedWithPreviousVersion = yield* _(
+      mergeOpsWithPreviousVersions({
+        edits,
+        opsByVersionId: mergedOpsByVersionId,
+        versions: mergedVersions,
+      })
+    );
+
+    return {
+      mergedVersions,
+      mergedOpsByVersionId: opsMergedWithPreviousVersion,
+    };
   });
-
-  return {
-    mergedVersions,
-    mergedOpsByVersionId,
-  };
 }

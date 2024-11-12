@@ -2,7 +2,11 @@ import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
 import type { BlockEvent, Op } from '../types';
-import { getDeletedRelations, getStaleEntitiesInEdit, maybeEntityOpsToRelation } from './aggregate-relations-v2';
+import {
+  getStaleEntitiesFromDeletedRelations,
+  getStaleEntitiesInEdit,
+  maybeEntityOpsToRelation,
+} from './aggregate-relations-v2';
 import { makeVersionForStaleEntity } from './make-version-for-stale-entity';
 
 interface AggregateNewVersionsArgs {
@@ -11,6 +15,7 @@ interface AggregateNewVersionsArgs {
   opsByEditId: Map<string, Op[]>;
   opsByEntityId: Map<string, Op[]>;
   block: BlockEvent;
+  editType: 'DEFAULT' | 'IMPORT';
 }
 
 /**
@@ -24,13 +29,18 @@ interface AggregateNewVersionsArgs {
  */
 // Can we parallelize in order? Effect.all
 export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
-  const { edits, opsByEditId, opsByEntityId, ipfsVersions, block } = args;
+  const { edits, editType, opsByEditId, opsByEntityId, ipfsVersions, block } = args;
   const newVersions = ipfsVersions;
 
   return Effect.gen(function* (_) {
-    // @TODO This needs to be import-aware...
     for (const edit of edits) {
-      const versionsInEdit = ipfsVersions.filter(v => v.edit_id.toString() === edit.id);
+      // If we're reading a set of imported edits we want to use all of the versions
+      // from the set and not just the versions from the current edit. This is because
+      // an edit in an import might reference an edit in the import that hasn't been
+      // "accepted" yet. We should treat these edits as if they are a single atomic
+      // unit that will eventually be accepted.
+      const versionsInEdit =
+        editType === 'IMPORT' ? ipfsVersions : ipfsVersions.filter(v => v.edit_id.toString() === edit.id);
       const entitiesInEdit = new Set(versionsInEdit.map(v => v.entity_id.toString()));
       const opsInEdit = opsByEditId.get(edit.id.toString()) ?? [];
 
@@ -39,7 +49,7 @@ export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
         .map(([entityId, ops]) => maybeEntityOpsToRelation(ops, entityId))
         .filter(r => r !== null);
 
-      const deletedRelations = yield* _(getDeletedRelations(opsInEdit));
+      const entitiesFromDeletedRelations = yield* _(getStaleEntitiesFromDeletedRelations(opsInEdit));
 
       // Stale entities are entities which are referenced by the "from" field in
       // created or deleted relations where the entity does not have a new version
@@ -48,7 +58,13 @@ export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
       // e.g., you make a new relation from Entity A, but do not change Entity A
       // itself, therefore a new version for Entity A is not created in this edit.
       const staleEntities = [
-        ...new Set(getStaleEntitiesInEdit({ createdRelations, deletedRelations, entityIds: entitiesInEdit })),
+        ...new Set(
+          getStaleEntitiesInEdit({
+            createdRelations,
+            entitiesFromDeletedRelations,
+            entityIds: entitiesInEdit,
+          })
+        ),
       ];
       const versionsForStaleEntities = staleEntities.map(entityId =>
         makeVersionForStaleEntity({
@@ -62,13 +78,6 @@ export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
 
       // Append new versions for stale entities to versions in edit
       newVersions.push(...versionsForStaleEntities);
-
-      console.log('relations', {
-        staleEntities,
-        deletedRelations,
-        versionsForStaleEntities,
-        newVersions,
-      });
 
       // Theoretically as soon as we append the new versions we can just let the existing
       //     write flow continue as-is. But it wouldn't be ideal since we're doing a lot

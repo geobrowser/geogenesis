@@ -45,10 +45,6 @@ function squashOps(ops: Op[], spaceId: string, versionId: string): Op[] {
 }
 
 function validateOps(ops: Op[]) {
-  if (ops === undefined) {
-    return [];
-  }
-
   return ops.filter(o => {
     if (o.type === 'DELETE_TRIPLE') return true;
 
