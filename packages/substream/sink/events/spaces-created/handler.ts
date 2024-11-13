@@ -7,7 +7,6 @@ import { CouldNotWriteSpacesError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
-import { slog } from '~/sink/utils/slog';
 
 export class CouldNotWriteGovernancePlugins extends Error {
   _tag: 'CouldNotWriteGovernancePlugins' = 'CouldNotWriteGovernancePlugins';
@@ -22,10 +21,7 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreatedWithSpaceId
     const telemetry = yield* _(Telemetry);
     const spaces = mapSpaces(spacesCreated, block.blockNumber);
 
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${spaces.length} spaces to DB`,
-    });
+    yield* _(Effect.logInfo('Handling spaces created'));
 
     const writtenSpaces = yield* _(
       Effect.tryPromise({
@@ -43,24 +39,17 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreatedWithSpaceId
     if (Either.isLeft(writtenSpaces)) {
       const error = writtenSpaces.left;
       telemetry.captureException(error);
-
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write spaces
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write spaces
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return null;
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `Spaces written successfully!`,
-    });
-
+    yield* _(Effect.logInfo('Spaces created'));
     return writtenSpaces.right.map(s => s.id);
   });
 }
@@ -68,6 +57,9 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreatedWithSpaceId
 export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPluginsCreated[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
+
+    yield* _(Effect.logInfo('Handling personal space plugins created'));
+    yield* _(Effect.logDebug('Collecting spaces for personal plugins'));
 
     const personalPluginsWithSpaceId = (yield* _(
       Effect.all(
@@ -92,12 +84,8 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
       )
     )).flatMap(g => (g ? [g] : []));
 
+    yield* _(Effect.logDebug('Updating spaces with personal space plugins'));
     const spaces = mapPersonalToSpaces(personalPluginsWithSpaceId, block.blockNumber);
-
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${spaces.length} spaces without governance to DB`,
-    });
 
     const writtenGovernancePlugins = yield* _(
       Effect.tryPromise({
@@ -116,28 +104,26 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
       const error = writtenGovernancePlugins.left;
       telemetry.captureException(error);
 
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write personal plugins for spaces
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write personal plugins for spaces
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return;
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `Personal plugins written successfully!`,
-    });
+    yield* _(Effect.logInfo('Personal space plugins created'));
   });
 }
 
 export function handleGovernancePluginCreated(governancePluginsCreated: GovernancePluginsCreated[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
+
+    yield* _(Effect.logInfo('Handling public space plugins created'));
+    yield* _(Effect.logDebug('Collecting spaces for public plugins'));
 
     const governancePluginsWithSpaceId = (yield* _(
       Effect.all(
@@ -162,12 +148,8 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
       )
     )).flatMap(g => (g ? [g] : []));
 
+    yield* _(Effect.logDebug('Updating spaces with public space plugins'));
     const spaces = mapGovernanceToSpaces(governancePluginsWithSpaceId, block.blockNumber);
-
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${spaces.length} spaces with governance to DB`,
-    });
 
     // @TODO:
     // - Should error each plugin independently
@@ -189,21 +171,16 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
       const error = writtenGovernancePlugins.left;
       telemetry.captureException(error);
 
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write governance plugins for spaces
+      yield* _(
+        Effect.logError(`Could not write governance plugins for spaces
           Cause: ${error.cause}
           Message: ${error.message}
-        `,
-      });
+        `)
+      );
 
       return;
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `Governance plugins written successfully!`,
-    });
+    yield* _(Effect.logInfo('Public space plugins created'));
   });
 }

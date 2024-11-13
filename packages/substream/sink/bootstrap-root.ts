@@ -260,5 +260,5 @@ export const bootstrapRoot = Effect.gen(function* (_) {
 
   yield* _(createInitialContentForSpaces({ proposals: [editProposal], block: INITIAL_BLOCK, editType: 'IMPORT' }));
   yield* _(handleEditsPublished([editProposal], [SPACE_ID], INITIAL_BLOCK));
-  yield* _(handleProposalsExecuted([editProposal], INITIAL_BLOCK));
+  yield* _(handleProposalsExecuted([editProposal]));
 });

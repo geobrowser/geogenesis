@@ -9,7 +9,6 @@ import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
-import { slog } from '~/sink/utils/slog';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { writeEdits } from '~/sink/write-edits/write-edits';
@@ -29,10 +28,7 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
-    slog({
-      requestId: block.requestId,
-      message: `Writing accounts for proposals for edits without proposals`,
-    });
+    yield* _(Effect.logInfo('Handling creating initial content'));
 
     // If we are importing a space we need to make accounts for any creators
     // that don't already exist on this chain.
@@ -45,6 +41,8 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
     ].map(creator => ({
       id: creator,
     }));
+
+    yield* _(Effect.logDebug('Writing accounts'));
 
     const writtenAccounts = yield* _(
       Effect.tryPromise({
@@ -61,14 +59,12 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
       const error = writtenAccounts.left;
       telemetry.captureException(error);
 
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write accounts when writing proposals for edits without proposals
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write accounts when writing proposals for edits without proposals
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return;
     }
@@ -87,10 +83,7 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
       })
     );
 
-    slog({
-      requestId: block.requestId,
-      message: `Writing edits, proposals, and versions for edits without proposals`,
-    });
+    yield* _(Effect.logDebug('Writing edits, proposals, versions for each edit'));
 
     // @TODO transactions are pretty slow for actual content writing for now, so
     // we are skipping writing the actual content in a transaction for now.
@@ -122,10 +115,7 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
       yield* _(write);
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `Writing content for edits without proposals`,
-    });
+    yield* _(Effect.logDebug('Writing content for edits'));
 
     const opsByNewVersions = yield* _(
       mergeOpsWithPreviousVersions({
@@ -147,27 +137,13 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
       )
     );
 
-    Either.match(populateResult, {
-      onRight: () => {
-        slog({
-          requestId: block.requestId,
-          message: 'Edits from content proposals written successfully!',
-        });
-      },
-      onLeft: error => {
-        telemetry.captureException(error);
+    if (Either.isLeft(populateResult)) {
+      const error = populateResult.left;
+      telemetry.captureException(error);
 
-        slog({
-          requestId: block.requestId,
-          message: `Could not write proposals for edits without proposals ${error.message}`,
-          level: 'error',
-        });
-      },
-    });
+      yield* _(Effect.logError(`Could not write proposals for edits without proposals ${error.message}`));
+    }
 
-    slog({
-      requestId: block.requestId,
-      message: 'Proposals for edits without proposals written successfully!',
-    });
+    yield* _(Effect.logInfo('Initial content created'));
   });
 }

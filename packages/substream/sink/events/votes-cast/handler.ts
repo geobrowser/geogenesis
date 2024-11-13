@@ -6,7 +6,6 @@ import { ProposalVotes } from '~/sink/db/proposal-votes';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
-import { slog } from '~/sink/utils/slog';
 
 class CouldNotWriteVotesError extends Error {
   _tag: 'CouldNotWriteVotesError' = 'CouldNotWriteVotesError';
@@ -15,13 +14,11 @@ class CouldNotWriteVotesError extends Error {
 export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
-
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${votesCast.length} votes`,
-    });
+    yield* _(Effect.logInfo('Handling votes cast'));
 
     const schemaVotes = yield* _(mapVotes(votesCast, block));
+
+    yield* _(Effect.logDebug('Writing votes'));
 
     const writtenVotes = yield* _(
       Effect.tryPromise({
@@ -39,22 +36,16 @@ export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
     if (Either.isLeft(writtenVotes)) {
       const error = writtenVotes.left;
       telemetry.captureException(error);
-
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write votes
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write votes
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return;
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `Votes written successfully!`,
-    });
+    yield* _(Effect.logInfo('Votes cast'));
   });
 }

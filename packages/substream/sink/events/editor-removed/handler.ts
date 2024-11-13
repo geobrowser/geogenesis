@@ -4,22 +4,17 @@ import { mapRemovedEditors } from './map-removed-editors';
 import type { EditorRemoved } from './parser';
 import { SpaceEditors } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
-import { slog } from '~/sink/utils/slog';
 
 export class CouldNotWriteRemovedEditorsError extends Error {
   _tag: 'CouldNotWriteRemovedEditorsError' = 'CouldNotWriteRemovedEditorsError';
 }
 
-export function handleEditorRemoved(editorsRemoved: EditorRemoved[], block: BlockEvent) {
+export function handleEditorRemoved(editorsRemoved: EditorRemoved[]) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
-    const schemaEditors = yield* _(mapRemovedEditors(editorsRemoved, block));
+    const schemaEditors = yield* _(mapRemovedEditors(editorsRemoved));
 
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${schemaEditors.length} removed editors to DB`,
-    });
+    yield* _(Effect.logInfo('Handling editor removed'));
 
     const writtenRemovedEditors = yield* _(
       Effect.all(
@@ -44,14 +39,12 @@ export function handleEditorRemoved(editorsRemoved: EditorRemoved[], block: Bloc
         const error = removedEditor.left;
         telemetry.captureException(error);
 
-        slog({
-          level: 'error',
-          requestId: block.requestId,
-          message: `Could not remove editor
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-        });
+        yield* _(
+          Effect.logError(`Could not remove editor
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+        );
 
         failedDeletions++;
 
@@ -59,11 +52,10 @@ export function handleEditorRemoved(editorsRemoved: EditorRemoved[], block: Bloc
       }
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `${writtenRemovedEditors.length - failedDeletions} out of ${
-        writtenRemovedEditors.length
-      } editors removed successfully!`,
-    });
+    yield* _(
+      Effect.logInfo(
+        `${writtenRemovedEditors.length - failedDeletions} out of ${writtenRemovedEditors.length} editors removed`
+      )
+    );
   });
 }

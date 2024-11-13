@@ -11,7 +11,6 @@ import {
   ZodMembershipProposal,
   ZodSubspaceProposal,
 } from '../events/proposals-created/parser';
-import { slog } from '~/sink/utils/slog';
 
 export class CouldNotDecodeProtobufError extends Error {
   _tag: 'CouldNotDecodeProtobufError' = 'CouldNotDecodeProtobufError';
@@ -22,8 +21,6 @@ export class CouldNotDecodeProtobufError extends Error {
  */
 export function decode<T>(fn: () => T) {
   return Effect.gen(function* (_) {
-    // const telemetry = yield* _(Telemetry);
-
     const result = yield* _(
       Effect.try({
         try: () => fn(),
@@ -32,25 +29,18 @@ export function decode<T>(fn: () => T) {
       Effect.either
     );
 
-    return Either.match(result, {
-      onLeft: error => {
-        // telemetry.captureException(error);
+    if (Either.isLeft(result)) {
+      const error = result.left;
+      yield* _(
+        Effect.logError(`Could not decode protobuf
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
+      return null;
+    }
 
-        slog({
-          level: 'error',
-          requestId: '-1',
-          message: `Could not decode protobuf
-            Cause: ${error.cause}
-            Message: ${error.message}
-          `,
-        });
-
-        return null;
-      },
-      onRight: value => {
-        return value;
-      },
-    });
+    return result.right;
   });
 }
 

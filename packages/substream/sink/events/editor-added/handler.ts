@@ -8,7 +8,6 @@ import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { retryEffect } from '~/sink/utils/retry-effect';
-import { slog } from '~/sink/utils/slog';
 
 export class CouldNotWriteAddedEditorsError extends Error {
   _tag: 'CouldNotWriteAddedEditorsError' = 'CouldNotWriteAddedEditorsError';
@@ -18,12 +17,9 @@ export function handleEditorsAdded(editorsAdded: EditorAdded[], block: BlockEven
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
     const schemaEditors = yield* _(mapEditors(editorsAdded, block));
+    yield* _(Effect.logInfo('Handling editors added'));
 
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${schemaEditors.length} added editors to DB`,
-    });
-
+    yield* _(Effect.logDebug('Writing accounts'));
     /**
      * Ensure that we create any relations for the role change before we create the
      * role change itself.
@@ -46,19 +42,17 @@ export function handleEditorsAdded(editorsAdded: EditorAdded[], block: BlockEven
     if (Either.isLeft(writtenAccounts)) {
       const error = writtenAccounts.left;
       telemetry.captureException(error);
-
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write accounts when writing added editors
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write accounts
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return;
     }
 
+    yield* _(Effect.logDebug('Writing editors'));
     const writtenAddedEditors = yield* _(
       Effect.tryPromise({
         try: () => SpaceEditors.upsert(schemaEditors),
@@ -73,22 +67,16 @@ export function handleEditorsAdded(editorsAdded: EditorAdded[], block: BlockEven
     if (Either.isLeft(writtenAddedEditors)) {
       const error = writtenAddedEditors.left;
       telemetry.captureException(error);
-
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write approved editors
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write approved editors
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return;
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `Approved editors written successfully!`,
-    });
+    yield* _(Effect.logInfo('Approved editors handled'));
   });
 }

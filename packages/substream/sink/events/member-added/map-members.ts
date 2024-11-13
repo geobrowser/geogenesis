@@ -2,17 +2,18 @@ import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
 import { getChecksumAddress } from '../../utils/get-checksum-address';
-import { slog } from '../../utils/slog';
 import type { MemberAdded } from './parser';
 import { Spaces } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';
 
 export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
-  return Effect.gen(function* (unwrap) {
+  return Effect.gen(function* (_) {
+    yield* _(Effect.logDebug('Mapping editors'));
+
     const members: S.space_members.Insertable[] = [];
 
     for (const member of membersApproved) {
-      const [maybeSpaceIdForVotingPlugin, maybeSpaceIdForPersonalPlugin] = yield* unwrap(
+      const [maybeSpaceIdForVotingPlugin, maybeSpaceIdForPersonalPlugin] = yield* _(
         Effect.all([
           Effect.tryPromise({
             try: () => Spaces.findForVotingPlugin(member.mainVotingPluginAddress),
@@ -26,11 +27,11 @@ export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
       );
 
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForPersonalPlugin) {
-        slog({
-          level: 'error',
-          message: `Matching space for approved member not found for plugin address ${member.mainVotingPluginAddress}`,
-          requestId: block.requestId,
-        });
+        yield* _(
+          Effect.logError(
+            `Matching space for approved member not found for plugin address ${member.mainVotingPluginAddress}`
+          )
+        );
 
         continue;
       }

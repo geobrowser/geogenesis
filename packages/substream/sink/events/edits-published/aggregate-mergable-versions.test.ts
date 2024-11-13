@@ -88,7 +88,6 @@ describe('aggregateMergableOps', () => {
       block: {
         blockNumber: 0,
         cursor: '',
-        requestId: '',
         timestamp: 0,
       },
       editType: 'DEFAULT',
@@ -109,7 +108,6 @@ describe('aggregateMergableOps', () => {
       block: {
         blockNumber: 0,
         cursor: '',
-        requestId: '',
         timestamp: 0,
       },
       editType: 'DEFAULT',
@@ -133,7 +131,6 @@ describe('aggregateMergableOps', () => {
       block: {
         blockNumber: 0,
         cursor: '',
-        requestId: '',
         timestamp: 0,
       },
       editType: 'DEFAULT',
@@ -157,7 +154,6 @@ describe('aggregateMergableOps', () => {
       block: {
         blockNumber: 0,
         cursor: '',
-        requestId: '',
         timestamp: 0,
       },
       editType: 'DEFAULT',
@@ -175,7 +171,6 @@ describe('aggregateMergableOps', () => {
       block: {
         blockNumber: 0,
         cursor: '',
-        requestId: '',
         timestamp: 0,
       },
       editType: 'IMPORT',
@@ -195,7 +190,6 @@ describe('aggregateMergableOps', () => {
       block: {
         blockNumber: 0,
         cursor: '',
-        requestId: '',
         timestamp: 0,
       },
       editType: 'IMPORT',

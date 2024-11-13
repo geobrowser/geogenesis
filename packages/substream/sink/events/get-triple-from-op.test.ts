@@ -21,7 +21,6 @@ describe('tripleFromOp', () => {
       {
         blockNumber: 0,
         cursor: '',
-        requestId: '',
         timestamp: 0,
       }
     );
@@ -54,7 +53,6 @@ describe('tripleFromOp', () => {
       {
         blockNumber: 0,
         cursor: '',
-        requestId: '',
         timestamp: 0,
       }
     );

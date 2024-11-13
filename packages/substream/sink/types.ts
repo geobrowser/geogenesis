@@ -6,7 +6,6 @@ export interface BlockEvent {
   cursor: string;
   blockNumber: number;
   timestamp: number;
-  requestId: string; // uuid
 }
 
 export interface GeoBlock extends BlockEvent {
