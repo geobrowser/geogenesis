@@ -5,7 +5,7 @@ import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import type { BlockScopedData } from '@substreams/core/proto';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Data, Duration, Effect, Secret, Stream } from 'effect';
+import { Data, Duration, Effect, LogLevel, Logger, Secret, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
@@ -54,7 +54,7 @@ import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
 import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
-import { withRequestId } from './logs';
+import { getConfiguredLogLevel, withRequestId } from './logs';
 import { Telemetry } from './telemetry';
 import { createSink, createStream } from './vendor/sink/src';
 
@@ -145,7 +145,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       handleBlockScopedData: message => {
         return Effect.gen(function* (_) {
           const requestId = createGeoId();
-          yield* _(handleEvent(message, registry).pipe(withRequestId(requestId)));
+          const logLevel = yield* _(getConfiguredLogLevel);
+          yield* _(handleEvent(message, registry).pipe(withRequestId(requestId), Logger.withMinimumLogLevel(logLevel)));
         });
       },
 
