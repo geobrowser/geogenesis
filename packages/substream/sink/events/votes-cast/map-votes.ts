@@ -11,7 +11,6 @@ import {
 import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { pool } from '~/sink/utils/pool';
-import { slog } from '~/sink/utils/slog';
 
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
@@ -30,18 +29,19 @@ export function mapVotes(
   ProposalWithOnchainProposalIdAndSpaceIdNotFoundError | SpaceWithPluginAddressNotFoundError,
   never
 > {
-  return Effect.gen(function* (unwrap) {
+  return Effect.gen(function* (_) {
+    yield* _(Effect.logDebug('Mapping votes'));
     const schemaVotes: S.proposal_votes.Insertable[] = [];
 
     for (const vote of votes) {
       const voteType = getVoteTypeAsText(vote.voteOption);
 
       if (!voteType) {
-        slog({
-          level: 'error',
-          message: `Vote type is invalid ${vote.voteOption} for vote ${vote.onchainProposalId} in space ${vote.pluginAddress}, skipping indexing the vote.`,
-          requestId: block.requestId,
-        });
+        yield* _(
+          Effect.logError(
+            `Vote type is invalid ${vote.voteOption} for vote ${vote.onchainProposalId} in space ${vote.pluginAddress}, skipping indexing the vote.`
+          )
+        );
 
         continue;
       }
@@ -58,7 +58,7 @@ export function mapVotes(
       //
       // If maybeSpaceIdForVotingPlugin returns data we know that the vote corresponds to a voting action.
       // Same for maybeSpaceIdForMemberPlugin.
-      const [maybeSpaceIdForVotingPlugin, maybeSpaceIdForMemberPlugin] = yield* unwrap(
+      const [maybeSpaceIdForVotingPlugin, maybeSpaceIdForMemberPlugin] = yield* _(
         Effect.all([
           Effect.promise(() => Spaces.findForVotingPlugin(vote.pluginAddress)),
           Effect.promise(() => Spaces.findForMembershipPlugin(vote.pluginAddress)),
@@ -66,22 +66,15 @@ export function mapVotes(
       );
 
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForMemberPlugin) {
-        slog({
-          message: `Matching space in Proposal not found for plugin address ${vote.pluginAddress}`,
-          requestId: block.requestId,
-        });
+        yield* _(Effect.logError(`Matching space in Proposal not found for plugin address ${vote.pluginAddress}`));
 
         continue;
       }
 
       if (maybeSpaceIdForVotingPlugin) {
-        slog({
-          requestId: block.requestId,
-          level: 'info',
-          message: `Verifying proposal id for voting plugin with address ${vote.pluginAddress}`,
-        });
+        yield* _(Effect.logDebug(`Verifying proposal id for voting plugin with address ${vote.pluginAddress}`));
 
-        const maybeProposalsForOnchainProposalId = yield* unwrap(
+        const maybeProposalsForOnchainProposalId = yield* _(
           Effect.tryPromise({
             try: () =>
               db
@@ -99,11 +92,11 @@ export function mapVotes(
         const proposalIdForAction = maybeProposalsForOnchainProposalId.find(p => p.type !== 'ADD_MEMBER');
 
         if (!proposalIdForAction) {
-          slog({
-            level: 'error',
-            message: `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForVotingPlugin}`,
-            requestId: block.requestId,
-          });
+          yield* _(
+            Effect.logError(
+              `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForVotingPlugin}`
+            )
+          );
 
           continue;
         }
@@ -122,13 +115,9 @@ export function mapVotes(
       }
 
       if (maybeSpaceIdForMemberPlugin) {
-        slog({
-          requestId: block.requestId,
-          level: 'info',
-          message: `Verifying proposal id for membership plugin with address ${vote.pluginAddress}`,
-        });
+        yield* _(Effect.logDebug(`Verifying proposal id for membership plugin with address ${vote.pluginAddress}`));
 
-        const maybeProposalsForMemberPlugin = yield* unwrap(
+        const maybeProposalsForMemberPlugin = yield* _(
           Effect.tryPromise({
             try: () =>
               db
@@ -145,11 +134,11 @@ export function mapVotes(
         const proposalIdForAction = maybeProposalsForMemberPlugin.find(p => p.type === 'ADD_MEMBER');
 
         if (!proposalIdForAction) {
-          slog({
-            level: 'error',
-            message: `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForMemberPlugin}`,
-            requestId: block.requestId,
-          });
+          yield* _(
+            Effect.logError(
+              `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForMemberPlugin}`
+            )
+          );
 
           continue;
         }

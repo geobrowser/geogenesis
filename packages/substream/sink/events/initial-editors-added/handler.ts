@@ -10,7 +10,6 @@ import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { pool } from '~/sink/utils/pool';
 import { retryEffect } from '~/sink/utils/retry-effect';
-import { slog } from '~/sink/utils/slog';
 
 class CouldNotWriteEditorsError extends Error {
   _tag: 'CouldNotWriteEditorsError' = 'CouldNotWriteEditorsError';
@@ -20,12 +19,14 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
-    slog({
-      requestId: block.requestId,
-      message: `Writing initial editor and member role for governance plugin for accounts ${editorsAdded
-        .map(e => e.addresses)
-        .join(', ')} to space with plugin ${editorsAdded.map(e => e.pluginAddress)} to DB`,
-    });
+    yield* _(Effect.logInfo('Handling initial editors for new public spaces'));
+    yield* _(
+      Effect.logDebug(
+        `Accounts ${editorsAdded
+          .map(e => e.addresses)
+          .join(', ')} being added as initial editors to space with plugin ${editorsAdded.map(e => e.pluginAddress)}`
+      )
+    );
 
     const accounts = editorsAdded.flatMap(e => e.addresses.map(a => ({ id: getChecksumAddress(a) })));
 
@@ -34,6 +35,8 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
     // we're using `noUncheckedIndexedAccess` even though we've asserted that editorsAdded is
     // not empty.
     const pluginAddresses = editorsAdded.map(e => e.pluginAddress);
+
+    yield* _(Effect.logDebug('Collecting spaces for public plugins'));
 
     const maybeSpacesForPlugins = yield* _(
       Effect.all(
@@ -78,6 +81,8 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
         new Map<string, string>()
       );
 
+    yield* _(Effect.logDebug('Writing accounts'));
+
     /**
      * Ensure that we create any relations for the role change before we create the
      * role change itself.
@@ -97,14 +102,12 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
       const error = writtenAccounts.left;
       telemetry.captureException(error);
 
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write accounts when writing added editors
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write accounts when writing added editors
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return;
     }
@@ -126,19 +129,6 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
 
           return editor;
         })
-        // Handle the edge case where we might start indexing at a block that occurs after
-        // the space was created.
-        .map(e => {
-          if (e.space_id === undefined) {
-            slog({
-              level: 'error',
-              message: `Could not find space for plugin address, ${pluginAddress}`,
-              requestId: block.requestId,
-            });
-          }
-
-          return e;
-        })
         .filter(e => e.space_id !== undefined)
     );
 
@@ -158,19 +148,6 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
           };
 
           return member;
-        })
-        // Handle the edge case where we might start indexing at a block that occurs after
-        // the space was created.
-        .map(e => {
-          if (e.space_id === undefined) {
-            slog({
-              level: 'error',
-              message: `Could not find space for plugin address, ${pluginAddress}`,
-              requestId: block.requestId,
-            });
-          }
-
-          return e;
         })
         .filter(e => e.space_id !== undefined)
     );
@@ -193,22 +170,17 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
       const error = writtenEditors.left;
       telemetry.captureException(error);
 
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write editors and members when writing added editors
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write editors and members when writing added editors
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return;
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `Initial editor and member roles written successfully!`,
-    });
+    yield* _(Effect.logInfo('Initial editors and members created'));
   });
 }
 
@@ -216,12 +188,14 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
-    slog({
-      requestId: block.requestId,
-      message: `Writing initial editor and member role for personal plugin for accounts ${editorsAdded
-        .map(e => e.addresses)
-        .join(', ')} to space with plugin ${editorsAdded.map(e => e.pluginAddress)} to DB`,
-    });
+    yield* _(Effect.logInfo('Handling initial editors for new personal spaces'));
+    yield* _(
+      Effect.logDebug(
+        `Accounts ${editorsAdded
+          .map(e => e.addresses)
+          .join(', ')} being added as initial editors to space with plugin ${editorsAdded.map(e => e.pluginAddress)}`
+      )
+    );
 
     const accounts = editorsAdded.flatMap(e => e.addresses.map(a => ({ id: getChecksumAddress(a) })));
 
@@ -230,6 +204,8 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
     // we're using `noUncheckedIndexedAccess` even though we've asserted that editorsAdded is
     // not empty.
     const pluginAddresses = editorsAdded.map(e => e.pluginAddress);
+
+    yield* _(Effect.logDebug('Collecting spaces for personal plugins'));
 
     const maybeSpacesForPlugins = yield* _(
       Effect.all(
@@ -267,6 +243,8 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
         new Map<string, string>()
       );
 
+    yield* _(Effect.logDebug('Writing accounts'));
+
     /**
      * Ensure that we create any relations for the role change before we create the
      * role change itself.
@@ -286,14 +264,12 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
       const error = writtenAccounts.left;
       telemetry.captureException(error);
 
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write accounts when writing added editors
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write accounts when writing added editors
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return;
     }
@@ -315,19 +291,6 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
 
           return editor;
         })
-        // Handle the edge case where we might start indexing at a block that occurs after
-        // the space was created.
-        .map(e => {
-          if (e.space_id === undefined) {
-            slog({
-              level: 'error',
-              message: `Could not find space for plugin address, ${pluginAddress}`,
-              requestId: block.requestId,
-            });
-          }
-
-          return e;
-        })
         .filter(e => e.space_id !== undefined)
     );
 
@@ -348,21 +311,10 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
 
           return member;
         })
-        // Handle the edge case where we might start indexing at a block that occurs after
-        // the space was created.
-        .map(e => {
-          if (e.space_id === undefined) {
-            slog({
-              level: 'error',
-              message: `Could not find space for plugin address, ${pluginAddress}`,
-              requestId: block.requestId,
-            });
-          }
-
-          return e;
-        })
         .filter(e => e.space_id !== undefined)
     );
+
+    yield* _(Effect.logDebug('Writing initial editors and members'));
 
     // @TODO: Transaction
     const writtenEditors = yield* _(
@@ -382,21 +334,16 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
       const error = writtenEditors.left;
       telemetry.captureException(error);
 
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write editors and members when writing added editors
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write editors and members when writing added editors
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return;
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `Initial editor and member roles written successfully!`,
-    });
+    yield* _(Effect.logInfo('Initial editors and members created'));
   });
 }

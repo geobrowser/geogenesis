@@ -6,7 +6,6 @@ import { Subspaces } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
-import { slog } from '~/sink/utils/slog';
 
 export class CouldNotWriteSubspacesError extends Error {
   _tag: 'CouldNotWriteSubspacesError' = 'CouldNotWriteSubspacesError';
@@ -15,11 +14,7 @@ export class CouldNotWriteSubspacesError extends Error {
 export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
-
-    slog({
-      message: `Writing subspaces`,
-      requestId: block.requestId,
-    });
+    yield* _(Effect.logInfo('Handling subspaces added'));
 
     const subspaces = yield* _(
       mapSubspaces({
@@ -28,6 +23,8 @@ export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: Blo
         blockNumber: block.blockNumber,
       })
     );
+
+    yield* _(Effect.logDebug('Writing subspaces'));
 
     const writtenSubspaces = yield* _(
       Effect.tryPromise({
@@ -46,21 +43,16 @@ export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: Blo
       const error = writtenSubspaces.left;
       telemetry.captureException(error);
 
-      slog({
-        level: 'error',
-        requestId: block.requestId,
-        message: `Could not write subspaces
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-      });
+      yield* _(
+        Effect.logError(`Could not write subspaces
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+      );
 
       return;
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `Subspaces written successfully!`,
-    });
+    yield* _(Effect.logInfo('Subspaces added'));
   });
 }

@@ -6,7 +6,6 @@ import { Subspaces } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
-import { slog } from '~/sink/utils/slog';
 
 export class CouldNotRemoveSubspacesError extends Error {
   _tag: 'CouldNotRemoveSubspacesError' = 'CouldNotRemoveSubspacesError';
@@ -15,13 +14,11 @@ export class CouldNotRemoveSubspacesError extends Error {
 export function handleSubspacesRemoved(subspacesRemoved: SubspaceRemoved[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
-
-    slog({
-      message: `Removing subspaces`,
-      requestId: block.requestId,
-    });
+    yield* _(Effect.logInfo('Handling subspaces removed'));
 
     const subspacesToRemove = yield* _(mapSubspacesToRemove(subspacesRemoved));
+
+    yield* _(Effect.logDebug('Removing subspaces'));
 
     const removedSubspaces = yield* _(
       Effect.all(
@@ -49,15 +46,12 @@ export function handleSubspacesRemoved(subspacesRemoved: SubspaceRemoved[], bloc
       if (Either.isLeft(removedSubspace)) {
         const error = removedSubspace.left;
         telemetry.captureException(error);
-
-        slog({
-          level: 'error',
-          requestId: block.requestId,
-          message: `Could not remove subspaces
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-        });
+        yield* _(
+          Effect.logDebug(`Could not remove subspaces
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+        );
 
         failedDeletions++;
 
@@ -65,11 +59,8 @@ export function handleSubspacesRemoved(subspacesRemoved: SubspaceRemoved[], bloc
       }
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `${removedSubspaces.length - failedDeletions} out of ${
-        removedSubspaces.length
-      } subspaces removed successfully!`,
-    });
+    yield* _(
+      Effect.logInfo(`${removedSubspaces.length - failedDeletions} out of ${removedSubspaces.length} subspaces removed`)
+    );
   });
 }

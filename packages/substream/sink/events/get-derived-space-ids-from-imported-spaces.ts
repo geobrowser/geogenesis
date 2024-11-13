@@ -4,17 +4,16 @@ import { Effect, Either } from 'effect';
 import { getFetchIpfsContentEffect } from '../ipfs';
 import type { BlockEvent } from '../types';
 import { createSpaceId } from '../utils/id';
-import { slog } from '../utils/slog';
 import type { ProposalProcessed } from './proposals-created/parser';
 import { decode } from '~/sink/proto';
 
-function fetchSpaceImportFromIpfs(ipfsUri: string, block: BlockEvent) {
+function fetchSpaceImportFromIpfs(ipfsUri: string) {
   return Effect.gen(function* (_) {
-    slog({
-      message: `Fetching IPFS content for space import
-        ipfsUri:       ${ipfsUri}`,
-      requestId: block.requestId,
-    });
+    yield* _(Effect.logDebug('Fetching space import from IPFS'));
+    yield* _(
+      Effect.logDebug(`Fetching IPFS content for space import
+      ipfsUri: ${ipfsUri}`)
+    );
 
     const fetchIpfsContentEffect = getFetchIpfsContentEffect(ipfsUri);
     const maybeIpfsContent = yield* _(Effect.either(fetchIpfsContentEffect));
@@ -24,19 +23,19 @@ function fetchSpaceImportFromIpfs(ipfsUri: string, block: BlockEvent) {
 
       switch (error._tag) {
         case 'UnableToParseBase64Error':
-          console.error(`Unable to parse base64 string ${ipfsUri}`, error);
+          yield* _(Effect.logError(`Unable to parse base64 string ${ipfsUri}. ${String(error)}`));
           break;
         case 'FailedFetchingIpfsContentError':
-          console.error(`Failed fetching IPFS content from uri ${ipfsUri}`, error);
+          yield* _(Effect.logError(`Failed fetching IPFS content from uri ${ipfsUri}. ${String(error)}`));
           break;
         case 'UnableToParseJsonError':
-          console.error(`Unable to parse JSON when reading content from uri ${ipfsUri}`, error);
+          yield* _(Effect.logError(`Unable to parse JSON when reading content from uri ${ipfsUri}. ${String(error)}`));
           break;
         case 'TimeoutException':
-          console.error(`Timed out when fetching IPFS content for uri ${ipfsUri}`, error);
+          yield* _(Effect.logError(`Timed out when fetching IPFS content for uri ${ipfsUri}. ${String(error)}`));
           break;
         default:
-          console.error(`Unknown error when fetching IPFS content for uri ${ipfsUri}`, error);
+          yield* _(Effect.logError(`Unknown error when fetching IPFS content for uri ${ipfsUri}. ${String(error)}`));
           break;
       }
 
@@ -59,18 +58,15 @@ function fetchSpaceImportFromIpfs(ipfsUri: string, block: BlockEvent) {
   });
 }
 
-export function getDerivedSpaceIdsFromImportedSpaces(processedProposals: ProposalProcessed[], block: BlockEvent) {
+export function getDerivedSpaceIdsFromImportedSpaces(processedProposals: ProposalProcessed[]) {
   return Effect.gen(function* (_) {
-    slog({
-      requestId: block.requestId,
-      message: `Gathering IPFS import content for ${processedProposals.length} initial space proposals`,
-    });
+    yield* _(Effect.logDebug(`Gathering IPFS import content for ${processedProposals.length} initial space proposals`));
 
     const maybeImportsFromIpfs = yield* _(
       Effect.all(
         processedProposals.map(p => {
           return Effect.gen(function* (_) {
-            const maybeSpaceId = yield* _(fetchSpaceImportFromIpfs(p.contentUri, block));
+            const maybeSpaceId = yield* _(fetchSpaceImportFromIpfs(p.contentUri));
 
             return {
               pluginAddress: p.pluginAddress,

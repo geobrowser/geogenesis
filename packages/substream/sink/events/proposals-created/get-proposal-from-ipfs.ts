@@ -11,9 +11,8 @@ import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder } from '~/sink/proto';
-import type { BlockEvent, Op } from '~/sink/types';
+import type { Op } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
-import { slog } from '~/sink/utils/slog';
 
 /**
  * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
@@ -26,13 +25,14 @@ import { slog } from '~/sink/utils/slog';
  * Later on we map this to the database schema and write the proposal to the database.
  */
 export function getProposalFromIpfs(
-  proposal: ProposalCreated,
-  block: BlockEvent
+  proposal: ProposalCreated
 ): Effect.Effect<
   EditProposal | SubspaceProposal | MembershipProposal | EditorshipProposal | null,
   SpaceWithPluginAddressNotFoundError
 > {
   return Effect.gen(function* (_) {
+    yield* _(Effect.logDebug('Fetching proposal from IPFS'));
+
     // The proposal can come from either the voting plugin or the membership plugin
     // depending on which type of proposal is being processed
     const maybeSpaceIdForVotingPlugin = yield* _(
@@ -43,24 +43,19 @@ export function getProposalFromIpfs(
     );
 
     if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForMembershipPlugin) {
-      slog({
-        message: `Matching space in Proposal not found for plugin address ${proposal.pluginAddress}`,
-        requestId: block.requestId,
-      });
-
+      yield* _(Effect.logError(`Matching space in Proposal not found for plugin address ${proposal.pluginAddress}`));
       return null;
     }
 
-    slog({
-      message: `Fetching IPFS content for proposal
-        proposalId:    ${proposal.proposalId}
-        pluginAddress: ${proposal.pluginAddress}
-        creator:       ${proposal.creator}
-        metadataUri:   ${proposal.metadataUri}
-        startTime:     ${proposal.startTime}
-        endTime:       ${proposal.endTime}`,
-      requestId: block.requestId,
-    });
+    yield* _(
+      Effect.logDebug(`Fetching IPFS content for proposal
+      proposalId:    ${proposal.proposalId}
+      pluginAddress: ${proposal.pluginAddress}
+      creator:       ${proposal.creator}
+      metadataUri:   ${proposal.metadataUri}
+      startTime:     ${proposal.startTime}
+      endTime:       ${proposal.endTime}`)
+    );
 
     const fetchIpfsContentEffect = getFetchIpfsContentEffect(proposal.metadataUri);
     const maybeIpfsContent = yield* _(Effect.either(fetchIpfsContentEffect));
@@ -70,19 +65,29 @@ export function getProposalFromIpfs(
 
       switch (error._tag) {
         case 'UnableToParseBase64Error':
-          console.error(`Unable to parse base64 string ${proposal.metadataUri}`, error);
+          yield* _(Effect.logError(`Unable to parse base64 string ${proposal.metadataUri}. ${String(error)}`));
           break;
         case 'FailedFetchingIpfsContentError':
-          console.error(`Failed fetching IPFS content from uri ${proposal.metadataUri}`, error);
+          yield* _(Effect.logError(`Failed fetching IPFS content from uri ${proposal.metadataUri}. ${String(error)}`));
           break;
         case 'UnableToParseJsonError':
-          console.error(`Unable to parse JSON when reading content from uri ${proposal.metadataUri}`, error);
+          yield* _(
+            Effect.logError(
+              `Unable to parse JSON when reading content from uri ${proposal.metadataUri}. ${String(error)}`
+            )
+          );
           break;
         case 'TimeoutException':
-          console.error(`Timed out when fetching IPFS content for uri ${proposal.metadataUri}`, error);
+          yield* _(
+            Effect.logError(`Timed out when fetching IPFS content for uri ${proposal.metadataUri}. ${String(error)}`)
+          );
           break;
         default:
-          console.error(`Unknown error when fetching IPFS content for uri ${proposal.metadataUri}`, error);
+          yield* _(
+            Effect.logError(
+              `Unknown error when fetching IPFS content for uri ${proposal.metadataUri}. ${String(error)}`
+            )
+          );
           break;
       }
 
@@ -99,7 +104,7 @@ export function getProposalFromIpfs(
 
     if (!validIpfsMetadata) {
       // @TODO: Effectify error handling
-      console.error('Failed to parse IPFS metadata for proposal', proposal.metadataUri);
+      yield* _(Effect.logError(`Failed to parse IPFS metadata for proposal ${validIpfsMetadata}`));
       return null;
     }
 
@@ -142,11 +147,7 @@ export function getProposalFromIpfs(
         );
 
         if (!maybeSpaceIdForSubspaceDaoAddress) {
-          slog({
-            requestId: block.requestId,
-            message: `Failed to get space for subspace DAO address ${parsedSubspace.subspace}`,
-            level: 'error',
-          });
+          yield* _(Effect.logError(`Failed to get space for subspace DAO address ${parsedSubspace.subspace}`));
           return null;
         }
 
@@ -219,14 +220,8 @@ export function getProposalFromIpfs(
         return mappedProposal;
       }
       default:
-        slog({
-          level: 'error',
-          message: `Unsupported content type ${validIpfsMetadata.type}`,
-          requestId: block.requestId,
-        });
+        yield* _(Effect.logError(`Unsupported content type ${validIpfsMetadata.type}`));
         return null;
-        // @TODO: Use more explicitly typed error
-        throw new Error('Unsupported content type');
     }
   });
 }

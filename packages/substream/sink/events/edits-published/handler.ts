@@ -7,7 +7,6 @@ import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mer
 import { CurrentVersions, Proposals, Versions } from '~/sink/db';
 import type { BlockEvent, Op } from '~/sink/types';
 import { partition } from '~/sink/utils';
-import { slog } from '~/sink/utils/slog';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { writeEdits } from '~/sink/write-edits/write-edits';
@@ -23,10 +22,7 @@ export class ProposalDoesNotExistError extends Error {
  */
 export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpaceIds: string[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    slog({
-      requestId: block.requestId,
-      message: `Updating ${ipfsProposals.length} processed proposals to accepted`,
-    });
+    yield* _(Effect.logInfo('Handling approved edits'));
 
     const {
       schemaEditProposals: { opsByVersionId, versions, edits, opsByEditId, opsByEntityId },
@@ -41,6 +37,8 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
     const [importedVersions, defaultVersions] = partition(versions, v =>
       importedEdits.some(e => e.id.toString() === v.edit_id.toString())
     );
+
+    yield* _(Effect.logDebug('Aggregating new versions for imported + default edits'));
 
     /**
      * There might be entities that aren't changed in an edit, and therefore don't
@@ -102,6 +100,8 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
     const allCreatedVersions = [...defaultVersionsWithStaleEntities, ...importedVersionsWithStaleEntities];
     const currentVersions = aggregateCurrentVersions(allCreatedVersions, allMergedVersions);
 
+    yield* _(Effect.logDebug('Writing approved edits + versions'));
+
     yield* _(
       Effect.all([
         Effect.tryPromise({
@@ -151,10 +151,7 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
       })
     );
 
-    slog({
-      requestId: block.requestId,
-      message: `${ipfsProposals.length} proposals set to accepted successfully`,
-    });
+    yield* _(Effect.logInfo('Approved edits created'));
   });
 }
 

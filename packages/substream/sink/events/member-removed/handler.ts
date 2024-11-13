@@ -4,22 +4,17 @@ import { mapRemovedMembers } from './map-removed-members';
 import type { MemberRemoved } from './parser';
 import { SpaceMembers } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
-import { slog } from '~/sink/utils/slog';
 
 export class CouldNotWriteRemovedMembersError extends Error {
   _tag: 'CouldNotWriteRemovedMembersError' = 'CouldNotWriteRemovedMembersError';
 }
 
-export function handleMemberRemoved(membersRemoved: MemberRemoved[], block: BlockEvent) {
+export function handleMemberRemoved(membersRemoved: MemberRemoved[]) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
-    const schemaMembers = yield* _(mapRemovedMembers(membersRemoved, block));
+    const schemaMembers = yield* _(mapRemovedMembers(membersRemoved));
 
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${schemaMembers.length} removed members to DB`,
-    });
+    yield* _(Effect.logInfo('Handling member removed'));
 
     const writtenRemovedMembers = yield* _(
       Effect.all(
@@ -44,14 +39,12 @@ export function handleMemberRemoved(membersRemoved: MemberRemoved[], block: Bloc
         const error = removedMember.left;
         telemetry.captureException(error);
 
-        slog({
-          level: 'error',
-          requestId: block.requestId,
-          message: `Could not remove member
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `,
-        });
+        yield* _(
+          Effect.logError(`Could not remove member
+        Cause: ${error.cause}
+        Message: ${error.message}
+      `)
+        );
 
         failedDeletions++;
 
@@ -59,11 +52,10 @@ export function handleMemberRemoved(membersRemoved: MemberRemoved[], block: Bloc
       }
     }
 
-    slog({
-      requestId: block.requestId,
-      message: `${writtenRemovedMembers.length - failedDeletions} out of ${
-        writtenRemovedMembers.length
-      } members removed successfully!`,
-    });
+    yield* _(
+      Effect.logInfo(
+        `${writtenRemovedMembers.length - failedDeletions} out of ${writtenRemovedMembers.length} members removed`
+      )
+    );
   });
 }

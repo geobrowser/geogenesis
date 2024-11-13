@@ -5,22 +5,23 @@ import type { EditorAdded } from './parser';
 import { Spaces } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
-import { slog } from '~/sink/utils/slog';
 
 export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
-  return Effect.gen(function* (unwrap) {
+  return Effect.gen(function* (_) {
     const editors: S.space_editors.Insertable[] = [];
+
+    yield* _(Effect.logDebug('Mapping editors'));
 
     for (const editor of editorAdded) {
       // @TODO: effect.all
-      const maybeSpaceIdForVotingPlugin = yield* unwrap(
+      const maybeSpaceIdForVotingPlugin = yield* _(
         Effect.tryPromise({
           try: () => Spaces.findForVotingPlugin(editor.mainVotingPluginAddress),
           catch: () => new Error(),
         })
       );
 
-      const maybeSpaceIdForPersonalPlugin = yield* unwrap(
+      const maybeSpaceIdForPersonalPlugin = yield* _(
         Effect.tryPromise({
           try: () => Spaces.findForPersonalPlugin(editor.mainVotingPluginAddress),
           catch: () => new Error(),
@@ -28,11 +29,11 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
       );
 
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForPersonalPlugin) {
-        slog({
-          level: 'error',
-          message: `Matching space for approved editor not found for plugin address ${editor.mainVotingPluginAddress}`,
-          requestId: block.requestId,
-        });
+        yield* _(
+          Effect.logError(
+            `Matching space for approved editor not found for plugin address ${editor.mainVotingPluginAddress}`
+          )
+        );
 
         continue;
       }
