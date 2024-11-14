@@ -92,19 +92,11 @@ export function writeEdits(args: PopulateContentArgs) {
         description,
       } satisfies Schema.versions.Insertable);
 
-      const spaces = triplesForVersion.reduce(
-        (acc, t) => {
-          acc.set(version.id.toString(), t.triple.space_id.toString());
-          return acc;
-        },
-        // version id -> space id
-        new Map<string, string>()
-      );
-
-      for (const [versionId, spaceId] of spaces.entries()) {
+      // Later we dedupe after applying space versions derived from relations
+      for (const triple of triplesForVersion) {
         versionSpaces.push({
-          version_id: versionId,
-          space_id: spaceId,
+          version_id: triple.triple.version_id.toString(),
+          space_id: triple.triple.space_id.toString(),
         });
       }
     }
