@@ -95,8 +95,8 @@ export function writeEdits(args: PopulateContentArgs) {
       // Later we dedupe after applying space versions derived from relations
       for (const triple of triplesForVersion) {
         versionSpaces.push({
-          version_id: triple.triple.version_id.toString(),
-          space_id: triple.triple.space_id.toString(),
+          version_id: triple.triple.version_id,
+          space_id: triple.triple.space_id,
         });
       }
     }
