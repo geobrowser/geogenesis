@@ -15,16 +15,22 @@ export interface GeoBlock extends BlockEvent {
 
 export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URI' | 'TIME' | 'GEO_LOCATION';
 
-// We hardcode our Op type instead of deriving it from the Zod types.
-// This is due to zod having issues generating disciminate types from
-// discriminate unions. See `ZodEditDeleteTriplePayload` and `ZodEditDeleteTriplePayload`
-// above.
-//
-// For now we cast the value depending on the op type during decoding and
-// trust that it is constructed into the correct ormat once it's decoded.
+/**
+ * We hardcode our Op type instead of deriving it from the Zod types. This is due to zod having
+ * issues generating disciminate types from discriminate unions. See `ZodEditDeleteTriplePayload`
+ * and `ZodEditDeleteTriplePayload` above.
+ *
+ * For now we cast the value depending on the op type during decoding and trust that it is
+ * constructed into the correct ormat once it's decoded.
+ *
+ * @NOTE that we currently merge ops from previous versions of entities into new versions. If
+ * an entity has triples from multiple spaces we need to keep the space_id of the original
+ * triple instead of changing it to the space id of the edit being processed.
+ */
 export type Op =
   | {
       type: 'SET_TRIPLE';
+      space: string;
       triple: {
         entity: string;
         attribute: string;
@@ -36,6 +42,7 @@ export type Op =
     }
   | {
       type: 'DELETE_TRIPLE';
+      space: string;
       triple: {
         entity: string;
         attribute: string;

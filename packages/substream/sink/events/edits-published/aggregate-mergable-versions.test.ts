@@ -55,6 +55,7 @@ const opsByVersionId = new Map<string, Op[]>([
     [
       {
         type: 'SET_TRIPLE',
+        space: 'space-1',
         triple: {
           attribute: 'attribute-id-1',
           entity: 'same',
@@ -68,6 +69,7 @@ const opsByVersionId = new Map<string, Op[]>([
     [
       {
         type: 'SET_TRIPLE',
+        space: 'space-1',
         triple: {
           attribute: 'attribute-id-2',
           entity: 'same',

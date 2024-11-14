@@ -3,7 +3,6 @@ import type * as Schema from 'zapatos/schema';
 
 import { CurrentVersions, Triples } from '../db';
 import type { Op } from '../types';
-import type { SchemaTripleEdit } from '../write-edits/map-triples';
 
 interface MergeOpsWithPreviousVersionArgs {
   versions: Schema.versions.Insertable[];
@@ -56,13 +55,7 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
     const triplesForLastVersion = Object.fromEntries(triplesForLastVersionTuples);
 
     for (const version of versions) {
-      const editWithCreatedById: SchemaTripleEdit = {
-        versonId: version.id.toString(),
-        createdById: version.created_by_id.toString(),
-        spaceId: spaceIdByEditId.get(version.edit_id.toString())!,
-        ops: opsByVersionId.get(version.id.toString()) ?? [],
-      };
-
+      const opsForVersion = opsByVersionId.get(version.id.toString()) ?? [];
       const lastVersionId = lastVersionForEntityId[version.entity_id.toString()];
 
       if (lastVersionId) {
@@ -74,6 +67,7 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
           ...lastVersionTriples.map((t): Op => {
             return {
               type: 'SET_TRIPLE',
+              space: t.space_id.toString(),
               triple: {
                 entity: t.entity_id,
                 attribute: t.attribute_id,
@@ -84,10 +78,10 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
               },
             };
           }),
-          ...(editWithCreatedById.ops ?? []),
+          ...opsForVersion,
         ]);
       } else {
-        newOpsByVersionId.set(version.id.toString(), editWithCreatedById.ops ?? []);
+        newOpsByVersionId.set(version.id.toString(), opsForVersion);
       }
     }
 
