@@ -157,7 +157,28 @@ function fetchEditProposalFromIpfs(
             proposalId: e.id,
             onchainProposalId: '-1',
             pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
-            ops: e.ops as Op[],
+            ops: e.ops.map((op): Op => {
+              if (op.type === 'SET_TRIPLE') {
+                return {
+                  type: 'SET_TRIPLE',
+                  space: maybeSpaceIdForSpacePlugin.id,
+                  triple: op.triple,
+                  // Have to do some weird transforms with import edits for some reason
+                  // and Zod doesn't recognize the transform as a literal. Means we can't
+                  // correctly discriminate between SET_TRIPLE and DELETE_TRIPLE structures.
+                } as Op;
+              }
+
+              return {
+                type: 'DELETE_TRIPLE',
+                space: maybeSpaceIdForSpacePlugin.id,
+                triple: {
+                  attribute: op.triple.attribute,
+                  entity: op.triple.entity,
+                  value: {},
+                },
+              };
+            }),
             creator: getChecksumAddress(e.createdBy),
             space: maybeSpaceIdForSpacePlugin.id,
             endTime: block.timestamp.toString(),

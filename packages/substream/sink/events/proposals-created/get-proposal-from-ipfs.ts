@@ -124,8 +124,25 @@ export function getProposalFromIpfs(
           proposalId: parsedContent.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          // @TODO: Figure out these types
-          ops: parsedContent.ops as unknown as Op[],
+          ops: parsedContent.ops.map((op): Op => {
+            if (op.type === 'SET_TRIPLE') {
+              return {
+                type: 'SET_TRIPLE',
+                space: maybeSpaceIdForVotingPlugin,
+                triple: op.triple,
+              };
+            }
+
+            return {
+              type: 'DELETE_TRIPLE',
+              space: maybeSpaceIdForVotingPlugin,
+              triple: {
+                attribute: op.triple.attribute,
+                entity: op.triple.entity,
+                value: {},
+              },
+            };
+          }),
           creator: getChecksumAddress(proposal.creator),
           space: maybeSpaceIdForVotingPlugin,
         };

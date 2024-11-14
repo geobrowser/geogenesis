@@ -9,10 +9,10 @@ export interface OpWithCreatedBy {
   triple: S.triples.Insertable;
 }
 
-export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string; versonId: string };
+export type SchemaTripleEdit = { ops: Op[]; createdById: string; versonId: string };
 
 export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
-  const squashedOps = squashOps(edit.ops, edit.spaceId, edit.versonId);
+  const squashedOps = squashOps(edit.ops, edit.versonId);
 
   // Validating after squashing is an intentional decision to throw away ops
   // with the _final_ state of the ops in an edit. If we validate before we
@@ -23,7 +23,7 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
   const validOps = validateOps(squashedOps);
 
   return validOps.map((op): OpWithCreatedBy => {
-    const triple = getTripleFromOp(op, edit.spaceId, edit.versonId, block);
+    const triple = getTripleFromOp(op, edit.versonId, block);
 
     return {
       createdById: edit.createdById,
@@ -33,10 +33,10 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
   });
 }
 
-function squashOps(ops: Op[], spaceId: string, versionId: string): Op[] {
+function squashOps(ops: Op[], versionId: string): Op[] {
   // We take the last op for each (S,E,A,V) tuple
   const squashedOps = ops.reduce((acc, op) => {
-    const idForOp = `${spaceId}:${op.triple.entity}:${op.triple.attribute}:${versionId}`;
+    const idForOp = `${op.space}:${op.triple.entity}:${op.triple.attribute}:${versionId}`;
     acc.set(idForOp, op);
     return acc;
   }, new Map<string, Op>());

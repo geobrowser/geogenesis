@@ -228,7 +228,7 @@ const ZodImportEditSetTriplePayload = z.object({
         case 7:
           return 'GEO_LOCATION';
         default:
-          return 'FILTER_ME_OUT';
+          return 'TEXT';
       }
     }),
   }),

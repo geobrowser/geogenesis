@@ -143,6 +143,7 @@ const types: Record<string, string[]> = {
 const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
   return {
     type: 'SET_TRIPLE',
+    space: SPACE_ID,
     triple: {
       attribute: SYSTEM_IDS.NAME,
       entity: entityId!,
@@ -159,7 +160,10 @@ const attributeOps: Op[] = Object.keys(attributes).flatMap(attributeId => {
     fromId: attributeId,
     toId: SYSTEM_IDS.ATTRIBUTE,
     relationTypeId: SYSTEM_IDS.TYPES,
-  });
+  }).map(op => ({
+    ...op,
+    space: SPACE_ID,
+  }));
 });
 
 const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attributeId, valueType]) => {
@@ -167,7 +171,10 @@ const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attribu
     fromId: attributeId,
     toId: valueType,
     relationTypeId: SYSTEM_IDS.VALUE_TYPE,
-  });
+  }).map(op => ({
+    ...op,
+    space: SPACE_ID,
+  }));
 });
 
 const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
@@ -175,7 +182,10 @@ const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
     fromId: typeId,
     toId: SYSTEM_IDS.SCHEMA_TYPE,
     relationTypeId: SYSTEM_IDS.TYPES,
-  });
+  }).map(op => ({
+    ...op,
+    space: SPACE_ID,
+  }));
 });
 
 const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds]) => {
@@ -184,7 +194,10 @@ const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds
       fromId: typeId,
       toId: attributeId,
       relationTypeId: SYSTEM_IDS.ATTRIBUTES,
-    });
+    }).map(op => ({
+      ...op,
+      space: SPACE_ID,
+    }));
   });
 });
 

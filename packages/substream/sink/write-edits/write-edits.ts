@@ -72,8 +72,6 @@ export function writeEdits(args: PopulateContentArgs) {
       const editWithCreatedById: SchemaTripleEdit = {
         versonId: version.id.toString(),
         createdById: version.created_by_id.toString(),
-        spaceId: spaceIdByEditId.get(version.edit_id.toString())!,
-        // @TODO: These can just be passed into the function as OpsWithCreatedBy instead of Ops
         ops: opsByVersionId.get(version.id.toString()) ?? [],
       };
 

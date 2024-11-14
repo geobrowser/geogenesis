@@ -101,6 +101,12 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
       .filter(v => Boolean(v))
       .flat();
 
+    // @TODO we should only check the per-edit triples. we can also do this above the loop
+    // and map the deleted relation ids to edits.
+    //
+    // We also need to scope the deleted ids to the current edit.
+    const deletedRelationEntityIds = yield* _(collectDeletedRelationsEntityIds(triples));
+
     // We process relations by edit id so that we can use either the latest or any version
     // in the specific edit when referencing to, from, and type within a relation. Otherwise
     // we can have relations referencing versions in different edits which doesn't make sense.
@@ -133,8 +139,6 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
       for (const version of allVersionsReferencedByRelations) {
         latestVersionForChangedEntities[version.entity_id.toString()] = version.id.toString();
       }
-
-      const deletedRelationEntityIds = yield* _(collectDeletedRelationsEntityIds(triples));
 
       const nonDeletedDbRelations = latestRelationsFromDbForVersions.filter(
         r => !deletedRelationEntityIds.has(r.entity_id)
