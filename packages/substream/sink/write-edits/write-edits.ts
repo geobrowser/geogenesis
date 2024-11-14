@@ -122,6 +122,18 @@ export function writeEdits(args: PopulateContentArgs) {
       })
     );
 
+    for (const relation of relations) {
+      versionSpaces.push({
+        version_id: relation.from_version_id,
+        space_id: relation.space_id,
+      });
+    }
+
+    const versionSpacesUnique = dedupeWith(
+      versionSpaces,
+      (a, z) => a.space_id.toString() !== z.space_id.toString() && a.version_id.toString() !== z.version_id.toString()
+    );
+
     /**
      * 1. Write versions with primitive metadata (e.g., name, description)
      * 2. Write any new entities
@@ -141,7 +153,7 @@ export function writeEdits(args: PopulateContentArgs) {
           catch: error => new Error(`Failed to insert entities. ${(error as Error).message}`),
         }),
         Effect.tryPromise({
-          try: () => VersionSpaces.upsert(versionSpaces),
+          try: () => VersionSpaces.upsert(versionSpacesUnique),
           catch: error => new Error(`Failed to insert version spaces. ${(error as Error).message}`),
         }),
         writeTriples({
