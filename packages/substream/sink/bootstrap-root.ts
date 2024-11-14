@@ -10,6 +10,12 @@ import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
 import type { Op } from './types';
 
+const SPACE_ID = 'ab7d4b9e02f840dab9746d352acb0ac6';
+const DAO_ADDRESS = '0x9e2342C55080f2fCb6163c739a88c4F2915163C4';
+const SPACE_ADDRESS = '0x7a260AC2D569994AA22a259B19763c9F681Ff84c';
+const MAIN_VOTING_ADDRESS = '0x379408c230817DC7aA36033BEDC05DCBAcE7DF50';
+const MEMBER_ACCESS_ADDRESS = '0xd09225EAe465f562719B9cA07da2E8ab286DBB36';
+
 const names: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: 'Types',
   [SYSTEM_IDS.NAME]: 'Name',
@@ -143,6 +149,7 @@ const types: Record<string, string[]> = {
 const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
   return {
     type: 'SET_TRIPLE',
+    space: SPACE_ID,
     triple: {
       attribute: SYSTEM_IDS.NAME,
       entity: entityId!,
@@ -159,7 +166,10 @@ const attributeOps: Op[] = Object.keys(attributes).flatMap(attributeId => {
     fromId: attributeId,
     toId: SYSTEM_IDS.ATTRIBUTE,
     relationTypeId: SYSTEM_IDS.TYPES,
-  });
+  }).map(op => ({
+    ...op,
+    space: SPACE_ID,
+  }));
 });
 
 const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attributeId, valueType]) => {
@@ -167,7 +177,10 @@ const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attribu
     fromId: attributeId,
     toId: valueType,
     relationTypeId: SYSTEM_IDS.VALUE_TYPE,
-  });
+  }).map(op => ({
+    ...op,
+    space: SPACE_ID,
+  }));
 });
 
 const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
@@ -175,7 +188,10 @@ const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
     fromId: typeId,
     toId: SYSTEM_IDS.SCHEMA_TYPE,
     relationTypeId: SYSTEM_IDS.TYPES,
-  });
+  }).map(op => ({
+    ...op,
+    space: SPACE_ID,
+  }));
 });
 
 const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds]) => {
@@ -184,19 +200,16 @@ const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds
       fromId: typeId,
       toId: attributeId,
       relationTypeId: SYSTEM_IDS.ATTRIBUTES,
-    });
+    }).map(op => ({
+      ...op,
+      space: SPACE_ID,
+    }));
   });
 });
 
 export class BootstrapRootError extends Error {
   _tag: 'BootstrapRootError' = 'BootstrapRootError';
 }
-
-const SPACE_ID = 'ab7d4b9e02f840dab9746d352acb0ac6';
-const DAO_ADDRESS = '0x9e2342C55080f2fCb6163c739a88c4F2915163C4';
-const SPACE_ADDRESS = '0x7a260AC2D569994AA22a259B19763c9F681Ff84c';
-const MAIN_VOTING_ADDRESS = '0x379408c230817DC7aA36033BEDC05DCBAcE7DF50';
-const MEMBER_ACCESS_ADDRESS = '0xd09225EAe465f562719B9cA07da2E8ab286DBB36';
 
 const editProposal: EditProposal = {
   type: 'ADD_EDIT',

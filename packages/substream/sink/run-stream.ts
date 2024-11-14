@@ -5,7 +5,7 @@ import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import type { BlockScopedData } from '@substreams/core/proto';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Data, Duration, Effect, LogLevel, Logger, Secret, Stream } from 'effect';
+import { Data, Duration, Effect, Logger, Secret, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';

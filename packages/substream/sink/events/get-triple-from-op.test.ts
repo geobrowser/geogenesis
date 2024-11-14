@@ -7,6 +7,7 @@ describe('tripleFromOp', () => {
     const triple = getTripleFromOp(
       {
         type: 'SET_TRIPLE',
+        space: 'space-1',
         triple: {
           attribute: 'attribute-id',
           entity: 'entity-id',
@@ -17,7 +18,6 @@ describe('tripleFromOp', () => {
         },
       },
       '0x1234',
-      '0',
       {
         blockNumber: 0,
         cursor: '',
@@ -42,6 +42,7 @@ describe('tripleFromOp', () => {
     const triple = getTripleFromOp(
       {
         type: 'DELETE_TRIPLE',
+        space: 'space-1',
         triple: {
           attribute: 'attribute-id',
           entity: 'entity-id',
@@ -49,7 +50,6 @@ describe('tripleFromOp', () => {
         },
       },
       '0x1234',
-      '0',
       {
         blockNumber: 0,
         cursor: '',

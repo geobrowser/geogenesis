@@ -87,33 +87,23 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
 
     // @TODO transactions are pretty slow for actual content writing for now, so
     // we are skipping writing the actual content in a transaction for now.
-    for (const edit of schemaEditProposals.edits) {
-      // @TODO this is nested af
-      const write = Effect.tryPromise({
-        try: async () => {
-          return await Transaction.run(async client => {
-            // @TODO this can probably go into an effect somewhere that's defined after
-            // we aggregate all the appropriate data to write.
-            await Promise.all([
-              Edits.upsert([edit], { client }),
-              Proposals.upsert(
-                schemaEditProposals.proposals.filter(p => p.edit_id?.toString() === edit.id),
-                { client }
-              ),
-              Versions.upsert(
-                versionsWithStaleEntities.filter(v => v.edit_id.toString() === edit.id),
-                { chunked: true, client }
-              ),
-            ]);
+    // @TODO this is nested af
+    const write = Effect.tryPromise({
+      try: async () => {
+        // @TODO this can probably go into an effect somewhere that's defined after
+        // we aggregate all the appropriate data to write.
+        await Promise.all([
+          Edits.upsert(schemaEditProposals.edits),
+          Proposals.upsert(schemaEditProposals.proposals),
+          Versions.upsert(versionsWithStaleEntities, { chunked: true }),
+        ]);
 
-            return true;
-          });
-        },
-        catch: error => new CouldNotWriteInitialSpaceProposalsError(String(error)),
-      });
+        return true;
+      },
+      catch: error => new CouldNotWriteInitialSpaceProposalsError(String(error)),
+    });
 
-      yield* _(write);
-    }
+    yield* _(write);
 
     yield* _(Effect.logDebug('Writing content for edits'));
 
