@@ -92,19 +92,11 @@ export function writeEdits(args: PopulateContentArgs) {
         description,
       } satisfies Schema.versions.Insertable);
 
-      const spaces = triplesForVersion.reduce(
-        (acc, t) => {
-          acc.set(version.id.toString(), t.triple.space_id.toString());
-          return acc;
-        },
-        // version id -> space id
-        new Map<string, string>()
-      );
-
-      for (const [versionId, spaceId] of spaces.entries()) {
+      // Later we dedupe after applying space versions derived from relations
+      for (const triple of triplesForVersion) {
         versionSpaces.push({
-          version_id: versionId,
-          space_id: spaceId,
+          version_id: triple.triple.version_id,
+          space_id: triple.triple.space_id,
         });
       }
     }
@@ -118,6 +110,18 @@ export function writeEdits(args: PopulateContentArgs) {
         edits,
         editType,
       })
+    );
+
+    for (const relation of relations) {
+      versionSpaces.push({
+        version_id: relation.from_version_id,
+        space_id: relation.space_id,
+      });
+    }
+
+    const versionSpacesUnique = dedupeWith(
+      versionSpaces,
+      (a, z) => a.space_id.toString() !== z.space_id.toString() && a.version_id.toString() !== z.version_id.toString()
     );
 
     /**
@@ -139,7 +143,7 @@ export function writeEdits(args: PopulateContentArgs) {
           catch: error => new Error(`Failed to insert entities. ${(error as Error).message}`),
         }),
         Effect.tryPromise({
-          try: () => VersionSpaces.upsert(versionSpaces),
+          try: () => VersionSpaces.upsert(versionSpacesUnique),
           catch: error => new Error(`Failed to insert version spaces. ${(error as Error).message}`),
         }),
         writeTriples({
