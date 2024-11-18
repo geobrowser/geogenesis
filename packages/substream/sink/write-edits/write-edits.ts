@@ -14,6 +14,7 @@ interface PopulateContentArgs {
   block: BlockEvent;
   versions: Schema.versions.Insertable[];
   opsByVersionId: Map<string, Op[]>;
+  opsByEditId: Map<string, Op[]>;
   /**
    * We pass in any imported edits to write to the db since we need to
    * write the imported edits as if they are a single atomic unit rather
@@ -41,7 +42,7 @@ interface PopulateContentArgs {
  * versions as a single unit.
  */
 export function writeEdits(args: PopulateContentArgs) {
-  const { versions, opsByVersionId, edits, block, editType } = args;
+  const { versions, opsByVersionId, opsByEditId, edits, block, editType } = args;
   const spaceIdByEditId = new Map<string, string>();
 
   for (const edit of edits) {
@@ -105,10 +106,11 @@ export function writeEdits(args: PopulateContentArgs) {
 
     const relations = yield* _(
       aggregateRelations({
-        triples: triplesWithCreatedBy,
+        opsByEditId,
         versions,
         edits,
         editType,
+        spaceIdByEditId,
       })
     );
 

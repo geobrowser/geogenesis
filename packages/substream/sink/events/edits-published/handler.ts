@@ -110,6 +110,7 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
         }),
         writeEdits({
           versions: defaultMergedVersions,
+          opsByEditId,
           opsByVersionId: defaultMergedOpsByVersionId,
           edits: defaultEdits,
           block,
@@ -133,6 +134,7 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
      */
     yield* _(
       writeEdits({
+        opsByEditId,
         versions: importedMergedVersions,
         opsByVersionId: importedMergedOpsByVersionId,
         block,
