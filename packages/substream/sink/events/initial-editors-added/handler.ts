@@ -1,11 +1,11 @@
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
+import { writeAccounts } from '../write-accounts';
 import type { InitialEditorsAdded } from './parser';
-import { Accounts, SpaceEditors, SpaceMembers, Spaces } from '~/sink/db';
-import { CouldNotWriteAccountsError, SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
-import { Telemetry } from '~/sink/telemetry';
+import { SpaceEditors, SpaceMembers, Spaces } from '~/sink/db';
+import { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { pool } from '~/sink/utils/pool';
@@ -17,8 +17,6 @@ class CouldNotWriteEditorsError extends Error {
 
 export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEditorsAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    const telemetry = yield* _(Telemetry);
-
     yield* _(Effect.logInfo('Handling initial editors for new public spaces'));
     yield* _(
       Effect.logDebug(
@@ -81,36 +79,11 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
         new Map<string, string>()
       );
 
-    yield* _(Effect.logDebug('Writing accounts'));
-
     /**
      * Ensure that we create any relations for the role change before we create the
      * role change itself.
      */
-    const writtenAccounts = yield* _(
-      Effect.tryPromise({
-        try: async () => {
-          await Accounts.upsert(accounts);
-        },
-        catch: error => new CouldNotWriteAccountsError(String(error)),
-      }),
-      retryEffect,
-      Effect.either
-    );
-
-    if (Either.isLeft(writtenAccounts)) {
-      const error = writtenAccounts.left;
-      telemetry.captureException(error);
-
-      yield* _(
-        Effect.logError(`Could not write accounts when writing added editors
-        Cause: ${error.cause}
-        Message: ${error.message}
-      `)
-      );
-
-      return;
-    }
+    yield* _(writeAccounts(accounts));
 
     const newEditors = editorsAdded.flatMap(({ addresses, pluginAddress }) =>
       addresses
@@ -118,9 +91,6 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
           const editor: S.space_editors.Insertable = {
             // Can safely assert that spacesForPlugins.get(pluginAddress) is not null here
             // since we set up the mapping based on the plugin address previously
-            //
-            // @NOTE: This might break if we start indexing at a block that occurs after the
-            // space was created.
             space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress))!,
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
@@ -138,9 +108,6 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
           const member: S.space_members.Insertable = {
             // Can safely assert that spacesForPlugins.get(pluginAddress) is not null here
             // since we set up the mapping based on the plugin address previously
-            //
-            // @NOTE: This might break if we start indexing at a block that occurs after the
-            // space was created.
             space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress))!,
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
@@ -153,32 +120,17 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
     );
 
     // @TODO: Transaction
-    const writtenEditors = yield* _(
+    yield* _(
       Effect.tryPromise({
         try: async () => {
           await Promise.all([SpaceEditors.upsert(newEditors), SpaceMembers.upsert(newMembers)]);
         },
         catch: error => {
-          return new CouldNotWriteEditorsError(String(error));
+          return new CouldNotWriteEditorsError(`Could not write initial editors and members ${String(error)}`);
         },
       }),
-      retryEffect,
-      Effect.either
+      retryEffect
     );
-
-    if (Either.isLeft(writtenEditors)) {
-      const error = writtenEditors.left;
-      telemetry.captureException(error);
-
-      yield* _(
-        Effect.logError(`Could not write editors and members when writing added editors
-        Cause: ${error.cause}
-        Message: ${error.message}
-      `)
-      );
-
-      return;
-    }
 
     yield* _(Effect.logInfo('Initial editors and members created'));
   });
@@ -186,8 +138,6 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
 
 export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEditorsAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    const telemetry = yield* _(Telemetry);
-
     yield* _(Effect.logInfo('Handling initial editors for new personal spaces'));
     yield* _(
       Effect.logDebug(
@@ -243,36 +193,11 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
         new Map<string, string>()
       );
 
-    yield* _(Effect.logDebug('Writing accounts'));
-
     /**
      * Ensure that we create any relations for the role change before we create the
      * role change itself.
      */
-    const writtenAccounts = yield* _(
-      Effect.tryPromise({
-        try: async () => {
-          await Accounts.upsert(accounts);
-        },
-        catch: error => new CouldNotWriteAccountsError(String(error)),
-      }),
-      retryEffect,
-      Effect.either
-    );
-
-    if (Either.isLeft(writtenAccounts)) {
-      const error = writtenAccounts.left;
-      telemetry.captureException(error);
-
-      yield* _(
-        Effect.logError(`Could not write accounts when writing added editors
-        Cause: ${error.cause}
-        Message: ${error.message}
-      `)
-      );
-
-      return;
-    }
+    yield* _(writeAccounts(accounts));
 
     const newEditors = editorsAdded.flatMap(({ addresses, pluginAddress }) =>
       addresses
@@ -317,32 +242,17 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
     yield* _(Effect.logDebug('Writing initial editors and members'));
 
     // @TODO: Transaction
-    const writtenEditors = yield* _(
+    yield* _(
       Effect.tryPromise({
         try: async () => {
           await Promise.all([SpaceEditors.upsert(newEditors), SpaceMembers.upsert(newMembers)]);
         },
         catch: error => {
-          return new CouldNotWriteEditorsError(String(error));
+          return new CouldNotWriteEditorsError(`Could not write initial editors and members ${String(error)}`);
         },
       }),
-      retryEffect,
-      Effect.either
+      retryEffect
     );
-
-    if (Either.isLeft(writtenEditors)) {
-      const error = writtenEditors.left;
-      telemetry.captureException(error);
-
-      yield* _(
-        Effect.logError(`Could not write editors and members when writing added editors
-        Cause: ${error.cause}
-        Message: ${error.message}
-      `)
-      );
-
-      return;
-    }
 
     yield* _(Effect.logInfo('Initial editors and members created'));
   });

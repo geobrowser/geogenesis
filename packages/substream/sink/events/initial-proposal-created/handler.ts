@@ -1,13 +1,11 @@
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
-import { Accounts, Proposals, Versions } from '~/sink/db';
+import { writeAccounts } from '../write-accounts';
+import { Proposals, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
-import { CouldNotWriteAccountsError } from '~/sink/errors';
-import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
-import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { writeEdits } from '~/sink/write-edits/write-edits';
@@ -25,8 +23,6 @@ interface InitialContentArgs {
 export function createInitialContentForSpaces(args: InitialContentArgs) {
   const { editType, proposals: proposalsFromIpfs, block } = args;
   return Effect.gen(function* (_) {
-    const telemetry = yield* _(Telemetry);
-
     yield* _(Effect.logInfo('Handling creating initial content'));
 
     // If we are importing a space we need to make accounts for any creators
@@ -43,30 +39,7 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
 
     yield* _(Effect.logDebug('Writing accounts'));
 
-    const writtenAccounts = yield* _(
-      Effect.tryPromise({
-        try: async () => {
-          await Accounts.upsert(initialAccounts);
-        },
-        catch: error => new CouldNotWriteAccountsError(String(error)),
-      }),
-      retryEffect,
-      Effect.either
-    );
-
-    if (Either.isLeft(writtenAccounts)) {
-      const error = writtenAccounts.left;
-      telemetry.captureException(error);
-
-      yield* _(
-        Effect.logError(`Could not write accounts when writing proposals for edits without proposals
-        Cause: ${error.cause}
-        Message: ${error.message}
-      `)
-      );
-
-      return;
-    }
+    yield* _(writeAccounts(initialAccounts));
 
     // @TODO: We need a special function to map a proposal endtime to be now
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposalsFromIpfs, block);
@@ -113,25 +86,16 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
       })
     );
 
-    const populateResult = yield* _(
-      Effect.either(
-        writeEdits({
-          versions: versionsWithStaleEntities,
-          opsByVersionId: opsByNewVersions,
-          opsByEditId: schemaEditProposals.opsByEditId,
-          block,
-          editType,
-          edits: schemaEditProposals.edits,
-        })
-      )
+    yield* _(
+      writeEdits({
+        versions: versionsWithStaleEntities,
+        opsByVersionId: opsByNewVersions,
+        opsByEditId: schemaEditProposals.opsByEditId,
+        block,
+        editType,
+        edits: schemaEditProposals.edits,
+      })
     );
-
-    if (Either.isLeft(populateResult)) {
-      const error = populateResult.left;
-      telemetry.captureException(error);
-
-      yield* _(Effect.logError(`Could not write proposals for edits without proposals ${error.message}`));
-    }
 
     yield* _(Effect.logInfo('Initial content created'));
   });

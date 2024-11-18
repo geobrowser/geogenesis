@@ -5,7 +5,6 @@ import type { SubspaceAdded } from './parser';
 import { Spaces } from '~/sink/db';
 import { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
-import { pool } from '~/sink/utils/pool';
 
 export function mapSubspaces({
   subspacesAdded,

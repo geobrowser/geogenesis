@@ -1,9 +1,9 @@
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 
+import { writeAccounts } from '../write-accounts';
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
-import { Accounts, Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
+import { Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
-import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
 import type {
   EditProposal,
@@ -12,7 +12,6 @@ import type {
   ProposalCreated,
   SubspaceProposal,
 } from '~/sink/events/proposals-created/parser';
-import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
@@ -25,7 +24,6 @@ class CouldNotWriteCreatedProposalsError extends Error {
 
 export function handleProposalsCreated(proposalsCreated: ProposalCreated[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    const telemetry = yield* _(Telemetry);
     yield* _(Effect.logInfo('Handling proposals created'));
 
     yield* _(Effect.logDebug(`Gathering IPFS content for ${proposalsCreated.length} proposals`));
@@ -52,33 +50,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
     // This might be the very first onchain interaction for a wallet address,
     // so we need to make sure that any accounts are already created when we
     // process the proposals below, particularly for editor and member requests.
-    const writtenAccounts = yield* _(
-      Effect.tryPromise({
-        try: async () => {
-          const accounts = [...schemaMembershipProposals.accounts, ...schemaEditorshipProposals.accounts];
-          return await Accounts.upsert(accounts);
-        },
-        catch: error => {
-          return new CouldNotWriteAccountsError(String(error));
-        },
-      }),
-      retryEffect,
-      Effect.either
-    );
-
-    if (Either.isLeft(writtenAccounts)) {
-      const error = writtenAccounts.left;
-      telemetry.captureException(error);
-
-      yield* _(
-        Effect.logError(`Could not write accounts when creating new proposals
-        Cause: ${error.cause}
-        Message: ${error.message}
-      `)
-      );
-
-      return;
-    }
+    yield* _(writeAccounts([...schemaMembershipProposals.accounts, ...schemaEditorshipProposals.accounts]));
 
     yield* _(
       Effect.logDebug(`Writing proposals
@@ -103,7 +75,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
     yield* _(Effect.logDebug('Writing proposals + metadata'));
 
     // @TODO: Put this in a transaction since all these writes are related
-    const writtenProposals = yield* _(
+    yield* _(
       Effect.tryPromise({
         try: async () => {
           await Promise.all([
@@ -128,16 +100,8 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
           return new CouldNotWriteCreatedProposalsError(String(error));
         },
       }),
-      retryEffect,
-      Effect.either
+      retryEffect
     );
-
-    if (Either.isLeft(writtenProposals)) {
-      const error = writtenProposals.left;
-      telemetry.captureException(error);
-      yield* _(Effect.logError(`Could not write created proposals: ${error.message} ${error.cause}`));
-      return;
-    }
 
     const opsByVersionId = yield* _(
       mergeOpsWithPreviousVersions({
@@ -147,7 +111,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       })
     );
 
-    const populateResult = yield* _(
+    yield* _(
       Effect.either(
         writeEdits({
           versions: versionsWithStaleEntities,
@@ -159,12 +123,5 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
         })
       )
     );
-
-    if (Either.isLeft(populateResult)) {
-      const error = populateResult.left;
-      telemetry.captureException(error);
-
-      yield* _(Effect.logError(`Could not write content for proposals ${error.message}`));
-    }
   });
 }

@@ -1,23 +1,25 @@
+import { Data } from 'effect';
+
 import { getChecksumAddress } from './utils/get-checksum-address';
 
+export class CouldNotWriteSpacesError extends Data.TaggedError('CouldNotWriteSpacesError')<{
+  message: string;
+}> {}
+
 export class SpaceWithPluginAddressNotFoundError extends Error {
-  _tag: 'SpaceWithPluginAddressNotFoundError' = 'SpaceWithPluginAddressNotFoundError';
+  readonly _tag: 'SpaceWithPluginAddressNotFoundError' = 'SpaceWithPluginAddressNotFoundError';
 }
 
 export class ProposalWithOnchainProposalIdAndSpaceIdNotFoundError extends Error {
-  _tag: 'ProposalWithOnchainProposalIdAndSpaceIdNotFoundError' = 'ProposalWithOnchainProposalIdAndSpaceIdNotFoundError';
-}
-
-export class CouldNotWriteSpacesError extends Error {
-  _tag: 'CouldNotWriteSpacesError' = 'CouldNotWriteSpacesError';
+  _tag = 'ProposalWithOnchainProposalIdAndSpaceIdNotFoundError';
 }
 
 export class CouldNotWriteAccountsError extends Error {
-  _tag: 'CouldNotWriteAccountsError' = 'CouldNotWriteAccountsError';
+  _tag = 'CouldNotWriteAccountsError';
 }
 
 export class InvalidPluginAddressForDaoError extends Error {
-  _tag: 'InvalidPluginAddressForDaoError' = 'InvalidPluginAddressForDaoError';
+  _tag = 'InvalidPluginAddressForDaoError';
 }
 
 export function isInvalidPluginForDao(

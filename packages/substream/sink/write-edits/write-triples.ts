@@ -3,6 +3,10 @@ import { Effect } from 'effect';
 import { type OpWithCreatedBy } from './map-triples';
 import { Triples } from '~/sink/db';
 
+class CouldNotWriteTriplesError extends Error {
+  readonly _tag = 'CouldNotWriteTriplesError';
+}
+
 interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
 }
@@ -20,7 +24,7 @@ export function writeTriples({ schemaTriples }: PopulateTriplesArgs) {
             schemaTriples.filter(t => t.op === 'SET_TRIPLE').map(op => op.triple),
             { chunked: true }
           ),
-        catch: error => new Error(`Failed to insert bulk triples. ${(error as Error).message}`),
+        catch: error => new CouldNotWriteTriplesError(`Failed to insert bulk triples. ${(error as Error).message}`),
       })
     );
   });

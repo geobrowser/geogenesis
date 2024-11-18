@@ -1,6 +1,6 @@
 import { Duration, Effect, Schedule } from 'effect';
 
-export function retryEffect<T>(effect: Effect.Effect<T, Error>) {
+export function retryEffect<V, E>(effect: Effect.Effect<V, E>) {
   return Effect.retry(
     effect,
     Schedule.exponential(100).pipe(
