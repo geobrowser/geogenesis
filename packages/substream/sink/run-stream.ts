@@ -5,7 +5,7 @@ import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import type { BlockScopedData } from '@substreams/core/proto';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Data, Duration, Effect, Logger, Secret, Stream } from 'effect';
+import { Data, Duration, Effect, Either, Logger, Secret, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
@@ -55,7 +55,7 @@ import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/pa
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { getConfiguredLogLevel, withRequestId } from './logs';
-import { Telemetry } from './telemetry';
+import { Telemetry, TelemetryLive } from './telemetry';
 import { createSink, createStream } from './vendor/sink/src';
 
 export class InvalidPackageError extends Error {
@@ -144,10 +144,33 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
     const sink = createSink({
       handleBlockScopedData: message => {
         return Effect.gen(function* (_) {
+          const blockNumber = Number(message.clock?.number.toString());
+
           const requestId = createGeoId();
+          const telemetry = yield* _(Telemetry);
           const logLevel = yield* _(getConfiguredLogLevel);
-          yield* _(handleEvent(message, registry).pipe(withRequestId(requestId), Logger.withMinimumLogLevel(logLevel)));
-        });
+
+          // If we get an unrecoverable error (how do we define those)
+          // then we don't want to exit the entire handler though, and
+          // continue if possible.
+          const result = yield* _(
+            handleMessage(message, registry).pipe(withRequestId(requestId), Logger.withMinimumLogLevel(logLevel)),
+            Effect.either
+          );
+
+          if (Either.isLeft(result)) {
+            const error = result.left;
+            telemetry.captureMessage(error.message);
+            yield* _(Effect.logError(error.message));
+            return;
+          }
+
+          const hasValidEvent = result.right;
+
+          if (hasValidEvent) {
+            yield* _(Effect.logInfo(`Finished processing block ${blockNumber}`));
+          }
+        }).pipe(Effect.provideService(Telemetry, TelemetryLive));
       },
 
       handleBlockUndoSignal: message => {
@@ -179,7 +202,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
   });
 }
 
-function handleEvent(message: BlockScopedData, registry: IMessageTypeRegistry) {
+function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
@@ -377,6 +400,20 @@ function handleEvent(message: BlockScopedData, registry: IMessageTypeRegistry) {
       );
     }
 
+    /**
+     * Public plugins get their own event when adding initial edits whereas the personal spaces
+     * emit the initial editors as part of the space creation event.
+     */
+    if (initialEditorsAddedResponse.success) {
+      yield* _(
+        handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, {
+          blockNumber,
+          cursor,
+          timestamp,
+        })
+      );
+    }
+
     if (subspacesAdded.success) {
       yield* _(
         handleSubspacesAdded(subspacesAdded.data.subspacesAdded, {
@@ -388,23 +425,7 @@ function handleEvent(message: BlockScopedData, registry: IMessageTypeRegistry) {
     }
 
     if (subspacesRemoved.success) {
-      yield* _(
-        handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
-    }
-
-    if (initialEditorsAddedResponse.success) {
-      yield* _(
-        handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
+      yield* _(handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved));
     }
 
     if (proposalCreatedResponse.success) {
@@ -569,5 +590,7 @@ function handleEvent(message: BlockScopedData, registry: IMessageTypeRegistry) {
     if (executedProposals.success) {
       yield* _(handleProposalsExecuted(executedProposals.data.executedProposals));
     }
+
+    return hasValidEvent;
   });
 }

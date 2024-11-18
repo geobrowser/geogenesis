@@ -1,10 +1,9 @@
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 
+import { writeAccounts } from '../write-accounts';
 import { mapEditors } from './map-editors';
 import type { EditorAdded } from './parser';
-import { Accounts, SpaceEditors } from '~/sink/db';
-import { CouldNotWriteAccountsError } from '~/sink/errors';
-import { Telemetry } from '~/sink/telemetry';
+import { SpaceEditors } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { retryEffect } from '~/sink/utils/retry-effect';
@@ -15,67 +14,34 @@ export class CouldNotWriteAddedEditorsError extends Error {
 
 export function handleEditorsAdded(editorsAdded: EditorAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    const telemetry = yield* _(Telemetry);
     const schemaEditors = yield* _(mapEditors(editorsAdded, block));
     yield* _(Effect.logInfo('Handling editors added'));
 
-    yield* _(Effect.logDebug('Writing accounts'));
     /**
      * Ensure that we create any relations for the role change before we create the
      * role change itself.
      */
-    const writtenAccounts = yield* _(
-      Effect.tryPromise({
-        try: async () => {
-          const accounts = schemaEditors.map(m => {
-            return {
-              id: getChecksumAddress(m.account_id as string),
-            };
-          });
-          await Accounts.upsert(accounts);
-        },
-        catch: error => new CouldNotWriteAccountsError(String(error)),
-      }),
-      Effect.either
+    yield* _(
+      writeAccounts(
+        schemaEditors.map(m => {
+          return {
+            id: getChecksumAddress(m.account_id as string),
+          };
+        })
+      )
     );
 
-    if (Either.isLeft(writtenAccounts)) {
-      const error = writtenAccounts.left;
-      telemetry.captureException(error);
-      yield* _(
-        Effect.logError(`Could not write accounts
-        Cause: ${error.cause}
-        Message: ${error.message}
-      `)
-      );
-
-      return;
-    }
-
     yield* _(Effect.logDebug('Writing editors'));
-    const writtenAddedEditors = yield* _(
+
+    yield* _(
       Effect.tryPromise({
         try: () => SpaceEditors.upsert(schemaEditors),
         catch: error => {
           return new CouldNotWriteAddedEditorsError(String(error));
         },
       }),
-      retryEffect,
-      Effect.either
+      retryEffect
     );
-
-    if (Either.isLeft(writtenAddedEditors)) {
-      const error = writtenAddedEditors.left;
-      telemetry.captureException(error);
-      yield* _(
-        Effect.logError(`Could not write approved editors
-        Cause: ${error.cause}
-        Message: ${error.message}
-      `)
-      );
-
-      return;
-    }
 
     yield* _(Effect.logInfo('Approved editors handled'));
   });

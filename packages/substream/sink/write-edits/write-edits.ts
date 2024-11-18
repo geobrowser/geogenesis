@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
@@ -9,6 +9,17 @@ import type { BlockEvent, Op } from '../types';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
 import { aggregateRelations } from './relations/aggregate-relations';
 import { writeTriples } from './write-triples';
+
+class CouldNotWriteVersionsError extends Data.TaggedError('CouldNotWriteVersionsError')<{ message: string }> {}
+class CouldNotWriteEntitiesError extends Data.TaggedError('CouldNotWriteEntitiesError')<{ message: string }> {}
+class CouldNotWriteRelationsError extends Data.TaggedError('CouldNotWriteRelationsError')<{ message: string }> {}
+class CouldNotWriteVersionTypesError extends Data.TaggedError('CouldNotWriteVersionTypesError')<{ message: string }> {}
+class CouldNotWriteSpaceMetadataError extends Data.TaggedError('CouldNotWriteSpaceMetadataError')<{
+  message: string;
+}> {}
+class CouldNotWriteVersionSpacesError extends Data.TaggedError('CouldNotWriteVersionSpacesError')<{
+  message: string;
+}> {}
 
 interface PopulateContentArgs {
   block: BlockEvent;
@@ -136,24 +147,32 @@ export function writeEdits(args: PopulateContentArgs) {
       Effect.all([
         Effect.tryPromise({
           try: () => Versions.upsertMetadata(versionsWithMetadata),
-          catch: error => new Error(`Failed to insert versions with metadata. ${(error as Error).message}`),
+          catch: error =>
+            new CouldNotWriteVersionsError({
+              message: `Failed to insert versions with metadata. ${(error as Error).message}`,
+            }),
         }),
         Effect.tryPromise({
           // We update the name and description for an entity when mapping
           // through triples.
           try: () => Entities.upsert(uniqueEntities),
-          catch: error => new Error(`Failed to insert entities. ${(error as Error).message}`),
+          catch: error =>
+            new CouldNotWriteEntitiesError({ message: `Failed to insert entities. ${(error as Error).message}` }),
         }),
         Effect.tryPromise({
           try: () => VersionSpaces.upsert(versionSpacesUnique),
-          catch: error => new Error(`Failed to insert version spaces. ${(error as Error).message}`),
+          catch: error =>
+            new CouldNotWriteVersionSpacesError({
+              message: `Failed to insert version spaces. ${(error as Error).message}`,
+            }),
         }),
         writeTriples({
           schemaTriples: triplesWithCreatedBy,
         }),
         Effect.tryPromise({
           try: () => Relations.upsert(relations, { chunked: true }),
-          catch: error => new Error(`Failed to insert relations. ${(error as Error).message}`),
+          catch: error =>
+            new CouldNotWriteRelationsError({ message: `Failed to insert relations. ${(error as Error).message}` }),
         }),
       ])
     );
@@ -167,20 +186,21 @@ export function writeEdits(args: PopulateContentArgs) {
     yield* _(
       Effect.tryPromise({
         try: () => Types.upsert(versionTypes),
-        catch: error => new Error(`Failed to insert version types. ${(error as Error).message}`),
+        catch: error =>
+          new CouldNotWriteVersionTypesError({
+            message: `Failed to insert version types. ${(error as Error).message}`,
+          }),
       })
     );
 
-    // @TODO: temporarily allow space metadata writing to fail gracefully. There is a space
-    // written during testing that is breaking this flow. Once we start back from the correct
-    // root space state this should be removed.
     yield* _(
-      Effect.either(
-        Effect.tryPromise({
-          try: () => SpaceMetadata.upsert(spaceMetadata),
-          catch: error => new Error(`Failed to insert space metadata. ${(error as Error).message}`),
-        })
-      )
+      Effect.tryPromise({
+        try: () => SpaceMetadata.upsert(spaceMetadata),
+        catch: error =>
+          new CouldNotWriteSpaceMetadataError({
+            message: `Failed to insert space metadata. ${(error as Error).message}`,
+          }),
+      })
     );
   });
 }

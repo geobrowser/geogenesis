@@ -15,6 +15,14 @@ export class ProposalDoesNotExistError extends Error {
   readonly _tag = 'ProposalDoesNotExistError';
 }
 
+export class CouldNotWriteMergedVersionsError extends Error {
+  readonly _tag = 'CouldNotWriteMergedVersionsError';
+}
+
+export class CouldNotWriteCurrentVersionsError extends Error {
+  readonly _tag = 'CouldNotWriteCurrentVersionsError';
+}
+
 /**
  * Handles when the EditsPublished event is emitted by a space contract. When this
  * event is emitted depends on the governance mechanism that a space has configured
@@ -106,7 +114,8 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
       Effect.all([
         Effect.tryPromise({
           try: () => Versions.upsert(allMergedVersions),
-          catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
+          catch: error =>
+            new CouldNotWriteMergedVersionsError(`Failed to insert merged versions. ${(error as Error).message}`),
         }),
         writeEdits({
           versions: defaultMergedVersions,
@@ -149,7 +158,8 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
     yield* _(
       Effect.tryPromise({
         try: () => CurrentVersions.upsert(currentVersions),
-        catch: error => new Error(`Failed to insert current versions. ${(error as Error).message}`),
+        catch: error =>
+          new CouldNotWriteCurrentVersionsError(`Failed to insert current versions. ${(error as Error).message}`),
       })
     );
 

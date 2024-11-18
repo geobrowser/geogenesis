@@ -1,8 +1,7 @@
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 
 import type { ProposalExecuted } from './parser';
 import { Proposals } from '~/sink/db';
-import { Telemetry } from '~/sink/telemetry';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 
 class CouldNotWriteExecutedProposalError extends Error {
@@ -11,12 +10,11 @@ class CouldNotWriteExecutedProposalError extends Error {
 
 export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[]) {
   return Effect.gen(function* (_) {
-    const telemetry = yield* _(Telemetry);
     yield* _(Effect.logInfo('Handling proposals executed'));
     yield* _(Effect.logDebug(`Updating proposal statuses for ${proposalsExecuted.length} proposals`));
 
     // @TODO: Batch update proposals in one insert instead of iteratively
-    const writtenExecutedProposals = yield* _(
+    yield* _(
       Effect.all(
         proposalsExecuted.map(proposal => {
           return Effect.tryPromise({
@@ -88,27 +86,8 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[]) {
               return new CouldNotWriteExecutedProposalError(String(error));
             },
           });
-        }),
-        {
-          mode: 'either',
-        }
+        })
       )
     );
-
-    // @TODO: Batch update proposals in one insert instead of iteratively
-    for (const writtenExecutedProposal of writtenExecutedProposals) {
-      if (Either.isLeft(writtenExecutedProposal)) {
-        const error = writtenExecutedProposal.left;
-        telemetry.captureException(error);
-        yield* _(
-          Effect.logError(`Could not write executed proposal
-          Cause: ${error.cause}
-          Message: ${error.message}
-        `)
-        );
-
-        continue;
-      }
-    }
   });
 }
