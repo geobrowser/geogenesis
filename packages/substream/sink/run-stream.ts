@@ -146,7 +146,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
         return Effect.gen(function* (_) {
           const requestId = createGeoId();
           const logLevel = yield* _(getConfiguredLogLevel);
-          yield* _(handleEvent(message, registry).pipe(withRequestId(requestId), Logger.withMinimumLogLevel(logLevel)));
+          yield* _(
+            handleMessage(message, registry).pipe(withRequestId(requestId), Logger.withMinimumLogLevel(logLevel))
+          );
         });
       },
 
@@ -179,7 +181,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
   });
 }
 
-function handleEvent(message: BlockScopedData, registry: IMessageTypeRegistry) {
+function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
