@@ -151,6 +151,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       Effect.either(
         writeEdits({
           versions: versionsWithStaleEntities,
+          opsByEditId: schemaEditProposals.opsByEditId,
           opsByVersionId,
           block,
           editType: 'DEFAULT',

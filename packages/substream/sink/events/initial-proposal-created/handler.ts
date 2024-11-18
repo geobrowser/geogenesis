@@ -4,7 +4,6 @@ import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-
 import type { EditProposal } from '../proposals-created/parser';
 import { Accounts, Proposals, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
-import { Transaction } from '~/sink/db/transaction';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
@@ -87,7 +86,6 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
 
     // @TODO transactions are pretty slow for actual content writing for now, so
     // we are skipping writing the actual content in a transaction for now.
-    // @TODO this is nested af
     const write = Effect.tryPromise({
       try: async () => {
         // @TODO this can probably go into an effect somewhere that's defined after
@@ -120,6 +118,7 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
         writeEdits({
           versions: versionsWithStaleEntities,
           opsByVersionId: opsByNewVersions,
+          opsByEditId: schemaEditProposals.opsByEditId,
           block,
           editType,
           edits: schemaEditProposals.edits,

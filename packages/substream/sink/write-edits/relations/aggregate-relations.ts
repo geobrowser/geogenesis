@@ -2,13 +2,14 @@ import { SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
-import type { OpWithCreatedBy } from '../map-triples';
 import { getDeletedRelationsFromOps } from './get-deleted-relations-from-ops';
 import { CurrentVersions } from '~/sink/db';
 import { Relations } from '~/sink/db/relations';
+import type { Op, SetTripleOp } from '~/sink/types';
 
 interface AggregateRelationsArgs {
-  triples: OpWithCreatedBy[];
+  opsByEditId: Map<string, Op[]>;
+  spaceIdByEditId: Map<string, string>;
   versions: Schema.versions.Insertable[];
   edits: Schema.edits.Insertable[];
   editType: 'IMPORT' | 'DEFAULT';
@@ -49,7 +50,15 @@ interface AggregateRelationsArgs {
  * @params triples - The triples that have been created in this block as array of {@link OpWithCreatedBy}
  * @returns relations – The relations to write as array of {@link Schema.relations.Insertable}
  */
-export function aggregateRelations({ triples, versions, edits, editType }: AggregateRelationsArgs) {
+export function aggregateRelations({
+  opsByEditId,
+  versions,
+  edits,
+  editType,
+  spaceIdByEditId,
+}: AggregateRelationsArgs) {
+  const triples = [...opsByEditId.values()].flat();
+
   const entitiesReferencedByNewRelations = [
     ...new Set(
       versions.flatMap(v => {
@@ -101,18 +110,21 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
       .filter(v => Boolean(v))
       .flat();
 
-    // @TODO we should only check the per-edit triples. we can also do this above the loop
-    // and map the deleted relation ids to edits.
-    //
-    // We also need to scope the deleted ids to the current edit.
-    const deletedRelationEntityIds = yield* _(collectDeletedRelationsEntityIds(triples));
+    const deletedRelations = yield* _(collectDeletedRelationIds(opsByEditId));
 
     // We process relations by edit id so that we can use either the latest or any version
     // in the specific edit when referencing to, from, and type within a relation. Otherwise
     // we can have relations referencing versions in different edits which doesn't make sense.
     for (const edit of edits) {
+      const editId = edit.id.toString();
+      const spaceId = spaceIdByEditId.get(editId)!;
       const latestVersionForChangedEntities: Record<string, string> = {};
-      const blockVersionsForEdit = versions.filter(v => v.edit_id.toString() === edit.id.toString());
+      const blockVersionsForEdit = versions.filter(v => v.edit_id.toString() === editId);
+
+      // @TODO: We're already calculating deleted ops by edit in the aggregateNewVersions
+      // function in order to find any stale entity versions. We can probably merge the
+      // work we're doing there with the work we're doing here somehow.
+      const deletedRelationsForEdit = new Set(deletedRelations.get(edit.id.toString()) ?? []);
 
       // Merge the versions from this block for this edit with any versions for this entity
       // from the database. We favor any versions from the block over the versions in the
@@ -141,7 +153,7 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
       }
 
       const nonDeletedDbRelations = latestRelationsFromDbForVersions.filter(
-        r => !deletedRelationEntityIds.has(r.entity_id)
+        latestRelation => !deletedRelationsForEdit.has(latestRelation.id.toString())
       );
 
       const relationsFromDbToWrite = blockVersionsForEdit.flatMap(v => {
@@ -183,10 +195,11 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
       });
 
       const relationsFromEdit = blockVersionsForEdit.flatMap(v => {
-        const relationsForEntity = getRelationFromTriples(
+        const relationsForEntity = getRelationFromOps(
           triples,
           v.entity_id.toString(),
-          latestVersionForChangedEntities
+          latestVersionForChangedEntities,
+          spaceId
         );
 
         return relationsForEntity ?? [];
@@ -205,45 +218,53 @@ export function aggregateRelations({ triples, versions, edits, editType }: Aggre
  * we don't store the value for deleted ops on IPFS, so we have to rely on a
  * heuristic + lookup to know if the triple we're deleting is for an entity
  * defined as a relation.
- *
- * @TODO Relations should be scoped to a space, so this deleting step should
- * be space-aware so that we delete the correct relation in the case where
- * a relation entity has multiple triples in multiple spaces.
  */
-function collectDeletedRelationsEntityIds(schemaTriples: OpWithCreatedBy[]): Effect.Effect<Set<string>> {
+function collectDeletedRelationIds(opsByEditId: Map<string, Op[]>) {
   return Effect.gen(function* (_) {
-    // DELETE_TRIPLE ops don't store the value of the deleted op, so we have no way
-    // of knowing if the op being deleted here is actually a relation unless we query
-    // the Relations table with the entity id.
-    const deletedRelations = yield* _(
-      getDeletedRelationsFromOps(
-        schemaTriples.map(t => {
-          return {
-            attribute: t.triple.attribute_id.toString(),
-            entity: t.triple.entity_id.toString(),
-            opType: t.op,
-          };
-        })
-      )
-    );
+    // edit id -> relation id[]
+    const deletedRelationIdsByEditId = new Map<string, string[]>();
 
-    return new Set(deletedRelations.map(r => r.entity_id.toString()));
+    for (const [editId, ops] of opsByEditId.entries()) {
+      // DELETE_TRIPLE ops don't store the value of the deleted op, so we have no way
+      // of knowing if the op being deleted here is actually a relation unless we query
+      // the Relations table with the entity id.
+      const deletedRelations = yield* _(
+        getDeletedRelationsFromOps(
+          ops.map(t => {
+            return {
+              attribute: t.triple.attribute,
+              entity: t.triple.entity,
+              opType: t.type,
+            };
+          })
+        )
+      );
+
+      deletedRelationIdsByEditId.set(
+        editId,
+        deletedRelations.map(r => r.id.toString())
+      );
+    }
+
+    return deletedRelationIdsByEditId;
   });
 }
 
-function getEntitiesReferencedByRelations(schemaTriples: OpWithCreatedBy[], entityId: string): string[] | null {
+function getEntitiesReferencedByRelations(schemaTriples: Op[], entityId: string): string[] | null {
   // Grab other triples in this edit that match the relation's entity id. We
   // want to add all of the relation properties to the item in the
   // collection_items table.
-  const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
+  const otherTriples = schemaTriples.filter(
+    t => t.triple.entity === entityId && t.type === 'SET_TRIPLE'
+  ) as SetTripleOp[];
 
-  const to = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
-  const from = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
-  const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+  const to = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+  const from = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+  const type = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
 
-  const toId = to?.triple.entity_value_id;
-  const fromId = from?.triple.entity_value_id;
-  const typeId = type?.triple.entity_value_id;
+  const toId = to?.triple.value.value;
+  const fromId = from?.triple.value.value;
+  const typeId = type?.triple.value.value;
 
   if (!toId || !fromId || !typeId) {
     return null;
@@ -259,35 +280,36 @@ function getEntitiesReferencedByRelations(schemaTriples: OpWithCreatedBy[], enti
  * exist before creating the item. If not all properties exist we don't create the collection
  * item.
  */
-function getRelationFromTriples(
-  schemaTriples: OpWithCreatedBy[],
+function getRelationFromOps(
+  ops: Op[],
   entityId: string,
-  latestVersionForChangedEntities: Record<string, string>
+  latestVersionForChangedEntities: Record<string, string>,
+  spaceId: string
 ): Schema.relations.Insertable | null {
   // Grab other triples in this edit that match the relation's entity id. We
   // want to add all of the relation properties to the item in the
   // collection_items table.
-  const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
+  const otherTriples = ops.filter(t => t.triple.entity === entityId && t.type === 'SET_TRIPLE') as SetTripleOp[];
 
   const isRelation = otherTriples.find(
     t =>
-      t.triple.attribute_id.toString() === SYSTEM_IDS.TYPES &&
-      t.triple.value_type.toString() === 'ENTITY' &&
-      t.triple.entity_value_id?.toString() === SYSTEM_IDS.RELATION_TYPE
+      t.triple.attribute === SYSTEM_IDS.TYPES &&
+      t.triple.value.type === 'ENTITY' &&
+      t.triple.value.value === SYSTEM_IDS.RELATION_TYPE
   );
-  const relationIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_INDEX);
-  const to = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
-  const from = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
-  const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+  const relationIndex = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_INDEX);
+  const to = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+  const from = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+  const type = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
 
   if (!isRelation || !from || !to || !type) {
     return null;
   }
 
-  const indexValue = relationIndex?.triple.text_value?.toString();
-  const toId = to?.triple.entity_value_id?.toString();
-  const fromId = from?.triple.entity_value_id?.toString();
-  const typeId = type?.triple.entity_value_id?.toString();
+  const indexValue = relationIndex?.triple.value.value;
+  const toId = to?.triple.value.value;
+  const fromId = from?.triple.value.value;
+  const typeId = type?.triple.value.value;
 
   if (!toId || !fromId || !typeId) {
     return null;
@@ -303,7 +325,7 @@ function getRelationFromTriples(
 
   return {
     id: createGeoId(),
-    space_id: isRelation.triple.space_id,
+    space_id: spaceId,
     to_version_id: toVersion,
     from_version_id: fromVersion,
     entity_id: entityId,
