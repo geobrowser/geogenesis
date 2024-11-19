@@ -53,7 +53,7 @@ export function useEntityTable() {
     },
     // Only return rows that are in the current space
     {
-      columnId: SYSTEM_IDS.SPACE,
+      columnId: SYSTEM_IDS.SPACE_FILTER,
       value: spaceId,
       valueType: 'TEXT',
     },

@@ -87,7 +87,7 @@ function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
     return 'IMAGE';
   }
 
-  if (typeIds.includes(EntityId(SYSTEM_IDS.TABLE_BLOCK))) {
+  if (typeIds.includes(EntityId(SYSTEM_IDS.DATA_BLOCK))) {
     return 'DATA';
   }
 

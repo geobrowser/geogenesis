@@ -43,7 +43,7 @@ async function ActivityList({ searchParams, entityId }: Props) {
   // Right now we assume it's set as an entity value but it might be a collection at
   // some point in the future.
   const address = (
-    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.WALLETS_ATTRIBUTE) as TripleWithEntityValue | undefined
+    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.ACCOUNTS_ATTRIBUTE) as TripleWithEntityValue | undefined
   )?.value?.name;
 
   const proposals = address

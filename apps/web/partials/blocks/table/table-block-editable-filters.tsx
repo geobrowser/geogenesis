@@ -28,7 +28,7 @@ export function TableBlockEditableFilters() {
     //   valueName: null,
     // },
     {
-      columnId: SYSTEM_IDS.SPACE,
+      columnId: SYSTEM_IDS.SPACE_FILTER,
       columnName: 'Space',
       valueType: valueTypes[SYSTEM_IDS.TEXT],
       value: '',

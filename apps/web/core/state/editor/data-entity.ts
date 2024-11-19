@@ -27,7 +27,7 @@ export function makeInitialDataEntityRelations(blockId: EntityId): [StoreRelatio
     makeRelationForSourceType('COLLECTION', blockId),
 
     // Create the type relation for the block itself. e.g., Table, Image, Text, etc.
-    getRelationForBlockType(blockId, SYSTEM_IDS.TABLE_BLOCK),
+    getRelationForBlockType(blockId, SYSTEM_IDS.DATA_BLOCK),
   ];
 }
 

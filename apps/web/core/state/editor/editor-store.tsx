@@ -319,7 +319,7 @@ export function useEditorStore() {
         const blockType = (() => {
           switch (node.type) {
             case 'tableNode':
-              return SYSTEM_IDS.TABLE_BLOCK;
+              return SYSTEM_IDS.DATA_BLOCK;
             case 'bulletList':
             case 'paragraph':
               return SYSTEM_IDS.TEXT_BLOCK;
@@ -338,7 +338,7 @@ export function useEditorStore() {
             break;
           case SYSTEM_IDS.IMAGE_BLOCK:
             break;
-          case SYSTEM_IDS.TABLE_BLOCK: {
+          case SYSTEM_IDS.DATA_BLOCK: {
             // @TODO(performance): upsertMany
             for (const relation of makeInitialDataEntityRelations(EntityId(node.id))) {
               DB.upsertRelation({ relation, spaceId });
