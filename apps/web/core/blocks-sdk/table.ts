@@ -4,7 +4,6 @@ import { ValueType as TripleValueType } from '~/core/types';
 
 import { mergeEntityAsync } from '../database/entities';
 import { useWriteOps } from '../database/write';
-import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { Source } from '../state/editor/types';
 
@@ -86,7 +85,7 @@ export function createGraphQLStringFromFilters(
         return `name_starts_with_nocase: "${filter.value}"`;
       }
 
-      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
+      if (filter.columnId === SYSTEM_IDS.SPACE_FILTER && filter.valueType === 'TEXT') {
         return `entityOf_: { space: "${filter.value}" }`;
       }
 
@@ -258,7 +257,7 @@ export async function createFiltersFromGraphQLStringAndSource(
   if (source.type === 'SPACES') {
     for (const spaceId of source.value) {
       filters.push({
-        columnId: SYSTEM_IDS.SPACE,
+        columnId: SYSTEM_IDS.SPACE_FILTER,
         valueType: 'TEXT',
         value: spaceId,
         valueName: null,
@@ -293,7 +292,7 @@ export function createGraphQLStringFromFiltersV2(
         return `name: { startsWithInsensitive: "${filter.value}" }`;
       }
 
-      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
+      if (filter.columnId === SYSTEM_IDS.SPACE_FILTER && filter.valueType === 'TEXT') {
         return `versionSpaces: {
           some: {
             spaceId: { equalTo: "${filter.value}" }

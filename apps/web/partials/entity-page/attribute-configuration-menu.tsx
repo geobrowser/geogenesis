@@ -70,7 +70,7 @@ function AttributeSearch({
     upsert(
       {
         entityId: attributeId,
-        attributeId: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
+        attributeId: SYSTEM_IDS.RELATION_VALUE_TYPE_ATTRIBUTE,
         attributeName: 'Relation Value Types',
         entityName: attributeName,
         value: {
@@ -90,7 +90,7 @@ function AttributeSearch({
     remove(
       {
         entityId: attributeId,
-        attributeId: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
+        attributeId: SYSTEM_IDS.RELATION_VALUE_TYPE_ATTRIBUTE,
       },
       spaceIdOfAttribute
     );

@@ -234,7 +234,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                   </div>
                   <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
                   <div className="relative flex flex-1">
-                    {state.selectedColumn === SYSTEM_IDS.SPACE ? (
+                    {state.selectedColumn === SYSTEM_IDS.SPACE_FILTER ? (
                       <TableBlockSpaceFilterInput
                         selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectSpaceValue}

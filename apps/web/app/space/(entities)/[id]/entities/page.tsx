@@ -78,7 +78,7 @@ const getData = async ({
         valueType: 'TEXT',
       },
       {
-        columnId: SYSTEM_IDS.SPACE,
+        columnId: SYSTEM_IDS.SPACE_CONFIGURATION,
         value: spaceId,
         valueType: 'TEXT',
       },

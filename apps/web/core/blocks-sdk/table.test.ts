@@ -79,7 +79,7 @@ describe('TableBlock SDK', () => {
 
     const spaceFilter = createGraphQLStringFromFilters([
       {
-        columnId: SYSTEM_IDS.SPACE,
+        columnId: SYSTEM_IDS.SPACE_FILTER,
         valueType: 'TEXT',
         value: '0x0000000000000000000000000000000000000000',
       },
@@ -222,7 +222,7 @@ describe('TableBlock SDK', () => {
 
     expect(spaceFilter).toEqual([
       {
-        columnId: SYSTEM_IDS.SPACE,
+        columnId: SYSTEM_IDS.SPACE_FILTER,
         value: '0x0000000000000000000000000000000000000000',
         valueType: 'string',
         valueName: null,
@@ -283,7 +283,7 @@ describe('TableBlock SDK', () => {
 
     const spaceFilter = createGraphQLStringFromFiltersV2([
       {
-        columnId: SYSTEM_IDS.SPACE,
+        columnId: SYSTEM_IDS.SPACE_FILTER,
         valueType: 'TEXT',
         value: '0x0000000000000000000000000000000000000000',
       },

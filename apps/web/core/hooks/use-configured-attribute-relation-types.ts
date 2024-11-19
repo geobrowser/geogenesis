@@ -74,7 +74,7 @@ export function useConfiguredAttributeRelationTypes({
         filter: [
           {
             field: 'attribute-id',
-            value: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
+            value: SYSTEM_IDS.RELATION_VALUE_TYPE_ATTRIBUTE,
           },
           {
             field: 'entity-id',
