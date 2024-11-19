@@ -33,5 +33,5 @@ export function toImageValue(rawValue: string) {
 }
 
 export function isRelationValueType(t: Triple): t is Triple & { value: AppEntityValue } {
-  return t.value.type === 'ENTITY' && t.attributeId === SYSTEM_IDS.RELATION_VALUE_TYPE_ATTRIBUTE;
+  return t.value.type === 'ENTITY' && t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE;
 }
