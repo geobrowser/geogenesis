@@ -1,3 +1,4 @@
+import { encodeBase58 } from '@geogenesis/sdk';
 import { createHash } from 'crypto';
 import { v4 } from 'uuid';
 
@@ -22,7 +23,7 @@ export function createIdFromUniqueString(text: string) {
   const hashed = createHash('md5').update(text).digest('hex');
   const bytes = hexToBytesArray(hashed);
   const uuid = v4({ random: bytes });
-  return uuid.split('-').join('');
+  return encodeBase58(uuid.split('-').join(''));
 }
 
 function hexToBytesArray(hex: string) {
