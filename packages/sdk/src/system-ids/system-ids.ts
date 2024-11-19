@@ -12,9 +12,16 @@ export const COVER_ATTRIBUTE = "DTEcNh4xFNvsqoX9bfF6qS"
 export const VALUE_TYPE = "JwYkkjY2i6uuR4wrgFScwt"
 export const CHECKBOX = "NtWv5uGJ1d15Mfk4ZdXfmU"
 export const DATE = "UGr1YqqZbE2BbEpJR9U88H"
-export const RELATION = "AKDxovGvZaPSWnmKnSoZJY"
 export const TEXT = "JBYTdEigecQHj2xhL3NeHV"
 export const WEB_URL = "5EQJAVKYDQWHZSfsawBtWa"
+
+export const RELATION = "AKDxovGvZaPSWnmKnSoZJY"
+/**
+  * Defines the relation value types for a relation. e.g., a Persons
+  * attribute must only contain relations where the to entity is type
+  * Person
+  */
+export const RELATION_VALUE_RELATIONSHIP_TYPE = "LdAS7yWqF32E2J4doUDe5u"
 
 export const IMAGE = "WpZ6MDcJZrfheC3XD7hyhh"
 export const IMAGE_FILE_TYPE_ATTRIBUTE = "B3nyKkmERhFEcaVgoe6kAL"
@@ -100,7 +107,6 @@ export const RELATION_TYPE = "XAeYjgogh9zKBz4g8pB9wG"
 export const RELATION_FROM_ATTRIBUTE = "3ZZFJ1dDBk7zTvN5x3XRR3"
 export const RELATION_TO_ATTRIBUTE = "NToMyNnNkCvFh1McQLm4Rm"
 export const RELATION_TYPE_ATTRIBUTE = "DGKmqmiyVPZ7Tfe18VksjN"
-export const RELATION_VALUE_TYPE_ATTRIBUTE = "LdAS7yWqF32E2J4doUDe5u"
 /*
  * Relations can be ordered using fractional indexing. By default we
  * add an index to every relation so that ordering can be added to
