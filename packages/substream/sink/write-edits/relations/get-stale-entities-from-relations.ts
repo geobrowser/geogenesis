@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS, parseEntityFromGraphScheme } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import { getDeletedRelationsFromOps } from './get-deleted-relations-from-ops';
@@ -46,11 +46,18 @@ export function maybeEntityOpsToRelation(ops: Op[], entityId: string): RelationW
     return null;
   }
 
+  const toId = to ? parseEntityFromGraphScheme(to.triple.value.value) : null;
+  const fromId = from ? parseEntityFromGraphScheme(from.triple.value.value) : null;
+  const typeId = type ? parseEntityFromGraphScheme(type.triple.value.value) : null;
+
+  if (!toId || !fromId || !typeId) {
+    return null;
+  }
   return {
-    to: to.triple.value.value,
-    from: from.triple.value.value,
+    to: toId,
+    from: fromId,
     entityId: entityId,
-    typeOf: type.triple.value.value,
+    typeOf: typeId,
     index: index?.triple.value.value,
   };
 }
