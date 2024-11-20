@@ -13,7 +13,7 @@ export interface GeoBlock extends BlockEvent {
   network: string;
 }
 
-export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URI' | 'TIME' | 'GEO_LOCATION';
+export type ValueType = 'TEXT' | 'NUMBER' | 'COLLECTION' | 'CHECKBOX' | 'URI' | 'TIME' | 'GEO_LOCATION';
 
 export type SetTripleOp = {
   type: 'SET_TRIPLE';

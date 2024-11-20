@@ -294,7 +294,7 @@ function getRelationFromOps(
   const isRelation = otherTriples.find(
     t =>
       t.triple.attribute === SYSTEM_IDS.TYPES &&
-      t.triple.value.type === 'ENTITY' &&
+      t.triple.value.type === 'URI' &&
       t.triple.value.value === SYSTEM_IDS.RELATION_TYPE
   );
   const relationIndex = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_INDEX);

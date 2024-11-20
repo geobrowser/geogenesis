@@ -14,8 +14,8 @@ type CreateRelationTypeOp = {
     attribute: typeof SYSTEM_IDS.TYPES;
     entity: string;
     value: {
-      type: 'ENTITY';
-      value: typeof SYSTEM_IDS.RELATION_TYPE;
+      type: 'URI';
+      value: `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`;
     };
   };
 };
@@ -26,7 +26,7 @@ type CreateRelationTypeOfOp = {
     attribute: typeof SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE;
     entity: string;
     value: {
-      type: 'ENTITY';
+      type: 'URI';
       value: string;
     };
   };
@@ -38,7 +38,7 @@ type CreateRelationFromOp = {
     attribute: typeof SYSTEM_IDS.RELATION_FROM_ATTRIBUTE;
     entity: string;
     value: {
-      type: 'ENTITY';
+      type: 'URI';
       value: string;
     };
   };
@@ -50,7 +50,7 @@ type CreateRelationToOp = {
     attribute: typeof SYSTEM_IDS.RELATION_TO_ATTRIBUTE;
     entity: string;
     value: {
-      type: 'ENTITY';
+      type: 'URI';
       value: string;
     };
   };
@@ -87,8 +87,8 @@ export function createRelationship(
         attribute: SYSTEM_IDS.TYPES,
         entity: newEntityId,
         value: {
-          type: 'ENTITY',
-          value: SYSTEM_IDS.RELATION_TYPE,
+          type: 'URI',
+          value: toGraphUri(SYSTEM_IDS.RELATION_TYPE) as `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`,
         },
       }
     },
@@ -99,8 +99,8 @@ export function createRelationship(
         attribute: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
         entity: newEntityId,
         value: {
-          type: 'ENTITY',
-          value: args.fromId,
+          type: 'URI',
+          value: toGraphUri(args.fromId),
         },
       }
     },
@@ -111,8 +111,8 @@ export function createRelationship(
         attribute: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
         entity: newEntityId,
         value: {
-          type: 'ENTITY',
-          value: args.toId,
+          type: 'URI',
+          value: toGraphUri(args.toId),
         },
       }
     },
@@ -133,10 +133,14 @@ export function createRelationship(
         attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
         entity: newEntityId,
         value: {
-          type: 'ENTITY',
-          value: args.relationTypeId,
+          type: 'URI',
+          value: toGraphUri(args.relationTypeId),
         }
       },
     },
   ] as const;
+}
+
+function toGraphUri(entityId: string) {
+  return `graph://${entityId}` as const
 }

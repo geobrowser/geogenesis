@@ -6,6 +6,7 @@ import type * as Schema from 'zapatos/schema';
 import { CurrentVersions, Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import type { BlockEvent, Op } from '../types';
+import { isEntityValueOp } from './is-entity-value';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
 import { aggregateRelations } from './relations/aggregate-relations';
 import { writeTriples } from './write-triples';
@@ -229,7 +230,7 @@ function aggregateTypesFromRelationsAndTriples({ relations, triples }: Aggregate
     }
 
     const triplesThatSetAType = triples.filter(
-      t => t.op === 'SET_TRIPLE' && t.triple.attribute_id === SYSTEM_IDS.TYPES && t.triple.value_type === 'ENTITY'
+      t => t.op === 'SET_TRIPLE' && t.triple.attribute_id === SYSTEM_IDS.TYPES && t.triple.value_type === 'URI'
     );
 
     const typeEntityIdsFromTriples = triplesThatSetAType

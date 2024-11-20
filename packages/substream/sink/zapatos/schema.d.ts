@@ -47,9 +47,9 @@ declare module 'zapatos/schema' {
   export namespace every {
     export type subspace_proposal_type = ['ADD_SUBSPACE', 'REMOVE_SUBSPACE'];
   }
-  export type triple_value_type = 'CHECKBOX' | 'COLLECTION' | 'ENTITY' | 'GEO_LOCATION' | 'NUMBER' | 'TEXT' | 'TIME' | 'URI';
+  export type triple_value_type = 'CHECKBOX' | 'COLLECTION' | 'GEO_LOCATION' | 'NUMBER' | 'TEXT' | 'TIME' | 'URI';
   export namespace every {
-    export type triple_value_type = ['CHECKBOX', 'COLLECTION', 'ENTITY', 'GEO_LOCATION', 'NUMBER', 'TEXT', 'TIME', 'URI'];
+    export type triple_value_type = ['CHECKBOX', 'COLLECTION', 'GEO_LOCATION', 'NUMBER', 'TEXT', 'TIME', 'URI'];
   }
   export type vote_type = 'accept' | 'reject';
   export namespace every {
