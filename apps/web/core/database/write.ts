@@ -44,8 +44,6 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
       toId: args.relation.toEntity.id,
       typeOfId: args.relation.typeOf.id,
       spaceId: args.spaceId,
-      toIdName: args.relation.toEntity.name,
-      typeOfName: args.relation.typeOf.name,
     });
 
     const relationId = EntityId(triples[0].entityId);

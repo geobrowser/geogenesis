@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
@@ -379,7 +379,7 @@ const ToggleColumn = ({
 }: ToggleColumnProps) => {
   const { upsert } = useWriteOps();
 
-  const { id, name } = column;
+  const { id } = column;
   const isShown = shownColumnIds.includes(column.id);
 
   const onToggleColumn = React.useCallback(async () => {
@@ -395,9 +395,8 @@ const ToggleColumn = ({
           attributeId,
           attributeName,
           value: {
-            type: 'ENTITY',
-            value: id,
-            name,
+            type: 'URI',
+            value: GraphUrl.fromEntityId(id),
           },
         },
         space
@@ -408,7 +407,7 @@ const ToggleColumn = ({
         // remove(shownColumnRelation, space);
       }
     }
-  }, [upsert, entityId, entityName, id, isShown, name, shownColumnRelation, space]);
+  }, [upsert, entityId, entityName, id, isShown, shownColumnRelation, space]);
 
   return (
     <MenuItem>

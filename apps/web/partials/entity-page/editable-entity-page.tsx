@@ -14,7 +14,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
-import { DeletableChipButton, LinkableRelationChip } from '~/design-system/chip';
+import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
@@ -94,21 +94,19 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
 
                 <div className="absolute right-0 top-6 flex items-center gap-1">
                   {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
-                  {renderableType !== 'ENTITY' && (
-                    <>
-                      <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
+                  <>
+                    <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
 
-                      {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
-                      {renderableType !== 'RELATION' && (
-                        <SquareButton
-                          icon={<Trash />}
-                          onClick={() => {
-                            send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
-                          }}
-                        />
-                      )}
-                    </>
-                  )}
+                    {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
+                    {renderableType !== 'RELATION' && (
+                      <SquareButton
+                        icon={<Trash />}
+                        onClick={() => {
+                          send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+                        }}
+                      />
+                    )}
+                  </>
                 </div>
               </div>
             );
@@ -343,42 +341,6 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
                 isEditing={true}
                 value={renderable.value}
               />
-            );
-          }
-          case 'ENTITY': {
-            if (renderable.value.value === '') {
-              return (
-                <div key={renderable.attributeId} data-testid="select-entity" className="w-full">
-                  <SelectEntity
-                    spaceId={spaceId}
-                    onDone={result => {
-                      send({
-                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                        payload: {
-                          renderable,
-                          value: {
-                            type: 'ENTITY',
-                            value: result.id,
-                            name: result.name,
-                          },
-                        },
-                      });
-                    }}
-                    variant="fixed"
-                  />
-                </div>
-              );
-            }
-
-            return (
-              <div key={`entity-${renderable.value.value}`}>
-                <DeletableChipButton
-                  href={NavUtils.toEntity(renderable.spaceId, renderable.value.value)}
-                  // onClick={() => removeOrResetEntityTriple(triple)}
-                >
-                  {renderable.value.name || renderable.value.value}
-                </DeletableChipButton>
-              </div>
             );
           }
         }

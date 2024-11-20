@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ValueType as TripleValueType } from '~/core/types';
 
@@ -67,13 +67,13 @@ export function upsertName({
 export function createGraphQLStringFromFilters(
   filters: {
     columnId: string;
-    valueType: TripleValueType;
+    valueType: TripleValueType | 'RELATION';
     value: string;
   }[]
 ): string {
   const filtersAsStrings = filters
     .map(filter => {
-      if (filter.columnId === SYSTEM_IDS.TYPES && filter.valueType === 'ENTITY') {
+      if (filter.columnId === SYSTEM_IDS.TYPES && filter.valueType === 'RELATION') {
         return `typeIds_contains_nocase: ["${filter.value}"]`;
       }
 
@@ -87,11 +87,6 @@ export function createGraphQLStringFromFilters(
 
       if (filter.columnId === SYSTEM_IDS.SPACE_FILTER && filter.valueType === 'TEXT') {
         return `entityOf_: { space: "${filter.value}" }`;
-      }
-
-      if (filter.valueType === 'ENTITY') {
-        // value is the ID of the relation
-        return `entityOf_: {attribute: "${filter.columnId}", entityValue: "${filter.value}"}`;
       }
 
       if (filter.valueType === 'TEXT') {
@@ -193,8 +188,8 @@ export async function createFiltersFromGraphQLStringAndSource(
       if (maybeType) {
         filters.push({
           columnId: SYSTEM_IDS.TYPES,
-          valueType: 'ENTITY',
-          value: JSON.parse(typeValue),
+          valueType: 'URI',
+          value: GraphUrl.fromEntityId(parsedTypeValue),
           valueName: maybeType.name,
         });
       }
@@ -227,8 +222,8 @@ export async function createFiltersFromGraphQLStringAndSource(
         if (maybeEntity) {
           filters.push({
             columnId: attribute,
-            valueType: 'ENTITY',
-            value: entityValue,
+            valueType: 'URI',
+            value: GraphUrl.fromEntityId(entityValue),
             valueName: maybeEntity.name,
           });
         }
@@ -271,7 +266,7 @@ export async function createFiltersFromGraphQLStringAndSource(
 export function createGraphQLStringFromFiltersV2(
   filters: {
     columnId: string;
-    valueType: TripleValueType;
+    valueType: TripleValueType | 'RELATION';
     value: string;
   }[]
 ): string {
@@ -280,7 +275,7 @@ export function createGraphQLStringFromFiltersV2(
   const filtersAsStrings = filters
     .map(filter => {
       // Assume we can only filter by one type at a time for now
-      if (filter.columnId === SYSTEM_IDS.TYPES && filter.valueType === 'ENTITY') {
+      if (filter.columnId === SYSTEM_IDS.TYPES && filter.valueType === 'RELATION') {
         return `versionTypes: { some: { type: { entityId: {equalTo: "${filter.value}" } } } }`;
       }
 
@@ -298,11 +293,6 @@ export function createGraphQLStringFromFiltersV2(
             spaceId: { equalTo: "${filter.value}" }
           }
         }`;
-      }
-
-      if (filter.valueType === 'ENTITY') {
-        // value is the ID of the relation
-        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, entityValueId: { equalTo: "${filter.value}"} } }`;
       }
 
       if (filter.valueType === 'TEXT') {

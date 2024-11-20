@@ -5,7 +5,6 @@ import { Suspense } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
-import { TripleWithEntityValue } from '~/core/types';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -42,9 +41,7 @@ async function ActivityList({ searchParams, entityId }: Props) {
   // Fetch the activity based on the wallets defined on the entity's Wallets triple
   // Right now we assume it's set as an entity value but it might be a collection at
   // some point in the future.
-  const address = (
-    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.ACCOUNTS_ATTRIBUTE) as TripleWithEntityValue | undefined
-  )?.value?.name;
+  const address = entity?.relationsOut.find(t => t.typeOf.id === SYSTEM_IDS.ACCOUNTS_ATTRIBUTE)?.toEntity.name;
 
   const proposals = address
     ? await fetchProposalsByUser({

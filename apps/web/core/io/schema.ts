@@ -91,24 +91,6 @@ const SubstreamUriValue = Schema.Struct({
 
 type SubstreamUriValue = Schema.Schema.Type<typeof SubstreamUriValue>;
 
-/**
- * Entity value
- */
-const SubstreamEntityValue = Schema.Struct({
-  valueType: Schema.Literal('ENTITY'),
-  textValue: Schema.Null,
-  entityValue: Schema.Struct({
-    id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
-    currentVersion: Schema.Struct({
-      version: Schema.Struct({
-        id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
-        name: Schema.NullOr(Schema.String),
-        versionTypes: SubstreamVersionTypes,
-      }),
-    }),
-  }),
-});
-
 const SubstreamCheckboxValue = Schema.Struct({
   valueType: Schema.Literal('CHECKBOX'),
   booleanValue: Schema.Boolean,
@@ -116,15 +98,7 @@ const SubstreamCheckboxValue = Schema.Struct({
 
 type SubstreamCheckboxValue = Schema.Schema.Type<typeof SubstreamCheckboxValue>;
 
-export type SubstreamEntityValue = Schema.Schema.Type<typeof SubstreamEntityValue>;
-
-const SubstreamValue = Schema.Union(
-  SubstreamTextValue,
-  SubstreamEntityValue,
-  SubstreamTimeValue,
-  SubstreamUriValue,
-  SubstreamCheckboxValue
-);
+const SubstreamValue = Schema.Union(SubstreamTextValue, SubstreamTimeValue, SubstreamUriValue, SubstreamCheckboxValue);
 type SubstreamValue = Schema.Schema.Type<typeof SubstreamValue>;
 
 const SpaceGovernanceType = Schema.Union(Schema.Literal('PUBLIC'), Schema.Literal('PERSONAL'));

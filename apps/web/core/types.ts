@@ -7,27 +7,15 @@ export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export type ValueType =
   | 'TEXT'
-  | 'ENTITY'
   | 'URI'
   | 'TIME'
   // | GEO_LOCATION
   | 'CHECKBOX';
 
-export type AppValue = {
+export type Value = {
   type: 'TEXT' | 'URI' | 'TIME' | 'CHECKBOX';
   value: string;
 };
-
-// We store unique metadata on an ENTITY value type so we map it
-// to a separate data structure. Only entities with type "Relation"
-// should be using triples with entity values.
-export type AppEntityValue = {
-  type: 'ENTITY';
-  value: string;
-  name: string | null;
-};
-
-export type Value = AppEntityValue | AppValue;
 
 export type SetTripleAppOp = {
   type: 'SET_TRIPLE';
@@ -80,28 +68,13 @@ export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT';
 // properties that ops mostly do in order to upsert or remove the renderable
 // fields.
 export type NativeRenderableProperty = {
-  type: AppValue['type'];
+  type: Value['type'];
   entityId: string;
   entityName: string | null;
   attributeId: string;
   attributeName: string | null;
   spaceId: string;
   value: string;
-  placeholder?: boolean;
-};
-
-// Entity renderable fields should only exist on Relations pages
-export type EntityRenderableProperty = {
-  type: 'ENTITY';
-  entityId: string;
-  entityName: string | null;
-  attributeId: string;
-  attributeName: string | null;
-  spaceId: string;
-  value: {
-    value: string;
-    name: string | null;
-  };
   placeholder?: boolean;
 };
 
@@ -127,7 +100,7 @@ export type ImageRelationRenderableProperty = {
 
 export type RelationRenderableProperty = BaseRelationRenderableProperty | ImageRelationRenderableProperty;
 
-export type TripleRenderableProperty = NativeRenderableProperty | EntityRenderableProperty;
+export type TripleRenderableProperty = NativeRenderableProperty;
 export type RenderableProperty =
   | TripleRenderableProperty
   | BaseRelationRenderableProperty
@@ -251,7 +224,6 @@ export type RelationValueType = {
 export type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
 
 export type TripleWithStringValue = OmitStrict<Triple, 'value'> & { value: Value };
-export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & { value: AppEntityValue };
 export type TripleWithImageValue = OmitStrict<Triple, 'value'> & { value: Value };
 export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: Value };
 export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: Value };

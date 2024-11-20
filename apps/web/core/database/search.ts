@@ -76,7 +76,7 @@ export async function mergeResultsAsync(options: FetchResultsOptions): Promise<S
         // `name` property in case the name was deleted/changed locally.
         const name = Entities.name(mergedTriples) ?? result.name;
         const description = Entities.description(mergedTriples) ?? result.description;
-        const types = readTypes(mergedTriples, mergedRelations);
+        const types = readTypes(mergedRelations);
         const spaces = result.spaces.flatMap(space => spacesInResults[space.spaceId] ?? []);
 
         return {

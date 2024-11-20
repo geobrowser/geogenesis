@@ -6,4 +6,4 @@ export { getProcessGeoProposalArguments, getAcceptSubspaceArguments, getAcceptEd
 export { createRelationship, reorderCollectionItem } from './src/collections';
 export { SYSTEM_IDS } from './src/system-ids'
 export { createImageEntityOps } from './src/create-image-entity'
-export { parseEntityFromGraphScheme } from './src/graph-scheme'
+export { GraphUrl } from './src/graph-scheme'

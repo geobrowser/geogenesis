@@ -51,18 +51,6 @@ export function toRenderables({
     });
 
   const triplesToRenderable = triples.map((t): TripleRenderableProperty => {
-    if (t.value.type === 'ENTITY') {
-      return {
-        type: t.value.type,
-        entityId: t.entityId,
-        entityName: t.entityName,
-        attributeId: t.attributeId,
-        attributeName: t.attributeName,
-        spaceId,
-        value: { value: t.value.value, name: t.value.name },
-      };
-    }
-
     return {
       type: t.value.type,
       entityId: t.entityId,

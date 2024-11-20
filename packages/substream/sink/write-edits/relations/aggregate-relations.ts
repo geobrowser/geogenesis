@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, createGeoId, parseEntityFromGraphScheme } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
@@ -295,7 +295,7 @@ function getRelationFromOps(
     t =>
       t.triple.attribute === SYSTEM_IDS.TYPES &&
       t.triple.value.type === 'URI' &&
-      parseEntityFromGraphScheme(t.triple.value.value) === SYSTEM_IDS.RELATION_TYPE
+      GraphUrl.toEntityId(t.triple.value.value) === SYSTEM_IDS.RELATION_TYPE
   );
   const relationIndex = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_INDEX);
   const to = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
@@ -307,9 +307,9 @@ function getRelationFromOps(
   }
 
   const indexValue = relationIndex?.triple.value.value ?? null;
-  const toId = to ? parseEntityFromGraphScheme(to.triple.value.value) : null;
-  const fromId = from ? parseEntityFromGraphScheme(from.triple.value.value) : null;
-  const typeId = type ? parseEntityFromGraphScheme(type.triple.value.value) : null;
+  const toId = to ? GraphUrl.toEntityId(to.triple.value.value) : null;
+  const fromId = from ? GraphUrl.toEntityId(from.triple.value.value) : null;
+  const typeId = type ? GraphUrl.toEntityId(type.triple.value.value) : null;
 
   if (!toId || !fromId || !typeId) {
     return null;
