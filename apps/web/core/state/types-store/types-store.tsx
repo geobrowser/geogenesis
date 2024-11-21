@@ -49,12 +49,15 @@ export function useTypesStore(): {
 } {
   const { initialTypes, space } = useTypesStoreInstance();
   const { relationsOut } = useEntity({
-    id: space?.spaceConfig.id ?? EntityId(''),
-    initialData: {
-      spaces: space?.spaceConfig.spaces ?? [],
-      relations: space?.spaceConfig.relationsOut ?? [],
-      triples: space?.spaceConfig.triples ?? [],
-    },
+    id: React.useMemo(() => space?.spaceConfig.id ?? EntityId(''), [space]),
+    initialData: React.useMemo(
+      () => ({
+        spaces: space?.spaceConfig.spaces ?? [],
+        relations: space?.spaceConfig.relationsOut ?? [],
+        triples: space?.spaceConfig.triples ?? [],
+      }),
+      [space]
+    ),
   });
 
   // @TODO(relations)

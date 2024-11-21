@@ -35,7 +35,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   // If the caller passes in a set of data we use that for merging. If not,
   // we fetch the entity from the server and merge it with the local state.
   const { data: initialOrRemoteEntity } = useQuery({
-    queryKey: ['useEntity', id, initialData],
+    queryKey: ['useEntity', spaceId, id, initialData],
     initialData,
     queryFn: async ({ signal }) => {
       if (initialData) {

@@ -3,14 +3,14 @@
 import * as React from 'react';
 
 import { useEntity } from '~/core/database/entities';
-import { EntityId } from '~/core/io/schema';
+import { EntityId, SpaceId } from '~/core/io/schema';
 
 import { useEntityStoreInstance } from './entity-store-provider';
 
 export function useEntityPageStore() {
   const { spaceId, id, initialSpaces, initialTriples, initialRelations } = useEntityStoreInstance();
   const { name, spaces, triples, relationsOut, schema, types } = useEntity({
-    spaceId,
+    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
     id: React.useMemo(() => EntityId(id), [id]),
     initialData: React.useMemo(
       () => ({ spaces: initialSpaces, triples: initialTriples, relations: initialRelations }),

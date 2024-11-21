@@ -97,21 +97,8 @@ const getData = async (spaceId: string, entityId: string) => {
       // Uncomment to navigate to space configuration templates in local development
       // if (process.env.NODE_ENV === 'development') return;
 
-      console.log(`Redirecting from space configuration entity ${entity.id} to space page ${nameTripleSpace}`);
-      return redirect(NavUtils.toSpace(nameTripleSpace));
-    }
-  }
-
-  // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
-  // the space for the entity we are rendering, so we need to redirect to the correct space.
-  if (nameTripleSpace) {
-    const spaceIdInNameTripleSpaces = entity.nameTripleSpaces.includes(spaceId);
-
-    if (!spaceIdInNameTripleSpaces) {
-      console.log(
-        `Redirecting from incorrect space ${spaceId} to correct space ${nameTripleSpace} for entity ${entityId}`
-      );
-      return redirect(NavUtils.toEntity(nameTripleSpace, entityId));
+      console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
+      return redirect(NavUtils.toSpace(spaceId));
     }
   }
 

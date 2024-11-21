@@ -135,8 +135,9 @@ export const getVersionFragment = (spaceId?: SpaceId) => {
         }
       }
     `;
-  } else {
-    return `
+  }
+
+  return `
       id
       entityId
       name
@@ -158,7 +159,6 @@ export const getVersionFragment = (spaceId?: SpaceId) => {
         }
       }
     `;
-  }
 };
 
 export const versionFragment = `

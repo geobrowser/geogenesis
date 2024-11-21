@@ -63,7 +63,7 @@ export function useTableBlock() {
   const { upsert } = useWriteOps();
 
   const blockEntity = useEntity({
-    spaceId,
+    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
     id: React.useMemo(() => EntityId(entityId), [entityId]),
   });
 

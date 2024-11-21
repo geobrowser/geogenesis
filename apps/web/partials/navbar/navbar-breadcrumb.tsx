@@ -73,7 +73,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
   const [open, setOpen] = useState<boolean>(false);
   const [query, setQuery] = useState<string>('');
 
-  const { space, isLoading } = useSpace(spaceId ?? '');
+  const { space, isLoading } = useSpace(spaceId);
 
   const entity = useEntity({ id: entityId });
   const { spaces } = useSpaces();
