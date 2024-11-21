@@ -32,6 +32,7 @@ export async function fetchProfileViaWalletsTripleAddress(address: string): Prom
   }
 
   const profile = entities[0];
+  // @TODO revise logic for spaceId here
   const space = profile.nameTripleSpaces?.[0];
 
   return {

@@ -254,6 +254,7 @@ export default async function Layout({ children, params }: Props) {
       <EntityStoreProvider
         id={props.id}
         spaceId={props.spaceId}
+        initialSpaces={props.spaces}
         initialTriples={props.triples}
         initialRelations={props.relationsOut}
       >
@@ -316,6 +317,7 @@ const getData = async (spaceId: string) => {
     redirect(`/space/${spaceId}/entities`);
   }
 
+  const spaces = entity?.spaces ?? [];
   const blockIds = entity?.relationsOut
     .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
     ?.map(r => r.toEntity.id);
@@ -329,6 +331,7 @@ const getData = async (spaceId: string) => {
     name: entity.name,
     description: Entities.description(entity.triples),
     spaceId,
+    spaces,
 
     blockRelations: entity.relationsOut,
     blocks,

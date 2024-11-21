@@ -84,6 +84,7 @@ export default async function ProfileLayout({ children, params }: Props) {
       <EntityStoreProvider
         id={entityId}
         spaceId={params.id}
+        initialSpaces={profile.spaces}
         initialTriples={profile.triples}
         initialRelations={profile.relationsOut}
       >
@@ -138,6 +139,7 @@ async function getProfilePage(entityId: string): Promise<
       id: EntityId(entityId),
       name: null,
       nameTripleSpaces: [],
+      spaces: [],
       avatarUrl: null,
       coverUrl: null,
       triples: [],

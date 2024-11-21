@@ -5,13 +5,27 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { Entity } from '~/core/io/dto/entities';
+import { SpaceId } from '~/core/types';
 
 import { EntityDto } from '../dto/entities';
 import { SubstreamEntity } from '../schema';
-import { versionFragment } from './fragments';
+import { getVersionFragment, versionFragment } from './fragments';
 import { graphql } from './graphql';
 
-function getFetchEntityQuery(id: string) {
+function getFetchEntityQuery(id: string, spaceId?: SpaceId) {
+  if (spaceId) {
+    return `query {
+      entity(id: ${JSON.stringify(id)}) {
+        id
+        currentVersion {
+          version {
+            ${getVersionFragment(spaceId)}
+          }
+        }
+      }
+    }`;
+  }
+
   return `query {
     entity(id: ${JSON.stringify(id)}) {
       id
@@ -25,6 +39,7 @@ function getFetchEntityQuery(id: string) {
 }
 
 export interface FetchEntityOptions {
+  spaceId?: SpaceId;
   id: string;
   signal?: AbortController['signal'];
 }
@@ -39,7 +54,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchEntityQuery(options.id),
+    query: getFetchEntityQuery(options.id, options.spaceId),
     signal: options.signal,
   });
 

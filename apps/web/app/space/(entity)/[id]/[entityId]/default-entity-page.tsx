@@ -49,6 +49,7 @@ export default async function DefaultEntityPage({
     <EntityStoreProvider
       id={props.id}
       spaceId={props.spaceId}
+      initialSpaces={props.spaces}
       initialTriples={props.triples}
       initialRelations={props.relationsOut}
     >
@@ -84,8 +85,9 @@ export default async function DefaultEntityPage({
 }
 
 const getData = async (spaceId: string, entityId: string) => {
-  const entity = await Subgraph.fetchEntity({ id: entityId });
+  const entity = await Subgraph.fetchEntity({ spaceId, id: entityId });
   const nameTripleSpace = entity?.nameTripleSpaces?.[0];
+  const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && nameTripleSpace) {
@@ -103,7 +105,9 @@ const getData = async (spaceId: string, entityId: string) => {
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
   // the space for the entity we are rendering, so we need to redirect to the correct space.
   if (nameTripleSpace) {
-    if (spaceId !== nameTripleSpace) {
+    const spaceIdInNameTripleSpaces = entity.nameTripleSpaces.includes(spaceId);
+
+    if (spaceIdInNameTripleSpaces) {
       console.log(
         `Redirecting from incorrect space ${spaceId} to correct space ${nameTripleSpace} for entity ${entityId}`
       );
@@ -126,6 +130,7 @@ const getData = async (spaceId: string, entityId: string) => {
     name: entity?.name ?? null,
     description: Entities.description(entity?.triples ?? []),
     spaceId,
+    spaces,
     serverAvatarUrl,
     serverCoverUrl,
     relationsOut: entity?.relationsOut ?? [],

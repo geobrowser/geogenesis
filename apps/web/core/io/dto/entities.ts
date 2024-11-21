@@ -11,6 +11,7 @@ export type Entity = {
   name: string | null;
   description: string | null;
   nameTripleSpaces: string[];
+  spaces: string[];
   types: { id: EntityId; name: string | null }[];
   relationsOut: Relation[];
   triples: Triple[];
@@ -33,6 +34,7 @@ export function EntityDto(substreamEntity: SubstreamEntity): Entity {
     name: entity.name,
     description: Entities.description(triples),
     nameTripleSpaces: nameTriples.map(t => t.space),
+    spaces: entity.versionSpaces.nodes.map(node => node.spaceId),
     types: entityTypes,
     relationsOut: entity.relationsByFromVersionId.nodes.map(t => {
       const toEntityTriples = t.toVersion.triples.nodes.map(TripleDto);

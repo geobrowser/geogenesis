@@ -62,7 +62,10 @@ export function useTableBlock() {
   const [pageNumber, setPageNumber] = React.useState(0);
   const { upsert } = useWriteOps();
 
-  const blockEntity = useEntity(React.useMemo(() => EntityId(entityId), [entityId]));
+  const blockEntity = useEntity({
+    spaceId,
+    id: React.useMemo(() => EntityId(entityId), [entityId]),
+  });
 
   const source: Source = React.useMemo(() => {
     return getSource(blockEntity.id, blockEntity.relationsOut, SpaceId(spaceId));

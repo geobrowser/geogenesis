@@ -60,6 +60,7 @@ export function SpaceMetadataDto(spaceId: string, metadata: SubstreamEntity | un
         triples: [],
         types: [],
         nameTripleSpaces: [],
+        spaces: [],
         relationsOut: [],
       };
 

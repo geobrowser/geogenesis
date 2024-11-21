@@ -15,7 +15,7 @@ import { fetchEntity } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
 import { store } from '../state/jotai-store';
-import { Relation, Schema, Triple, TripleWithEntityValue, ValueTypeId } from '../types';
+import { Relation, Schema, SpaceId, Triple, TripleWithEntityValue, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
 import { getTriples, useTriples } from './triples';
@@ -23,7 +23,15 @@ import { localOpsAtom, localRelationsAtom } from './write';
 
 export type EntityWithSchema = Entity & { schema: Schema[] };
 
-export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relations: Relation[] }): EntityWithSchema {
+type UseEntityOptions = {
+  spaceId?: SpaceId;
+  id: EntityId;
+  initialData?: { spaces: SpaceId[]; triples: Triple[]; relations: Relation[] };
+};
+
+export function useEntity(options: UseEntityOptions): EntityWithSchema {
+  const { spaceId, id, initialData } = options;
+
   // If the caller passes in a set of data we use that for merging. If not,
   // we fetch the entity from the server and merge it with the local state.
   const { data: initialOrRemoteEntity } = useQuery({
@@ -34,9 +42,10 @@ export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relat
         return initialData;
       }
 
-      const entity = await fetchEntity({ id, signal });
+      const entity = await fetchEntity({ spaceId, id, signal });
 
       return {
+        spaces: entity?.spaces ?? [],
         triples: entity?.triples ?? [],
         relations: entity?.relationsOut ?? [],
       };
@@ -71,6 +80,10 @@ export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relat
     return triples.filter(t => t.attributeId === SYSTEM_IDS.NAME).map(t => t.space);
   }, [triples]);
 
+  const spaces = React.useMemo(() => {
+    return initialOrRemoteEntity?.spaces ?? [];
+  }, [initialOrRemoteEntity?.spaces]);
+
   const description = React.useMemo(() => {
     return Entities.description(triples);
   }, [triples]);
@@ -91,6 +104,7 @@ export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relat
     id,
     name,
     nameTripleSpaces,
+    spaces,
     description,
     // @TODO: Spaces with metadata
     schema: schema ?? [],
@@ -134,6 +148,8 @@ export function mergeEntity({ id, mergeWith }: MergeEntityArgs): EntityWithSchem
     id: EntityId(id),
     name,
     nameTripleSpaces: mergedTriples.filter(t => t.attributeId === SYSTEM_IDS.NAME).map(t => t.space),
+    // @TODO add real merging logic
+    spaces: mergeWith?.spaces ?? [],
     description,
     types,
     triples: mergedTriples,

@@ -223,6 +223,13 @@ export const SubstreamEntity = Schema.Struct({
       id: Schema.String.pipe(Schema.fromBrand(EntityId)),
       name: Schema.NullOr(Schema.String),
       description: Schema.NullOr(Schema.String),
+      versionSpaces: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.Struct({
+            spaceId: Schema.String,
+          })
+        ),
+      }),
       versionTypes: SubstreamVersionTypes,
       relationsByFromVersionId: Schema.Struct({
         nodes: Schema.Array(SubstreamRelation),
@@ -379,6 +386,13 @@ export const SubstreamVersion = Schema.Struct({
   }),
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
+  versionSpaces: Schema.Struct({
+    nodes: Schema.Array(
+      Schema.Struct({
+        spaceId: Schema.String,
+      })
+    ),
+  }),
   versionTypes: SubstreamVersionTypes,
   relationsByFromVersionId: Schema.Struct({
     nodes: Schema.Array(SubstreamRelation),
