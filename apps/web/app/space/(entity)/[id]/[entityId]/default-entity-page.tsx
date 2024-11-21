@@ -107,7 +107,7 @@ const getData = async (spaceId: string, entityId: string) => {
   if (nameTripleSpace) {
     const spaceIdInNameTripleSpaces = entity.nameTripleSpaces.includes(spaceId);
 
-    if (spaceIdInNameTripleSpaces) {
+    if (!spaceIdInNameTripleSpaces) {
       console.log(
         `Redirecting from incorrect space ${spaceId} to correct space ${nameTripleSpace} for entity ${entityId}`
       );
