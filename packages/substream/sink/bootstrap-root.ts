@@ -144,7 +144,7 @@ const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
     space: SPACE_ID,
     triple: {
       attribute: SYSTEM_IDS.NAME,
-      entity: entityId!,
+      entity: entityId,
       value: {
         type: 'TEXT',
         value: name!,
@@ -174,6 +174,32 @@ const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attribu
     space: SPACE_ID,
   }));
 });
+
+const spaceType = createRelationship({
+  fromId: SPACE_ID,
+  toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+  relationTypeId: SYSTEM_IDS.TYPES,
+})
+  .map((o): Op => {
+    return {
+      ...o,
+      space: SPACE_ID,
+    };
+  })
+  .concat([
+    {
+      space: SPACE_ID,
+      type: 'SET_TRIPLE',
+      triple: {
+        attribute: SYSTEM_IDS.NAME,
+        entity: SPACE_ID,
+        value: {
+          type: 'TEXT',
+          value: 'Root',
+        },
+      },
+    },
+  ]);
 
 const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
   return createRelationship({
@@ -212,9 +238,9 @@ const editProposal: EditProposal = {
   endTime: ROOT_SPACE_CREATED_AT.toString(),
   startTime: ROOT_SPACE_CREATED_AT.toString(),
   metadataUri: 'bootstrapped-so-no-uri',
-  ops: [...nameOps, ...attributeOps, ...attributeValueTypeOps, ...typeOps, ...typeSchemaOps],
+  ops: [...nameOps, ...attributeOps, ...attributeValueTypeOps, ...typeOps, ...spaceType, ...typeSchemaOps],
   pluginAddress: MAIN_VOTING_ADDRESS,
-  space: SYSTEM_IDS.ROOT_SPACE_ID,
+  space: SPACE_ID,
 };
 
 const INITIAL_BLOCK = {
