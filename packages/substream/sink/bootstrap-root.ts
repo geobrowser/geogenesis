@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createRelationship, encodeBase58 } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
@@ -10,7 +10,7 @@ import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
 import type { Op } from './types';
 
-const SPACE_ID = 'ab7d4b9e02f840dab9746d352acb0ac6';
+const SPACE_ID = encodeBase58('ab7d4b9e02f840dab9746d352acb0ac6');
 const DAO_ADDRESS = '0x9e2342C55080f2fCb6163c739a88c4F2915163C4';
 const SPACE_ADDRESS = '0x7a260AC2D569994AA22a259B19763c9F681Ff84c';
 const MAIN_VOTING_ADDRESS = '0x379408c230817DC7aA36033BEDC05DCBAcE7DF50';

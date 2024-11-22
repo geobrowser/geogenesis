@@ -16,7 +16,7 @@ export function createVersionId({ proposalId, entityId }: { proposalId: string; 
  * the new one that they're creating.
  */
 export function createSpaceId({ network, address }: { network: string; address: string }) {
-  return createIdFromUniqueString(`${network}:${address}`);
+  return encodeBase58(createIdFromUniqueString(`${network}:${address}`));
 }
 
 export function createIdFromUniqueString(text: string) {
