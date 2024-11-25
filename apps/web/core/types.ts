@@ -7,13 +7,13 @@ export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export type ValueType =
   | 'TEXT'
-  | 'URI'
+  | 'URL'
   | 'TIME'
   // | GEO_LOCATION
   | 'CHECKBOX';
 
 export type Value = {
-  type: 'TEXT' | 'URI' | 'TIME' | 'CHECKBOX';
+  type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX';
   value: string;
 };
 
@@ -109,7 +109,7 @@ export type RenderableProperty =
 // The types of renderables don't map 1:1 to the triple value types. We might
 // also render relations with a specific type, e.g., an Image entity or a
 // Person entity, etc.
-export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URI' | 'TIME' | 'IMAGE' | 'CHECKBOX';
+export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URL' | 'TIME' | 'IMAGE' | 'CHECKBOX';
 
 export type ReviewState =
   | 'idle'

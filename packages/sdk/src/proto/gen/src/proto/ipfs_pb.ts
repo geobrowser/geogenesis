@@ -52,40 +52,34 @@ export enum ValueType {
   NUMBER = 2,
 
   /**
-   * @generated from enum value: ENTITY = 3;
+   * @generated from enum value: CHECKBOX = 3;
    */
-  ENTITY = 3,
+  CHECKBOX = 3,
 
   /**
-   * @generated from enum value: URI = 4;
+   * @generated from enum value: URL = 4;
    */
-  URI = 4,
+  URL = 4,
 
   /**
-   * @generated from enum value: CHECKBOX = 5;
+   * @generated from enum value: TIME = 5;
    */
-  CHECKBOX = 5,
+  TIME = 5,
 
   /**
-   * @generated from enum value: TIME = 6;
+   * @generated from enum value: POINT = 6;
    */
-  TIME = 6,
-
-  /**
-   * @generated from enum value: GEO_LOCATION = 7;
-   */
-  GEO_LOCATION = 7,
+  POINT = 6,
 }
 // Retrieve enum metadata with: proto3.getEnumType(ValueType)
 proto3.util.setEnumType(ValueType, "ValueType", [
   { no: 0, name: "UNKNOWN" },
   { no: 1, name: "TEXT" },
   { no: 2, name: "NUMBER" },
-  { no: 3, name: "ENTITY" },
-  { no: 4, name: "URI" },
-  { no: 5, name: "CHECKBOX" },
-  { no: 6, name: "TIME" },
-  { no: 7, name: "GEO_LOCATION" },
+  { no: 3, name: "CHECKBOX" },
+  { no: 4, name: "URL" },
+  { no: 5, name: "TIME" },
+  { no: 6, name: "POINT" },
 ]);
 
 /**
@@ -103,51 +97,57 @@ export enum ActionType {
   ADD_EDIT = 1,
 
   /**
-   * @generated from enum value: IMPORT_SPACE = 2;
+   * @generated from enum value: ADD_SUBSPACE = 2;
    */
-  IMPORT_SPACE = 2,
+  ADD_SUBSPACE = 2,
 
   /**
-   * @generated from enum value: ADD_SUBSPACE = 3;
+   * @generated from enum value: REMOVE_SUBSPACE = 3;
    */
-  ADD_SUBSPACE = 3,
+  REMOVE_SUBSPACE = 3,
 
   /**
-   * @generated from enum value: REMOVE_SUBSPACE = 4;
+   * @generated from enum value: IMPORT_SPACE = 4;
    */
-  REMOVE_SUBSPACE = 4,
+  IMPORT_SPACE = 4,
 
   /**
-   * @generated from enum value: ADD_EDITOR = 5;
+   * @generated from enum value: ARCHIVE_SPACE = 5;
    */
-  ADD_EDITOR = 5,
+  ARCHIVE_SPACE = 5,
 
   /**
-   * @generated from enum value: REMOVE_EDITOR = 6;
+   * @generated from enum value: ADD_EDITOR = 6;
    */
-  REMOVE_EDITOR = 6,
+  ADD_EDITOR = 6,
 
   /**
-   * @generated from enum value: ADD_MEMBER = 7;
+   * @generated from enum value: REMOVE_EDITOR = 7;
    */
-  ADD_MEMBER = 7,
+  REMOVE_EDITOR = 7,
 
   /**
-   * @generated from enum value: REMOVE_MEMBER = 8;
+   * @generated from enum value: ADD_MEMBER = 8;
    */
-  REMOVE_MEMBER = 8,
+  ADD_MEMBER = 8,
+
+  /**
+   * @generated from enum value: REMOVE_MEMBER = 9;
+   */
+  REMOVE_MEMBER = 9,
 }
 // Retrieve enum metadata with: proto3.getEnumType(ActionType)
 proto3.util.setEnumType(ActionType, "ActionType", [
   { no: 0, name: "EMPTY" },
   { no: 1, name: "ADD_EDIT" },
-  { no: 2, name: "IMPORT_SPACE" },
-  { no: 3, name: "ADD_SUBSPACE" },
-  { no: 4, name: "REMOVE_SUBSPACE" },
-  { no: 5, name: "ADD_EDITOR" },
-  { no: 6, name: "REMOVE_EDITOR" },
-  { no: 7, name: "ADD_MEMBER" },
-  { no: 8, name: "REMOVE_MEMBER" },
+  { no: 2, name: "ADD_SUBSPACE" },
+  { no: 3, name: "REMOVE_SUBSPACE" },
+  { no: 4, name: "IMPORT_SPACE" },
+  { no: 5, name: "ARCHIVE_SPACE" },
+  { no: 6, name: "ADD_EDITOR" },
+  { no: 7, name: "REMOVE_EDITOR" },
+  { no: 8, name: "ADD_MEMBER" },
+  { no: 9, name: "REMOVE_MEMBER" },
 ]);
 
 /**
@@ -214,14 +214,14 @@ export class IpfsMetadata extends Message<IpfsMetadata> {
  */
 export class Edit extends Message<Edit> {
   /**
-   * @generated from field: ActionType type = 1;
-   */
-  type = ActionType.EMPTY;
-
-  /**
-   * @generated from field: string version = 2;
+   * @generated from field: string version = 1;
    */
   version = "";
+
+  /**
+   * @generated from field: ActionType type = 2;
+   */
+  type = ActionType.EMPTY;
 
   /**
    * @generated from field: string id = 3;
@@ -251,8 +251,8 @@ export class Edit extends Message<Edit> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "Edit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
     { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "ops", kind: "message", T: Op, repeated: true },
@@ -281,14 +281,14 @@ export class Edit extends Message<Edit> {
  */
 export class ImportEdit extends Message<ImportEdit> {
   /**
-   * @generated from field: ActionType type = 1;
-   */
-  type = ActionType.EMPTY;
-
-  /**
-   * @generated from field: string version = 2;
+   * @generated from field: string version = 1;
    */
   version = "";
+
+  /**
+   * @generated from field: ActionType type = 2;
+   */
+  type = ActionType.EMPTY;
 
   /**
    * @generated from field: string id = 3;
@@ -343,8 +343,8 @@ export class ImportEdit extends Message<ImportEdit> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "ImportEdit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
     { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "ops", kind: "message", T: Op, repeated: true },

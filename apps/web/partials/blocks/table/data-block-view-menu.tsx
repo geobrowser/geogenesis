@@ -129,7 +129,7 @@ const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriple,
           entityId,
           entityName,
           value: {
-            type: 'URI',
+            type: 'URL',
             value: GraphUrl.fromEntityId(view.id),
           },
         },

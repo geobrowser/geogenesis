@@ -14,7 +14,7 @@ export function fromEntityId(entityId: string, spaceId?: string): GraphUri {
   return uri
 }
 
-export function isGraphUrl(value: string): boolean {
+export function isGraphUrl(value: string): value is GraphUri {
   return value.startsWith('graph://')
 }
 

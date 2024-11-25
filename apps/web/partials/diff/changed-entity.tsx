@@ -418,7 +418,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           </div>
         );
       }
-      case 'URI': {
+      case 'URL': {
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
             <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">

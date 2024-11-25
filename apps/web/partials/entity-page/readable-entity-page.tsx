@@ -72,7 +72,7 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
                       />
                     );
                   }
-                  case 'URI': {
+                  case 'URL': {
                     return (
                       <WebUrlField
                         key={`uri-${renderable.attributeId}-${renderable.value}`}

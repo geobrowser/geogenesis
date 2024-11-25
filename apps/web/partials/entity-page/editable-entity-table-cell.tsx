@@ -198,7 +198,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             );
           case 'TIME':
             return <DateField key={renderable.attributeId} isEditing={true} value={renderable.value} />;
-          case 'URI':
+          case 'URL':
             return (
               <WebUrlField
                 key={renderable.attributeId}

@@ -75,7 +75,7 @@ function AttributeSearch({
         entityName: attributeName,
         value: {
           // @TODO: Should be a relationship
-          type: 'URI',
+          type: 'URL',
           value: result.id,
         },
       },

@@ -60,7 +60,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
       };
     case SYSTEM_IDS.WEB_URL:
       return {
-        type: 'URI',
+        type: 'URL',
         attributeId,
         attributeName,
         entityId,
