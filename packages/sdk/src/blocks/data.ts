@@ -30,18 +30,6 @@ export function make({ fromId, dataType, position }: { fromId: string, dataType:
     toId: getSourceTypeId(dataType)
   })
 
-  const textBlockMarkdownText = {
-    type: 'SET_TRIPLE',
-    triple: {
-      attribute: SYSTEM_IDS.NAME,
-      entity: newBlockId,
-      value: {
-        type: 'TEXT',
-        value: "New data block"
-      }
-    }
-  } as const
-
   const dataBlockRelation = createRelationship({
     fromId,
     relationTypeId: SYSTEM_IDS.BLOCKS,
@@ -49,5 +37,5 @@ export function make({ fromId, dataType, position }: { fromId: string, dataType:
     position
   })
 
-  return [textBlockMarkdownText, ...dataBlockType, ...dataBlockQueryType, ...dataBlockRelation]
+  return [...dataBlockType, ...dataBlockQueryType, ...dataBlockRelation]
 }

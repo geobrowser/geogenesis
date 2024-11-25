@@ -23,7 +23,7 @@ export function maybeEntityOpsToRelation(ops: Op[], entityId: string): RelationW
     t =>
       t.triple.attribute === SYSTEM_IDS.TYPES &&
       t.triple.value.type === 'URI' &&
-      t.triple.value.value === SYSTEM_IDS.RELATION_TYPE
+      GraphUrl.toEntityId(t.triple.value.value) === SYSTEM_IDS.RELATION_TYPE
   );
   const to = setTriples.find(
     t => t.triple.attribute === SYSTEM_IDS.RELATION_TO_ATTRIBUTE && t.triple.value.type === 'URI'
