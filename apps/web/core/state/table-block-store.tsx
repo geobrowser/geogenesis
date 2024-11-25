@@ -155,7 +155,7 @@ export function useTableBlock() {
         skip: pageNumber * PAGE_SIZE,
       };
 
-      if (source.type === 'SPACES') {
+      if (source.type === 'SPACES' || source.type === 'GEO') {
         return await mergeTableEntities({ options: params, source });
       }
 
