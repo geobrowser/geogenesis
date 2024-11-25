@@ -22,17 +22,18 @@ export function maybeEntityOpsToRelation(ops: Op[], entityId: string): RelationW
   const isRelation = setTriples.find(
     t =>
       t.triple.attribute === SYSTEM_IDS.TYPES &&
-      t.triple.value.type === 'URI' &&
+      t.triple.value.type.toString() === 'URL' &&
+      GraphUrl.isGraphUrl(t.triple.value.value) &&
       GraphUrl.toEntityId(t.triple.value.value) === SYSTEM_IDS.RELATION_TYPE
   );
   const to = setTriples.find(
-    t => t.triple.attribute === SYSTEM_IDS.RELATION_TO_ATTRIBUTE && t.triple.value.type === 'URI'
+    t => t.triple.attribute === SYSTEM_IDS.RELATION_TO_ATTRIBUTE && t.triple.value.type === 'URL'
   );
   const from = setTriples.find(
-    t => t.triple.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE && t.triple.value.type === 'URI'
+    t => t.triple.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE && t.triple.value.type === 'URL'
   );
   const type = setTriples.find(
-    t => t.triple.attribute === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE && t.triple.value.type === 'URI'
+    t => t.triple.attribute === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE && t.triple.value.type === 'URL'
   );
   const index = setTriples.find(
     t => t.triple.attribute === SYSTEM_IDS.RELATION_INDEX && t.triple.value.type === 'TEXT'
@@ -46,9 +47,11 @@ export function maybeEntityOpsToRelation(ops: Op[], entityId: string): RelationW
     return null;
   }
 
-  const toId = to ? GraphUrl.toEntityId(to.triple.value.value) : null;
-  const fromId = from ? GraphUrl.toEntityId(from.triple.value.value) : null;
-  const typeId = type ? GraphUrl.toEntityId(type.triple.value.value) : null;
+  const toId = to && GraphUrl.isGraphUrl(to.triple.value.value) ? GraphUrl.toEntityId(to.triple.value.value) : null;
+  const fromId =
+    from && GraphUrl.isGraphUrl(from.triple.value.value) ? GraphUrl.toEntityId(from.triple.value.value) : null;
+  const typeId =
+    type && GraphUrl.isGraphUrl(type.triple.value.value) ? GraphUrl.toEntityId(type.triple.value.value) : null;
 
   if (!toId || !fromId || !typeId) {
     return null;

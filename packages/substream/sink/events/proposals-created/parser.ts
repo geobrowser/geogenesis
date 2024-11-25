@@ -133,25 +133,15 @@ const ZodEditSetTriplePayload = z.object({
   entity: z.string(),
   attribute: z.string(),
 
-  /**
-   * TEXT = 1;
-   * NUMBER = 2;
-   * ENTITY = 3;
-   * URI = 4;
-   * CHECKBOX = 5;
-   * TIME = 6;
-   * GEO_LOCATION = 7;
-   */
   value: z.object({
     value: z.string(),
     type: z.union([
       z.literal('TEXT'),
       z.literal('NUMBER'),
-      z.literal('ENTITY'),
-      z.literal('URI'),
+      z.literal('URL'),
       z.literal('CHECKBOX'),
       z.literal('TIME'),
-      z.literal('GEO_LOCATION'),
+      z.literal('POINT'),
     ]),
   }),
 });
@@ -203,13 +193,14 @@ const ZodImportEditSetTriplePayload = z.object({
   value: z.object({
     value: z.string(),
     /**
-     * TEXT = 1;
-     * NUMBER = 2;
-     * ENTITY = 3;
-     * URI = 4;
-     * CHECKBOX = 5;
-     * TIME = 6;
-     * GEO_LOCATION = 7;
+        enum ValueType {
+        TEXT = 1;
+        NUMBER = 2;
+        CHECKBOX = 3;
+        URL = 4;
+        TIME = 5;
+        POINT = 6;
+        }
      */
     type: z.number().transform(t => {
       switch (t) {
@@ -218,15 +209,13 @@ const ZodImportEditSetTriplePayload = z.object({
         case 2:
           return 'NUMBER';
         case 3:
-          return 'ENTITY';
+          return 'CHECKBOX';
         case 4:
           return 'URI';
         case 5:
-          return 'CHECKBOX';
-        case 6:
           return 'TIME';
-        case 7:
-          return 'GEO_LOCATION';
+        case 6:
+          return 'POINT';
         default:
           return 'TEXT';
       }

@@ -15,7 +15,7 @@ type CreateRelationTypeOp = {
     attribute: typeof SYSTEM_IDS.TYPES;
     entity: string;
     value: {
-      type: 'URI';
+      type: 'URL';
       value: `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`;
     };
   };
@@ -27,7 +27,7 @@ type CreateRelationTypeOfOp = {
     attribute: typeof SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE;
     entity: string;
     value: {
-      type: 'URI';
+      type: 'URL';
       value: string;
     };
   };
@@ -39,7 +39,7 @@ type CreateRelationFromOp = {
     attribute: typeof SYSTEM_IDS.RELATION_FROM_ATTRIBUTE;
     entity: string;
     value: {
-      type: 'URI';
+      type: 'URL';
       value: string;
     };
   };
@@ -51,7 +51,7 @@ type CreateRelationToOp = {
     attribute: typeof SYSTEM_IDS.RELATION_TO_ATTRIBUTE;
     entity: string;
     value: {
-      type: 'URI';
+      type: 'URL';
       value: string;
     };
   };
@@ -88,7 +88,7 @@ export function createRelationship(
         attribute: SYSTEM_IDS.TYPES,
         entity: newEntityId,
         value: {
-          type: 'URI',
+          type: 'URL',
           value: toGraphUri(SYSTEM_IDS.RELATION_TYPE) as `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`,
         },
       }
@@ -100,7 +100,7 @@ export function createRelationship(
         attribute: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
         entity: newEntityId,
         value: {
-          type: 'URI',
+          type: 'URL',
           value: toGraphUri(args.fromId),
         },
       }
@@ -112,7 +112,7 @@ export function createRelationship(
         attribute: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
         entity: newEntityId,
         value: {
-          type: 'URI',
+          type: 'URL',
           value: toGraphUri(args.toId),
         },
       }
@@ -134,7 +134,7 @@ export function createRelationship(
         attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
         entity: newEntityId,
         value: {
-          type: 'URI',
+          type: 'URL',
           value: toGraphUri(args.relationTypeId),
         }
       },
