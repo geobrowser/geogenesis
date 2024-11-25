@@ -2,10 +2,10 @@ import { createRelationship } from "../collections";
 import { createGeoId } from "../id";
 import { SYSTEM_IDS } from "../system-ids";
 
-type DataBlockType = "QUERY" | "COLLECTION" | "GEO"
+type DataBlockSourceType = "QUERY" | "COLLECTION" | "GEO"
 
-function getSourceTypeId(dataType: DataBlockType) {
-  switch(dataType) {
+function getSourceTypeId(sourceType: DataBlockSourceType) {
+  switch(sourceType) {
     case 'COLLECTION':
       return SYSTEM_IDS.COLLECTION_DATA_SOURCE
     case 'GEO':
@@ -15,7 +15,7 @@ function getSourceTypeId(dataType: DataBlockType) {
   }
 }
 
-export function make({ fromId, dataType, position }: { fromId: string, dataType: DataBlockType, position?: string }) {
+export function make({ fromId, sourceType, position }: { fromId: string, sourceType: DataBlockSourceType, position?: string }) {
   const newBlockId = createGeoId()
 
   const dataBlockType = createRelationship({
@@ -24,10 +24,10 @@ export function make({ fromId, dataType, position }: { fromId: string, dataType:
     toId: SYSTEM_IDS.DATA_BLOCK
   })
 
-  const dataBlockQueryType = createRelationship({
+  const dataBlockSourceType = createRelationship({
     fromId: newBlockId,
     relationTypeId: SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE,
-    toId: getSourceTypeId(dataType)
+    toId: getSourceTypeId(sourceType)
   })
 
   const dataBlockRelation = createRelationship({
@@ -37,5 +37,5 @@ export function make({ fromId, dataType, position }: { fromId: string, dataType:
     position
   })
 
-  return [...dataBlockType, ...dataBlockQueryType, ...dataBlockRelation]
+  return [...dataBlockType, ...dataBlockSourceType, ...dataBlockRelation]
 }

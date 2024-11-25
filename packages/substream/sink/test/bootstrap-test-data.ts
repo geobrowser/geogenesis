@@ -49,7 +49,7 @@ const testEntityTypes: Op[] = [SYSTEM_IDS.PERSON_TYPE].flatMap(typeId => {
 
 const testEntityBlocks: Op[] = [
   ...TextBlock.make({ fromId: TEST_ENTITY_ID, text: 'Test entity text block' }),
-  ...DataBlock.make({ fromId: TEST_ENTITY_ID, dataType: 'GEO', position: 'a1' }),
+  ...DataBlock.make({ fromId: TEST_ENTITY_ID, sourceType: 'GEO', position: 'a1' }),
 ].map(o => {
   return {
     ...o,
