@@ -1,4 +1,5 @@
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants';
+import { GraphUrl } from '../graph-scheme';
 import { createGeoId } from '../id';
 import { SYSTEM_IDS } from '../system-ids';
 
@@ -89,7 +90,7 @@ export function createRelationship(
         entity: newEntityId,
         value: {
           type: 'URL',
-          value: toGraphUri(SYSTEM_IDS.RELATION_TYPE) as `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`,
+          value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE) as `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`,
         },
       }
     },
@@ -101,7 +102,7 @@ export function createRelationship(
         entity: newEntityId,
         value: {
           type: 'URL',
-          value: toGraphUri(args.fromId),
+          value: GraphUrl.fromEntityId(args.fromId),
         },
       }
     },
@@ -113,7 +114,7 @@ export function createRelationship(
         entity: newEntityId,
         value: {
           type: 'URL',
-          value: toGraphUri(args.toId),
+          value: GraphUrl.fromEntityId(args.toId),
         },
       }
     },
@@ -135,13 +136,9 @@ export function createRelationship(
         entity: newEntityId,
         value: {
           type: 'URL',
-          value: toGraphUri(args.relationTypeId),
+          value: GraphUrl.fromEntityId(args.relationTypeId),
         }
       },
     },
   ] as const;
-}
-
-function toGraphUri(entityId: string) {
-  return `graph://${entityId}` as const
 }
