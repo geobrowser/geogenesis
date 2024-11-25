@@ -40,7 +40,7 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
           );
         }
 
-        if (renderable.type === 'URI') {
+        if (renderable.type === 'URL') {
           return <WebUrlField variant="tableCell" isEditing={false} key={renderable.value} value={renderable.value} />;
         }
 

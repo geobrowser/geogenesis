@@ -82,7 +82,7 @@ export function EntityTextAutocomplete({
             entityName: query,
             attributeName: 'Types',
             value: {
-              type: 'URI',
+              type: 'URL',
               value: GraphUrl.fromEntityId(type.typeId),
             },
           },

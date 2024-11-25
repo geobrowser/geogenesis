@@ -87,7 +87,7 @@ export function upsertSourceSpaceOnCollectionItem({
       entityId: collectionItemId,
       entityName: null,
       value: {
-        type: 'URI',
+        type: 'URL',
         value: GraphUrl.fromEntityId(toId, sourceSpaceId),
       },
     },

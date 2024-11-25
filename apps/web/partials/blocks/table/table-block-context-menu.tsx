@@ -395,7 +395,7 @@ const ToggleColumn = ({
           attributeId,
           attributeName,
           value: {
-            type: 'URI',
+            type: 'URL',
             value: GraphUrl.fromEntityId(id),
           },
         },

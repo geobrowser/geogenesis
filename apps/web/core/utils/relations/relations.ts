@@ -30,7 +30,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityId: entityId,
       entityName: null,
       value: {
-        type: 'URI',
+        type: 'URL',
         value: typeOp.triple.value.value,
       },
     },
@@ -41,7 +41,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityId: entityId,
       entityName: null,
       value: {
-        type: 'URI',
+        type: 'URL',
         value: fromOp.triple.value.value,
       },
     },
@@ -52,7 +52,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityId: entityId,
       entityName: null,
       value: {
-        type: 'URI',
+        type: 'URL',
         value: toOp.triple.value.value,
       },
     },
@@ -74,7 +74,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityId: entityId,
       entityName: null,
       value: {
-        type: 'URI',
+        type: 'URL',
         value: typeOfOp.triple.value.value,
       },
     },

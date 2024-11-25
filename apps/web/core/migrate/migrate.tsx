@@ -193,7 +193,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
           // delete otherwise
           case 'TEXT': {
             switch (newValueType) {
-              case 'URI': {
+              case 'URL': {
                 const maybeMigratedTriple = migrateStringTripleToUrlTriple(
                   // Should be safe to cast here since we've type narrowed with the above
                   // switch statements.
@@ -250,7 +250,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
 
           // can migrate to string
           // delete otherwise
-          case 'URI': {
+          case 'URL': {
             if (newValueType === 'TEXT') {
               const newTriple = migrateUrlTripleToStringTriple(
                 // Should be safe to cast here since we've type narrowed with the above

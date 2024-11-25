@@ -107,7 +107,7 @@ export function EntityAutocompleteDialog({ onDone, selectedIds, filterByTypes, s
             entityName: autocomplete.query,
             attributeName: 'Types',
             value: {
-              type: 'URI',
+              type: 'URL',
               value: GraphUrl.fromEntityId(type.typeId),
             },
           },

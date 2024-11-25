@@ -63,17 +63,16 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
   }
 
   if (spaceAvatarUri) {
-    const [typeOp, srcOp] = createImageEntityOps(spaceAvatarUri);
+    const imageOps = createImageEntityOps(spaceAvatarUri);
 
     // Creates the image entity
-    ops.push(typeOp);
-    ops.push(srcOp);
+    ops.push(...imageOps);
 
     // Creates the relation pointing to the image entity
     ops.push(
       ...createRelationship({
         fromId: newEntityId,
-        toId: typeOp.triple.entity, // Set the avatar relation to point to the entity id of the new entity
+        toId: imageOps[0].triple.entity, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
       })
     );

@@ -211,7 +211,7 @@ const ZodImportEditSetTriplePayload = z.object({
         case 3:
           return 'CHECKBOX';
         case 4:
-          return 'URI';
+          return 'URL';
         case 5:
           return 'TIME';
         case 6:

@@ -84,12 +84,12 @@ type SubstreamTimeValue = Schema.Schema.Type<typeof SubstreamTimeValue>;
 /**
  * Url value
  */
-const SubstreamUriValue = Schema.Struct({
-  valueType: Schema.Literal('URI'),
+const SubstreamUrlValue = Schema.Struct({
+  valueType: Schema.Literal('URL'),
   textValue: Schema.String,
 });
 
-type SubstreamUriValue = Schema.Schema.Type<typeof SubstreamUriValue>;
+type SubstreamUrlValue = Schema.Schema.Type<typeof SubstreamUrlValue>;
 
 const SubstreamCheckboxValue = Schema.Struct({
   valueType: Schema.Literal('CHECKBOX'),
@@ -98,7 +98,7 @@ const SubstreamCheckboxValue = Schema.Struct({
 
 type SubstreamCheckboxValue = Schema.Schema.Type<typeof SubstreamCheckboxValue>;
 
-const SubstreamValue = Schema.Union(SubstreamTextValue, SubstreamTimeValue, SubstreamUriValue, SubstreamCheckboxValue);
+const SubstreamValue = Schema.Union(SubstreamTextValue, SubstreamTimeValue, SubstreamUrlValue, SubstreamCheckboxValue);
 type SubstreamValue = Schema.Schema.Type<typeof SubstreamValue>;
 
 const SpaceGovernanceType = Schema.Union(Schema.Literal('PUBLIC'), Schema.Literal('PERSONAL'));

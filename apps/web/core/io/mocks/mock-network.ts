@@ -1,10 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Triple, TripleWithDateValue, TripleWithStringValue, TripleWithUrlValue, Value } from '~/core/types';
-
-import { Space } from '../dto/spaces';
-import { Address, EntityId, SpaceId } from '../schema';
 
 export const makeStubTriple = (name: string, entityId?: string): Triple => {
   return {
@@ -76,7 +72,7 @@ export const makeStubTripleWithUrlValue = (value: string): TripleWithUrlValue =>
     attributeId: `attributeId~${value}`,
     attributeName: `attributeName~${value}`,
     value: {
-      type: 'URI',
+      type: 'URL',
       value,
     },
     space: `space~${value}`,

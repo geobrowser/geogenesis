@@ -44,7 +44,7 @@ type GenerateProps = {
   space: Space;
 };
 
-export type SupportedValueType = 'TEXT' | 'TIME' | 'URI' | 'ENTITY';
+export type SupportedValueType = 'TEXT' | 'TIME' | 'URL' | 'ENTITY';
 
 export type UnsupportedValueType = 'number' | 'image';
 

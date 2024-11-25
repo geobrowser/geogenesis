@@ -20,7 +20,7 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
     case SYSTEM_IDS.DATE:
       return 'TIME';
     case SYSTEM_IDS.WEB_URL:
-      return 'URI';
+      return 'URL';
     // @TODO(relations): Add relation support
     // @TODO(relations): Add image support
     // Currently we don't have a value type id for relations
@@ -133,10 +133,10 @@ export const getRenderableTypeSelectorOptions = (
           <p>URI</p>
         </div>
       ),
-      value: 'URI' as const,
+      value: 'URL' as const,
       onClick: () =>
         onSelect({
-          type: 'URI',
+          type: 'URL',
           entityId: renderable.entityId,
           entityName: renderable.entityName,
           attributeId: renderable.attributeId,

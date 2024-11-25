@@ -150,7 +150,7 @@ const listener =
               // Relations are the only entity in the system that we expect
               // to use an entity value type in a triple
               value: {
-                type: 'URI',
+                type: 'URL',
                 value: GraphUrl.fromEntityId(attributeId),
               },
             },

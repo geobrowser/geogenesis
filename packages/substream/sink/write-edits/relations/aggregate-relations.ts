@@ -296,7 +296,7 @@ function getRelationFromOps(
   const isRelation = otherTriples.find(
     t =>
       t.triple.attribute === SYSTEM_IDS.TYPES &&
-      t.triple.value.type.toString() === 'URI' &&
+      t.triple.value.type.toString() === 'URL' &&
       GraphUrl.isGraphUrl(t.triple.value.value) &&
       GraphUrl.toEntityId(t.triple.value.value) === SYSTEM_IDS.RELATION_TYPE
   );
