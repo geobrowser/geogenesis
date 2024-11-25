@@ -9,7 +9,9 @@ export const valueTypeIds: Record<TripleValueType, ValueTypeId> = {
   CHECKBOX: SYSTEM_IDS.CHECKBOX,
 };
 
-export const valueTypes: Record<ValueTypeId, TripleValueType | 'RELATION'> = {
+export type FilterableValueType = TripleValueType | 'RELATION';
+
+export const valueTypes: Record<ValueTypeId, FilterableValueType> = {
   [SYSTEM_IDS.TEXT]: 'TEXT',
   [SYSTEM_IDS.RELATION]: 'RELATION',
   [SYSTEM_IDS.DATE]: 'TIME',

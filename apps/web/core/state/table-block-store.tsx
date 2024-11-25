@@ -21,10 +21,11 @@ import { StoredRelation } from '../database/types';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { Schema, ValueType as TripleValueType } from '../types';
+import { Schema } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
+import { FilterableValueType } from '../value-types';
 import { getSource, removeSources, upsertSource } from './editor/sources';
 import { Source } from './editor/types';
 
@@ -52,7 +53,7 @@ const queryKeys = {
 
 export interface TableBlockFilter {
   columnId: string;
-  valueType: TripleValueType | 'RELATION';
+  valueType: FilterableValueType;
   value: string;
   valueName: string | null;
 }
