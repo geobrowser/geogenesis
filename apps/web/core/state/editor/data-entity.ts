@@ -20,8 +20,6 @@ import { makeRelationForSourceType } from './sources';
  * @returns an array of {@link StoreRelation} representing the data entity relations.
  */
 export function makeInitialDataEntityRelations(blockId: EntityId): [StoreRelation, StoreRelation] {
-  // @TODO: Make the source of the collection the block id instead of this new collection id
-
   return [
     // Create relation for the source type, e.g., Spaces, Collection, Geo, etc.
     makeRelationForSourceType('COLLECTION', blockId),

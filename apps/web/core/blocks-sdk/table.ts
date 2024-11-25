@@ -1,6 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
-
-import { ValueType as TripleValueType } from '~/core/types';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { mergeEntityAsync } from '../database/entities';
 import { useWriteOps } from '../database/write';
@@ -164,14 +162,14 @@ export async function createFiltersFromGraphQLStringAndSource(
 ): Promise<
   {
     columnId: string;
-    valueType: TripleValueType;
+    valueType: FilterableValueType;
     value: string;
     valueName: string | null;
   }[]
 > {
   const filters: {
     columnId: string;
-    valueType: TripleValueType;
+    valueType: FilterableValueType;
     value: string;
     valueName: string | null;
   }[] = [];
@@ -189,8 +187,8 @@ export async function createFiltersFromGraphQLStringAndSource(
       if (maybeType) {
         filters.push({
           columnId: SYSTEM_IDS.TYPES,
-          valueType: 'URI',
-          value: GraphUrl.fromEntityId(parsedTypeValue),
+          valueType: 'RELATION',
+          value: parsedTypeValue,
           valueName: maybeType.name,
         });
       }
@@ -218,13 +216,14 @@ export async function createFiltersFromGraphQLStringAndSource(
       const entityValue = match[2];
 
       if (attribute && entityValue) {
+        console.log('value', entityValue);
         const maybeEntity = await mergeEntityAsync(EntityId(entityValue));
 
         if (maybeEntity) {
           filters.push({
             columnId: attribute,
-            valueType: 'URI',
-            value: GraphUrl.fromEntityId(entityValue),
+            valueType: 'RELATION',
+            value: entityValue,
             valueName: maybeEntity.name,
           });
         }
