@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import { StoreRelation } from '~/core/database/types';
@@ -70,23 +70,25 @@ export function upsertCollectionItemRelation({
 type UpsertSourceSpaceCollectionItemArgs = {
   collectionItemId: EntityId;
   spaceId: SpaceId;
-  sourceSpace: string;
+  sourceSpaceId: string;
+  toId: EntityId;
 };
 
 export function upsertSourceSpaceOnCollectionItem({
   collectionItemId,
   spaceId,
-  sourceSpace,
+  toId,
+  sourceSpaceId,
 }: UpsertSourceSpaceCollectionItemArgs) {
   DB.upsert(
     {
-      attributeId: SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE,
-      attributeName: 'Source Space',
+      attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+      attributeName: 'To entity',
       entityId: collectionItemId,
       entityName: null,
       value: {
-        type: 'TEXT',
-        value: sourceSpace,
+        type: 'URI',
+        value: GraphUrl.fromEntityId(toId, sourceSpaceId),
       },
     },
     spaceId

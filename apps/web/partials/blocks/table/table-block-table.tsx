@@ -247,6 +247,7 @@ export const TableBlockTable = React.memo(
         if (entity.space) {
           upsertSourceSpaceOnCollectionItem({
             collectionItemId: EntityId(id),
+            toId: EntityId(entity.id),
             spaceId: SpaceId(space),
             sourceSpace: entity.space,
           });
