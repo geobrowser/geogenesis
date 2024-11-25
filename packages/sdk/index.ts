@@ -7,3 +7,4 @@ export { createRelationship, reorderCollectionItem } from './src/collections';
 export { SYSTEM_IDS } from './src/system-ids'
 export { createImageEntityOps } from './src/create-image-entity'
 export { GraphUrl } from './src/graph-scheme'
+export { TextBlock, DataBlock } from './src/blocks'

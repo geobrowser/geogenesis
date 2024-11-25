@@ -262,9 +262,9 @@ function getEntitiesReferencedByRelations(schemaTriples: Op[], entityId: string)
   const from = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
   const type = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
 
-  const toId = to?.triple.value.value;
-  const fromId = from?.triple.value.value;
-  const typeId = type?.triple.value.value;
+  const toId = to?.triple.value.value ? GraphUrl.toEntityId(to.triple.value.value) : null;
+  const fromId = from?.triple.value.value ? GraphUrl.toEntityId(from.triple.value.value) : null;
+  const typeId = type?.triple.value.value ? GraphUrl.toEntityId(type.triple.value.value) : null;
 
   if (!toId || !fromId || !typeId) {
     return null;

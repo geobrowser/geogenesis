@@ -1,20 +1,23 @@
-import { SYSTEM_IDS, createRelationship, encodeBase58 } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
-import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
-import { handleEditsPublished } from './events/edits-published/handler';
-import { handleInitialGovernanceSpaceEditorsAdded } from './events/initial-editors-added/handler';
-import { createInitialContentForSpaces } from './events/initial-proposal-created/handler';
-import type { EditProposal } from './events/proposals-created/parser';
-import { handleProposalsExecuted } from './events/proposals-executed/handler';
-import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
-import type { Op } from './types';
-
-const SPACE_ID = encodeBase58('ab7d4b9e02f840dab9746d352acb0ac6');
-const DAO_ADDRESS = '0x9e2342C55080f2fCb6163c739a88c4F2915163C4';
-const SPACE_ADDRESS = '0x7a260AC2D569994AA22a259B19763c9F681Ff84c';
-const MAIN_VOTING_ADDRESS = '0x379408c230817DC7aA36033BEDC05DCBAcE7DF50';
-const MEMBER_ACCESS_ADDRESS = '0xd09225EAe465f562719B9cA07da2E8ab286DBB36';
+import { handleEditsPublished } from '../events/edits-published/handler';
+import { handleInitialGovernanceSpaceEditorsAdded } from '../events/initial-editors-added/handler';
+import { createInitialContentForSpaces } from '../events/initial-proposal-created/handler';
+import type { EditProposal } from '../events/proposals-created/parser';
+import { handleProposalsExecuted } from '../events/proposals-executed/handler';
+import { handleGovernancePluginCreated, handleSpacesCreated } from '../events/spaces-created/handler';
+import type { Op } from '../types';
+import {
+  DAO_ADDRESS,
+  INITIAL_BLOCK,
+  MAIN_VOTING_ADDRESS,
+  MEMBER_ACCESS_ADDRESS,
+  ROOT_SPACE_CREATED_AT,
+  ROOT_SPACE_CREATED_BY_ID,
+  SPACE_ADDRESS,
+  SPACE_ID,
+} from './constants';
 
 const names: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: 'Types',
@@ -147,7 +150,7 @@ const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
       entity: entityId,
       value: {
         type: 'TEXT',
-        value: name!,
+        value: name,
       },
     },
   } satisfies Op;
@@ -225,10 +228,6 @@ const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds
   });
 });
 
-export class BootstrapRootError extends Error {
-  _tag: 'BootstrapRootError' = 'BootstrapRootError';
-}
-
 const editProposal: EditProposal = {
   type: 'ADD_EDIT',
   proposalId: '-1',
@@ -241,13 +240,6 @@ const editProposal: EditProposal = {
   ops: [...nameOps, ...attributeOps, ...attributeValueTypeOps, ...typeOps, ...spaceType, ...typeSchemaOps],
   pluginAddress: MAIN_VOTING_ADDRESS,
   space: SPACE_ID,
-};
-
-const INITIAL_BLOCK = {
-  blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
-  cursor: '0',
-  requestId: '-1',
-  timestamp: ROOT_SPACE_CREATED_AT,
 };
 
 export const bootstrapRoot = Effect.gen(function* (_) {

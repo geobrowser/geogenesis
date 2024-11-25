@@ -6,6 +6,7 @@ interface CreateCollectionItemArgs {
   fromId: string; // uuid
   toId: string; // uuid
   relationTypeId: string; // uuid
+  position?: string // fractional index
 }
 
 type CreateRelationTypeOp = {
@@ -123,7 +124,7 @@ export function createRelationship(
         entity: newEntityId,
         value: {
           type: 'TEXT',
-          value: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+          value: args.position ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
         }
       },
     },
