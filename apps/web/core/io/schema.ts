@@ -114,7 +114,7 @@ const SchemaMembers = Schema.Struct({
 type SchemaMembers = Schema.Schema.Type<typeof SchemaMembers>;
 
 const SubstreamSpaceWithoutMetadata = Schema.Struct({
-  id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
+  id: Schema.String.pipe(Schema.fromBrand(SpaceId)),
   type: SpaceGovernanceType,
   daoAddress: AddressWithValidation,
   spacePluginAddress: AddressWithValidation,
@@ -135,13 +135,13 @@ export const SubstreamTriple = Schema.extend(
   SubstreamValue,
   Schema.Struct({
     entity: Schema.Struct({
-      id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
+      id: Schema.String.pipe(Schema.fromBrand(EntityId)),
       currentVersion: Schema.Struct({
         version: Schema.extend(Identifiable, Nameable),
       }),
     }),
     attribute: Schema.Struct({
-      id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
+      id: Schema.String.pipe(Schema.fromBrand(EntityId)),
       currentVersion: Schema.Struct({
         version: Schema.extend(Identifiable, Nameable),
       }),
@@ -268,7 +268,7 @@ export type SubstreamSubspace = Schema.Schema.Type<typeof SubstreamSubspace>;
  * An entity belongs to a space when it has at least one triple in that space.
  */
 export const SubstreamSearchResult = Schema.Struct({
-  id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
+  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
   currentVersion: Schema.Struct({
     version: Schema.Struct({
       id: Schema.String.pipe(Schema.fromBrand(EntityId)),
