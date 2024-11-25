@@ -1,6 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
-
-import { ValueType as TripleValueType } from '~/core/types';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { mergeEntityAsync } from '../database/entities';
 import { useWriteOps } from '../database/write';
