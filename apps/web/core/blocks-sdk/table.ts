@@ -6,6 +6,7 @@ import { mergeEntityAsync } from '../database/entities';
 import { useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
 import { Source } from '../state/editor/types';
+import { FilterableValueType } from '../value-types';
 
 export function upsertName({
   newName,
@@ -67,7 +68,7 @@ export function upsertName({
 export function createGraphQLStringFromFilters(
   filters: {
     columnId: string;
-    valueType: TripleValueType | 'RELATION';
+    valueType: FilterableValueType;
     value: string;
   }[]
 ): string {
@@ -266,7 +267,7 @@ export async function createFiltersFromGraphQLStringAndSource(
 export function createGraphQLStringFromFiltersV2(
   filters: {
     columnId: string;
-    valueType: TripleValueType | 'RELATION';
+    valueType: FilterableValueType;
     value: string;
   }[]
 ): string {

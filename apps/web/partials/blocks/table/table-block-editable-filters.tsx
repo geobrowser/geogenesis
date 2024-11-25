@@ -1,8 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { ValueType as TripleValueType } from '~/core/types';
-import { valueTypes } from '~/core/value-types';
+import { FilterableValueType, valueTypes } from '~/core/value-types';
 
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
@@ -65,7 +64,7 @@ export function TableBlockEditableFilters() {
   }: {
     columnId: string;
     value: string;
-    valueType: TripleValueType | 'RELATION';
+    valueType: FilterableValueType;
     valueName: string | null;
   }) => {
     setFilterState([

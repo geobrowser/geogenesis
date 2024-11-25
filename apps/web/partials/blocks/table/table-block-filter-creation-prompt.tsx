@@ -9,7 +9,7 @@ import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Space } from '~/core/io/dto/spaces';
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { ValueType as TripleValueType } from '~/core/types';
+import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
@@ -29,7 +29,7 @@ interface TableBlockFilterPromptProps {
   onCreate: (filter: {
     columnId: string;
     value: string;
-    valueType: TripleValueType | 'RELATION';
+    valueType: FilterableValueType;
     valueName: string | null;
   }) => void;
 }
