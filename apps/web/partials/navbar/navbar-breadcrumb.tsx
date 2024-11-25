@@ -40,7 +40,7 @@ type SpaceBreadcrumbProps = {
 };
 
 const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
-  const { space, isLoading } = useSpace(spaceId ?? '');
+  const { space, isLoading } = useSpace(spaceId);
 
   if (isLoading || !space || !space.spaceConfig) {
     return null;

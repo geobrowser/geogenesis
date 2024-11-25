@@ -32,8 +32,9 @@ export async function fetchProfileViaWalletsTripleAddress(address: string): Prom
   }
 
   const profile = entities[0];
-  // @TODO revise logic for spaceId here
-  const space = profile.nameTripleSpaces?.[0];
+  // @TODO how do we establish the spaceId?
+  // spaces array (from versionSpaces) is in alphanumeric order, not creation order
+  const space = profile.spaces[0];
 
   return {
     id: profile.id,
