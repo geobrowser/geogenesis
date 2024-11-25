@@ -54,12 +54,6 @@ export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
 }
 
-export function valueTypeId(triples: ITriple[]): ValueTypeId | null {
-  // Returns SYSTEM_IDS.TEXT, SYSTEM_IDS.RELATION, etc... or null if not found
-  const triple = valueTypeTriple(triples);
-  return triple?.value.type === 'ENTITY' ? (triple?.value.value as ValueTypeId) : null;
-}
-
 /**
  * This function traverses through all the relations associated with an entity and attempts to find the avatar URL of the entity.
  */

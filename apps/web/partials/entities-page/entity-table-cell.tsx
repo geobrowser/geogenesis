@@ -30,16 +30,6 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
   return (
     <div className="flex flex-wrap gap-2">
       {renderables.map(renderable => {
-        if (renderable.type === 'ENTITY') {
-          const value = renderable.value.value;
-          const name = renderable.value.name;
-          return (
-            <LinkableChip key={value} href={NavUtils.toEntity(space, value)}>
-              {name ?? value}
-            </LinkableChip>
-          );
-        }
-
         if (renderable.type === 'RELATION') {
           const value = renderable.value;
           const name = renderable.valueName;

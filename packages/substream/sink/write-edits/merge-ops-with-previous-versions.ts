@@ -73,7 +73,7 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
                 attribute: t.attribute_id,
                 value: {
                   type: t.value_type,
-                  value: (t.value_type === 'ENTITY' ? t.entity_value_id : t.text_value) as string,
+                  value: t.text_value as string,
                 },
               },
             };

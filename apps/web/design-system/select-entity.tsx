@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -133,9 +133,8 @@ export const SelectEntity = ({
             entityName: query,
             attributeName: 'Types',
             value: {
-              type: 'ENTITY',
-              value: type.typeId,
-              name: type.typeName,
+              type: 'URI',
+              value: GraphUrl.fromEntityId(type.typeId),
             },
           },
           spaceId

@@ -88,12 +88,11 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
                   transition={{ delay: 0.02 * i }}
                   key={result.id}
                 >
-                  {/* It's safe to cast nameTripleSpace since we only render entities that have a name triple */}
-                  <Link href={NavUtils.toEntity(result.spaces![0].id, result.id)} onClick={() => onDone()}>
+                  <Link href={NavUtils.toEntity(result.spaces![0].spaceId, result.id)} onClick={() => onDone()}>
                     <Command.Item
                       className="transition-colors duration-75 aria-selected:bg-grey-01"
                       onSelect={() => {
-                        router.push(NavUtils.toEntity(result.spaces![0].id, result.id));
+                        router.push(NavUtils.toEntity(result.spaces![0].spaceId, result.id));
                         onDone();
                       }}
                     >

@@ -159,7 +159,7 @@ function filterValue(value: Value, valueToFilter: string) {
   switch (value.type) {
     case 'TEXT':
       return value.value === valueToFilter;
-    case 'ENTITY':
+    case 'URI':
       return value.value === valueToFilter;
     default:
       return false;

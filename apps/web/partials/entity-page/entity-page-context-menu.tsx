@@ -8,13 +8,8 @@ import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store'
 
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
-import { Merge } from '~/design-system/icons/merge';
-import { MoveSpace } from '~/design-system/icons/move-space';
 import { Trash } from '~/design-system/icons/trash';
 import { Menu } from '~/design-system/menu';
-
-import { MergeEntityMenu } from '../merge-entity/merge-entity-menu';
-import { MoveEntityMenu } from '../move-entity/move-entity-menu';
 
 interface Props {
   entityId: string;
@@ -23,8 +18,6 @@ interface Props {
 
 export function EntityPageContextMenu({ entityId, spaceId }: Props) {
   const [isMenuOpen, onMenuOpenChange] = React.useState(false);
-  const [isMoveEntityMenuOpen, onMoveEntityMenuOpenChange] = React.useState(false);
-  const [isMergeEntityMenuOpen, onMergeEntityMenuOpenChange] = React.useState(false);
 
   const isEditing = useUserIsEditing(spaceId);
   const { triples } = useEntityPageStore();
@@ -60,42 +53,6 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
       </EntityPageContextMenuItem>
       {isEditing && (
         <>
-          <EntityPageContextMenuItem>
-            <Menu
-              open={isMoveEntityMenuOpen}
-              onOpenChange={onMoveEntityMenuOpenChange}
-              trigger={
-                <button
-                  className="flex h-full w-full items-center gap-2 px-2 py-2"
-                  onClick={() => onMoveEntityMenuOpenChange(true)}
-                >
-                  <MoveSpace />
-                  Move to space
-                </button>
-              }
-              side="bottom"
-            >
-              <MoveEntityMenu entityId={entityId} spaceId={spaceId} />
-            </Menu>
-          </EntityPageContextMenuItem>
-          <EntityPageContextMenuItem>
-            <Menu
-              open={isMergeEntityMenuOpen}
-              onOpenChange={onMergeEntityMenuOpenChange}
-              trigger={
-                <button
-                  className="flex h-full w-full items-center gap-2 px-2 py-2"
-                  onClick={() => onMergeEntityMenuOpenChange(true)}
-                >
-                  <Merge />
-                  Merge with entity
-                </button>
-              }
-              side="bottom"
-            >
-              <MergeEntityMenu entityId={entityId} />
-            </Menu>
-          </EntityPageContextMenuItem>
           <EntityPageContextMenuItem>
             <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
               <Trash />

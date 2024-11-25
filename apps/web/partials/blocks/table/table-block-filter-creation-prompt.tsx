@@ -26,7 +26,12 @@ import { TextButton } from '~/design-system/text-button';
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
   options: (TableBlockFilter & { columnName: string })[];
-  onCreate: (filter: { columnId: string; value: string; valueType: TripleValueType; valueName: string | null }) => void;
+  onCreate: (filter: {
+    columnId: string;
+    value: string;
+    valueType: TripleValueType | 'RELATION';
+    valueName: string | null;
+  }) => void;
 }
 
 /**
@@ -239,7 +244,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                         selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectSpaceValue}
                       />
-                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'ENTITY' ? (
+                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'RELATION' ? (
                       <TableBlockEntityFilterInput
                         filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
                         selectedValue={getFilterValueName(state.value) ?? ''}

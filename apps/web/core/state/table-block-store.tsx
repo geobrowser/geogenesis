@@ -52,7 +52,7 @@ const queryKeys = {
 
 export interface TableBlockFilter {
   columnId: string;
-  valueType: TripleValueType;
+  valueType: TripleValueType | 'RELATION';
   value: string;
   valueName: string | null;
 }

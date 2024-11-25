@@ -229,7 +229,7 @@ function aggregateTypesFromRelationsAndTriples({ relations, triples }: Aggregate
     }
 
     const triplesThatSetAType = triples.filter(
-      t => t.op === 'SET_TRIPLE' && t.triple.attribute_id === SYSTEM_IDS.TYPES && t.triple.value_type === 'ENTITY'
+      t => t.op === 'SET_TRIPLE' && t.triple.attribute_id === SYSTEM_IDS.TYPES && t.triple.value_type === 'URI'
     );
 
     const typeEntityIdsFromTriples = triplesThatSetAType

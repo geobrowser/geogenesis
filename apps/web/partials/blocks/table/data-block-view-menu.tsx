@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { motion } from 'framer-motion';
 
@@ -129,15 +129,14 @@ const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriple,
           entityId,
           entityName,
           value: {
-            type: 'ENTITY',
-            value: view.id,
-            name: view.name,
+            type: 'URI',
+            value: GraphUrl.fromEntityId(view.id),
           },
         },
         space
       );
     }
-  }, [upsert, entityId, entityName, isActive, remove, space, view.id, view.name, viewTriple]);
+  }, [upsert, entityId, entityName, isActive, remove, space, view.id, viewTriple]);
 
   return (
     <MenuItem active={isActive}>

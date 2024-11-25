@@ -52,7 +52,7 @@ export function TableBlockEditableFilters() {
         };
       })
       // Filter out any columns with names and any columns that are not entity or string value types
-      .flatMap(c => (c.columnName !== '' && (c.valueType === 'ENTITY' || c.valueType === 'TEXT') ? [c] : [])),
+      .flatMap(c => (c.columnName !== '' && (c.valueType === 'RELATION' || c.valueType === 'TEXT') ? [c] : [])),
   ];
 
   const sortedFilters = sortFilters(filterableColumns);
@@ -65,7 +65,7 @@ export function TableBlockEditableFilters() {
   }: {
     columnId: string;
     value: string;
-    valueType: TripleValueType;
+    valueType: TripleValueType | 'RELATION';
     valueName: string | null;
   }) => {
     setFilterState([

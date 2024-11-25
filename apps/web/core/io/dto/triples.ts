@@ -6,14 +6,6 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
   switch (networkTriple.valueType) {
     case 'TEXT':
       return { type: 'TEXT', value: networkTriple.textValue };
-    case 'ENTITY': {
-      const entityValue = networkTriple.entityValue.currentVersion.version;
-      return {
-        type: 'ENTITY',
-        value: networkTriple.entityValue.id,
-        name: entityValue.name,
-      };
-    }
     case 'CHECKBOX':
       return { type: 'CHECKBOX', value: networkTriple.booleanValue ? '1' : '0' };
     case 'TIME':

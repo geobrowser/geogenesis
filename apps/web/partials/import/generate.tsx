@@ -182,18 +182,18 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         });
 
         // Create entity type
-        newTriples.push({
-          space: spaceId,
-          entityId: newEntityId,
-          entityName: entity[entityNameIndex],
-          attributeId: 'type',
-          attributeName: 'Types',
-          value: {
-            type: 'ENTITY',
-            value: entityType.id,
-            name: entityType.name,
-          },
-        });
+        // newTriples.push({
+        //   space: spaceId,
+        //   entityId: newEntityId,
+        //   entityName: entity[entityNameIndex],
+        //   attributeId: 'type',
+        //   attributeName: 'Types',
+        //   value: {
+        //     type: 'ENTITY',
+        //     value: entityType.id,
+        //     name: entityType.name,
+        //   },
+        // });
 
         // Create entity attribute values
         attributes.forEach(attributeId => {
@@ -224,22 +224,21 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               },
             });
           } else if (entityAttributes[attributeId]?.type === 'ENTITY') {
-            const values = entity[entityAttributes[attributeId].index].split(',');
-
-            values.forEach(value => {
-              newTriples.push({
-                space: spaceId,
-                entityId: newEntityId,
-                entityName: entity[entityNameIndex],
-                attributeId,
-                attributeName: entityAttributes[attributeId]?.name ?? '',
-                value: {
-                  type: 'ENTITY',
-                  value: value,
-                  name: relatedEntitiesMap.get(EntityId(value)) ?? null,
-                },
-              });
-            });
+            // const values = entity[entityAttributes[attributeId].index].split(',');
+            // values.forEach(value => {
+            //   newTriples.push({
+            //     space: spaceId,
+            //     entityId: newEntityId,
+            //     entityName: entity[entityNameIndex],
+            //     attributeId,
+            //     attributeName: entityAttributes[attributeId]?.name ?? '',
+            //     value: {
+            //       type: 'ENTITY',
+            //       value: value,
+            //       name: relatedEntitiesMap.get(EntityId(value)) ?? null,
+            //     },
+            //   });
+            // });
           } else {
             newTriples.push({
               space: spaceId,
@@ -435,7 +434,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 <div key={attribute.value.value}>
                   <div className="flex items-center justify-between">
                     <div className="text-metadataMedium">
-                      {attribute.value.type === 'ENTITY' ? attribute.value.name : null}
+                      {/* {attribute.value.type === 'ENTITY' ? attribute.value.name : null} */}
                     </div>
                     <div className="text-footnoteMedium">Optional</div>
                   </div>
@@ -488,7 +487,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                           newEntityAttributes[attribute.value.value] = {
                             ...newEntityAttributes[attribute.value.value],
                             index: parseInt(value, 10),
-                            name: attribute.value.type === 'ENTITY' ? attribute.value.name ?? '' : '',
+                            // name: attribute.value.type === 'ENTITY' ? attribute.value.name ?? '' : '',
                           };
                         } else {
                           delete newEntityAttributes[attribute.value.value];
@@ -522,7 +521,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                     <div key={attribute.value.value}>
                       <div className="flex items-center justify-between">
                         <div className="text-metadataMedium">
-                          {attribute.value.type === 'ENTITY' && attribute.value.name}
+                          {/* {attribute.value.type === 'ENTITY' && attribute.value.name} */}
                         </div>
                         <div className="text-footnoteMedium">Optional</div>
                       </div>
@@ -594,11 +593,11 @@ const getAttributes = (entityType: Entity | undefined) => {
   if (entityType) {
     entityType?.triples.forEach((triple: TripleType) => {
       if (triple.attributeName === 'Attributes') {
-        if (triple.value.type === 'ENTITY' && triple.value.name && UNSUPPORTED_ATTRIBUTES.includes(triple.value.name)) {
-          unsupportedAttributes.push(triple);
-        } else {
-          supportedAttributes.push(triple);
-        }
+        // if (triple.value.type === 'ENTITY' && triple.value.name && UNSUPPORTED_ATTRIBUTES.includes(triple.value.name)) {
+        //   unsupportedAttributes.push(triple);
+        // } else {
+        //   supportedAttributes.push(triple);
+        // }
       }
     });
   }

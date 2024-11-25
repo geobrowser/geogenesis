@@ -74,9 +74,9 @@ function AttributeSearch({
         attributeName: 'Relation Value Types',
         entityName: attributeName,
         value: {
-          type: 'ENTITY',
+          // @TODO: Should be a relationship
+          type: 'URI',
           value: result.id,
-          name: result.name,
         },
       },
       // Ensure that we create the triple for the relation value type in the same space
