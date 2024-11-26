@@ -12,12 +12,6 @@ type Template = {
   extraData: Op[];
 };
 
-// type Attribute = {
-//   name: string;
-//   blocks: Op[];
-//   valueType: string;
-// };
-
 const NONPROFIT: Template[] = [
   {
     id: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
@@ -283,7 +277,62 @@ const COMPANY: Template[] = [
   },
 ];
 
-export const templateOps: Op[] = [...NONPROFIT, ...COMPANY]
+const PERSON: Template[] = [
+  {
+    id: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+    name: 'Person Space Configuration Template',
+    blocks: [
+      ...TextBlock.make({
+        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        text: '## Welcome to my personal space',
+        position: 'a0',
+      }),
+      ...TextBlock.make({
+        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        text: `This space is where I compile my interests, posts, collections, and a summary of myself, along with anything else I'd like to share with the broader Geo community.`,
+        position: 'a1',
+      }),
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        sourceType: 'COLLECTION',
+        name: 'Goals',
+        position: 'a2',
+      }),
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        sourceType: 'COLLECTION',
+        name: 'Skills',
+        position: 'a3',
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    types: [SYSTEM_IDS.SPACE_CONFIGURATION, SYSTEM_IDS.PERSON_TYPE],
+    extraData: [],
+    foreignTypes: [],
+  },
+  {
+    id: SYSTEM_IDS.PERSON_POSTS_PAGE_TEMPLATE,
+    name: 'Person Posts Page Template',
+    blocks: [
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.PERSON_POSTS_PAGE_TEMPLATE,
+        sourceType: 'GEO',
+        name: 'Posts',
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      // Page type -> Posts page
+      ...Relation.make({
+        fromId: SYSTEM_IDS.PERSON_POSTS_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.POSTS_PAGE,
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })),
+    foreignTypes: [],
+  },
+];
+
+export const templateOps: Op[] = [...NONPROFIT, ...COMPANY, ...PERSON]
   .flatMap(t => {
     const nameOp: Op = {
       type: 'SET_TRIPLE',
