@@ -62,6 +62,7 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
         fromId: newEntityId,
         toId: relation.toEntity.id,
         relationTypeId: relation.typeOf.id,
+        position: relation.index,
       })
     );
   });
@@ -82,6 +83,7 @@ const cloneBlocks = async (blocksToClone: Array<RelationType>, newEntityId: stri
         fromId: newEntityId,
         toId: newBlockId,
         relationTypeId: block.typeOf.id,
+        position: block.index,
       });
 
       const newBlockOps = await cloneEntity({
