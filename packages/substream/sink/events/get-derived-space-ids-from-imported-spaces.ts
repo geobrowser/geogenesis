@@ -2,10 +2,9 @@ import { Import } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
 import { getFetchIpfsContentEffect } from '../ipfs';
-import type { BlockEvent } from '../types';
 import { createSpaceId } from '../utils/id';
 import type { ProposalProcessed } from './proposals-created/parser';
-import { decode } from '~/sink/proto';
+import { Decoder, decode } from '~/sink/proto';
 
 function fetchSpaceImportFromIpfs(ipfsUri: string) {
   return Effect.gen(function* (_) {
@@ -48,7 +47,7 @@ function fetchSpaceImportFromIpfs(ipfsUri: string) {
       return null;
     }
 
-    const importResult = yield* _(decode(() => Import.fromBinary(ipfsContent)));
+    const importResult = yield* _(Decoder.decodeImport(ipfsContent));
 
     if (!importResult) {
       return null;

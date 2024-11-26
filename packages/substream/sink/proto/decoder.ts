@@ -1,4 +1,4 @@
-import { Edit, ImportEdit, IpfsMetadata, Membership, Subspace } from '@geogenesis/sdk/proto';
+import { Edit, Import, ImportEdit, IpfsMetadata, Membership, Subspace } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 import { z } from 'zod';
 
@@ -177,9 +177,43 @@ function decodeSubspace(data: Buffer) {
   });
 }
 
+/**
+* string version = 1;
+ActionType type = 2;
+string previousNetwork = 3;
+string previousContractAddress = 4;
+repeated string edits = 5;
+*
+*
+*/
+const ZodImport = z.object({
+  version: z.string(),
+  name: z.string(),
+  previousNetwork: z.string(),
+  previousContractAddress: z.string(),
+});
+
+function decodeImport(data: Buffer) {
+  return Effect.gen(function* (_) {
+    const decodeEffect = decode(() => {
+      const importResult = Import.fromBinary(data);
+      const parseResult = ZodImport.safeParse(importResult.toJson());
+
+      if (parseResult.success) {
+        return parseResult.data;
+      }
+
+      return null;
+    });
+
+    return yield* _(decodeEffect);
+  });
+}
+
 export const Decoder = {
   decodeIpfsMetadata,
   decodeEdit,
+  decodeImport,
   decodeImportEdit,
   decodeMembership,
   decodeEditorship,

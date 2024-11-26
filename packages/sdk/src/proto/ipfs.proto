@@ -1,11 +1,11 @@
 syntax = "proto3";
 
 message IpfsMetadata {
-  ActionType type = 1;
   // We version the data structured used to represent proposal metadata. Each
   // proposal type has their own metadata and versioning that we can change
   // independently of other proposal types.
-  string version = 2;
+  string version = 1;
+  ActionType type = 2;
   string id = 3;
   string name = 4;
 }
@@ -95,8 +95,8 @@ enum ActionType {
 }
 
 message Import {
-  ActionType type = 1;
-  string version = 2;
+  string version = 1;
+  ActionType type = 2;
   string previousNetwork = 3;
   string previousContractAddress = 4;
   repeated string edits = 5;
