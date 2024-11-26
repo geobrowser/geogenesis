@@ -17,7 +17,7 @@ interface SearchOptions {
 }
 
 export function useSearch({ filterByTypes }: SearchOptions = {}) {
-  const [query, setQuery] = React.useState('');
+  const [query, setQuery] = React.useState<string>('');
   const debouncedQuery = useDebouncedValue(query);
 
   const { data: results, isLoading } = useQuery({
