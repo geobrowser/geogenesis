@@ -35,16 +35,6 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
 
   // Add space type-specific ops
   switch (type) {
-    case 'default': {
-      ops.push(
-        ...Relation.make({
-          fromId: newEntityId,
-          toId: SYSTEM_IDS.SPACE_CONFIGURATION,
-          relationTypeId: SYSTEM_IDS.TYPES,
-        })
-      );
-      break;
-    }
     case 'personal': {
       const personOps = await generateOpsForPerson(newEntityId, spaceName);
       ops.push(...personOps);
@@ -60,10 +50,20 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
       ops.push(...nonprofitOps);
       break;
     }
+    default: {
+      ops.push(
+        ...Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+          relationTypeId: SYSTEM_IDS.TYPES,
+        })
+      );
+      break;
+    }
   }
 
   if (spaceAvatarUri) {
-    const imageOps = Image.make(spaceAvatarUri);
+    const { imageId, ops: imageOps } = Image.make(spaceAvatarUri);
 
     // Creates the image entity
     ops.push(...imageOps);
@@ -72,24 +72,23 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
     ops.push(
       ...Relation.make({
         fromId: newEntityId,
-        toId: imageOps[0].triple.entity, // Set the avatar relation to point to the entity id of the new entity
+        toId: imageId, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
       })
     );
   }
 
   if (spaceCoverUri) {
-    const [typeOp, srcOp] = Image.make(spaceCoverUri);
+    const { imageId, ops: imageOps } = Image.make(spaceCoverUri);
 
     // Creates the image entity
-    ops.push(typeOp);
-    ops.push(srcOp);
+    ops.push(...imageOps);
 
     // Creates the relation pointing to the image entity
     ops.push(
       ...Relation.make({
         fromId: newEntityId,
-        toId: typeOp.triple.entity, // Set the avatar relation to point to the entity id of the new entity
+        toId: imageId, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.COVER_ATTRIBUTE,
       })
     );

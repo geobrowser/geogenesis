@@ -65,7 +65,7 @@ export const OnboardingDialog = () => {
 
     try {
       const spaceId = await deploy({
-        spaceAvatarUri: avatar,
+        spaceImage: avatar,
         spaceName: name,
         type: 'personal',
       });
