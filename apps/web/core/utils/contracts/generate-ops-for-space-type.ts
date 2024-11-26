@@ -63,34 +63,32 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
   }
 
   if (spaceAvatarUri) {
-    const imageOps = Image.make(spaceAvatarUri);
+    const { imageId, ops } = Image.make(spaceAvatarUri);
 
     // Creates the image entity
-    ops.push(...imageOps);
-    const imageEntityId = imageOps.find(o => o.triple.attribute === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE)!.triple.entity;
+    ops.push(...ops);
 
     // Creates the relation pointing to the image entity
     ops.push(
       ...Relation.make({
         fromId: newEntityId,
-        toId: imageEntityId, // Set the avatar relation to point to the entity id of the new entity
+        toId: imageId, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
       })
     );
   }
 
   if (spaceCoverUri) {
-    const imageOps = Image.make(spaceCoverUri);
+    const { imageId, ops } = Image.make(spaceCoverUri);
 
     // Creates the image entity
-    ops.push(...imageOps);
-    const imageEntityId = imageOps.find(o => o.triple.attribute === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE)!.triple.entity;
+    ops.push(...ops);
 
     // Creates the relation pointing to the image entity
     ops.push(
       ...Relation.make({
         fromId: newEntityId,
-        toId: imageEntityId, // Set the avatar relation to point to the entity id of the new entity
+        toId: imageId, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.COVER_ATTRIBUTE,
       })
     );
