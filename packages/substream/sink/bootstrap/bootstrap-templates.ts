@@ -81,6 +81,27 @@ const TEMPLATES: Template[] = [
     foreignTypes: [],
   },
   {
+    id: SYSTEM_IDS.NONPROFIT_TEAM_PAGE_TEMPLATE,
+    name: 'Nonprofit Projects Page Template',
+    blocks: [
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.NONPROFIT_TEAM_PAGE_TEMPLATE,
+        sourceType: 'GEO',
+        name: 'Projects',
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      // Page type -> Posts page
+      ...createRelationship({
+        fromId: SYSTEM_IDS.NONPROFIT_TEAM_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.PROJECTS_PAGE,
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })),
+    foreignTypes: [],
+  },
+  {
     id: SYSTEM_IDS.NONPROFIT_FINANCES_PAGE_TEMPLATE,
     name: 'Nonprofit Finances Page Template',
     blocks: [

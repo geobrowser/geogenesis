@@ -87,6 +87,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.POSTS_PAGE]: 'Posts page',
   [SYSTEM_IDS.PROJECTS_PAGE]: 'Projects page',
   [SYSTEM_IDS.FINANCES_PAGE]: 'Finances page',
+  [SYSTEM_IDS.TEAM_PAGE]: 'Team page',
 };
 
 const attributes: Record<string, string> = {
@@ -242,25 +243,6 @@ const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds
   });
 });
 
-const adhocTypes: Record<string, string[]> = {
-  [SYSTEM_IDS.POSTS_PAGE]: [SYSTEM_IDS.PAGE_TYPE],
-  [SYSTEM_IDS.PROJECTS_PAGE]: [SYSTEM_IDS.PAGE_TYPE],
-  [SYSTEM_IDS.FINANCES_PAGE]: [SYSTEM_IDS.PAGE_TYPE],
-};
-
-const adhocTypesOps: Op[] = Object.entries(adhocTypes).flatMap(([entityId, typeIds]) => {
-  return typeIds.flatMap(typeId => {
-    return createRelationship({
-      fromId: entityId,
-      toId: typeId,
-      relationTypeId: SYSTEM_IDS.TYPES,
-    }).map(op => ({
-      ...op,
-      space: SPACE_ID,
-    }));
-  });
-});
-
 const editProposal: EditProposal = {
   type: 'ADD_EDIT',
   proposalId: '-1',
@@ -277,7 +259,6 @@ const editProposal: EditProposal = {
     ...typeOps,
     ...spaceType,
     ...typeSchemaOps,
-    ...adhocTypesOps,
     ...templateOps,
   ],
   pluginAddress: MAIN_VOTING_ADDRESS,
