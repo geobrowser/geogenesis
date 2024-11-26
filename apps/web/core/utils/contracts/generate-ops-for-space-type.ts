@@ -1,4 +1,4 @@
-import { Op, Relation, SYSTEM_IDS, createImageEntityOps } from '@geogenesis/sdk';
+import { Image, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import type { SpaceGovernanceType, SpaceType } from '~/core/types';
@@ -63,7 +63,7 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
   }
 
   if (spaceAvatarUri) {
-    const imageOps = createImageEntityOps(spaceAvatarUri);
+    const imageOps = Image.make(spaceAvatarUri);
 
     // Creates the image entity
     ops.push(...imageOps);
@@ -79,7 +79,7 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
   }
 
   if (spaceCoverUri) {
-    const [typeOp, srcOp] = createImageEntityOps(spaceCoverUri);
+    const [typeOp, srcOp] = Image.make(spaceCoverUri);
 
     // Creates the image entity
     ops.push(typeOp);

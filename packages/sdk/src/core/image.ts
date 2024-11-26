@@ -1,14 +1,14 @@
-import { createGeoId } from './id';
-import { Relation } from './relation';
-import { SYSTEM_IDS } from './system-ids';
-import type { Op } from './types';
+import { createGeoId } from '../id';
+import { Relation } from '../relation';
+import { SYSTEM_IDS } from '../system-ids';
+import type { Op } from '../types';
 
 /**
  * Creates an entity representing an Image.
  *
  * @returns ops: The SET_TRIPLE ops for an Image entity
  */
-export function createImageEntityOps(src: string): Op[] {
+export function make(src: string): Op[] {
   const entityId = createGeoId();
 
   return [
