@@ -12,7 +12,7 @@ type DeployArgs =
   | {
       type: 'personal' | 'company';
       spaceName: string;
-      spaceAvatarUri?: string;
+      spaceImage?: string;
       governanceType?: SpaceGovernanceType;
     }
   | {
@@ -27,7 +27,7 @@ type DeployArgs =
         | 'government-org'
         | 'interest-group';
       spaceName: string;
-      spaceCoverUri?: string;
+      spaceImage?: string;
       governanceType?: SpaceGovernanceType;
     };
 
@@ -54,8 +54,8 @@ export function useDeploySpace() {
       );
 
       if (args.type === 'personal' || args.type === 'company') {
-        if (args.spaceAvatarUri && args.spaceAvatarUri !== '') {
-          url.searchParams.set('spaceAvatarUri', args.spaceAvatarUri);
+        if (args.spaceImage && args.spaceImage !== '') {
+          url.searchParams.set('spaceAvatarUri', args.spaceImage);
         }
       } else if (
         args.type === 'default' ||
@@ -68,8 +68,8 @@ export function useDeploySpace() {
         args.type === 'government-org' ||
         args.type === 'interest-group'
       ) {
-        if (args.spaceCoverUri && args.spaceCoverUri !== '') {
-          url.searchParams.set('spaceCoverUri', args.spaceCoverUri);
+        if (args.spaceImage && args.spaceImage !== '') {
+          url.searchParams.set('spaceCoverUri', args.spaceImage);
         }
       }
 

@@ -35,16 +35,6 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
 
   // Add space type-specific ops
   switch (type) {
-    case 'default': {
-      ops.push(
-        ...Relation.make({
-          fromId: newEntityId,
-          toId: SYSTEM_IDS.SPACE_CONFIGURATION,
-          relationTypeId: SYSTEM_IDS.TYPES,
-        })
-      );
-      break;
-    }
     case 'personal': {
       const personOps = await generateOpsForPerson(newEntityId, spaceName);
       ops.push(...personOps);
@@ -60,13 +50,23 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
       ops.push(...nonprofitOps);
       break;
     }
+    default: {
+      ops.push(
+        ...Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+          relationTypeId: SYSTEM_IDS.TYPES,
+        })
+      );
+      break;
+    }
   }
 
   if (spaceAvatarUri) {
-    const { imageId, ops } = Image.make(spaceAvatarUri);
+    const { imageId, ops: imageOps } = Image.make(spaceAvatarUri);
 
     // Creates the image entity
-    ops.push(...ops);
+    ops.push(...imageOps);
 
     // Creates the relation pointing to the image entity
     ops.push(
@@ -79,10 +79,10 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
   }
 
   if (spaceCoverUri) {
-    const { imageId, ops } = Image.make(spaceCoverUri);
+    const { imageId, ops: imageOps } = Image.make(spaceCoverUri);
 
     // Creates the image entity
-    ops.push(...ops);
+    ops.push(...imageOps);
 
     // Creates the relation pointing to the image entity
     ops.push(
