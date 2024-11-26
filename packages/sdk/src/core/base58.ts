@@ -69,6 +69,6 @@ export function decodeBase58ToUUID(encoded: string): UUID {
   hexStr = hexStr.padStart(32, '0'); // Ensure it is 32 characters
 
   return [hexStr.slice(0, 8), hexStr.slice(8, 12), hexStr.slice(12, 16), hexStr.slice(16, 20), hexStr.slice(20)].join(
-    '-',
+    '-'
   );
 }

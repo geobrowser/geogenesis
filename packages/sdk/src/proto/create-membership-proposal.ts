@@ -1,19 +1,19 @@
-import type { MembershipProposalMetadata } from '../..'
-import { createGeoId } from '../id'
-import { ActionType, Membership } from '.'
+import { ActionType, Membership } from '.';
+import type { MembershipProposalMetadata } from '../..';
+import { createGeoId } from '../id';
 
 function getActionTypeFromType(type: MembershipProposalMetadata['type']): ActionType {
   switch (type) {
     case 'ADD_EDITOR':
-      return ActionType.ADD_EDITOR
+      return ActionType.ADD_EDITOR;
     case 'REMOVE_EDITOR':
-      return ActionType.REMOVE_EDITOR
+      return ActionType.REMOVE_EDITOR;
     case 'ADD_MEMBER':
-      return ActionType.ADD_MEMBER
+      return ActionType.ADD_MEMBER;
     case 'REMOVE_MEMBER':
-      return ActionType.REMOVE_MEMBER
+      return ActionType.REMOVE_MEMBER;
     default:
-      throw new Error(`Unsupported action type in createMembershipProposal: ${type}`)
+      throw new Error(`Unsupported action type in createMembershipProposal: ${type}`);
   }
 }
 
@@ -22,9 +22,9 @@ export function createMembershipProposal({
   type,
   userAddress,
 }: {
-  name: string
-  type: MembershipProposalMetadata['type']
-  userAddress: `0x${string}`
+  name: string;
+  type: MembershipProposalMetadata['type'];
+  userAddress: `0x${string}`;
 }): Uint8Array {
   return new Membership({
     type: getActionTypeFromType(type),
@@ -32,5 +32,5 @@ export function createMembershipProposal({
     id: createGeoId(),
     user: userAddress,
     name,
-  }).toBinary()
+  }).toBinary();
 }

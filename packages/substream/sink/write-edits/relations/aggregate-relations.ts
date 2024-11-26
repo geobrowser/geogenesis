@@ -262,11 +262,11 @@ function getEntitiesReferencedByRelations(schemaTriples: Op[], entityId: string)
   const from = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
   const type = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
 
-  const toId = to && GraphUrl.isGraphUrl(to.triple.value.value) ? GraphUrl.toEntityId(to.triple.value.value) : null;
+  const toId = to && GraphUrl.isValid(to.triple.value.value) ? GraphUrl.toEntityId(to.triple.value.value) : null;
   const fromId =
-    from && GraphUrl.isGraphUrl(from.triple.value.value) ? GraphUrl.toEntityId(from.triple.value.value) : null;
+    from && GraphUrl.isValid(from.triple.value.value) ? GraphUrl.toEntityId(from.triple.value.value) : null;
   const typeId =
-    type && GraphUrl.isGraphUrl(type.triple.value.value) ? GraphUrl.toEntityId(type.triple.value.value) : null;
+    type && GraphUrl.isValid(type.triple.value.value) ? GraphUrl.toEntityId(type.triple.value.value) : null;
 
   if (!toId || !fromId || !typeId) {
     return null;
@@ -297,7 +297,7 @@ function getRelationFromOps(
     t =>
       t.triple.attribute === SYSTEM_IDS.TYPES &&
       t.triple.value.type.toString() === 'URL' &&
-      GraphUrl.isGraphUrl(t.triple.value.value) &&
+      GraphUrl.isValid(t.triple.value.value) &&
       GraphUrl.toEntityId(t.triple.value.value) === SYSTEM_IDS.RELATION_TYPE
   );
   const relationIndex = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_INDEX);
@@ -310,11 +310,11 @@ function getRelationFromOps(
   }
 
   const indexValue = relationIndex?.triple.value.value ?? null;
-  const toId = to && GraphUrl.isGraphUrl(to.triple.value.value) ? GraphUrl.toEntityId(to.triple.value.value) : null;
+  const toId = to && GraphUrl.isValid(to.triple.value.value) ? GraphUrl.toEntityId(to.triple.value.value) : null;
   const fromId =
-    from && GraphUrl.isGraphUrl(from.triple.value.value) ? GraphUrl.toEntityId(from.triple.value.value) : null;
+    from && GraphUrl.isValid(from.triple.value.value) ? GraphUrl.toEntityId(from.triple.value.value) : null;
   const typeId =
-    type && GraphUrl.isGraphUrl(type.triple.value.value) ? GraphUrl.toEntityId(type.triple.value.value) : null;
+    type && GraphUrl.isValid(type.triple.value.value) ? GraphUrl.toEntityId(type.triple.value.value) : null;
 
   if (!toId || !fromId || !typeId) {
     return null;

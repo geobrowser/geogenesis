@@ -1,15 +1,16 @@
-import { encodeFunctionData, stringToHex } from 'viem'
-import { MainVotingAbi } from '../abis'
-import { VoteOption } from '../..'
+import { encodeFunctionData, stringToHex } from 'viem';
+
+import { VoteOption } from '../..';
+import { MainVotingAbi } from '../abis';
 
 export function getRemoveEditorArguments({
   votingPluginAddress,
   ipfsUri,
   editorAddress,
 }: {
-  votingPluginAddress: `0x${string}`
-  ipfsUri: `ipfs://${string}`
-  editorAddress: `0x${string}`
+  votingPluginAddress: `0x${string}`;
+  ipfsUri: `ipfs://${string}`;
+  editorAddress: `0x${string}`;
 }) {
   return [
     stringToHex(ipfsUri),
@@ -27,5 +28,5 @@ export function getRemoveEditorArguments({
     BigInt(0),
     VoteOption.Yes,
     true,
-  ] as const
+  ] as const;
 }

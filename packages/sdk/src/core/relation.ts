@@ -1,13 +1,15 @@
+import { generateKeyBetween } from 'fractional-indexing';
+
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants';
-import { GraphUrl } from '../graph-scheme';
 import { createGeoId } from '../id';
+import { GraphUrl } from '../scheme';
 import { SYSTEM_IDS } from '../system-ids';
 
-interface CreateCollectionItemArgs {
+interface CreateRelationArgs {
   fromId: string; // uuid
   toId: string; // uuid
   relationTypeId: string; // uuid
-  position?: string // fractional index
+  position?: string; // fractional index
 }
 
 type CreateRelationTypeOp = {
@@ -68,10 +70,10 @@ interface CreateRelationIndexOp {
       value: string;
     };
   };
-};
+}
 
-export function createRelationship(
-  args: CreateCollectionItemArgs
+export function make(
+  args: CreateRelationArgs
 ): readonly [
   CreateRelationTypeOp,
   CreateRelationFromOp,
@@ -82,7 +84,6 @@ export function createRelationship(
   const newEntityId = createGeoId();
 
   return [
-    // Type of Collection Item
     {
       type: 'SET_TRIPLE',
       triple: {
@@ -92,9 +93,8 @@ export function createRelationship(
           type: 'URL',
           value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE) as `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`,
         },
-      }
+      },
     },
-    // Entity value for the collection itself
     {
       type: 'SET_TRIPLE',
       triple: {
@@ -104,9 +104,8 @@ export function createRelationship(
           type: 'URL',
           value: GraphUrl.fromEntityId(args.fromId),
         },
-      }
+      },
     },
-    // Entity value for the entity referenced by this collection item
     {
       type: 'SET_TRIPLE',
       triple: {
@@ -116,7 +115,7 @@ export function createRelationship(
           type: 'URL',
           value: GraphUrl.fromEntityId(args.toId),
         },
-      }
+      },
     },
     {
       type: 'SET_TRIPLE',
@@ -126,7 +125,7 @@ export function createRelationship(
         value: {
           type: 'TEXT',
           value: args.position ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
-        }
+        },
       },
     },
     {
@@ -137,8 +136,43 @@ export function createRelationship(
         value: {
           type: 'URL',
           value: GraphUrl.fromEntityId(args.relationTypeId),
-        }
+        },
       },
     },
   ] as const;
+}
+
+interface ReorderRelationArgs {
+  relationId: string;
+  beforeIndex?: string;
+  afterIndex?: string;
+}
+
+type ReorderRelationOp = {
+  type: 'SET_TRIPLE';
+  triple: {
+    attribute: typeof SYSTEM_IDS.RELATION_INDEX;
+    entity: string;
+    value: {
+      type: 'TEXT';
+      value: string;
+    };
+  };
+};
+
+// @TODO: Do we want jittering?
+export function reorder(args: ReorderRelationArgs): ReorderRelationOp {
+  const newIndex = generateKeyBetween(args.beforeIndex, args.afterIndex);
+
+  return {
+    type: 'SET_TRIPLE',
+    triple: {
+      attribute: SYSTEM_IDS.RELATION_INDEX,
+      entity: args.relationId,
+      value: {
+        type: 'TEXT',
+        value: newIndex,
+      },
+    },
+  };
 }

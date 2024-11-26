@@ -1,282 +1,282 @@
 export const abi = [
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
       },
       {
-        "internalType": "uint256",
-        "name": "profileId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'profileId',
+        type: 'uint256',
+      },
     ],
-    "name": "AccountHasExistingProfileError",
-    "type": "error"
+    name: 'AccountHasExistingProfileError',
+    type: 'error',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
       },
       {
-        "internalType": "address",
-        "name": "homeSpace",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'homeSpace',
+        type: 'address',
+      },
     ],
-    "name": "ExistingHomeSpaceEqualsNewHomeSpaceError",
-    "type": "error"
+    name: 'ExistingHomeSpaceEqualsNewHomeSpaceError',
+    type: 'error',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
       },
       {
-        "internalType": "uint256",
-        "name": "profileId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'profileId',
+        type: 'uint256',
+      },
     ],
-    "name": "NotProfileOwnerError",
-    "type": "error"
+    name: 'NotProfileOwnerError',
+    type: 'error',
   },
   {
-    "inputs": [],
-    "name": "ProfileDoesNotExistError",
-    "type": "error"
+    inputs: [],
+    name: 'ProfileDoesNotExistError',
+    type: 'error',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": false,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
+        indexed: false,
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "address",
-        "name": "homeSpace",
-        "type": "address"
+        indexed: false,
+        internalType: 'address',
+        name: 'homeSpace',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'id',
+        type: 'uint256',
+      },
     ],
-    "name": "GeoProfileHomeSpaceUpdated",
-    "type": "event"
+    name: 'GeoProfileHomeSpaceUpdated',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": false,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
+        indexed: false,
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "address",
-        "name": "homeSpace",
-        "type": "address"
+        indexed: false,
+        internalType: 'address',
+        name: 'homeSpace',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'id',
+        type: 'uint256',
+      },
     ],
-    "name": "GeoProfileRegistered",
-    "type": "event"
+    name: 'GeoProfileRegistered',
+    type: 'event',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "index",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'index',
+        type: 'uint256',
+      },
     ],
-    "name": "geoProfileAtIndex",
-    "outputs": [
+    name: 'geoProfileAtIndex',
+    outputs: [
       {
-        "components": [
+        components: [
           {
-            "internalType": "address",
-            "name": "homeSpace",
-            "type": "address"
+            internalType: 'address',
+            name: 'homeSpace',
+            type: 'address',
           },
           {
-            "internalType": "address",
-            "name": "account",
-            "type": "address"
+            internalType: 'address',
+            name: 'account',
+            type: 'address',
           },
           {
-            "internalType": "uint256",
-            "name": "id",
-            "type": "uint256"
-          }
+            internalType: 'uint256',
+            name: 'id',
+            type: 'uint256',
+          },
         ],
-        "internalType": "struct GeoProfile",
-        "name": "",
-        "type": "tuple"
-      }
+        internalType: 'struct GeoProfile',
+        name: '',
+        type: 'tuple',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "geoProfileCount",
-    "outputs": [
+    inputs: [],
+    name: 'geoProfileCount',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
+      },
     ],
-    "name": "geoProfileExists",
-    "outputs": [
+    name: 'geoProfileExists',
+    outputs: [
       {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
+      },
     ],
-    "name": "geoProfileFor",
-    "outputs": [
+    name: 'geoProfileFor',
+    outputs: [
       {
-        "components": [
+        components: [
           {
-            "internalType": "address",
-            "name": "homeSpace",
-            "type": "address"
+            internalType: 'address',
+            name: 'homeSpace',
+            type: 'address',
           },
           {
-            "internalType": "address",
-            "name": "account",
-            "type": "address"
+            internalType: 'address',
+            name: 'account',
+            type: 'address',
           },
           {
-            "internalType": "uint256",
-            "name": "id",
-            "type": "uint256"
-          }
+            internalType: 'uint256',
+            name: 'id',
+            type: 'uint256',
+          },
         ],
-        "internalType": "struct GeoProfile",
-        "name": "",
-        "type": "tuple"
-      }
+        internalType: 'struct GeoProfile',
+        name: '',
+        type: 'tuple',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "offset",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'offset',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "limit",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'limit',
+        type: 'uint256',
+      },
     ],
-    "name": "geoProfiles",
-    "outputs": [
+    name: 'geoProfiles',
+    outputs: [
       {
-        "components": [
+        components: [
           {
-            "internalType": "address",
-            "name": "homeSpace",
-            "type": "address"
+            internalType: 'address',
+            name: 'homeSpace',
+            type: 'address',
           },
           {
-            "internalType": "address",
-            "name": "account",
-            "type": "address"
+            internalType: 'address',
+            name: 'account',
+            type: 'address',
           },
           {
-            "internalType": "uint256",
-            "name": "id",
-            "type": "uint256"
-          }
+            internalType: 'uint256',
+            name: 'id',
+            type: 'uint256',
+          },
         ],
-        "internalType": "struct GeoProfile[]",
-        "name": "",
-        "type": "tuple[]"
-      }
+        internalType: 'struct GeoProfile[]',
+        name: '',
+        type: 'tuple[]',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "homeSpace",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'homeSpace',
+        type: 'address',
+      },
     ],
-    "name": "registerGeoProfile",
-    "outputs": [
+    name: 'registerGeoProfile',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "homeSpace",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'homeSpace',
+        type: 'address',
+      },
     ],
-    "name": "updateProfileHomeSpace",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-] as const
+    name: 'updateProfileHomeSpace',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const;

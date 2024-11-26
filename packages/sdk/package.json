@@ -12,6 +12,7 @@
     "dist"
   ],
   "scripts": {
+    "format": "npx prettier . --write",
     "test": "vitest",
     "generate:protobuf": "npx buf generate"
   },
