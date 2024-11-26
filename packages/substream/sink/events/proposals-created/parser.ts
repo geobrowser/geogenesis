@@ -129,39 +129,6 @@ export const ZodProposalProcessedStreamResponse = z.object({
   proposalsProcessed: z.array(ZodProposalProcessed).min(1),
 });
 
-const ZodEditSetTriplePayload = z.object({
-  entity: z.string(),
-  attribute: z.string(),
-
-  value: z.object({
-    value: z.string(),
-    type: z.union([
-      z.literal('TEXT'),
-      z.literal('NUMBER'),
-      z.literal('URL'),
-      z.literal('CHECKBOX'),
-      z.literal('TIME'),
-      z.literal('POINT'),
-    ]),
-  }),
-});
-
-const ZodEditDeleteTriplePayload = z.object({
-  entity: z.string(),
-  attribute: z.string(),
-  value: z.object({}),
-});
-
-const ZodSetTripleOp = z.object({
-  type: z.literal('SET_TRIPLE'),
-  triple: ZodEditSetTriplePayload,
-});
-
-const ZodDeleteTripleOp = z.object({
-  type: z.literal('DELETE_TRIPLE'),
-  triple: ZodEditDeleteTriplePayload,
-});
-
 export type EditProposal = Proposal & {
   type: 'ADD_EDIT';
   name: string;
@@ -171,7 +138,7 @@ export type EditProposal = Proposal & {
   ops: Op[];
 };
 
-const ZodImportEditSetTriplePayload = z.object({
+const ZodEditSetTriplePayload = z.object({
   entity: z.string(),
   attribute: z.string(),
   // zod has issues with discriminated unions. We set the value
@@ -210,22 +177,28 @@ const ZodImportEditSetTriplePayload = z.object({
   }),
 });
 
-const ZodImportEditDeleteTriplePayload = z.object({
+const ZodEditDeleteTriplePayload = z.object({
   entity: z.string(),
   attribute: z.string(),
 });
 
-const ZodImportEditSetTripleOp = z.object({
-  type: z.literal(1).transform(() => 'SET_TRIPLE'),
-  triple: ZodImportEditSetTriplePayload,
+const ZodEditSetTripleOp = z.object({
+  type: z
+    .literal(1)
+    .transform(() => 'SET_TRIPLE')
+    .superRefine(arg => arg === 'SET_TRIPLE'),
+  triple: ZodEditSetTriplePayload,
 });
 
-const ZodImportEditDeleteTripleOp = z.object({
-  type: z.literal(2).transform(() => 'DELETE_TRIPLE'),
-  triple: ZodImportEditDeleteTriplePayload,
+const ZodEditDeleteTripleOp = z.object({
+  type: z
+    .literal(2)
+    .transform(() => 'DELETE_TRIPLE')
+    .superRefine(arg => arg === 'DELETE_TRIPLE'),
+  triple: ZodEditDeleteTriplePayload,
 });
 
-const ZodImportEditOp = z.union([ZodImportEditSetTripleOp, ZodImportEditDeleteTripleOp]);
+const ZodImportEditOp = z.union([ZodEditSetTripleOp, ZodEditDeleteTripleOp]);
 
 export const ZodImportEdit = z.object({
   name: z.string(),
@@ -239,11 +212,14 @@ export const ZodImportEdit = z.object({
 
 export type ParsedImportEdit = z.infer<typeof ZodImportEdit>;
 
-export const ZodOp = z.union([ZodImportEditSetTripleOp, ZodImportEditDeleteTripleOp]);
+export const ZodOp = z.union([ZodEditSetTripleOp, ZodEditDeleteTripleOp]);
 
 export const ZodEdit = z.object({
   version: z.string(),
-  type: z.literal(1).transform(() => 'ADD_EDIT'),
+  type: z
+    .literal(1)
+    .transform(() => 'ADD_EDIT')
+    .superRefine(arg => arg === 'ADD_EDIT'),
   id: z.string(),
   name: z.string(),
   ops: z.array(ZodOp),
