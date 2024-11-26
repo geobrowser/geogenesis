@@ -85,6 +85,8 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.PAGE_TYPE]: 'Page',
   [SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE]: 'Page type',
   [SYSTEM_IDS.POSTS_PAGE]: 'Posts page',
+  [SYSTEM_IDS.PROJECTS_PAGE]: 'Projects page',
+  [SYSTEM_IDS.FINANCES_PAGE]: 'Finances page',
 };
 
 const attributes: Record<string, string> = {
@@ -242,6 +244,8 @@ const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds
 
 const adhocTypes: Record<string, string[]> = {
   [SYSTEM_IDS.POSTS_PAGE]: [SYSTEM_IDS.PAGE_TYPE],
+  [SYSTEM_IDS.PROJECTS_PAGE]: [SYSTEM_IDS.PAGE_TYPE],
+  [SYSTEM_IDS.FINANCES_PAGE]: [SYSTEM_IDS.PAGE_TYPE],
 };
 
 const adhocTypesOps: Op[] = Object.entries(adhocTypes).flatMap(([entityId, typeIds]) => {
