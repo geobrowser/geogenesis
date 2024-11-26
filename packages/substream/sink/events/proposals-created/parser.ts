@@ -149,7 +149,7 @@ const ZodEditSetTriplePayload = z.object({
 const ZodEditDeleteTriplePayload = z.object({
   entity: z.string(),
   attribute: z.string(),
-  // value: z.object({}),
+  value: z.object({}),
 });
 
 const ZodSetTripleOp = z.object({
@@ -161,19 +161,6 @@ const ZodDeleteTripleOp = z.object({
   type: z.literal('DELETE_TRIPLE'),
   triple: ZodEditDeleteTriplePayload,
 });
-
-export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
-
-export const ZodEdit = z.object({
-  version: z.string(),
-  type: z.literal('ADD_EDIT'),
-  id: z.string(),
-  name: z.string(),
-  ops: z.array(ZodOp),
-  authors: z.array(z.string()),
-});
-
-export type ParsedEdit = z.infer<typeof ZodEdit>;
 
 export type EditProposal = Proposal & {
   type: 'ADD_EDIT';
@@ -251,3 +238,16 @@ export const ZodImportEdit = z.object({
 });
 
 export type ParsedImportEdit = z.infer<typeof ZodImportEdit>;
+
+export const ZodOp = z.union([ZodImportEditSetTripleOp, ZodImportEditDeleteTripleOp]);
+
+export const ZodEdit = z.object({
+  version: z.string(),
+  type: z.literal(1).transform(() => 'ADD_EDIT'),
+  id: z.string(),
+  name: z.string(),
+  ops: z.array(ZodOp),
+  authors: z.array(z.string()),
+});
+
+export type ParsedEdit = z.infer<typeof ZodEdit>;

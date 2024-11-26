@@ -1,7 +1,7 @@
 import { createGeoId } from '../../id';
 import { Relation } from '../../relation';
 import { SYSTEM_IDS } from '../../system-ids';
-import type { Op } from '../../types';
+import type { SetTripleOp } from '../../types';
 
 type DataBlockSourceType = 'QUERY' | 'COLLECTION' | 'GEO';
 
@@ -16,9 +16,9 @@ function getSourceTypeId(sourceType: DataBlockSourceType) {
   }
 }
 
-type DataBlockArgs = { fromId: string; sourceType: DataBlockSourceType; position?: string };
+type DataBlockArgs = { fromId: string; sourceType: DataBlockSourceType; position?: string; name?: string };
 
-export function make({ fromId, sourceType, position }: DataBlockArgs): Op[] {
+export function make({ fromId, sourceType, position, name }: DataBlockArgs): SetTripleOp[] {
   const newBlockId = createGeoId();
 
   const dataBlockType = Relation.make({
@@ -40,5 +40,21 @@ export function make({ fromId, sourceType, position }: DataBlockArgs): Op[] {
     position,
   });
 
-  return [...dataBlockType, ...dataBlockSourceType, ...dataBlockRelation];
+  const ops: SetTripleOp[] = [...dataBlockType, ...dataBlockSourceType, ...dataBlockRelation];
+
+  if (name) {
+    ops.push({
+      type: 'SET_TRIPLE',
+      triple: {
+        attribute: SYSTEM_IDS.NAME,
+        entity: newBlockId,
+        value: {
+          type: 'TEXT',
+          value: name,
+        },
+      },
+    });
+  }
+
+  return ops;
 }

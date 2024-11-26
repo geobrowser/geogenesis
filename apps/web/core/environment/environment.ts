@@ -11,7 +11,7 @@ export type AppConfig = {
   bundler: string;
 };
 
-export type IVars = Readonly<{
+type IVars = Readonly<{
   liveBlocksPublicKey: string;
   appEnv: string;
   walletConnectProjectId: string;
@@ -32,8 +32,6 @@ export const variables: IVars = {
   walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
   accountAbstractionApiKey: process.env.NEXT_PUBLIC_PIMLICO_API_KEY!,
 };
-
-export const DEFAULT_ENV: AppEnv = 'production';
 
 // @TODO: This eventually completely comes from our environment instead of hardcoded here.
 // We can ensure our env matches the right schema in `make` above.

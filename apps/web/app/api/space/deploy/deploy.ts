@@ -179,6 +179,10 @@ const query = (daoAddress: string) => ` {
   }
 }`;
 
+class TimeoutError extends Error {
+  _tag = 'TimeoutError';
+}
+
 async function waitForSpaceToBeIndexed(daoAddress: string) {
   console.log('Waiting for space to be indexed...');
 
@@ -224,12 +228,12 @@ async function waitForSpaceToBeIndexed(daoAddress: string) {
     const maybeSpace = resultOrError.right.spaces.nodes[0];
 
     if (!maybeSpace) {
-      yield* Effect.fail(new Error('Could not find deployed space'));
+      yield* Effect.fail(new TimeoutError('Could not find deployed space'));
       return null;
     }
 
     if (maybeSpace.spacesMetadata.nodes.length === 0) {
-      yield* Effect.fail(new Error('Could not find deployed space'));
+      yield* Effect.fail(new TimeoutError('Could not find deployed space'));
       return null;
     }
 
