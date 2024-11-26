@@ -1,4 +1,4 @@
-import { DataBlock, SYSTEM_IDS, TextBlock, createRelationship } from '@geogenesis/sdk';
+import { DataBlock, Relation, SYSTEM_IDS, TextBlock } from '@geogenesis/sdk';
 
 import type { Op } from '../types';
 import { SPACE_ID } from './constants';
@@ -51,7 +51,7 @@ const TEMPLATES: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
-      ...createRelationship({
+      ...Relation.make({
         fromId: SYSTEM_IDS.NONPROFIT_POSTS_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.POSTS_PAGE,
@@ -72,7 +72,7 @@ const TEMPLATES: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
-      ...createRelationship({
+      ...Relation.make({
         fromId: SYSTEM_IDS.NONPROFIT_PROJECTS_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.PROJECTS_PAGE,
@@ -82,18 +82,18 @@ const TEMPLATES: Template[] = [
   },
   {
     id: SYSTEM_IDS.NONPROFIT_TEAM_PAGE_TEMPLATE,
-    name: 'Nonprofit Projects Page Template',
+    name: 'Nonprofit Team Page Template',
     blocks: [
       ...DataBlock.make({
         fromId: SYSTEM_IDS.NONPROFIT_TEAM_PAGE_TEMPLATE,
-        sourceType: 'GEO',
+        sourceType: 'COLLECTION',
         name: 'Projects',
       }),
     ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
-      ...createRelationship({
+      ...Relation.make({
         fromId: SYSTEM_IDS.NONPROFIT_TEAM_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.PROJECTS_PAGE,
@@ -119,7 +119,7 @@ const TEMPLATES: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
-      ...createRelationship({
+      ...Relation.make({
         fromId: SYSTEM_IDS.NONPROFIT_FINANCES_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.FINANCES_PAGE,
@@ -144,7 +144,7 @@ export const templateOps: Op[] = TEMPLATES.flatMap(t => {
   };
 
   const typesOps = t.types.map(typeId =>
-    createRelationship({
+    Relation.make({
       fromId: t.id,
       relationTypeId: SYSTEM_IDS.TYPES,
       toId: typeId,
