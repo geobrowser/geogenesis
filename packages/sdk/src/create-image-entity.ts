@@ -1,7 +1,7 @@
-import { createRelationship } from './relations';
 import { createGeoId } from './id';
+import { Relation } from './relation';
 import { SYSTEM_IDS } from './system-ids';
-import { Op } from './types';
+import type { Op } from './types';
 
 /**
  * Creates an entity representing an Image.
@@ -12,7 +12,7 @@ export function createImageEntityOps(src: string): Op[] {
   const entityId = createGeoId();
 
   return [
-    ...createRelationship({
+    ...Relation.make({
       fromId: entityId,
       toId: SYSTEM_IDS.IMAGE,
       relationTypeId: SYSTEM_IDS.TYPES,

@@ -1,4 +1,4 @@
-import { createRelationship } from '@geogenesis/sdk';
+import { Relation } from '@geogenesis/sdk';
 
 import { EntityId } from '~/core/io/schema';
 import { Triple } from '~/core/types';
@@ -14,7 +14,7 @@ interface OpsToTriplesArgs {
 export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
   const { fromId, toId, spaceId, typeOfId } = args;
 
-  const [typeOp, fromOp, toOp, indexOp, typeOfOp] = createRelationship({
+  const [typeOp, fromOp, toOp, indexOp, typeOfOp] = Relation.make({
     fromId,
     toId,
     relationTypeId: typeOfId,

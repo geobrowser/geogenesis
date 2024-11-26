@@ -1,7 +1,8 @@
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from "../../../constants";
-import { createGeoId } from "../../id";
-import { GraphUrl } from "../../scheme";
-import { SYSTEM_IDS } from "../../system-ids";
+import { generateKeyBetween } from 'fractional-indexing';
+import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from "../../constants";
+import { createGeoId } from "../id";
+import { GraphUrl } from "../scheme";
+import { SYSTEM_IDS } from "../system-ids";
 
 interface CreateRelationArgs {
   fromId: string; // uuid
@@ -70,7 +71,7 @@ interface CreateRelationIndexOp {
   };
 };
 
-export function createRelationship(
+export function make(
   args: CreateRelationArgs
 ): readonly [
   CreateRelationTypeOp,
@@ -138,4 +139,39 @@ export function createRelationship(
       },
     },
   ] as const;
+}
+
+interface ReorderRelationArgs {
+  relationId: string;
+  beforeIndex?: string;
+  afterIndex?: string;
+}
+
+type ReorderRelationOp = {
+  type: 'SET_TRIPLE';
+  triple: {
+    attribute: typeof SYSTEM_IDS.RELATION_INDEX;
+    entity: string;
+    value: {
+      type: 'TEXT';
+      value: string;
+    };
+  };
+};
+
+// @TODO: Do we want jittering?
+export function reorder(args: ReorderRelationArgs): ReorderRelationOp {
+  const newIndex = generateKeyBetween(args.beforeIndex, args.afterIndex);
+
+  return {
+    type: 'SET_TRIPLE',
+    triple: {
+      attribute: SYSTEM_IDS.RELATION_INDEX,
+      entity: args.relationId,
+      value: {
+        type: 'TEXT',
+        value: newIndex,
+      },
+    }
+  };
 }

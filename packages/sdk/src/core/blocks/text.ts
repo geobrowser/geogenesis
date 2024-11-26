@@ -1,14 +1,14 @@
 import { createGeoId } from "../../id"
-import { createRelationship } from "../relations/create-relation"
+import { Relation } from "../../relation"
 import { SYSTEM_IDS } from "../../system-ids"
-import { Op } from "../../types"
+import type { Op } from "../../types"
 
 type TextBlockArgs = { fromId: string, text: string, position?: string }
 
 export function make({ fromId, text, position }: TextBlockArgs): Op[] {
   const newBlockId = createGeoId()
 
-  const textBlockType = createRelationship({
+  const textBlockType = Relation.make({
     fromId: newBlockId,
     relationTypeId: SYSTEM_IDS.TYPES,
     toId: SYSTEM_IDS.TEXT_BLOCK
@@ -26,7 +26,7 @@ export function make({ fromId, text, position }: TextBlockArgs): Op[] {
     }
   } as const
 
-  const textBlockRelation = createRelationship({
+  const textBlockRelation = Relation.make({
     fromId,
     relationTypeId: SYSTEM_IDS.BLOCKS,
     toId: newBlockId,
