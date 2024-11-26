@@ -18,14 +18,14 @@ type Template = {
 //   valueType: string;
 // };
 
-const TEMPLATES: Template[] = [
+const NONPROFIT: Template[] = [
   {
     id: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
     name: 'Nonprofit Space Configuration Template',
     blocks: [
       ...TextBlock.make({
         fromId: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
-        text: '# Welcome to our nonprofit!',
+        text: '## Welcome to our nonprofit!',
         position: 'a0',
       }),
       ...TextBlock.make({
@@ -129,27 +129,183 @@ const TEMPLATES: Template[] = [
   },
 ];
 
-export const templateOps: Op[] = TEMPLATES.flatMap(t => {
-  const nameOp: Op = {
-    type: 'SET_TRIPLE',
-    space: SPACE_ID,
-    triple: {
-      attribute: SYSTEM_IDS.NAME,
-      entity: t.id,
-      value: {
-        type: 'TEXT',
-        value: t.name,
+const COMPANY: Template[] = [
+  {
+    id: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+    name: 'Company Space Configuration Template',
+    blocks: [
+      ...TextBlock.make({
+        fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+        text: '## Welcome to our company!',
+        position: 'a0',
+      }),
+      ...TextBlock.make({
+        fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+        text: `We're dedicated to pushing boundaries and fostering innovation. With a focus on excellence and a passion for progress, we strive to make a positive impact in everything we do. From our talented team to our cutting-edge solutions, we're committed to delivering unparalleled quality and service to our customers.`,
+        position: 'a1',
+      }),
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+        sourceType: 'COLLECTION',
+        name: 'Goals',
+        position: 'a3',
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    types: [SYSTEM_IDS.SPACE_CONFIGURATION, SYSTEM_IDS.COMPANY_TYPE],
+    extraData: [],
+    foreignTypes: [],
+  },
+  {
+    id: SYSTEM_IDS.COMPANY_POSTS_PAGE_TEMPLATE,
+    name: 'Company Posts Page Template',
+    blocks: [
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.COMPANY_POSTS_PAGE_TEMPLATE,
+        sourceType: 'GEO',
+        name: 'Posts',
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      // Page type -> Posts page
+      ...Relation.make({
+        fromId: SYSTEM_IDS.COMPANY_POSTS_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.POSTS_PAGE,
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })),
+    foreignTypes: [],
+  },
+  {
+    id: SYSTEM_IDS.COMPANY_EVENTS_PAGE_TEMPLATE,
+    name: 'Company Events Page Template',
+    blocks: [
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.COMPANY_EVENTS_PAGE_TEMPLATE,
+        sourceType: 'GEO',
+        name: 'Events',
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      // Page type -> Events page
+      ...Relation.make({
+        fromId: SYSTEM_IDS.COMPANY_EVENTS_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.EVENTS_PAGE,
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })),
+    foreignTypes: [],
+  },
+  {
+    id: SYSTEM_IDS.COMPANY_JOBS_PAGE_TEMPLATE,
+    name: 'Company Jobs Page Template',
+    blocks: [
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.COMPANY_JOBS_PAGE_TEMPLATE,
+        sourceType: 'GEO',
+        name: 'Job openings',
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      // Page type -> Jobs page
+      ...Relation.make({
+        fromId: SYSTEM_IDS.COMPANY_JOBS_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.JOBS_PAGE,
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })),
+    foreignTypes: [],
+  },
+  {
+    id: SYSTEM_IDS.COMPANY_PRODUCTS_PAGE_TEMPLATE,
+    name: 'Company Products Page Template',
+    blocks: [
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.COMPANY_PRODUCTS_PAGE_TEMPLATE,
+        sourceType: 'GEO',
+        name: 'Products',
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      // Page type -> Products page
+      ...Relation.make({
+        fromId: SYSTEM_IDS.COMPANY_PRODUCTS_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.PRODUCTS_PAGE,
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })),
+    foreignTypes: [],
+  },
+  {
+    id: SYSTEM_IDS.COMPANY_SERVICES_PAGE_TEMPLATE,
+    name: 'Company Services Page Template',
+    blocks: [
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.COMPANY_SERVICES_PAGE_TEMPLATE,
+        sourceType: 'GEO',
+        name: 'Services',
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      // Page type -> Services page
+      ...Relation.make({
+        fromId: SYSTEM_IDS.COMPANY_SERVICES_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.SERVICES_PAGE,
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })),
+    foreignTypes: [],
+  },
+  {
+    id: SYSTEM_IDS.COMPANY_TEAM_PAGE_TEMPLATE,
+    name: 'Company Team Page Template',
+    blocks: [
+      ...DataBlock.make({
+        fromId: SYSTEM_IDS.COMPANY_TEAM_PAGE_TEMPLATE,
+        sourceType: 'COLLECTION',
+        name: 'Team members',
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      // Page type -> Team page
+      ...Relation.make({
+        fromId: SYSTEM_IDS.COMPANY_TEAM_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.TEAM_PAGE,
+      }),
+    ].map(o => ({ ...o, space: SPACE_ID })),
+    foreignTypes: [],
+  },
+];
+
+export const templateOps: Op[] = [...NONPROFIT, ...COMPANY]
+  .flatMap(t => {
+    const nameOp: Op = {
+      type: 'SET_TRIPLE',
+      space: SPACE_ID,
+      triple: {
+        attribute: SYSTEM_IDS.NAME,
+        entity: t.id,
+        value: {
+          type: 'TEXT',
+          value: t.name,
+        },
       },
-    },
-  };
+    };
 
-  const typesOps = t.types.map(typeId =>
-    Relation.make({
-      fromId: t.id,
-      relationTypeId: SYSTEM_IDS.TYPES,
-      toId: typeId,
-    })
-  );
+    const typesOps = t.types.map(typeId =>
+      Relation.make({
+        fromId: t.id,
+        relationTypeId: SYSTEM_IDS.TYPES,
+        toId: typeId,
+      })
+    );
 
-  return [nameOp, ...typesOps.flat(), ...t.blocks, ...t.extraData];
-}).map(o => ({ ...o, space: SPACE_ID }));
+    return [nameOp, ...typesOps.flat(), ...t.blocks, ...t.extraData];
+  })
+  .map(o => ({ ...o, space: SPACE_ID }));
