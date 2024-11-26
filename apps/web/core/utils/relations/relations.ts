@@ -1,4 +1,4 @@
-import { createRelationship } from '@geogenesis/sdk';
+import { Relation } from '@geogenesis/sdk';
 
 import { EntityId } from '~/core/io/schema';
 import { Triple } from '~/core/types';
@@ -6,17 +6,15 @@ import { Triple } from '~/core/types';
 interface OpsToTriplesArgs {
   relationId?: EntityId;
   toId: string;
-  toIdName: string | null;
   fromId: string;
   spaceId: string;
   typeOfId: string;
-  typeOfName: string | null;
 }
 
 export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
-  const { fromId, toId, toIdName, spaceId, typeOfId } = args;
+  const { fromId, toId, spaceId, typeOfId } = args;
 
-  const [typeOp, fromOp, toOp, indexOp, typeOfOp] = createRelationship({
+  const [typeOp, fromOp, toOp, indexOp, typeOfOp] = Relation.make({
     fromId,
     toId,
     relationTypeId: typeOfId,
@@ -32,8 +30,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityId: entityId,
       entityName: null,
       value: {
-        type: 'ENTITY',
-        name: 'Relation',
+        type: 'URL',
         value: typeOp.triple.value.value,
       },
     },
@@ -44,8 +41,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityId: entityId,
       entityName: null,
       value: {
-        type: 'ENTITY',
-        name: null,
+        type: 'URL',
         value: fromOp.triple.value.value,
       },
     },
@@ -56,8 +52,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityId: entityId,
       entityName: null,
       value: {
-        type: 'ENTITY',
-        name: toIdName,
+        type: 'URL',
         value: toOp.triple.value.value,
       },
     },
@@ -79,8 +74,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityId: entityId,
       entityName: null,
       value: {
-        type: 'ENTITY',
-        name: args.typeOfName,
+        type: 'URL',
         value: typeOfOp.triple.value.value,
       },
     },

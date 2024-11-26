@@ -143,7 +143,7 @@ function fetchEditProposalFromIpfs(
       // The initial content set might not be an Edit and instead be an import. If it's an import
       // we need to turn every Edit in the import into an individual EditProposal.
       case 'IMPORT_SPACE': {
-        const importResult = yield* _(decode(() => Import.fromBinary(ipfsContent)));
+        const importResult = yield* _(Decoder.decodeImport(ipfsContent));
 
         if (!importResult) {
           return null;

@@ -118,7 +118,7 @@ describe('EntityTableCell', () => {
                 name: 'some attribute name',
               },
               {
-                type: 'URI',
+                type: 'URL',
                 value: 'some url value',
               }
             ),
@@ -133,7 +133,7 @@ describe('EntityTableCell', () => {
               name: 'some attribute name',
             },
             {
-              type: 'URI',
+              type: 'URL',
               value: 'some url value',
             }
           ),
@@ -161,7 +161,7 @@ describe('EntityTableCell', () => {
                 name: 'some attribute name',
               },
               {
-                type: 'URI',
+                type: 'URL',
                 value: 'some url value',
               }
             ),

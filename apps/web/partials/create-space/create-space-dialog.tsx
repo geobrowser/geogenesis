@@ -32,8 +32,7 @@ import { Animation } from '~/partials/onboarding/dialog';
 const spaceTypeAtom = atom<SpaceType | null>(null);
 const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
 const nameAtom = atom<string>('');
-const avatarAtom = atom<string>('');
-const coverAtom = atom<string>('');
+const imageAtom = atom<string>('');
 const spaceIdAtom = atom<string>('');
 
 type Step = 'select-type' | 'select-governance' | 'enter-profile' | 'create-space' | 'completed';
@@ -50,7 +49,7 @@ export function CreateSpaceDialog() {
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const [name, setName] = useAtom(nameAtom);
-  const [cover, setCover] = useAtom(coverAtom);
+  const [image, setImage] = useAtom(imageAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
@@ -67,8 +66,7 @@ export function CreateSpaceDialog() {
       const spaceId = await deploy({
         type: spaceType,
         spaceName: name,
-        spaceAvatarUri: '',
-        spaceCoverUri: cover,
+        spaceImage: image,
         governanceType: governanceType ?? undefined,
       });
 
@@ -106,7 +104,7 @@ export function CreateSpaceDialog() {
       <Dialog.Trigger
         onClick={() => {
           setName('');
-          setCover('');
+          setImage('');
           setGovernanceType(null);
           setStep('select-type');
         }}
@@ -379,8 +377,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const [name, setName] = useAtom(nameAtom);
   const spaceType = useAtomValue(spaceTypeAtom);
   const isCompany = spaceType === 'company';
-  const [avatar, setAvatar] = useAtom(avatarAtom);
-  const [cover, setCover] = useAtom(coverAtom);
+  const [image, setImage] = useAtom(imageAtom);
 
   const validName = name.length > 0;
 
@@ -397,11 +394,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
       const file = e.target.files[0];
       const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
-      if (isCompany) {
-        setAvatar(imageValue);
-      } else {
-        setCover(imageValue);
-      }
+      setImage(imageValue);
     }
   };
 
@@ -417,11 +410,11 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
             <div className="group relative overflow-hidden rounded-lg shadow-lg">
               {isCompany ? (
                 <>
-                  {avatar ? (
+                  {image ? (
                     <>
                       <div
                         style={{
-                          backgroundImage: `url(${getImagePath(avatar)})`,
+                          backgroundImage: `url(${getImagePath(image)})`,
                           height: 152,
                           width: 152,
                           backgroundSize: 'cover',
@@ -429,7 +422,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
                         }}
                       />
                       <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
-                        <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
+                        <SquareButton disabled={image === ''} onClick={() => setImage('')} icon={<Trash />} />
                       </div>
                     </>
                   ) : (
@@ -438,11 +431,11 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
                 </>
               ) : (
                 <>
-                  {cover ? (
+                  {image ? (
                     <>
                       <div
                         style={{
-                          backgroundImage: `url(${getImagePath(cover)})`,
+                          backgroundImage: `url(${getImagePath(image)})`,
                           height: 100,
                           width: 250,
                           backgroundSize: 'cover',
@@ -450,7 +443,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
                         }}
                       />
                       <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
-                        <SquareButton disabled={cover === ''} onClick={() => setCover('')} icon={<Trash />} />
+                        <SquareButton disabled={image === ''} onClick={() => setImage('')} icon={<Trash />} />
                       </div>
                     </>
                   ) : (

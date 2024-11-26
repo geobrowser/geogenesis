@@ -1,3 +1,4 @@
+import { GraphUrl } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import { createVersionId } from '../../utils/id';

@@ -31,15 +31,17 @@ export const entityCountByTypeAtom = atom(get => {
 
   const entitySetByType: Record<string, Set<string>> = {};
 
-  typeActions.forEach(action => {
-    if (action.value.type !== 'ENTITY' || !action.value.name) return;
+  // @TODO disabling for now to remove ENTITY values. We aren't supporting
+  // the import flow yet anyway. Nov 20, 2024.
+  // typeActions.forEach(action => {
+  //   if (action.value.type !== 'ENTITY' || !action.value.name) return;
 
-    if (!Object.hasOwn(entitySetByType, action.value.name)) {
-      entitySetByType[action.value.name] = new Set();
-    }
+  //   if (!Object.hasOwn(entitySetByType, action.value.name)) {
+  //     entitySetByType[action.value.name] = new Set();
+  //   }
 
-    entitySetByType[action.value.name].add(action.entityId);
-  });
+  //   entitySetByType[action.value.name].add(action.entityId);
+  // });
 
   const entityCountByType: Array<{ name: string; count: string }> = [];
 

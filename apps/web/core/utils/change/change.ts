@@ -198,7 +198,10 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
   });
 }
 
-function isRealChange(before: TripleChangeValue | null, after: TripleChangeValue) {
+function isRealChange(
+  before: TripleChangeValue | RelationChangeValue | null,
+  after: TripleChangeValue | RelationChangeValue
+) {
   // The before and after values are the same
   if (before?.value === after.value) {
     return false;

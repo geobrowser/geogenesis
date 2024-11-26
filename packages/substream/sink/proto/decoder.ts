@@ -1,4 +1,4 @@
-import { Edit, ImportEdit, IpfsMetadata, Membership, Subspace } from '@geogenesis/sdk/proto';
+import { Edit, Import, ImportEdit, IpfsMetadata, Membership, Subspace } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 import { z } from 'zod';
 
@@ -64,7 +64,6 @@ function decodeIpfsMetadata(data: Buffer): Effect.Effect<z.infer<typeof ZodIpfsM
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const metadata = IpfsMetadata.fromBinary(data);
-
       const parseResult = ZodIpfsMetadata.safeParse(metadata.toJson());
 
       if (parseResult.success) {
@@ -82,7 +81,7 @@ function decodeEdit(data: Buffer): Effect.Effect<ParsedEdit | null> {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = Edit.fromBinary(data);
-      const parseResult = ZodEdit.safeParse(edit.toJson());
+      const parseResult = ZodEdit.safeParse(edit);
 
       if (parseResult.success) {
         return parseResult.data;
@@ -112,7 +111,6 @@ function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> 
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = ImportEdit.fromBinary(data);
-
       const parseResult = ZodImportEdit.safeParse(edit);
 
       if (parseResult.success) {
@@ -177,9 +175,35 @@ function decodeSubspace(data: Buffer) {
   });
 }
 
+const ZodImport = z.object({
+  version: z.string(),
+  name: z.string(),
+  previousNetwork: z.string(),
+  previousContractAddress: z.string(),
+  edits: z.array(z.string()),
+});
+
+function decodeImport(data: Buffer) {
+  return Effect.gen(function* (_) {
+    const decodeEffect = decode(() => {
+      const importResult = Import.fromBinary(data);
+      const parseResult = ZodImport.safeParse(importResult.toJson());
+
+      if (parseResult.success) {
+        return parseResult.data;
+      }
+
+      return null;
+    });
+
+    return yield* _(decodeEffect);
+  });
+}
+
 export const Decoder = {
   decodeIpfsMetadata,
   decodeEdit,
+  decodeImport,
   decodeImportEdit,
   decodeMembership,
   decodeEditorship,

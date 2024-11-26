@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import { StoreRelation } from '~/core/database/types';
@@ -20,14 +20,12 @@ import { makeRelationForSourceType } from './sources';
  * @returns an array of {@link StoreRelation} representing the data entity relations.
  */
 export function makeInitialDataEntityRelations(blockId: EntityId): [StoreRelation, StoreRelation] {
-  // @TODO: Make the source of the collection the block id instead of this new collection id
-
   return [
     // Create relation for the source type, e.g., Spaces, Collection, Geo, etc.
     makeRelationForSourceType('COLLECTION', blockId),
 
     // Create the type relation for the block itself. e.g., Table, Image, Text, etc.
-    getRelationForBlockType(blockId, SYSTEM_IDS.TABLE_BLOCK),
+    getRelationForBlockType(blockId, SYSTEM_IDS.DATA_BLOCK),
   ];
 }
 
@@ -72,23 +70,25 @@ export function upsertCollectionItemRelation({
 type UpsertSourceSpaceCollectionItemArgs = {
   collectionItemId: EntityId;
   spaceId: SpaceId;
-  sourceSpace: string;
+  sourceSpaceId: string;
+  toId: EntityId;
 };
 
 export function upsertSourceSpaceOnCollectionItem({
   collectionItemId,
   spaceId,
-  sourceSpace,
+  toId,
+  sourceSpaceId,
 }: UpsertSourceSpaceCollectionItemArgs) {
   DB.upsert(
     {
-      attributeId: SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE,
-      attributeName: 'Source Space',
+      attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+      attributeName: 'To entity',
       entityId: collectionItemId,
       entityName: null,
       value: {
-        type: 'TEXT',
-        value: sourceSpace,
+        type: 'URL',
+        value: GraphUrl.fromEntityId(toId, { spaceId: sourceSpaceId }),
       },
     },
     spaceId

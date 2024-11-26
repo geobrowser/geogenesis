@@ -84,30 +84,12 @@ type SubstreamTimeValue = Schema.Schema.Type<typeof SubstreamTimeValue>;
 /**
  * Url value
  */
-const SubstreamUriValue = Schema.Struct({
-  valueType: Schema.Literal('URI'),
+const SubstreamUrlValue = Schema.Struct({
+  valueType: Schema.Literal('URL'),
   textValue: Schema.String,
 });
 
-type SubstreamUriValue = Schema.Schema.Type<typeof SubstreamUriValue>;
-
-/**
- * Entity value
- */
-const SubstreamEntityValue = Schema.Struct({
-  valueType: Schema.Literal('ENTITY'),
-  textValue: Schema.Null,
-  entityValue: Schema.Struct({
-    id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
-    currentVersion: Schema.Struct({
-      version: Schema.Struct({
-        id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
-        name: Schema.NullOr(Schema.String),
-        versionTypes: SubstreamVersionTypes,
-      }),
-    }),
-  }),
-});
+type SubstreamUrlValue = Schema.Schema.Type<typeof SubstreamUrlValue>;
 
 const SubstreamCheckboxValue = Schema.Struct({
   valueType: Schema.Literal('CHECKBOX'),
@@ -116,15 +98,7 @@ const SubstreamCheckboxValue = Schema.Struct({
 
 type SubstreamCheckboxValue = Schema.Schema.Type<typeof SubstreamCheckboxValue>;
 
-export type SubstreamEntityValue = Schema.Schema.Type<typeof SubstreamEntityValue>;
-
-const SubstreamValue = Schema.Union(
-  SubstreamTextValue,
-  SubstreamEntityValue,
-  SubstreamTimeValue,
-  SubstreamUriValue,
-  SubstreamCheckboxValue
-);
+const SubstreamValue = Schema.Union(SubstreamTextValue, SubstreamTimeValue, SubstreamUrlValue, SubstreamCheckboxValue);
 type SubstreamValue = Schema.Schema.Type<typeof SubstreamValue>;
 
 const SpaceGovernanceType = Schema.Union(Schema.Literal('PUBLIC'), Schema.Literal('PERSONAL'));
@@ -140,7 +114,7 @@ const SchemaMembers = Schema.Struct({
 type SchemaMembers = Schema.Schema.Type<typeof SchemaMembers>;
 
 const SubstreamSpaceWithoutMetadata = Schema.Struct({
-  id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
+  id: Schema.String.pipe(Schema.fromBrand(SpaceId)),
   type: SpaceGovernanceType,
   daoAddress: AddressWithValidation,
   spacePluginAddress: AddressWithValidation,
@@ -161,13 +135,13 @@ export const SubstreamTriple = Schema.extend(
   SubstreamValue,
   Schema.Struct({
     entity: Schema.Struct({
-      id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
+      id: Schema.String.pipe(Schema.fromBrand(EntityId)),
       currentVersion: Schema.Struct({
         version: Schema.extend(Identifiable, Nameable),
       }),
     }),
     attribute: Schema.Struct({
-      id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
+      id: Schema.String.pipe(Schema.fromBrand(EntityId)),
       currentVersion: Schema.Struct({
         version: Schema.extend(Identifiable, Nameable),
       }),
@@ -294,7 +268,7 @@ export type SubstreamSubspace = Schema.Schema.Type<typeof SubstreamSubspace>;
  * An entity belongs to a space when it has at least one triple in that space.
  */
 export const SubstreamSearchResult = Schema.Struct({
-  id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
+  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
   currentVersion: Schema.Struct({
     version: Schema.Struct({
       id: Schema.String.pipe(Schema.fromBrand(EntityId)),

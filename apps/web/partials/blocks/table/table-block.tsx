@@ -96,7 +96,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       };
     }
 
-    if (f.columnId === SYSTEM_IDS.SPACE) {
+    if (f.columnId === SYSTEM_IDS.SPACE_FILTER) {
       return {
         ...f,
         columnName: 'Space',

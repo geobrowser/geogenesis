@@ -133,25 +133,15 @@ const ZodEditSetTriplePayload = z.object({
   entity: z.string(),
   attribute: z.string(),
 
-  /**
-   * TEXT = 1;
-   * NUMBER = 2;
-   * ENTITY = 3;
-   * URI = 4;
-   * CHECKBOX = 5;
-   * TIME = 6;
-   * GEO_LOCATION = 7;
-   */
   value: z.object({
     value: z.string(),
     type: z.union([
       z.literal('TEXT'),
       z.literal('NUMBER'),
-      z.literal('ENTITY'),
-      z.literal('URI'),
+      z.literal('URL'),
       z.literal('CHECKBOX'),
       z.literal('TIME'),
-      z.literal('GEO_LOCATION'),
+      z.literal('POINT'),
     ]),
   }),
 });
@@ -159,7 +149,7 @@ const ZodEditSetTriplePayload = z.object({
 const ZodEditDeleteTriplePayload = z.object({
   entity: z.string(),
   attribute: z.string(),
-  // value: z.object({}),
+  value: z.object({}),
 });
 
 const ZodSetTripleOp = z.object({
@@ -171,19 +161,6 @@ const ZodDeleteTripleOp = z.object({
   type: z.literal('DELETE_TRIPLE'),
   triple: ZodEditDeleteTriplePayload,
 });
-
-export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
-
-export const ZodEdit = z.object({
-  version: z.string(),
-  type: z.literal('ADD_EDIT'),
-  id: z.string(),
-  name: z.string(),
-  ops: z.array(ZodOp),
-  authors: z.array(z.string()),
-});
-
-export type ParsedEdit = z.infer<typeof ZodEdit>;
 
 export type EditProposal = Proposal & {
   type: 'ADD_EDIT';
@@ -203,13 +180,14 @@ const ZodImportEditSetTriplePayload = z.object({
   value: z.object({
     value: z.string(),
     /**
-     * TEXT = 1;
-     * NUMBER = 2;
-     * ENTITY = 3;
-     * URI = 4;
-     * CHECKBOX = 5;
-     * TIME = 6;
-     * GEO_LOCATION = 7;
+        enum ValueType {
+        TEXT = 1;
+        NUMBER = 2;
+        CHECKBOX = 3;
+        URL = 4;
+        TIME = 5;
+        POINT = 6;
+        }
      */
     type: z.number().transform(t => {
       switch (t) {
@@ -218,15 +196,13 @@ const ZodImportEditSetTriplePayload = z.object({
         case 2:
           return 'NUMBER';
         case 3:
-          return 'ENTITY';
-        case 4:
-          return 'URI';
-        case 5:
           return 'CHECKBOX';
-        case 6:
+        case 4:
+          return 'URL';
+        case 5:
           return 'TIME';
-        case 7:
-          return 'GEO_LOCATION';
+        case 6:
+          return 'POINT';
         default:
           return 'TEXT';
       }
@@ -262,3 +238,16 @@ export const ZodImportEdit = z.object({
 });
 
 export type ParsedImportEdit = z.infer<typeof ZodImportEdit>;
+
+export const ZodOp = z.union([ZodImportEditSetTripleOp, ZodImportEditDeleteTripleOp]);
+
+export const ZodEdit = z.object({
+  version: z.string(),
+  type: z.literal(1).transform(() => 'ADD_EDIT'),
+  id: z.string(),
+  name: z.string(),
+  ops: z.array(ZodOp),
+  authors: z.array(z.string()),
+});
+
+export type ParsedEdit = z.infer<typeof ZodEdit>;

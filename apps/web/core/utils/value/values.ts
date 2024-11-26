@@ -1,14 +1,6 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-
-import type { AppEntityValue, Triple } from '~/core/types';
+import type { Triple } from '~/core/types';
 
 import { getImageHash } from '../utils';
-
-export function nameOfEntityValue(triple?: Triple) {
-  if (!triple) return null;
-
-  return triple.value.type === 'ENTITY' ? triple.value.name : null;
-}
 
 export function stringValue(triple?: Triple) {
   if (!triple) return null;
@@ -30,8 +22,4 @@ export function toImageValue(rawValue: string) {
   } else {
     return '';
   }
-}
-
-export function isRelationValueType(t: Triple): t is Triple & { value: AppEntityValue } {
-  return t.value.type === 'ENTITY' && t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE;
 }

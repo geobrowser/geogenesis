@@ -43,7 +43,7 @@ function makeStubUriTriple(value: string): Triple {
     id: EntityId('1-1'),
     space: 'uri-space-from-test',
     value: {
-      type: 'URI',
+      type: 'URL',
       value: value,
     },
   };
@@ -60,22 +60,6 @@ function makeStubTimeTriple(value: string): Triple {
     value: {
       type: 'TIME',
       value: value,
-    },
-  };
-}
-
-function makeStubEntityTriple(value: string): Triple {
-  return {
-    attributeId: 'entity-attribute-from-test',
-    attributeName: 'Entity Attribute from Test',
-    entityId: EntityId('1'),
-    entityName: 'Entity Name From Entity Test',
-    id: EntityId('1-1'),
-    space: 'entity-space-from-test',
-    value: {
-      type: 'ENTITY',
-      value: value,
-      name: value,
     },
   };
 }
@@ -181,7 +165,7 @@ describe('Change', () => {
         blockChanges: [],
         changes: [
           {
-            type: 'URI',
+            type: 'URL',
             attribute: {
               id: 'uri-attribute-from-test',
               name: 'URI Attribute from Test',
@@ -269,68 +253,6 @@ describe('Change', () => {
   it('diffs a time triple with same values', () => {
     const before = makeStubEntity(() => makeStubTimeTriple('time-value-1-from-test'));
     const after = makeStubEntity(() => makeStubTimeTriple('time-value-1-from-test'));
-
-    const changes = aggregateChanges({
-      spaceId: undefined,
-      afterEntities: [after],
-      beforeEntities: [before],
-    });
-
-    const expected: EntityChange[] = [
-      {
-        id: EntityId('1'),
-        name: 'Entity Name from Test',
-        blockChanges: [],
-        changes: [],
-      },
-    ];
-
-    expect(changes).toStrictEqual(expected);
-  });
-
-  it('diffs an entity triple with different values', () => {
-    const before = makeStubEntity(() => makeStubEntityTriple('entity-value-1-from-test'));
-    const after = makeStubEntity(() => makeStubEntityTriple('entity-value-2-from-test'));
-
-    const changes = aggregateChanges({
-      spaceId: undefined,
-      afterEntities: [after],
-      beforeEntities: [before],
-    });
-
-    const expected: EntityChange[] = [
-      {
-        id: EntityId('1'),
-        name: 'Entity Name from Test',
-        blockChanges: [],
-        changes: [
-          {
-            type: 'ENTITY',
-            attribute: {
-              id: 'entity-attribute-from-test',
-              name: 'Entity Attribute from Test',
-            },
-            after: {
-              type: 'UPDATE',
-              valueName: 'entity-value-2-from-test',
-              value: 'entity-value-2-from-test',
-            },
-            before: {
-              type: 'UPDATE',
-              valueName: 'entity-value-1-from-test',
-              value: 'entity-value-1-from-test',
-            },
-          },
-        ],
-      },
-    ];
-
-    expect(changes).toStrictEqual(expected);
-  });
-
-  it('diffs an entity triple with same values', () => {
-    const before = makeStubEntity(() => makeStubEntityTriple('entity-value-1-from-test'));
-    const after = makeStubEntity(() => makeStubEntityTriple('entity-value-1-from-test'));
 
     const changes = aggregateChanges({
       spaceId: undefined,

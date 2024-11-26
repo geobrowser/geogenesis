@@ -1,15 +1,16 @@
-import { encodeFunctionData, stringToHex } from 'viem'
-import { SpaceAbi } from '../abis'
-import { VoteOption } from '../..'
+import { encodeFunctionData, stringToHex } from 'viem';
+
+import { VoteOption } from '../..';
+import { SpaceAbi } from '../abis';
 
 export function getAcceptSubspaceArguments({
   spacePluginAddress,
   ipfsUri,
   subspaceToAccept,
 }: {
-  spacePluginAddress: `0x${string}`
-  ipfsUri: `ipfs://${string}`
-  subspaceToAccept: `0x${string}`
+  spacePluginAddress: `0x${string}`;
+  ipfsUri: `ipfs://${string}`;
+  subspaceToAccept: `0x${string}`;
 }) {
   return [
     stringToHex(ipfsUri),
@@ -27,5 +28,5 @@ export function getAcceptSubspaceArguments({
     BigInt(0),
     VoteOption.Yes,
     true,
-  ] as const
+  ] as const;
 }

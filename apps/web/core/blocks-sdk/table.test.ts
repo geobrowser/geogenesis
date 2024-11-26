@@ -1,11 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
-import { MockNetworkData } from '~/core/io';
-
-import { EntityId } from '../io/schema';
 import {
-  createFiltersFromGraphQLString,
+  createFiltersFromGraphQLStringAndSource,
   createGraphQLStringFromFilters,
   createGraphQLStringFromFiltersV2,
 } from './table';
@@ -37,7 +34,7 @@ describe('TableBlock SDK', () => {
       {
         columnId: 'type',
         value: 'id 1',
-        valueType: 'ENTITY',
+        valueType: 'RELATION',
       },
     ]);
 
@@ -64,7 +61,7 @@ describe('TableBlock SDK', () => {
       {
         columnId: 'type',
         value: 'id 1',
-        valueType: 'ENTITY',
+        valueType: 'RELATION',
       },
       {
         columnId: SYSTEM_IDS.NAME,
@@ -79,7 +76,7 @@ describe('TableBlock SDK', () => {
 
     const spaceFilter = createGraphQLStringFromFilters([
       {
-        columnId: SYSTEM_IDS.SPACE,
+        columnId: SYSTEM_IDS.SPACE_FILTER,
         valueType: 'TEXT',
         value: '0x0000000000000000000000000000000000000000',
       },
@@ -104,18 +101,10 @@ describe('TableBlock SDK', () => {
      *
      * These four combinations can also be used together with an "and" filter
      */
-    const stringFilter = await createFiltersFromGraphQLString(
+    const stringFilter = await createFiltersFromGraphQLStringAndSource(
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", stringValue_starts_with_nocase: "Value 1"}}`,
-      async () => {
-        return {
-          id: EntityId('type'),
-          triples: [MockNetworkData.makeStubTriple('Types')],
-          name: 'Types',
-          description: '',
-          types: [],
-          nameTripleSpaces: [],
-          relationsOut: [],
-        };
+      {
+        type: 'GEO',
       }
     );
 
@@ -128,35 +117,19 @@ describe('TableBlock SDK', () => {
       },
     ]);
 
-    const entityFilter = await createFiltersFromGraphQLString(
+    const entityFilter = await createFiltersFromGraphQLStringAndSource(
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", entityValue: "id 1"}}`,
-      async () => {
-        return {
-          id: EntityId('id 1'),
-          triples: [MockNetworkData.makeStubTriple('Types')],
-          name: 'Entity Name',
-          description: '',
-          types: [],
-          nameTripleSpaces: [],
-          relationsOut: [],
-        };
+      {
+        type: 'GEO',
       }
     );
 
     expect(entityFilter).toEqual([{ columnId: 'type', valueName: 'Entity Name', value: 'id 1', valueType: 'entity' }]);
 
-    const nameFilter = await createFiltersFromGraphQLString(
+    const nameFilter = await createFiltersFromGraphQLStringAndSource(
       `{typeIds_contains_nocase: ["type-id"], name_starts_with_nocase: "id 1"}`,
-      async () => {
-        return {
-          id: EntityId('type'),
-          triples: [MockNetworkData.makeStubTriple('Name')],
-          name: 'Name',
-          description: '',
-          types: [],
-          nameTripleSpaces: [],
-          relationsOut: [],
-        };
+      {
+        type: 'GEO',
       }
     );
 
@@ -169,18 +142,10 @@ describe('TableBlock SDK', () => {
       },
     ]);
 
-    const andFilter = await createFiltersFromGraphQLString(
+    const andFilter = await createFiltersFromGraphQLStringAndSource(
       `{and: [{typeIds_contains_nocase: ["type-id"]}, {entityOf_: {attribute: "type", stringValue_starts_with_nocase: "Value 1"}}, {entityOf_: {attribute: "type", entityValue: "id 1"}}, {name_starts_with_nocase: "id 1"}]}`,
-      async () => {
-        return {
-          id: EntityId('id 1'),
-          triples: [MockNetworkData.makeStubTriple('Types')],
-          name: 'Entity Name',
-          description: '',
-          types: [],
-          nameTripleSpaces: [],
-          relationsOut: [],
-        };
+      {
+        type: 'GEO',
       }
     );
 
@@ -205,24 +170,16 @@ describe('TableBlock SDK', () => {
       },
     ]);
 
-    const spaceFilter = await createFiltersFromGraphQLString(
+    const spaceFilter = await createFiltersFromGraphQLStringAndSource(
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {space: "0x0000000000000000000000000000000000000000"}}`,
-      async () => {
-        return {
-          id: EntityId('id 1'),
-          triples: [MockNetworkData.makeStubTriple('Types')],
-          name: 'Entity Name',
-          description: '',
-          types: [],
-          nameTripleSpaces: [],
-          relationsOut: [],
-        };
+      {
+        type: 'GEO',
       }
     );
 
     expect(spaceFilter).toEqual([
       {
-        columnId: SYSTEM_IDS.SPACE,
+        columnId: SYSTEM_IDS.SPACE_FILTER,
         value: '0x0000000000000000000000000000000000000000',
         valueType: 'string',
         valueName: null,
@@ -245,7 +202,7 @@ describe('TableBlock SDK', () => {
       {
         columnId: 'type',
         value: 'id 1',
-        valueType: 'ENTITY',
+        valueType: 'RELATION',
       },
     ]);
 
@@ -270,7 +227,7 @@ describe('TableBlock SDK', () => {
       {
         columnId: 'type',
         value: 'id 1',
-        valueType: 'ENTITY',
+        valueType: 'RELATION',
       },
       {
         columnId: SYSTEM_IDS.NAME,
@@ -283,7 +240,7 @@ describe('TableBlock SDK', () => {
 
     const spaceFilter = createGraphQLStringFromFiltersV2([
       {
-        columnId: SYSTEM_IDS.SPACE,
+        columnId: SYSTEM_IDS.SPACE_FILTER,
         valueType: 'TEXT',
         value: '0x0000000000000000000000000000000000000000',
       },

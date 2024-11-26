@@ -1,18 +1,18 @@
 syntax = "proto3";
 
 message IpfsMetadata {
-  ActionType type = 1;
   // We version the data structured used to represent proposal metadata. Each
   // proposal type has their own metadata and versioning that we can change
   // independently of other proposal types.
-  string version = 2;
+  string version = 1;
+  ActionType type = 2;
   string id = 3;
   string name = 4;
 }
 
 message Edit {
-  ActionType type = 1;
-  string version = 2;
+  string version = 1;
+  ActionType type = 2;
   string id = 3;
   string name = 4;
   repeated Op ops = 5;
@@ -20,8 +20,8 @@ message Edit {
 }
 
 message ImportEdit {
-  ActionType type = 1;
-  string version = 2;
+  string version = 1;
+  ActionType type = 2;
   string id = 3;
   string name = 4;
   repeated Op ops = 5;
@@ -59,11 +59,10 @@ enum ValueType {
   UNKNOWN = 0;
   TEXT = 1;
   NUMBER = 2;
-  ENTITY = 3;
-  URI = 4;
-  CHECKBOX = 5;
-  TIME = 6;
-  GEO_LOCATION = 7;
+  CHECKBOX = 3;
+  URL = 4;
+  TIME = 5;
+  POINT = 6;
 }
 
 message Membership {
@@ -85,18 +84,19 @@ message Subspace {
 enum ActionType {
   EMPTY = 0;
   ADD_EDIT = 1;
-  IMPORT_SPACE = 2;
-  ADD_SUBSPACE = 3;
-  REMOVE_SUBSPACE = 4;
-  ADD_EDITOR = 5;
-  REMOVE_EDITOR = 6;
-  ADD_MEMBER = 7;
-  REMOVE_MEMBER = 8;
+  ADD_SUBSPACE = 2;
+  REMOVE_SUBSPACE = 3;
+  IMPORT_SPACE = 4;
+  ARCHIVE_SPACE = 5;
+  ADD_EDITOR = 6;
+  REMOVE_EDITOR = 7;
+  ADD_MEMBER = 8;
+  REMOVE_MEMBER = 9;
 }
 
 message Import {
-  ActionType type = 1;
-  string version = 2;
+  string version = 1;
+  ActionType type = 2;
   string previousNetwork = 3;
   string previousContractAddress = 4;
   repeated string edits = 5;

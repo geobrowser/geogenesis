@@ -1,33 +1,35 @@
-import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
+import { Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
-import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
-import { handleEditsPublished } from './events/edits-published/handler';
-import { handleInitialGovernanceSpaceEditorsAdded } from './events/initial-editors-added/handler';
-import { createInitialContentForSpaces } from './events/initial-proposal-created/handler';
-import type { EditProposal } from './events/proposals-created/parser';
-import { handleProposalsExecuted } from './events/proposals-executed/handler';
-import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
-import type { Op } from './types';
-
-const SPACE_ID = 'ab7d4b9e02f840dab9746d352acb0ac6';
-const DAO_ADDRESS = '0x9e2342C55080f2fCb6163c739a88c4F2915163C4';
-const SPACE_ADDRESS = '0x7a260AC2D569994AA22a259B19763c9F681Ff84c';
-const MAIN_VOTING_ADDRESS = '0x379408c230817DC7aA36033BEDC05DCBAcE7DF50';
-const MEMBER_ACCESS_ADDRESS = '0xd09225EAe465f562719B9cA07da2E8ab286DBB36';
+import { handleEditsPublished } from '../events/edits-published/handler';
+import { handleInitialGovernanceSpaceEditorsAdded } from '../events/initial-editors-added/handler';
+import { createInitialContentForSpaces } from '../events/initial-proposal-created/handler';
+import type { EditProposal } from '../events/proposals-created/parser';
+import { handleProposalsExecuted } from '../events/proposals-executed/handler';
+import { handleGovernancePluginCreated, handleSpacesCreated } from '../events/spaces-created/handler';
+import type { Op } from '../types';
+import { templateOps } from './bootstrap-templates';
+import {
+  DAO_ADDRESS,
+  INITIAL_BLOCK,
+  MAIN_VOTING_ADDRESS,
+  MEMBER_ACCESS_ADDRESS,
+  ROOT_SPACE_CREATED_AT,
+  ROOT_SPACE_CREATED_BY_ID,
+  SPACE_ADDRESS,
+  SPACE_ID,
+} from './constants';
 
 const names: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: 'Types',
   [SYSTEM_IDS.NAME]: 'Name',
   [SYSTEM_IDS.ATTRIBUTE]: 'Attribute',
   [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: 'Relation Type',
-  [SYSTEM_IDS.SPACE]: 'Indexed Space',
   [SYSTEM_IDS.ATTRIBUTES]: 'Attributes',
   [SYSTEM_IDS.SCHEMA_TYPE]: 'Type',
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: 'Template',
   [SYSTEM_IDS.VALUE_TYPE]: 'Value type',
   [SYSTEM_IDS.RELATION]: 'Relation',
-  [SYSTEM_IDS.COLLECTION_VALUE_TYPE]: 'Collection',
   [SYSTEM_IDS.TEXT]: 'Text',
   [SYSTEM_IDS.CHECKBOX]: 'Checkbox',
 
@@ -36,7 +38,6 @@ const names: Record<string, string> = {
 
   [SYSTEM_IDS.DATE]: 'Date',
   [SYSTEM_IDS.WEB_URL]: 'Web URL',
-  [SYSTEM_IDS.IMAGE_ATTRIBUTE]: 'Image',
   [SYSTEM_IDS.DESCRIPTION]: 'Description',
   [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source Space',
@@ -45,7 +46,7 @@ const names: Record<string, string> = {
 
   // Data blocks
   [SYSTEM_IDS.VIEW_TYPE]: 'View',
-  [SYSTEM_IDS.TABLE_BLOCK]: 'Table Block',
+  [SYSTEM_IDS.DATA_BLOCK]: 'Data Block',
   [SYSTEM_IDS.VIEW_ATTRIBUTE]: 'View',
   [SYSTEM_IDS.GALLERY_VIEW]: 'Gallery View',
   [SYSTEM_IDS.TABLE_VIEW]: 'Table View',
@@ -54,17 +55,16 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.TEXT_BLOCK]: 'Text Block',
   [SYSTEM_IDS.IMAGE_BLOCK]: 'Image Block',
   [SYSTEM_IDS.BLOCKS]: 'Blocks',
-  [SYSTEM_IDS.PARENT_ENTITY]: 'Parent Entity',
   [SYSTEM_IDS.FILTER]: 'Filter',
+  [SYSTEM_IDS.SPACE_FILTER]: 'Space filter',
   [SYSTEM_IDS.MARKDOWN_CONTENT]: 'Markdown Content',
-  [SYSTEM_IDS.ROW_TYPE]: 'Row Type',
   [SYSTEM_IDS.PLACEHOLDER_IMAGE]: 'Placeholder Image',
   [SYSTEM_IDS.PLACEHOLDER_TEXT]: 'Placeholder Text',
 
   [SYSTEM_IDS.PERSON_TYPE]: 'Person',
   [SYSTEM_IDS.AVATAR_ATTRIBUTE]: 'Avatar',
   [SYSTEM_IDS.COVER_ATTRIBUTE]: 'Cover',
-  [SYSTEM_IDS.WALLETS_ATTRIBUTE]: 'Wallets',
+  [SYSTEM_IDS.ACCOUNTS_ATTRIBUTE]: 'Accounts',
   [SYSTEM_IDS.BROADER_SPACES]: 'Broader Spaces',
   [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: 'Relation Value Types',
 
@@ -79,6 +79,21 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE]: 'Geo Data Source',
   [SYSTEM_IDS.QUERY_DATA_SOURCE]: 'Query Data Source',
   [SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE]: 'Collection Item',
+
+  // Templates + Space Layouts
+  [SYSTEM_IDS.NONPROFIT_TYPE]: 'Nonprofit',
+  [SYSTEM_IDS.PROJECT_TYPE]: 'Project',
+  [SYSTEM_IDS.COMPANY_TYPE]: 'Company',
+  [SYSTEM_IDS.PAGE_TYPE]: 'Page',
+  [SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE]: 'Page type',
+  [SYSTEM_IDS.POSTS_PAGE]: 'Posts page',
+  [SYSTEM_IDS.PROJECTS_PAGE]: 'Projects page',
+  [SYSTEM_IDS.FINANCES_PAGE]: 'Finances page',
+  [SYSTEM_IDS.TEAM_PAGE]: 'Team page',
+  [SYSTEM_IDS.JOBS_PAGE]: 'Jobs page',
+  [SYSTEM_IDS.EVENTS_PAGE]: 'Events page',
+  [SYSTEM_IDS.SERVICES_PAGE]: 'Services page',
+  [SYSTEM_IDS.PRODUCTS_PAGE]: 'Products page',
 };
 
 const attributes: Record<string, string> = {
@@ -87,10 +102,8 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.ATTRIBUTES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.VALUE_TYPE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.IMAGE_ATTRIBUTE]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.DESCRIPTION]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.NAME]: SYSTEM_IDS.TEXT,
-  [SYSTEM_IDS.SPACE]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: SYSTEM_IDS.CHECKBOX,
 
@@ -98,9 +111,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.VIEW_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.FOREIGN_TYPES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.MARKDOWN_CONTENT]: SYSTEM_IDS.TEXT,
-  [SYSTEM_IDS.ROW_TYPE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.BLOCKS]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.PARENT_ENTITY]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.FILTER]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.PLACEHOLDER_IMAGE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.PLACEHOLDER_TEXT]: SYSTEM_IDS.TEXT,
@@ -108,7 +119,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.AVATAR_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
   [SYSTEM_IDS.COVER_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
-  [SYSTEM_IDS.WALLETS_ATTRIBUTE]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.ACCOUNTS_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.RELATION_INDEX]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.RELATION_TO_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: SYSTEM_IDS.RELATION,
@@ -119,6 +130,8 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE]: SYSTEM_IDS.RELATION,
+
+  [SYSTEM_IDS.PAGE_TYPE]: SYSTEM_IDS.RELATION,
 };
 
 // These types include the default types and attributes for a given type. There might be more
@@ -134,10 +147,13 @@ const types: Record<string, string[]> = {
   [SYSTEM_IDS.WEB_URL]: [],
   [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE],
   [SYSTEM_IDS.SPACE_CONFIGURATION]: [SYSTEM_IDS.FOREIGN_TYPES, SYSTEM_IDS.BLOCKS],
-  [SYSTEM_IDS.IMAGE_BLOCK]: [SYSTEM_IDS.IMAGE_ATTRIBUTE, SYSTEM_IDS.PARENT_ENTITY],
-  [SYSTEM_IDS.TABLE_BLOCK]: [SYSTEM_IDS.ROW_TYPE, SYSTEM_IDS.PARENT_ENTITY],
-  [SYSTEM_IDS.TEXT_BLOCK]: [SYSTEM_IDS.MARKDOWN_CONTENT, SYSTEM_IDS.PARENT_ENTITY],
+  [SYSTEM_IDS.IMAGE_BLOCK]: [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE],
+  [SYSTEM_IDS.DATA_BLOCK]: [],
+  [SYSTEM_IDS.TEXT_BLOCK]: [SYSTEM_IDS.MARKDOWN_CONTENT],
   [SYSTEM_IDS.PERSON_TYPE]: [SYSTEM_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.COVER_ATTRIBUTE],
+  [SYSTEM_IDS.NONPROFIT_TYPE]: [],
+  [SYSTEM_IDS.PROJECT_TYPE]: [],
+  [SYSTEM_IDS.COMPANY_TYPE]: [],
   [SYSTEM_IDS.RELATION_TYPE]: [
     SYSTEM_IDS.RELATION_INDEX,
     SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
@@ -152,17 +168,17 @@ const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
     space: SPACE_ID,
     triple: {
       attribute: SYSTEM_IDS.NAME,
-      entity: entityId!,
+      entity: entityId,
       value: {
         type: 'TEXT',
-        value: name!,
+        value: name,
       },
     },
   } satisfies Op;
 });
 
 const attributeOps: Op[] = Object.keys(attributes).flatMap(attributeId => {
-  return createRelationship({
+  return Relation.make({
     fromId: attributeId,
     toId: SYSTEM_IDS.ATTRIBUTE,
     relationTypeId: SYSTEM_IDS.TYPES,
@@ -173,7 +189,7 @@ const attributeOps: Op[] = Object.keys(attributes).flatMap(attributeId => {
 });
 
 const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attributeId, valueType]) => {
-  return createRelationship({
+  return Relation.make({
     fromId: attributeId,
     toId: valueType,
     relationTypeId: SYSTEM_IDS.VALUE_TYPE,
@@ -183,8 +199,35 @@ const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attribu
   }));
 });
 
+// Temporary
+const spaceType = Relation.make({
+  fromId: SPACE_ID,
+  toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+  relationTypeId: SYSTEM_IDS.TYPES,
+})
+  .map((o): Op => {
+    return {
+      ...o,
+      space: SPACE_ID,
+    };
+  })
+  .concat([
+    {
+      space: SPACE_ID,
+      type: 'SET_TRIPLE',
+      triple: {
+        attribute: SYSTEM_IDS.NAME,
+        entity: SPACE_ID,
+        value: {
+          type: 'TEXT',
+          value: 'Root',
+        },
+      },
+    },
+  ]);
+
 const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
-  return createRelationship({
+  return Relation.make({
     fromId: typeId,
     toId: SYSTEM_IDS.SCHEMA_TYPE,
     relationTypeId: SYSTEM_IDS.TYPES,
@@ -196,7 +239,7 @@ const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
 
 const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds]) => {
   return attributeIds.flatMap(attributeId => {
-    return createRelationship({
+    return Relation.make({
       fromId: typeId,
       toId: attributeId,
       relationTypeId: SYSTEM_IDS.ATTRIBUTES,
@@ -207,10 +250,6 @@ const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds
   });
 });
 
-export class BootstrapRootError extends Error {
-  _tag: 'BootstrapRootError' = 'BootstrapRootError';
-}
-
 const editProposal: EditProposal = {
   type: 'ADD_EDIT',
   proposalId: '-1',
@@ -220,16 +259,17 @@ const editProposal: EditProposal = {
   endTime: ROOT_SPACE_CREATED_AT.toString(),
   startTime: ROOT_SPACE_CREATED_AT.toString(),
   metadataUri: 'bootstrapped-so-no-uri',
-  ops: [...nameOps, ...attributeOps, ...attributeValueTypeOps, ...typeOps, ...typeSchemaOps],
+  ops: [
+    ...nameOps,
+    ...attributeOps,
+    ...attributeValueTypeOps,
+    ...typeOps,
+    ...spaceType,
+    ...typeSchemaOps,
+    ...templateOps,
+  ],
   pluginAddress: MAIN_VOTING_ADDRESS,
-  space: SYSTEM_IDS.ROOT_SPACE_ID,
-};
-
-const INITIAL_BLOCK = {
-  blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
-  cursor: '0',
-  requestId: '-1',
-  timestamp: ROOT_SPACE_CREATED_AT,
+  space: SPACE_ID,
 };
 
 export const bootstrapRoot = Effect.gen(function* (_) {

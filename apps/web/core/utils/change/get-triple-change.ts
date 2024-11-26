@@ -1,6 +1,6 @@
 import { Triple } from '~/core/types';
 
-import { RelationChangeValue, TripleChangeValue } from './types';
+import { TripleChangeValue } from './types';
 
 /**
  * Compare the local triple with the remote triple and return the TripleChange.
@@ -14,7 +14,7 @@ import { RelationChangeValue, TripleChangeValue } from './types';
 export function getBeforeTripleChange(
   value: Triple['value'],
   remoteValue: Triple['value'] | null
-): (TripleChangeValue | RelationChangeValue) | null {
+): TripleChangeValue | null {
   if (remoteValue === null) {
     return null;
   }
@@ -22,14 +22,14 @@ export function getBeforeTripleChange(
   if (value.value !== remoteValue.value) {
     return {
       value: remoteValue.value,
-      valueName: remoteValue.type === 'ENTITY' ? remoteValue.name : null,
+      valueName: null,
       type: 'UPDATE',
     };
   }
 
   return {
     value: remoteValue.value,
-    valueName: remoteValue.type === 'ENTITY' ? remoteValue.name : null,
+    valueName: null,
     type: 'REMOVE',
   };
 }
@@ -44,14 +44,11 @@ export function getBeforeTripleChange(
  * @returns - {@link TripleChange}. There is always an after triple change, so this version
  * of the function always returns a value.
  */
-export function getAfterTripleChange(
-  value: Triple['value'],
-  remoteValue: Triple['value'] | null
-): TripleChangeValue | RelationChangeValue {
+export function getAfterTripleChange(value: Triple['value'], remoteValue: Triple['value'] | null): TripleChangeValue {
   if (remoteValue === null) {
     return {
       value: value.value,
-      valueName: value.type === 'ENTITY' ? value.name : null,
+      valueName: null,
       type: 'ADD',
     };
   }
@@ -59,14 +56,14 @@ export function getAfterTripleChange(
   if (value.value !== remoteValue.value) {
     return {
       value: value.value,
-      valueName: value.type === 'ENTITY' ? value.name : null,
+      valueName: null,
       type: 'UPDATE',
     };
   }
 
   return {
     value: value.value,
-    valueName: value.type === 'ENTITY' ? value.name : null,
+    valueName: null,
     type: 'ADD',
   };
 }
