@@ -11,7 +11,7 @@ export type AppConfig = {
   bundler: string;
 };
 
-export type IVars = Readonly<{
+type IVars = Readonly<{
   liveBlocksPublicKey: string;
   appEnv: string;
   walletConnectProjectId: string;
@@ -33,8 +33,6 @@ export const variables: IVars = {
   accountAbstractionApiKey: process.env.NEXT_PUBLIC_PIMLICO_API_KEY!,
 };
 
-export const DEFAULT_ENV: AppEnv = 'production';
-
 // @TODO: This eventually completely comes from our environment instead of hardcoded here.
 // We can ensure our env matches the right schema in `make` above.
 export const options: Record<AppEnv, AppConfig> = {
@@ -49,7 +47,7 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '19411',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
-    api: 'https://geo-conduit.up.railway.app/graphql',
+    api: 'http://localhost:5001/graphql',
     bundler: `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   testnet: {

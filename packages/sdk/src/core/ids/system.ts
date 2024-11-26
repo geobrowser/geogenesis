@@ -166,6 +166,7 @@ export const NONPROFIT_POSTS_PAGE_TEMPLATE = 'G8iePrDZk2SkqL9QEW6nCR';
 export const NONPROFIT_PROJECTS_PAGE_TEMPLATE = 'JkJDTY4f3Xc6APZKna5kGh';
 export const NONPROFIT_SERVICE_TYPE = 'GZao3GpaUjMrX14VB2LoNR';
 export const NONPROFIT_SPACE_CONFIGURATION_TEMPLATE = 'HEuj9VYAF5z1KQ8x37Uzze';
+export const NONPROFIT_TEAM_PAGE_TEMPLATE = 'K51CbDqxW35osbjPo5ZF77';
 
 /**
  * Defines the type of the page being copied when creating an entity
