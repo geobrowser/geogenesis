@@ -1,339 +1,339 @@
 export const abi = [
   {
-    "inputs": [],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
+    inputs: [],
+    stateMutability: 'nonpayable',
+    type: 'constructor',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "editor",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'editor',
+        type: 'address',
+      },
     ],
-    "name": "EditorAddressInvalid",
-    "type": "error"
+    name: 'EditorAddressInvalid',
+    type: 'error',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": false,
-        "internalType": "address",
-        "name": "dao",
-        "type": "address"
+        indexed: false,
+        internalType: 'address',
+        name: 'dao',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "address",
-        "name": "personalAdminPlugin",
-        "type": "address"
+        indexed: false,
+        internalType: 'address',
+        name: 'personalAdminPlugin',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "address",
-        "name": "initialEditor",
-        "type": "address"
-      }
+        indexed: false,
+        internalType: 'address',
+        name: 'initialEditor',
+        type: 'address',
+      },
     ],
-    "name": "GeoPersonalAdminPluginCreated",
-    "type": "event"
+    name: 'GeoPersonalAdminPluginCreated',
+    type: 'event',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "bytes",
-        "name": "_data",
-        "type": "bytes"
-      }
+        internalType: 'bytes',
+        name: '_data',
+        type: 'bytes',
+      },
     ],
-    "name": "decodeInstallationParams",
-    "outputs": [
+    name: 'decodeInstallationParams',
+    outputs: [
       {
-        "internalType": "address",
-        "name": "initialEditor",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'initialEditor',
+        type: 'address',
+      },
     ],
-    "stateMutability": "pure",
-    "type": "function"
+    stateMutability: 'pure',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "_initialEditor",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: '_initialEditor',
+        type: 'address',
+      },
     ],
-    "name": "encodeInstallationParams",
-    "outputs": [
+    name: 'encodeInstallationParams',
+    outputs: [
       {
-        "internalType": "bytes",
-        "name": "",
-        "type": "bytes"
-      }
+        internalType: 'bytes',
+        name: '',
+        type: 'bytes',
+      },
     ],
-    "stateMutability": "pure",
-    "type": "function"
+    stateMutability: 'pure',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "implementation",
-    "outputs": [
+    inputs: [],
+    name: 'implementation',
+    outputs: [
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "_dao",
-        "type": "address"
+        internalType: 'address',
+        name: '_dao',
+        type: 'address',
       },
       {
-        "internalType": "bytes",
-        "name": "_data",
-        "type": "bytes"
-      }
+        internalType: 'bytes',
+        name: '_data',
+        type: 'bytes',
+      },
     ],
-    "name": "prepareInstallation",
-    "outputs": [
+    name: 'prepareInstallation',
+    outputs: [
       {
-        "internalType": "address",
-        "name": "plugin",
-        "type": "address"
+        internalType: 'address',
+        name: 'plugin',
+        type: 'address',
       },
       {
-        "components": [
+        components: [
           {
-            "internalType": "address[]",
-            "name": "helpers",
-            "type": "address[]"
+            internalType: 'address[]',
+            name: 'helpers',
+            type: 'address[]',
           },
           {
-            "components": [
+            components: [
               {
-                "internalType": "enum PermissionLib.Operation",
-                "name": "operation",
-                "type": "uint8"
+                internalType: 'enum PermissionLib.Operation',
+                name: 'operation',
+                type: 'uint8',
               },
               {
-                "internalType": "address",
-                "name": "where",
-                "type": "address"
+                internalType: 'address',
+                name: 'where',
+                type: 'address',
               },
               {
-                "internalType": "address",
-                "name": "who",
-                "type": "address"
+                internalType: 'address',
+                name: 'who',
+                type: 'address',
               },
               {
-                "internalType": "address",
-                "name": "condition",
-                "type": "address"
+                internalType: 'address',
+                name: 'condition',
+                type: 'address',
               },
               {
-                "internalType": "bytes32",
-                "name": "permissionId",
-                "type": "bytes32"
-              }
+                internalType: 'bytes32',
+                name: 'permissionId',
+                type: 'bytes32',
+              },
             ],
-            "internalType": "struct PermissionLib.MultiTargetPermission[]",
-            "name": "permissions",
-            "type": "tuple[]"
-          }
+            internalType: 'struct PermissionLib.MultiTargetPermission[]',
+            name: 'permissions',
+            type: 'tuple[]',
+          },
         ],
-        "internalType": "struct IPluginSetup.PreparedSetupData",
-        "name": "preparedSetupData",
-        "type": "tuple"
-      }
+        internalType: 'struct IPluginSetup.PreparedSetupData',
+        name: 'preparedSetupData',
+        type: 'tuple',
+      },
     ],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "_dao",
-        "type": "address"
+        internalType: 'address',
+        name: '_dao',
+        type: 'address',
       },
       {
-        "components": [
+        components: [
           {
-            "internalType": "address",
-            "name": "plugin",
-            "type": "address"
+            internalType: 'address',
+            name: 'plugin',
+            type: 'address',
           },
           {
-            "internalType": "address[]",
-            "name": "currentHelpers",
-            "type": "address[]"
+            internalType: 'address[]',
+            name: 'currentHelpers',
+            type: 'address[]',
           },
           {
-            "internalType": "bytes",
-            "name": "data",
-            "type": "bytes"
-          }
+            internalType: 'bytes',
+            name: 'data',
+            type: 'bytes',
+          },
         ],
-        "internalType": "struct IPluginSetup.SetupPayload",
-        "name": "_payload",
-        "type": "tuple"
-      }
+        internalType: 'struct IPluginSetup.SetupPayload',
+        name: '_payload',
+        type: 'tuple',
+      },
     ],
-    "name": "prepareUninstallation",
-    "outputs": [
+    name: 'prepareUninstallation',
+    outputs: [
       {
-        "components": [
+        components: [
           {
-            "internalType": "enum PermissionLib.Operation",
-            "name": "operation",
-            "type": "uint8"
+            internalType: 'enum PermissionLib.Operation',
+            name: 'operation',
+            type: 'uint8',
           },
           {
-            "internalType": "address",
-            "name": "where",
-            "type": "address"
+            internalType: 'address',
+            name: 'where',
+            type: 'address',
           },
           {
-            "internalType": "address",
-            "name": "who",
-            "type": "address"
+            internalType: 'address',
+            name: 'who',
+            type: 'address',
           },
           {
-            "internalType": "address",
-            "name": "condition",
-            "type": "address"
+            internalType: 'address',
+            name: 'condition',
+            type: 'address',
           },
           {
-            "internalType": "bytes32",
-            "name": "permissionId",
-            "type": "bytes32"
-          }
+            internalType: 'bytes32',
+            name: 'permissionId',
+            type: 'bytes32',
+          },
         ],
-        "internalType": "struct PermissionLib.MultiTargetPermission[]",
-        "name": "permissions",
-        "type": "tuple[]"
-      }
+        internalType: 'struct PermissionLib.MultiTargetPermission[]',
+        name: 'permissions',
+        type: 'tuple[]',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "_dao",
-        "type": "address"
+        internalType: 'address',
+        name: '_dao',
+        type: 'address',
       },
       {
-        "internalType": "uint16",
-        "name": "_currentBuild",
-        "type": "uint16"
+        internalType: 'uint16',
+        name: '_currentBuild',
+        type: 'uint16',
       },
       {
-        "components": [
+        components: [
           {
-            "internalType": "address",
-            "name": "plugin",
-            "type": "address"
+            internalType: 'address',
+            name: 'plugin',
+            type: 'address',
           },
           {
-            "internalType": "address[]",
-            "name": "currentHelpers",
-            "type": "address[]"
+            internalType: 'address[]',
+            name: 'currentHelpers',
+            type: 'address[]',
           },
           {
-            "internalType": "bytes",
-            "name": "data",
-            "type": "bytes"
-          }
+            internalType: 'bytes',
+            name: 'data',
+            type: 'bytes',
+          },
         ],
-        "internalType": "struct IPluginSetup.SetupPayload",
-        "name": "_payload",
-        "type": "tuple"
-      }
+        internalType: 'struct IPluginSetup.SetupPayload',
+        name: '_payload',
+        type: 'tuple',
+      },
     ],
-    "name": "prepareUpdate",
-    "outputs": [
+    name: 'prepareUpdate',
+    outputs: [
       {
-        "internalType": "bytes",
-        "name": "initData",
-        "type": "bytes"
+        internalType: 'bytes',
+        name: 'initData',
+        type: 'bytes',
       },
       {
-        "components": [
+        components: [
           {
-            "internalType": "address[]",
-            "name": "helpers",
-            "type": "address[]"
+            internalType: 'address[]',
+            name: 'helpers',
+            type: 'address[]',
           },
           {
-            "components": [
+            components: [
               {
-                "internalType": "enum PermissionLib.Operation",
-                "name": "operation",
-                "type": "uint8"
+                internalType: 'enum PermissionLib.Operation',
+                name: 'operation',
+                type: 'uint8',
               },
               {
-                "internalType": "address",
-                "name": "where",
-                "type": "address"
+                internalType: 'address',
+                name: 'where',
+                type: 'address',
               },
               {
-                "internalType": "address",
-                "name": "who",
-                "type": "address"
+                internalType: 'address',
+                name: 'who',
+                type: 'address',
               },
               {
-                "internalType": "address",
-                "name": "condition",
-                "type": "address"
+                internalType: 'address',
+                name: 'condition',
+                type: 'address',
               },
               {
-                "internalType": "bytes32",
-                "name": "permissionId",
-                "type": "bytes32"
-              }
+                internalType: 'bytes32',
+                name: 'permissionId',
+                type: 'bytes32',
+              },
             ],
-            "internalType": "struct PermissionLib.MultiTargetPermission[]",
-            "name": "permissions",
-            "type": "tuple[]"
-          }
+            internalType: 'struct PermissionLib.MultiTargetPermission[]',
+            name: 'permissions',
+            type: 'tuple[]',
+          },
         ],
-        "internalType": "struct IPluginSetup.PreparedSetupData",
-        "name": "preparedSetupData",
-        "type": "tuple"
-      }
+        internalType: 'struct IPluginSetup.PreparedSetupData',
+        name: 'preparedSetupData',
+        type: 'tuple',
+      },
     ],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "bytes4",
-        "name": "_interfaceId",
-        "type": "bytes4"
-      }
+        internalType: 'bytes4',
+        name: '_interfaceId',
+        type: 'bytes4',
+      },
     ],
-    "name": "supportsInterface",
-    "outputs": [
+    name: 'supportsInterface',
+    outputs: [
       {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-] as const
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;

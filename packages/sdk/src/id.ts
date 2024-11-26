@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
-import { encodeBase58 } from './base58';
+
+import { encodeBase58 } from './core/base58';
 
 /**
  * Generate a v4 UUID.
@@ -20,14 +21,4 @@ export function createGeoId() {
   const uuid = uuidv4();
   const stripped = uuid.replaceAll(/-/g, '');
   return encodeBase58(stripped);
-}
-
-type CreateTripleIdArgs = {
-  spaceId: string;
-  entityId: string;
-  attributeId: string;
-};
-
-export function createTripleId(args: CreateTripleIdArgs): string {
-  return `${args.spaceId}:${args.entityId}:${args.attributeId}`;
 }

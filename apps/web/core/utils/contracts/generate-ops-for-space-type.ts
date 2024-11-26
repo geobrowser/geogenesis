@@ -1,4 +1,4 @@
-import { Op, SYSTEM_IDS, createImageEntityOps, createRelationship } from '@geogenesis/sdk';
+import { Image, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import type { SpaceGovernanceType, SpaceType } from '~/core/types';
@@ -37,7 +37,7 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
   switch (type) {
     case 'default': {
       ops.push(
-        ...createRelationship({
+        ...Relation.make({
           fromId: newEntityId,
           toId: SYSTEM_IDS.SPACE_CONFIGURATION,
           relationTypeId: SYSTEM_IDS.TYPES,
@@ -63,14 +63,14 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
   }
 
   if (spaceAvatarUri) {
-    const imageOps = createImageEntityOps(spaceAvatarUri);
+    const imageOps = Image.make(spaceAvatarUri);
 
     // Creates the image entity
     ops.push(...imageOps);
 
     // Creates the relation pointing to the image entity
     ops.push(
-      ...createRelationship({
+      ...Relation.make({
         fromId: newEntityId,
         toId: imageOps[0].triple.entity, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
@@ -79,7 +79,7 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
   }
 
   if (spaceCoverUri) {
-    const [typeOp, srcOp] = createImageEntityOps(spaceCoverUri);
+    const [typeOp, srcOp] = Image.make(spaceCoverUri);
 
     // Creates the image entity
     ops.push(typeOp);
@@ -87,7 +87,7 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
 
     // Creates the relation pointing to the image entity
     ops.push(
-      ...createRelationship({
+      ...Relation.make({
         fromId: newEntityId,
         toId: typeOp.triple.entity, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.COVER_ATTRIBUTE,

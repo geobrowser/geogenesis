@@ -1,18 +1,18 @@
 /** @type {import('prettier').Config} */
-module.exports = {
+export default {
   singleQuote: true,
-  trailingComma: "es5",
-  arrowParens: "avoid",
+  trailingComma: 'es5',
+  arrowParens: 'avoid',
   printWidth: 120,
   semi: true,
   importOrderSeparation: true,
   importOrderSortSpecifiers: true,
   importOrder: [
-    "^@geogenesis$",
+    '^@geogenesis$',
     // External dependencies
-    "^w",
+    '^w',
     // Every import starting with ./ or ~/
-    "^[./|~/]",
+    '^[./|~/]',
   ],
-  plugins: ["@trivago/prettier-plugin-sort-imports"],
+  plugins: ['@trivago/prettier-plugin-sort-imports'],
 };

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
+import { Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import { handleEditsPublished } from '../events/edits-published/handler';
@@ -170,7 +170,7 @@ const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
 });
 
 const attributeOps: Op[] = Object.keys(attributes).flatMap(attributeId => {
-  return createRelationship({
+  return Relation.make({
     fromId: attributeId,
     toId: SYSTEM_IDS.ATTRIBUTE,
     relationTypeId: SYSTEM_IDS.TYPES,
@@ -181,7 +181,7 @@ const attributeOps: Op[] = Object.keys(attributes).flatMap(attributeId => {
 });
 
 const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attributeId, valueType]) => {
-  return createRelationship({
+  return Relation.make({
     fromId: attributeId,
     toId: valueType,
     relationTypeId: SYSTEM_IDS.VALUE_TYPE,
@@ -192,7 +192,7 @@ const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attribu
 });
 
 // Temporary
-const spaceType = createRelationship({
+const spaceType = Relation.make({
   fromId: SPACE_ID,
   toId: SYSTEM_IDS.SPACE_CONFIGURATION,
   relationTypeId: SYSTEM_IDS.TYPES,
@@ -219,7 +219,7 @@ const spaceType = createRelationship({
   ]);
 
 const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
-  return createRelationship({
+  return Relation.make({
     fromId: typeId,
     toId: SYSTEM_IDS.SCHEMA_TYPE,
     relationTypeId: SYSTEM_IDS.TYPES,
@@ -231,7 +231,7 @@ const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
 
 const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds]) => {
   return attributeIds.flatMap(attributeId => {
-    return createRelationship({
+    return Relation.make({
       fromId: typeId,
       toId: attributeId,
       relationTypeId: SYSTEM_IDS.ATTRIBUTES,
