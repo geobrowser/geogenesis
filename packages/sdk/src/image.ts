@@ -1,1 +1,1 @@
-export * as Image from './core/image'
+export * as Image from './core/image';

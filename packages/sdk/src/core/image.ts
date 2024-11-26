@@ -24,9 +24,9 @@ export function make(src: string): Op[] {
         attribute: SYSTEM_IDS.IMAGE_URL_ATTRIBUTE,
         value: {
           type: 'URL',
-          value: src
-        }
-      }
-    }
-  ]
+          value: src,
+        },
+      },
+    },
+  ];
 }

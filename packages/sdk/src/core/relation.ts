@@ -1,14 +1,15 @@
 import { generateKeyBetween } from 'fractional-indexing';
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from "../../constants";
-import { createGeoId } from "../id";
-import { GraphUrl } from "../scheme";
-import { SYSTEM_IDS } from "../system-ids";
+
+import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants';
+import { createGeoId } from '../id';
+import { GraphUrl } from '../scheme';
+import { SYSTEM_IDS } from '../system-ids';
 
 interface CreateRelationArgs {
   fromId: string; // uuid
   toId: string; // uuid
   relationTypeId: string; // uuid
-  position?: string // fractional index
+  position?: string; // fractional index
 }
 
 type CreateRelationTypeOp = {
@@ -69,7 +70,7 @@ interface CreateRelationIndexOp {
       value: string;
     };
   };
-};
+}
 
 export function make(
   args: CreateRelationArgs
@@ -92,7 +93,7 @@ export function make(
           type: 'URL',
           value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE) as `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`,
         },
-      }
+      },
     },
     {
       type: 'SET_TRIPLE',
@@ -103,7 +104,7 @@ export function make(
           type: 'URL',
           value: GraphUrl.fromEntityId(args.fromId),
         },
-      }
+      },
     },
     {
       type: 'SET_TRIPLE',
@@ -114,7 +115,7 @@ export function make(
           type: 'URL',
           value: GraphUrl.fromEntityId(args.toId),
         },
-      }
+      },
     },
     {
       type: 'SET_TRIPLE',
@@ -124,7 +125,7 @@ export function make(
         value: {
           type: 'TEXT',
           value: args.position ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
-        }
+        },
       },
     },
     {
@@ -135,7 +136,7 @@ export function make(
         value: {
           type: 'URL',
           value: GraphUrl.fromEntityId(args.relationTypeId),
-        }
+        },
       },
     },
   ] as const;
@@ -172,6 +173,6 @@ export function reorder(args: ReorderRelationArgs): ReorderRelationOp {
         type: 'TEXT',
         value: newIndex,
       },
-    }
+    },
   };
 }

@@ -1,11 +1,9 @@
-import { encodeFunctionData, stringToHex } from 'viem'
-import { SpaceAbi } from '../abis'
-import { VoteOption } from '../..'
+import { encodeFunctionData, stringToHex } from 'viem';
 
-export function getProcessGeoProposalArguments(
-  spacePluginAddress: `0x${string}`,
-  ipfsUri: `ipfs://${string}`
-) {
+import { VoteOption } from '../..';
+import { SpaceAbi } from '../abis';
+
+export function getProcessGeoProposalArguments(spacePluginAddress: `0x${string}`, ipfsUri: `ipfs://${string}`) {
   return [
     stringToHex(ipfsUri),
     [
@@ -22,5 +20,5 @@ export function getProcessGeoProposalArguments(
     BigInt(0),
     VoteOption.Yes,
     true,
-  ] as const
+  ] as const;
 }

@@ -1,1 +1,1 @@
-export * as Relation from './core/relation'
+export * as Relation from './core/relation';
