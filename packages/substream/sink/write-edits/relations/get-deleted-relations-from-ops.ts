@@ -19,14 +19,17 @@ export function getDeletedRelationsFromOps(ops: PartialOp[]) {
       .filter(o => o.opType === 'DELETE_TRIPLE' && o.attribute === SYSTEM_IDS.TYPES)
       .map(o => o.entity);
 
-    const getRelations = Effect.all(
-      entityIdsForDeletedTypeOps.map(entityId =>
+    const getRelations = Effect.forEach(
+      entityIdsForDeletedTypeOps,
+      entityId =>
         Effect.promise(() => {
           return Relations.selectOne({
             entity_id: entityId,
           });
-        })
-      )
+        }),
+      {
+        concurrency: 50,
+      }
     );
 
     return (yield* _(getRelations)).filter(r => r !== undefined);

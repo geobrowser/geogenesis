@@ -76,13 +76,14 @@ export function aggregateRelations({
     ];
 
     const dbVersionsForEntitiesReferencedInBlock = (yield* _(
-      Effect.all(
-        referencedEntitiesInBlock.map(entityId => {
+      Effect.forEach(
+        referencedEntitiesInBlock,
+        entityId => {
           return Effect.retry(
             Effect.promise(() => CurrentVersions.selectOne({ entity_id: entityId })),
             { times: 5 }
           );
-        }),
+        },
         {
           concurrency: 50,
         }
@@ -97,10 +98,9 @@ export function aggregateRelations({
     // For all of the referenced versions, both from the edit and from the past, we
     // need to fetch the relations for each version so we can merge into new versions.
     const latestRelationsFromDbForVersions = (yield* _(
-      Effect.all(
-        [...lastDbVersionByEntityId.values()].map(version => {
-          return Effect.promise(() => Relations.select({ from_version_id: version }));
-        }),
+      Effect.forEach(
+        [...lastDbVersionByEntityId.values()],
+        version => Effect.promise(() => Relations.select({ from_version_id: version })),
         {
           concurrency: 100,
         }

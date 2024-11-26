@@ -14,25 +14,24 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
     yield* _(Effect.logDebug('Mapping editors'));
 
     for (const editor of editorAdded) {
-      // @TODO: effect.all
-      const maybeSpaceIdForVotingPlugin = yield* _(
-        Effect.tryPromise({
-          try: () => Spaces.findForVotingPlugin(editor.mainVotingPluginAddress),
-          catch: () =>
-            new InvalidPluginAddressForDaoError(
-              `Could not find space for main voting plugin address ${editor.mainVotingPluginAddress}`
-            ),
-        })
-      );
+      const maybeSpaceIdForVotingPluginEffect = Effect.tryPromise({
+        try: () => Spaces.findForVotingPlugin(editor.mainVotingPluginAddress),
+        catch: () =>
+          new InvalidPluginAddressForDaoError(
+            `Could not find space for main voting plugin address ${editor.mainVotingPluginAddress}`
+          ),
+      });
 
-      const maybeSpaceIdForPersonalPlugin = yield* _(
-        Effect.tryPromise({
-          try: () => Spaces.findForPersonalPlugin(editor.mainVotingPluginAddress),
-          catch: () =>
-            new InvalidPluginAddressForDaoError(
-              `Could not find space for main voting plugin address ${editor.mainVotingPluginAddress}`
-            ),
-        })
+      const maybeSpaceIdForPersonalPluginEffect = Effect.tryPromise({
+        try: () => Spaces.findForPersonalPlugin(editor.mainVotingPluginAddress),
+        catch: () =>
+          new InvalidPluginAddressForDaoError(
+            `Could not find space for main voting plugin address ${editor.mainVotingPluginAddress}`
+          ),
+      });
+
+      const [maybeSpaceIdForVotingPlugin, maybeSpaceIdForPersonalPlugin] = yield* _(
+        Effect.all([maybeSpaceIdForVotingPluginEffect, maybeSpaceIdForPersonalPluginEffect], { concurrency: 2 })
       );
 
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForPersonalPlugin) {

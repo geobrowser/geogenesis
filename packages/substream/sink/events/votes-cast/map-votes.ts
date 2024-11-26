@@ -59,10 +59,13 @@ export function mapVotes(
       // If maybeSpaceIdForVotingPlugin returns data we know that the vote corresponds to a voting action.
       // Same for maybeSpaceIdForMemberPlugin.
       const [maybeSpaceIdForVotingPlugin, maybeSpaceIdForMemberPlugin] = yield* _(
-        Effect.all([
-          Effect.promise(() => Spaces.findForVotingPlugin(vote.pluginAddress)),
-          Effect.promise(() => Spaces.findForMembershipPlugin(vote.pluginAddress)),
-        ])
+        Effect.all(
+          [
+            Effect.promise(() => Spaces.findForVotingPlugin(vote.pluginAddress)),
+            Effect.promise(() => Spaces.findForMembershipPlugin(vote.pluginAddress)),
+          ],
+          { concurrency: 2 }
+        )
       );
 
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForMemberPlugin) {

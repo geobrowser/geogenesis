@@ -111,29 +111,37 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
     yield* _(Effect.logDebug('Writing approved edits + versions'));
 
     yield* _(
-      Effect.all([
-        Effect.tryPromise({
-          try: () => Versions.upsert(allMergedVersions),
-          catch: error =>
-            new CouldNotWriteMergedVersionsError(`Failed to insert merged versions. ${(error as Error).message}`),
-        }),
-        writeEdits({
-          versions: defaultMergedVersions,
-          opsByEditId,
-          opsByVersionId: defaultMergedOpsByVersionId,
-          edits: defaultEdits,
-          block,
-          editType: 'DEFAULT',
-        }),
-        ...ipfsProposals.map(proposal => {
-          return Effect.tryPromise({
-            try: () => Proposals.setAcceptedById(proposal.proposalId),
-            catch: error => {
-              return new ProposalDoesNotExistError(String(error));
-            },
-          });
-        }),
-      ])
+      Effect.all(
+        [
+          Effect.tryPromise({
+            try: () => Versions.upsert(allMergedVersions),
+            catch: error =>
+              new CouldNotWriteMergedVersionsError(`Failed to insert merged versions. ${(error as Error).message}`),
+          }),
+          writeEdits({
+            versions: defaultMergedVersions,
+            opsByEditId,
+            opsByVersionId: defaultMergedOpsByVersionId,
+            edits: defaultEdits,
+            block,
+            editType: 'DEFAULT',
+          }),
+          Effect.forEach(
+            ipfsProposals,
+            proposal =>
+              Effect.tryPromise({
+                try: () => Proposals.setAcceptedById(proposal.proposalId),
+                catch: error => {
+                  return new ProposalDoesNotExistError(String(error));
+                },
+              }),
+            {
+              concurrency: 50,
+            }
+          ),
+        ],
+        { concurrency: 50 }
+      )
     );
 
     /**

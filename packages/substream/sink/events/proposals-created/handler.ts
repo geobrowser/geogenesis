@@ -29,12 +29,9 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
     yield* _(Effect.logDebug(`Gathering IPFS content for ${proposalsCreated.length} proposals`));
 
     const maybeProposals = yield* _(
-      Effect.all(
-        proposalsCreated.map(proposal => getProposalFromIpfs(proposal)),
-        {
-          concurrency: 20,
-        }
-      )
+      Effect.forEach(proposalsCreated, proposal => getProposalFromIpfs(proposal), {
+        concurrency: 20,
+      })
     );
 
     const proposals = maybeProposals.filter(

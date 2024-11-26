@@ -162,7 +162,7 @@ function fetchEditProposalFromIpfs(
         };
 
         const maybeDecodedEdits = yield* _(
-          Effect.all(importResult.edits.map(decodeImportEditEffect), {
+          Effect.forEach(importResult.edits, decodeImportEditEffect, {
             concurrency: 50,
             // @TODO: Batching, filtering errors? retrying errors?
           })
@@ -223,16 +223,16 @@ export function getEditsProposalsFromIpfsUri(proposalsProcessed: ProposalProcess
     yield* _(Effect.logInfo('Gathering IPFS content for accepted proposals'));
 
     const maybeProposalsFromIpfs = yield* _(
-      Effect.all(
-        proposalsProcessed.map(proposal =>
+      Effect.forEach(
+        proposalsProcessed,
+        proposal =>
           fetchEditProposalFromIpfs(
             {
               ipfsUri: proposal.contentUri,
               pluginAddress: proposal.pluginAddress,
             },
             block
-          )
-        ),
+          ),
         {
           concurrency: 20,
         }

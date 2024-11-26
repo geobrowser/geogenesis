@@ -178,7 +178,7 @@ const SubstreamRelation = Schema.Struct({
     name: Schema.NullOr(Schema.String),
     versionTypes: SubstreamVersionTypes,
 
-    // Currently our relation query only returns triples where the value type is URI
+    // Currently our relation query only returns triples where the value type is URL
     triples: Schema.Struct({
       nodes: Schema.Array(SubstreamTriple),
     }),

@@ -62,8 +62,9 @@ export function getDerivedSpaceIdsFromImportedSpaces(processedProposals: Proposa
     yield* _(Effect.logDebug(`Gathering IPFS import content for ${processedProposals.length} initial space proposals`));
 
     const maybeImportsFromIpfs = yield* _(
-      Effect.all(
-        processedProposals.map(p => {
+      Effect.forEach(
+        processedProposals,
+        p => {
           return Effect.gen(function* (_) {
             const maybeSpaceId = yield* _(fetchSpaceImportFromIpfs(p.contentUri));
 
@@ -73,7 +74,7 @@ export function getDerivedSpaceIdsFromImportedSpaces(processedProposals: Proposa
               spaceId: maybeSpaceId,
             };
           });
-        }),
+        },
         {
           concurrency: 50,
         }
