@@ -8,6 +8,7 @@ import type { EditProposal } from '../events/proposals-created/parser';
 import { handleProposalsExecuted } from '../events/proposals-executed/handler';
 import { handleGovernancePluginCreated, handleSpacesCreated } from '../events/spaces-created/handler';
 import type { Op } from '../types';
+import { templateOps } from './bootstrap-templates';
 import {
   DAO_ADDRESS,
   INITIAL_BLOCK,
@@ -78,6 +79,12 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE]: 'Geo Data Source',
   [SYSTEM_IDS.QUERY_DATA_SOURCE]: 'Query Data Source',
   [SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE]: 'Collection Item',
+
+  [SYSTEM_IDS.NONPROFIT_TYPE]: 'Nonprofit',
+  [SYSTEM_IDS.PROJECT_TYPE]: 'Project',
+  [SYSTEM_IDS.PAGE_TYPE]: 'Page',
+  [SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE]: 'Page type',
+  [SYSTEM_IDS.POSTS_PAGE]: 'Posts page',
 };
 
 const attributes: Record<string, string> = {
@@ -114,6 +121,8 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE]: SYSTEM_IDS.RELATION,
+
+  [SYSTEM_IDS.PAGE_TYPE]: SYSTEM_IDS.RELATION,
 };
 
 // These types include the default types and attributes for a given type. There might be more
@@ -133,6 +142,8 @@ const types: Record<string, string[]> = {
   [SYSTEM_IDS.DATA_BLOCK]: [],
   [SYSTEM_IDS.TEXT_BLOCK]: [SYSTEM_IDS.MARKDOWN_CONTENT],
   [SYSTEM_IDS.PERSON_TYPE]: [SYSTEM_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.COVER_ATTRIBUTE],
+  [SYSTEM_IDS.NONPROFIT_TYPE]: [],
+  [SYSTEM_IDS.PROJECT_TYPE]: [],
   [SYSTEM_IDS.RELATION_TYPE]: [
     SYSTEM_IDS.RELATION_INDEX,
     SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
@@ -178,6 +189,7 @@ const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attribu
   }));
 });
 
+// Temporary
 const spaceType = createRelationship({
   fromId: SPACE_ID,
   toId: SYSTEM_IDS.SPACE_CONFIGURATION,
@@ -228,6 +240,23 @@ const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds
   });
 });
 
+const adhocTypes: Record<string, string[]> = {
+  [SYSTEM_IDS.POSTS_PAGE]: [SYSTEM_IDS.PAGE_TYPE],
+};
+
+const adhocTypesOps: Op[] = Object.entries(adhocTypes).flatMap(([entityId, typeIds]) => {
+  return typeIds.flatMap(typeId => {
+    return createRelationship({
+      fromId: entityId,
+      toId: typeId,
+      relationTypeId: SYSTEM_IDS.TYPES,
+    }).map(op => ({
+      ...op,
+      space: SPACE_ID,
+    }));
+  });
+});
+
 const editProposal: EditProposal = {
   type: 'ADD_EDIT',
   proposalId: '-1',
@@ -237,7 +266,16 @@ const editProposal: EditProposal = {
   endTime: ROOT_SPACE_CREATED_AT.toString(),
   startTime: ROOT_SPACE_CREATED_AT.toString(),
   metadataUri: 'bootstrapped-so-no-uri',
-  ops: [...nameOps, ...attributeOps, ...attributeValueTypeOps, ...typeOps, ...spaceType, ...typeSchemaOps],
+  ops: [
+    ...nameOps,
+    ...attributeOps,
+    ...attributeValueTypeOps,
+    ...typeOps,
+    ...spaceType,
+    ...typeSchemaOps,
+    ...adhocTypesOps,
+    ...templateOps,
+  ],
   pluginAddress: MAIN_VOTING_ADDRESS,
   space: SPACE_ID,
 };

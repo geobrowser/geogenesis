@@ -2,86 +2,20 @@ import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants';
 import { GraphUrl } from '../graph-scheme';
 import { createGeoId } from '../id';
 import { SYSTEM_IDS } from '../system-ids';
+import type { SetTripleOp } from '../types';
 
 interface CreateCollectionItemArgs {
   fromId: string; // uuid
   toId: string; // uuid
   relationTypeId: string; // uuid
-  position?: string // fractional index
+  name?: string;
+  position?: string; // fractional index
 }
 
-type CreateRelationTypeOp = {
-  type: 'SET_TRIPLE';
-  triple: {
-    attribute: typeof SYSTEM_IDS.TYPES;
-    entity: string;
-    value: {
-      type: 'URL';
-      value: `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`;
-    };
-  };
-};
-
-type CreateRelationTypeOfOp = {
-  type: 'SET_TRIPLE';
-  triple: {
-    attribute: typeof SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE;
-    entity: string;
-    value: {
-      type: 'URL';
-      value: string;
-    };
-  };
-};
-
-type CreateRelationFromOp = {
-  type: 'SET_TRIPLE';
-  triple: {
-    attribute: typeof SYSTEM_IDS.RELATION_FROM_ATTRIBUTE;
-    entity: string;
-    value: {
-      type: 'URL';
-      value: string;
-    };
-  };
-};
-
-type CreateRelationToOp = {
-  type: 'SET_TRIPLE';
-  triple: {
-    attribute: typeof SYSTEM_IDS.RELATION_TO_ATTRIBUTE;
-    entity: string;
-    value: {
-      type: 'URL';
-      value: string;
-    };
-  };
-};
-
-interface CreateRelationIndexOp {
-  type: 'SET_TRIPLE';
-  triple: {
-    attribute: typeof SYSTEM_IDS.RELATION_INDEX;
-    entity: string;
-    value: {
-      type: 'TEXT';
-      value: string;
-    };
-  };
-};
-
-export function createRelationship(
-  args: CreateCollectionItemArgs
-): readonly [
-  CreateRelationTypeOp,
-  CreateRelationFromOp,
-  CreateRelationToOp,
-  CreateRelationIndexOp,
-  CreateRelationTypeOfOp,
-] {
+export function createRelationship(args: CreateCollectionItemArgs): SetTripleOp[] {
   const newEntityId = createGeoId();
 
-  return [
+  const ops: SetTripleOp[] = [
     // Type of Collection Item
     {
       type: 'SET_TRIPLE',
@@ -92,7 +26,7 @@ export function createRelationship(
           type: 'URL',
           value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE) as `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`,
         },
-      }
+      },
     },
     // Entity value for the collection itself
     {
@@ -104,7 +38,7 @@ export function createRelationship(
           type: 'URL',
           value: GraphUrl.fromEntityId(args.fromId),
         },
-      }
+      },
     },
     // Entity value for the entity referenced by this collection item
     {
@@ -116,7 +50,7 @@ export function createRelationship(
           type: 'URL',
           value: GraphUrl.fromEntityId(args.toId),
         },
-      }
+      },
     },
     {
       type: 'SET_TRIPLE',
@@ -126,7 +60,7 @@ export function createRelationship(
         value: {
           type: 'TEXT',
           value: args.position ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
-        }
+        },
       },
     },
     {
@@ -137,8 +71,24 @@ export function createRelationship(
         value: {
           type: 'URL',
           value: GraphUrl.fromEntityId(args.relationTypeId),
-        }
+        },
       },
     },
   ] as const;
+
+  if (args.name) {
+    ops.push({
+      type: 'SET_TRIPLE',
+      triple: {
+        attribute: SYSTEM_IDS.NAME,
+        entity: newEntityId,
+        value: {
+          type: 'TEXT',
+          value: args.name,
+        },
+      },
+    });
+  }
+
+  return ops;
 }

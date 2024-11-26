@@ -1,7 +1,7 @@
 import { createRelationship } from './collections';
 import { createGeoId } from './id';
 import { SYSTEM_IDS } from './system-ids';
-import { Op } from './types';
+import type { Op } from './types';
 
 /**
  * Creates an entity representing an Image.
@@ -24,9 +24,9 @@ export function createImageEntityOps(src: string): Op[] {
         attribute: SYSTEM_IDS.IMAGE_URL_ATTRIBUTE,
         value: {
           type: 'URL',
-          value: src
-        }
-      }
-    }
-  ]
+          value: src,
+        },
+      },
+    },
+  ];
 }
