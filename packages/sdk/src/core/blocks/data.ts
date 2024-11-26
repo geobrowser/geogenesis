@@ -1,6 +1,7 @@
-import { createRelationship } from "../collections";
-import { createGeoId } from "../id";
-import { SYSTEM_IDS } from "../system-ids";
+import { createRelationship } from "../relations/create-relation";
+import { createGeoId } from "../../id";
+import { SYSTEM_IDS } from "../../system-ids";
+import { Op } from "../../types";
 
 type DataBlockSourceType = "QUERY" | "COLLECTION" | "GEO"
 
@@ -15,7 +16,9 @@ function getSourceTypeId(sourceType: DataBlockSourceType) {
   }
 }
 
-export function make({ fromId, sourceType, position }: { fromId: string, sourceType: DataBlockSourceType, position?: string }) {
+type DataBlockArgs = { fromId: string, sourceType: DataBlockSourceType, position?: string }
+
+export function make({ fromId, sourceType, position }: DataBlockArgs): Op[] {
   const newBlockId = createGeoId()
 
   const dataBlockType = createRelationship({

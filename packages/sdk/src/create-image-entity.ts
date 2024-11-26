@@ -1,4 +1,4 @@
-import { createRelationship } from './collections';
+import { createRelationship } from './relations';
 import { createGeoId } from './id';
 import { SYSTEM_IDS } from './system-ids';
 import { Op } from './types';

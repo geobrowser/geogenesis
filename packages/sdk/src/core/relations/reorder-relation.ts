@@ -1,14 +1,13 @@
 import { generateKeyBetween } from 'fractional-indexing';
-import { SYSTEM_IDS } from '../system-ids';
+import { SYSTEM_IDS } from '../../system-ids';
 
-
-interface ReorderCollectionItemArgs {
-  collectionItemId: string;
+interface ReorderRelationArgs {
+  relationId: string;
   beforeIndex?: string;
   afterIndex?: string;
 }
 
-type ReorderCollectionItemOp = {
+type ReorderRelationOp = {
   type: 'SET_TRIPLE';
   triple: {
     attribute: typeof SYSTEM_IDS.RELATION_INDEX;
@@ -21,14 +20,14 @@ type ReorderCollectionItemOp = {
 };
 
 // @TODO: Do we want jittering?
-export function reorderCollectionItem(args: ReorderCollectionItemArgs): ReorderCollectionItemOp {
+export function reorderRelation(args: ReorderRelationArgs): ReorderRelationOp {
   const newIndex = generateKeyBetween(args.beforeIndex, args.afterIndex);
 
   return {
     type: 'SET_TRIPLE',
     triple: {
       attribute: SYSTEM_IDS.RELATION_INDEX,
-      entity: args.collectionItemId,
+      entity: args.relationId,
       value: {
         type: 'TEXT',
         value: newIndex,

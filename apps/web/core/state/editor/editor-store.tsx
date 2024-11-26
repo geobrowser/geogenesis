@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS, reorderCollectionItem } from '@geogenesis/sdk';
+import { SYSTEM_IDS, reorderRelation } from '@geogenesis/sdk';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { Array } from 'effect';
@@ -125,8 +125,8 @@ const makeBlocksRelations = async ({
         blockRelations.find(c => c.block.id === afterBlockIndex)?.index ??
         newBlocks.find(c => c.id === afterBlockIndex)?.index;
 
-      const newTripleOrdering = reorderCollectionItem({
-        collectionItemId: newRelationId,
+      const newTripleOrdering = reorderRelation({
+        relationId: newRelationId,
         beforeIndex: beforeCollectionItemIndex,
         afterIndex: afterCollectionItemIndex,
       });

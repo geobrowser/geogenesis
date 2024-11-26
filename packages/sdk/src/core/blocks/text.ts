@@ -1,8 +1,11 @@
-import { createRelationship } from "../collections";
-import { createGeoId } from "../id";
-import { SYSTEM_IDS } from "../system-ids";
+import { createGeoId } from "../../id"
+import { createRelationship } from "../relations/create-relation"
+import { SYSTEM_IDS } from "../../system-ids"
+import { Op } from "../../types"
 
-export function make({ fromId, text, position }: { fromId: string, text: string, position?: string }) {
+type TextBlockArgs = { fromId: string, text: string, position?: string }
+
+export function make({ fromId, text, position }: TextBlockArgs): Op[] {
   const newBlockId = createGeoId()
 
   const textBlockType = createRelationship({

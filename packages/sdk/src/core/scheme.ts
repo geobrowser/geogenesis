@@ -1,20 +1,25 @@
 type GraphUri = `graph://${string}`
 
-export function fromEntityId(entityId: string, spaceId?: string): GraphUri {
-  if (isGraphUrl(entityId)) {
+type SchemeQueryParams = {
+  spaceId?: string;
+  versionId?: string;
+}
+
+export function fromEntityId(entityId: string, params: SchemeQueryParams = {}): GraphUri {
+  if (isValid(entityId)) {
     throw new Error("The passed in entityId should not start with graph://")
   }
 
   let uri: GraphUri = `graph://${entityId}`
 
-  if (spaceId) {
-    uri = `${uri}?s=${spaceId}`
+  if (params.spaceId) {
+    uri = `${uri}?s=${params.spaceId}`
   }
 
   return uri
 }
 
-export function isGraphUrl(value: string): value is GraphUri {
+export function isValid(value: string): value is GraphUri {
   return value.startsWith('graph://')
 }
 

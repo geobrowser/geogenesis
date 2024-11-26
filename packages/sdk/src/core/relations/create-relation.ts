@@ -1,9 +1,9 @@
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants';
-import { GraphUrl } from '../graph-scheme';
-import { createGeoId } from '../id';
-import { SYSTEM_IDS } from '../system-ids';
+import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from "../../../constants";
+import { createGeoId } from "../../id";
+import { GraphUrl } from "../../scheme";
+import { SYSTEM_IDS } from "../../system-ids";
 
-interface CreateCollectionItemArgs {
+interface CreateRelationArgs {
   fromId: string; // uuid
   toId: string; // uuid
   relationTypeId: string; // uuid
@@ -71,7 +71,7 @@ interface CreateRelationIndexOp {
 };
 
 export function createRelationship(
-  args: CreateCollectionItemArgs
+  args: CreateRelationArgs
 ): readonly [
   CreateRelationTypeOp,
   CreateRelationFromOp,
@@ -82,7 +82,6 @@ export function createRelationship(
   const newEntityId = createGeoId();
 
   return [
-    // Type of Collection Item
     {
       type: 'SET_TRIPLE',
       triple: {
@@ -94,7 +93,6 @@ export function createRelationship(
         },
       }
     },
-    // Entity value for the collection itself
     {
       type: 'SET_TRIPLE',
       triple: {
@@ -106,7 +104,6 @@ export function createRelationship(
         },
       }
     },
-    // Entity value for the entity referenced by this collection item
     {
       type: 'SET_TRIPLE',
       triple: {
