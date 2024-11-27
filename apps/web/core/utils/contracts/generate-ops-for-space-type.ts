@@ -38,6 +38,18 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
     case 'personal': {
       const personOps = await generateOpsForPerson(newEntityId, spaceName);
       ops.push(...personOps);
+
+      const { accountId, ops: accountOps } = Account.make(initialEditorAddress);
+
+      ops.push(...accountOps);
+      ops.push(
+        ...Relation.make({
+          fromId: newEntityId,
+          relationTypeId: SYSTEM_IDS.ACCOUNTS_ATTRIBUTE,
+          toId: accountId,
+        })
+      );
+
       break;
     }
     case 'company': {
