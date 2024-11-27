@@ -87,8 +87,7 @@ const getData = async (spaceId: string, entityId: string) => {
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && nameTripleSpace) {
     // But don't redirect for space configuration templates in the root space
-
-    if (spaceId !== SYSTEM_IDS.ROOT_SPACE || entityId === SYSTEM_IDS.ROOT_SPACE_CONFIGURATION) {
+    if (spaceId !== SYSTEM_IDS.ROOT_SPACE_ID) {
       // Uncomment to navigate to space configuration templates in local development
       // if (process.env.NODE_ENV === 'development') return;
 
