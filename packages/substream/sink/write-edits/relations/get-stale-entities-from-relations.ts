@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import { getDeletedRelationsFromOps } from './get-deleted-relations-from-ops';
@@ -22,17 +22,18 @@ export function maybeEntityOpsToRelation(ops: Op[], entityId: string): RelationW
   const isRelation = setTriples.find(
     t =>
       t.triple.attribute === SYSTEM_IDS.TYPES &&
-      t.triple.value.type === 'ENTITY' &&
-      t.triple.value.value === SYSTEM_IDS.RELATION_TYPE
+      t.triple.value.type.toString() === 'URL' &&
+      GraphUrl.isValid(t.triple.value.value) &&
+      GraphUrl.toEntityId(t.triple.value.value) === SYSTEM_IDS.RELATION_TYPE
   );
   const to = setTriples.find(
-    t => t.triple.attribute === SYSTEM_IDS.RELATION_TO_ATTRIBUTE && t.triple.value.type === 'ENTITY'
+    t => t.triple.attribute === SYSTEM_IDS.RELATION_TO_ATTRIBUTE && t.triple.value.type === 'URL'
   );
   const from = setTriples.find(
-    t => t.triple.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE && t.triple.value.type === 'ENTITY'
+    t => t.triple.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE && t.triple.value.type === 'URL'
   );
   const type = setTriples.find(
-    t => t.triple.attribute === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE && t.triple.value.type === 'ENTITY'
+    t => t.triple.attribute === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE && t.triple.value.type === 'URL'
   );
   const index = setTriples.find(
     t => t.triple.attribute === SYSTEM_IDS.RELATION_INDEX && t.triple.value.type === 'TEXT'
@@ -46,11 +47,20 @@ export function maybeEntityOpsToRelation(ops: Op[], entityId: string): RelationW
     return null;
   }
 
+  const toId = to && GraphUrl.isValid(to.triple.value.value) ? GraphUrl.toEntityId(to.triple.value.value) : null;
+  const fromId =
+    from && GraphUrl.isValid(from.triple.value.value) ? GraphUrl.toEntityId(from.triple.value.value) : null;
+  const typeId =
+    type && GraphUrl.isValid(type.triple.value.value) ? GraphUrl.toEntityId(type.triple.value.value) : null;
+
+  if (!toId || !fromId || !typeId) {
+    return null;
+  }
   return {
-    to: to.triple.value.value,
-    from: from.triple.value.value,
+    to: toId,
+    from: fromId,
     entityId: entityId,
-    typeOf: type.triple.value.value,
+    typeOf: typeId,
     index: index?.triple.value.value,
   };
 }
@@ -82,14 +92,17 @@ export function getStaleEntitiesFromDeletedRelations(ops: Op[]) {
       )
     );
 
-    const getEntityIdOfFromRelations = Effect.all(
-      relations.map(relation =>
+    const getEntityIdOfFromRelations = Effect.forEach(
+      relations,
+      relation =>
         Effect.promise(() => {
           return Versions.selectOne({
             id: relation.from_version_id,
           });
-        })
-      )
+        }),
+      {
+        concurrency: 50,
+      }
     );
 
     const maybeEntityIds = yield* _(getEntityIdOfFromRelations);

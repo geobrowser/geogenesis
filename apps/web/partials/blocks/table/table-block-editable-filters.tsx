@@ -1,8 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { ValueType as TripleValueType } from '~/core/types';
-import { valueTypes } from '~/core/value-types';
+import { FilterableValueType, valueTypes } from '~/core/value-types';
 
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
@@ -28,7 +27,7 @@ export function TableBlockEditableFilters() {
     //   valueName: null,
     // },
     {
-      columnId: SYSTEM_IDS.SPACE,
+      columnId: SYSTEM_IDS.SPACE_FILTER,
       columnName: 'Space',
       valueType: valueTypes[SYSTEM_IDS.TEXT],
       value: '',
@@ -52,7 +51,7 @@ export function TableBlockEditableFilters() {
         };
       })
       // Filter out any columns with names and any columns that are not entity or string value types
-      .flatMap(c => (c.columnName !== '' && (c.valueType === 'ENTITY' || c.valueType === 'TEXT') ? [c] : [])),
+      .flatMap(c => (c.columnName !== '' && (c.valueType === 'RELATION' || c.valueType === 'TEXT') ? [c] : [])),
   ];
 
   const sortedFilters = sortFilters(filterableColumns);
@@ -65,7 +64,7 @@ export function TableBlockEditableFilters() {
   }: {
     columnId: string;
     value: string;
-    valueType: TripleValueType;
+    valueType: FilterableValueType;
     valueName: string | null;
   }) => {
     setFilterState([

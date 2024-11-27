@@ -5,7 +5,7 @@ import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty 
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
-import { LinkableChip, LinkableRelationChip } from '~/design-system/chip';
+import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
@@ -72,22 +72,13 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
                       />
                     );
                   }
-                  case 'URI': {
+                  case 'URL': {
                     return (
                       <WebUrlField
                         key={`uri-${renderable.attributeId}-${renderable.value}`}
                         isEditing={false}
                         value={renderable.value}
                       />
-                    );
-                  }
-                  case 'ENTITY': {
-                    return (
-                      <div key={`entity-${renderable.attributeId}-${renderable.value.value}}`} className="mt-1">
-                        <LinkableChip href={NavUtils.toEntity(renderable.spaceId, renderable.value.value)}>
-                          {renderable.value.name || renderable.value.value}
-                        </LinkableChip>
-                      </div>
                     );
                   }
                 }

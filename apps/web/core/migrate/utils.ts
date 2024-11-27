@@ -59,7 +59,7 @@ export function migrateStringTripleToUrlTriple(triple: TripleWithStringValue): T
     ...triple,
     value: {
       ...triple.value,
-      type: 'URI',
+      type: 'URL',
       value: triple.value.value,
     },
   };

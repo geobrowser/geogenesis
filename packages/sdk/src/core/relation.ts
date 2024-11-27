@@ -1,11 +1,15 @@
+import { generateKeyBetween } from 'fractional-indexing';
+
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants';
 import { createGeoId } from '../id';
+import { GraphUrl } from '../scheme';
 import { SYSTEM_IDS } from '../system-ids';
 
-interface CreateCollectionItemArgs {
+interface CreateRelationArgs {
   fromId: string; // uuid
   toId: string; // uuid
   relationTypeId: string; // uuid
+  position?: string; // fractional index
 }
 
 type CreateRelationTypeOp = {
@@ -14,8 +18,8 @@ type CreateRelationTypeOp = {
     attribute: typeof SYSTEM_IDS.TYPES;
     entity: string;
     value: {
-      type: 'ENTITY';
-      value: typeof SYSTEM_IDS.RELATION_TYPE;
+      type: 'URL';
+      value: `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`;
     };
   };
 };
@@ -26,7 +30,7 @@ type CreateRelationTypeOfOp = {
     attribute: typeof SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE;
     entity: string;
     value: {
-      type: 'ENTITY';
+      type: 'URL';
       value: string;
     };
   };
@@ -38,7 +42,7 @@ type CreateRelationFromOp = {
     attribute: typeof SYSTEM_IDS.RELATION_FROM_ATTRIBUTE;
     entity: string;
     value: {
-      type: 'ENTITY';
+      type: 'URL';
       value: string;
     };
   };
@@ -50,7 +54,7 @@ type CreateRelationToOp = {
     attribute: typeof SYSTEM_IDS.RELATION_TO_ATTRIBUTE;
     entity: string;
     value: {
-      type: 'ENTITY';
+      type: 'URL';
       value: string;
     };
   };
@@ -66,10 +70,10 @@ interface CreateRelationIndexOp {
       value: string;
     };
   };
-};
+}
 
-export function createRelationship(
-  args: CreateCollectionItemArgs
+export function make(
+  args: CreateRelationArgs
 ): readonly [
   CreateRelationTypeOp,
   CreateRelationFromOp,
@@ -80,41 +84,38 @@ export function createRelationship(
   const newEntityId = createGeoId();
 
   return [
-    // Type of Collection Item
     {
       type: 'SET_TRIPLE',
       triple: {
         attribute: SYSTEM_IDS.TYPES,
         entity: newEntityId,
         value: {
-          type: 'ENTITY',
-          value: SYSTEM_IDS.RELATION_TYPE,
+          type: 'URL',
+          value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE) as `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`,
         },
-      }
+      },
     },
-    // Entity value for the collection itself
     {
       type: 'SET_TRIPLE',
       triple: {
         attribute: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
         entity: newEntityId,
         value: {
-          type: 'ENTITY',
-          value: args.fromId,
+          type: 'URL',
+          value: GraphUrl.fromEntityId(args.fromId),
         },
-      }
+      },
     },
-    // Entity value for the entity referenced by this collection item
     {
       type: 'SET_TRIPLE',
       triple: {
         attribute: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
         entity: newEntityId,
         value: {
-          type: 'ENTITY',
-          value: args.toId,
+          type: 'URL',
+          value: GraphUrl.fromEntityId(args.toId),
         },
-      }
+      },
     },
     {
       type: 'SET_TRIPLE',
@@ -123,8 +124,8 @@ export function createRelationship(
         entity: newEntityId,
         value: {
           type: 'TEXT',
-          value: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
-        }
+          value: args.position ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+        },
       },
     },
     {
@@ -133,10 +134,45 @@ export function createRelationship(
         attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
         entity: newEntityId,
         value: {
-          type: 'ENTITY',
-          value: args.relationTypeId,
-        }
+          type: 'URL',
+          value: GraphUrl.fromEntityId(args.relationTypeId),
+        },
       },
     },
   ] as const;
+}
+
+interface ReorderRelationArgs {
+  relationId: string;
+  beforeIndex?: string;
+  afterIndex?: string;
+}
+
+type ReorderRelationOp = {
+  type: 'SET_TRIPLE';
+  triple: {
+    attribute: typeof SYSTEM_IDS.RELATION_INDEX;
+    entity: string;
+    value: {
+      type: 'TEXT';
+      value: string;
+    };
+  };
+};
+
+// @TODO: Do we want jittering?
+export function reorder(args: ReorderRelationArgs): ReorderRelationOp {
+  const newIndex = generateKeyBetween(args.beforeIndex, args.afterIndex);
+
+  return {
+    type: 'SET_TRIPLE',
+    triple: {
+      attribute: SYSTEM_IDS.RELATION_INDEX,
+      entity: args.relationId,
+      value: {
+        type: 'TEXT',
+        value: newIndex,
+      },
+    },
+  };
 }

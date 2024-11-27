@@ -1,11 +1,6 @@
 import { EntityId } from '~/core/io/schema';
 
-import {
-  BaseRelationRenderableProperty,
-  EntityRenderableProperty,
-  ImageRelationRenderableProperty,
-  NativeRenderableProperty,
-} from '../../types';
+import { BaseRelationRenderableProperty, ImageRelationRenderableProperty, NativeRenderableProperty } from '../../types';
 
 export type BlockId = string;
 
@@ -28,7 +23,9 @@ export type RelationChangeValue = {
 
 export type TripleChangeValue = {
   value: string;
-  valueName: string | null;
+  // mostly to make discriminated unions easier to handle at consumers by matching
+  // the same shape as RelationValueChange
+  valueName: null;
 } & ChangeType;
 
 type Attribute = {
@@ -43,9 +40,9 @@ type Attribute = {
  *
  * This makes it so the diff UI can work the same way as our standard rendering UI.
  */
-export type RenderableChange = TripleChange | RelationChange;
 export type RelationChange = BaseRelationChange | ImageRelationChange;
-export type TripleChange = NativeTripleChange | EntityTripleChange;
+export type TripleChange = NativeTripleChange;
+export type RenderableChange = TripleChange | RelationChange;
 
 type BaseRelationChange = {
   type: BaseRelationRenderableProperty['type'];
@@ -66,13 +63,6 @@ type NativeTripleChange = {
   attribute: Attribute;
   before: TripleChangeValue | null;
   after: TripleChangeValue;
-};
-
-type EntityTripleChange = {
-  type: EntityRenderableProperty['type'];
-  attribute: Attribute;
-  before: RelationChangeValue | null;
-  after: RelationChangeValue;
 };
 
 export type EntityChange = {

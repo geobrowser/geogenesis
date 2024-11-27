@@ -15,8 +15,9 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[]) {
 
     // @TODO: Batch update proposals in one insert instead of iteratively
     yield* _(
-      Effect.all(
-        proposalsExecuted.map(proposal => {
+      Effect.forEach(
+        proposalsExecuted,
+        proposal => {
           return Effect.tryPromise({
             try: async () => {
               // There might be executed proposals coming from both the member access plugin
@@ -86,7 +87,10 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[]) {
               return new CouldNotWriteExecutedProposalError(String(error));
             },
           });
-        })
+        },
+        {
+          concurrency: 50,
+        }
       )
     );
   });

@@ -8,28 +8,23 @@ import { SpaceGovernanceType } from '../types';
 
 // Governance type is only manually set if the space is a "Blank"/default space.
 // Otherwise we manually set the governance type depending on the space type.
-type DeployArgs =
-  | {
-      type: 'personal' | 'company';
-      spaceName: string;
-      spaceAvatarUri?: string;
-      governanceType?: SpaceGovernanceType;
-    }
-  | {
-      type:
-        | 'default'
-        | 'nonprofit'
-        | 'academic-field'
-        | 'region'
-        | 'industry'
-        | 'protocol'
-        | 'dao'
-        | 'government-org'
-        | 'interest-group';
-      spaceName: string;
-      spaceCoverUri?: string;
-      governanceType?: SpaceGovernanceType;
-    };
+type DeployArgs = {
+  type:
+    | 'personal'
+    | 'company'
+    | 'default'
+    | 'nonprofit'
+    | 'academic-field'
+    | 'region'
+    | 'industry'
+    | 'protocol'
+    | 'dao'
+    | 'government-org'
+    | 'interest-group';
+  spaceName: string;
+  spaceImage?: string;
+  governanceType?: SpaceGovernanceType;
+};
 
 export function useDeploySpace() {
   const smartAccount = useSmartAccount();
@@ -54,8 +49,8 @@ export function useDeploySpace() {
       );
 
       if (args.type === 'personal' || args.type === 'company') {
-        if (args.spaceAvatarUri && args.spaceAvatarUri !== '') {
-          url.searchParams.set('spaceAvatarUri', args.spaceAvatarUri);
+        if (args.spaceImage && args.spaceImage !== '') {
+          url.searchParams.set('spaceAvatarUri', args.spaceImage);
         }
       } else if (
         args.type === 'default' ||
@@ -68,8 +63,8 @@ export function useDeploySpace() {
         args.type === 'government-org' ||
         args.type === 'interest-group'
       ) {
-        if (args.spaceCoverUri && args.spaceCoverUri !== '') {
-          url.searchParams.set('spaceCoverUri', args.spaceCoverUri);
+        if (args.spaceImage && args.spaceImage !== '') {
+          url.searchParams.set('spaceCoverUri', args.spaceImage);
         }
       }
 

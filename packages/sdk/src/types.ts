@@ -1,4 +1,4 @@
-export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URI' | 'TIME' | 'GEO_LOCATION';
+export type ValueType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'URL' | 'TIME' | 'POINT';
 
 export type Value = {
   type: ValueType;
@@ -25,7 +25,6 @@ export type DeleteTripleOp = {
   triple: {
     entity: string;
     attribute: string;
-    // Delete operations don't need a value since there can only be one (spaceId, entityId, attributeId) tuple combination
   };
 };
 

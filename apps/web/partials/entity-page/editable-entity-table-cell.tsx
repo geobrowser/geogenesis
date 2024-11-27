@@ -8,7 +8,7 @@ import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
-import { DeletableChipButton, LinkableRelationChip } from '~/design-system/chip';
+import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageStringField, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
@@ -198,7 +198,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             );
           case 'TIME':
             return <DateField key={renderable.attributeId} isEditing={true} value={renderable.value} />;
-          case 'URI':
+          case 'URL':
             return (
               <WebUrlField
                 key={renderable.attributeId}
@@ -207,46 +207,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 value={renderable.value}
               />
             );
-          case 'ENTITY': {
-            if (renderable.value.value === '') {
-              return (
-                <div
-                  key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value.value}`}
-                  data-testid="select-entity"
-                  className="w-full"
-                >
-                  <SelectEntity
-                    spaceId={spaceId}
-                    onDone={result => {
-                      send({
-                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                        payload: {
-                          renderable,
-                          value: {
-                            type: 'ENTITY',
-                            value: result.id,
-                            name: result.name,
-                          },
-                        },
-                      });
-                    }}
-                    variant="fixed"
-                  />
-                </div>
-              );
-            }
-
-            return (
-              <div key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value.value}`}>
-                <DeletableChipButton
-                  href={NavUtils.toEntity(renderable.spaceId, renderable.value.value)}
-                  // onClick={() => removeOrResetEntityTriple(triple)}
-                >
-                  {renderable.value.name || renderable.value.value}
-                </DeletableChipButton>
-              </div>
-            );
-          }
         }
       })}
     </div>

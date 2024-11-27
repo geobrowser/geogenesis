@@ -23,7 +23,7 @@ const MotionContent = motion(DropdownPrimitive.Content);
 const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
   TIME: Date,
   TEXT: Text,
-  URI: Url,
+  URL: Url,
   RELATION: RelationSmall,
   IMAGE: Image,
   CHECKBOX: CheckboxChecked,

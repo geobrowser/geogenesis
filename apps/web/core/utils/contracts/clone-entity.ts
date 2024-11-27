@@ -1,8 +1,8 @@
-import { Op, SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
+import { Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
-import { Relation, Triple as TripleType } from '~/core/types';
+import { Relation as RelationType } from '~/core/types';
 import { Ops } from '~/core/utils/ops';
 
 type Options = {
@@ -26,17 +26,11 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
   const newEntityName = entityName ?? oldEntity.name ?? '';
   const newOps: Array<Op> = [];
 
-  const triplesToClone: Array<TripleType> = oldEntity.triples.filter(
-    (triple: TripleType) => !SKIPPED_ATTRIBUTES.includes(triple.attributeId)
-  );
+  const triplesToClone = oldEntity.triples.filter(triple => !SKIPPED_ATTRIBUTES.includes(triple.attributeId));
 
-  const relationsToClone: Array<Relation> = oldEntity.relationsOut.filter(
-    (relation: Relation) => !SKIPPED_ATTRIBUTES.includes(relation.typeOf.id)
-  );
+  const relationsToClone = oldEntity.relationsOut.filter(relation => !SKIPPED_ATTRIBUTES.includes(relation.typeOf.id));
 
-  const blocksToClone: Array<Relation> = oldEntity.relationsOut.filter(
-    (relation: Relation) => relation.typeOf.id === SYSTEM_IDS.BLOCKS
-  );
+  const blocksToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS);
 
   newOps.push(
     Ops.create({
@@ -64,10 +58,11 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
 
   relationsToClone.forEach(relation => {
     newOps.push(
-      ...createRelationship({
+      ...Relation.make({
         fromId: newEntityId,
         toId: relation.toEntity.id,
         relationTypeId: relation.typeOf.id,
+        position: relation.index,
       })
     );
   });
@@ -79,15 +74,16 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
   return newOps;
 };
 
-const cloneBlocks = async (blocksToClone: Array<Relation>, newEntityId: string) => {
+const cloneBlocks = async (blocksToClone: Array<RelationType>, newEntityId: string) => {
   const allOps = await Promise.all(
     blocksToClone.map(async block => {
       const newBlockId = ID.createEntityId();
 
-      const relationshipOps = createRelationship({
+      const relationshipOps = Relation.make({
         fromId: newEntityId,
         toId: newBlockId,
         relationTypeId: block.typeOf.id,
+        position: block.index,
       });
 
       const newBlockOps = await cloneEntity({

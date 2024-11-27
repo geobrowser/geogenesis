@@ -143,7 +143,7 @@ function fetchEditProposalFromIpfs(
       // The initial content set might not be an Edit and instead be an import. If it's an import
       // we need to turn every Edit in the import into an individual EditProposal.
       case 'IMPORT_SPACE': {
-        const importResult = yield* _(decode(() => Import.fromBinary(ipfsContent)));
+        const importResult = yield* _(Decoder.decodeImport(ipfsContent));
 
         if (!importResult) {
           return null;
@@ -162,7 +162,7 @@ function fetchEditProposalFromIpfs(
         };
 
         const maybeDecodedEdits = yield* _(
-          Effect.all(importResult.edits.map(decodeImportEditEffect), {
+          Effect.forEach(importResult.edits, decodeImportEditEffect, {
             concurrency: 50,
             // @TODO: Batching, filtering errors? retrying errors?
           })
@@ -223,16 +223,16 @@ export function getEditsProposalsFromIpfsUri(proposalsProcessed: ProposalProcess
     yield* _(Effect.logInfo('Gathering IPFS content for accepted proposals'));
 
     const maybeProposalsFromIpfs = yield* _(
-      Effect.all(
-        proposalsProcessed.map(proposal =>
+      Effect.forEach(
+        proposalsProcessed,
+        proposal =>
           fetchEditProposalFromIpfs(
             {
               ipfsUri: proposal.contentUri,
               pluginAddress: proposal.pluginAddress,
             },
             block
-          )
-        ),
+          ),
         {
           concurrency: 20,
         }

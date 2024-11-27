@@ -1,7 +1,7 @@
-import { Op, SYSTEM_IDS, createImageEntityOps, createRelationship } from '@geogenesis/sdk';
+import { Account, Image, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
-import type { SpaceGovernanceType, SpaceType } from '~/core/types';
+import type { SpaceType } from '~/core/types';
 import { generateOpsForCompany } from '~/core/utils/contracts/generate-ops-for-company';
 import { generateOpsForNonprofit } from '~/core/utils/contracts/generate-ops-for-nonprofit';
 import { generateOpsForPerson } from '~/core/utils/contracts/generate-ops-for-person';
@@ -9,15 +9,19 @@ import { Ops } from '~/core/utils/ops';
 
 type DeployArgs = {
   type: SpaceType;
-  governanceType?: SpaceGovernanceType;
   spaceName: string;
   spaceAvatarUri: string | null;
   spaceCoverUri: string | null;
   initialEditorAddress: string;
-  baseUrl: string;
 };
 
-export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri, spaceCoverUri }: DeployArgs) => {
+export const generateOpsForSpaceType = async ({
+  type,
+  spaceName,
+  spaceAvatarUri,
+  spaceCoverUri,
+  initialEditorAddress,
+}: DeployArgs) => {
   const ops: Op[] = [];
   const newEntityId = ID.createEntityId();
 
@@ -35,19 +39,21 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
 
   // Add space type-specific ops
   switch (type) {
-    case 'default': {
-      ops.push(
-        ...createRelationship({
-          fromId: newEntityId,
-          toId: SYSTEM_IDS.SPACE_CONFIGURATION,
-          relationTypeId: SYSTEM_IDS.TYPES,
-        })
-      );
-      break;
-    }
     case 'personal': {
       const personOps = await generateOpsForPerson(newEntityId, spaceName);
       ops.push(...personOps);
+
+      const { accountId, ops: accountOps } = Account.make(initialEditorAddress);
+
+      ops.push(...accountOps);
+      ops.push(
+        ...Relation.make({
+          fromId: newEntityId,
+          relationTypeId: SYSTEM_IDS.ACCOUNTS_ATTRIBUTE,
+          toId: accountId,
+        })
+      );
+
       break;
     }
     case 'company': {
@@ -60,37 +66,45 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri,
       ops.push(...nonprofitOps);
       break;
     }
+    default: {
+      ops.push(
+        ...Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+          relationTypeId: SYSTEM_IDS.TYPES,
+        })
+      );
+      break;
+    }
   }
 
   if (spaceAvatarUri) {
-    const [typeOp, srcOp] = createImageEntityOps(spaceAvatarUri);
+    const { imageId, ops: imageOps } = Image.make(spaceAvatarUri);
 
     // Creates the image entity
-    ops.push(typeOp);
-    ops.push(srcOp);
+    ops.push(...imageOps);
 
     // Creates the relation pointing to the image entity
     ops.push(
-      ...createRelationship({
+      ...Relation.make({
         fromId: newEntityId,
-        toId: typeOp.triple.entity, // Set the avatar relation to point to the entity id of the new entity
+        toId: imageId, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
       })
     );
   }
 
   if (spaceCoverUri) {
-    const [typeOp, srcOp] = createImageEntityOps(spaceCoverUri);
+    const { imageId, ops: imageOps } = Image.make(spaceCoverUri);
 
     // Creates the image entity
-    ops.push(typeOp);
-    ops.push(srcOp);
+    ops.push(...imageOps);
 
     // Creates the relation pointing to the image entity
     ops.push(
-      ...createRelationship({
+      ...Relation.make({
         fromId: newEntityId,
-        toId: typeOp.triple.entity, // Set the avatar relation to point to the entity id of the new entity
+        toId: imageId, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.COVER_ATTRIBUTE,
       })
     );

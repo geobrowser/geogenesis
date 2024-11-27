@@ -331,16 +331,14 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           </div>
         );
       }
-      case 'RELATION':
-      case 'ENTITY': {
+      case 'RELATION': {
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
             <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="flex flex-wrap gap-2">
                 {changes.map(c => {
-                  const { before } = c;
-                  return before && <Chip status={before.type}>{before.valueName ?? before.value}</Chip>;
+                  return c.before && <Chip status={c.before.type}>{c.before.valueName ?? c.before.value}</Chip>;
                 })}
               </div>
             </div>
@@ -349,10 +347,9 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="flex flex-wrap gap-2">
                 {changes.map(c => {
-                  const { after } = c;
                   return (
-                    <Chip key={after.value} status={after.type}>
-                      {after.valueName ?? after.value}
+                    <Chip key={c.after.value} status={c.after.type}>
+                      {c.after.valueName ?? c.after.value}
                     </Chip>
                   );
                 })}
@@ -421,7 +418,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           </div>
         );
       }
-      case 'URI': {
+      case 'URL': {
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
             <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">

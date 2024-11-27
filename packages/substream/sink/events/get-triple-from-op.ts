@@ -42,14 +42,9 @@ export function getTripleFromOp(op: Op, versionId: string, block: BlockEvent): S
 }
 
 function getValue(value_type: ValueType, value: { type: ValueType; value: string }) {
-  switch (value_type) {
-    case 'ENTITY':
-      return {
-        text_value: null,
-        entity_value_id: value.value,
-        boolean_value: null,
-      };
+  // @TODO: Map graph:// URI triples to be relational
 
+  switch (value_type) {
     case 'CHECKBOX': {
       // We filter valid boolean values before this function call so we can assume that
       // any values we get here are either 0 or 1

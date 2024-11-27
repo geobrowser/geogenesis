@@ -1,3 +1,5 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+
 export const ZERO_WIDTH_SPACE = '\u200b';
 
 export const PLACEHOLDER_IMAGES = {
@@ -23,7 +25,7 @@ export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`
 
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 export const PUBLIC_SPACES = [
-  'ab7d4b9e02f840dab9746d352acb0ac6', // root
+  SYSTEM_IDS.ROOT_SPACE_ID, // root
   // '0xc46618C200f02EF1EEA28923FC3828301e63C4Bd', // San Francisco
   // '0xe3d08763498e3247EC00A481F199B018f2148723', // Health
   // '0xB4B3d95e9c82cb26A5bd4BC73ffBa46F1e979f16', // Philosophy

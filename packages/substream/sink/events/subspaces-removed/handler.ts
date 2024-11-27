@@ -18,20 +18,22 @@ export function handleSubspacesRemoved(subspacesRemoved: SubspaceRemoved[]) {
     yield* _(Effect.logDebug('Removing subspaces'));
 
     yield* _(
-      Effect.all(
-        subspacesToRemove.map(
-          s =>
-            Effect.try({
-              try: () => {
-                return Subspaces.remove(s);
-              },
-              catch: error => {
-                return new CouldNotRemoveSubspacesError(String(error));
-              },
-            }),
-          retryEffect
-        )
-      )
+      Effect.forEach(
+        subspacesToRemove,
+        s =>
+          Effect.tryPromise({
+            try: () => {
+              return Subspaces.remove(s);
+            },
+            catch: error => {
+              return new CouldNotRemoveSubspacesError(String(error));
+            },
+          }),
+        {
+          concurrency: 20,
+        }
+      ),
+      retryEffect
     );
 
     yield* _(Effect.logInfo(`Subspaces removed`));

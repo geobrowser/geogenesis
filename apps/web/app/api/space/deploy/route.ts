@@ -54,12 +54,15 @@ export async function GET(request: Request) {
       type,
       governanceType: governanceType ?? undefined,
     }),
-    // Retry deploys for 5 minutes with a 100ms exponential, jittered delay between retries.
-    Schedule.exponential(Duration.millis(100)).pipe(
-      Schedule.jittered,
-      Schedule.compose(Schedule.elapsed),
-      Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.minutes(5)))
-    )
+    {
+      // Retry deploys for 5 minutes with a 100ms exponential, jittered delay between retries.
+      // @TODO: This should not fail on timeout errors
+      schedule: Schedule.exponential(Duration.millis(100)).pipe(
+        Schedule.jittered,
+        Schedule.compose(Schedule.elapsed),
+        Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.minutes(5)))
+      ),
+    }
   );
 
   const result = await Effect.runPromise(Effect.either(deployWithRetry));

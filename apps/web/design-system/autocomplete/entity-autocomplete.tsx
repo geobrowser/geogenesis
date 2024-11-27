@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
@@ -107,9 +107,8 @@ export function EntityAutocompleteDialog({ onDone, selectedIds, filterByTypes, s
             entityName: autocomplete.query,
             attributeName: 'Types',
             value: {
-              type: 'ENTITY',
-              value: type.typeId,
-              name: type.typeName,
+              type: 'URL',
+              value: GraphUrl.fromEntityId(type.typeId),
             },
           },
           spaceId

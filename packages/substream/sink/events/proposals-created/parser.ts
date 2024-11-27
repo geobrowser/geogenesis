@@ -129,62 +129,6 @@ export const ZodProposalProcessedStreamResponse = z.object({
   proposalsProcessed: z.array(ZodProposalProcessed).min(1),
 });
 
-const ZodEditSetTriplePayload = z.object({
-  entity: z.string(),
-  attribute: z.string(),
-
-  /**
-   * TEXT = 1;
-   * NUMBER = 2;
-   * ENTITY = 3;
-   * URI = 4;
-   * CHECKBOX = 5;
-   * TIME = 6;
-   * GEO_LOCATION = 7;
-   */
-  value: z.object({
-    value: z.string(),
-    type: z.union([
-      z.literal('TEXT'),
-      z.literal('NUMBER'),
-      z.literal('ENTITY'),
-      z.literal('URI'),
-      z.literal('CHECKBOX'),
-      z.literal('TIME'),
-      z.literal('GEO_LOCATION'),
-    ]),
-  }),
-});
-
-const ZodEditDeleteTriplePayload = z.object({
-  entity: z.string(),
-  attribute: z.string(),
-  // value: z.object({}),
-});
-
-const ZodSetTripleOp = z.object({
-  type: z.literal('SET_TRIPLE'),
-  triple: ZodEditSetTriplePayload,
-});
-
-const ZodDeleteTripleOp = z.object({
-  type: z.literal('DELETE_TRIPLE'),
-  triple: ZodEditDeleteTriplePayload,
-});
-
-export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
-
-export const ZodEdit = z.object({
-  version: z.string(),
-  type: z.literal('ADD_EDIT'),
-  id: z.string(),
-  name: z.string(),
-  ops: z.array(ZodOp),
-  authors: z.array(z.string()),
-});
-
-export type ParsedEdit = z.infer<typeof ZodEdit>;
-
 export type EditProposal = Proposal & {
   type: 'ADD_EDIT';
   name: string;
@@ -194,7 +138,7 @@ export type EditProposal = Proposal & {
   ops: Op[];
 };
 
-const ZodImportEditSetTriplePayload = z.object({
+const ZodEditSetTriplePayload = z.object({
   entity: z.string(),
   attribute: z.string(),
   // zod has issues with discriminated unions. We set the value
@@ -203,13 +147,14 @@ const ZodImportEditSetTriplePayload = z.object({
   value: z.object({
     value: z.string(),
     /**
-     * TEXT = 1;
-     * NUMBER = 2;
-     * ENTITY = 3;
-     * URI = 4;
-     * CHECKBOX = 5;
-     * TIME = 6;
-     * GEO_LOCATION = 7;
+        enum ValueType {
+        TEXT = 1;
+        NUMBER = 2;
+        CHECKBOX = 3;
+        URL = 4;
+        TIME = 5;
+        POINT = 6;
+        }
      */
     type: z.number().transform(t => {
       switch (t) {
@@ -218,15 +163,13 @@ const ZodImportEditSetTriplePayload = z.object({
         case 2:
           return 'NUMBER';
         case 3:
-          return 'ENTITY';
-        case 4:
-          return 'URI';
-        case 5:
           return 'CHECKBOX';
-        case 6:
+        case 4:
+          return 'URL';
+        case 5:
           return 'TIME';
-        case 7:
-          return 'GEO_LOCATION';
+        case 6:
+          return 'POINT';
         default:
           return 'TEXT';
       }
@@ -234,22 +177,28 @@ const ZodImportEditSetTriplePayload = z.object({
   }),
 });
 
-const ZodImportEditDeleteTriplePayload = z.object({
+const ZodEditDeleteTriplePayload = z.object({
   entity: z.string(),
   attribute: z.string(),
 });
 
-const ZodImportEditSetTripleOp = z.object({
-  type: z.literal(1).transform(() => 'SET_TRIPLE'),
-  triple: ZodImportEditSetTriplePayload,
+const ZodEditSetTripleOp = z.object({
+  type: z
+    .literal(1)
+    .transform(() => 'SET_TRIPLE')
+    .superRefine(arg => arg === 'SET_TRIPLE'),
+  triple: ZodEditSetTriplePayload,
 });
 
-const ZodImportEditDeleteTripleOp = z.object({
-  type: z.literal(2).transform(() => 'DELETE_TRIPLE'),
-  triple: ZodImportEditDeleteTriplePayload,
+const ZodEditDeleteTripleOp = z.object({
+  type: z
+    .literal(2)
+    .transform(() => 'DELETE_TRIPLE')
+    .superRefine(arg => arg === 'DELETE_TRIPLE'),
+  triple: ZodEditDeleteTriplePayload,
 });
 
-const ZodImportEditOp = z.union([ZodImportEditSetTripleOp, ZodImportEditDeleteTripleOp]);
+const ZodImportEditOp = z.union([ZodEditSetTripleOp, ZodEditDeleteTripleOp]);
 
 export const ZodImportEdit = z.object({
   name: z.string(),
@@ -262,3 +211,19 @@ export const ZodImportEdit = z.object({
 });
 
 export type ParsedImportEdit = z.infer<typeof ZodImportEdit>;
+
+export const ZodOp = z.union([ZodEditSetTripleOp, ZodEditDeleteTripleOp]);
+
+export const ZodEdit = z.object({
+  version: z.string(),
+  type: z
+    .literal(1)
+    .transform(() => 'ADD_EDIT')
+    .superRefine(arg => arg === 'ADD_EDIT'),
+  id: z.string(),
+  name: z.string(),
+  ops: z.array(ZodOp),
+  authors: z.array(z.string()),
+});
+
+export type ParsedEdit = z.infer<typeof ZodEdit>;

@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import { useMemo } from 'react';
@@ -150,9 +150,8 @@ const listener =
               // Relations are the only entity in the system that we expect
               // to use an entity value type in a triple
               value: {
-                type: 'ENTITY',
-                value: attributeId,
-                name: attributeName,
+                type: 'URL',
+                value: GraphUrl.fromEntityId(attributeId),
               },
             },
             context.spaceId
@@ -162,22 +161,6 @@ const listener =
         // @TODO(relations): Add support for IMAGE
         if (renderable.type === 'IMAGE') {
           return;
-        }
-
-        if (renderable.type === 'ENTITY') {
-          return upsert(
-            {
-              ...renderable,
-              attributeId,
-              attributeName,
-              value: {
-                type: renderable.type,
-                value: renderable.value.value,
-                name: renderable.value.name,
-              },
-            },
-            context.spaceId
-          );
         }
 
         return upsert(
@@ -231,20 +214,6 @@ const listener =
         // @TODO(relations): Add support for IMAGE
         if (type === 'IMAGE') {
           return;
-        }
-
-        if (type === 'ENTITY') {
-          return upsert(
-            {
-              ...renderable,
-              value: {
-                type,
-                value: '',
-                name: null,
-              },
-            },
-            context.spaceId
-          );
         }
 
         return upsert(

@@ -11,7 +11,7 @@ export async function fetchProfileViaWalletsTripleAddress(address: string): Prom
     filter: [
       {
         field: 'attribute-id',
-        value: SYSTEM_IDS.WALLETS_ATTRIBUTE,
+        value: SYSTEM_IDS.ACCOUNTS_ATTRIBUTE,
       },
       {
         field: 'value',

@@ -65,6 +65,7 @@ export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
           })
         ),
       ];
+
       const versionsForStaleEntities = staleEntities.map(entityId =>
         makeVersionForStaleEntity({
           block,

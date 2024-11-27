@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { pipe } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTriples } from '../database/triples';
@@ -7,7 +6,6 @@ import { StoredTriple } from '../database/types';
 import { Services } from '../services';
 import { Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
 import { Triples } from '../utils/triples';
-import { Values } from '../utils/value';
 
 /**
  * This function takes triples from the server for the relation value types and merges them with any locally
@@ -21,23 +19,7 @@ const mapMergedTriplesToRelationValueTypes = (
   // We need to re-merge local actions with the server triples since we don't re-run RQ in useConfiguredAttributeRelationTypes
   // when actions change.
   const mergedTriples = Triples.merge(triples, relationTypeTriples);
-
-  return pipe(
-    mergedTriples,
-    triples => triples.filter(Values.isRelationValueType),
-    triples =>
-      triples.reduce<RelationValueTypesByAttributeId>((acc, relationType) => {
-        if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
-
-        acc[relationType.entityId].push({
-          typeId: relationType.value.value,
-          typeName: relationType.value.type === 'ENTITY' ? relationType.value.name : '',
-          spaceIdOfAttribute: relationType.space,
-        });
-
-        return acc;
-      }, {})
-  );
+  return {};
 };
 
 /**

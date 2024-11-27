@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
@@ -76,13 +76,14 @@ export function aggregateRelations({
     ];
 
     const dbVersionsForEntitiesReferencedInBlock = (yield* _(
-      Effect.all(
-        referencedEntitiesInBlock.map(entityId => {
+      Effect.forEach(
+        referencedEntitiesInBlock,
+        entityId => {
           return Effect.retry(
             Effect.promise(() => CurrentVersions.selectOne({ entity_id: entityId })),
             { times: 5 }
           );
-        }),
+        },
         {
           concurrency: 50,
         }
@@ -97,10 +98,9 @@ export function aggregateRelations({
     // For all of the referenced versions, both from the edit and from the past, we
     // need to fetch the relations for each version so we can merge into new versions.
     const latestRelationsFromDbForVersions = (yield* _(
-      Effect.all(
-        [...lastDbVersionByEntityId.values()].map(version => {
-          return Effect.promise(() => Relations.select({ from_version_id: version }));
-        }),
+      Effect.forEach(
+        [...lastDbVersionByEntityId.values()],
+        version => Effect.promise(() => Relations.select({ from_version_id: version })),
         {
           concurrency: 100,
         }
@@ -262,9 +262,11 @@ function getEntitiesReferencedByRelations(schemaTriples: Op[], entityId: string)
   const from = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
   const type = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
 
-  const toId = to?.triple.value.value;
-  const fromId = from?.triple.value.value;
-  const typeId = type?.triple.value.value;
+  const toId = to && GraphUrl.isValid(to.triple.value.value) ? GraphUrl.toEntityId(to.triple.value.value) : null;
+  const fromId =
+    from && GraphUrl.isValid(from.triple.value.value) ? GraphUrl.toEntityId(from.triple.value.value) : null;
+  const typeId =
+    type && GraphUrl.isValid(type.triple.value.value) ? GraphUrl.toEntityId(type.triple.value.value) : null;
 
   if (!toId || !fromId || !typeId) {
     return null;
@@ -294,8 +296,9 @@ function getRelationFromOps(
   const isRelation = otherTriples.find(
     t =>
       t.triple.attribute === SYSTEM_IDS.TYPES &&
-      t.triple.value.type === 'ENTITY' &&
-      t.triple.value.value === SYSTEM_IDS.RELATION_TYPE
+      t.triple.value.type.toString() === 'URL' &&
+      GraphUrl.isValid(t.triple.value.value) &&
+      GraphUrl.toEntityId(t.triple.value.value) === SYSTEM_IDS.RELATION_TYPE
   );
   const relationIndex = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_INDEX);
   const to = otherTriples.find(t => t.triple.attribute === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
@@ -306,10 +309,12 @@ function getRelationFromOps(
     return null;
   }
 
-  const indexValue = relationIndex?.triple.value.value;
-  const toId = to?.triple.value.value;
-  const fromId = from?.triple.value.value;
-  const typeId = type?.triple.value.value;
+  const indexValue = relationIndex?.triple.value.value ?? null;
+  const toId = to && GraphUrl.isValid(to.triple.value.value) ? GraphUrl.toEntityId(to.triple.value.value) : null;
+  const fromId =
+    from && GraphUrl.isValid(from.triple.value.value) ? GraphUrl.toEntityId(from.triple.value.value) : null;
+  const typeId =
+    type && GraphUrl.isValid(type.triple.value.value) ? GraphUrl.toEntityId(type.triple.value.value) : null;
 
   if (!toId || !fromId || !typeId) {
     return null;

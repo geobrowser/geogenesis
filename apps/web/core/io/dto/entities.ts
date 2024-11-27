@@ -48,12 +48,6 @@ export function EntityDto(substreamEntity: SubstreamEntity): Entity {
 
       const renderableType = getRenderableEntityType(toEntityTypes);
 
-      // @TODO(relations): Until we fix the migrations we'll manually check for cover and avatar
-      // relations and set the renderable typ to image.
-      const isCoverOrAvatar =
-        t.typeOf.entityId === EntityId(SYSTEM_IDS.COVER_ATTRIBUTE) ||
-        t.typeOf.entityId === EntityId(SYSTEM_IDS.AVATAR_ATTRIBUTE);
-
       return {
         id: t.entityId,
         index: t.index,
@@ -72,9 +66,9 @@ export function EntityDto(substreamEntity: SubstreamEntity): Entity {
           // The "Renderable Type" for an entity provides a hint to the consumer
           // of the entity to _what_ the entity is so they know how they should
           // render it depending on their use case.
-          renderableType: isCoverOrAvatar ? 'IMAGE' : renderableType,
+          renderableType,
           // Right now we only support images and entity ids as the value of the To entity.
-          value: isCoverOrAvatar || renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : t.toVersion.entityId,
+          value: renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : t.toVersion.entityId,
         },
       };
     }),
@@ -89,7 +83,7 @@ function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
     return 'IMAGE';
   }
 
-  if (typeIds.includes(EntityId(SYSTEM_IDS.TABLE_BLOCK))) {
+  if (typeIds.includes(EntityId(SYSTEM_IDS.DATA_BLOCK))) {
     return 'DATA';
   }
 

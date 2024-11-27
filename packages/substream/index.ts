@@ -1,12 +1,13 @@
 import { Command } from 'commander';
 import { Effect, Either, pipe } from 'effect';
 
-import { bootstrapRoot } from './sink/bootstrap-root';
+import { bootstrapRoot } from './sink/bootstrap/bootstrap-root';
 import { readStartBlock } from './sink/cursor';
 import { Environment, EnvironmentLive } from './sink/environment';
 import { getStreamConfiguration } from './sink/get-stream-configuration';
 import { runStream } from './sink/run-stream';
 import { Telemetry, TelemetryLive } from './sink/telemetry';
+import { bootstrapTest } from './sink/test/bootstrap-test-data';
 import { resetPublicTablesToGenesis } from './sink/utils/reset-public-tables-to-genesis';
 
 const main = Effect.gen(function* (_) {
@@ -44,6 +45,18 @@ const main = Effect.gen(function* (_) {
       console.error('Message: ', bootstrap.left.message);
       console.error('Cause: ', bootstrap.left.cause);
       console.error('Stack: ', bootstrap.left.stack);
+      process.exit(1);
+    }
+
+    const testBootstrap = yield* _(pipe(bootstrapTest, Effect.either));
+
+    if (Either.isLeft(testBootstrap)) {
+      TelemetryLive.captureMessage('Could not bootstrap test entities');
+
+      console.error('Could not bootstrap test entities');
+      console.error('Message: ', testBootstrap.left.message);
+      console.error('Cause: ', testBootstrap.left.cause);
+      console.error('Stack: ', testBootstrap.left.stack);
       process.exit(1);
     }
   }

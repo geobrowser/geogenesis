@@ -83,7 +83,7 @@ export async function mergeTableEntities({ options, source }: MergeTableEntities
   return entities.filter(entity => {
     for (const filter of filterState) {
       return entity.triples.some(triple => {
-        if (filter.columnId === SYSTEM_IDS.SPACE) {
+        if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
           // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
           // attached to a triple in the data model. Once we represents entities across multiple spaces
           // this filter likely won't make sense anymore.
@@ -159,7 +159,7 @@ function filterValue(value: Value, valueToFilter: string) {
   switch (value.type) {
     case 'TEXT':
       return value.value === valueToFilter;
-    case 'ENTITY':
+    case 'URL':
       return value.value === valueToFilter;
     default:
       return false;

@@ -22,8 +22,9 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
     const newOpsByVersionId = new Map<string, Op[]>();
 
     const maybeLatestVersionForEntityIds = yield* _(
-      Effect.all(
-        versions.map(v =>
+      Effect.forEach(
+        versions,
+        v =>
           Effect.retry(
             Effect.promise(async () => {
               const latestVersion = await CurrentVersions.selectOne({ entity_id: v.entity_id.toString() });
@@ -32,23 +33,27 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
             }),
             {
               times: 5,
-              concurrency: 100,
             }
-          )
-        )
+          ),
+        {
+          concurrency: 50,
+        }
       )
     );
 
     // entity id -> version id
     const lastVersionForEntityId = Object.fromEntries(maybeLatestVersionForEntityIds.filter(v => v !== null));
     const triplesForLastVersionTuples = yield* _(
-      Effect.all(
-        Object.values(lastVersionForEntityId).map(versionId =>
+      Effect.forEach(
+        Object.values(lastVersionForEntityId),
+        versionId =>
           Effect.promise(async () => {
             const lastVersionTriples = await Triples.select({ version_id: versionId });
             return [versionId, lastVersionTriples] as const;
-          })
-        )
+          }),
+        {
+          concurrency: 50,
+        }
       )
     );
 
@@ -73,7 +78,7 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
                 attribute: t.attribute_id,
                 value: {
                   type: t.value_type,
-                  value: (t.value_type === 'ENTITY' ? t.entity_value_id : t.text_value) as string,
+                  value: t.text_value as string,
                 },
               },
             };

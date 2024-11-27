@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS, reorderCollectionItem } from '@geogenesis/sdk';
+import { Relation as R, SYSTEM_IDS } from '@geogenesis/sdk';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { Array } from 'effect';
@@ -125,8 +125,8 @@ const makeBlocksRelations = async ({
         blockRelations.find(c => c.block.id === afterBlockIndex)?.index ??
         newBlocks.find(c => c.id === afterBlockIndex)?.index;
 
-      const newTripleOrdering = reorderCollectionItem({
-        collectionItemId: newRelationId,
+      const newTripleOrdering = R.reorder({
+        relationId: newRelationId,
         beforeIndex: beforeCollectionItemIndex,
         afterIndex: afterCollectionItemIndex,
       });
@@ -319,7 +319,7 @@ export function useEditorStore() {
         const blockType = (() => {
           switch (node.type) {
             case 'tableNode':
-              return SYSTEM_IDS.TABLE_BLOCK;
+              return SYSTEM_IDS.DATA_BLOCK;
             case 'bulletList':
             case 'paragraph':
               return SYSTEM_IDS.TEXT_BLOCK;
@@ -338,7 +338,7 @@ export function useEditorStore() {
             break;
           case SYSTEM_IDS.IMAGE_BLOCK:
             break;
-          case SYSTEM_IDS.TABLE_BLOCK: {
+          case SYSTEM_IDS.DATA_BLOCK: {
             // @TODO(performance): upsertMany
             for (const relation of makeInitialDataEntityRelations(EntityId(node.id))) {
               DB.upsertRelation({ relation, spaceId });

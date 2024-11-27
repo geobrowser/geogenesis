@@ -9,7 +9,7 @@ import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Space } from '~/core/io/dto/spaces';
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { ValueType as TripleValueType } from '~/core/types';
+import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
@@ -26,7 +26,12 @@ import { TextButton } from '~/design-system/text-button';
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
   options: (TableBlockFilter & { columnName: string })[];
-  onCreate: (filter: { columnId: string; value: string; valueType: TripleValueType; valueName: string | null }) => void;
+  onCreate: (filter: {
+    columnId: string;
+    value: string;
+    valueType: FilterableValueType;
+    valueName: string | null;
+  }) => void;
 }
 
 /**
@@ -234,12 +239,12 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                   </div>
                   <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
                   <div className="relative flex flex-1">
-                    {state.selectedColumn === SYSTEM_IDS.SPACE ? (
+                    {state.selectedColumn === SYSTEM_IDS.SPACE_FILTER ? (
                       <TableBlockSpaceFilterInput
                         selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectSpaceValue}
                       />
-                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'ENTITY' ? (
+                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'RELATION' ? (
                       <TableBlockEntityFilterInput
                         filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
                         selectedValue={getFilterValueName(state.value) ?? ''}

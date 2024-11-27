@@ -11,7 +11,7 @@ import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder } from '~/sink/proto';
-import type { Op } from '~/sink/types';
+import type { Op, SetTripleOp } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 
 /**
@@ -130,7 +130,7 @@ export function getProposalFromIpfs(
                 type: 'SET_TRIPLE',
                 space: maybeSpaceIdForVotingPlugin,
                 triple: op.triple,
-              };
+              } as SetTripleOp;
             }
 
             return {

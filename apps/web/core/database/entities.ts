@@ -15,7 +15,7 @@ import { fetchEntity } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
 import { store } from '../state/jotai-store';
-import { Relation, Schema, SpaceId, Triple, TripleWithEntityValue, ValueTypeId } from '../types';
+import { Relation, Schema, SpaceId, Triple, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
 import { getTriples, useTriples } from './triples';
@@ -89,8 +89,8 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   }, [triples]);
 
   const types = React.useMemo(() => {
-    return readTypes(triples, relations);
-  }, [triples, relations]);
+    return readTypes(relations);
+  }, [relations]);
 
   const { data: schema } = useQuery({
     queryKey: ['entity-schema-for-merging', id, types],
@@ -142,7 +142,7 @@ export function mergeEntity({ id, mergeWith }: MergeEntityArgs): EntityWithSchem
   // `name` property in case the name was deleted/changed locally.
   const name = Entities.name(mergedTriples);
   const description = Entities.description(mergedTriples);
-  const types = readTypes(mergedTriples, mergedRelations);
+  const types = readTypes(mergedRelations);
 
   return {
     id: EntityId(id),
@@ -275,20 +275,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
  * The triples and relations here should already be merged with the entity's
  * local and remote state.
  */
-export function readTypes(triples: Triple[], relations: Relation[]): { id: EntityId; name: string | null }[] {
-  const typesViaTriples = triples
-    .filter(
-      triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.type === 'ENTITY' && triple.value.value !== ''
-    )
-    ?.map(triple => {
-      // Safe to cast here since we verified that it's an entity value above.
-      const value = triple.value as TripleWithEntityValue['value'];
-      return {
-        id: EntityId(value.value),
-        name: value.name,
-      };
-    });
-
+export function readTypes(relations: Relation[]): { id: EntityId; name: string | null }[] {
   const typeIdsViaRelations = relations
     .filter(r => r.typeOf.id === SYSTEM_IDS.TYPES)
     .map(r => ({
@@ -296,7 +283,7 @@ export function readTypes(triples: Triple[], relations: Relation[]): { id: Entit
       name: r.toEntity.name,
     }));
 
-  return dedupeWith([...typesViaTriples, ...typeIdsViaRelations], (a, b) => a.id === b.id);
+  return dedupeWith(typeIdsViaRelations, (a, b) => a.id === b.id);
 }
 
 const localEntitiesAtom = atom(async get => {
