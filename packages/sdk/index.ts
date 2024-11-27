@@ -9,8 +9,9 @@ export {
   getRemoveEditorArguments,
   getRemoveSubspaceArguments,
 } from './src/encodings';
-export { Relation } from './src/relation';
-export { SYSTEM_IDS, NETWORK_IDS } from './src/system-ids';
-export { Image } from './src/image';
+export { Account } from './src/account';
 export { TextBlock, DataBlock } from './src/blocks';
+export { Image } from './src/image';
+export { Relation } from './src/relation';
 export { GraphUrl } from './src/scheme';
+export { SYSTEM_IDS, NETWORK_IDS } from './src/system-ids';

@@ -1,7 +1,7 @@
-import { Image, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
+import { Account, Image, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
-import type { SpaceGovernanceType, SpaceType } from '~/core/types';
+import type { SpaceType } from '~/core/types';
 import { generateOpsForCompany } from '~/core/utils/contracts/generate-ops-for-company';
 import { generateOpsForNonprofit } from '~/core/utils/contracts/generate-ops-for-nonprofit';
 import { generateOpsForPerson } from '~/core/utils/contracts/generate-ops-for-person';
@@ -9,15 +9,19 @@ import { Ops } from '~/core/utils/ops';
 
 type DeployArgs = {
   type: SpaceType;
-  governanceType?: SpaceGovernanceType;
   spaceName: string;
   spaceAvatarUri: string | null;
   spaceCoverUri: string | null;
   initialEditorAddress: string;
-  baseUrl: string;
 };
 
-export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri, spaceCoverUri }: DeployArgs) => {
+export const generateOpsForSpaceType = async ({
+  type,
+  spaceName,
+  spaceAvatarUri,
+  spaceCoverUri,
+  initialEditorAddress,
+}: DeployArgs) => {
   const ops: Op[] = [];
   const newEntityId = ID.createEntityId();
 
