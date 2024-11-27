@@ -1,2 +1,3 @@
-export const POLYGON = '0370cdbd57a946e9a5119c0c1ffc69d7';
-export const GEO = 'GEO_NETWORK_ENTITY_ID';
+export const POLYGON = 'ReFDxuVQ674gHd2kFjsFL';
+export const ETHEREUM = 'JnWfsCw2gqoPWFT1NXmFWW';
+export const GEO = 'KJjKetFsGVSbw9qFpRzRSy';

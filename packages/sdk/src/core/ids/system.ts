@@ -186,8 +186,12 @@ export const FINANCE_OVERVIEW_TYPE = '5LHixDnR2vBTx26kmbnyih';
 export const FINANCE_SUMMMARY_TYPE = '8zrMWkTeDkfxbGn1U1MjLx';
 
 /** Identity */
+export const ACCOUNT_TYPE = 'S7rX6suDMmU75yjbAD5WsP';
 export const ACCOUNTS_ATTRIBUTE = 'VA5i7mm1v3QMjUChMT5dPs';
+export const ADDRESS_ATTRIBUTE = 'HXLpAZyQkcy6Di4YJu4xzU';
+export const NETWORK_ATTRIBUTE = 'MuMLDVbHAmRjZQjhyk3HGx';
 export const PERSON_TYPE = 'GfN9BK2oicLiBHrUavteS8';
+export const NETWORK_TYPE = 'YCLXoVZho6C4S51g4AbF3C';
 
 export const CLAIM_TYPE = 'KeG9eTM8NUYFMAjnsvF4Dg';
 export const BROADER_CLAIMS_ATTRIBUTE = 'RWkXuBRdVqDAiHKQisTZZ4';
