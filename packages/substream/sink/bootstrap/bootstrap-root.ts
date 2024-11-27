@@ -1,4 +1,4 @@
-import { Relation, SYSTEM_IDS } from '@geogenesis/sdk';
+import { NETWORK_IDS, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import { handleEditsPublished } from '../events/edits-published/handler';
@@ -65,6 +65,12 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.AVATAR_ATTRIBUTE]: 'Avatar',
   [SYSTEM_IDS.COVER_ATTRIBUTE]: 'Cover',
   [SYSTEM_IDS.ACCOUNTS_ATTRIBUTE]: 'Accounts',
+  [SYSTEM_IDS.NETWORK_TYPE]: 'Network',
+  [SYSTEM_IDS.NETWORK_ATTRIBUTE]: 'Network',
+  [SYSTEM_IDS.ADDRESS_ATTRIBUTE]: 'Address',
+  [SYSTEM_IDS.ACCOUNT_TYPE]: 'Account',
+  [NETWORK_IDS.ETHEREUM]: 'Ethereum',
+
   [SYSTEM_IDS.BROADER_SPACES]: 'Broader Spaces',
   [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: 'Relation Value Types',
 
@@ -117,9 +123,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.PLACEHOLDER_TEXT]: SYSTEM_IDS.TEXT,
 
   [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.AVATAR_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
-  [SYSTEM_IDS.COVER_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
-  [SYSTEM_IDS.ACCOUNTS_ATTRIBUTE]: SYSTEM_IDS.RELATION,
+
   [SYSTEM_IDS.RELATION_INDEX]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.RELATION_TO_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: SYSTEM_IDS.RELATION,
@@ -132,11 +136,17 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE]: SYSTEM_IDS.RELATION,
 
   [SYSTEM_IDS.PAGE_TYPE]: SYSTEM_IDS.RELATION,
+
+  [SYSTEM_IDS.AVATAR_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
+  [SYSTEM_IDS.COVER_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
+  [SYSTEM_IDS.ACCOUNTS_ATTRIBUTE]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.NETWORK_ATTRIBUTE]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.ADDRESS_ATTRIBUTE]: SYSTEM_IDS.TEXT,
 };
 
 // These types include the default types and attributes for a given type. There might be more
 // attributes on a type than are listed here if they were later added by users.
-const types: Record<string, string[]> = {
+const schemaTypes: Record<string, string[]> = {
   [SYSTEM_IDS.SCHEMA_TYPE]: [SYSTEM_IDS.TEMPLATE_ATTRIBUTE],
   [SYSTEM_IDS.VIEW_TYPE]: [],
   [SYSTEM_IDS.TEXT]: [],
@@ -151,6 +161,8 @@ const types: Record<string, string[]> = {
   [SYSTEM_IDS.DATA_BLOCK]: [],
   [SYSTEM_IDS.TEXT_BLOCK]: [SYSTEM_IDS.MARKDOWN_CONTENT],
   [SYSTEM_IDS.PERSON_TYPE]: [SYSTEM_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.COVER_ATTRIBUTE],
+  [SYSTEM_IDS.ACCOUNT_TYPE]: [SYSTEM_IDS.NETWORK_ATTRIBUTE, SYSTEM_IDS.ADDRESS_ATTRIBUTE],
+  [SYSTEM_IDS.NETWORK_TYPE]: [],
   [SYSTEM_IDS.NONPROFIT_TYPE]: [],
   [SYSTEM_IDS.PROJECT_TYPE]: [],
   [SYSTEM_IDS.COMPANY_TYPE]: [],
@@ -160,6 +172,10 @@ const types: Record<string, string[]> = {
     SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
     SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
   ],
+};
+
+const types: Record<string, string[]> = {
+  [NETWORK_IDS.ETHEREUM]: [SYSTEM_IDS.NETWORK_TYPE],
 };
 
 const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
@@ -226,7 +242,7 @@ const spaceType = Relation.make({
     },
   ]);
 
-const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
+const typeOps: Op[] = Object.keys(schemaTypes).flatMap(typeId => {
   return Relation.make({
     fromId: typeId,
     toId: SYSTEM_IDS.SCHEMA_TYPE,
@@ -237,12 +253,25 @@ const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
   }));
 });
 
-const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds]) => {
+const typeSchemaOps: Op[] = Object.entries(schemaTypes).flatMap(([typeId, attributeIds]) => {
   return attributeIds.flatMap(attributeId => {
     return Relation.make({
       fromId: typeId,
       toId: attributeId,
       relationTypeId: SYSTEM_IDS.ATTRIBUTES,
+    }).map(op => ({
+      ...op,
+      space: SPACE_ID,
+    }));
+  });
+});
+
+const entitiesWithTypesOps: Op[] = Object.entries(types).flatMap(([entityId, typeIds]) => {
+  return typeIds.flatMap(typeId => {
+    return Relation.make({
+      fromId: entityId,
+      toId: typeId,
+      relationTypeId: SYSTEM_IDS.TYPES,
     }).map(op => ({
       ...op,
       space: SPACE_ID,
@@ -267,6 +296,7 @@ const editProposal: EditProposal = {
     ...spaceType,
     ...typeSchemaOps,
     ...templateOps,
+    ...entitiesWithTypesOps,
   ],
   pluginAddress: MAIN_VOTING_ADDRESS,
   space: SPACE_ID,
