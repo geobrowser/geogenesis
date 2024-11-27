@@ -27,6 +27,7 @@ export function handleMemberRemoved(membersRemoved: MemberRemoved[]) {
           });
         }),
         {
+          concurrency: 20,
           mode: 'either',
         }
       )

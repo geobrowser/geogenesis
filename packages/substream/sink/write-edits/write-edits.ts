@@ -144,37 +144,40 @@ export function writeEdits(args: PopulateContentArgs) {
      * 4. Write triples + relations
      */
     yield* _(
-      Effect.all([
-        Effect.tryPromise({
-          try: () => Versions.upsertMetadata(versionsWithMetadata),
-          catch: error =>
-            new CouldNotWriteVersionsError({
-              message: `Failed to insert versions with metadata. ${(error as Error).message}`,
-            }),
-        }),
-        Effect.tryPromise({
-          // We update the name and description for an entity when mapping
-          // through triples.
-          try: () => Entities.upsert(uniqueEntities),
-          catch: error =>
-            new CouldNotWriteEntitiesError({ message: `Failed to insert entities. ${(error as Error).message}` }),
-        }),
-        Effect.tryPromise({
-          try: () => VersionSpaces.upsert(versionSpacesUnique),
-          catch: error =>
-            new CouldNotWriteVersionSpacesError({
-              message: `Failed to insert version spaces. ${(error as Error).message}`,
-            }),
-        }),
-        writeTriples({
-          schemaTriples: triplesWithCreatedBy,
-        }),
-        Effect.tryPromise({
-          try: () => Relations.upsert(relations, { chunked: true }),
-          catch: error =>
-            new CouldNotWriteRelationsError({ message: `Failed to insert relations. ${(error as Error).message}` }),
-        }),
-      ])
+      Effect.all(
+        [
+          Effect.tryPromise({
+            try: () => Versions.upsertMetadata(versionsWithMetadata),
+            catch: error =>
+              new CouldNotWriteVersionsError({
+                message: `Failed to insert versions with metadata. ${(error as Error).message}`,
+              }),
+          }),
+          Effect.tryPromise({
+            // We update the name and description for an entity when mapping
+            // through triples.
+            try: () => Entities.upsert(uniqueEntities),
+            catch: error =>
+              new CouldNotWriteEntitiesError({ message: `Failed to insert entities. ${(error as Error).message}` }),
+          }),
+          Effect.tryPromise({
+            try: () => VersionSpaces.upsert(versionSpacesUnique),
+            catch: error =>
+              new CouldNotWriteVersionSpacesError({
+                message: `Failed to insert version spaces. ${(error as Error).message}`,
+              }),
+          }),
+          writeTriples({
+            schemaTriples: triplesWithCreatedBy,
+          }),
+          Effect.tryPromise({
+            try: () => Relations.upsert(relations, { chunked: true }),
+            catch: error =>
+              new CouldNotWriteRelationsError({ message: `Failed to insert relations. ${(error as Error).message}` }),
+          }),
+        ],
+        { concurrency: 'unbounded' }
+      )
     );
 
     // We run this after versions are written so that we can fetch all of the types for the
@@ -238,12 +241,15 @@ function aggregateTypesFromRelationsAndTriples({ relations, triples }: Aggregate
       .filter(entityId => entityId !== undefined);
 
     const versionsForTypeEntityIdsFromTriples = (yield* _(
-      Effect.all(
-        typeEntityIdsFromTriples.map(entityId =>
+      Effect.forEach(
+        typeEntityIdsFromTriples,
+        entityId =>
           Effect.promise(() => {
             return CurrentVersions.selectOne({ entity_id: entityId });
-          })
-        )
+          }),
+        {
+          concurrency: 50,
+        }
       )
     )).flatMap(v => (v ? [v] : []));
 
@@ -282,10 +288,13 @@ function aggregateSpacesFromRelations(
     const spaceConfigEntityVersionIds = new Set<string>();
 
     const [typesVersions, spaceConfigsVersions] = yield* _(
-      Effect.all([
-        Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES })),
-        Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.SPACE_CONFIGURATION })),
-      ])
+      Effect.all(
+        [
+          Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES })),
+          Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.SPACE_CONFIGURATION })),
+        ],
+        { concurrency: 2 }
+      )
     );
 
     const typeVersionIds = new Set(typesVersions.map(v => v.id.toString()));

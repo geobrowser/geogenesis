@@ -37,8 +37,9 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
     yield* _(Effect.logDebug('Collecting spaces for public plugins'));
 
     const maybeSpacesForPlugins = yield* _(
-      Effect.all(
-        pluginAddresses.map(p =>
+      Effect.forEach(
+        pluginAddresses,
+        p =>
           Effect.tryPromise({
             try: () =>
               db
@@ -49,8 +50,7 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
                 )
                 .run(pool),
             catch: error => new SpaceWithPluginAddressNotFoundError(String(error)),
-          })
-        ),
+          }),
         {
           concurrency: 20,
         }
@@ -158,13 +158,13 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
     yield* _(Effect.logDebug('Collecting spaces for personal plugins'));
 
     const maybeSpacesForPlugins = yield* _(
-      Effect.all(
-        pluginAddresses.map(p =>
+      Effect.forEach(
+        pluginAddresses,
+        p =>
           Effect.tryPromise({
             try: () => Spaces.findForPersonalPlugin(p),
             catch: error => new SpaceWithPluginAddressNotFoundError(String(error)),
-          })
-        ),
+          }),
         {
           concurrency: 20,
         }

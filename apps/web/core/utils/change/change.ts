@@ -37,18 +37,26 @@ export async function fromLocal(spaceId?: string) {
   const entityIdsToFetch = [...entityIds.values()];
 
   const collectEntities = Effect.gen(function* () {
-    const maybeRemoteEntitiesEffect = Effect.all(
-      entityIdsToFetch.map(id => Effect.promise(() => getEntityAsync(EntityId(id))))
+    const maybeRemoteEntitiesEffect = Effect.forEach(
+      entityIdsToFetch,
+      id => Effect.promise(() => getEntityAsync(EntityId(id))),
+      {
+        concurrency: 50,
+      }
     );
 
-    const maybeLocalEntitiesEffect = Effect.all(
-      entityIdsToFetch.map(id => Effect.promise(() => mergeEntityAsync(EntityId(id))))
+    const maybeLocalEntitiesEffect = Effect.forEach(
+      entityIdsToFetch,
+      id => Effect.promise(() => mergeEntityAsync(EntityId(id))),
+      {
+        concurrency: 50,
+      }
     );
 
-    const [maybeRemoteEntities, maybeLocalEntities] = yield* Effect.all([
-      maybeRemoteEntitiesEffect,
-      maybeLocalEntitiesEffect,
-    ]);
+    const [maybeRemoteEntities, maybeLocalEntities] = yield* Effect.all(
+      [maybeRemoteEntitiesEffect, maybeLocalEntitiesEffect],
+      { concurrency: 2 }
+    );
 
     const remoteEntities = maybeRemoteEntities.filter(e => e !== null);
     const localEntities = maybeLocalEntities.filter(e => e !== null);

@@ -19,13 +19,13 @@ export function mapSubspaces({
     // Need to get the DAO/space address for the space plugin that emits the
     // SubspaceAdded event.
     const maybeSpacesForPlugins = yield* _(
-      Effect.all(
-        subspacesAdded.map(p =>
+      Effect.forEach(
+        subspacesAdded,
+        p =>
           Effect.tryPromise({
             try: () => Spaces.findForSpacePlugin(p.pluginAddress),
             catch: error => new SpaceWithPluginAddressNotFoundError(String(error)),
-          })
-        ),
+          }),
         {
           concurrency: 20,
         }
@@ -55,13 +55,13 @@ export function mapSubspaces({
       );
 
     const maybeSpaceIdsForSubspaceDaoAddress = yield* _(
-      Effect.all(
-        subspacesAdded.map(p =>
+      Effect.forEach(
+        subspacesAdded,
+        p =>
           Effect.tryPromise({
             try: () => Spaces.findForDaoAddress(p.subspace),
             catch: error => new SpaceWithPluginAddressNotFoundError(String(error)),
-          })
-        ),
+          }),
         {
           concurrency: 20,
         }

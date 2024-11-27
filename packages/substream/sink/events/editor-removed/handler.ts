@@ -15,15 +15,19 @@ export function handleEditorRemoved(editorsRemoved: EditorRemoved[]) {
     yield* _(Effect.logInfo('Handling editor removed'));
 
     yield* _(
-      Effect.all(
-        schemaEditors.map(m => {
+      Effect.forEach(
+        schemaEditors,
+        m => {
           return Effect.tryPromise({
             try: () => SpaceEditors.remove(m),
             catch: error => {
               return new CouldNotWriteRemovedEditorsError(String(error));
             },
           });
-        })
+        },
+        {
+          concurrency: 20,
+        }
       )
     );
 

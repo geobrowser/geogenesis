@@ -92,14 +92,17 @@ export function getStaleEntitiesFromDeletedRelations(ops: Op[]) {
       )
     );
 
-    const getEntityIdOfFromRelations = Effect.all(
-      relations.map(relation =>
+    const getEntityIdOfFromRelations = Effect.forEach(
+      relations,
+      relation =>
         Effect.promise(() => {
           return Versions.selectOne({
             id: relation.from_version_id,
           });
-        })
-      )
+        }),
+      {
+        concurrency: 50,
+      }
     );
 
     const maybeEntityIds = yield* _(getEntityIdOfFromRelations);

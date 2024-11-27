@@ -270,13 +270,15 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       yield* _(Effect.logInfo(`Handling new events in block ${blockNumber}`));
 
       yield* _(
-        handleNewGeoBlock({
-          blockNumber,
-          cursor,
-          timestamp,
-          hash: message.clock?.id ?? '',
-          network: NETWORK_IDS.GEO,
-        })
+        Effect.fork(
+          handleNewGeoBlock({
+            blockNumber,
+            cursor,
+            timestamp,
+            hash: message.clock?.id ?? '',
+            network: NETWORK_IDS.GEO,
+          })
+        )
       );
     }
 
@@ -382,11 +384,13 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       });
 
       yield* _(
-        handleInitialPersonalSpaceEditorsAdded(initialEditors, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
+        Effect.fork(
+          handleInitialPersonalSpaceEditorsAdded(initialEditors, {
+            blockNumber,
+            cursor,
+            timestamp,
+          })
+        )
       );
     }
 
@@ -406,26 +410,14 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
      */
     if (initialEditorsAddedResponse.success) {
       yield* _(
-        handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
+        Effect.fork(
+          handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, {
+            blockNumber,
+            cursor,
+            timestamp,
+          })
+        )
       );
-    }
-
-    if (subspacesAdded.success) {
-      yield* _(
-        handleSubspacesAdded(subspacesAdded.data.subspacesAdded, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
-    }
-
-    if (subspacesRemoved.success) {
-      yield* _(handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved));
     }
 
     if (proposalCreatedResponse.success) {
@@ -436,6 +428,66 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
           timestamp,
         })
       );
+    }
+
+    if (membersAdded.success) {
+      yield* _(
+        Effect.fork(
+          handleMemberAdded(membersAdded.data.membersAdded, {
+            blockNumber,
+            cursor,
+            timestamp,
+          })
+        )
+      );
+    }
+
+    if (membersRemoved.success) {
+      yield* _(Effect.fork(handleMemberRemoved(membersRemoved.data.membersRemoved)));
+    }
+
+    if (editorsAdded.success) {
+      yield* _(
+        Effect.fork(
+          handleEditorsAdded(editorsAdded.data.editorsAdded, {
+            blockNumber,
+            cursor,
+            timestamp,
+          })
+        )
+      );
+    }
+
+    if (editorsRemoved.success) {
+      yield* _(Effect.fork(handleEditorRemoved(editorsRemoved.data.editorsRemoved)));
+    }
+
+    if (votesCast.success) {
+      yield* _(
+        Effect.fork(
+          handleVotesCast(votesCast.data.votesCast, {
+            blockNumber,
+            cursor,
+            timestamp,
+          })
+        )
+      );
+    }
+
+    if (subspacesAdded.success) {
+      yield* _(
+        Effect.fork(
+          handleSubspacesAdded(subspacesAdded.data.subspacesAdded, {
+            blockNumber,
+            cursor,
+            timestamp,
+          })
+        )
+      );
+    }
+
+    if (subspacesRemoved.success) {
+      yield* _(Effect.fork(handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved)));
     }
 
     /**
@@ -549,46 +601,8 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       );
     }
 
-    if (membersAdded.success) {
-      yield* _(
-        handleMemberAdded(membersAdded.data.membersAdded, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
-    }
-
-    if (membersRemoved.success) {
-      yield* _(handleMemberRemoved(membersRemoved.data.membersRemoved));
-    }
-
-    if (editorsAdded.success) {
-      yield* _(
-        handleEditorsAdded(editorsAdded.data.editorsAdded, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
-    }
-
-    if (editorsRemoved.success) {
-      yield* _(handleEditorRemoved(editorsRemoved.data.editorsRemoved));
-    }
-
-    if (votesCast.success) {
-      yield* _(
-        handleVotesCast(votesCast.data.votesCast, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
-    }
-
     if (executedProposals.success) {
-      yield* _(handleProposalsExecuted(executedProposals.data.executedProposals));
+      yield* _(Effect.fork(handleProposalsExecuted(executedProposals.data.executedProposals)));
     }
 
     return hasValidEvent;

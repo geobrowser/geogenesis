@@ -44,8 +44,9 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
     yield* _(Effect.logDebug('Collecting spaces for personal plugins'));
 
     const personalPluginsWithSpaceId = (yield* _(
-      Effect.all(
-        personalPluginsCreated.map(p => {
+      Effect.forEach(
+        personalPluginsCreated,
+        p => {
           return Effect.gen(function* (_) {
             const maybeSpace = yield* _(Effect.promise(() => Spaces.findForDaoAddress(p.daoAddress)));
 
@@ -63,7 +64,7 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
               id: maybeSpace.id,
             };
           });
-        }),
+        },
         {
           concurrency: 25,
         }
@@ -96,8 +97,9 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
     yield* _(Effect.logDebug('Collecting spaces for public plugins'));
 
     const governancePluginsWithSpaceId = (yield* _(
-      Effect.all(
-        governancePluginsCreated.map(g => {
+      Effect.forEach(
+        governancePluginsCreated,
+        g => {
           return Effect.gen(function* (_) {
             const maybeSpace = yield* _(Effect.promise(() => Spaces.findForDaoAddress(g.daoAddress)));
 
@@ -115,7 +117,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
               id: maybeSpace.id,
             };
           });
-        }),
+        },
         {
           concurrency: 25,
         }

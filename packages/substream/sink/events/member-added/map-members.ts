@@ -14,16 +14,19 @@ export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
 
     for (const member of membersApproved) {
       const [maybeSpaceIdForVotingPlugin, maybeSpaceIdForPersonalPlugin] = yield* _(
-        Effect.all([
-          Effect.tryPromise({
-            try: () => Spaces.findForVotingPlugin(member.mainVotingPluginAddress),
-            catch: () => new Error(),
-          }),
-          Effect.tryPromise({
-            try: () => Spaces.findForPersonalPlugin(member.mainVotingPluginAddress),
-            catch: () => new Error(),
-          }),
-        ])
+        Effect.all(
+          [
+            Effect.tryPromise({
+              try: () => Spaces.findForVotingPlugin(member.mainVotingPluginAddress),
+              catch: () => new Error(),
+            }),
+            Effect.tryPromise({
+              try: () => Spaces.findForPersonalPlugin(member.mainVotingPluginAddress),
+              catch: () => new Error(),
+            }),
+          ],
+          { concurrency: 2 }
+        )
       );
 
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForPersonalPlugin) {
