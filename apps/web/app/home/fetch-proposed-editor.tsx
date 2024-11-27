@@ -28,7 +28,7 @@ interface NetworkResult {
   };
 }
 
-export async function fetchProposedEditorForProposal(proposalId: string): Promise<Profile | null> {
+export async function fetchProposedEditorForProposal(proposalId: string): Promise<Profile> {
   const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
