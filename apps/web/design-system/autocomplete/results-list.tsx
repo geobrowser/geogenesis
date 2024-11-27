@@ -42,7 +42,7 @@ type ResultContentProps = {
   onClick: () => void;
   result: SearchResult;
   alreadySelected?: boolean;
-  onChooseSpace: () => void;
+  onChooseSpace?: () => void;
   withDescription?: boolean;
 };
 
@@ -110,7 +110,7 @@ export const ResultContent = ({
           </>
         )}
       </button>
-      {hasOtherSpaces && (
+      {hasOtherSpaces && !!onChooseSpace && (
         <button
           onClick={onChooseSpace}
           className="-mt-2 flex w-full items-center justify-between p-2 transition-colors duration-150 hover:bg-grey-01"
