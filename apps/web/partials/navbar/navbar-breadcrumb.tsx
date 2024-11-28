@@ -134,13 +134,12 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
           key="entity-view-space-toggle-content"
           side="bottom"
           align="start"
-          sideOffset={6}
           avoidCollisions
           initial={{ opacity: 0, y: 10, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, y: 10, scale: 0.95 }}
           transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15, opacity: { duration: 0.125 } }}
-          className="relative z-100 w-[284px] origin-top-left rounded-md border border-grey-02 bg-white p-1"
+          className="relative top-[0.375rem] z-100 w-[284px] origin-top-left rounded-md border border-grey-02 bg-white p-1"
           onOpenAutoFocus={event => event.preventDefault()}
         >
           <div>

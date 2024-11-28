@@ -122,7 +122,7 @@ export const SearchDialog = ({ open, onDone }: Props) => {
                 <button autoFocus className="sr-only" aria-hidden />
                 <Command.Item
                   onSelect={() => setPage(null)}
-                  className="flex w-full items-center border-b border-divider p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01"
+                  className="flex w-full cursor-pointer items-center border-b border-divider p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01"
                 >
                   <div className="size-[12px] *:size-[12px]">
                     <LeftArrowLong color="grey-04" />
