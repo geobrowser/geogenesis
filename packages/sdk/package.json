@@ -31,7 +31,6 @@
     "@ethersproject/providers": "^5.6.8",
     "@types/uuid": "^9.0.8",
     "ethers": "^5.7.2",
-    "fractional-indexing": "^3.2.0",
     "position-strings": "^2.0.1",
     "uuid": "^9.0.0",
     "viem": "^1.16.0",
