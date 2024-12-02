@@ -15,6 +15,7 @@ export function useGeoProfile(account?: `0x${string}`): {
     isLoading,
     isFetched,
   } = useQuery({
+    enabled: account !== undefined,
     queryKey: ['profile', account],
     queryFn: async () => {
       if (!account) return null;

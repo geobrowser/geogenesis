@@ -7,9 +7,7 @@ export interface FetchAccountOptions {
   signal?: AbortController['signal'];
 }
 
-export async function fetchAccount(
-  options: FetchAccountOptions
-): Promise<{ address: string; profile: Profile } | null> {
+export async function fetchAccount(options: FetchAccountOptions): Promise<{ address: string; profile: Profile }> {
   const profile = await fetchProfile({ address: options.address });
 
   return {

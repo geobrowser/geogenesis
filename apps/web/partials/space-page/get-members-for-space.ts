@@ -1,14 +1,12 @@
 import { cache } from 'react';
 
 import { fetchProfile } from '~/core/io/subgraph';
-import { OmitStrict, Profile } from '~/core/types';
+import { Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
-type MemberProfile = OmitStrict<Profile, 'coverUrl'>;
-
 type MembersForSpace = {
-  allMembers: MemberProfile[];
+  allMembers: Profile[];
   totalMembers: number;
   votingPluginAddress: string | null;
   spacePluginAddress: string | null;
@@ -22,28 +20,7 @@ export const getMembersForSpace = cache(async (spaceId: string): Promise<Members
     throw new Error("Space doesn't exist");
   }
 
-  const memberProfiles = await Promise.all(
-    space.members.map(async (member): Promise<MemberProfile> => {
-      const profile = await fetchProfile({ address: member });
-      if (!profile) {
-        return {
-          id: member,
-          avatarUrl: null,
-          name: null,
-          address: member as `0x${string}`,
-          profileLink: '',
-        };
-      }
-
-      return {
-        id: profile.id,
-        avatarUrl: profile.avatarUrl,
-        name: profile.name,
-        address: profile.address,
-        profileLink: profile.profileLink,
-      };
-    })
-  );
+  const memberProfiles = await Promise.all(space.members.map(member => fetchProfile({ address: member })));
 
   return {
     allMembers: memberProfiles,
