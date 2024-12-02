@@ -5,4 +5,4 @@
  * is an avatar. If it's consumed by a Block relation, then we know the
  * image is a block.
  */
-export { make } from '../image';
+export { make } from '../image.js';

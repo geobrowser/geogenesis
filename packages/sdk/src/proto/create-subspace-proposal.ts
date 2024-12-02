@@ -1,6 +1,6 @@
-import { ActionType, Subspace } from '.';
-import type { SubspaceProposalMetadata } from '../..';
-import { createGeoId } from '../id';
+import { createGeoId } from '../id.js';
+import type { SubspaceProposalMetadata } from '../types.js';
+import { ActionType, Subspace } from './gen/src/proto/ipfs_pb.js';
 
 export function createSubspaceProposal({
   name,

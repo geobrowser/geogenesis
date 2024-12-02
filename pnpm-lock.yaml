@@ -336,6 +336,7 @@ importers:
       '@types/uuid': ^9.0.8
       ethers: ^5.7.2
       fractional-indexing: ^3.2.0
+      position-strings: ^2.0.1
       prettier: ^3.2.5
       typescript: ^5.4.5
       uuid: ^9.0.0
@@ -349,6 +350,7 @@ importers:
       '@types/uuid': 9.0.8
       ethers: 5.7.2
       fractional-indexing: 3.2.0
+      position-strings: 2.0.1
       uuid: 9.0.0
       viem: 1.16.0_typescript@5.4.5
       vite: 5.2.11
@@ -5708,6 +5710,10 @@ packages:
     resolution: {integrity: sha512-hHxJU6PAEUn0TP4S/ZOzuTUvJWuZ6eIKeNKb5RBpODvSl6hp1Wrw4s7ATY50rklRCScUDpHzVA/DQdSjJ3UoYQ==}
     dependencies:
       '@types/node': 20.14.12
+    dev: false
+
+  /@types/seedrandom/2.4.34:
+    resolution: {integrity: sha512-ytDiArvrn/3Xk6/vtylys5tlY6eo7Ane0hvcx++TKo6RxQXuVfW0AF/oeWqAj9dN29SyhtawuXstgmPlwNcv/A==}
     dev: false
 
   /@types/semver/7.5.6:
@@ -12439,6 +12445,12 @@ packages:
   /pony-cause/2.1.11:
     resolution: {integrity: sha512-M7LhCsdNbNgiLYiP4WjsfLUuFmCfnjdF6jKe2R9NKl4WFN+HZPGHJZ9lnLP7f9ZnKe3U9nuWD0szirmj+migUg==}
     engines: {node: '>=12.0.0'}
+    dev: false
+
+  /position-strings/2.0.1:
+    resolution: {integrity: sha512-kPVJHLd4q1HnWROKmrbEpKZ0s1FrKt5G6W96wc1PYBGJ2Gw/ZcxhMoRbDw6g02fUiaPTM5/L/fAaUOzE7I/GUg==}
+    dependencies:
+      '@types/seedrandom': 2.4.34
     dev: false
 
   /possible-typed-array-names/1.0.0:

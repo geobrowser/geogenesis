@@ -1,7 +1,6 @@
 import type { IMessageTypeRegistry } from '@bufbuild/protobuf';
 import { createGrpcTransport } from '@connectrpc/connect-node';
-import { createGeoId } from '@geogenesis/sdk';
-import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
+import { NETWORK_IDS, createGeoId } from '@geogenesis/sdk';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import type { BlockScopedData } from '@substreams/core/proto';
 import { readPackageFromFile } from '@substreams/manifest';

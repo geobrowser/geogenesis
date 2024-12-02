@@ -1,1 +1,1 @@
-export * as GraphUrl from './core/scheme';
+export * as GraphUrl from './core/scheme.js';

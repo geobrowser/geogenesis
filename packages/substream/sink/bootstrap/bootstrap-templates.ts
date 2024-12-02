@@ -1,4 +1,4 @@
-import { DataBlock, Relation, SYSTEM_IDS, TextBlock } from '@geogenesis/sdk';
+import { DataBlock, Position, PositionRange, Relation, SYSTEM_IDS, TextBlock } from '@geogenesis/sdk';
 
 import type { Op } from '../types';
 import { SPACE_ID } from './constants';
@@ -20,12 +20,12 @@ const NONPROFIT: Template[] = [
       ...TextBlock.make({
         fromId: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
         text: '## Welcome to our nonprofit!',
-        position: 'a0',
+        position: PositionRange.FIRST,
       }),
       ...TextBlock.make({
         fromId: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
         text: `We're thrilled to have you here. At our core, we are driven by a passionate commitment to positive change. As a community, we believe in the power of collective action to make a difference, no matter how big or small. Together, we can create meaningful impact and contribute to a better world. Thank you for joining us on this journey towards a brighter future.`,
-        position: 'a1',
+        position: Position.createBetween(PositionRange.FIRST),
       }),
     ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
     types: [SYSTEM_IDS.NONPROFIT_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.SPACE_CONFIGURATION],
@@ -102,12 +102,13 @@ const NONPROFIT: Template[] = [
       ...TextBlock.make({
         fromId: SYSTEM_IDS.NONPROFIT_FINANCES_PAGE_TEMPLATE,
         text: 'Welcome to the finance summary of this nonprofit.',
+        position: PositionRange.FIRST,
       }),
       ...DataBlock.make({
         fromId: SYSTEM_IDS.NONPROFIT_FINANCES_PAGE_TEMPLATE,
         sourceType: 'GEO',
         name: 'Finance Summaries',
-        position: 'a1',
+        position: Position.createBetween(PositionRange.FIRST),
       }),
     ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
     types: [SYSTEM_IDS.PAGE_TYPE],
@@ -123,6 +124,8 @@ const NONPROFIT: Template[] = [
   },
 ];
 
+const SECOND_COMPANY_BLOCK_POSITION = Position.createBetween(PositionRange.FIRST);
+
 const COMPANY: Template[] = [
   {
     id: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
@@ -131,18 +134,18 @@ const COMPANY: Template[] = [
       ...TextBlock.make({
         fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
         text: '## Welcome to our company!',
-        position: 'a0',
+        position: PositionRange.FIRST,
       }),
       ...TextBlock.make({
         fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
         text: `We're dedicated to pushing boundaries and fostering innovation. With a focus on excellence and a passion for progress, we strive to make a positive impact in everything we do. From our talented team to our cutting-edge solutions, we're committed to delivering unparalleled quality and service to our customers.`,
-        position: 'a1',
+        position: Position.createBetween(PositionRange.FIRST),
       }),
       ...DataBlock.make({
         fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
         sourceType: 'COLLECTION',
         name: 'Goals',
-        position: 'a3',
+        position: Position.createBetween(PositionRange.FIRST, SECOND_COMPANY_BLOCK_POSITION),
       }),
     ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
     types: [SYSTEM_IDS.SPACE_CONFIGURATION, SYSTEM_IDS.COMPANY_TYPE],
@@ -277,6 +280,22 @@ const COMPANY: Template[] = [
   },
 ];
 
+function getPersonBlockPositions() {
+  const first = PositionRange.FIRST;
+  const second = Position.createBetween(first);
+  const third = Position.createBetween(second);
+  const fourth = Position.createBetween(third);
+
+  return {
+    first,
+    second,
+    third,
+    fourth,
+  };
+}
+
+const PERSON_POSITIONS = getPersonBlockPositions();
+
 const PERSON: Template[] = [
   {
     id: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
@@ -285,24 +304,24 @@ const PERSON: Template[] = [
       ...TextBlock.make({
         fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
         text: '## Welcome to my personal space',
-        position: 'a0',
+        position: PERSON_POSITIONS.first,
       }),
       ...TextBlock.make({
         fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
         text: `This space is where I compile my interests, posts, collections, and a summary of myself, along with anything else I'd like to share with the broader Geo community.`,
-        position: 'a1',
+        position: PERSON_POSITIONS.second,
       }),
       ...DataBlock.make({
         fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
         sourceType: 'COLLECTION',
         name: 'Goals',
-        position: 'a2',
+        position: PERSON_POSITIONS.third,
       }),
       ...DataBlock.make({
         fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
         sourceType: 'COLLECTION',
         name: 'Skills',
-        position: 'a3',
+        position: PERSON_POSITIONS.fourth,
       }),
     ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
     types: [SYSTEM_IDS.SPACE_CONFIGURATION, SYSTEM_IDS.PERSON_TYPE],

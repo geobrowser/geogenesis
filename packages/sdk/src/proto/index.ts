@@ -1,1 +1,1 @@
-export * from './gen/src/proto/ipfs_pb';
+export * from './gen/src/proto/ipfs_pb.js';

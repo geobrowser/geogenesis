@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-import { encodeBase58 } from './core/base58';
+import { encodeBase58 } from './core/base58.js';
 
 /**
  * Generate a v4 UUID.

@@ -1,9 +1,9 @@
-import { createGeoId } from '../id';
-import { Relation } from '../relation';
-import type { SetTripleOp } from '../types';
-import { getChecksumAddress } from './get-checksum-address';
-import { ETHEREUM } from './ids/network';
-import { ACCOUNT_TYPE, ADDRESS_ATTRIBUTE, NAME, NETWORK_ATTRIBUTE, TYPES } from './ids/system';
+import { createGeoId } from '../id.js';
+import { Relation } from '../relation.js';
+import type { SetTripleOp } from '../types.js';
+import { getChecksumAddress } from './get-checksum-address.js';
+import { ETHEREUM } from './ids/network.js';
+import { ACCOUNT_TYPE, ADDRESS_ATTRIBUTE, NAME, NETWORK_ATTRIBUTE, TYPES } from './ids/system.js';
 
 type MakeAccountReturnType = {
   accountId: string;

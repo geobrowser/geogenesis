@@ -1,3 +1,4 @@
+import { PositionRange } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
 import { Entity } from '~/core/io/dto/entities';
@@ -67,7 +68,7 @@ function makeStubTimeTriple(value: string): Triple {
 function makeStubRelation(value: string): Relation {
   return {
     id: EntityId('1-1'),
-    index: 'a0',
+    index: PositionRange.FIRST,
     fromEntity: {
       id: EntityId('1'),
       name: 'From Entity Name From Relation Test',

@@ -1,9 +1,8 @@
-import { generateKeyBetween } from 'fractional-indexing';
-
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants';
-import { createGeoId } from '../id';
-import { GraphUrl } from '../scheme';
-import { SYSTEM_IDS } from '../system-ids';
+import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants.js';
+import { createGeoId } from '../id.js';
+import { GraphUrl } from '../scheme.js';
+import { SYSTEM_IDS } from '../system-ids.js';
+import { Position } from './position.js';
 
 interface CreateRelationArgs {
   fromId: string; // uuid
@@ -160,9 +159,8 @@ type ReorderRelationOp = {
   };
 };
 
-// @TODO: Do we want jittering?
 export function reorder(args: ReorderRelationArgs): ReorderRelationOp {
-  const newIndex = generateKeyBetween(args.beforeIndex, args.afterIndex);
+  const newIndex = Position.createBetween(args.beforeIndex, args.afterIndex);
 
   return {
     type: 'SET_TRIPLE',

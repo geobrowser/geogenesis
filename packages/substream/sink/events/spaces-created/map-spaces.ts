@@ -1,4 +1,4 @@
-import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
+import { NETWORK_IDS } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import type { GovernancePluginsCreated, PersonalPluginsCreated, SpacePluginCreatedWithSpaceId } from './parser';
