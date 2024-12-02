@@ -1,3 +1,3 @@
-import { PositionSource } from 'position-strings';
+import { Position, PositionRange } from './src/position.js';
 
-export const INITIAL_COLLECTION_ITEM_INDEX_VALUE = PositionSource.FIRST;
+export const INITIAL_RELATION_INDEX_VALUE = Position.createBetween(PositionRange.FIRST);

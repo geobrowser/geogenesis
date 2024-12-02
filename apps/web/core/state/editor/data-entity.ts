@@ -1,5 +1,5 @@
 import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
@@ -140,7 +140,7 @@ function makeRelationForCollectionItem({
   // Create a relation that points from the collection to the entity with Relation Type -> CollectionItem
   // 1. Relation type -> CollectionItem
   return {
-    index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+    index: INITIAL_RELATION_INDEX_VALUE,
     typeOf: {
       id: EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE),
       name: 'Collection Item',

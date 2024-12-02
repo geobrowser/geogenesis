@@ -1,4 +1,4 @@
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import { EntityId } from '../io/schema';
 import { RenderableEntityType } from '../types';
@@ -25,7 +25,7 @@ interface BaseRelation {
 export class Relation {
   static make(baseRelation: BaseRelation): StoreRelation {
     return {
-      index: baseRelation.index ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+      index: baseRelation.index ?? INITIAL_RELATION_INDEX_VALUE,
       typeOf: {
         id: EntityId(baseRelation.typeOf.id),
         name: baseRelation.typeOf.name,

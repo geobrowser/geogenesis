@@ -1,4 +1,4 @@
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants.js';
+import { INITIAL_RELATION_INDEX_VALUE } from '../../constants.js';
 import { createGeoId } from '../id.js';
 import { GraphUrl } from '../scheme.js';
 import { SYSTEM_IDS } from '../system-ids.js';
@@ -123,7 +123,7 @@ export function make(
         entity: newEntityId,
         value: {
           type: 'TEXT',
-          value: args.position ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+          value: args.position ?? INITIAL_RELATION_INDEX_VALUE,
         },
       },
     },

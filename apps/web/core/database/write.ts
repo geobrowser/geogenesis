@@ -1,4 +1,4 @@
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { atom } from 'jotai';
 
 import { createTripleId } from '../id/create-id';
@@ -71,7 +71,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
     // We can set a dummy relation here since we only care about the deleted state
     {
       id: args.relationId,
-      index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+      index: INITIAL_RELATION_INDEX_VALUE,
       isDeleted: true,
       typeOf: {
         id: EntityId(''),
