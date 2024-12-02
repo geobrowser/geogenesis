@@ -1,7 +1,5 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -34,9 +32,6 @@ export function SpacePageMetadataHeader({
 }: SpacePageMetadataHeaderProps) {
   const isEditing = useUserIsEditing(spaceId);
   const [open, onOpenChange] = React.useState(false);
-
-  // @TODO pathname might already include `/entities` or `/import`, resulting in a broken behavior in the context menu
-  const pathname = usePathname();
 
   // const { subgraph } = Services.useServices();
 
@@ -140,9 +135,6 @@ export function SpacePageMetadataHeader({
         >
           <MenuItem onClick={onCopyId}>
             <p className="text-button">Copy ID</p>
-          </MenuItem>
-          <MenuItem href={`${pathname}/entities`} onClick={() => onOpenChange(false)}>
-            <p className="text-button">View data</p>
           </MenuItem>
 
           {isEditing && addSubspaceComponent}
