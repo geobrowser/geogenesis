@@ -1,8 +1,7 @@
-import { NETWORK_IDS } from '@geogenesis/sdk';
+import { NETWORK_IDS, getChecksumAddress } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import type { GovernancePluginsCreated, PersonalPluginsCreated, SpacePluginCreatedWithSpaceId } from './parser';
-import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { createSpaceId } from '~/sink/utils/id';
 
 export function mapSpaces(spaces: SpacePluginCreatedWithSpaceId[], createdAtBlock: number): S.spaces.Insertable[] {

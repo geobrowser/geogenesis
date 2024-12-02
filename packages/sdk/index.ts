@@ -16,3 +16,4 @@ export { Position, PositionRange } from './src/position.js';
 export { Relation } from './src/relation.js';
 export { GraphUrl } from './src/scheme.js';
 export { SYSTEM_IDS, NETWORK_IDS } from './src/system-ids.js';
+export { getChecksumAddress } from './src/core/get-checksum-address.js';

@@ -1,12 +1,11 @@
-import { Import } from '@geogenesis/sdk/proto';
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
 import { getFetchIpfsContentEffect } from '../../ipfs';
 import type { BlockEvent, Op } from '../../types';
-import { getChecksumAddress } from '../../utils/get-checksum-address';
 import { type EditProposal, type ProposalProcessed } from '../proposals-created/parser';
-import { Decoder, decode } from '~/sink/proto';
+import { Decoder } from '~/sink/proto';
 
 function fetchEditProposalFromIpfs(
   processedProposal: {

@@ -1,3 +1,4 @@
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import { writeAccounts } from '../write-accounts';
@@ -5,7 +6,6 @@ import { mapEditors } from './map-editors';
 import type { EditorAdded } from './parser';
 import { SpaceEditors } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';
-import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { retryEffect } from '~/sink/utils/retry-effect';
 
 export class CouldNotWriteAddedEditorsError extends Error {

@@ -1,10 +1,10 @@
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
 import type { SubspaceRemoved } from './parser';
 import { Spaces } from '~/sink/db';
 import { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
-import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 
 export function mapSubspacesToRemove(
   subspacesRemoved: SubspaceRemoved[]

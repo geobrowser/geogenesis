@@ -1,7 +1,7 @@
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
-import { getChecksumAddress } from '../../utils/get-checksum-address';
 import type { MemberAdded } from './parser';
 import { Spaces } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';

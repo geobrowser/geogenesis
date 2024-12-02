@@ -1,6 +1,5 @@
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Data } from 'effect';
-
-import { getChecksumAddress } from './utils/get-checksum-address';
 
 export class CouldNotWriteSpacesError extends Data.TaggedError('CouldNotWriteSpacesError')<{
   message: string;

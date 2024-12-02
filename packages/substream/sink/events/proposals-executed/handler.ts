@@ -1,8 +1,8 @@
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import type { ProposalExecuted } from './parser';
 import { Proposals } from '~/sink/db';
-import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 
 class CouldNotWriteExecutedProposalError extends Error {
   _tag: 'CouldNotWriteExecutedProposalError' = 'CouldNotWriteExecutedProposalError';
