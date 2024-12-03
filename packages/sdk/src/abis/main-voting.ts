@@ -426,6 +426,12 @@ export const abi = [
     inputs: [
       {
         indexed: false,
+        internalType: 'address',
+        name: 'dao',
+        type: 'address',
+      },
+      {
+        indexed: false,
         internalType: 'address[]',
         name: 'editors',
         type: 'address[]',

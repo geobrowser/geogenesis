@@ -12,6 +12,8 @@ pub struct SuccessorSpaceCreated {
     pub predecessor_space: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
     pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub dao_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -109,63 +111,14 @@ pub struct InitialEditorAdded {
     pub addresses: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, tag="2")]
     pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub dao_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InitialEditorsAdded {
     #[prost(message, repeated, tag="1")]
     pub editors: ::prost::alloc::vec::Vec<InitialEditorAdded>,
-}
-/// *
-/// Proposals represent a proposal to change the state of a DAO-based space. Proposals can
-/// represent changes to content, membership (editor or member), governance changes, subspace
-/// membership, or anything else that can be executed by a DAO.
-///
-/// Currently we use a simple majority voting model, where a proposal requires 51% of the
-/// available votes in order to pass. Only editors are allowed to vote on proposals, but editors
-/// _and_ members can create them.
-///
-/// Proposals require encoding a "callback" that represents the action to be taken if the proposal
-/// succeeds. For example, if a proposal is to add a new editor to the space, the callback would
-/// be the encoded function call to add the editor to the space.
-///
-/// ```ts
-/// {
-///    to: `0x123...`, // The address of the membership contract
-///    data: `0x123...`, // The encoded function call parameters
-/// }
-/// ```
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct DaoAction {
-    #[prost(string, tag="1")]
-    pub to: ::prost::alloc::string::String,
-    #[prost(uint64, tag="2")]
-    pub value: u64,
-    #[prost(bytes="vec", tag="3")]
-    pub data: ::prost::alloc::vec::Vec<u8>,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ProposalCreated {
-    #[prost(string, tag="1")]
-    pub proposal_id: ::prost::alloc::string::String,
-    #[prost(string, tag="2")]
-    pub creator: ::prost::alloc::string::String,
-    #[prost(string, tag="3")]
-    pub start_time: ::prost::alloc::string::String,
-    #[prost(string, tag="4")]
-    pub end_time: ::prost::alloc::string::String,
-    #[prost(string, tag="5")]
-    pub metadata_uri: ::prost::alloc::string::String,
-    #[prost(string, tag="6")]
-    pub plugin_address: ::prost::alloc::string::String,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ProposalsCreated {
-    #[prost(message, repeated, tag="1")]
-    pub proposals: ::prost::alloc::vec::Vec<ProposalCreated>,
 }
 /// Executed proposals have been approved and executed onchain in a DAO-based
 /// space's main voting plugin. The DAO itself also emits the executed event,
@@ -199,6 +152,8 @@ pub struct EditPublished {
     pub content_uri: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
     pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub dao_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -220,6 +175,8 @@ pub struct SubspaceAdded {
     pub plugin_address: ::prost::alloc::string::String,
     #[prost(string, tag="3")]
     pub change_type: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub dao_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -236,6 +193,8 @@ pub struct SubspaceRemoved {
     pub plugin_address: ::prost::alloc::string::String,
     #[prost(string, tag="3")]
     pub change_type: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub dao_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -258,7 +217,7 @@ pub struct VoteCast {
     pub voter: ::prost::alloc::string::String,
     #[prost(uint64, tag="3")]
     pub vote_option: u64,
-    #[prost(string, tag="5")]
+    #[prost(string, tag="4")]
     pub plugin_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -276,6 +235,8 @@ pub struct MemberAdded {
     pub main_voting_plugin_address: ::prost::alloc::string::String,
     #[prost(string, tag="3")]
     pub change_type: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub dao_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -289,11 +250,11 @@ pub struct MemberRemoved {
     #[prost(string, tag="1")]
     pub member_address: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
-    pub dao_address: ::prost::alloc::string::String,
-    #[prost(string, tag="3")]
     pub plugin_address: ::prost::alloc::string::String,
-    #[prost(string, tag="4")]
+    #[prost(string, tag="3")]
     pub change_type: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub dao_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -310,6 +271,8 @@ pub struct EditorAdded {
     pub main_voting_plugin_address: ::prost::alloc::string::String,
     #[prost(string, tag="3")]
     pub change_type: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub dao_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -323,11 +286,11 @@ pub struct EditorRemoved {
     #[prost(string, tag="1")]
     pub editor_address: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
-    pub dao_address: ::prost::alloc::string::String,
-    #[prost(string, tag="3")]
     pub plugin_address: ::prost::alloc::string::String,
-    #[prost(string, tag="4")]
+    #[prost(string, tag="3")]
     pub change_type: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub dao_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

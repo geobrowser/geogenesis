@@ -29,11 +29,7 @@ import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleMemberRemoved } from './events/member-removed/handler';
 import { ZodMemberRemovedStreamResponse } from './events/member-removed/parser';
-import { handleProposalsCreated } from './events/proposals-created/handler';
-import {
-  ZodProposalCreatedStreamResponse,
-  ZodProposalProcessedStreamResponse,
-} from './events/proposals-created/parser';
+import { ZodEditPublishedStreamResponse } from './events/proposals-created/parser';
 import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { ZodProposalExecutedStreamResponse } from './events/proposals-executed/parser';
 import { getSpacesWithInitialProposalsProcessed } from './events/spaces-created/get-spaces-with-initial-proposals-processed';
@@ -240,8 +236,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     const subspacesAdded = ZodSubspacesAddedStreamResponse.safeParse(jsonOutput);
     const subspacesRemoved = ZodSubspacesRemovedStreamResponse.safeParse(jsonOutput);
     const initialEditorsAddedResponse = ZodInitialEditorsAddedStreamResponse.safeParse(jsonOutput);
-    const proposalCreatedResponse = ZodProposalCreatedStreamResponse.safeParse(jsonOutput);
-    const proposalProcessedResponse = ZodProposalProcessedStreamResponse.safeParse(jsonOutput);
+    const proposalProcessedResponse = ZodEditPublishedStreamResponse.safeParse(jsonOutput);
     const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
     const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
     const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
@@ -256,7 +251,6 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       subspacesAdded.success ||
       subspacesRemoved.success ||
       initialEditorsAddedResponse.success ||
-      proposalCreatedResponse.success ||
       proposalProcessedResponse.success ||
       votesCast.success ||
       executedProposals.success ||
@@ -419,15 +413,15 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       );
     }
 
-    if (proposalCreatedResponse.success) {
-      yield* _(
-        handleProposalsCreated(proposalCreatedResponse.data.proposalsCreated, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
-    }
+    // if (proposalCreatedResponse.success) {
+    //   yield* _(
+    //     handleProposalsCreated(proposalCreatedResponse.data.proposalsCreated, {
+    //       blockNumber,
+    //       cursor,
+    //       timestamp,
+    //     })
+    //   );
+    // }
 
     if (membersAdded.success) {
       yield* _(

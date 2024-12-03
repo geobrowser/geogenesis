@@ -4,7 +4,7 @@ import { Effect, Either } from 'effect';
 import { Spaces } from '../../db';
 import { getFetchIpfsContentEffect } from '../../ipfs';
 import type { BlockEvent, Op } from '../../types';
-import { type EditProposal, type ProposalProcessed } from '../proposals-created/parser';
+import { type EditProposal, type EditPublished } from '../proposals-created/parser';
 import { Decoder } from '~/sink/proto';
 
 function fetchEditProposalFromIpfs(
@@ -217,7 +217,7 @@ function fetchEditProposalFromIpfs(
   });
 }
 
-export function getEditsProposalsFromIpfsUri(proposalsProcessed: ProposalProcessed[], block: BlockEvent) {
+export function getEditsProposalsFromIpfsUri(proposalsProcessed: EditPublished[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     yield* _(Effect.logInfo('Gathering IPFS content for accepted proposals'));
 

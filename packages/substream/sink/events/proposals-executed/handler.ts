@@ -27,6 +27,7 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[]) {
               //
               // A proposal stores the plugin address that created the proposal so we can disambiguate
               // when we update the proposals here.
+              // @TODO: We should be able to derive the proposal id at this point and just look it up
               const [isContentProposal, isAddSubspaceProposal, isAddEditorProposal] = await Promise.all([
                 Proposals.getOne({
                   onchainProposalId: proposal.proposalId,

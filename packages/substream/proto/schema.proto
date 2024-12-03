@@ -10,8 +10,9 @@ package schema;
  * but it's generally applicable across any space.
  */
 message SuccessorSpaceCreated {
-  string predecessorSpace = 1;
-  string pluginAddress = 2;
+  string predecessor_space = 1;
+  string plugin_address = 2;
+  string dao_address = 3;
 }
 
 message SuccessorSpacesCreated {
@@ -27,8 +28,8 @@ message SuccessorSpacesCreated {
  * address with the address of the DAO contract.
  */
 message GeoSpaceCreated {
-  string daoAddress = 1;
-  string spaceAddress = 2;
+  string dao_address = 1;
+  string space_address = 2;
 }
 
 message GeoSpacesCreated {
@@ -48,9 +49,9 @@ message GeoSpacesCreated {
  * 2. Member access plugin – This defines the membership rules and behaviors for a DAO
  */
 message GeoGovernancePluginCreated {
-  string daoAddress = 1;
-  string mainVotingAddress = 2;
-  string memberAccessAddress = 3;
+  string dao_address = 1;
+  string main_voting_address = 2;
+  string member_access_address = 3;
 }
 
 message GeoGovernancePluginsCreated {
@@ -58,9 +59,9 @@ message GeoGovernancePluginsCreated {
 }
 
 message GeoPersonalSpaceAdminPluginCreated {
-  string daoAddress = 1;
-  string personalAdminAddress = 2;
-  string initialEditor = 3;
+  string dao_address = 1;
+  string personal_admin_address = 2;
+  string initial_editor = 3;
 }
 
 message GeoPersonalSpaceAdminPluginsCreated {
@@ -89,50 +90,12 @@ message InitialEditorAdded {
   // when first creating the governance plugin. After that we only emit one
   // address at a time via proposals.
   repeated string addresses = 1;
-  string pluginAddress = 2;
+  string plugin_address = 2;
+  string dao_address = 3;
 }
 
 message InitialEditorsAdded {
   repeated InitialEditorAdded editors = 1;
-}
-
-/**
- * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
- * represent changes to content, membership (editor or member), governance changes, subspace
- * membership, or anything else that can be executed by a DAO.
- *
- * Currently we use a simple majority voting model, where a proposal requires 51% of the
- * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
- * _and_ members can create them.
- *
- * Proposals require encoding a "callback" that represents the action to be taken if the proposal
- * succeeds. For example, if a proposal is to add a new editor to the space, the callback would
- * be the encoded function call to add the editor to the space.
- *
- * ```ts
- * {
- *   to: `0x123...`, // The address of the membership contract
- *   data: `0x123...`, // The encoded function call parameters
- * }
- * ```
- */
-message DaoAction {
-  string to = 1;
-  uint64 value = 2;
-  bytes data = 3;
-}
-
-message ProposalCreated {
-  string proposal_id = 1;
-  string creator = 2;
-  string start_time = 3;
-  string end_time = 4;
-  string metadata_uri = 5;
-  string plugin_address = 6;
-}
-
-message ProposalsCreated {
-  repeated ProposalCreated proposals = 1;
 }
 
 // Executed proposals have been approved and executed onchain in a DAO-based
@@ -159,6 +122,7 @@ message ProposalsExecuted {
 message EditPublished {
   string content_uri = 1;
   string plugin_address = 2;
+  string dao_address = 3;
 }
 
 message EditsPublished {
@@ -175,6 +139,7 @@ message SubspaceAdded {
   string subspace = 1;
   string plugin_address = 2;
   string change_type = 3;
+  string dao_address = 4;
 }
 
 message SubspacesAdded {
@@ -185,6 +150,7 @@ message SubspaceRemoved {
   string subspace = 1;
   string plugin_address = 2;
   string change_type = 3;
+  string dao_address = 4;
 }
 
 message SubspacesRemoved {
@@ -202,7 +168,7 @@ message VoteCast {
   string onchain_proposal_id = 1;
   string voter = 2;
   uint64 vote_option = 3;
-  string plugin_address = 5;
+  string plugin_address = 4;
 }
 
 message VotesCast {
@@ -213,6 +179,7 @@ message MemberAdded {
   string member_address = 1;
   string main_voting_plugin_address = 2;
   string change_type = 3;
+  string dao_address = 4;
 }
 
 message MembersAdded {
@@ -221,9 +188,9 @@ message MembersAdded {
 
 message MemberRemoved {
   string member_address = 1;
-  string dao_address = 2;
-  string plugin_address = 3;
-  string change_type = 4;
+  string plugin_address = 2;
+  string change_type = 3;
+  string dao_address = 4;
 }
 
 message MembersRemoved {
@@ -234,6 +201,7 @@ message EditorAdded {
   string editor_address = 1;
   string main_voting_plugin_address = 2;
   string change_type = 3;
+  string dao_address = 4;
 }
 
 message EditorsAdded {
@@ -242,9 +210,9 @@ message EditorsAdded {
 
 message EditorRemoved {
   string editor_address = 1;
-  string dao_address = 2;
-  string plugin_address = 3;
-  string change_type = 4;
+  string plugin_address = 2;
+  string change_type = 3;
+  string dao_address = 4;
 }
 
 message EditorsRemoved {

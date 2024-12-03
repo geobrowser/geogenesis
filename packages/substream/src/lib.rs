@@ -63,6 +63,7 @@ fn map_successor_spaces_created(
                 return Some(SuccessorSpaceCreated {
                     plugin_address: address,
                     predecessor_space: format_hex(&successor_space_created.predecessor_space),
+                    dao_address: format_hex(&successor_space_created.dao),
                 });
             }
 
@@ -114,6 +115,7 @@ fn map_subspaces_added(block: eth::v2::Block) -> Result<SubspacesAdded, substrea
                     change_type: "added".to_string(),
                     subspace: format_hex(&space_created.subspace_dao),
                     plugin_address: format_hex(&log.address()),
+                    dao_address: format_hex(&space_created.dao),
                 });
             }
 
@@ -136,6 +138,7 @@ fn map_subspaces_removed(
                     change_type: "removed".to_string(),
                     subspace: format_hex(&space_created.subspace_dao),
                     plugin_address: format_hex(&log.address()),
+                    dao_address: format_hex(&space_created.dao),
                 });
             }
 
@@ -242,6 +245,7 @@ fn map_initial_editors_added(
                         .map(|address| format_hex(address))
                         .collect(),
                     plugin_address: format_hex(&log.address()),
+                    dao_address: format_hex(&editors_added.dao),
                 });
             }
 
@@ -262,6 +266,7 @@ fn map_members_added(block: eth::v2::Block) -> Result<MembersAdded, substreams::
                     change_type: "added".to_string(),
                     main_voting_plugin_address: format_hex(&log.address()),
                     member_address: format_hex(&members_approved.member),
+                    dao_address: format_hex(&members_approved.dao),
                 });
             }
 
@@ -303,6 +308,7 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
                     change_type: "added".to_string(),
                     main_voting_plugin_address: format_hex(&log.address()),
                     editor_address: format_hex(&members_approved.editor),
+                    dao_address: format_hex(&members_approved.dao),
                 });
             }
 
@@ -425,9 +431,10 @@ fn map_edits_published(block: eth::v2::Block) -> Result<EditsPublished, substrea
     let proposals: Vec<EditPublished> = block
         .logs()
         .filter_map(|log| {
-            if let Some(proposal_created) = EditsPublishedEvent::match_and_decode(log) {
+            if let Some(edit_published) = EditsPublishedEvent::match_and_decode(log) {
                 return Some(EditPublished {
-                    content_uri: proposal_created.content_uri,
+                    content_uri: edit_published.content_uri,
+                    dao_address: format_hex(&edit_published.dao),
                     plugin_address: format_hex(&log.address()),
                 });
             }

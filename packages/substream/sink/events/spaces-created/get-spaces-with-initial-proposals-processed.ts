@@ -1,6 +1,6 @@
 import { getChecksumAddress } from '@geogenesis/sdk';
 
-import type { ProposalProcessed } from '../proposals-created/parser';
+import type { EditPublished } from '../proposals-created/parser';
 import type { SpacePluginCreated } from './parser';
 
 /**
@@ -13,7 +13,7 @@ import type { SpacePluginCreated } from './parser';
  */
 export function getSpacesWithInitialProposalsProcessed(
   spacesCreated: SpacePluginCreated[],
-  proposalsProcessed: ProposalProcessed[]
+  proposalsProcessed: EditPublished[]
 ) {
   const proposalPluginAddresses = new Set(proposalsProcessed.map(s => getChecksumAddress(s.pluginAddress)));
   return spacesCreated.filter(p => proposalPluginAddresses.has(getChecksumAddress(p.spaceAddress)));

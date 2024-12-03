@@ -114,19 +114,16 @@ export type SubspaceProposal = Proposal & {
   subspace: string; // corresponds to the space id
 };
 
-export const ZodProposalCreatedStreamResponse = z.object({
-  proposalsCreated: z.array(ZodSubstreamProposalCreated).min(1),
-});
-
-export const ZodProposalProcessed = z.object({
+export const ZodEditPublished = z.object({
   contentUri: z.string(),
   pluginAddress: z.string(),
+  daoAddress: z.string(),
 });
 
-export type ProposalProcessed = z.infer<typeof ZodProposalProcessed>;
+export type EditPublished = z.infer<typeof ZodEditPublished>;
 
-export const ZodProposalProcessedStreamResponse = z.object({
-  proposalsProcessed: z.array(ZodProposalProcessed).min(1),
+export const ZodEditPublishedStreamResponse = z.object({
+  proposalsProcessed: z.array(ZodEditPublished).min(1),
 });
 
 export type EditProposal = Proposal & {

@@ -7,6 +7,7 @@ export const ZodMemberAdded = z.object({
   changeType: z.string().refine(data => data === 'added'),
   memberAddress: z.string(),
   mainVotingPluginAddress: z.string(),
+  daoAddress: z.string(),
 });
 
 export type MemberAdded = z.infer<typeof ZodMemberAdded>;
