@@ -3,21 +3,6 @@ syntax = "proto3";
 package schema;
 
 /**
- * Profiles represent the users of Geo. Profiles are registered in the GeoProfileRegistry
- * contract and are associated with a user's EVM-based address and the space where metadata
- * representing their profile resides in.
-*/
-message GeoProfileRegistered {
-  string requestor = 1;
-  string space = 2;
-  string id = 3;
-}
-
-message GeoProfilesRegistered {
-  repeated GeoProfileRegistered profiles = 1;
-}
-
-/**
  * The new DAO-based contracts allow forking of spaces into successor spaces. This is so
  * users can create new spaces whose data is derived from another space.
  *
@@ -171,19 +156,19 @@ message ProposalsExecuted {
  * only consume the `proposalId` in the content URI to map the processed
  * data to an existing proposal onchain and in the sink.
 */
-message ProposalProcessed {
+message EditPublished {
   string content_uri = 1;
   string plugin_address = 2;
 }
 
-message ProposalsProcessed {
-  repeated ProposalProcessed proposals = 1;
+message EditsPublished {
+  repeated EditPublished proposals = 1;
 }
 
 /**
  * Added or Removed Subspaces represent adding a space contracto to the hierarchy
  * of the DAO-based space. This is useful to "link" Spaces together in a
- * tree of spaces, allowing us to curate the graph of their knowledge and 
+ * tree of spaces, allowing us to curate the graph of their knowledge and
  * permissions.
 */
 message SubspaceAdded {
@@ -267,20 +252,18 @@ message EditorsRemoved {
 }
 
 message GeoOutput {
-  repeated GeoProfileRegistered profiles_registered = 1;
-  repeated GeoSpaceCreated spaces_created = 2;
-  repeated GeoGovernancePluginCreated governance_plugins_created = 3;
-  repeated InitialEditorAdded initial_editors_added = 4;
-  repeated ProposalCreated proposals_created = 5;
-  repeated VoteCast votes_cast = 6;
-  repeated ProposalProcessed proposals_processed = 7;
-  repeated SuccessorSpaceCreated successor_spaces_created = 8;
-  repeated SubspaceAdded subspaces_added = 9;
-  repeated SubspaceRemoved subspaces_removed = 10;
-  repeated ProposalExecuted executed_proposals = 11;
-  repeated MemberAdded members_added = 12;
-  repeated EditorAdded editors_added = 13;
-  repeated GeoPersonalSpaceAdminPluginCreated personal_plugins_created = 14;
-  repeated MemberRemoved members_removed = 15;
-  repeated EditorRemoved editors_removed = 16;
+  repeated GeoSpaceCreated spaces_created = 1;
+  repeated GeoGovernancePluginCreated governance_plugins_created = 2;
+  repeated InitialEditorAdded initial_editors_added = 3;
+  repeated VoteCast votes_cast = 4;
+  repeated EditPublished edits_published = 5;
+  repeated SuccessorSpaceCreated successor_spaces_created = 6;
+  repeated SubspaceAdded subspaces_added = 7;
+  repeated SubspaceRemoved subspaces_removed = 8;
+  repeated ProposalExecuted executed_proposals = 9;
+  repeated MemberAdded members_added = 10;
+  repeated EditorAdded editors_added = 11;
+  repeated GeoPersonalSpaceAdminPluginCreated personal_plugins_created = 12;
+  repeated MemberRemoved members_removed = 13;
+  repeated EditorRemoved editors_removed = 14;
 }

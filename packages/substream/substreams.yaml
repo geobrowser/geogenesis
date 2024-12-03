@@ -15,14 +15,6 @@ binaries:
     file: ./target/wasm32-unknown-unknown/release/geo_substream.wasm
 
 modules:
-  - name: map_profiles_registered
-    kind: map
-    initialBlock: 620
-    inputs:
-      - source: sf.ethereum.type.v2.Block
-    output:
-      type: proto:schema.GeoProfilesRegistered
-
   - name: map_successor_spaces_created
     kind: map
     initialBlock: 620
@@ -79,21 +71,13 @@ modules:
     output:
       type: proto:schema.EditorsAdded
 
-  - name: map_proposals_created
+  - name: map_edits_published
     kind: map
     initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
-      type: proto:schema.ProposalsCreated
-
-  - name: map_proposals_processed
-    kind: map
-    initialBlock: 620
-    inputs:
-      - source: sf.ethereum.type.v2.Block
-    output:
-      type: proto:schema.ProposalsProcessed
+      type: proto:schema.EditsPublished
 
   - name: map_votes_cast
     kind: map
@@ -147,13 +131,11 @@ modules:
     kind: map
     initialBlock: 620
     inputs:
-      - map: map_profiles_registered
       - map: map_spaces_created
       - map: map_governance_plugins_created
       - map: map_initial_editors_added
-      - map: map_proposals_created
       - map: map_votes_cast
-      - map: map_proposals_processed
+      - map: map_edits_published
       - map: map_successor_spaces_created
       - map: map_subspaces_added
       - map: map_subspaces_removed

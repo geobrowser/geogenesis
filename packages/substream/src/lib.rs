@@ -3,12 +3,11 @@ pub mod helpers;
 mod pb;
 
 use pb::schema::{
-    EditorAdded, EditorRemoved, EditorsAdded, EditorsRemoved, GeoGovernancePluginCreated,
-    GeoGovernancePluginsCreated, GeoOutput, GeoPersonalSpaceAdminPluginCreated,
-    GeoPersonalSpaceAdminPluginsCreated, GeoProfileRegistered, GeoProfilesRegistered,
-    GeoSpaceCreated, GeoSpacesCreated, InitialEditorAdded, InitialEditorsAdded, MemberAdded,
-    MemberRemoved, MembersAdded, MembersRemoved, ProposalCreated, ProposalExecuted,
-    ProposalProcessed, ProposalsCreated, ProposalsExecuted, ProposalsProcessed, SubspaceAdded,
+    EditPublished, EditorAdded, EditorRemoved, EditorsAdded, EditorsRemoved, EditsPublished,
+    GeoGovernancePluginCreated, GeoGovernancePluginsCreated, GeoOutput,
+    GeoPersonalSpaceAdminPluginCreated, GeoPersonalSpaceAdminPluginsCreated, GeoSpaceCreated,
+    GeoSpacesCreated, InitialEditorAdded, InitialEditorsAdded, MemberAdded, MemberRemoved,
+    MembersAdded, MembersRemoved, ProposalExecuted, ProposalsExecuted, SubspaceAdded,
     SubspaceRemoved, SubspacesAdded, SubspacesRemoved, SuccessorSpaceCreated,
     SuccessorSpacesCreated, VoteCast, VotesCast,
 };
@@ -18,7 +17,6 @@ use substreams_ethereum::{pb::eth, use_contract, Event};
 use helpers::*;
 
 use_contract!(space, "abis/space.json");
-use_contract!(geo_profile_registry, "abis/geo-profile-registry.json");
 use_contract!(space_setup, "abis/space-setup.json");
 use_contract!(governance_setup, "abis/governance-setup.json");
 use_contract!(personal_admin_setup, "abis/personal-admin-setup.json");
@@ -30,49 +28,19 @@ use_contract!(
     "abis/majority-voting-base.json"
 );
 
-use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use governance_setup::events::GeoGovernancePluginsCreated as GovernancePluginCreatedEvent;
 use main_voting_plugin::events::{
     EditorAdded as EditorAddedEvent, EditorRemoved as EditorRemovedEvent,
     EditorsAdded as EditorsAddedEvent, MemberAdded as MemberAddedEvent,
-    MemberRemoved as MemberRemovedEvent, ProposalCreated as ProposalCreatedEvent,
-    ProposalExecuted as ProposalExecutedEvent,
+    MemberRemoved as MemberRemovedEvent, ProposalExecuted as ProposalExecutedEvent,
 };
 use majority_voting_base_plugin::events::VoteCast as VoteCastEvent;
 use personal_admin_setup::events::GeoPersonalAdminPluginCreated as GeoPersonalAdminPluginCreatedEvent;
 use space::events::{
     EditsPublished as EditsPublishedEvent, SubspaceAccepted as SubspaceAcceptedEvent,
-    SubspaceRemoved as SubspaceRemovedEvent, SuccessorSpaceCreated as SuccessSpaceCreatedEvent,
+    SubspaceRemoved as SubspaceRemovedEvent, SuccessorSpaceCreated as SuccessorSpaceCreatedEvent,
 };
 use space_setup::events::GeoSpacePluginCreated as SpacePluginCreatedEvent;
-
-/**
- * Profiles represent the users of Geo. Profiles are registered in the GeoProfileRegistry
- * contract and are associated with a user's EVM-based address and the space where metadata
- * representing their profile resides in.
-*/
-#[substreams::handlers::map]
-fn map_profiles_registered(
-    block: eth::v2::Block,
-) -> Result<GeoProfilesRegistered, substreams::errors::Error> {
-    let profiles: Vec<GeoProfileRegistered> = block
-        .logs()
-        .filter_map(|log| {
-            if let Some(profile_registered) = GeoProfileRegisteredEvent::match_and_decode(log) {
-                return Some(profile_registered);
-            }
-
-            return None;
-        })
-        .map(|profile_registered| GeoProfileRegistered {
-            id: profile_registered.id.to_string(),
-            requestor: format_hex(&profile_registered.account),
-            space: format_hex(&profile_registered.home_space),
-        })
-        .collect();
-
-    Ok(GeoProfilesRegistered { profiles })
-}
 
 /**
  * The new DAO-based contracts allow forking of spaces into successor spaces. This is so
@@ -90,7 +58,8 @@ fn map_successor_spaces_created(
         .filter_map(|log| {
             let address = format_hex(&log.address());
 
-            if let Some(successor_space_created) = SuccessSpaceCreatedEvent::match_and_decode(log) {
+            if let Some(successor_space_created) = SuccessorSpaceCreatedEvent::match_and_decode(log)
+            {
                 return Some(SuccessorSpaceCreated {
                     plugin_address: address,
                     predecessor_space: format_hex(&successor_space_created.predecessor_space),
@@ -366,6 +335,17 @@ fn map_editors_removed(block: eth::v2::Block) -> Result<EditorsRemoved, substrea
 }
 
 /**
+* Proposals for each proposal type
+* 1. Add member
+* 2. Remove member
+* 3. Add editor
+* 4. Remove editor
+* 5. Add subspace
+* 6. Remove subspace
+* 7. Publish edits
+*/
+
+/**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
  * represent changes to content, membership (editor or member), governance changes, subspace
  * membership, or anything else that can be executed by a DAO.
@@ -385,31 +365,31 @@ fn map_editors_removed(block: eth::v2::Block) -> Result<EditorsRemoved, substrea
  * }
  * ```
  */
-#[substreams::handlers::map]
-fn map_proposals_created(
-    block: eth::v2::Block,
-) -> Result<ProposalsCreated, substreams::errors::Error> {
-    let proposals: Vec<ProposalCreated> = block
-        .logs()
-        .filter_map(|log| {
-            if let Some(proposal_created) = ProposalCreatedEvent::match_and_decode(log) {
-                // @TODO: Should we return none if actions is empty?
-                return Some(ProposalCreated {
-                    proposal_id: proposal_created.proposal_id.to_string(),
-                    creator: format_hex(&proposal_created.creator),
-                    start_time: proposal_created.start_date.to_string(),
-                    end_time: proposal_created.end_date.to_string(),
-                    metadata_uri: String::from_utf8(proposal_created.metadata).unwrap(),
-                    plugin_address: format_hex(&log.address()),
-                });
-            }
+// #[substreams::handlers::map]
+// fn map_proposals_created(
+//     block: eth::v2::Block,
+// ) -> Result<ProposalsCreated, substreams::errors::Error> {
+//     let proposals: Vec<ProposalCreated> = block
+//         .logs()
+//         .filter_map(|log| {
+//             if let Some(proposal_created) = ProposalCreatedEvent::match_and_decode(log) {
+//                 // @TODO: Should we return none if actions is empty?
+//                 return Some(ProposalCreated {
+//                     proposal_id: proposal_created.proposal_id.to_string(),
+//                     creator: format_hex(&proposal_created.creator),
+//                     start_time: proposal_created.start_date.to_string(),
+//                     end_time: proposal_created.end_date.to_string(),
+//                     metadata_uri: String::from_utf8(proposal_created.metadata).unwrap(),
+//                     plugin_address: format_hex(&log.address()),
+//                 });
+//             }
 
-            return None;
-        })
-        .collect();
+//             return None;
+//         })
+//         .collect();
 
-    Ok(ProposalsCreated { proposals })
-}
+//     Ok(ProposalsCreated { proposals })
+// }
 
 #[substreams::handlers::map]
 fn map_proposals_executed(
@@ -441,14 +421,12 @@ fn map_proposals_executed(
  * data to an existing proposal onchain and in the sink.
 */
 #[substreams::handlers::map]
-fn map_proposals_processed(
-    block: eth::v2::Block,
-) -> Result<ProposalsProcessed, substreams::errors::Error> {
-    let proposals: Vec<ProposalProcessed> = block
+fn map_edits_published(block: eth::v2::Block) -> Result<EditsPublished, substreams::errors::Error> {
+    let proposals: Vec<EditPublished> = block
         .logs()
         .filter_map(|log| {
             if let Some(proposal_created) = EditsPublishedEvent::match_and_decode(log) {
-                return Some(ProposalProcessed {
+                return Some(EditPublished {
                     content_uri: proposal_created.content_uri,
                     plugin_address: format_hex(&log.address()),
                 });
@@ -458,7 +436,7 @@ fn map_proposals_processed(
         })
         .collect();
 
-    Ok(ProposalsProcessed { proposals })
+    Ok(EditsPublished { proposals })
 }
 
 /**
@@ -495,13 +473,11 @@ fn map_votes_cast(block: eth::v2::Block) -> Result<VotesCast, substreams::errors
 
 #[substreams::handlers::map]
 fn geo_out(
-    profiles_registered: GeoProfilesRegistered,
     spaces_created: GeoSpacesCreated,
     governance_plugins_created: GeoGovernancePluginsCreated,
     initial_editors_added: InitialEditorsAdded,
-    proposals_created: ProposalsCreated,
     votes_cast: VotesCast,
-    geo_proposals_processed: ProposalsProcessed,
+    edits_published: EditsPublished,
     successor_spaces_created: SuccessorSpacesCreated,
     subspaces_added: SubspacesAdded,
     subspaces_removed: SubspacesRemoved,
@@ -512,13 +488,11 @@ fn geo_out(
     members_removed: MembersRemoved,
     editors_removed: EditorsRemoved,
 ) -> Result<GeoOutput, substreams::errors::Error> {
-    let profiles_registered = profiles_registered.profiles;
     let spaces_created = spaces_created.spaces;
     let governance_plugins_created = governance_plugins_created.plugins;
     let initial_editors_added = initial_editors_added.editors;
-    let proposals_created = proposals_created.proposals;
     let votes_cast = votes_cast.votes;
-    let proposals_processed = geo_proposals_processed.proposals;
+    let edits_published = edits_published.proposals;
     let successor_spaces_created = successor_spaces_created.spaces;
     let added_subspaces = subspaces_added.subspaces;
     let removed_subspaces = subspaces_removed.subspaces;
@@ -530,13 +504,11 @@ fn geo_out(
     let personal_admin_plugins_created = personal_admin_plugins_created.plugins;
 
     Ok(GeoOutput {
-        profiles_registered,
         spaces_created,
         governance_plugins_created,
         initial_editors_added,
-        proposals_created,
         votes_cast,
-        proposals_processed,
+        edits_published,
         successor_spaces_created,
         subspaces_added: added_subspaces,
         subspaces_removed: removed_subspaces,

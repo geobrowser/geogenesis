@@ -1,25 +1,5 @@
 // @generated
 /// *
-/// Profiles represent the users of Geo. Profiles are registered in the GeoProfileRegistry
-/// contract and are associated with a user's EVM-based address and the space where metadata
-/// representing their profile resides in.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GeoProfileRegistered {
-    #[prost(string, tag="1")]
-    pub requestor: ::prost::alloc::string::String,
-    #[prost(string, tag="2")]
-    pub space: ::prost::alloc::string::String,
-    #[prost(string, tag="3")]
-    pub id: ::prost::alloc::string::String,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GeoProfilesRegistered {
-    #[prost(message, repeated, tag="1")]
-    pub profiles: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
-}
-/// *
 /// The new DAO-based contracts allow forking of spaces into successor spaces. This is so
 /// users can create new spaces whose data is derived from another space.
 ///
@@ -214,7 +194,7 @@ pub struct ProposalsExecuted {
 /// data to an existing proposal onchain and in the sink.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ProposalProcessed {
+pub struct EditPublished {
     #[prost(string, tag="1")]
     pub content_uri: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
@@ -222,14 +202,14 @@ pub struct ProposalProcessed {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ProposalsProcessed {
+pub struct EditsPublished {
     #[prost(message, repeated, tag="1")]
-    pub proposals: ::prost::alloc::vec::Vec<ProposalProcessed>,
+    pub proposals: ::prost::alloc::vec::Vec<EditPublished>,
 }
 /// *
 /// Added or Removed Subspaces represent adding a space contracto to the hierarchy
 /// of the DAO-based space. This is useful to "link" Spaces together in a
-/// tree of spaces, allowing us to curate the graph of their knowledge and 
+/// tree of spaces, allowing us to curate the graph of their knowledge and
 /// permissions.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -359,36 +339,32 @@ pub struct EditorsRemoved {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoOutput {
     #[prost(message, repeated, tag="1")]
-    pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
-    #[prost(message, repeated, tag="2")]
     pub spaces_created: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
-    #[prost(message, repeated, tag="3")]
+    #[prost(message, repeated, tag="2")]
     pub governance_plugins_created: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
-    #[prost(message, repeated, tag="4")]
+    #[prost(message, repeated, tag="3")]
     pub initial_editors_added: ::prost::alloc::vec::Vec<InitialEditorAdded>,
-    #[prost(message, repeated, tag="5")]
-    pub proposals_created: ::prost::alloc::vec::Vec<ProposalCreated>,
-    #[prost(message, repeated, tag="6")]
+    #[prost(message, repeated, tag="4")]
     pub votes_cast: ::prost::alloc::vec::Vec<VoteCast>,
-    #[prost(message, repeated, tag="7")]
-    pub proposals_processed: ::prost::alloc::vec::Vec<ProposalProcessed>,
-    #[prost(message, repeated, tag="8")]
+    #[prost(message, repeated, tag="5")]
+    pub edits_published: ::prost::alloc::vec::Vec<EditPublished>,
+    #[prost(message, repeated, tag="6")]
     pub successor_spaces_created: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
-    #[prost(message, repeated, tag="9")]
+    #[prost(message, repeated, tag="7")]
     pub subspaces_added: ::prost::alloc::vec::Vec<SubspaceAdded>,
-    #[prost(message, repeated, tag="10")]
+    #[prost(message, repeated, tag="8")]
     pub subspaces_removed: ::prost::alloc::vec::Vec<SubspaceRemoved>,
-    #[prost(message, repeated, tag="11")]
+    #[prost(message, repeated, tag="9")]
     pub executed_proposals: ::prost::alloc::vec::Vec<ProposalExecuted>,
-    #[prost(message, repeated, tag="12")]
+    #[prost(message, repeated, tag="10")]
     pub members_added: ::prost::alloc::vec::Vec<MemberAdded>,
-    #[prost(message, repeated, tag="13")]
+    #[prost(message, repeated, tag="11")]
     pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
-    #[prost(message, repeated, tag="14")]
+    #[prost(message, repeated, tag="12")]
     pub personal_plugins_created: ::prost::alloc::vec::Vec<GeoPersonalSpaceAdminPluginCreated>,
-    #[prost(message, repeated, tag="15")]
+    #[prost(message, repeated, tag="13")]
     pub members_removed: ::prost::alloc::vec::Vec<MemberRemoved>,
-    #[prost(message, repeated, tag="16")]
+    #[prost(message, repeated, tag="14")]
     pub editors_removed: ::prost::alloc::vec::Vec<EditorRemoved>,
 }
 // @@protoc_insertion_point(module)
