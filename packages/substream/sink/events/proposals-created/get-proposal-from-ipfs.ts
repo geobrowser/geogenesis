@@ -13,6 +13,7 @@ import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder } from '~/sink/proto';
 import type { Op, SetTripleOp } from '~/sink/types';
+import { deriveProposalId } from '~/sink/utils/id';
 
 /**
  * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
@@ -172,7 +173,10 @@ export function getProposalFromIpfs(
           ...proposal,
           type: validIpfsMetadata.type,
           name: `Add subspace: ${maybeSpaceIdForSubspaceDaoAddress.id}`,
-          proposalId: parsedSubspace.id,
+          proposalId: deriveProposalId({
+            pluginAddress: proposal.pluginAddress,
+            onchainProposalId: proposal.proposalId,
+          }),
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
           subspace: maybeSpaceIdForSubspaceDaoAddress.id, // this should be the space id
@@ -199,7 +203,10 @@ export function getProposalFromIpfs(
           ...proposal,
           type: validIpfsMetadata.type,
           name: `Add Editor: ${parsedMembership.user}`,
-          proposalId: parsedMembership.id,
+          proposalId: deriveProposalId({
+            pluginAddress: proposal.pluginAddress,
+            onchainProposalId: proposal.proposalId,
+          }),
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
           user: getChecksumAddress(parsedMembership.user),
@@ -226,7 +233,10 @@ export function getProposalFromIpfs(
           ...proposal,
           type: validIpfsMetadata.type,
           name: `Add Member: ${parsedMembership.user}`,
-          proposalId: parsedMembership.id,
+          proposalId: deriveProposalId({
+            pluginAddress: proposal.pluginAddress,
+            onchainProposalId: proposal.proposalId,
+          }),
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
           user: getChecksumAddress(parsedMembership.user),

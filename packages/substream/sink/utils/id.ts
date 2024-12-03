@@ -1,4 +1,4 @@
-import { encodeBase58 } from '@geogenesis/sdk';
+import { encodeBase58, getChecksumAddress } from '@geogenesis/sdk';
 import { createHash } from 'crypto';
 import { v4 } from 'uuid';
 
@@ -34,4 +34,13 @@ function hexToBytesArray(hex: string) {
   }
 
   return bytes;
+}
+
+type DeriveProposalIdArgs = {
+  pluginAddress: string;
+  onchainProposalId: string;
+};
+
+export function deriveProposalId(args: DeriveProposalIdArgs) {
+  return createIdFromUniqueString(`${getChecksumAddress(args.pluginAddress)}:${args.onchainProposalId}`);
 }
