@@ -66,6 +66,49 @@ export const abi = [
     anonymous: false,
     inputs: [
       {
+        indexed: true,
+        internalType: 'uint256',
+        name: 'proposalId',
+        type: 'uint256',
+      },
+      {
+        indexed: true,
+        internalType: 'address',
+        name: 'creator',
+        type: 'address',
+      },
+      {
+        indexed: false,
+        internalType: 'uint64',
+        name: 'startDate',
+        type: 'uint64',
+      },
+      {
+        indexed: false,
+        internalType: 'uint64',
+        name: 'endDate',
+        type: 'uint64',
+      },
+      {
+        indexed: true,
+        internalType: 'address',
+        name: 'member',
+        type: 'address',
+      },
+      {
+        indexed: false,
+        internalType: 'address',
+        name: 'dao',
+        type: 'address',
+      },
+    ],
+    name: 'AddMemberProposalCreated',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
         indexed: false,
         internalType: 'address',
         name: 'previousAdmin',

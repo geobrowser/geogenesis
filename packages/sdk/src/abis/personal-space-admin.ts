@@ -26,6 +26,17 @@ export const abi = [
     type: 'error',
   },
   {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'caller',
+        type: 'address',
+      },
+    ],
+    name: 'NotAMember',
+    type: 'error',
+  },
+  {
     anonymous: false,
     inputs: [
       {
