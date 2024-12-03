@@ -300,6 +300,30 @@ pub struct EditorsRemoved {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PublishEditProposalCreated {
+    #[prost(string, tag="1")]
+    pub proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub creator: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub start_time: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub end_time: ::prost::alloc::string::String,
+    #[prost(string, tag="5")]
+    pub content_uri: ::prost::alloc::string::String,
+    #[prost(string, tag="6")]
+    pub dao_address: ::prost::alloc::string::String,
+    #[prost(string, tag="7")]
+    pub plugin_address: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PublishEditsProposalsCreated {
+    #[prost(message, repeated, tag="1")]
+    pub edits: ::prost::alloc::vec::Vec<PublishEditProposalCreated>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoOutput {
     #[prost(message, repeated, tag="1")]
     pub spaces_created: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
@@ -329,5 +353,7 @@ pub struct GeoOutput {
     pub members_removed: ::prost::alloc::vec::Vec<MemberRemoved>,
     #[prost(message, repeated, tag="14")]
     pub editors_removed: ::prost::alloc::vec::Vec<EditorRemoved>,
+    #[prost(message, repeated, tag="15")]
+    pub edits: ::prost::alloc::vec::Vec<PublishEditProposalCreated>,
 }
 // @@protoc_insertion_point(module)

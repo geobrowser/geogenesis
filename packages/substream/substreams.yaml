@@ -127,6 +127,14 @@ modules:
     output:
       type: proto:schema.EditorsRemoved
 
+  - name: map_publish_edits_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.PublishEditsProposalsCreated
+
   - name: geo_out
     kind: map
     initialBlock: 620
@@ -145,6 +153,7 @@ modules:
       - map: map_personal_admin_plugins_created
       - map: map_members_removed
       - map: map_editors_removed
+      - map: map_publish_edits_proposals_created
     output:
       type: proto:schema.GeoOutput
 

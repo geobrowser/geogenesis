@@ -7,9 +7,9 @@ use pb::schema::{
     GeoGovernancePluginCreated, GeoGovernancePluginsCreated, GeoOutput,
     GeoPersonalSpaceAdminPluginCreated, GeoPersonalSpaceAdminPluginsCreated, GeoSpaceCreated,
     GeoSpacesCreated, InitialEditorAdded, InitialEditorsAdded, MemberAdded, MemberRemoved,
-    MembersAdded, MembersRemoved, ProposalExecuted, ProposalsExecuted, SubspaceAdded,
-    SubspaceRemoved, SubspacesAdded, SubspacesRemoved, SuccessorSpaceCreated,
-    SuccessorSpacesCreated, VoteCast, VotesCast,
+    MembersAdded, MembersRemoved, ProposalExecuted, ProposalsExecuted, PublishEditProposalCreated,
+    PublishEditsProposalsCreated, SubspaceAdded, SubspaceRemoved, SubspacesAdded, SubspacesRemoved,
+    SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
 };
 
 use substreams_ethereum::{pb::eth, use_contract, Event};
@@ -33,6 +33,7 @@ use main_voting_plugin::events::{
     EditorAdded as EditorAddedEvent, EditorRemoved as EditorRemovedEvent,
     EditorsAdded as EditorsAddedEvent, MemberAdded as MemberAddedEvent,
     MemberRemoved as MemberRemovedEvent, ProposalExecuted as ProposalExecutedEvent,
+    PublishEditsProposalCreated as PublishEditsProposalCreatedEvent,
 };
 use majority_voting_base_plugin::events::VoteCast as VoteCastEvent;
 use personal_admin_setup::events::GeoPersonalAdminPluginCreated as GeoPersonalAdminPluginCreatedEvent;
@@ -479,6 +480,36 @@ fn map_votes_cast(block: eth::v2::Block) -> Result<VotesCast, substreams::errors
 }
 
 #[substreams::handlers::map]
+fn map_publish_edits_proposals_created(
+    block: eth::v2::Block,
+) -> Result<PublishEditsProposalsCreated, substreams::errors::Error> {
+    let edits: Vec<PublishEditProposalCreated> = block
+        .logs()
+        .filter_map(|log| {
+            // @TODO: Should we track our plugins/daos and only emit if the address is one of them?
+            if let Some(proposed_edit) = PublishEditsProposalCreatedEvent::match_and_decode(log) {
+                return Some(PublishEditProposalCreated {
+                    // The onchain proposal id is an incrementing integer. We represent
+                    // the proposal with a more unique id in the sink, so we remap the
+                    // name here to disambiguate between the onchain id and the sink id.
+                    proposal_id: proposed_edit.proposal_id.to_string(),
+                    creator: format_hex(&proposed_edit.creator),
+                    start_time: proposed_edit.start_date.to_string(),
+                    end_time: proposed_edit.end_date.to_string(),
+                    content_uri: proposed_edit.content_uri,
+                    plugin_address: format_hex(&log.address()),
+                    dao_address: format_hex(&proposed_edit.dao),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(PublishEditsProposalsCreated { edits })
+}
+
+#[substreams::handlers::map]
 fn geo_out(
     spaces_created: GeoSpacesCreated,
     governance_plugins_created: GeoGovernancePluginsCreated,
@@ -494,6 +525,7 @@ fn geo_out(
     personal_admin_plugins_created: GeoPersonalSpaceAdminPluginsCreated,
     members_removed: MembersRemoved,
     editors_removed: EditorsRemoved,
+    edit_proposals: PublishEditsProposalsCreated,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let spaces_created = spaces_created.spaces;
     let governance_plugins_created = governance_plugins_created.plugins;
@@ -509,6 +541,7 @@ fn geo_out(
     let members_removed = members_removed.members;
     let editors_removed = editors_removed.editors;
     let personal_admin_plugins_created = personal_admin_plugins_created.plugins;
+    let edit_proposals_created = edit_proposals.edits;
 
     Ok(GeoOutput {
         spaces_created,
@@ -525,5 +558,6 @@ fn geo_out(
         personal_plugins_created: personal_admin_plugins_created,
         members_removed,
         editors_removed,
+        edits: edit_proposals_created,
     })
 }
