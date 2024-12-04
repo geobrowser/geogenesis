@@ -1,19 +1,19 @@
 import { createGeoId } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
+import type { SinkEditProposal } from '../types';
 import { getProposalsForSpaceIds } from './get-proposals-for-space-ids';
-import type { EditProposal } from './proposals-created/parser';
 
 describe('getProposalsForSpaceIds', () => {
   it('proposal is in set of new spaces', () => {
     const spacesCreated: string[] = ['0x7eC3D9a27F89f52FAEa2C9cCC8dFBBA1A0c6a239'];
 
-    const processedProposal: EditProposal = {
+    const processedProposal: SinkEditProposal = {
       proposalId: createGeoId(),
+      daoAddress: '',
       onchainProposalId: '-1',
       startTime: '0',
       endTime: '5',
-      metadataUri: '',
       contentUri: '',
       pluginAddress: '',
       space: '0x7eC3D9a27F89f52FAEa2C9cCC8dFBBA1A0c6a239',
@@ -32,12 +32,12 @@ describe('getProposalsForSpaceIds', () => {
 
     const spacesCreated: string[] = ['0xF4781fA765A5D73DFa457F5d0d495344a787b57F'];
 
-    const processedProposal: EditProposal = {
+    const processedProposal: SinkEditProposal = {
       proposalId: createGeoId(),
       onchainProposalId: '-1',
+      daoAddress: '',
       startTime: '0',
       endTime: '5',
-      metadataUri: '',
       contentUri: '',
       pluginAddress: '',
       space: '0x7eC3D9a27F89f52FAEa2C9cCC8dFBBA1A0c6a239',

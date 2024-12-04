@@ -1,10 +1,9 @@
-import { Import } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
 import { getFetchIpfsContentEffect } from '../ipfs';
 import { createSpaceId } from '../utils/id';
-import type { EditPublished } from './proposals-created/parser';
-import { Decoder, decode } from '~/sink/proto';
+import type { ChainEditPublished } from './schema/edit-published';
+import { Decoder } from '~/sink/proto';
 
 function fetchSpaceImportFromIpfs(ipfsUri: string) {
   return Effect.gen(function* (_) {
@@ -57,7 +56,7 @@ function fetchSpaceImportFromIpfs(ipfsUri: string) {
   });
 }
 
-export function getDerivedSpaceIdsFromImportedSpaces(processedProposals: EditPublished[]) {
+export function getDerivedSpaceIdsFromImportedSpaces(processedProposals: ChainEditPublished[]) {
   return Effect.gen(function* (_) {
     yield* _(Effect.logDebug(`Gathering IPFS import content for ${processedProposals.length} initial space proposals`));
 

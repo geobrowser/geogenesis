@@ -16,10 +16,9 @@ import {
 import { handleEditsPublished } from '../events/edits-published/handler';
 import { handleInitialGovernanceSpaceEditorsAdded } from '../events/initial-editors-added/handler';
 import { createInitialContentForSpaces } from '../events/initial-proposal-created/handler';
-import type { EditProposal } from '../events/proposals-created/parser';
 import { handleProposalsExecuted } from '../events/proposals-executed/handler';
 import { handleGovernancePluginCreated, handleSpacesCreated } from '../events/spaces-created/handler';
-import type { Op } from '../types';
+import type { Op, SinkEditProposal } from '../types';
 
 const TEST_ENTITY_ID = encodeBase58('62ef04337a56401db29ab40aa1d5c672');
 
@@ -61,8 +60,9 @@ const testEntityBlocks = [
   };
 }) as Op[];
 
-const PROPOSAL: EditProposal = {
+const PROPOSAL: SinkEditProposal = {
   type: 'ADD_EDIT',
+  daoAddress: DAO_ADDRESS,
   proposalId: '-2',
   onchainProposalId: '-2',
   creator: ROOT_SPACE_CREATED_BY_ID,
@@ -70,7 +70,6 @@ const PROPOSAL: EditProposal = {
   endTime: ROOT_SPACE_CREATED_AT.toString(),
   startTime: ROOT_SPACE_CREATED_AT.toString(),
   contentUri: 'bootstrapped-so-no-uri',
-  metadataUri: 'bootstrapped-so-no-uri',
   ops: [testEntityNameOp, ...testEntityTypes, ...testEntityBlocks],
   pluginAddress: MAIN_VOTING_ADDRESS,
   space: SPACE_ID,

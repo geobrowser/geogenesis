@@ -1,12 +1,12 @@
 import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 
-import { type EditProposal, type PublishEditProposalCreated } from './parser';
+import type { ChainEditProposal } from '../schema/proposal';
 import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder } from '~/sink/proto';
-import type { Op, SetTripleOp } from '~/sink/types';
+import type { Op, SetTripleOp, SinkEditProposal } from '~/sink/types';
 
 /**
  * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
@@ -19,8 +19,8 @@ import type { Op, SetTripleOp } from '~/sink/types';
  * Later on we map this to the database schema and write the proposal to the database.
  */
 export function getProposalFromIpfs(
-  proposal: PublishEditProposalCreated
-): Effect.Effect<EditProposal | null, SpaceWithPluginAddressNotFoundError> {
+  proposal: ChainEditProposal
+): Effect.Effect<SinkEditProposal | null, SpaceWithPluginAddressNotFoundError> {
   return Effect.gen(function* (_) {
     yield* _(Effect.logDebug('Fetching proposal from IPFS'));
 
@@ -104,10 +104,9 @@ export function getProposalFromIpfs(
           return null;
         }
 
-        const mappedProposal: EditProposal = {
+        const mappedProposal: SinkEditProposal = {
           ...proposal,
           type: 'ADD_EDIT',
-          metadataUri: proposal.contentUri,
           name: validIpfsMetadata.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: proposal.proposalId,
@@ -138,104 +137,6 @@ export function getProposalFromIpfs(
         return mappedProposal;
       }
 
-      // case 'ADD_SUBSPACE':
-      // case 'REMOVE_SUBSPACE': {
-      //   const parsedSubspace = yield* _(Decoder.decodeSubspace(ipfsContent));
-
-      //   // Subspace proposals are only emitted by the voting plugin
-      //   if (!parsedSubspace || !maybeSpace.id) {
-      //     return null;
-      //   }
-
-      //   const maybeSpaceIdForSubspaceDaoAddress = yield* _(
-      //     Effect.promise(() => Spaces.findForDaoAddress(getChecksumAddress(parsedSubspace.subspace)))
-      //   );
-
-      //   if (!maybeSpaceIdForSubspaceDaoAddress) {
-      //     yield* _(Effect.logError(`Failed to get space for subspace DAO address ${parsedSubspace.subspace}`));
-      //     return null;
-      //   }
-
-      //   const mappedProposal: SubspaceProposal = {
-      //     ...proposal,
-      //     metadataUri: proposal.contentUri,
-      //     type: validIpfsMetadata.type,
-      //     name: `Add subspace: ${maybeSpaceIdForSubspaceDaoAddress.id}`,
-      //     proposalId: deriveProposalId({
-      //       pluginAddress: proposal.pluginAddress,
-      //       onchainProposalId: proposal.proposalId,
-      //     }),
-      //     onchainProposalId: proposal.proposalId,
-      //     pluginAddress: getChecksumAddress(proposal.pluginAddress),
-      //     subspace: maybeSpaceIdForSubspaceDaoAddress.id, // this should be the space id
-      //     creator: getChecksumAddress(proposal.creator),
-      //     space: maybeSpace.id,
-      //   };
-
-      //   return mappedProposal;
-      // }
-
-      // case 'ADD_EDITOR':
-      // case 'REMOVE_EDITOR': {
-      //   const parsedMembership = yield* _(Decoder.decodeEditorship(ipfsContent));
-
-      //   if (!parsedMembership) {
-      //     return null;
-      //   }
-
-      //   // If both of these are null then we already early exit out of this function, so it's safe to cast
-      //   // to the correct type here.
-      //   const spaceId = maybeSpaceIdForMembershipPlugin ?? maybeSpace.id;
-
-      //   const mappedProposal: EditorshipProposal = {
-      //     ...proposal,
-      //     metadataUri: proposal.contentUri,
-      //     type: validIpfsMetadata.type,
-      //     name: `Add Editor: ${parsedMembership.user}`,
-      //     proposalId: deriveProposalId({
-      //       pluginAddress: proposal.pluginAddress,
-      //       onchainProposalId: proposal.proposalId,
-      //     }),
-      //     onchainProposalId: proposal.proposalId,
-      //     pluginAddress: getChecksumAddress(proposal.pluginAddress),
-      //     user: getChecksumAddress(parsedMembership.user),
-      //     creator: getChecksumAddress(proposal.creator),
-      //     space: spaceId as string,
-      //   };
-
-      //   return mappedProposal;
-      // }
-
-      // case 'ADD_MEMBER':
-      // case 'REMOVE_MEMBER': {
-      //   const parsedMembership = yield* _(Decoder.decodeMembership(ipfsContent));
-
-      //   if (!parsedMembership) {
-      //     return null;
-      //   }
-
-      //   // If both of these are null then we already early exit out of this function, so it's safe to cast
-      //   // to the correct type here.
-      //   const spaceId = maybeSpaceIdForMembershipPlugin ?? maybeSpace.id;
-
-      //   const mappedProposal: MembershipProposal = {
-      //     ...proposal,
-      //     metadataUri: proposal.contentUri,
-      //     type: validIpfsMetadata.type,
-      //     name: `Add Member: ${parsedMembership.user}`,
-      //     proposalId: deriveProposalId({
-      //       pluginAddress: proposal.pluginAddress,
-      //       onchainProposalId: proposal.proposalId,
-      //     }),
-      //     onchainProposalId: proposal.proposalId,
-      //     pluginAddress: getChecksumAddress(proposal.pluginAddress),
-      //     user: getChecksumAddress(parsedMembership.user),
-      //     creator: getChecksumAddress(proposal.creator),
-      //     space: spaceId as string,
-      //   };
-
-      //   return mappedProposal;
-      // }
       default:
         yield* _(Effect.logError(`Unsupported content type ${validIpfsMetadata.type}`));
         return null;

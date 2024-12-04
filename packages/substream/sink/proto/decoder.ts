@@ -1,16 +1,8 @@
-import { Edit, Import, ImportEdit, IpfsMetadata, Membership, Subspace } from '@geogenesis/sdk/proto';
+import { Edit, Import, ImportEdit, IpfsMetadata } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 import { z } from 'zod';
 
-import {
-  type ParsedEdit,
-  type ParsedImportEdit,
-  ZodEdit,
-  ZodEditorshipProposal,
-  ZodImportEdit,
-  ZodMembershipProposal,
-  ZodSubspaceProposal,
-} from '../events/proposals-created/parser';
+import { type DecodedEdit, type DecodedImportEdit, ZodEdit, ZodImportEdit, ZodIpfsMetadata } from './schema';
 
 export class CouldNotDecodeProtobufError extends Error {
   _tag: 'CouldNotDecodeProtobufError' = 'CouldNotDecodeProtobufError';
@@ -44,22 +36,6 @@ export function decode<T>(fn: () => T) {
   });
 }
 
-const ZodIpfsMetadata = z.object({
-  version: z.string(),
-  type: z.union([
-    z.literal('ADD_EDIT'),
-    z.literal('ADD_MEMBER'),
-    z.literal('REMOVE_MEMBER'),
-    z.literal('ADD_EDITOR'),
-    z.literal('REMOVE_EDITOR'),
-    z.literal('ADD_SUBSPACE'),
-    z.literal('REMOVE_SUBSPACE'),
-    z.literal('IMPORT_SPACE'),
-  ]),
-  id: z.string(),
-  name: z.string(),
-});
-
 function decodeIpfsMetadata(data: Buffer): Effect.Effect<z.infer<typeof ZodIpfsMetadata> | null> {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
@@ -77,7 +53,7 @@ function decodeIpfsMetadata(data: Buffer): Effect.Effect<z.infer<typeof ZodIpfsM
   });
 }
 
-function decodeEdit(data: Buffer): Effect.Effect<ParsedEdit | null> {
+function decodeEdit(data: Buffer): Effect.Effect<DecodedEdit | null> {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = Edit.fromBinary(data);
@@ -100,69 +76,12 @@ function decodeEdit(data: Buffer): Effect.Effect<ParsedEdit | null> {
  * extra metadata that would normally be derived onchain, like the message
  * sender, when it was posted onchain, etc., in order to correctly preserve
  * history at the time the data in the original space was created.
- *
- * @TODO: For some reason right now we need to decode the import edits op
- * in a different way than the normal ADD_EDIT ops. For import edits we
- * don't convert to JSON before parsing, we parse the edit directly. There
- * are zod errors with the imports that we don't get with normal edits if
- * we parse the JSON.
  */
-function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> {
+function decodeImportEdit(data: Buffer): Effect.Effect<DecodedImportEdit | null> {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = ImportEdit.fromBinary(data);
       const parseResult = ZodImportEdit.safeParse(edit);
-
-      if (parseResult.success) {
-        return parseResult.data;
-      }
-
-      return null;
-    });
-
-    return yield* _(decodeEffect);
-  });
-}
-
-function decodeMembership(data: Buffer) {
-  return Effect.gen(function* (_) {
-    const decodeEffect = decode(() => {
-      const memberRequest = Membership.fromBinary(data);
-      const parseResult = ZodMembershipProposal.safeParse(memberRequest.toJson());
-
-      if (parseResult.success) {
-        return parseResult.data;
-      }
-
-      return null;
-    });
-
-    return yield* _(decodeEffect);
-  });
-}
-
-function decodeEditorship(data: Buffer) {
-  return Effect.gen(function* (_) {
-    const decodeEffect = decode(() => {
-      const memberRequest = Membership.fromBinary(data);
-      const parseResult = ZodEditorshipProposal.safeParse(memberRequest.toJson());
-
-      if (parseResult.success) {
-        return parseResult.data;
-      }
-
-      return null;
-    });
-
-    return yield* _(decodeEffect);
-  });
-}
-
-function decodeSubspace(data: Buffer) {
-  return Effect.gen(function* (_) {
-    const decodeEffect = decode(() => {
-      const subspaceRequest = Subspace.fromBinary(data);
-      const parseResult = ZodSubspaceProposal.safeParse(subspaceRequest.toJson());
 
       if (parseResult.success) {
         return parseResult.data;
@@ -205,7 +124,4 @@ export const Decoder = {
   decodeEdit,
   decodeImport,
   decodeImportEdit,
-  decodeMembership,
-  decodeEditorship,
-  decodeSubspace,
 };

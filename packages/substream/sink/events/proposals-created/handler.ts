@@ -1,12 +1,11 @@
 import { Effect } from 'effect';
 
-import { writeAccounts } from '../write-accounts';
+import type { ChainEditProposal } from '../schema/proposal';
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
 import { Proposals, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
-import type { EditProposal, PublishEditProposalCreated } from '~/sink/events/proposals-created/parser';
-import type { BlockEvent } from '~/sink/types';
+import type { BlockEvent, SinkEditProposal } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
@@ -16,7 +15,7 @@ class CouldNotWriteCreatedProposalsError extends Error {
   _tag: 'CouldNotWriteCreatedProposalsError' = 'CouldNotWriteCreatedProposalsError';
 }
 
-export function handleEditProposalCreated(proposalsCreated: PublishEditProposalCreated[], block: BlockEvent) {
+export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     yield* _(Effect.logInfo('Handling proposals created'));
     yield* _(Effect.logDebug(`Gathering IPFS content for ${proposalsCreated.length} proposals`));
@@ -27,7 +26,9 @@ export function handleEditProposalCreated(proposalsCreated: PublishEditProposalC
       })
     );
 
-    const proposals = maybeProposals.filter((maybeProposal): maybeProposal is EditProposal => maybeProposal !== null);
+    const proposals = maybeProposals.filter(
+      (maybeProposal): maybeProposal is SinkEditProposal => maybeProposal !== null
+    );
 
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposals, block);
 

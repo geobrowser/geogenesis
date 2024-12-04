@@ -126,7 +126,7 @@ message EditPublished {
 }
 
 message EditsPublished {
-  repeated EditPublished proposals = 1;
+  repeated EditPublished edits = 1;
 }
 
 /**
@@ -233,6 +233,96 @@ message PublishEditsProposalsCreated {
   repeated PublishEditProposalCreated edits = 1;
 }
 
+message AddMemberProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string member = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message AddMemberProposalsCreated {
+  repeated AddMemberProposalCreated proposed_members = 1;
+}
+
+message RemoveMemberProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string member = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message RemoveMemberProposalsCreated {
+  repeated RemoveMemberProposalCreated proposed_members = 1;
+}
+
+message AddEditorProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string editor = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message AddEditorProposalsCreated {
+  repeated AddEditorProposalCreated proposed_editors = 1;
+}
+
+message RemoveEditorProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string editor = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message RemoveEditorProposalsCreated {
+  repeated RemoveEditorProposalCreated proposed_editors = 1; 
+}
+
+message AddSubspaceProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string subspace = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message AddSubspaceProposalsCreated {
+  repeated AddSubspaceProposalCreated proposed_subspaces = 1;
+}
+
+message RemoveSubspaceProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string subspace = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message RemoveSubspaceProposalsCreated {
+  repeated RemoveSubspaceProposalCreated proposed_subspaces = 1;
+}
+
 message GeoOutput {
   repeated GeoSpaceCreated spaces_created = 1;
   repeated GeoGovernancePluginCreated governance_plugins_created = 2;
@@ -249,4 +339,10 @@ message GeoOutput {
   repeated MemberRemoved members_removed = 13;
   repeated EditorRemoved editors_removed = 14;
   repeated PublishEditProposalCreated edits = 15;
+  repeated AddMemberProposalCreated proposed_members = 16;
+  repeated RemoveMemberProposalCreated proposed_members = 17;
+  repeated AddEditorProposalCreated proposed_editors = 18;
+  repeated RemoveEditorProposalCreated proposed_editors = 19;
+  repeated AddSubspaceProposalCreated proposed_subspaces = 20;
+  repeated RemoveSubspaceProposalCreated proposed_subspaces = 21;
 }

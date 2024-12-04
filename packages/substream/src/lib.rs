@@ -429,7 +429,7 @@ fn map_proposals_executed(
 */
 #[substreams::handlers::map]
 fn map_edits_published(block: eth::v2::Block) -> Result<EditsPublished, substreams::errors::Error> {
-    let proposals: Vec<EditPublished> = block
+    let edits: Vec<EditPublished> = block
         .logs()
         .filter_map(|log| {
             if let Some(edit_published) = EditsPublishedEvent::match_and_decode(log) {
@@ -444,7 +444,7 @@ fn map_edits_published(block: eth::v2::Block) -> Result<EditsPublished, substrea
         })
         .collect();
 
-    Ok(EditsPublished { proposals })
+    Ok(EditsPublished { edits })
 }
 
 /**
@@ -531,7 +531,7 @@ fn geo_out(
     let governance_plugins_created = governance_plugins_created.plugins;
     let initial_editors_added = initial_editors_added.editors;
     let votes_cast = votes_cast.votes;
-    let edits_published = edits_published.proposals;
+    let edits_published = edits_published.edits;
     let successor_spaces_created = successor_spaces_created.spaces;
     let added_subspaces = subspaces_added.subspaces;
     let removed_subspaces = subspaces_removed.subspaces;

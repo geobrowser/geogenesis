@@ -1,17 +1,22 @@
-import { GraphUrl } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import { createVersionId } from '../../utils/id';
-import type { EditProposal, EditorshipProposal, MembershipProposal, SubspaceProposal } from './parser';
-import type { BlockEvent, Op } from '~/sink/types';
+import type {
+  BlockEvent,
+  Op,
+  SinkEditProposal,
+  SinkEditorshipProposal,
+  SinkMembershipProposal,
+  SinkSubspaceProposal,
+} from '~/sink/types';
 
 function groupProposalsByType(
-  proposals: (MembershipProposal | SubspaceProposal | EditorshipProposal | EditProposal)[]
+  proposals: (SinkMembershipProposal | SinkSubspaceProposal | SinkEditorshipProposal | SinkEditProposal)[]
 ): {
-  memberProposals: MembershipProposal[];
-  editorProposals: EditorshipProposal[];
-  subspaceProposals: SubspaceProposal[];
-  editProposals: EditProposal[];
+  memberProposals: SinkMembershipProposal[];
+  editorProposals: SinkEditorshipProposal[];
+  subspaceProposals: SinkSubspaceProposal[];
+  editProposals: SinkEditProposal[];
 } {
   const editProposals = proposals.flatMap(p => (p.type === 'ADD_EDIT' ? p : []));
   const memberProposals = proposals.flatMap(p => (p.type === 'ADD_MEMBER' || p.type === 'REMOVE_MEMBER' ? p : []));
@@ -29,7 +34,7 @@ function groupProposalsByType(
 }
 
 function mapEditorshipProposalsToSchema(
-  proposals: EditorshipProposal[],
+  proposals: SinkEditorshipProposal[],
   block: BlockEvent
 ): {
   proposals: S.proposals.Insertable[];
@@ -60,7 +65,7 @@ function mapEditorshipProposalsToSchema(
     const proposedEditor: S.proposed_editors.Insertable = {
       id: p.proposalId,
       type: p.type,
-      account_id: p.user,
+      account_id: p.editor,
       space_id: spaceId,
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
@@ -70,7 +75,7 @@ function mapEditorshipProposalsToSchema(
     proposedEditorsToWrite.push(proposedEditor);
 
     const newAccount: S.accounts.Insertable = {
-      id: p.user,
+      id: p.editor,
     };
 
     accountsToWrite.push(newAccount);
@@ -84,7 +89,7 @@ function mapEditorshipProposalsToSchema(
 }
 
 function mapMembershipProposalsToSchema(
-  proposals: MembershipProposal[],
+  proposals: SinkMembershipProposal[],
   block: BlockEvent
 ): {
   proposals: S.proposals.Insertable[];
@@ -115,7 +120,7 @@ function mapMembershipProposalsToSchema(
     const proposedMember: S.proposed_members.Insertable = {
       id: p.proposalId,
       type: p.type,
-      account_id: p.user,
+      account_id: p.member,
       space_id: spaceId,
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
@@ -125,7 +130,7 @@ function mapMembershipProposalsToSchema(
     proposedMembersToWrite.push(proposedMember);
 
     const newAccount: S.accounts.Insertable = {
-      id: p.user,
+      id: p.member,
     };
 
     accountsToWrite.push(newAccount);
@@ -139,7 +144,7 @@ function mapMembershipProposalsToSchema(
 }
 
 function mapSubspaceProposalsToSchema(
-  proposals: SubspaceProposal[],
+  proposals: SinkSubspaceProposal[],
   block: BlockEvent
 ): {
   proposals: S.proposals.Insertable[];
@@ -185,7 +190,7 @@ function mapSubspaceProposalsToSchema(
 }
 
 function mapEditProposalToSchema(
-  proposals: EditProposal[],
+  proposals: SinkEditProposal[],
   block: BlockEvent
 ): {
   proposals: S.proposals.Insertable[];
@@ -209,7 +214,7 @@ function mapEditProposalToSchema(
       id: p.proposalId,
       name: p.name,
       description: null,
-      uri: p.metadataUri,
+      uri: p.contentUri,
       created_at_block: block.blockNumber.toString(),
       created_at: Number(p.startTime),
       created_by_id: p.creator,
@@ -268,7 +273,7 @@ function mapEditProposalToSchema(
 }
 
 export function mapIpfsProposalToSchemaProposalByType(
-  proposals: (MembershipProposal | SubspaceProposal | EditorshipProposal | EditProposal)[],
+  proposals: (SinkMembershipProposal | SinkSubspaceProposal | SinkEditorshipProposal | SinkEditProposal)[],
   block: BlockEvent
 ) {
   const { subspaceProposals, memberProposals, editorProposals, editProposals } = groupProposalsByType(proposals);

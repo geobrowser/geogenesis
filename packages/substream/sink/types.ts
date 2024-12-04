@@ -1,3 +1,14 @@
+import type {
+  ChainAddEditorProposal,
+  ChainAddMemberProposal,
+  ChainAddSubspaceProposal,
+  ChainEditProposal,
+  ChainProposal,
+  ChainRemoveEditorProposal,
+  ChainRemoveMemberProposal,
+  ChainRemoveSubspaceProposal,
+} from './events/schema/proposal';
+
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export type TripleOp = 'SET_TRIPLE' | 'DELETE_TRIPLE';
@@ -59,3 +70,18 @@ export type Edit = {
   authors: string[];
   proposalId: string;
 };
+
+export type SinkProposal = { space: string; name: string; onchainProposalId: string; ops: Op[] };
+export type SinkEditProposal = ChainEditProposal & { type: 'ADD_EDIT' } & SinkProposal;
+export type SinkAddMemberProposal = ChainAddMemberProposal & { type: 'ADD_MEMBER' } & SinkProposal;
+export type SinkRemoveMemberProposal = ChainRemoveMemberProposal & { type: 'REMOVE_MEMBER' } & SinkProposal;
+export type SinkAddEditorProposal = ChainAddEditorProposal & { type: 'ADD_EDITOR' } & SinkProposal;
+export type SinkRemoveEditorProposal = ChainRemoveEditorProposal & { type: 'REMOVE_EDITOR' } & SinkProposal;
+export type SinkAddSubspaceProposal = ChainAddSubspaceProposal & { type: 'ADD_SUBSPACE' } & SinkProposal;
+export type SinkRemoveSubspaceProposal = ChainRemoveSubspaceProposal & {
+  type: 'REMOVE_SUBSPACE';
+} & SinkProposal;
+
+export type SinkMembershipProposal = SinkAddMemberProposal | SinkRemoveMemberProposal;
+export type SinkEditorshipProposal = SinkAddEditorProposal | SinkRemoveEditorProposal;
+export type SinkSubspaceProposal = SinkAddSubspaceProposal | SinkRemoveSubspaceProposal;

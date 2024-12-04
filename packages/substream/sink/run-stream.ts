@@ -30,12 +30,10 @@ import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleMemberRemoved } from './events/member-removed/handler';
 import { ZodMemberRemovedStreamResponse } from './events/member-removed/parser';
 import { handleEditProposalCreated } from './events/proposals-created/handler';
-import {
-  ZodEditPublishedStreamResponse,
-  ZodPublishedEditProposalCreatedStreamResponse,
-} from './events/proposals-created/parser';
 import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { ZodProposalExecutedStreamResponse } from './events/proposals-executed/parser';
+import { ZodEditPublishedStreamResponse } from './events/schema/edit-published';
+import { ZodEditProposalCreatedStreamResponse } from './events/schema/proposal';
 import { getSpacesWithInitialProposalsProcessed } from './events/spaces-created/get-spaces-with-initial-proposals-processed';
 import {
   handleGovernancePluginCreated,
@@ -237,17 +235,21 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
     const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
     const personalPluginsCreated = ZodPersonalPluginsCreatedStreamResponse.safeParse(jsonOutput);
+
     const subspacesAdded = ZodSubspacesAddedStreamResponse.safeParse(jsonOutput);
     const subspacesRemoved = ZodSubspacesRemovedStreamResponse.safeParse(jsonOutput);
+
     const initialEditorsAddedResponse = ZodInitialEditorsAddedStreamResponse.safeParse(jsonOutput);
-    const proposalProcessedResponse = ZodEditPublishedStreamResponse.safeParse(jsonOutput);
-    const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
-    const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
-    const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
-    const membersRemoved = ZodMemberRemovedStreamResponse.safeParse(jsonOutput);
     const editorsAdded = ZodEditorAddedStreamResponse.safeParse(jsonOutput);
     const editorsRemoved = ZodEditorRemovedStreamResponse.safeParse(jsonOutput);
-    const editsProposed = ZodPublishedEditProposalCreatedStreamResponse.safeParse(jsonOutput);
+    const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
+    const membersRemoved = ZodMemberRemovedStreamResponse.safeParse(jsonOutput);
+
+    const editsProposed = ZodEditProposalCreatedStreamResponse.safeParse(jsonOutput);
+    const editsPublishedResponse = ZodEditPublishedStreamResponse.safeParse(jsonOutput);
+
+    const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
+    const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
 
     const hasValidEvent =
       spacePluginCreatedResponse.success ||
@@ -256,7 +258,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       subspacesAdded.success ||
       subspacesRemoved.success ||
       initialEditorsAddedResponse.success ||
-      proposalProcessedResponse.success ||
+      editsPublishedResponse.success ||
       votesCast.success ||
       executedProposals.success ||
       membersAdded.success ||
@@ -309,15 +311,15 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
        * It might make sense to do the proposal creation here instead of in proposalProcessed. That way all
        * of this logic for checking proposals happens in the same place.
        */
-      if (proposalProcessedResponse.success) {
+      if (editsPublishedResponse.success) {
         const spacesWithInitialProposal = getSpacesWithInitialProposalsProcessed(
           spacePluginCreatedResponse.data.spacesCreated,
-          proposalProcessedResponse.data.proposalsProcessed
+          editsPublishedResponse.data.editsPublished
         );
 
         const spacePluginAddressesWithInitialProposal = new Set(spacesWithInitialProposal.map(s => s.spaceAddress));
 
-        const initialProposalsForSpaces = proposalProcessedResponse.data.proposalsProcessed.filter(p =>
+        const initialProposalsForSpaces = editsPublishedResponse.data.editsPublished.filter(p =>
           spacePluginAddressesWithInitialProposal.has(p.pluginAddress)
         );
 
@@ -504,7 +506,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
      * If there are processed proposals as a result of an initial content uri, we need to create the appropriate
      * proposals, proposed versions, ops, etc. before we actually set the proposal as "ACCEPTED"
      */
-    if (proposalProcessedResponse.success) {
+    if (editsPublishedResponse.success) {
       /**
        * Since there are potentially two handlers that we need to run, we abstract out the common
        * data fetching needed for both here, and pass the result to the two handlers. This breaks
@@ -515,7 +517,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
        * contains many edits
        */
       const proposals = yield* _(
-        getEditsProposalsFromIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
+        getEditsProposalsFromIpfsUri(editsPublishedResponse.data.editsPublished, {
           blockNumber,
           cursor,
           timestamp,

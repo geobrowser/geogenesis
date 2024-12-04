@@ -3,17 +3,11 @@ import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
 import { getFetchIpfsContentEffect } from '../../ipfs';
-import type { BlockEvent, Op } from '../../types';
-import { type EditProposal, type EditPublished } from '../proposals-created/parser';
+import type { BlockEvent, Op, SinkEditProposal } from '../../types';
+import type { ChainEditPublished } from '../schema/edit-published';
 import { Decoder } from '~/sink/proto';
 
-function fetchEditProposalFromIpfs(
-  processedProposal: {
-    ipfsUri: string;
-    pluginAddress: string;
-  },
-  block: BlockEvent
-) {
+function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block: BlockEvent) {
   return Effect.gen(function* (_) {
     yield* _(Effect.logDebug('Fetching edit proposal from IPFS'));
 
@@ -31,11 +25,11 @@ function fetchEditProposalFromIpfs(
 
     yield* _(
       Effect.logDebug(`Fetching IPFS content for processed proposal
-      ipfsUri:       ${processedProposal.ipfsUri}
+      contentUri:    ${processedProposal.contentUri}
       pluginAddress: ${processedProposal.pluginAddress}`)
     );
 
-    const fetchIpfsContentEffect = getFetchIpfsContentEffect(processedProposal.ipfsUri);
+    const fetchIpfsContentEffect = getFetchIpfsContentEffect(processedProposal.contentUri);
     const maybeIpfsContent = yield* _(Effect.either(fetchIpfsContentEffect));
 
     if (Either.isLeft(maybeIpfsContent)) {
@@ -43,31 +37,31 @@ function fetchEditProposalFromIpfs(
 
       switch (error._tag) {
         case 'UnableToParseBase64Error':
-          yield* _(Effect.logError(`Unable to parse base64 string ${processedProposal.ipfsUri}. ${String(error)}`));
+          yield* _(Effect.logError(`Unable to parse base64 string ${processedProposal.contentUri}. ${String(error)}`));
           break;
         case 'FailedFetchingIpfsContentError':
           yield* _(
-            Effect.logError(`Failed fetching IPFS content from uri ${processedProposal.ipfsUri}. ${String(error)}`)
+            Effect.logError(`Failed fetching IPFS content from uri ${processedProposal.contentUri}. ${String(error)}`)
           );
           break;
         case 'UnableToParseJsonError':
           yield* _(
             Effect.logError(
-              `Unable to parse JSON when reading content from uri ${processedProposal.ipfsUri}. ${String(error)}`
+              `Unable to parse JSON when reading content from uri ${processedProposal.contentUri}. ${String(error)}`
             )
           );
           break;
         case 'TimeoutException':
           yield* _(
             Effect.logError(
-              `Timed out when fetching IPFS content for uri ${processedProposal.ipfsUri}. ${String(error)}`
+              `Timed out when fetching IPFS content for uri ${processedProposal.contentUri}. ${String(error)}`
             )
           );
           break;
         default:
           yield* _(
             Effect.logError(
-              `Unknown error when fetching IPFS content for uri ${processedProposal.ipfsUri}. ${String(error)}`,
+              `Unknown error when fetching IPFS content for uri ${processedProposal.contentUri}. ${String(error)}`,
               error
             )
           );
@@ -99,11 +93,12 @@ function fetchEditProposalFromIpfs(
           return null;
         }
 
-        const contentProposal: EditProposal = {
+        const contentProposal: SinkEditProposal = {
           type: 'ADD_EDIT',
           name: validIpfsMetadata.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: '-1',
+          daoAddress: processedProposal.daoAddress,
           pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
           ops: parsedContent.ops.map((op): Op => {
             if (op.type === 'SET_TRIPLE') {
@@ -134,8 +129,7 @@ function fetchEditProposalFromIpfs(
           space: maybeSpaceIdForSpacePlugin.id,
           endTime: block.timestamp.toString(),
           startTime: block.timestamp.toString(),
-          metadataUri: processedProposal.ipfsUri,
-          contentUri: processedProposal.ipfsUri,
+          contentUri: processedProposal.contentUri,
         };
 
         return contentProposal;
@@ -171,8 +165,9 @@ function fetchEditProposalFromIpfs(
         const decodedEdits = maybeDecodedEdits.flatMap(e => (e ? [e] : []));
 
         const proposals = decodedEdits.map(e => {
-          const contentProposal: EditProposal = {
+          const contentProposal: SinkEditProposal = {
             type: 'ADD_EDIT',
+            daoAddress: processedProposal.daoAddress,
             name: e.name ?? null,
             proposalId: e.id,
             onchainProposalId: '-1',
@@ -203,8 +198,7 @@ function fetchEditProposalFromIpfs(
             space: maybeSpaceIdForSpacePlugin.id,
             endTime: block.timestamp.toString(),
             startTime: block.timestamp.toString(),
-            metadataUri: processedProposal.ipfsUri,
-            contentUri: processedProposal.ipfsUri,
+            contentUri: processedProposal.contentUri,
           };
 
           return contentProposal;
@@ -213,31 +207,17 @@ function fetchEditProposalFromIpfs(
         return proposals;
       }
     }
-
-    yield* _(Effect.logError(`Invalid processed proposal content type ${validIpfsMetadata.type}`));
-    return [];
   });
 }
 
-export function getEditsProposalsFromIpfsUri(proposalsProcessed: EditPublished[], block: BlockEvent) {
+export function getEditsProposalsFromIpfsUri(proposalsProcessed: ChainEditPublished[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     yield* _(Effect.logInfo('Gathering IPFS content for accepted proposals'));
 
     const maybeProposalsFromIpfs = yield* _(
-      Effect.forEach(
-        proposalsProcessed,
-        proposal =>
-          fetchEditProposalFromIpfs(
-            {
-              ipfsUri: proposal.contentUri,
-              pluginAddress: proposal.pluginAddress,
-            },
-            block
-          ),
-        {
-          concurrency: 20,
-        }
-      )
+      Effect.forEach(proposalsProcessed, proposal => fetchEditProposalFromIpfs(proposal, block), {
+        concurrency: 20,
+      })
     );
 
     const proposalsFromIpfs = maybeProposalsFromIpfs.flatMap(e => (e ? [e] : [])).flat();

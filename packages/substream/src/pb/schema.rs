@@ -159,7 +159,7 @@ pub struct EditPublished {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EditsPublished {
     #[prost(message, repeated, tag="1")]
-    pub proposals: ::prost::alloc::vec::Vec<EditPublished>,
+    pub edits: ::prost::alloc::vec::Vec<EditPublished>,
 }
 /// *
 /// Added or Removed Subspaces represent adding a space contracto to the hierarchy
