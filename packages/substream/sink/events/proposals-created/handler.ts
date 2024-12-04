@@ -1,11 +1,28 @@
+import { NETWORK_IDS, getChecksumAddress } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
-import type { ChainEditProposal } from '../schema/proposal';
+import type {
+  ChainAddEditorProposal,
+  ChainAddMemberProposal,
+  ChainAddSubspaceProposal,
+  ChainEditProposal,
+  ChainRemoveEditorProposal,
+  ChainRemoveMemberProposal,
+  ChainRemoveSubspaceProposal,
+} from '../schema/proposal';
+import { writeAccounts } from '../write-accounts';
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
-import { Proposals, Versions } from '~/sink/db';
+import { Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
-import type { BlockEvent, SinkEditProposal } from '~/sink/types';
+import type {
+  BlockEvent,
+  SinkEditProposal,
+  SinkEditorshipProposal,
+  SinkMembershipProposal,
+  SinkSubspaceProposal,
+} from '~/sink/types';
+import { deriveProposalId, deriveSpaceId } from '~/sink/utils/id';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
@@ -91,6 +108,169 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
           edits: schemaEditProposals.edits,
         })
       )
+    );
+  });
+}
+
+export function handleMembershipProposalsCreated(
+  proposalsCreated: (ChainAddMemberProposal | ChainRemoveMemberProposal)[],
+  block: BlockEvent
+) {
+  return Effect.gen(function* (_) {
+    const proposals: SinkMembershipProposal[] = proposalsCreated.map((p): SinkMembershipProposal => {
+      const proposalId = deriveProposalId({ onchainProposalId: p.proposalId, pluginAddress: p.pluginAddress });
+      const member = getChecksumAddress(p.member);
+
+      if (p.changeType === 'added') {
+        return {
+          ...p,
+          name: `Add member ${member}`,
+          onchainProposalId: p.proposalId,
+          proposalId,
+          space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+          type: 'ADD_MEMBER',
+        };
+      }
+
+      return {
+        ...p,
+        name: `Remove member ${member}`,
+        onchainProposalId: p.proposalId,
+        proposalId,
+        space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+        type: 'REMOVE_MEMBER',
+      };
+    });
+
+    const { schemaMembershipProposals } = mapIpfsProposalToSchemaProposalByType(proposals, block);
+
+    // This might be the very first onchain interaction for a wallet address,
+    // so we need to make sure that any accounts are already created when we
+    // process the proposals below, particularly for editor and member requests.
+    yield* _(writeAccounts(schemaMembershipProposals.accounts));
+
+    yield* _(Effect.logDebug(`Writing membership proposals: ${schemaMembershipProposals.proposals.length}`));
+
+    yield* _(
+      Effect.tryPromise({
+        try: async () => {
+          await Promise.all([
+            Proposals.upsert(schemaMembershipProposals.proposals),
+            ProposedMembers.upsert(schemaMembershipProposals.proposedMembers),
+          ]);
+        },
+        catch: error => {
+          return new CouldNotWriteCreatedProposalsError(String(error));
+        },
+      }),
+      retryEffect
+    );
+  });
+}
+
+export function handleEditorshipProposalsCreated(
+  proposalsCreated: (ChainAddEditorProposal | ChainRemoveEditorProposal)[],
+  block: BlockEvent
+) {
+  return Effect.gen(function* (_) {
+    const proposals: SinkEditorshipProposal[] = proposalsCreated.map((p): SinkEditorshipProposal => {
+      const proposalId = deriveProposalId({ onchainProposalId: p.proposalId, pluginAddress: p.pluginAddress });
+      const editor = getChecksumAddress(p.editor);
+
+      if (p.changeType === 'added') {
+        return {
+          ...p,
+          name: `Add editor ${editor}`,
+          onchainProposalId: p.proposalId,
+          proposalId,
+          space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+          type: 'ADD_EDITOR',
+        };
+      }
+
+      return {
+        ...p,
+        name: `Remove editor ${editor}`,
+        onchainProposalId: p.proposalId,
+        proposalId,
+        space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+        type: 'REMOVE_EDITOR',
+      };
+    });
+
+    const { schemaEditorshipProposals } = mapIpfsProposalToSchemaProposalByType(proposals, block);
+
+    // This might be the very first onchain interaction for a wallet address,
+    // so we need to make sure that any accounts are already created when we
+    // process the proposals below, particularly for editor and member requests.
+    yield* _(writeAccounts(schemaEditorshipProposals.accounts));
+
+    yield* _(Effect.logDebug(`Writing membership proposals: ${schemaEditorshipProposals.proposals.length}`));
+
+    yield* _(
+      Effect.tryPromise({
+        try: async () => {
+          await Promise.all([
+            Proposals.upsert(schemaEditorshipProposals.proposals),
+            ProposedEditors.upsert(schemaEditorshipProposals.proposedEditors),
+          ]);
+        },
+        catch: error => {
+          return new CouldNotWriteCreatedProposalsError(String(error));
+        },
+      }),
+      retryEffect
+    );
+  });
+}
+
+export function handleSubspaceProposalsCreated(
+  proposalsCreated: (ChainAddSubspaceProposal | ChainRemoveSubspaceProposal)[],
+  block: BlockEvent
+) {
+  return Effect.gen(function* (_) {
+    const proposals = proposalsCreated.map((p): SinkSubspaceProposal => {
+      const proposalId = deriveProposalId({ onchainProposalId: p.proposalId, pluginAddress: p.pluginAddress });
+      const subspaceAddress = getChecksumAddress(p.subspace);
+
+      if (p.changeType === 'added') {
+        return {
+          ...p,
+          name: `Add subspace ${subspaceAddress}`,
+          onchainProposalId: p.proposalId,
+          proposalId,
+          space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+          type: 'ADD_SUBSPACE',
+        };
+      }
+
+      return {
+        ...p,
+        name: `Remove subspace ${subspaceAddress}`,
+        onchainProposalId: p.proposalId,
+        proposalId,
+        space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+        type: 'REMOVE_SUBSPACE',
+      };
+    });
+
+    const { schemaSubspaceProposals } = mapIpfsProposalToSchemaProposalByType(proposals, block);
+
+    yield* _(Effect.logDebug(`Writing subspace proposals: ${schemaSubspaceProposals.proposals.length}`));
+
+    yield* _(
+      Effect.tryPromise({
+        try: async () => {
+          await Promise.all([
+            Proposals.upsert(schemaSubspaceProposals.proposals),
+            ProposedSubspaces.upsert(schemaSubspaceProposals.proposedSubspaces),
+          ]);
+        },
+        catch: error => {
+          return new CouldNotWriteCreatedProposalsError(String(error));
+        },
+      }),
+      retryEffect
     );
   });
 }

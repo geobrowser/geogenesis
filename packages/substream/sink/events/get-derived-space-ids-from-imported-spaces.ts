@@ -1,7 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { getFetchIpfsContentEffect } from '../ipfs';
-import { createSpaceId } from '../utils/id';
+import { deriveSpaceId } from '../utils/id';
 import type { ChainEditPublished } from './schema/edit-published';
 import { Decoder } from '~/sink/proto';
 
@@ -52,7 +52,7 @@ function fetchSpaceImportFromIpfs(ipfsUri: string) {
       return null;
     }
 
-    return createSpaceId({ network: importResult.previousNetwork, address: importResult.previousContractAddress });
+    return deriveSpaceId({ network: importResult.previousNetwork, address: importResult.previousContractAddress });
   });
 }
 

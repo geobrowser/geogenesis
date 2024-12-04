@@ -71,8 +71,8 @@ export type Edit = {
   proposalId: string;
 };
 
-export type SinkProposal = { space: string; name: string; onchainProposalId: string; ops: Op[] };
-export type SinkEditProposal = ChainEditProposal & { type: 'ADD_EDIT' } & SinkProposal;
+export type SinkProposal = { space: string; name: string; onchainProposalId: string };
+export type SinkEditProposal = ChainEditProposal & { type: 'ADD_EDIT'; ops: Op[] } & SinkProposal;
 export type SinkAddMemberProposal = ChainAddMemberProposal & { type: 'ADD_MEMBER' } & SinkProposal;
 export type SinkRemoveMemberProposal = ChainRemoveMemberProposal & { type: 'REMOVE_MEMBER' } & SinkProposal;
 export type SinkAddEditorProposal = ChainAddEditorProposal & { type: 'ADD_EDITOR' } & SinkProposal;

@@ -15,7 +15,7 @@ export function createVersionId({ proposalId, entityId }: { proposalId: string; 
  * Users can import or fork a space from any network and import the contents of the original space into
  * the new one that they're creating.
  */
-export function createSpaceId({ network, address }: { network: string; address: string }) {
+export function deriveSpaceId({ network, address }: { network: string; address: string }) {
   return createIdFromUniqueString(`${network}:${address}`);
 }
 
