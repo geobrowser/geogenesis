@@ -21,9 +21,7 @@ import { SearchDialog } from '~/partials/search';
 
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
-  const onDone = () => {
-    setOpen(false);
-  };
+
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
   // Ideally memoization happens in the useKeyboardShortcuts hook
@@ -47,7 +45,7 @@ export function App({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Navbar onSearchClick={() => setOpen(true)} />
-      <SearchDialog open={open} onDone={onDone} />
+      <SearchDialog open={open} onDone={() => setOpen(false)} />
       <Main>{children}</Main>
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>

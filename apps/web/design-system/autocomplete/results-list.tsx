@@ -2,8 +2,10 @@ import cx from 'classnames';
 
 import * as React from 'react';
 
+import { useEntity } from '~/core/database/entities';
 import { SearchResult } from '~/core/io/dto/search';
 import { SpaceConfigEntity } from '~/core/io/dto/spaces';
+import { EntityId } from '~/core/io/schema';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
@@ -54,8 +56,11 @@ export const ResultContent = ({
   onChooseSpace,
 }: ResultContentProps) => {
   const [space, ...otherSpaces] = result.spaces;
-  const spaceName = space?.name ?? space?.spaceId ?? '';
-  const spaceImg = space?.image ?? null;
+
+  if (!space) return null;
+
+  const spaceName = space.name;
+  const spaceImg = space.image;
   const hasOtherSpaces = otherSpaces?.length > 0;
 
   const showBreadcrumbs = spaceName || result.types.length > 0;
@@ -137,7 +142,7 @@ export const ResultContent = ({
 
 type SpaceContentProps = {
   onClick: () => void;
-  result: SearchResult;
+  entityId: EntityId;
   space: SpaceConfigEntity;
   alreadySelected?: boolean;
   withDescription?: boolean;
@@ -145,16 +150,18 @@ type SpaceContentProps = {
 
 export const SpaceContent = ({
   onClick,
-  result,
+  entityId,
   space,
   alreadySelected,
   withDescription = true,
 }: SpaceContentProps) => {
-  const spaceName = space?.name ?? space?.spaceId ?? '';
-  const spaceImg = space?.image ?? null;
+  const entity = useEntity({ id: entityId, spaceId: space.spaceId });
 
-  const showBreadcrumbs = spaceName || result.types.length > 0;
-  const showBreadcrumbChevron = spaceName && result.types.length > 0;
+  const spaceName = space.name ?? space.spaceId ?? '';
+  const spaceImg = space.image ?? null;
+
+  const showBreadcrumbs = spaceName || entity.types.length > 0;
+  const showBreadcrumbChevron = spaceName && entity.types.length > 0;
 
   const onSelect = () => {
     if (alreadySelected) return;
@@ -172,7 +179,7 @@ export const SpaceContent = ({
       >
         <div className="flex w-full items-center justify-between leading-[1rem]">
           <Text variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-            {result.name ?? result.id}
+            {entity.name ?? entity.id}
           </Text>
           {alreadySelected && <CheckCircleSmall color="grey-04" />}
         </div>
@@ -186,9 +193,9 @@ export const SpaceContent = ({
                   <ChevronDownSmall color="grey-04" />
                 </span>
               )}
-              {result.types.length > 0 && (
+              {entity.types.length > 0 && (
                 <div className="flex items-center gap-1.5">
-                  {result.types.map(type => (
+                  {entity.types.map(type => (
                     <Tag key={type.id}>{type.name}</Tag>
                   ))}
                 </div>
@@ -196,11 +203,11 @@ export const SpaceContent = ({
             </div>
           </>
         )}
-        {withDescription && result.description && (
+        {withDescription && entity.description && (
           <>
             <Spacer height={4} />
             <Truncate maxLines={3} shouldTruncate variant="footnote">
-              <Text variant="footnote">{result.description}</Text>
+              <Text variant="footnote">{entity.description}</Text>
             </Truncate>
           </>
         )}

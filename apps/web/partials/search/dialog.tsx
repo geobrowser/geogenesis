@@ -25,12 +25,12 @@ export const SearchDialog = ({ open, onDone }: Props) => {
   const router = useRouter();
   const autocomplete = useSearch();
 
-  const [page, setPage] = useState<number | null>(null);
-  const selectedEntity = page !== null ? autocomplete.results[page] : null;
+  const [openSpacesIndex, setOpenSpacesIndex] = useState<number | null>(null);
+  const selectedEntity = openSpacesIndex !== null ? autocomplete.results[openSpacesIndex] : null;
 
   const handleOpenChange = useCallback(() => {
     autocomplete.onQueryChange('');
-    setPage(null);
+    setOpenSpacesIndex(null);
     onDone();
   }, [autocomplete, onDone]);
 
@@ -41,7 +41,7 @@ export const SearchDialog = ({ open, onDone }: Props) => {
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center">
         <div className="pointer-events-auto mt-32 w-full max-w-[434px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-dropdown">
           <Command.List>
-            {page === null && (
+            {openSpacesIndex === null && (
               <>
                 <div className={cx('relative p-1', A.isNotEmpty(autocomplete.results) && 'border-b border-grey-02')}>
                   <AnimatePresence mode="wait">
@@ -94,11 +94,11 @@ export const SearchDialog = ({ open, onDone }: Props) => {
                           <Command.Item
                             onSelect={() => {
                               if (result.spaces.length > 1) {
-                                setPage(i);
+                                setOpenSpacesIndex(i);
                               } else {
                                 router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
                                 autocomplete.onQueryChange('');
-                                setPage(null);
+                                setOpenSpacesIndex(null);
                                 onDone();
                               }
                             }}
@@ -107,7 +107,7 @@ export const SearchDialog = ({ open, onDone }: Props) => {
                               // The onClick behavior is handled by cmdk.
                               onClick={() => {}}
                               result={result}
-                              onChooseSpace={() => setPage(i)}
+                              onChooseSpace={() => setOpenSpacesIndex(i)}
                             />
                           </Command.Item>
                         </div>
@@ -117,11 +117,15 @@ export const SearchDialog = ({ open, onDone }: Props) => {
                 </ResizableContainer>
               </>
             )}
-            {page !== null && selectedEntity && (
+            {openSpacesIndex !== null && selectedEntity && (
               <div>
+                {/*
+                  retains the focus trap inside the dialog even when the input above isn't rendered
+                  see https://github.com/pacocoursey/cmdk/issues/322#issuecomment-2444703817
+               */}
                 <button autoFocus className="sr-only" aria-hidden />
                 <Command.Item
-                  onSelect={() => setPage(null)}
+                  onSelect={() => setOpenSpacesIndex(null)}
                   className="flex w-full cursor-pointer items-center border-b border-divider p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01"
                 >
                   <div className="size-[12px] *:size-[12px]">
@@ -144,14 +148,14 @@ export const SearchDialog = ({ open, onDone }: Props) => {
                             onSelect={() => {
                               router.push(NavUtils.toEntity(space.spaceId, selectedEntity.id));
                               autocomplete.onQueryChange('');
-                              setPage(null);
+                              setOpenSpacesIndex(null);
                               onDone();
                             }}
                           >
                             <SpaceContent
                               // The onClick behavior is handled by cmdk.
                               onClick={() => {}}
-                              result={selectedEntity}
+                              entityId={selectedEntity.id}
                               space={space}
                             />
                           </Command.Item>
