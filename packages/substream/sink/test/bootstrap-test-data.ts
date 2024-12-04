@@ -69,6 +69,7 @@ const PROPOSAL: EditProposal = {
   name: 'Test Bootstrap',
   endTime: ROOT_SPACE_CREATED_AT.toString(),
   startTime: ROOT_SPACE_CREATED_AT.toString(),
+  contentUri: 'bootstrapped-so-no-uri',
   metadataUri: 'bootstrapped-so-no-uri',
   ops: [testEntityNameOp, ...testEntityTypes, ...testEntityBlocks],
   pluginAddress: MAIN_VOTING_ADDRESS,

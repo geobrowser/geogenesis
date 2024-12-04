@@ -135,6 +135,7 @@ function fetchEditProposalFromIpfs(
           endTime: block.timestamp.toString(),
           startTime: block.timestamp.toString(),
           metadataUri: processedProposal.ipfsUri,
+          contentUri: processedProposal.ipfsUri,
         };
 
         return contentProposal;
@@ -203,6 +204,7 @@ function fetchEditProposalFromIpfs(
             endTime: block.timestamp.toString(),
             startTime: block.timestamp.toString(),
             metadataUri: processedProposal.ipfsUri,
+            contentUri: processedProposal.ipfsUri,
           };
 
           return contentProposal;

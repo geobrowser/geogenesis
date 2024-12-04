@@ -20,13 +20,19 @@ import type { Op } from '~/sink/types';
  * type or action type. i.e., if it's a personal space or a space that was created with a set
  * of data we create those proposals in a separate process.
  */
-export const ZodSubstreamProposalCreated = z.object({
+const ZodSubstreamProposalCreated = z.object({
   proposalId: z.string(),
   pluginAddress: z.string(),
   creator: z.string(),
-  metadataUri: z.string(),
   startTime: z.string(),
   endTime: z.string(),
+  daoAddress: z.string(),
+});
+
+export const ZodSubstreamPublishedEditProposalCreated = ZodSubstreamProposalCreated.extend({ contentUri: z.string() });
+
+export const ZodPublishedEditProposalCreatedStreamResponse = z.object({
+  edits: z.array(ZodSubstreamPublishedEditProposalCreated).min(1),
 });
 
 // This comes from the onchain event mapping in our rust bindings
@@ -61,6 +67,7 @@ export const ZodProposalMetadata = z.object({
 export type ProposalMetadata = z.infer<typeof ZodProposalMetadata>;
 
 export type ProposalCreated = z.infer<typeof ZodSubstreamProposalCreated>;
+export type PublishEditProposalCreated = z.infer<typeof ZodSubstreamPublishedEditProposalCreated>;
 export type Proposal = z.infer<typeof ZodProposal>;
 
 export const ZodMembershipProposal = z.object({
@@ -133,6 +140,7 @@ export type EditProposal = Proposal & {
   onchainProposalId: string;
   pluginAddress: string;
   ops: Op[];
+  contentUri: string;
 };
 
 const ZodEditSetTriplePayload = z.object({

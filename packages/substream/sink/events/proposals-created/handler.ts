@@ -2,16 +2,10 @@ import { Effect } from 'effect';
 
 import { writeAccounts } from '../write-accounts';
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
-import { Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
+import { Proposals, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
-import type {
-  EditProposal,
-  EditorshipProposal,
-  MembershipProposal,
-  ProposalCreated,
-  SubspaceProposal,
-} from '~/sink/events/proposals-created/parser';
+import type { EditProposal, PublishEditProposalCreated } from '~/sink/events/proposals-created/parser';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
@@ -22,10 +16,9 @@ class CouldNotWriteCreatedProposalsError extends Error {
   _tag: 'CouldNotWriteCreatedProposalsError' = 'CouldNotWriteCreatedProposalsError';
 }
 
-export function handleProposalsCreated(proposalsCreated: ProposalCreated[], block: BlockEvent) {
+export function handleEditProposalCreated(proposalsCreated: PublishEditProposalCreated[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     yield* _(Effect.logInfo('Handling proposals created'));
-
     yield* _(Effect.logDebug(`Gathering IPFS content for ${proposalsCreated.length} proposals`));
 
     const maybeProposals = yield* _(
@@ -34,29 +27,18 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       })
     );
 
-    const proposals = maybeProposals.filter(
-      (maybeProposal): maybeProposal is EditProposal | SubspaceProposal | MembershipProposal | EditorshipProposal =>
-        maybeProposal !== null
-    );
+    const proposals = maybeProposals.filter((maybeProposal): maybeProposal is EditProposal => maybeProposal !== null);
 
-    const { schemaEditProposals, schemaSubspaceProposals, schemaMembershipProposals, schemaEditorshipProposals } =
-      mapIpfsProposalToSchemaProposalByType(proposals, block);
+    const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposals, block);
 
     yield* _(Effect.logDebug('Writing accounts'));
 
     // This might be the very first onchain interaction for a wallet address,
     // so we need to make sure that any accounts are already created when we
     // process the proposals below, particularly for editor and member requests.
-    yield* _(writeAccounts([...schemaMembershipProposals.accounts, ...schemaEditorshipProposals.accounts]));
+    // yield* _(writeAccounts([...schemaMembershipProposals.accounts, ...schemaEditorshipProposals.accounts]));
 
-    yield* _(
-      Effect.logDebug(`Writing proposals
-      Edit proposals: ${schemaEditProposals.proposals.length}
-      Subspace proposals: ${schemaSubspaceProposals.proposals.length}
-      Editor proposals: ${schemaEditorshipProposals.proposals.length}
-      Member proposals: ${schemaMembershipProposals.proposals.length}
-    `)
-    );
+    yield* _(Effect.logDebug(`Writing edit proposals: ${schemaEditProposals.proposals.length}`));
 
     const versionsWithStaleEntities = yield* _(
       aggregateNewVersions({
@@ -80,17 +62,6 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
             Edits.upsert(schemaEditProposals.edits),
             Proposals.upsert(schemaEditProposals.proposals),
             Versions.upsert(versionsWithStaleEntities),
-
-            // Subspace proposals
-            Proposals.upsert(schemaSubspaceProposals.proposals),
-            // Editorship proposals
-            Proposals.upsert(schemaEditorshipProposals.proposals),
-            // Membership proposals
-            Proposals.upsert(schemaMembershipProposals.proposals),
-
-            ProposedSubspaces.upsert(schemaSubspaceProposals.proposedSubspaces),
-            ProposedEditors.upsert(schemaEditorshipProposals.proposedEditors),
-            ProposedMembers.upsert(schemaMembershipProposals.proposedMembers),
           ]);
         },
         catch: error => {

@@ -29,7 +29,11 @@ import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleMemberRemoved } from './events/member-removed/handler';
 import { ZodMemberRemovedStreamResponse } from './events/member-removed/parser';
-import { ZodEditPublishedStreamResponse } from './events/proposals-created/parser';
+import { handleEditProposalCreated } from './events/proposals-created/handler';
+import {
+  ZodEditPublishedStreamResponse,
+  ZodPublishedEditProposalCreatedStreamResponse,
+} from './events/proposals-created/parser';
 import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { ZodProposalExecutedStreamResponse } from './events/proposals-executed/parser';
 import { getSpacesWithInitialProposalsProcessed } from './events/spaces-created/get-spaces-with-initial-proposals-processed';
@@ -243,6 +247,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     const membersRemoved = ZodMemberRemovedStreamResponse.safeParse(jsonOutput);
     const editorsAdded = ZodEditorAddedStreamResponse.safeParse(jsonOutput);
     const editorsRemoved = ZodEditorRemovedStreamResponse.safeParse(jsonOutput);
+    const editsProposed = ZodPublishedEditProposalCreatedStreamResponse.safeParse(jsonOutput);
 
     const hasValidEvent =
       spacePluginCreatedResponse.success ||
@@ -413,16 +418,6 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       );
     }
 
-    // if (proposalCreatedResponse.success) {
-    //   yield* _(
-    //     handleProposalsCreated(proposalCreatedResponse.data.proposalsCreated, {
-    //       blockNumber,
-    //       cursor,
-    //       timestamp,
-    //     })
-    //   );
-    // }
-
     if (membersAdded.success) {
       yield* _(
         Effect.fork(
@@ -482,6 +477,24 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     if (subspacesRemoved.success) {
       yield* _(Effect.fork(handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved)));
     }
+
+    if (editsProposed.success) {
+      yield* _(
+        handleEditProposalCreated(editsProposed.data.edits, {
+          blockNumber,
+          cursor,
+          timestamp,
+        })
+      );
+    }
+
+    // We can fork these since they aren't immediately processed
+    // AddSubspaceProposal
+    // RemoveSubspaceProposal
+    // AddEditorProposal
+    // RemoveEditorProposal
+    // AddMemberProposal
+    // RemoveMemberProposal
 
     /**
      * If we have a set of "SpacePluginCreated" events in the same block as a set of "ProposalProcessed" events
