@@ -120,11 +120,18 @@ export function handleMembershipProposalsCreated(
     const proposals: SinkMembershipProposal[] = proposalsCreated.map((p): SinkMembershipProposal => {
       const proposalId = deriveProposalId({ onchainProposalId: p.proposalId, pluginAddress: p.pluginAddress });
       const member = getChecksumAddress(p.member);
+      const creator = getChecksumAddress(p.creator);
+      const pluginAddress = getChecksumAddress(p.pluginAddress);
+      const daoAddress = getChecksumAddress(p.daoAddress);
 
       if (p.changeType === 'added') {
         return {
           ...p,
           name: `Add member ${member}`,
+          daoAddress,
+          pluginAddress,
+          creator,
+          member,
           onchainProposalId: p.proposalId,
           proposalId,
           space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
@@ -135,6 +142,10 @@ export function handleMembershipProposalsCreated(
       return {
         ...p,
         name: `Remove member ${member}`,
+        daoAddress,
+        pluginAddress,
+        creator,
+        member,
         onchainProposalId: p.proposalId,
         proposalId,
         space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),

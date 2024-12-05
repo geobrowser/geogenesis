@@ -132,6 +132,7 @@ export function getProposalFromIpfs(
             };
           }),
           creator: getChecksumAddress(proposal.creator),
+          daoAddress: getChecksumAddress(proposal.daoAddress),
           space: maybeSpace.id,
         };
 

@@ -167,7 +167,7 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
         const proposals = decodedEdits.map(e => {
           const contentProposal: SinkEditProposal = {
             type: 'ADD_EDIT',
-            daoAddress: processedProposal.daoAddress,
+            daoAddress: getChecksumAddress(processedProposal.daoAddress),
             name: e.name ?? null,
             proposalId: e.id,
             onchainProposalId: '-1',
