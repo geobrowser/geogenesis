@@ -18,7 +18,7 @@ export function RelationDto(relation: SubstreamRelation) {
   const renderableType = getRenderableEntityType(toEntityTypes);
 
   return {
-    space: relation.space.id,
+    space: relation.spaceId,
     id: relation.entityId,
     index: relation.index,
     typeOf: {

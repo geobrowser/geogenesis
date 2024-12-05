@@ -211,7 +211,6 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
                   send({
                     type: 'UPSERT_RELATION',
                     payload: {
-                      spaceId,
                       fromEntityId: id,
                       toEntityId: result.id,
                       toEntityName: result.name,
@@ -254,7 +253,6 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
               send({
                 type: 'UPSERT_RELATION',
                 payload: {
-                  spaceId,
                   fromEntityId: id,
                   toEntityId: result.id,
                   toEntityName: result.name,

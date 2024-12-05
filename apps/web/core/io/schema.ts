@@ -157,7 +157,7 @@ export type SubstreamTriple = Schema.Schema.Type<typeof SubstreamTriple>;
  */
 const SubstreamRelation = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  space: SubstreamSpaceWithoutMetadata.pick('id'),
+  spaceId: Schema.String,
   entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
   index: Schema.String,
   typeOf: Schema.Struct({

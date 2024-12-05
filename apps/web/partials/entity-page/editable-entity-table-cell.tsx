@@ -101,7 +101,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                     send({
                       type: 'UPSERT_RELATION',
                       payload: {
-                        spaceId,
                         fromEntityId: entityId,
                         toEntityId: result.id,
                         toEntityName: result.name,
@@ -147,7 +146,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 send({
                   type: 'UPSERT_RELATION',
                   payload: {
-                    spaceId,
                     fromEntityId: entityId,
                     toEntityId: result.id,
                     toEntityName: result.name,
