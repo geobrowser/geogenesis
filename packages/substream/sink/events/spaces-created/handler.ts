@@ -129,7 +129,6 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
 
     // @TODO:
     // - Should error each plugin independently
-    // - We need to know the actual space address
     yield* _(
       Effect.tryPromise({
         try: async () => {

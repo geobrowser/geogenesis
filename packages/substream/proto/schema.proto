@@ -339,10 +339,10 @@ message GeoOutput {
   repeated MemberRemoved members_removed = 13;
   repeated EditorRemoved editors_removed = 14;
   repeated PublishEditProposalCreated edits = 15;
-  repeated AddMemberProposalCreated proposed_members = 16;
-  repeated RemoveMemberProposalCreated proposed_members = 17;
-  repeated AddEditorProposalCreated proposed_editors = 18;
-  repeated RemoveEditorProposalCreated proposed_editors = 19;
-  repeated AddSubspaceProposalCreated proposed_subspaces = 20;
-  repeated RemoveSubspaceProposalCreated proposed_subspaces = 21;
+  repeated AddMemberProposalCreated proposed_added_members = 16;
+  repeated RemoveMemberProposalCreated proposed_removed_members = 17;
+  repeated AddEditorProposalCreated proposed_added_editors = 18;
+  repeated RemoveEditorProposalCreated proposed_removed_editors = 19;
+  repeated AddSubspaceProposalCreated proposed_added_subspaces = 20;
+  repeated RemoveSubspaceProposalCreated proposed_removed_subspaces = 21;
 }

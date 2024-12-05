@@ -1,15 +1,12 @@
 'use client';
 
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
-import { createMembershipProposal } from '@geogenesis/sdk/proto';
 import { useMutation } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
-import { encodeFunctionData, stringToHex } from 'viem';
+import { encodeFunctionData } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-
-import { IpfsEffectClient } from '../io/ipfs-client';
 
 export function useRequestToBeEditor(votingPluginAddress: string | null) {
   const smartAccount = useSmartAccount();
@@ -25,31 +22,19 @@ export function useRequestToBeEditor(votingPluginAddress: string | null) {
 
       console.log('requesting to be editor', smartAccount);
 
-      const proposal = createMembershipProposal({
-        name: 'Editor request',
-        type: 'ADD_EDITOR',
-        userAddress: smartAccount.account.address,
-      });
-
       const writeTxEffect = Effect.gen(function* () {
-        const cid = yield* IpfsEffectClient.upload(proposal);
-
         const callData = encodeFunctionData({
           functionName: 'proposeAddEditor',
           abi: MainVotingAbi,
-          args: [stringToHex(cid), smartAccount.account.address],
+          args: ['0x', smartAccount.account.address],
         });
 
-        return yield* tx(callData);
+        const hash = yield* tx(callData);
+        console.log('Transaction hash: ', hash);
+        return hash;
       });
 
-      const publishProgram = Effect.gen(function* () {
-        const writeTxHash = yield* writeTxEffect;
-        console.log('Transaction hash: ', writeTxHash);
-        return writeTxHash;
-      });
-
-      const result = await Effect.runPromise(Effect.either(publishProgram));
+      const result = await Effect.runPromise(Effect.either(writeTxEffect));
 
       Either.match(result, {
         onLeft: error => console.error(error),

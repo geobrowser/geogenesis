@@ -135,6 +135,54 @@ modules:
     output:
       type: proto:schema.PublishEditsProposalsCreated
 
+  - name: map_add_member_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.AddMemberProposalsCreated
+
+  - name: map_remove_member_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.RemoveMemberProposalsCreated
+
+  - name: map_add_editor_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.AddEditorProposalsCreated
+
+  - name: map_remove_editor_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.RemoveEditorProposalsCreated
+
+  - name: map_add_subspace_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.AddSubspaceProposalsCreated
+
+  - name: map_remove_subspace_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.RemoveSubspaceProposalsCreated
+
   - name: geo_out
     kind: map
     initialBlock: 620
@@ -154,6 +202,12 @@ modules:
       - map: map_members_removed
       - map: map_editors_removed
       - map: map_publish_edits_proposals_created
+      - map: map_add_member_proposals_created
+      - map: map_remove_member_proposals_created
+      - map: map_add_editor_proposals_created
+      - map: map_remove_editor_proposals_created
+      - map: map_add_subspace_proposals_created
+      - map: map_remove_subspace_proposals_created
     output:
       type: proto:schema.GeoOutput
 

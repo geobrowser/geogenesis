@@ -108,6 +108,7 @@ export const bootstrapTest = Effect.gen(function* (_) {
         {
           addresses: [ROOT_SPACE_CREATED_BY_ID],
           pluginAddress: MAIN_VOTING_ADDRESS,
+          daoAddress: DAO_ADDRESS,
         },
       ],
       INITIAL_BLOCK

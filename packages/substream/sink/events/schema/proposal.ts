@@ -39,7 +39,7 @@ export const ZodAddMemberProposal = ZodChainBaseProposalCreated.extend({
 });
 
 export const ZodAddMemberProposalStreamResponse = z.object({
-  proposedMembers: z.array(ZodAddMemberProposal).min(1),
+  proposedAddedMembers: z.array(ZodAddMemberProposal).min(1),
 });
 
 export const ZodRemoveMemberProposal = ZodChainBaseProposalCreated.extend({
@@ -48,7 +48,7 @@ export const ZodRemoveMemberProposal = ZodChainBaseProposalCreated.extend({
 });
 
 export const ZodRemoveMemberProposalStreamResponse = z.object({
-  proposedMembers: z.array(ZodRemoveMemberProposal).min(1),
+  proposedRemovedMembers: z.array(ZodRemoveMemberProposal).min(1),
 });
 
 export const ZodAddEditorProposal = ZodChainBaseProposalCreated.extend({
@@ -57,7 +57,7 @@ export const ZodAddEditorProposal = ZodChainBaseProposalCreated.extend({
 });
 
 export const ZodAddEditorProposalStreamResponse = z.object({
-  proposedEditors: z.array(ZodAddEditorProposal).min(1),
+  proposedAddedEditors: z.array(ZodAddEditorProposal).min(1),
 });
 
 export const ZodRemoveEditorProposal = ZodChainBaseProposalCreated.extend({
@@ -66,7 +66,7 @@ export const ZodRemoveEditorProposal = ZodChainBaseProposalCreated.extend({
 });
 
 export const ZodRemoveEditorProposalStreamResponse = z.object({
-  proposedEditors: z.array(ZodRemoveEditorProposal).min(1),
+  proposedRemovedEditors: z.array(ZodRemoveEditorProposal).min(1),
 });
 
 export const ZodAddSubspaceProposal = ZodChainBaseProposalCreated.extend({
@@ -75,7 +75,7 @@ export const ZodAddSubspaceProposal = ZodChainBaseProposalCreated.extend({
 });
 
 export const ZodAddSubspaceProposalStreamResponse = z.object({
-  proposedSubspaces: z.array(ZodAddSubspaceProposal).min(1),
+  proposedAddedSubspaces: z.array(ZodAddSubspaceProposal).min(1),
 });
 
 export const ZodRemoveSubspaceProposal = ZodChainBaseProposalCreated.extend({
@@ -84,7 +84,7 @@ export const ZodRemoveSubspaceProposal = ZodChainBaseProposalCreated.extend({
 });
 
 export const ZodRemoveSubspaceProposalStreamResponse = z.object({
-  proposedSubspaces: z.array(ZodRemoveSubspaceProposal).min(1),
+  proposedRemovedSubspaces: z.array(ZodRemoveSubspaceProposal).min(1),
 });
 
 export type ChainProposal = z.infer<typeof ZodChainBaseProposalCreated>;

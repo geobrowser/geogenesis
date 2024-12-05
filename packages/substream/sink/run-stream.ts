@@ -390,6 +390,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
         return {
           pluginAddress: p.personalAdminAddress,
           addresses: [p.initialEditor],
+          daoAddress: p.daoAddress,
         };
       });
 
@@ -443,27 +444,29 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     // AddSubspaceProposal
     // RemoveSubspaceProposal
     if (addMembersProposed.success) {
-      yield* _(Effect.fork(handleMembershipProposalsCreated(addMembersProposed.data.proposedMembers, block)));
+      yield* _(Effect.fork(handleMembershipProposalsCreated(addMembersProposed.data.proposedAddedMembers, block)));
     }
 
     if (removeMembersProposed.success) {
-      yield* _(Effect.fork(handleMembershipProposalsCreated(removeMembersProposed.data.proposedMembers, block)));
+      yield* _(Effect.fork(handleMembershipProposalsCreated(removeMembersProposed.data.proposedRemovedMembers, block)));
     }
 
     if (addEditorsProposed.success) {
-      yield* _(Effect.fork(handleEditorshipProposalsCreated(addEditorsProposed.data.proposedEditors, block)));
+      yield* _(Effect.fork(handleEditorshipProposalsCreated(addEditorsProposed.data.proposedAddedEditors, block)));
     }
 
     if (removeEditorsProposed.success) {
-      yield* _(Effect.fork(handleEditorshipProposalsCreated(removeEditorsProposed.data.proposedEditors, block)));
+      yield* _(Effect.fork(handleEditorshipProposalsCreated(removeEditorsProposed.data.proposedRemovedEditors, block)));
     }
 
     if (addSubspacesProposed.success) {
-      yield* _(Effect.fork(handleSubspaceProposalsCreated(addSubspacesProposed.data.proposedSubspaces, block)));
+      yield* _(Effect.fork(handleSubspaceProposalsCreated(addSubspacesProposed.data.proposedAddedSubspaces, block)));
     }
 
     if (removeSubspacesProposed.success) {
-      yield* _(Effect.fork(handleSubspaceProposalsCreated(removeSubspacesProposed.data.proposedSubspaces, block)));
+      yield* _(
+        Effect.fork(handleSubspaceProposalsCreated(removeSubspacesProposed.data.proposedRemovedSubspaces, block))
+      );
     }
 
     if (editsProposed.success) {

@@ -324,6 +324,162 @@ pub struct PublishEditsProposalsCreated {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddMemberProposalCreated {
+    #[prost(string, tag="1")]
+    pub proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub creator: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub start_time: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub end_time: ::prost::alloc::string::String,
+    #[prost(string, tag="5")]
+    pub member: ::prost::alloc::string::String,
+    #[prost(string, tag="6")]
+    pub dao_address: ::prost::alloc::string::String,
+    #[prost(string, tag="7")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="8")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddMemberProposalsCreated {
+    #[prost(message, repeated, tag="1")]
+    pub proposed_members: ::prost::alloc::vec::Vec<AddMemberProposalCreated>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemoveMemberProposalCreated {
+    #[prost(string, tag="1")]
+    pub proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub creator: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub start_time: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub end_time: ::prost::alloc::string::String,
+    #[prost(string, tag="5")]
+    pub member: ::prost::alloc::string::String,
+    #[prost(string, tag="6")]
+    pub dao_address: ::prost::alloc::string::String,
+    #[prost(string, tag="7")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="8")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemoveMemberProposalsCreated {
+    #[prost(message, repeated, tag="1")]
+    pub proposed_members: ::prost::alloc::vec::Vec<RemoveMemberProposalCreated>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddEditorProposalCreated {
+    #[prost(string, tag="1")]
+    pub proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub creator: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub start_time: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub end_time: ::prost::alloc::string::String,
+    #[prost(string, tag="5")]
+    pub editor: ::prost::alloc::string::String,
+    #[prost(string, tag="6")]
+    pub dao_address: ::prost::alloc::string::String,
+    #[prost(string, tag="7")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="8")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddEditorProposalsCreated {
+    #[prost(message, repeated, tag="1")]
+    pub proposed_editors: ::prost::alloc::vec::Vec<AddEditorProposalCreated>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemoveEditorProposalCreated {
+    #[prost(string, tag="1")]
+    pub proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub creator: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub start_time: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub end_time: ::prost::alloc::string::String,
+    #[prost(string, tag="5")]
+    pub editor: ::prost::alloc::string::String,
+    #[prost(string, tag="6")]
+    pub dao_address: ::prost::alloc::string::String,
+    #[prost(string, tag="7")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="8")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemoveEditorProposalsCreated {
+    #[prost(message, repeated, tag="1")]
+    pub proposed_editors: ::prost::alloc::vec::Vec<RemoveEditorProposalCreated>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddSubspaceProposalCreated {
+    #[prost(string, tag="1")]
+    pub proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub creator: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub start_time: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub end_time: ::prost::alloc::string::String,
+    #[prost(string, tag="5")]
+    pub subspace: ::prost::alloc::string::String,
+    #[prost(string, tag="6")]
+    pub dao_address: ::prost::alloc::string::String,
+    #[prost(string, tag="7")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="8")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddSubspaceProposalsCreated {
+    #[prost(message, repeated, tag="1")]
+    pub proposed_subspaces: ::prost::alloc::vec::Vec<AddSubspaceProposalCreated>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemoveSubspaceProposalCreated {
+    #[prost(string, tag="1")]
+    pub proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub creator: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub start_time: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub end_time: ::prost::alloc::string::String,
+    #[prost(string, tag="5")]
+    pub subspace: ::prost::alloc::string::String,
+    #[prost(string, tag="6")]
+    pub dao_address: ::prost::alloc::string::String,
+    #[prost(string, tag="7")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="8")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemoveSubspaceProposalsCreated {
+    #[prost(message, repeated, tag="1")]
+    pub proposed_subspaces: ::prost::alloc::vec::Vec<RemoveSubspaceProposalCreated>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoOutput {
     #[prost(message, repeated, tag="1")]
     pub spaces_created: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
@@ -355,5 +511,17 @@ pub struct GeoOutput {
     pub editors_removed: ::prost::alloc::vec::Vec<EditorRemoved>,
     #[prost(message, repeated, tag="15")]
     pub edits: ::prost::alloc::vec::Vec<PublishEditProposalCreated>,
+    #[prost(message, repeated, tag="16")]
+    pub proposed_added_members: ::prost::alloc::vec::Vec<AddMemberProposalCreated>,
+    #[prost(message, repeated, tag="17")]
+    pub proposed_removed_members: ::prost::alloc::vec::Vec<RemoveMemberProposalCreated>,
+    #[prost(message, repeated, tag="18")]
+    pub proposed_added_editors: ::prost::alloc::vec::Vec<AddEditorProposalCreated>,
+    #[prost(message, repeated, tag="19")]
+    pub proposed_removed_editors: ::prost::alloc::vec::Vec<RemoveEditorProposalCreated>,
+    #[prost(message, repeated, tag="20")]
+    pub proposed_added_subspaces: ::prost::alloc::vec::Vec<AddSubspaceProposalCreated>,
+    #[prost(message, repeated, tag="21")]
+    pub proposed_removed_subspaces: ::prost::alloc::vec::Vec<RemoveSubspaceProposalCreated>,
 }
 // @@protoc_insertion_point(module)

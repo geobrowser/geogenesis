@@ -1,15 +1,12 @@
 'use client';
 
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
-import { createMembershipProposal } from '@geogenesis/sdk/proto';
 import { useMutation } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
-import { encodeFunctionData, getAddress, stringToHex } from 'viem';
+import { encodeFunctionData, getAddress } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-
-import { IpfsEffectClient } from '../io/ipfs-client';
 
 export function useRequestToBeMember(votingPluginAddress: string | null) {
   const smartAccount = useSmartAccount();
@@ -25,31 +22,21 @@ export function useRequestToBeMember(votingPluginAddress: string | null) {
 
       const requestorAddress = getAddress(smartAccount.account.address);
 
-      const proposal = createMembershipProposal({
-        name: 'Member request',
-        type: 'ADD_MEMBER',
-        userAddress: smartAccount.account.address,
-      });
+      console.log('Requesting to be member', { smartAccount, contract: votingPluginAddress });
 
       const writeTxEffect = Effect.gen(function* () {
-        const cid = yield* IpfsEffectClient.upload(proposal);
-
         const callData = encodeFunctionData({
           functionName: 'proposeAddMember',
           abi: MainVotingAbi,
-          args: [stringToHex(cid), requestorAddress],
+          args: ['0x', requestorAddress],
         });
 
-        return yield* tx(callData);
+        const hash = yield* tx(callData);
+        console.log('Transaction hash: ', hash);
+        return hash;
       });
 
-      const publishProgram = Effect.gen(function* () {
-        const writeTxHash = yield* writeTxEffect;
-        console.log('Transaction hash: ', writeTxHash);
-        return writeTxHash;
-      });
-
-      const result = await Effect.runPromise(Effect.either(publishProgram));
+      const result = await Effect.runPromise(Effect.either(writeTxEffect));
 
       Either.match(result, {
         onLeft: error => console.error(error),
