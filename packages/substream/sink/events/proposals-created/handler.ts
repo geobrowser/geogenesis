@@ -178,10 +178,16 @@ export function handleEditorshipProposalsCreated(
     const proposals: SinkEditorshipProposal[] = proposalsCreated.map((p): SinkEditorshipProposal => {
       const proposalId = deriveProposalId({ onchainProposalId: p.proposalId, pluginAddress: p.pluginAddress });
       const editor = getChecksumAddress(p.editor);
+      const creator = getChecksumAddress(p.creator);
+      const pluginAddress = getChecksumAddress(p.pluginAddress);
+      const daoAddress = getChecksumAddress(p.daoAddress);
 
       if (p.changeType === 'added') {
         return {
           ...p,
+          creator,
+          daoAddress,
+          pluginAddress,
           name: `Add editor ${editor}`,
           onchainProposalId: p.proposalId,
           proposalId,
@@ -192,6 +198,10 @@ export function handleEditorshipProposalsCreated(
 
       return {
         ...p,
+        editor,
+        creator,
+        daoAddress,
+        pluginAddress,
         name: `Remove editor ${editor}`,
         onchainProposalId: p.proposalId,
         proposalId,
@@ -234,11 +244,17 @@ export function handleSubspaceProposalsCreated(
     const proposals = proposalsCreated.map((p): SinkSubspaceProposal => {
       const proposalId = deriveProposalId({ onchainProposalId: p.proposalId, pluginAddress: p.pluginAddress });
       const subspaceAddress = getChecksumAddress(p.subspace);
+      const creator = getChecksumAddress(p.creator);
+      const pluginAddress = getChecksumAddress(p.pluginAddress);
+      const daoAddress = getChecksumAddress(p.daoAddress);
 
       if (p.changeType === 'added') {
         return {
           ...p,
           name: `Add subspace ${subspaceAddress}`,
+          creator,
+          pluginAddress,
+          daoAddress,
           onchainProposalId: p.proposalId,
           proposalId,
           subspace: deriveSpaceId({ address: subspaceAddress, network: NETWORK_IDS.GEO }),
@@ -250,6 +266,9 @@ export function handleSubspaceProposalsCreated(
       return {
         ...p,
         name: `Remove subspace ${subspaceAddress}`,
+        creator,
+        pluginAddress,
+        daoAddress,
         onchainProposalId: p.proposalId,
         proposalId,
         subspace: deriveSpaceId({ address: subspaceAddress, network: NETWORK_IDS.GEO }),
