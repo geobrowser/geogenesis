@@ -429,10 +429,6 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       yield* _(Effect.fork(handleEditorRemoved(editorsRemoved.data.editorsRemoved)));
     }
 
-    if (votesCast.success) {
-      yield* _(Effect.fork(handleVotesCast(votesCast.data.votesCast, block)));
-    }
-
     if (subspacesAdded.success) {
       yield* _(Effect.fork(handleSubspacesAdded(subspacesAdded.data.subspacesAdded, block)));
     }
@@ -471,6 +467,10 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
 
     if (editsProposed.success) {
       yield* _(handleEditProposalCreated(editsProposed.data.edits, block));
+    }
+
+    if (votesCast.success) {
+      yield* _(handleVotesCast(votesCast.data.votesCast, block));
     }
 
     /**
@@ -565,7 +565,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     }
 
     if (executedProposals.success) {
-      yield* _(Effect.fork(handleProposalsExecuted(executedProposals.data.executedProposals)));
+      yield* _(handleProposalsExecuted(executedProposals.data.executedProposals));
     }
 
     return hasValidEvent;

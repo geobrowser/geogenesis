@@ -6,11 +6,9 @@ import { deriveSpaceId } from '~/sink/utils/id';
 
 export function mapSpaces(spaces: SpacePluginCreatedWithSpaceId[], createdAtBlock: number): S.spaces.Insertable[] {
   return spaces.map(s => {
-    const daoAddress = getChecksumAddress(s.daoAddress);
-
     return {
-      id: s.id ?? deriveSpaceId({ network: NETWORK_IDS.GEO, address: daoAddress }),
-      dao_address: daoAddress,
+      id: s.id ?? deriveSpaceId({ network: NETWORK_IDS.GEO, address: s.daoAddress }),
+      dao_address: s.daoAddress,
       space_plugin_address: getChecksumAddress(s.spaceAddress),
       is_root_space: false,
       type: 'public',

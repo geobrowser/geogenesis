@@ -1,3 +1,4 @@
+import { NETWORK_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import { mapGovernanceToSpaces, mapPersonalToSpaces, mapSpaces } from './map-spaces';
@@ -5,6 +6,7 @@ import type { GovernancePluginsCreated, PersonalPluginsCreated, SpacePluginCreat
 import { Spaces } from '~/sink/db';
 import { CouldNotWriteSpacesError } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
+import { deriveSpaceId } from '~/sink/utils/id';
 import { retryEffect } from '~/sink/utils/retry-effect';
 
 export class CouldNotWriteGovernancePlugins extends Error {
@@ -43,33 +45,12 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
     yield* _(Effect.logInfo('Handling personal space plugins created'));
     yield* _(Effect.logDebug('Collecting spaces for personal plugins'));
 
-    const personalPluginsWithSpaceId = (yield* _(
-      Effect.forEach(
-        personalPluginsCreated,
-        p => {
-          return Effect.gen(function* (_) {
-            const maybeSpace = yield* _(Effect.promise(() => Spaces.findForDaoAddress(p.daoAddress)));
-
-            if (maybeSpace === null) {
-              yield* _(
-                Effect.fail(
-                  new CouldNotWritePersonalPlugins(`Could not find space for personal plugin ${p.personalAdminAddress}`)
-                )
-              );
-              return null;
-            }
-
-            return {
-              ...p,
-              id: maybeSpace.id,
-            };
-          });
-        },
-        {
-          concurrency: 25,
-        }
-      )
-    )).flatMap(g => (g ? [g] : []));
+    const personalPluginsWithSpaceId = personalPluginsCreated.map(p => {
+      return {
+        ...p,
+        id: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+      };
+    });
 
     yield* _(Effect.logDebug('Updating spaces with personal space plugins'));
     const spaces = mapPersonalToSpaces(personalPluginsWithSpaceId, block.blockNumber);
@@ -96,33 +77,12 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
     yield* _(Effect.logInfo('Handling public space plugins created'));
     yield* _(Effect.logDebug('Collecting spaces for public plugins'));
 
-    const governancePluginsWithSpaceId = (yield* _(
-      Effect.forEach(
-        governancePluginsCreated,
-        g => {
-          return Effect.gen(function* (_) {
-            const maybeSpace = yield* _(Effect.promise(() => Spaces.findForDaoAddress(g.daoAddress)));
-
-            if (maybeSpace === null) {
-              yield* _(
-                Effect.fail(
-                  new CouldNotWriteGovernancePlugins(`Could not find find space for daoAddress ${g.daoAddress}`)
-                )
-              );
-              return null;
-            }
-
-            return {
-              ...g,
-              id: maybeSpace.id,
-            };
-          });
-        },
-        {
-          concurrency: 25,
-        }
-      )
-    )).flatMap(g => (g ? [g] : []));
+    const governancePluginsWithSpaceId = governancePluginsCreated.map(g => {
+      return {
+        ...g,
+        id: deriveSpaceId({ address: g.daoAddress, network: NETWORK_IDS.GEO }),
+      };
+    });
 
     yield* _(Effect.logDebug('Updating spaces with public space plugins'));
     const spaces = mapGovernanceToSpaces(governancePluginsWithSpaceId, block.blockNumber);

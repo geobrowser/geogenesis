@@ -94,5 +94,7 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[]) {
         }
       )
     );
+
+    yield* _(Effect.logInfo('Proposal state updated'));
   });
 }

@@ -24,14 +24,15 @@ export function getProposalFromIpfs(
   return Effect.gen(function* (_) {
     yield* _(Effect.logDebug('Fetching proposal from IPFS'));
 
-    const maybeSpace = yield* _(Effect.promise(() => Spaces.getById(proposal.daoAddress)));
+    console.log('proposal', proposal);
+    const maybeSpace = yield* _(Effect.promise(() => Spaces.findForDaoAddress(proposal.daoAddress)));
 
     if (!maybeSpace) {
       yield* _(Effect.logError(`Space not found for DAO address ${proposal.daoAddress}`));
       return null;
     }
 
-    if (maybeSpace.main_voting_plugin_address !== proposal.pluginAddress) {
+    if (maybeSpace.main_voting_plugin_address !== getChecksumAddress(proposal.pluginAddress)) {
       yield* _(Effect.logError(`Proposal is not for the voting plugin`));
       return null;
     }

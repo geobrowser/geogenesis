@@ -165,6 +165,8 @@ export function handleMembershipProposalsCreated(
       }),
       retryEffect
     );
+
+    yield* _(Effect.logDebug('Membership proposals written'));
   });
 }
 
