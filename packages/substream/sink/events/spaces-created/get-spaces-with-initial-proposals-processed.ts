@@ -1,6 +1,7 @@
+import { getChecksumAddress } from '@geogenesis/sdk';
+
 import type { ProposalProcessed } from '../proposals-created/parser';
 import type { SpacePluginCreated } from './parser';
-import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 
 /**
  * If we have a set of "SpacePluginCreated" events in the same block as a set of "ProposalProcessed" events

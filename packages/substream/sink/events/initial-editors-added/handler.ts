@@ -1,3 +1,4 @@
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
@@ -7,7 +8,6 @@ import type { InitialEditorsAdded } from './parser';
 import { SpaceEditors, SpaceMembers, Spaces } from '~/sink/db';
 import { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
-import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { pool } from '~/sink/utils/pool';
 import { retryEffect } from '~/sink/utils/retry-effect';
 

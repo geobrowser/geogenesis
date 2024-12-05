@@ -1,7 +1,7 @@
+import { getChecksumAddress } from '@geogenesis/sdk';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
-import { getChecksumAddress } from '../utils/get-checksum-address';
 import { pool } from '../utils/pool';
 import { CHUNK_SIZE } from './constants';
 

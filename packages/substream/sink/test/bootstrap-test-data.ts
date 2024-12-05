@@ -1,6 +1,6 @@
 // create cover image
 // create avatar image
-import { DataBlock, Relation, SYSTEM_IDS, TextBlock, encodeBase58 } from '@geogenesis/sdk';
+import { DataBlock, Position, PositionRange, Relation, SYSTEM_IDS, TextBlock, encodeBase58 } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import {
@@ -49,7 +49,11 @@ const testEntityTypes: Op[] = [SYSTEM_IDS.PERSON_TYPE].flatMap(typeId => {
 
 const testEntityBlocks = [
   ...TextBlock.make({ fromId: TEST_ENTITY_ID, text: 'Test entity text block' }),
-  ...DataBlock.make({ fromId: TEST_ENTITY_ID, sourceType: 'GEO', position: 'a1' }),
+  ...DataBlock.make({
+    fromId: TEST_ENTITY_ID,
+    sourceType: 'GEO',
+    position: Position.createBetween(PositionRange.FIRST),
+  }),
 ].map(o => {
   return {
     ...o,

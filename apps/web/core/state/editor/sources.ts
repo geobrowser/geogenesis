@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { Match } from 'effect';
 
 import { StoreRelation } from '~/core/database/types';
@@ -146,7 +146,7 @@ export function makeRelationForSourceType(
 
   return {
     space: spaceId,
-    index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+    index: INITIAL_RELATION_INDEX_VALUE,
     typeOf: {
       id: EntityId(SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE),
       name: 'Data Source Type',
@@ -210,7 +210,7 @@ export function makeRelationForSource(sourceId: EntityId, blockId: EntityId, spa
   // the collection entity.
   return {
     space: spaceId,
-    index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+    index: INITIAL_RELATION_INDEX_VALUE,
     typeOf: {
       id: EntityId(SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE),
       name: 'Data Source',

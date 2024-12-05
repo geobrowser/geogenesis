@@ -1,3 +1,4 @@
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
@@ -5,7 +6,6 @@ import type { EditorAdded } from './parser';
 import { Spaces } from '~/sink/db';
 import { InvalidPluginAddressForDaoError } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
-import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 
 export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {

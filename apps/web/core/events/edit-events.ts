@@ -1,7 +1,7 @@
 'use client';
 
 import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import { useMemo } from 'react';
 
@@ -114,7 +114,7 @@ const listener =
 
         const newRelation: StoreRelation = {
           space: spaceId,
-          index: index ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+          index: index ?? INITIAL_RELATION_INDEX_VALUE,
           typeOf: {
             id: EntityId(typeOfId),
             name: typeOfName,
@@ -194,7 +194,7 @@ const listener =
 
           const newRelation: StoreRelation = {
             space: renderable.spaceId,
-            index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+            index: INITIAL_RELATION_INDEX_VALUE,
             typeOf: {
               id: EntityId(renderable.attributeId),
               name: renderable.attributeName,

@@ -1,3 +1,4 @@
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 
 import {
@@ -12,7 +13,6 @@ import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder } from '~/sink/proto';
 import type { Op, SetTripleOp } from '~/sink/types';
-import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 
 /**
  * We don't know the content type of the proposal until we fetch the IPFS content and parse it.

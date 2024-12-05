@@ -1,6 +1,6 @@
-import { ActionType, Membership } from '.';
-import type { MembershipProposalMetadata } from '../..';
-import { createGeoId } from '../id';
+import { createGeoId } from '../id.js';
+import type { MembershipProposalMetadata } from '../types.js';
+import { ActionType, Membership } from './gen/src/proto/ipfs_pb.js';
 
 function getActionTypeFromType(type: MembershipProposalMetadata['type']): ActionType {
   switch (type) {

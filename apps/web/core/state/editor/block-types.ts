@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import { StoreRelation } from '~/core/database/types';
 import { EntityId } from '~/core/io/schema';
@@ -13,7 +13,7 @@ export function getRelationForBlockType(
 ): StoreRelation {
   return {
     space: spaceId,
-    index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+    index: INITIAL_RELATION_INDEX_VALUE,
     typeOf: {
       id: EntityId(SYSTEM_IDS.TYPES),
       name: 'Types',
