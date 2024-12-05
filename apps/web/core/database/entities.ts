@@ -56,9 +56,9 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     React.useMemo(
       () => ({
         mergeWith: initialOrRemoteEntity?.triples,
-        selector: t => t.entityId === id,
+        selector: spaceId ? t => t.entityId === id && t.space === spaceId : t => t.entityId === id,
       }),
-      [initialOrRemoteEntity?.triples, id]
+      [initialOrRemoteEntity?.triples, id, spaceId]
     )
   );
 
@@ -66,9 +66,9 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     React.useMemo(
       () => ({
         mergeWith: initialOrRemoteEntity?.relations,
-        selector: r => r.fromEntity.id === id,
+        selector: spaceId ? r => r.fromEntity.id === id && r.space === spaceId : r => r.fromEntity.id === id,
       }),
-      [initialOrRemoteEntity?.relations, id]
+      [initialOrRemoteEntity?.relations, id, spaceId]
     )
   );
 

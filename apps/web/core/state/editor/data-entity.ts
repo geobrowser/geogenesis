@@ -19,13 +19,13 @@ import { makeRelationForSourceType } from './sources';
  * @param blockId the id of the new data block as an {@link EntityId}
  * @returns an array of {@link StoreRelation} representing the data entity relations.
  */
-export function makeInitialDataEntityRelations(blockId: EntityId): [StoreRelation, StoreRelation] {
+export function makeInitialDataEntityRelations(blockId: EntityId, spaceId: string): [StoreRelation, StoreRelation] {
   return [
     // Create relation for the source type, e.g., Spaces, Collection, Geo, etc.
-    makeRelationForSourceType('COLLECTION', blockId),
+    makeRelationForSourceType('COLLECTION', blockId, spaceId),
 
     // Create the type relation for the block itself. e.g., Table, Image, Text, etc.
-    getRelationForBlockType(blockId, SYSTEM_IDS.DATA_BLOCK),
+    getRelationForBlockType(blockId, SYSTEM_IDS.DATA_BLOCK, spaceId),
   ];
 }
 
@@ -61,6 +61,7 @@ export function upsertCollectionItemRelation({
         collectionId,
         toEntityId: toEntity.id,
         toEntityName: toEntity.name,
+        spaceId,
       }),
     },
     spaceId,
@@ -123,6 +124,7 @@ type GetRelationForCollectionItemArgs = {
   collectionId: EntityId;
   toEntityId: EntityId;
   toEntityName: string | null;
+  spaceId: string;
 };
 
 /**
@@ -136,10 +138,12 @@ function makeRelationForCollectionItem({
   collectionId,
   toEntityId,
   toEntityName,
+  spaceId,
 }: GetRelationForCollectionItemArgs): StoreRelation {
   // Create a relation that points from the collection to the entity with Relation Type -> CollectionItem
   // 1. Relation type -> CollectionItem
   return {
+    space: spaceId,
     index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
     typeOf: {
       id: EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE),

@@ -25,6 +25,7 @@ export function createType(
   upsert(nameTriple, spaceId);
   upsertRelation({
     relation: Relation.make({
+      space: spaceId,
       typeOf: {
         id: SYSTEM_IDS.TYPES,
         name: 'Types',

@@ -50,6 +50,7 @@ export type EditEvent =
   | {
       type: 'UPSERT_RELATION';
       payload: {
+        spaceId: string;
         toEntityId: string;
         toEntityName: string | null;
         fromEntityId: string;
@@ -109,9 +110,11 @@ const listener =
       }
 
       case 'UPSERT_RELATION': {
-        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName, renderableType, index } = event.payload;
+        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName, renderableType, index, spaceId } =
+          event.payload;
 
         const newRelation: StoreRelation = {
+          space: spaceId,
           index: index ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
           typeOf: {
             id: EntityId(typeOfId),
@@ -191,6 +194,7 @@ const listener =
           remove(renderable, context.spaceId);
 
           const newRelation: StoreRelation = {
+            space: renderable.spaceId,
             index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
             typeOf: {
               id: EntityId(renderable.attributeId),
