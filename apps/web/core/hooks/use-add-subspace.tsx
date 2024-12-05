@@ -20,8 +20,6 @@ interface AddSubspaceArgs {
 export function useAddSubspace(args: AddSubspaceArgs) {
   const router = useRouter();
 
-  // @TODO(performance): We can pass the space down from the layout as well to avoid
-  // fetching on the client here.
   const { data: space } = useQuery({
     queryKey: ['fetch-space', args.spaceId],
     queryFn: () => fetchSpace({ id: args.spaceId }),
@@ -49,45 +47,18 @@ export function useAddSubspace(args: AddSubspaceArgs) {
       }
 
       const writeTxEffect = Effect.gen(function* () {
-        if (space.type === 'PUBLIC') {
-          const proposal = createSubspaceProposal({
-            name: 'Add subspace',
-            type: 'ADD_SUBSPACE',
-            spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
-          });
+        const calldata = getCalldataForGovernanceType({
+          type: space.type,
+          spacePluginAddress: space.spacePluginAddress,
+          subspaceAddress,
+        });
 
-          const cid = yield* IpfsEffectClient.upload(proposal);
-
-          const calldata = getCalldataForGovernanceType({
-            type: space.type,
-            spacePluginAddress: space.spacePluginAddress,
-            subspaceAddress,
-            cid,
-          });
-
-          return yield* tx(calldata);
-        }
-
-        if (space.type === 'PERSONAL') {
-          const calldata = getCalldataForGovernanceType({
-            type: space.type,
-            spacePluginAddress: space.spacePluginAddress,
-            subspaceAddress,
-          });
-
-          return yield* tx(calldata);
-        }
-
-        throw new Error('Invalid governance type found when writing subspace proposal', space.type);
+        const hash = yield* tx(calldata);
+        console.log('Transaction hash: ', hash);
+        return hash;
       });
 
-      const publishProgram = Effect.gen(function* () {
-        const writeTxHash = yield* writeTxEffect;
-        console.log('Transaction hash: ', writeTxHash);
-        return writeTxHash;
-      });
-
-      await Effect.runPromise(publishProgram);
+      await Effect.runPromise(writeTxEffect);
     },
   });
 
@@ -100,7 +71,6 @@ export function useAddSubspace(args: AddSubspaceArgs) {
 type CalldataForGovernanceTypeArgs =
   | {
       type: 'PUBLIC';
-      cid: `ipfs://${string}`;
       subspaceAddress: string;
       spacePluginAddress: string;
     }
@@ -117,7 +87,7 @@ function getCalldataForGovernanceType(args: CalldataForGovernanceTypeArgs): `0x$
         functionName: 'proposeAcceptSubspace',
         abi: MainVotingAbi,
         // @TODO: Function for encoding
-        args: [stringToHex(args.cid), args.subspaceAddress as `0x${string}`, args.spacePluginAddress as `0x${string}`],
+        args: ['0x', args.subspaceAddress as `0x${string}`, args.spacePluginAddress as `0x${string}`],
       });
     case 'PERSONAL':
       return encodeFunctionData({

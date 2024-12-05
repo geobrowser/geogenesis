@@ -241,6 +241,7 @@ export function handleSubspaceProposalsCreated(
           name: `Add subspace ${subspaceAddress}`,
           onchainProposalId: p.proposalId,
           proposalId,
+          subspace: deriveSpaceId({ address: subspaceAddress, network: NETWORK_IDS.GEO }),
           space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
           type: 'ADD_SUBSPACE',
         };
@@ -251,6 +252,7 @@ export function handleSubspaceProposalsCreated(
         name: `Remove subspace ${subspaceAddress}`,
         onchainProposalId: p.proposalId,
         proposalId,
+        subspace: deriveSpaceId({ address: subspaceAddress, network: NETWORK_IDS.GEO }),
         space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
         type: 'REMOVE_SUBSPACE',
       };
