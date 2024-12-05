@@ -1,16 +1,13 @@
 'use client';
 
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
-import { createSubspaceProposal } from '@geogenesis/sdk/proto';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';
-import { encodeFunctionData, stringToHex } from 'viem';
+import { encodeFunctionData } from 'viem';
 
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { fetchSpace } from '~/core/io/subgraph';
-
-import { IpfsEffectClient } from '../io/ipfs-client';
 
 interface AddSubspaceArgs {
   spaceId: string;
