@@ -6,8 +6,13 @@ import { EntityId } from '~/core/io/schema';
 
 type BlockTypeId = typeof SYSTEM_IDS.TEXT_BLOCK | typeof SYSTEM_IDS.IMAGE_BLOCK | typeof SYSTEM_IDS.DATA_BLOCK;
 
-export function getRelationForBlockType(fromBlockEntityId: string, blockTypeId: BlockTypeId): StoreRelation {
+export function getRelationForBlockType(
+  fromBlockEntityId: string,
+  blockTypeId: BlockTypeId,
+  spaceId: string
+): StoreRelation {
   return {
+    space: spaceId,
     index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
     typeOf: {
       id: EntityId(SYSTEM_IDS.TYPES),

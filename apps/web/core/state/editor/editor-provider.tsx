@@ -3,13 +3,13 @@
 import * as React from 'react';
 
 import { Entity } from '~/core/io/dto/entities';
-import { OmitStrict, Relation } from '~/core/types';
+import { OmitStrict, Relation, SpaceId } from '~/core/types';
 
 const EditorContext = React.createContext<OmitStrict<Props, 'children'> | null>(null);
 
 interface Props {
   id: string;
-  spaceId: string;
+  spaceId: SpaceId;
   initialBlocks: Entity[];
   initialBlockRelations: Relation[];
   children: React.ReactNode;

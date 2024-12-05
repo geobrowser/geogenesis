@@ -5,6 +5,7 @@ import { RenderableEntityType } from '../types';
 import { StoreRelation } from './types';
 
 interface BaseRelation {
+  space: string;
   index?: string;
   typeOf: {
     id: string;
@@ -25,6 +26,7 @@ interface BaseRelation {
 export class Relation {
   static make(baseRelation: BaseRelation): StoreRelation {
     return {
+      ...baseRelation,
       index: baseRelation.index ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
       typeOf: {
         id: EntityId(baseRelation.typeOf.id),
