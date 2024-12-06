@@ -1,4 +1,4 @@
-import { encodeBase58 } from '@geogenesis/sdk';
+import { encodeBase58, getChecksumAddress } from '@geogenesis/sdk';
 import { createHash } from 'crypto';
 import { v4 } from 'uuid';
 
@@ -15,8 +15,8 @@ export function createVersionId({ proposalId, entityId }: { proposalId: string; 
  * Users can import or fork a space from any network and import the contents of the original space into
  * the new one that they're creating.
  */
-export function createSpaceId({ network, address }: { network: string; address: string }) {
-  return createIdFromUniqueString(`${network}:${address}`);
+export function deriveSpaceId({ network, address }: { network: string; address: string }) {
+  return createIdFromUniqueString(`${network}:${getChecksumAddress(address)}`);
 }
 
 export function createIdFromUniqueString(text: string) {
@@ -34,4 +34,13 @@ function hexToBytesArray(hex: string) {
   }
 
   return bytes;
+}
+
+type DeriveProposalIdArgs = {
+  pluginAddress: string;
+  onchainProposalId: string;
+};
+
+export function deriveProposalId(args: DeriveProposalIdArgs) {
+  return createIdFromUniqueString(`${getChecksumAddress(args.pluginAddress)}:${args.onchainProposalId}`);
 }

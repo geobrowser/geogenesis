@@ -10,7 +10,13 @@ export class Spaces {
   }
 
   static async getById(spaceId: string) {
-    return await db.selectExactlyOne('spaces', { id: spaceId }, { columns: ['id', 'type'] }).run(pool);
+    return await db
+      .selectExactlyOne(
+        'spaces',
+        { id: spaceId },
+        { columns: ['id', 'type', 'main_voting_plugin_address', 'personal_space_admin_plugin_address'] }
+      )
+      .run(pool);
   }
 
   static async findForDaoAddress(daoAddress: string) {
@@ -18,7 +24,15 @@ export class Spaces {
       .selectOne(
         'spaces',
         { dao_address: getChecksumAddress(daoAddress) },
-        { columns: ['id', 'dao_address', 'main_voting_plugin_address', 'personal_space_admin_plugin_address'] }
+        {
+          columns: [
+            'id',
+            'dao_address',
+            'main_voting_plugin_address',
+            'member_access_plugin_address',
+            'personal_space_admin_plugin_address',
+          ],
+        }
       )
       .run(pool);
 

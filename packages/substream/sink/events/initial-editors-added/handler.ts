@@ -34,8 +34,6 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
     // not empty.
     const pluginAddresses = editorsAdded.map(e => e.pluginAddress);
 
-    yield* _(Effect.logDebug('Collecting spaces for public plugins'));
-
     const maybeSpacesForPlugins = yield* _(
       Effect.forEach(
         pluginAddresses,

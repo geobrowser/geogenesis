@@ -15,14 +15,6 @@ binaries:
     file: ./target/wasm32-unknown-unknown/release/geo_substream.wasm
 
 modules:
-  - name: map_profiles_registered
-    kind: map
-    initialBlock: 620
-    inputs:
-      - source: sf.ethereum.type.v2.Block
-    output:
-      type: proto:schema.GeoProfilesRegistered
-
   - name: map_successor_spaces_created
     kind: map
     initialBlock: 620
@@ -79,21 +71,13 @@ modules:
     output:
       type: proto:schema.EditorsAdded
 
-  - name: map_proposals_created
+  - name: map_edits_published
     kind: map
     initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
-      type: proto:schema.ProposalsCreated
-
-  - name: map_proposals_processed
-    kind: map
-    initialBlock: 620
-    inputs:
-      - source: sf.ethereum.type.v2.Block
-    output:
-      type: proto:schema.ProposalsProcessed
+      type: proto:schema.EditsPublished
 
   - name: map_votes_cast
     kind: map
@@ -143,17 +127,71 @@ modules:
     output:
       type: proto:schema.EditorsRemoved
 
+  - name: map_publish_edits_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.PublishEditsProposalsCreated
+
+  - name: map_add_member_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.AddMemberProposalsCreated
+
+  - name: map_remove_member_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.RemoveMemberProposalsCreated
+
+  - name: map_add_editor_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.AddEditorProposalsCreated
+
+  - name: map_remove_editor_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.RemoveEditorProposalsCreated
+
+  - name: map_add_subspace_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.AddSubspaceProposalsCreated
+
+  - name: map_remove_subspace_proposals_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.RemoveSubspaceProposalsCreated
+
   - name: geo_out
     kind: map
     initialBlock: 620
     inputs:
-      - map: map_profiles_registered
       - map: map_spaces_created
       - map: map_governance_plugins_created
       - map: map_initial_editors_added
-      - map: map_proposals_created
       - map: map_votes_cast
-      - map: map_proposals_processed
+      - map: map_edits_published
       - map: map_successor_spaces_created
       - map: map_subspaces_added
       - map: map_subspaces_removed
@@ -163,6 +201,13 @@ modules:
       - map: map_personal_admin_plugins_created
       - map: map_members_removed
       - map: map_editors_removed
+      - map: map_publish_edits_proposals_created
+      - map: map_add_member_proposals_created
+      - map: map_remove_member_proposals_created
+      - map: map_add_editor_proposals_created
+      - map: map_remove_editor_proposals_created
+      - map: map_add_subspace_proposals_created
+      - map: map_remove_subspace_proposals_created
     output:
       type: proto:schema.GeoOutput
 

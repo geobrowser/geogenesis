@@ -1,11 +1,10 @@
 import { Effect } from 'effect';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
-import type { EditProposal } from '../proposals-created/parser';
 import { writeAccounts } from '../write-accounts';
 import { Proposals, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
-import type { BlockEvent } from '~/sink/types';
+import type { BlockEvent, SinkEditProposal } from '~/sink/types';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { writeEdits } from '~/sink/write-edits/write-edits';
@@ -16,7 +15,7 @@ class CouldNotWriteInitialSpaceProposalsError extends Error {
 
 interface InitialContentArgs {
   editType: 'IMPORT' | 'DEFAULT';
-  proposals: EditProposal[];
+  proposals: SinkEditProposal[];
   block: BlockEvent;
 }
 
@@ -41,7 +40,6 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
 
     yield* _(writeAccounts(initialAccounts));
 
-    // @TODO: We need a special function to map a proposal endtime to be now
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposalsFromIpfs, block);
 
     const versionsWithStaleEntities = yield* _(

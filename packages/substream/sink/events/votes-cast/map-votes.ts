@@ -10,6 +10,7 @@ import {
   type SpaceWithPluginAddressNotFoundError,
 } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
+import { deriveProposalId } from '~/sink/utils/id';
 import { pool } from '~/sink/utils/pool';
 
 /**
@@ -35,6 +36,10 @@ export function mapVotes(
 
     for (const vote of votes) {
       const voteType = getVoteTypeAsText(vote.voteOption);
+      const proposalId = deriveProposalId({
+        onchainProposalId: vote.onchainProposalId,
+        pluginAddress: vote.pluginAddress,
+      });
 
       if (!voteType) {
         yield* _(
@@ -75,8 +80,15 @@ export function mapVotes(
       }
 
       if (maybeSpaceIdForVotingPlugin) {
-        yield* _(Effect.logDebug(`Verifying proposal id for voting plugin with address ${vote.pluginAddress}`));
+        yield* _(
+          Effect.logDebug(
+            `Verifying proposal id for voting plugin with address ${vote.pluginAddress}. id: ${proposalId} onchainProposalId: ${vote.onchainProposalId} pluginAddress: ${vote.pluginAddress}`
+          )
+        );
 
+        // We can derive the id for all proposals at this point except for edit proposals. This is because
+        // edit proposal ids are passed from the client instead of derived from onchain data. We need to
+        // derive it because at edit publish time we don't know the onchain id of the proposal.
         const maybeProposalsForOnchainProposalId = yield* _(
           Effect.tryPromise({
             try: () =>
@@ -92,22 +104,17 @@ export function mapVotes(
           })
         );
 
-        const proposalIdForAction = maybeProposalsForOnchainProposalId.find(p => p.type !== 'ADD_MEMBER');
-
-        if (!proposalIdForAction) {
-          yield* _(
-            Effect.logError(
-              `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForVotingPlugin}`
-            )
-          );
-
-          continue;
-        }
+        const maybeEditProposal = maybeProposalsForOnchainProposalId.find(p => p.type === 'ADD_EDIT');
 
         schemaVotes.push({
           vote: voteType,
           space_id: maybeSpaceIdForVotingPlugin,
-          proposal_id: proposalIdForAction.id,
+          // We can derive the id for all proposals at this point except for edit proposals. This is because
+          // edit proposal ids are passed from the client instead of derived from onchain data. We need to
+          // derive it because at edit publish time we don't know the onchain id of the proposal.
+          proposal_id: maybeEditProposal
+            ? maybeEditProposal.id
+            : deriveProposalId({ onchainProposalId: vote.onchainProposalId, pluginAddress: vote.pluginAddress }),
           onchain_proposal_id: vote.onchainProposalId,
           account_id: getChecksumAddress(vote.voter),
           created_at: block.timestamp,
@@ -120,36 +127,13 @@ export function mapVotes(
       if (maybeSpaceIdForMemberPlugin) {
         yield* _(Effect.logDebug(`Verifying proposal id for membership plugin with address ${vote.pluginAddress}`));
 
-        const maybeProposalsForMemberPlugin = yield* _(
-          Effect.tryPromise({
-            try: () =>
-              db
-                .select(
-                  'proposals',
-                  { onchain_proposal_id: vote.onchainProposalId, space_id: maybeSpaceIdForMemberPlugin },
-                  { columns: ['id', 'type'] }
-                )
-                .run(pool),
-            catch: error => new ProposalWithOnchainProposalIdAndSpaceIdNotFoundError(String(error)),
-          })
-        );
-
-        const proposalIdForAction = maybeProposalsForMemberPlugin.find(p => p.type === 'ADD_MEMBER');
-
-        if (!proposalIdForAction) {
-          yield* _(
-            Effect.logError(
-              `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForMemberPlugin}`
-            )
-          );
-
-          continue;
-        }
-
         schemaVotes.push({
           vote: voteType,
           space_id: maybeSpaceIdForMemberPlugin,
-          proposal_id: proposalIdForAction.id,
+          proposal_id: deriveProposalId({
+            onchainProposalId: vote.onchainProposalId,
+            pluginAddress: vote.pluginAddress,
+          }),
           onchain_proposal_id: vote.onchainProposalId,
           account_id: getChecksumAddress(vote.voter),
           created_at: block.timestamp,

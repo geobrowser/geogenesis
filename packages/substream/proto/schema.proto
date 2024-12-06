@@ -3,21 +3,6 @@ syntax = "proto3";
 package schema;
 
 /**
- * Profiles represent the users of Geo. Profiles are registered in the GeoProfileRegistry
- * contract and are associated with a user's EVM-based address and the space where metadata
- * representing their profile resides in.
-*/
-message GeoProfileRegistered {
-  string requestor = 1;
-  string space = 2;
-  string id = 3;
-}
-
-message GeoProfilesRegistered {
-  repeated GeoProfileRegistered profiles = 1;
-}
-
-/**
  * The new DAO-based contracts allow forking of spaces into successor spaces. This is so
  * users can create new spaces whose data is derived from another space.
  *
@@ -25,8 +10,9 @@ message GeoProfilesRegistered {
  * but it's generally applicable across any space.
  */
 message SuccessorSpaceCreated {
-  string predecessorSpace = 1;
-  string pluginAddress = 2;
+  string predecessor_space = 1;
+  string plugin_address = 2;
+  string dao_address = 3;
 }
 
 message SuccessorSpacesCreated {
@@ -42,8 +28,8 @@ message SuccessorSpacesCreated {
  * address with the address of the DAO contract.
  */
 message GeoSpaceCreated {
-  string daoAddress = 1;
-  string spaceAddress = 2;
+  string dao_address = 1;
+  string space_address = 2;
 }
 
 message GeoSpacesCreated {
@@ -63,9 +49,9 @@ message GeoSpacesCreated {
  * 2. Member access plugin – This defines the membership rules and behaviors for a DAO
  */
 message GeoGovernancePluginCreated {
-  string daoAddress = 1;
-  string mainVotingAddress = 2;
-  string memberAccessAddress = 3;
+  string dao_address = 1;
+  string main_voting_address = 2;
+  string member_access_address = 3;
 }
 
 message GeoGovernancePluginsCreated {
@@ -73,9 +59,9 @@ message GeoGovernancePluginsCreated {
 }
 
 message GeoPersonalSpaceAdminPluginCreated {
-  string daoAddress = 1;
-  string personalAdminAddress = 2;
-  string initialEditor = 3;
+  string dao_address = 1;
+  string personal_admin_address = 2;
+  string initial_editor = 3;
 }
 
 message GeoPersonalSpaceAdminPluginsCreated {
@@ -104,50 +90,12 @@ message InitialEditorAdded {
   // when first creating the governance plugin. After that we only emit one
   // address at a time via proposals.
   repeated string addresses = 1;
-  string pluginAddress = 2;
+  string plugin_address = 2;
+  string dao_address = 3;
 }
 
 message InitialEditorsAdded {
   repeated InitialEditorAdded editors = 1;
-}
-
-/**
- * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
- * represent changes to content, membership (editor or member), governance changes, subspace
- * membership, or anything else that can be executed by a DAO.
- *
- * Currently we use a simple majority voting model, where a proposal requires 51% of the
- * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
- * _and_ members can create them.
- *
- * Proposals require encoding a "callback" that represents the action to be taken if the proposal
- * succeeds. For example, if a proposal is to add a new editor to the space, the callback would
- * be the encoded function call to add the editor to the space.
- *
- * ```ts
- * {
- *   to: `0x123...`, // The address of the membership contract
- *   data: `0x123...`, // The encoded function call parameters
- * }
- * ```
- */
-message DaoAction {
-  string to = 1;
-  uint64 value = 2;
-  bytes data = 3;
-}
-
-message ProposalCreated {
-  string proposal_id = 1;
-  string creator = 2;
-  string start_time = 3;
-  string end_time = 4;
-  string metadata_uri = 5;
-  string plugin_address = 6;
-}
-
-message ProposalsCreated {
-  repeated ProposalCreated proposals = 1;
 }
 
 // Executed proposals have been approved and executed onchain in a DAO-based
@@ -171,25 +119,27 @@ message ProposalsExecuted {
  * only consume the `proposalId` in the content URI to map the processed
  * data to an existing proposal onchain and in the sink.
 */
-message ProposalProcessed {
+message EditPublished {
   string content_uri = 1;
   string plugin_address = 2;
+  string dao_address = 3;
 }
 
-message ProposalsProcessed {
-  repeated ProposalProcessed proposals = 1;
+message EditsPublished {
+  repeated EditPublished edits = 1;
 }
 
 /**
  * Added or Removed Subspaces represent adding a space contracto to the hierarchy
  * of the DAO-based space. This is useful to "link" Spaces together in a
- * tree of spaces, allowing us to curate the graph of their knowledge and 
+ * tree of spaces, allowing us to curate the graph of their knowledge and
  * permissions.
 */
 message SubspaceAdded {
   string subspace = 1;
   string plugin_address = 2;
   string change_type = 3;
+  string dao_address = 4;
 }
 
 message SubspacesAdded {
@@ -200,6 +150,7 @@ message SubspaceRemoved {
   string subspace = 1;
   string plugin_address = 2;
   string change_type = 3;
+  string dao_address = 4;
 }
 
 message SubspacesRemoved {
@@ -217,7 +168,7 @@ message VoteCast {
   string onchain_proposal_id = 1;
   string voter = 2;
   uint64 vote_option = 3;
-  string plugin_address = 5;
+  string plugin_address = 4;
 }
 
 message VotesCast {
@@ -228,6 +179,7 @@ message MemberAdded {
   string member_address = 1;
   string main_voting_plugin_address = 2;
   string change_type = 3;
+  string dao_address = 4;
 }
 
 message MembersAdded {
@@ -236,9 +188,9 @@ message MembersAdded {
 
 message MemberRemoved {
   string member_address = 1;
-  string dao_address = 2;
-  string plugin_address = 3;
-  string change_type = 4;
+  string plugin_address = 2;
+  string change_type = 3;
+  string dao_address = 4;
 }
 
 message MembersRemoved {
@@ -249,6 +201,7 @@ message EditorAdded {
   string editor_address = 1;
   string main_voting_plugin_address = 2;
   string change_type = 3;
+  string dao_address = 4;
 }
 
 message EditorsAdded {
@@ -257,30 +210,139 @@ message EditorsAdded {
 
 message EditorRemoved {
   string editor_address = 1;
-  string dao_address = 2;
-  string plugin_address = 3;
-  string change_type = 4;
+  string plugin_address = 2;
+  string change_type = 3;
+  string dao_address = 4;
 }
 
 message EditorsRemoved {
   repeated EditorRemoved editors = 1;
 }
 
+message PublishEditProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string content_uri = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+}
+
+message PublishEditsProposalsCreated {
+  repeated PublishEditProposalCreated edits = 1;
+}
+
+message AddMemberProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string member = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message AddMemberProposalsCreated {
+  repeated AddMemberProposalCreated proposed_members = 1;
+}
+
+message RemoveMemberProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string member = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message RemoveMemberProposalsCreated {
+  repeated RemoveMemberProposalCreated proposed_members = 1;
+}
+
+message AddEditorProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string editor = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message AddEditorProposalsCreated {
+  repeated AddEditorProposalCreated proposed_editors = 1;
+}
+
+message RemoveEditorProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string editor = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message RemoveEditorProposalsCreated {
+  repeated RemoveEditorProposalCreated proposed_editors = 1; 
+}
+
+message AddSubspaceProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string subspace = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message AddSubspaceProposalsCreated {
+  repeated AddSubspaceProposalCreated proposed_subspaces = 1;
+}
+
+message RemoveSubspaceProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string subspace = 5;
+  string dao_address = 6;
+  string plugin_address = 7;
+  string change_type = 8;
+}
+
+message RemoveSubspaceProposalsCreated {
+  repeated RemoveSubspaceProposalCreated proposed_subspaces = 1;
+}
+
 message GeoOutput {
-  repeated GeoProfileRegistered profiles_registered = 1;
-  repeated GeoSpaceCreated spaces_created = 2;
-  repeated GeoGovernancePluginCreated governance_plugins_created = 3;
-  repeated InitialEditorAdded initial_editors_added = 4;
-  repeated ProposalCreated proposals_created = 5;
-  repeated VoteCast votes_cast = 6;
-  repeated ProposalProcessed proposals_processed = 7;
-  repeated SuccessorSpaceCreated successor_spaces_created = 8;
-  repeated SubspaceAdded subspaces_added = 9;
-  repeated SubspaceRemoved subspaces_removed = 10;
-  repeated ProposalExecuted executed_proposals = 11;
-  repeated MemberAdded members_added = 12;
-  repeated EditorAdded editors_added = 13;
-  repeated GeoPersonalSpaceAdminPluginCreated personal_plugins_created = 14;
-  repeated MemberRemoved members_removed = 15;
-  repeated EditorRemoved editors_removed = 16;
+  repeated GeoSpaceCreated spaces_created = 1;
+  repeated GeoGovernancePluginCreated governance_plugins_created = 2;
+  repeated InitialEditorAdded initial_editors_added = 3;
+  repeated VoteCast votes_cast = 4;
+  repeated EditPublished edits_published = 5;
+  repeated SuccessorSpaceCreated successor_spaces_created = 6;
+  repeated SubspaceAdded subspaces_added = 7;
+  repeated SubspaceRemoved subspaces_removed = 8;
+  repeated ProposalExecuted executed_proposals = 9;
+  repeated MemberAdded members_added = 10;
+  repeated EditorAdded editors_added = 11;
+  repeated GeoPersonalSpaceAdminPluginCreated personal_plugins_created = 12;
+  repeated MemberRemoved members_removed = 13;
+  repeated EditorRemoved editors_removed = 14;
+  repeated PublishEditProposalCreated edits = 15;
+  repeated AddMemberProposalCreated proposed_added_members = 16;
+  repeated RemoveMemberProposalCreated proposed_removed_members = 17;
+  repeated AddEditorProposalCreated proposed_added_editors = 18;
+  repeated RemoveEditorProposalCreated proposed_removed_editors = 19;
+  repeated AddSubspaceProposalCreated proposed_added_subspaces = 20;
+  repeated RemoveSubspaceProposalCreated proposed_removed_subspaces = 21;
 }

@@ -3,13 +3,13 @@ import md5 from 'md5';
 import { v4 } from 'uuid';
 import { describe, expect, it } from 'vitest';
 
-import { createSpaceId } from './id';
+import { deriveSpaceId } from './id';
 
 const ADDRESS = '0x72332Cd2bA2f7f0B52EC198b4C6faa0ee57CAe89';
 
-describe('createSpaceId', () => {
+describe('deriveSpaceId', () => {
   it('creates a hash that matches md5 spec', () => {
-    const ours = createSpaceId({ network: NETWORK_IDS.GEO, address: ADDRESS });
+    const ours = deriveSpaceId({ network: NETWORK_IDS.GEO, address: ADDRESS });
     const theirs = createIdFromUniqueString(`${NETWORK_IDS.GEO}:${ADDRESS}`);
 
     expect(ours).toEqual(theirs);

@@ -2,10 +2,9 @@ import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
-import type { EditProposal } from '../proposals-created/parser';
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
 import { CurrentVersions, Proposals, Versions } from '~/sink/db';
-import type { BlockEvent, Op } from '~/sink/types';
+import type { BlockEvent, Op, SinkEditProposal } from '~/sink/types';
 import { partition } from '~/sink/utils';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
@@ -28,7 +27,7 @@ export class CouldNotWriteCurrentVersionsError extends Error {
  * event is emitted depends on the governance mechanism that a space has configured
  * (voting vs no voting).
  */
-export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpaceIds: string[], block: BlockEvent) {
+export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdSpaceIds: string[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     yield* _(Effect.logInfo('Handling approved edits'));
 

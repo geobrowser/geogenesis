@@ -29,13 +29,24 @@ import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleMemberRemoved } from './events/member-removed/handler';
 import { ZodMemberRemovedStreamResponse } from './events/member-removed/parser';
-import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
-  ZodProposalCreatedStreamResponse,
-  ZodProposalProcessedStreamResponse,
-} from './events/proposals-created/parser';
+  handleEditProposalCreated,
+  handleEditorshipProposalsCreated,
+  handleMembershipProposalsCreated,
+  handleSubspaceProposalsCreated,
+} from './events/proposals-created/handler';
 import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { ZodProposalExecutedStreamResponse } from './events/proposals-executed/parser';
+import { ZodEditPublishedStreamResponse } from './events/schema/edit-published';
+import {
+  ZodAddEditorProposalStreamResponse,
+  ZodAddMemberProposalStreamResponse,
+  ZodAddSubspaceProposalStreamResponse,
+  ZodEditProposalCreatedStreamResponse,
+  ZodRemoveEditorProposalStreamResponse,
+  ZodRemoveMemberProposalStreamResponse,
+  ZodRemoveSubspaceProposalStreamResponse,
+} from './events/schema/proposal';
 import { getSpacesWithInitialProposalsProcessed } from './events/spaces-created/get-spaces-with-initial-proposals-processed';
 import {
   handleGovernancePluginCreated,
@@ -55,6 +66,7 @@ import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { getConfiguredLogLevel, withRequestId } from './logs';
 import { Telemetry, TelemetryLive } from './telemetry';
+import type { BlockEvent } from './types';
 import { createSink, createStream } from './vendor/sink/src';
 
 export class InvalidPackageError extends Error {
@@ -237,17 +249,34 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
     const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
     const personalPluginsCreated = ZodPersonalPluginsCreatedStreamResponse.safeParse(jsonOutput);
+
     const subspacesAdded = ZodSubspacesAddedStreamResponse.safeParse(jsonOutput);
     const subspacesRemoved = ZodSubspacesRemovedStreamResponse.safeParse(jsonOutput);
+
     const initialEditorsAddedResponse = ZodInitialEditorsAddedStreamResponse.safeParse(jsonOutput);
-    const proposalCreatedResponse = ZodProposalCreatedStreamResponse.safeParse(jsonOutput);
-    const proposalProcessedResponse = ZodProposalProcessedStreamResponse.safeParse(jsonOutput);
-    const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
-    const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
-    const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
-    const membersRemoved = ZodMemberRemovedStreamResponse.safeParse(jsonOutput);
     const editorsAdded = ZodEditorAddedStreamResponse.safeParse(jsonOutput);
     const editorsRemoved = ZodEditorRemovedStreamResponse.safeParse(jsonOutput);
+    const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
+    const membersRemoved = ZodMemberRemovedStreamResponse.safeParse(jsonOutput);
+
+    const editsProposed = ZodEditProposalCreatedStreamResponse.safeParse(jsonOutput);
+    const editsPublishedResponse = ZodEditPublishedStreamResponse.safeParse(jsonOutput);
+
+    const addMembersProposed = ZodAddMemberProposalStreamResponse.safeParse(jsonOutput);
+    const removeMembersProposed = ZodRemoveMemberProposalStreamResponse.safeParse(jsonOutput);
+    const addEditorsProposed = ZodAddEditorProposalStreamResponse.safeParse(jsonOutput);
+    const removeEditorsProposed = ZodRemoveEditorProposalStreamResponse.safeParse(jsonOutput);
+    const addSubspacesProposed = ZodAddSubspaceProposalStreamResponse.safeParse(jsonOutput);
+    const removeSubspacesProposed = ZodRemoveSubspaceProposalStreamResponse.safeParse(jsonOutput);
+
+    const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
+    const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
+
+    const block: BlockEvent = {
+      blockNumber,
+      cursor,
+      timestamp,
+    };
 
     const hasValidEvent =
       spacePluginCreatedResponse.success ||
@@ -256,14 +285,16 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       subspacesAdded.success ||
       subspacesRemoved.success ||
       initialEditorsAddedResponse.success ||
-      proposalCreatedResponse.success ||
-      proposalProcessedResponse.success ||
+      editsPublishedResponse.success ||
       votesCast.success ||
       executedProposals.success ||
       membersAdded.success ||
       editorsAdded.success ||
-      membersRemoved ||
-      editorsRemoved;
+      membersRemoved.success ||
+      editorsRemoved.success ||
+      editsProposed.success ||
+      addMembersProposed.success ||
+      removeMembersProposed.success;
 
     if (hasValidEvent) {
       yield* _(Effect.logInfo(`Handling new events in block ${blockNumber}`));
@@ -271,9 +302,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       yield* _(
         Effect.fork(
           handleNewGeoBlock({
-            blockNumber,
-            cursor,
-            timestamp,
+            ...block,
             hash: message.clock?.id ?? '',
             network: NETWORK_IDS.GEO,
           })
@@ -310,15 +339,15 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
        * It might make sense to do the proposal creation here instead of in proposalProcessed. That way all
        * of this logic for checking proposals happens in the same place.
        */
-      if (proposalProcessedResponse.success) {
+      if (editsPublishedResponse.success) {
         const spacesWithInitialProposal = getSpacesWithInitialProposalsProcessed(
           spacePluginCreatedResponse.data.spacesCreated,
-          proposalProcessedResponse.data.proposalsProcessed
+          editsPublishedResponse.data.editsPublished
         );
 
         const spacePluginAddressesWithInitialProposal = new Set(spacesWithInitialProposal.map(s => s.spaceAddress));
 
-        const initialProposalsForSpaces = proposalProcessedResponse.data.proposalsProcessed.filter(p =>
+        const initialProposalsForSpaces = editsPublishedResponse.data.editsPublished.filter(p =>
           spacePluginAddressesWithInitialProposal.has(p.pluginAddress)
         );
 
@@ -337,32 +366,14 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
           };
         });
 
-        createdSpaceIds = yield* _(
-          handleSpacesCreated(spacesCreated, {
-            blockNumber,
-            cursor,
-            timestamp,
-          })
-        );
+        createdSpaceIds = yield* _(handleSpacesCreated(spacesCreated, block));
       } else {
-        createdSpaceIds = yield* _(
-          handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
-            blockNumber,
-            cursor,
-            timestamp,
-          })
-        );
+        createdSpaceIds = yield* _(handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, block));
       }
     }
 
     if (personalPluginsCreated.success) {
-      yield* _(
-        handlePersonalSpacesCreated(personalPluginsCreated.data.personalPluginsCreated, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
+      yield* _(handlePersonalSpacesCreated(personalPluginsCreated.data.personalPluginsCreated, block));
 
       // We want to map the initial editors across spaces fairly similarly. Unfortunately
       // the contracts are distinct enough where they don't match 1:1 with how they
@@ -379,28 +390,15 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
         return {
           pluginAddress: p.personalAdminAddress,
           addresses: [p.initialEditor],
+          daoAddress: p.daoAddress,
         };
       });
 
-      yield* _(
-        Effect.fork(
-          handleInitialPersonalSpaceEditorsAdded(initialEditors, {
-            blockNumber,
-            cursor,
-            timestamp,
-          })
-        )
-      );
+      yield* _(handleInitialPersonalSpaceEditorsAdded(initialEditors, block));
     }
 
     if (governancePluginsCreatedResponse.success) {
-      yield* _(
-        handleGovernancePluginCreated(governancePluginsCreatedResponse.data.governancePluginsCreated, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
+      yield* _(handleGovernancePluginCreated(governancePluginsCreatedResponse.data.governancePluginsCreated, block));
     }
 
     /**
@@ -408,37 +406,11 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
      * emit the initial editors as part of the space creation event.
      */
     if (initialEditorsAddedResponse.success) {
-      yield* _(
-        Effect.fork(
-          handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, {
-            blockNumber,
-            cursor,
-            timestamp,
-          })
-        )
-      );
-    }
-
-    if (proposalCreatedResponse.success) {
-      yield* _(
-        handleProposalsCreated(proposalCreatedResponse.data.proposalsCreated, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
+      yield* _(handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, block));
     }
 
     if (membersAdded.success) {
-      yield* _(
-        Effect.fork(
-          handleMemberAdded(membersAdded.data.membersAdded, {
-            blockNumber,
-            cursor,
-            timestamp,
-          })
-        )
-      );
+      yield* _(Effect.fork(handleMemberAdded(membersAdded.data.membersAdded, block)));
     }
 
     if (membersRemoved.success) {
@@ -446,47 +418,53 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     }
 
     if (editorsAdded.success) {
-      yield* _(
-        Effect.fork(
-          handleEditorsAdded(editorsAdded.data.editorsAdded, {
-            blockNumber,
-            cursor,
-            timestamp,
-          })
-        )
-      );
+      yield* _(Effect.fork(handleEditorsAdded(editorsAdded.data.editorsAdded, block)));
     }
 
     if (editorsRemoved.success) {
       yield* _(Effect.fork(handleEditorRemoved(editorsRemoved.data.editorsRemoved)));
     }
 
-    if (votesCast.success) {
-      yield* _(
-        Effect.fork(
-          handleVotesCast(votesCast.data.votesCast, {
-            blockNumber,
-            cursor,
-            timestamp,
-          })
-        )
-      );
-    }
-
     if (subspacesAdded.success) {
-      yield* _(
-        Effect.fork(
-          handleSubspacesAdded(subspacesAdded.data.subspacesAdded, {
-            blockNumber,
-            cursor,
-            timestamp,
-          })
-        )
-      );
+      yield* _(Effect.fork(handleSubspacesAdded(subspacesAdded.data.subspacesAdded, block)));
     }
 
     if (subspacesRemoved.success) {
       yield* _(Effect.fork(handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved)));
+    }
+
+    // AddSubspaceProposal
+    // RemoveSubspaceProposal
+    if (addMembersProposed.success) {
+      yield* _(handleMembershipProposalsCreated(addMembersProposed.data.proposedAddedMembers, block));
+    }
+
+    if (removeMembersProposed.success) {
+      yield* _(handleMembershipProposalsCreated(removeMembersProposed.data.proposedRemovedMembers, block));
+    }
+
+    if (addEditorsProposed.success) {
+      yield* _(handleEditorshipProposalsCreated(addEditorsProposed.data.proposedAddedEditors, block));
+    }
+
+    if (removeEditorsProposed.success) {
+      yield* _(handleEditorshipProposalsCreated(removeEditorsProposed.data.proposedRemovedEditors, block));
+    }
+
+    if (addSubspacesProposed.success) {
+      yield* _(handleSubspaceProposalsCreated(addSubspacesProposed.data.proposedAddedSubspaces, block));
+    }
+
+    if (removeSubspacesProposed.success) {
+      yield* _(handleSubspaceProposalsCreated(removeSubspacesProposed.data.proposedRemovedSubspaces, block));
+    }
+
+    if (editsProposed.success) {
+      yield* _(handleEditProposalCreated(editsProposed.data.edits, block));
+    }
+
+    if (votesCast.success) {
+      yield* _(handleVotesCast(votesCast.data.votesCast, block));
     }
 
     /**
@@ -497,7 +475,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
      * If there are processed proposals as a result of an initial content uri, we need to create the appropriate
      * proposals, proposed versions, ops, etc. before we actually set the proposal as "ACCEPTED"
      */
-    if (proposalProcessedResponse.success) {
+    if (editsPublishedResponse.success) {
       /**
        * Since there are potentially two handlers that we need to run, we abstract out the common
        * data fetching needed for both here, and pass the result to the two handlers. This breaks
@@ -507,13 +485,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
        * `getEditsProposalFromProposalIpfsUri` might be an Edit or it might be an Import which
        * contains many edits
        */
-      const proposals = yield* _(
-        getEditsProposalsFromIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
+      const proposals = yield* _(getEditsProposalsFromIpfsUri(editsPublishedResponse.data.editsPublished, block));
 
       // We need to know if we're reading from a personal space or public space for each proposal.
       //
@@ -560,11 +532,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
         yield* _(
           createInitialContentForSpaces({
             proposals: initialProposalsToWrite,
-            block: {
-              blockNumber,
-              cursor,
-              timestamp,
-            },
+            block,
             editType: 'IMPORT',
           })
         );
@@ -581,27 +549,17 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
         yield* _(
           createInitialContentForSpaces({
             proposals: initialProposalsToWrite,
-            block: {
-              blockNumber,
-              cursor,
-              timestamp,
-            },
+            block,
             editType: 'DEFAULT',
           })
         );
       }
 
-      yield* _(
-        handleEditsPublished(proposals, createdSpaceIds ?? [], {
-          blockNumber,
-          cursor,
-          timestamp,
-        })
-      );
+      yield* _(handleEditsPublished(proposals, createdSpaceIds ?? [], block));
     }
 
     if (executedProposals.success) {
-      yield* _(Effect.fork(handleProposalsExecuted(executedProposals.data.executedProposals)));
+      yield* _(handleProposalsExecuted(executedProposals.data.executedProposals));
     }
 
     return hasValidEvent;

@@ -1,4 +1,5 @@
 import { Schema } from '@effect/schema';
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
@@ -63,7 +64,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
         space: {
           spaceEditors: {
             some: {
-              accountId: { equalTo: "${address}" }
+              accountId: { equalTo: "${getChecksumAddress(address)}" }
             }
           }
         }

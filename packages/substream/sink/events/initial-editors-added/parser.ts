@@ -14,6 +14,7 @@ import { z } from 'zod';
 export const ZodInitialEditorsAdded = z.object({
   addresses: z.array(z.string()),
   pluginAddress: z.string(),
+  daoAddress: z.string(),
 });
 
 export type InitialEditorsAdded = z.infer<typeof ZodInitialEditorsAdded>;

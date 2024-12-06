@@ -1,15 +1,13 @@
 'use client';
 
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
-import { createSubspaceProposal } from '@geogenesis/sdk/proto';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';
-import { encodeFunctionData, stringToHex } from 'viem';
+import { encodeFunctionData } from 'viem';
 
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 
-import { IpfsEffectClient } from '../io/ipfs-client';
 import { useSpace } from './use-space';
 
 interface RemoveSubspaceArgs {
@@ -46,45 +44,18 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
       }
 
       const writeTxEffect = Effect.gen(function* () {
-        if (space.type === 'PUBLIC') {
-          const proposal = createSubspaceProposal({
-            name: 'Remove subspace',
-            type: 'REMOVE_SUBSPACE',
-            spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
-          });
+        const calldata = getCalldataForGovernanceType({
+          type: space.type,
+          spacePluginAddress: space.spacePluginAddress,
+          subspaceAddress,
+        });
 
-          const cid = yield* IpfsEffectClient.upload(proposal);
-
-          const calldata = getCalldataForGovernanceType({
-            type: space.type,
-            spacePluginAddress: space.spacePluginAddress,
-            subspaceAddress,
-            cid,
-          });
-
-          return yield* tx(calldata);
-        }
-
-        if (space.type === 'PERSONAL') {
-          const calldata = getCalldataForGovernanceType({
-            type: space.type,
-            spacePluginAddress: space.spacePluginAddress,
-            subspaceAddress,
-          });
-
-          return yield* tx(calldata);
-        }
-
-        throw new Error('Invalid governance type found when writing subspace proposal', space.type);
+        const hash = yield* tx(calldata);
+        console.log('Transaction hash: ', hash);
+        return hash;
       });
 
-      const publishProgram = Effect.gen(function* () {
-        const writeTxHash = yield* writeTxEffect;
-        console.log('Transaction hash: ', writeTxHash);
-        return writeTxHash;
-      });
-
-      await Effect.runPromise(publishProgram);
+      await Effect.runPromise(writeTxEffect);
     },
   });
 
@@ -97,7 +68,6 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
 type CalldataForGovernanceTypeArgs =
   | {
       type: 'PUBLIC';
-      cid: `ipfs://${string}`;
       subspaceAddress: string;
       spacePluginAddress: string;
     }
@@ -113,7 +83,7 @@ function getCalldataForGovernanceType(args: CalldataForGovernanceTypeArgs): `0x$
       return encodeFunctionData({
         functionName: 'proposeRemoveSubspace',
         abi: MainVotingAbi,
-        args: [stringToHex(args.cid), args.subspaceAddress as `0x${string}`, args.spacePluginAddress as `0x${string}`],
+        args: ['0x', args.subspaceAddress as `0x${string}`, args.spacePluginAddress as `0x${string}`],
       });
     case 'PERSONAL':
       return encodeFunctionData({

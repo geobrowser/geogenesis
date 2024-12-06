@@ -4,10 +4,9 @@ import { Effect } from 'effect';
 import { handleEditsPublished } from '../events/edits-published/handler';
 import { handleInitialGovernanceSpaceEditorsAdded } from '../events/initial-editors-added/handler';
 import { createInitialContentForSpaces } from '../events/initial-proposal-created/handler';
-import type { EditProposal } from '../events/proposals-created/parser';
 import { handleProposalsExecuted } from '../events/proposals-executed/handler';
 import { handleGovernancePluginCreated, handleSpacesCreated } from '../events/spaces-created/handler';
-import type { Op } from '../types';
+import type { Op, SinkEditProposal } from '../types';
 import { templateOps } from './bootstrap-templates';
 import {
   DAO_ADDRESS,
@@ -279,7 +278,7 @@ const entitiesWithTypesOps: Op[] = Object.entries(types).flatMap(([entityId, typ
   });
 });
 
-const editProposal: EditProposal = {
+const editProposal: SinkEditProposal = {
   type: 'ADD_EDIT',
   proposalId: '-1',
   onchainProposalId: '-1',
@@ -287,7 +286,8 @@ const editProposal: EditProposal = {
   name: 'Root Space Bootstrap',
   endTime: ROOT_SPACE_CREATED_AT.toString(),
   startTime: ROOT_SPACE_CREATED_AT.toString(),
-  metadataUri: 'bootstrapped-so-no-uri',
+  contentUri: 'bootstrapped-so-no-uri',
+  daoAddress: DAO_ADDRESS,
   ops: [
     ...nameOps,
     ...attributeOps,
@@ -335,6 +335,7 @@ export const bootstrapRoot = Effect.gen(function* (_) {
         {
           addresses: [ROOT_SPACE_CREATED_BY_ID],
           pluginAddress: MAIN_VOTING_ADDRESS,
+          daoAddress: DAO_ADDRESS,
         },
       ],
       INITIAL_BLOCK

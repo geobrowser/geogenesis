@@ -1,16 +1,13 @@
 'use client';
 
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
-import { createMembershipProposal } from '@geogenesis/sdk/proto';
 import { useMutation } from '@tanstack/react-query';
-import { Effect } from 'effect';
-import { encodeFunctionData, getAddress, stringToHex } from 'viem';
+import { Effect, Either } from 'effect';
+import { encodeFunctionData, getAddress } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { SpaceGovernanceType } from '~/core/types';
-
-import { IpfsEffectClient } from '../io/ipfs-client';
 
 interface RemoveEditorArgs {
   votingPluginAddress: string | null;
@@ -31,41 +28,21 @@ export function useRemoveEditor(args: RemoveEditorArgs) {
       }
 
       const writeTxEffect = Effect.gen(function* () {
-        if (args.spaceType === 'PUBLIC') {
-          const membershipProposalMetadata = createMembershipProposal({
-            name: 'Remove editor request',
-            type: 'REMOVE_EDITOR',
-            userAddress: getAddress(editorToRemove) as `0x${string}`,
-          });
+        const callData = getCalldataForGovernanceType({
+          type: args.spaceType,
+          editorAddress: getAddress(editorToRemove) as `0x${string}`,
+        });
 
-          const cid = yield* IpfsEffectClient.upload(membershipProposalMetadata);
-
-          const callData = getCalldataForGovernanceType({
-            type: args.spaceType,
-            cid,
-            editorAddress: getAddress(editorToRemove) as `0x${string}`,
-          });
-
-          return yield* tx(callData);
-        }
-
-        if (args.spaceType === 'PERSONAL') {
-          const callData = getCalldataForGovernanceType({
-            type: args.spaceType,
-            editorAddress: getAddress(editorToRemove) as `0x${string}`,
-          });
-
-          return yield* tx(callData);
-        }
+        const hash = yield* tx(callData);
+        console.log('Transaction hash: ', hash);
+        return hash;
       });
 
-      const publishProgram = Effect.gen(function* () {
-        const writeTxHash = yield* writeTxEffect;
-        console.log('Transaction hash: ', writeTxHash);
-        return writeTxHash;
+      const res = await Effect.runPromise(Effect.either(writeTxEffect));
+      Either.match(res, {
+        onLeft: error => console.error(error),
+        onRight: () => console.log('Successfully removed editor'),
       });
-
-      await Effect.runPromise(publishProgram);
     },
   });
 
@@ -78,7 +55,6 @@ export function useRemoveEditor(args: RemoveEditorArgs) {
 type CalldataForGovernanceTypeArgs =
   | {
       type: 'PUBLIC';
-      cid: `ipfs://${string}`;
       editorAddress: string;
     }
   | {
@@ -92,8 +68,7 @@ function getCalldataForGovernanceType(args: CalldataForGovernanceTypeArgs): `0x$
       return encodeFunctionData({
         functionName: 'proposeRemoveEditor',
         abi: MainVotingAbi,
-        // @TODO: Function for encoding
-        args: [stringToHex(args.cid), args.editorAddress as `0x${string}`],
+        args: ['0x', args.editorAddress as `0x${string}`],
       });
     case 'PERSONAL':
       return encodeFunctionData({

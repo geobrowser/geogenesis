@@ -9,13 +9,13 @@ import {
 import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
-import { VotingMode } from '@geogenesis/sdk';
+import { VotingMode, getChecksumAddress } from '@geogenesis/sdk';
 import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { providers } from 'ethers';
 import { v4 as uuid } from 'uuid';
-import { encodeFunctionData, getAddress, stringToHex, zeroAddress } from 'viem';
+import { encodeFunctionData, stringToHex, zeroAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { IpfsUploadError } from '~/core/errors';
@@ -63,7 +63,7 @@ interface DeployArgs {
 
 export function deploySpace(args: DeployArgs) {
   return Effect.gen(function* () {
-    const initialEditorAddress = getAddress(args.initialEditorAddress);
+    const initialEditorAddress = getChecksumAddress(args.initialEditorAddress);
 
     if (args.type === 'default' && args.governanceType === undefined) {
       throw new Error('Governance type is required for default spaces');
@@ -93,7 +93,7 @@ export function deploySpace(args: DeployArgs) {
       firstBlockContentUri: `ipfs://${firstBlockContentUri}`,
       // @HACK: Using a different upgrader from the governance plugin to work around
       // a limitation in Aragon.
-      pluginUpgrader: getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
+      pluginUpgrader: getChecksumAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
     });
 
     plugins.push(spacePluginInstallItem);
@@ -106,8 +106,8 @@ export function deploySpace(args: DeployArgs) {
           duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
-        initialEditors: [getAddress(initialEditorAddress)],
-        pluginUpgrader: getAddress(initialEditorAddress),
+        initialEditors: [getChecksumAddress(initialEditorAddress)],
+        pluginUpgrader: getChecksumAddress(initialEditorAddress),
       };
 
       const governancePluginInstallItem = getGovernancePluginInstallItem(governancePluginConfig);
@@ -116,7 +116,7 @@ export function deploySpace(args: DeployArgs) {
 
     if (governanceType === 'PERSONAL') {
       const personalSpacePluginItem = getPersonalSpaceGovernancePluginInstallItem({
-        initialEditor: getAddress(initialEditorAddress),
+        initialEditor: getChecksumAddress(initialEditorAddress),
       });
 
       plugins.push(personalSpacePluginItem);
@@ -166,7 +166,7 @@ function getGovernanceTypeForSpaceType(type: SpaceType, governanceType?: SpaceGo
 }
 
 const query = (daoAddress: string) => ` {
-  spaces(filter: { daoAddress: { equalTo: "${getAddress(daoAddress)}" } }) {
+  spaces(filter: { daoAddress: { equalTo: "${getChecksumAddress(daoAddress)}" } }) {
     nodes {
       id
 
