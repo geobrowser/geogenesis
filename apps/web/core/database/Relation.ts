@@ -26,7 +26,7 @@ interface BaseRelation {
 export class Relation {
   static make(baseRelation: BaseRelation): StoreRelation {
     return {
-      ...baseRelation,
+      space: baseRelation.space,
       index: baseRelation.index ?? INITIAL_RELATION_INDEX_VALUE,
       typeOf: {
         id: EntityId(baseRelation.typeOf.id),

@@ -34,14 +34,13 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
 
   // If the caller passes in a set of data we use that for merging. If not,
   // we fetch the entity from the server and merge it with the local state.
-  const { data: initialOrRemoteEntity } = useQuery({
+  let data = initialData;
+
+  const { data: remoteData } = useQuery({
+    enabled: !initialData,
     queryKey: ['useEntity', spaceId, id, initialData],
     initialData,
     queryFn: async ({ signal }) => {
-      if (initialData) {
-        return initialData;
-      }
-
       const entity = await fetchEntity({ spaceId, id, signal });
 
       return {
@@ -52,23 +51,27 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     },
   });
 
+  if (!initialData) {
+    data = remoteData;
+  }
+
   const triples = useTriples(
     React.useMemo(
       () => ({
-        mergeWith: initialOrRemoteEntity?.triples,
+        mergeWith: data?.triples,
         selector: spaceId ? t => t.entityId === id && t.space === spaceId : t => t.entityId === id,
       }),
-      [initialOrRemoteEntity?.triples, id, spaceId]
+      [data?.triples, id, spaceId]
     )
   );
 
   const relations = useRelations(
     React.useMemo(
       () => ({
-        mergeWith: initialOrRemoteEntity?.relations,
+        mergeWith: data?.relations,
         selector: spaceId ? r => r.fromEntity.id === id && r.space === spaceId : r => r.fromEntity.id === id,
       }),
-      [initialOrRemoteEntity?.relations, id, spaceId]
+      [data?.relations, id, spaceId]
     )
   );
 
@@ -81,8 +84,8 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   }, [triples]);
 
   const spaces = React.useMemo(() => {
-    return initialOrRemoteEntity?.spaces ?? [];
-  }, [initialOrRemoteEntity?.spaces]);
+    return data?.spaces ?? [];
+  }, [data?.spaces]);
 
   const description = React.useMemo(() => {
     return Entities.description(triples);
