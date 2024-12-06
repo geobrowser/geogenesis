@@ -148,6 +148,7 @@ const makeBlocksRelations = async ({
       })();
 
       const newRelation: Relation = {
+        space: spaceId,
         id: newRelationId,
         index: newTripleOrdering.triple.value.value,
         typeOf: {
@@ -334,13 +335,13 @@ export function useEditorStore() {
         // @TODO: ImageBlock
         switch (blockType) {
           case SYSTEM_IDS.TEXT_BLOCK:
-            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.TEXT_BLOCK), spaceId });
+            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.TEXT_BLOCK, spaceId), spaceId });
             break;
           case SYSTEM_IDS.IMAGE_BLOCK:
             break;
           case SYSTEM_IDS.DATA_BLOCK: {
             // @TODO(performance): upsertMany
-            for (const relation of makeInitialDataEntityRelations(EntityId(node.id))) {
+            for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId)) {
               DB.upsertRelation({ relation, spaceId });
             }
 

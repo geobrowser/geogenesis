@@ -110,8 +110,10 @@ const listener =
 
       case 'UPSERT_RELATION': {
         const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName, renderableType, index } = event.payload;
+        const { spaceId } = context;
 
         const newRelation: StoreRelation = {
+          space: spaceId,
           index: index ?? INITIAL_RELATION_INDEX_VALUE,
           typeOf: {
             id: EntityId(typeOfId),
@@ -191,6 +193,7 @@ const listener =
           remove(renderable, context.spaceId);
 
           const newRelation: StoreRelation = {
+            space: renderable.spaceId,
             index: INITIAL_RELATION_INDEX_VALUE,
             typeOf: {
               id: EntityId(renderable.attributeId),

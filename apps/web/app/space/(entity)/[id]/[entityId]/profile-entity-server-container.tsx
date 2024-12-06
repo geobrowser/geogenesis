@@ -16,10 +16,11 @@ interface Props {
 }
 
 export async function ProfileEntityServerContainer({ params }: Props) {
+  const spaceId = params.id;
   const entityId = params.entityId;
 
   const [person, profile] = await Promise.all([
-    Subgraph.fetchEntity({ id: entityId }),
+    Subgraph.fetchEntity({ spaceId, id: entityId }),
     fetchOnchainProfileByEntityId(entityId),
   ]);
 
@@ -67,7 +68,7 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       spaceId={params.id}
       relationsOut={person.relationsOut}
       referencedByComponent={
-        /* 
+        /*
           Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
           show any referenced by loading states but do want to stream it in
         */

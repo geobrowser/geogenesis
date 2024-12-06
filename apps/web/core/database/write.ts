@@ -70,6 +70,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
     ...nonDeletedRelations,
     // We can set a dummy relation here since we only care about the deleted state
     {
+      space: args.spaceId,
       id: args.relationId,
       index: INITIAL_RELATION_INDEX_VALUE,
       isDeleted: true,

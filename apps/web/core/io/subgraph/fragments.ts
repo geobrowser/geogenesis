@@ -1,3 +1,5 @@
+import { SpaceId } from '~/core/types';
+
 export const imageValueTypeTripleFragment = `
     attributeId
     textValue
@@ -76,6 +78,7 @@ export const tripleFragment = `
  */
 export const relationFragment = `
   id
+  spaceId
   entityId
   index
   typeOf {
@@ -109,11 +112,66 @@ export const spacePluginsFragment = `
   spacePluginAddress
 `;
 
+export const getVersionFragment = (spaceId?: SpaceId) => {
+  if (spaceId) {
+    return `
+      id
+      entityId
+      name
+      description
+      versionSpaces {
+        nodes {
+          spaceId
+        }
+      }
+      ${versionTypesFragment}
+      relationsByFromVersionId(filter: {spaceId: {equalTo: "${spaceId}"}}) {
+        nodes {
+          ${relationFragment}
+        }
+      }
+      triples(filter: {spaceId: {equalTo: "${spaceId}"}}) {
+        nodes {
+          ${tripleFragment}
+        }
+      }
+    `;
+  }
+
+  return `
+      id
+      entityId
+      name
+      description
+      versionSpaces {
+        nodes {
+          spaceId
+        }
+      }
+      ${versionTypesFragment}
+      relationsByFromVersionId {
+        nodes {
+          ${relationFragment}
+        }
+      }
+      triples {
+        nodes {
+          ${tripleFragment}
+        }
+      }
+    `;
+};
+
 export const versionFragment = `
   id
   entityId
   name
   description
+  versionSpaces {
+    nodes {
+      spaceId
+    }
+  }
   ${versionTypesFragment}
   relationsByFromVersionId {
     nodes {
@@ -131,6 +189,11 @@ export const spaceMetadataFragment = `
   id
   name
   description
+  versionSpaces {
+    nodes {
+      spaceId
+    }
+  }
   ${versionTypesFragment}
   relationsByFromVersionId {
     nodes {
@@ -185,6 +248,7 @@ export const resultEntityFragment = `
   ${versionTypesFragment}
   versionSpaces {
     nodes {
+      spaceId
       space {
         ${spaceFragment}
       }

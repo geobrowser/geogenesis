@@ -9,6 +9,7 @@ import { EntityId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
+import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -47,6 +48,7 @@ export default async function DefaultEntityPage({
     <EntityStoreProvider
       id={props.id}
       spaceId={props.spaceId}
+      initialSpaces={props.spaces}
       initialTriples={props.triples}
       initialRelations={props.relationsOut}
     >
@@ -79,24 +81,24 @@ export default async function DefaultEntityPage({
 }
 
 const getData = async (spaceId: string, entityId: string) => {
-  const entity = await Subgraph.fetchEntity({ id: entityId });
+  const entity = await Subgraph.fetchEntity({ spaceId, id: entityId });
   const nameTripleSpace = entity?.nameTripleSpaces?.[0];
+  const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && nameTripleSpace) {
-    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${nameTripleSpace}`);
-    return redirect(NavUtils.toSpace(nameTripleSpace));
+    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
+
+    return redirect(NavUtils.toSpace(spaceId));
   }
 
-  // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
-  // the space for the entity we are rendering, so we need to redirect to the correct space.
-  if (nameTripleSpace) {
-    if (spaceId !== nameTripleSpace) {
-      console.log(
-        `Redirecting from incorrect space ${spaceId} to correct space ${nameTripleSpace} for entity ${entityId}`
-      );
-      return redirect(NavUtils.toEntity(nameTripleSpace, entityId));
-    }
+  // Redirect from an invalid space to a valid one
+  if (entity && !spaces.includes(spaceId)) {
+    const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
+
+    console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
+
+    return redirect(NavUtils.toEntity(newSpaceId, entityId));
   }
 
   const serverAvatarUrl = Entities.avatar(entity?.relationsOut);
@@ -114,6 +116,7 @@ const getData = async (spaceId: string, entityId: string) => {
     name: entity?.name ?? null,
     description: Entities.description(entity?.triples ?? []),
     spaceId,
+    spaces,
     serverAvatarUrl,
     serverCoverUrl,
     relationsOut: entity?.relationsOut ?? [],

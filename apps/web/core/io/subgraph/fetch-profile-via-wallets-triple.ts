@@ -102,7 +102,7 @@ export async function fetchProfileViaWalletsTripleAddress(address: string): Prom
     return defaultProfile(address);
   }
 
-  const space = parsedProfile.nameTripleSpaces[0];
+  const space = parsedProfile.spaces[0];
 
   return {
     id: parsedProfile.id,

@@ -1,5 +1,3 @@
-import { Suspense } from 'react';
-
 import { ClientOnly } from '~/design-system/client-only';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { Search } from '~/design-system/icons/search';
@@ -21,9 +19,7 @@ export function Navbar({ onSearchClick }: Props) {
         <Link href="/spaces">
           <GeoLogoLarge />
         </Link>
-        <Suspense fallback={<SpaceSkeleton />}>
-          <NavbarSpaceMetadata />
-        </Suspense>
+        <NavbarSpaceMetadata />
       </div>
 
       {/* Hide navbar actions until we are on the client. This is because our account state only exists

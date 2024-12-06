@@ -157,6 +157,7 @@ export type SubstreamTriple = Schema.Schema.Type<typeof SubstreamTriple>;
  */
 const SubstreamRelation = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+  spaceId: Schema.String,
   entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
   index: Schema.String,
   typeOf: Schema.Struct({
@@ -197,6 +198,13 @@ export const SubstreamEntity = Schema.Struct({
       id: Schema.String.pipe(Schema.fromBrand(EntityId)),
       name: Schema.NullOr(Schema.String),
       description: Schema.NullOr(Schema.String),
+      versionSpaces: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.Struct({
+            spaceId: Schema.String,
+          })
+        ),
+      }),
       versionTypes: SubstreamVersionTypes,
       relationsByFromVersionId: Schema.Struct({
         nodes: Schema.Array(SubstreamRelation),
@@ -353,6 +361,13 @@ export const SubstreamVersion = Schema.Struct({
   }),
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
+  versionSpaces: Schema.Struct({
+    nodes: Schema.Array(
+      Schema.Struct({
+        spaceId: Schema.String,
+      })
+    ),
+  }),
   versionTypes: SubstreamVersionTypes,
   relationsByFromVersionId: Schema.Struct({
     nodes: Schema.Array(SubstreamRelation),

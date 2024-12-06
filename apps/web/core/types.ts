@@ -159,6 +159,7 @@ export interface Schema {
 }
 
 export type Relation = {
+  space: string;
   id: EntityId;
   index: string;
   typeOf: {

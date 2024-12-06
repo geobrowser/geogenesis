@@ -48,9 +48,16 @@ export function useTypesStore(): {
   localForeignTypes: GeoType[];
 } {
   const { initialTypes, space } = useTypesStoreInstance();
-  const { relationsOut } = useEntity(space?.spaceConfig.id ?? EntityId(''), {
-    relations: space?.spaceConfig.relationsOut ?? [],
-    triples: space?.spaceConfig.triples ?? [],
+  const { relationsOut } = useEntity({
+    id: React.useMemo(() => space?.spaceConfig.id ?? EntityId(''), [space]),
+    initialData: React.useMemo(
+      () => ({
+        spaces: space?.spaceConfig.spaces ?? [],
+        relations: space?.spaceConfig.relationsOut ?? [],
+        triples: space?.spaceConfig.triples ?? [],
+      }),
+      [space]
+    ),
   });
 
   // @TODO(relations)
