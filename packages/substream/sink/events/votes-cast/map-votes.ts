@@ -1,6 +1,5 @@
 import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect } from 'effect';
-import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
 import type { VoteCast } from './parser';
@@ -10,7 +9,7 @@ import {
   type SpaceWithPluginAddressNotFoundError,
 } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
-import { pool } from '~/sink/utils/pool';
+import { deriveProposalId } from '~/sink/utils/id';
 
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
@@ -77,37 +76,13 @@ export function mapVotes(
       if (maybeSpaceIdForVotingPlugin) {
         yield* _(Effect.logDebug(`Verifying proposal id for voting plugin with address ${vote.pluginAddress}`));
 
-        const maybeProposalsForOnchainProposalId = yield* _(
-          Effect.tryPromise({
-            try: () =>
-              db
-                .select(
-                  'proposals',
-
-                  { onchain_proposal_id: vote.onchainProposalId, space_id: maybeSpaceIdForVotingPlugin },
-                  { columns: ['id', 'type'] }
-                )
-                .run(pool),
-            catch: error => new ProposalWithOnchainProposalIdAndSpaceIdNotFoundError(String(error)),
-          })
-        );
-
-        const proposalIdForAction = maybeProposalsForOnchainProposalId.find(p => p.type !== 'ADD_MEMBER');
-
-        if (!proposalIdForAction) {
-          yield* _(
-            Effect.logError(
-              `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForVotingPlugin}`
-            )
-          );
-
-          continue;
-        }
-
         schemaVotes.push({
           vote: voteType,
           space_id: maybeSpaceIdForVotingPlugin,
-          proposal_id: proposalIdForAction.id,
+          proposal_id: deriveProposalId({
+            onchainProposalId: vote.onchainProposalId,
+            pluginAddress: vote.pluginAddress,
+          }),
           onchain_proposal_id: vote.onchainProposalId,
           account_id: getChecksumAddress(vote.voter),
           created_at: block.timestamp,
@@ -120,36 +95,13 @@ export function mapVotes(
       if (maybeSpaceIdForMemberPlugin) {
         yield* _(Effect.logDebug(`Verifying proposal id for membership plugin with address ${vote.pluginAddress}`));
 
-        const maybeProposalsForMemberPlugin = yield* _(
-          Effect.tryPromise({
-            try: () =>
-              db
-                .select(
-                  'proposals',
-                  { onchain_proposal_id: vote.onchainProposalId, space_id: maybeSpaceIdForMemberPlugin },
-                  { columns: ['id', 'type'] }
-                )
-                .run(pool),
-            catch: error => new ProposalWithOnchainProposalIdAndSpaceIdNotFoundError(String(error)),
-          })
-        );
-
-        const proposalIdForAction = maybeProposalsForMemberPlugin.find(p => p.type === 'ADD_MEMBER');
-
-        if (!proposalIdForAction) {
-          yield* _(
-            Effect.logError(
-              `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForMemberPlugin}`
-            )
-          );
-
-          continue;
-        }
-
         schemaVotes.push({
           vote: voteType,
           space_id: maybeSpaceIdForMemberPlugin,
-          proposal_id: proposalIdForAction.id,
+          proposal_id: deriveProposalId({
+            onchainProposalId: vote.onchainProposalId,
+            pluginAddress: vote.pluginAddress,
+          }),
           onchain_proposal_id: vote.onchainProposalId,
           account_id: getChecksumAddress(vote.voter),
           created_at: block.timestamp,

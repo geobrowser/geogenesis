@@ -2,7 +2,7 @@
 
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { useMutation } from '@tanstack/react-query';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { encodeFunctionData, getAddress } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -38,7 +38,11 @@ export function useRemoveEditor(args: RemoveEditorArgs) {
         return hash;
       });
 
-      await Effect.runPromise(writeTxEffect);
+      const res = await Effect.runPromise(Effect.either(writeTxEffect));
+      Either.match(res, {
+        onLeft: error => console.error(error),
+        onRight: () => console.log('Successfully removed editor'),
+      });
     },
   });
 

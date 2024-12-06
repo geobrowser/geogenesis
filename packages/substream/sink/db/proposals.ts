@@ -2,6 +2,7 @@ import { getChecksumAddress } from '@geogenesis/sdk';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
+import { deriveProposalId } from '../utils/id';
 import { pool } from '../utils/pool';
 import { CHUNK_SIZE } from './constants';
 
@@ -63,23 +64,13 @@ export class Proposals {
     return await db.update('proposals', { status: 'accepted' }, { id }).run(pool);
   }
 
-  static async setAccepted({
-    onchainProposalId,
-    pluginAddress,
-    type,
-  }: {
-    onchainProposalId: string;
-    pluginAddress: string;
-    type: S.proposal_type;
-  }) {
+  static async setAccepted({ onchainProposalId, pluginAddress }: { onchainProposalId: string; pluginAddress: string }) {
     return await db
       .update(
         'proposals',
         { status: 'accepted' },
         {
-          onchain_proposal_id: onchainProposalId,
-          plugin_address: getChecksumAddress(pluginAddress),
-          type: type,
+          id: deriveProposalId({ onchainProposalId, pluginAddress: getChecksumAddress(pluginAddress) }),
         }
       )
       .run(pool);

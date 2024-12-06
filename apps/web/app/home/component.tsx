@@ -164,10 +164,14 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
     return null;
   }
 
+  const proposalName = `${proposal.type === 'ADD_MEMBER' ? 'Add' : 'Remove'} member ${
+    proposedMember.address ?? proposedMember.name ?? proposedMember.id ?? proposedMember.address
+  }`;
+
   const ProfileHeader = proposedMember.profileLink ? (
     <Link href={proposedMember.profileLink} className="w-full">
       <div className="flex items-center justify-between">
-        <div className="text-smallTitle">{proposedMember.name ?? proposedMember.id}</div>
+        <div className="text-smallTitle">{proposalName}</div>
         <div className="relative h-5 w-5 overflow-hidden rounded-full">
           <Avatar avatarUrl={proposedMember.avatarUrl} value={proposedMember.id} size={20} />
         </div>
@@ -176,7 +180,7 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
   ) : (
     <div className="w-full">
       <div className="flex items-center justify-between">
-        <div className="text-smallTitle">{proposedMember.name ?? proposedMember.id}</div>
+        <div className="text-smallTitle">{proposalName}</div>
         <div className="relative h-5 w-5 overflow-hidden rounded-full">
           <Avatar avatarUrl={proposedMember.avatarUrl} value={proposedMember.id} size={20} />
         </div>
