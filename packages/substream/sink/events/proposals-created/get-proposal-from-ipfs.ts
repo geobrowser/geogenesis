@@ -24,7 +24,6 @@ export function getProposalFromIpfs(
   return Effect.gen(function* (_) {
     yield* _(Effect.logDebug('Fetching proposal from IPFS'));
 
-    console.log('proposal', proposal);
     const maybeSpace = yield* _(Effect.promise(() => Spaces.findForDaoAddress(proposal.daoAddress)));
 
     if (!maybeSpace) {

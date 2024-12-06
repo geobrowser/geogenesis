@@ -394,7 +394,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
         };
       });
 
-      yield* _(Effect.fork(handleInitialPersonalSpaceEditorsAdded(initialEditors, block)));
+      yield* _(handleInitialPersonalSpaceEditorsAdded(initialEditors, block));
     }
 
     if (governancePluginsCreatedResponse.success) {
@@ -406,11 +406,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
      * emit the initial editors as part of the space creation event.
      */
     if (initialEditorsAddedResponse.success) {
-      yield* _(
-        Effect.fork(
-          handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, block)
-        )
-      );
+      yield* _(handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, block));
     }
 
     if (membersAdded.success) {
@@ -440,29 +436,27 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     // AddSubspaceProposal
     // RemoveSubspaceProposal
     if (addMembersProposed.success) {
-      yield* _(Effect.fork(handleMembershipProposalsCreated(addMembersProposed.data.proposedAddedMembers, block)));
+      yield* _(handleMembershipProposalsCreated(addMembersProposed.data.proposedAddedMembers, block));
     }
 
     if (removeMembersProposed.success) {
-      yield* _(Effect.fork(handleMembershipProposalsCreated(removeMembersProposed.data.proposedRemovedMembers, block)));
+      yield* _(handleMembershipProposalsCreated(removeMembersProposed.data.proposedRemovedMembers, block));
     }
 
     if (addEditorsProposed.success) {
-      yield* _(Effect.fork(handleEditorshipProposalsCreated(addEditorsProposed.data.proposedAddedEditors, block)));
+      yield* _(handleEditorshipProposalsCreated(addEditorsProposed.data.proposedAddedEditors, block));
     }
 
     if (removeEditorsProposed.success) {
-      yield* _(Effect.fork(handleEditorshipProposalsCreated(removeEditorsProposed.data.proposedRemovedEditors, block)));
+      yield* _(handleEditorshipProposalsCreated(removeEditorsProposed.data.proposedRemovedEditors, block));
     }
 
     if (addSubspacesProposed.success) {
-      yield* _(Effect.fork(handleSubspaceProposalsCreated(addSubspacesProposed.data.proposedAddedSubspaces, block)));
+      yield* _(handleSubspaceProposalsCreated(addSubspacesProposed.data.proposedAddedSubspaces, block));
     }
 
     if (removeSubspacesProposed.success) {
-      yield* _(
-        Effect.fork(handleSubspaceProposalsCreated(removeSubspacesProposed.data.proposedRemovedSubspaces, block))
-      );
+      yield* _(handleSubspaceProposalsCreated(removeSubspacesProposed.data.proposedRemovedSubspaces, block));
     }
 
     if (editsProposed.success) {

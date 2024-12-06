@@ -40,7 +40,6 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
 
     yield* _(writeAccounts(initialAccounts));
 
-    // @TODO: We need a special function to map a proposal endtime to be now
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposalsFromIpfs, block);
 
     const versionsWithStaleEntities = yield* _(

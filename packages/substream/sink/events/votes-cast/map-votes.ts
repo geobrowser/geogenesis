@@ -1,5 +1,6 @@
 import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect } from 'effect';
+import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
 import type { VoteCast } from './parser';
@@ -10,6 +11,7 @@ import {
 } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
 import { deriveProposalId } from '~/sink/utils/id';
+import { pool } from '~/sink/utils/pool';
 
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
@@ -34,6 +36,10 @@ export function mapVotes(
 
     for (const vote of votes) {
       const voteType = getVoteTypeAsText(vote.voteOption);
+      const proposalId = deriveProposalId({
+        onchainProposalId: vote.onchainProposalId,
+        pluginAddress: vote.pluginAddress,
+      });
 
       if (!voteType) {
         yield* _(
@@ -74,15 +80,41 @@ export function mapVotes(
       }
 
       if (maybeSpaceIdForVotingPlugin) {
-        yield* _(Effect.logDebug(`Verifying proposal id for voting plugin with address ${vote.pluginAddress}`));
+        yield* _(
+          Effect.logDebug(
+            `Verifying proposal id for voting plugin with address ${vote.pluginAddress}. id: ${proposalId} onchainProposalId: ${vote.onchainProposalId} pluginAddress: ${vote.pluginAddress}`
+          )
+        );
+
+        // We can derive the id for all proposals at this point except for edit proposals. This is because
+        // edit proposal ids are passed from the client instead of derived from onchain data. We need to
+        // derive it because at edit publish time we don't know the onchain id of the proposal.
+        const maybeProposalsForOnchainProposalId = yield* _(
+          Effect.tryPromise({
+            try: () =>
+              db
+                .select(
+                  'proposals',
+
+                  { onchain_proposal_id: vote.onchainProposalId, space_id: maybeSpaceIdForVotingPlugin },
+                  { columns: ['id', 'type'] }
+                )
+                .run(pool),
+            catch: error => new ProposalWithOnchainProposalIdAndSpaceIdNotFoundError(String(error)),
+          })
+        );
+
+        const maybeEditProposal = maybeProposalsForOnchainProposalId.find(p => p.type === 'ADD_EDIT');
 
         schemaVotes.push({
           vote: voteType,
           space_id: maybeSpaceIdForVotingPlugin,
-          proposal_id: deriveProposalId({
-            onchainProposalId: vote.onchainProposalId,
-            pluginAddress: vote.pluginAddress,
-          }),
+          // We can derive the id for all proposals at this point except for edit proposals. This is because
+          // edit proposal ids are passed from the client instead of derived from onchain data. We need to
+          // derive it because at edit publish time we don't know the onchain id of the proposal.
+          proposal_id: maybeEditProposal
+            ? maybeEditProposal.id
+            : deriveProposalId({ onchainProposalId: vote.onchainProposalId, pluginAddress: vote.pluginAddress }),
           onchain_proposal_id: vote.onchainProposalId,
           account_id: getChecksumAddress(vote.voter),
           created_at: block.timestamp,
