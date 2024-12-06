@@ -87,12 +87,9 @@ const getData = async (spaceId: string, entityId: string) => {
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && nameTripleSpace) {
-    // But don't redirect for space configuration templates in the root space
-    if (spaceId !== SYSTEM_IDS.ROOT_SPACE_ID) {
-      console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
+    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
 
-      return redirect(NavUtils.toSpace(spaceId));
-    }
+    return redirect(NavUtils.toSpace(spaceId));
   }
 
   // Redirect from an invalid space to a valid one
