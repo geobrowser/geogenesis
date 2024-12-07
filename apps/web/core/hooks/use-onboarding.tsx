@@ -19,6 +19,8 @@ export function useOnboarding() {
   const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const { profile, isFetched, isLoading } = useGeoProfile(address);
 
+  const shouldOnboard = isFetched && !isLoading && !profile?.profileLink && user;
+
   // Set the onboarding to visible the first time we fetch the
   // profile for the user. Any subsequent changes to the visibility
   // state through `hideOnboarding` won't trigger this effect and the
@@ -26,23 +28,21 @@ export function useOnboarding() {
   //
   // Whenever the user reloads Geo they will be prompted to go through
   // onboarding again if they don't have a profile.
-  //
-  // @TODO: We should only show onboarding if the user is not a member
-  // of any spaces OR there is no profile representing the user in
-  // any of the spaces where they are a member.
   useEffect(() => {
     if (isModalOpen) {
       setIsOnboardingVisible(false);
-    } else if (isFetched && !isLoading && !profile?.profileLink && user) {
+    } else if (shouldOnboard) {
       setIsOnboardingVisible(true);
     } else {
       setIsOnboardingVisible(false);
     }
-  }, [isFetched, profile, isLoading, isModalOpen, setIsOnboardingVisible, user]);
+  }, [isModalOpen, setIsOnboardingVisible, shouldOnboard]);
 
   useAccountEffect({
     onDisconnect: () => setIsOnboardingVisible(false),
-    onConnect({ address }) {
+    onConnect(data) {
+      const { address } = data;
+
       if (address && isFetched && !profile) {
         setIsOnboardingVisible(true);
       }

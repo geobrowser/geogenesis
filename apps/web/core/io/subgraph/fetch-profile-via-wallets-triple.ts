@@ -19,6 +19,19 @@ const query = (address: string) => {
       filter: {
         currentVersion: {
           version: {
+            versionSpaces: {
+              some: {
+                space: {
+                  spaceEditors: {
+                    some: {
+                      accountId: {
+                        equalTo: "${address}"
+                      }
+                    }
+                  }
+                }
+              }
+            }
             relationsByFromVersionId: {
               some: {
                 typeOf: { entityId: { equalTo: "${SYSTEM_IDS.ACCOUNTS_ATTRIBUTE}" } }
