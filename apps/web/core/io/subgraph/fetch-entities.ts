@@ -21,7 +21,9 @@ function getFetchEntitiesQuery(
 ) {
   const typeIdsString =
     typeIds && typeIds.length > 0
-      ? `versionTypes: { some: { type: { entityId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } } }`
+      ? `versionTypes: {
+            some: { type: { entityId: { in: ["${typeIds.join('","')}"] } } }
+          }`
       : // Filter out block entities by default
         `versionTypes: { every: { type: { entityId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.DATA_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}"] } } } }`;
 
