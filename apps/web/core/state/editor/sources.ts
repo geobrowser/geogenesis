@@ -189,8 +189,8 @@ function makeRelationsForSourceEntities(source: Source, blockId: EntityId, space
   }
 
   if (source.type === 'SPACES') {
-    return source.value.map(spaceId => {
-      return makeRelationForSource(EntityId(spaceId), blockId, spaceId);
+    return source.value.map(sourceSpaceId => {
+      return makeRelationForSource(EntityId(sourceSpaceId), blockId, spaceId);
     });
   }
 
