@@ -1,13 +1,8 @@
-'use client';
-
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-
 import { useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { ID } from '~/core/id';
 import { SpaceConfigEntity } from '~/core/io/dto/spaces';
 import { SpaceId } from '~/core/io/schema';
 import { useTableBlock } from '~/core/state/table-block-store';

@@ -23,7 +23,7 @@ type NetworkResult = {
 const spacesQuery = (name: string) => `
   {
     spaces(
-      filter: { spacesMetadata: { some: { entity: { name: { includesInsensitive: "${name}" } } } } }
+      filter: { spacesMetadata: { some: { entity: { currentVersion: { version: { name: { includesInsensitive: "${name}" } } } } } } } 
       first: 10
     ) {
       nodes {
@@ -33,8 +33,8 @@ const spacesQuery = (name: string) => `
             entity {
               id
               currentVersion {
-              version {
-                ${spaceMetadataFragment}
+                version {
+                  ${spaceMetadataFragment}
                 }
               }
             }
