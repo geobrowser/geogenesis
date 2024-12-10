@@ -50,7 +50,7 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
             action={
               <div className="flex w-full gap-6">
                 <div className="w-full flex-grow">
-                  <FindProjects />
+                  <FindProjects spaceId={spaceId} />
                 </div>
                 <div className="flex-shrink-0">
                   <CopyPersonId personId={entityId} />
@@ -244,7 +244,11 @@ const SimpleButton = ({ href = '', ...rest }: SimpleButtonProps) => {
   return <Link href={href} className="rounded border border-text px-2 py-1 text-smallButton text-text" {...rest} />;
 };
 
-const FindProjects = () => {
+type FindProjectsProps = {
+  spaceId: string;
+};
+
+const FindProjects = ({ spaceId }: FindProjectsProps) => {
   const router = useRouter();
 
   return (
@@ -255,7 +259,7 @@ const FindProjects = () => {
           const destination = NavUtils.toEntity(SYSTEM_IDS.ROOT_SPACE_ID, result.id);
           router.push(destination);
         }}
-        spaceId={SYSTEM_IDS.ROOT_SPACE_ID}
+        spaceId={spaceId}
         allowedTypes={[
           { typeName: 'Space', typeId: SYSTEM_IDS.SPACE_CONFIGURATION, spaceIdOfAttribute: SYSTEM_IDS.ROOT_SPACE_ID },
           { typeName: 'Project', typeId: SYSTEM_IDS.PROJECT_TYPE, spaceIdOfAttribute: SYSTEM_IDS.ROOT_SPACE_ID },

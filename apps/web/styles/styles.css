@@ -172,3 +172,9 @@ textarea::placeholder {
 .elevated-popover > [data-radix-popper-content-wrapper] {
   z-index: 1001 !important;
 }
+
+/* Radix UI fixes */
+/* see https://github.com/radix-ui/primitives/issues/2908*/
+[data-radix-popper-content-wrapper] {
+  width: var(--radix-popper-anchor-width);
+}
