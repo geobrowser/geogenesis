@@ -1,11 +1,13 @@
 'use client';
 
+import { GraphUrl } from '@geogenesis/sdk';
 import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 import { LayoutGroup } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
+import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/editor-store';
 import { removeIdAttributes } from '~/core/state/editor/utils';
@@ -104,9 +106,12 @@ function useInterceptEditorLinks(spaceId: string) {
   const router = useRouter();
 
   React.useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
     function handleClick(event: MouseEvent) {
       const target = event.target;
-
       if (!target) {
         return;
       }
@@ -126,22 +131,17 @@ function useInterceptEditorLinks(spaceId: string) {
           // Prevent the default link behavior
           event.stopPropagation();
           event.preventDefault();
-          const post = originalUrl.split('://')[1];
-          const [entityId] = post.split('/');
+          const entityId = GraphUrl.toEntityId(originalUrl);
           router.prefetch(NavUtils.toEntity(spaceId, entityId));
           router.push(NavUtils.toEntity(spaceId, entityId));
         }
       }
     }
 
-    if (typeof document !== 'undefined') {
-      editor?.addEventListener('click', handleClick);
-    }
+    document.addEventListener('click', handleClick);
 
     return () => {
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('click', handleClick);
-      }
+      document.removeEventListener('click', handleClick);
     };
-  });
+  }, [router, spaceId]);
 }
