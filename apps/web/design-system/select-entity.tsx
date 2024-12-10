@@ -177,9 +177,10 @@ export const SelectEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
+              align="center"
               forceMount
             >
-              <div className={cx(variant === 'fixed' && 'pt-1')}>
+              <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
                 <div
                   className={cx(
                     '-ml-px overflow-hidden rounded-md border border-divider bg-white',
