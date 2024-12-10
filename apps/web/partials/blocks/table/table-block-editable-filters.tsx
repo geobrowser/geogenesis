@@ -26,20 +26,6 @@ export function TableBlockEditableFilters() {
     //   value: '',
     //   valueName: null,
     // },
-    {
-      columnId: SYSTEM_IDS.SPACE_FILTER,
-      columnName: 'Space',
-      valueType: valueTypes[SYSTEM_IDS.TEXT],
-      value: '',
-      valueName: null,
-    },
-    {
-      columnId: SYSTEM_IDS.TYPES,
-      columnName: 'Types',
-      valueType: valueTypes[SYSTEM_IDS.RELATION],
-      value: '',
-      valueName: null,
-    },
     ...columns
       .map(c => {
         return {
