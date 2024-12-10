@@ -19,6 +19,10 @@
   opacity: 1;
 }
 
+.ProseMirror a {
+  @apply text-ctaPrimary underline hover:text-ctaHover;
+}
+
 .ProseMirror .tiptap-menu-trigger {
   position: absolute;
   padding-right: 24px;
