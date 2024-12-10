@@ -177,8 +177,7 @@ export const SelectEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
-              align={width === 'full' ? 'start' : 'center'}
-              className={cx(width === 'full' && 'w-full')}
+              align="center"
               forceMount
             >
               <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
