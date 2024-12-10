@@ -256,10 +256,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
       {
         id: EntityId(SYSTEM_IDS.TYPES),
         name: 'Types',
-        // @TODO: Should specify that this attribute is a relation. We probably want
-        // a want to distinguish  between the schema value type so we can render it
-        // in the UI differently.
-        valueType: SYSTEM_IDS.TEXT,
+        valueType: SYSTEM_IDS.RELATION,
       },
       ...schema,
     ],
