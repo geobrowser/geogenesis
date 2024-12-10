@@ -1,7 +1,7 @@
 export * from './src/types.js';
 
 export { createGeoId } from './src/id.js';
-export { decodeBase58ToUUID, encodeBase58 } from './src/core/base58.js';
+export { BASE58_ALLOWED_CHARS, decodeBase58ToUUID, encodeBase58 } from './src/core/base58.js';
 export {
   getProcessGeoProposalArguments,
   getAcceptSubspaceArguments,

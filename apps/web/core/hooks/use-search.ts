@@ -8,6 +8,9 @@ import * as Either from 'effect/Either';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
+import { EntityId } from '~/core/io/schema';
+import { fetchResult } from '~/core/io/subgraph';
+import { validateEntityId } from '~/core/utils/utils';
 
 import { mergeSearchResults } from '../database/results';
 import { useDebouncedValue } from './use-debounced-value';
@@ -20,11 +23,21 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
   const [query, setQuery] = React.useState<string>('');
   const debouncedQuery = useDebouncedValue(query);
 
+  const maybeEntityId = debouncedQuery.trim();
+  const isValidEntityId = validateEntityId(maybeEntityId);
+
   const { data: results, isLoading } = useQuery({
     enabled: debouncedQuery !== '',
     queryKey: ['search', debouncedQuery, filterByTypes],
     queryFn: async ({ signal }) => {
       if (query.length === 0) return [];
+
+      if (isValidEntityId) {
+        const id = maybeEntityId as EntityId;
+        const result = await fetchResult({ id });
+        if (result) return [result];
+        return [];
+      }
 
       const fetchResultsEffect = Effect.either(
         Effect.tryPromise({
