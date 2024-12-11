@@ -5,6 +5,8 @@ export type { FetchTriplesOptions } from './fetch-triples';
 
 export { fetchEntities } from './fetch-entities';
 export type { FetchEntitiesOptions } from './fetch-entities';
+export { fetchResult } from './fetch-result';
+export type { FetchResultOptions } from './fetch-result';
 export { fetchResults } from './fetch-results';
 export type { FetchResultsOptions } from './fetch-results';
 export { fetchEntity } from './fetch-entity';

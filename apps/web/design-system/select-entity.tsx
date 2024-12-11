@@ -6,7 +6,7 @@ import { useAtom } from 'jotai';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
-import { useState } from 'react';
+import { startTransition, useState } from 'react';
 
 import { useWriteOps } from '~/core/database/write';
 import { useSearch } from '~/core/hooks/use-search';
@@ -98,6 +98,12 @@ export const SelectEntity = ({
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
     filterByTypes: allowedTypes?.map(type => type.typeId),
   });
+
+  if (query === '' && result !== null) {
+    startTransition(() => {
+      setResult(null);
+    });
+  }
 
   const handleShowIds = () => {
     setIsShowingIds(!isShowingIds);

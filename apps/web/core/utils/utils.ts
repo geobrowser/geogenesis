@@ -1,7 +1,9 @@
+import { BASE58_ALLOWED_CHARS } from '@geogenesis/sdk';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { IPFS_GATEWAY_READ_PATH } from '~/core/constants';
+import type { EntityId } from '~/core/io/schema';
 
 import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';
@@ -314,3 +316,20 @@ export const uuidValidateV4 = (uuid: string) => {
 
   return uuidValidate(uuid) && uuidVersion(uuid) === 4;
 };
+
+export const validateEntityId = (maybeEntityId: EntityId | string | null | undefined) => {
+  if (typeof maybeEntityId !== 'string') return false;
+
+  if (!VALID_ENTITY_ID_LENGTHS.includes(maybeEntityId.length)) return false;
+
+  for (const char of maybeEntityId) {
+    const index = BASE58_ALLOWED_CHARS.indexOf(char);
+    if (index === -1) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const VALID_ENTITY_ID_LENGTHS = [21, 22];
