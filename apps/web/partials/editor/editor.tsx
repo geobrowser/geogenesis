@@ -1,14 +1,16 @@
 'use client';
 
+import { GraphUrl } from '@geogenesis/sdk';
 import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
-import cx from 'classnames';
 import { LayoutGroup } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/editor-store';
 import { removeIdAttributes } from '~/core/state/editor/utils';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -43,6 +45,8 @@ export const Editor = React.memo(function Editor({
       transformPastedHTML: html => removeIdAttributes(html),
     },
   });
+
+  useInterceptEditorLinks(spaceId);
 
   const onBlur = React.useCallback(
     (params: { editor: TiptapEditor }) => {
@@ -88,7 +92,7 @@ export const Editor = React.memo(function Editor({
 
   return (
     <LayoutGroup id="editor">
-      <div className={cx(editable ? 'editable' : 'not-editable')}>
+      <div className={editable ? 'editable' : 'not-editable'}>
         {!editor ? <ServerContent content={editorJson.content} /> : <EditorContent editor={editor} />}
 
         {shouldHandleOwnSpacing && <Spacer height={60} />}
@@ -96,3 +100,56 @@ export const Editor = React.memo(function Editor({
     </LayoutGroup>
   );
 });
+
+/**
+ * Sets up listeners to intercept clicks on links on entity pages and redirect them to the
+ * appropriate entity based on the `graph://` URI.
+ *
+ * This is one of the most hacky ways to do it, but is the least amount of effort to implement
+ * for now. Alternative approaches are to use Linkify, which tiptap uses internally, to render
+ * the links using a custom React component which can handle the `graph://` protocol, or to
+ * somehow render the links as a React component through tiptap itself.
+ */
+function useInterceptEditorLinks(spaceId: string) {
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    function handleClick(event: MouseEvent) {
+      const target = event.target;
+      if (!target) {
+        return;
+      }
+
+      // @ts-expect-error target doesn't have "closest" method in types
+      const link = target.closest('a');
+
+      if (!link) {
+        return;
+      }
+
+      // Check if the clicked element is a link
+      if (link.tagName === 'A') {
+        const originalUrl = link.href;
+
+        if (originalUrl.startsWith('graph://')) {
+          // Prevent the default link behavior
+          event.stopPropagation();
+          event.preventDefault();
+          const entityId = GraphUrl.toEntityId(originalUrl);
+          router.prefetch(NavUtils.toEntity(spaceId, entityId));
+          router.push(NavUtils.toEntity(spaceId, entityId));
+        }
+      }
+    }
+
+    document.addEventListener('click', handleClick);
+
+    return () => {
+      document.removeEventListener('click', handleClick);
+    };
+  }, [router, spaceId]);
+}

@@ -19,8 +19,7 @@ export function htmlToMarkdown(html: string): string {
   md = md.replace(/<em>(.*?)<\/em>/gi, '*$1*');
 
   // Convert links
-  // We don't support links atm
-  // md = md.replace(/<a href="(.*?)">(.*?)<\/a>/gi, '[$2]($1)');
+  md = md.replace(/<a href="(.*?)">(.*?)<\/a>/gi, '[$2]($1)');
 
   // Convert unordered lists
   md = md.replace(/<ul>(.*?)<\/ul>/gis, match => {

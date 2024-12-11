@@ -64,6 +64,7 @@ importers:
       '@tiptap/extension-hard-break': ^2.0.3
       '@tiptap/extension-heading': ^2.0.3
       '@tiptap/extension-image': 2.4.0
+      '@tiptap/extension-link': ^2.10.3
       '@tiptap/extension-list-item': ^2.0.3
       '@tiptap/extension-paragraph': ^2.0.3
       '@tiptap/extension-placeholder': 2.4.0
@@ -179,6 +180,7 @@ importers:
       '@tiptap/extension-hard-break': 2.0.3_@tiptap+core@2.4.0
       '@tiptap/extension-heading': 2.0.3_@tiptap+core@2.4.0
       '@tiptap/extension-image': 2.4.0_@tiptap+core@2.4.0
+      '@tiptap/extension-link': 2.10.3_cseowc5uttychkmw3wguqfmiwq
       '@tiptap/extension-list-item': 2.0.3_@tiptap+core@2.4.0
       '@tiptap/extension-paragraph': 2.0.3_@tiptap+core@2.4.0
       '@tiptap/extension-placeholder': 2.4.0_cseowc5uttychkmw3wguqfmiwq
@@ -5330,6 +5332,17 @@ packages:
       '@tiptap/core': 2.4.0_@tiptap+pm@2.4.0
     dev: false
 
+  /@tiptap/extension-link/2.10.3_cseowc5uttychkmw3wguqfmiwq:
+    resolution: {integrity: sha512-8esKlkZBzEiNcpt7I8Cd6l1mWmCc/66pPbUq9LfnIniDXE3U+ahBf4m3TJltYFBGbiiTR/xqMtJyVHOpuLDtAw==}
+    peerDependencies:
+      '@tiptap/core': ^2.7.0
+      '@tiptap/pm': ^2.7.0
+    dependencies:
+      '@tiptap/core': 2.4.0_@tiptap+pm@2.4.0
+      '@tiptap/pm': 2.4.0
+      linkifyjs: 4.2.0
+    dev: false
+
   /@tiptap/extension-list-item/2.0.3_@tiptap+core@2.4.0:
     resolution: {integrity: sha512-p7cUsk0LpM1PfdAuFE8wYBNJ3gvA0UhNGR08Lo++rt9UaCeFLSN1SXRxg97c0oa5+Ski7SrCjIJ5Ynhz0viTjQ==}
     peerDependencies:
@@ -9301,7 +9314,7 @@ packages:
       debug: 4.3.4
       enhanced-resolve: 5.12.0
       eslint: 8.21.0
-      eslint-plugin-import: 2.26.0_m2m4u4ujm3f6v75yfbf66l5qly
+      eslint-plugin-import: 2.26.0_vfkjhpyu3ul4ompvtbiazva2r4
       get-tsconfig: 4.7.2
       globby: 13.1.2
       is-core-module: 2.13.0
@@ -11327,6 +11340,10 @@ packages:
     resolution: {integrity: sha512-5aHCbzQRADcdP+ATqnDuhhJ/MRIqDkZX5pyjFHRRysS8vZ5AbqGEoFIb6pYHPZ+L/OC2Lc+xT8uHVVR5CAK/wQ==}
     dependencies:
       uc.micro: 2.1.0
+    dev: false
+
+  /linkifyjs/4.2.0:
+    resolution: {integrity: sha512-pCj3PrQyATaoTYKHrgWRF3SJwsm61udVh+vuls/Rl6SptiDhgE7ziUIudAedRY9QEfynmM7/RmLEfPUyw1HPCw==}
     dev: false
 
   /listhen/1.7.2:
