@@ -320,7 +320,7 @@ export const uuidValidateV4 = (uuid: string) => {
 export const validateEntityId = (maybeEntityId: EntityId | string | null | undefined) => {
   if (typeof maybeEntityId !== 'string') return false;
 
-  if (maybeEntityId.length !== 22) return false;
+  if (!VALID_ENTITY_ID_LENGTHS.includes(maybeEntityId.length)) return false;
 
   for (const char of maybeEntityId) {
     const index = BASE58_ALLOWED_CHARS.indexOf(char);
@@ -331,3 +331,5 @@ export const validateEntityId = (maybeEntityId: EntityId | string | null | undef
 
   return true;
 };
+
+const VALID_ENTITY_ID_LENGTHS = [21, 22];

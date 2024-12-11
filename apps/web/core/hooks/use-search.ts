@@ -24,7 +24,6 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
   const debouncedQuery = useDebouncedValue(query);
 
   const maybeEntityId = debouncedQuery.trim();
-  const isValidEntityId = validateEntityId(maybeEntityId);
 
   const { data: results, isLoading } = useQuery({
     enabled: debouncedQuery !== '',
@@ -32,8 +31,10 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
     queryFn: async ({ signal }) => {
       if (query.length === 0) return [];
 
+      const isValidEntityId = validateEntityId(maybeEntityId);
+
       if (isValidEntityId) {
-        const id = maybeEntityId as EntityId;
+        const id = EntityId(maybeEntityId);
         const result = await fetchResult({ id });
         if (result) return [result];
         return [];
