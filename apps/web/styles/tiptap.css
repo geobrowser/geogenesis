@@ -6,6 +6,10 @@
   margin-bottom: 0 !important; /* Override Tiptap's margin-bottom */
 }
 
+.ProseMirror .paragraph-node a {
+  @apply text-ctaPrimary underline hover:text-ctaHover;
+}
+
 .ProseMirror .tiptap-block {
   position: relative;
 }
