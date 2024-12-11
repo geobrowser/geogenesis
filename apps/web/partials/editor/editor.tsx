@@ -4,18 +4,21 @@ import BulletList from '@tiptap/extension-bullet-list';
 import Gapcursor from '@tiptap/extension-gapcursor';
 import HardBreak from '@tiptap/extension-hard-break';
 import Image from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
 import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 // import {FloatingMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import cx from 'classnames';
+import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { NavUtils } from '~/core/utils/utils';
 
 // import { SquareButton } from '~/design-system/button';
 // import { Plus } from '~/design-system/icons/plus';
@@ -42,6 +45,15 @@ export const tiptapExtensions = [
     paragraph: false,
     heading: false,
     code: false,
+  }),
+  Link.configure({
+    defaultProtocol: 'graph',
+    protocols: ['graph', 'https'],
+    HTMLAttributes: {
+      rel: null,
+      target: null,
+    },
+    openOnClick: false,
   }),
   ParagraphNode,
   HeadingNode,
@@ -98,6 +110,8 @@ export const Editor = React.memo(function Editor({
       transformPastedHTML: html => removeIdAttributes(html),
     },
   });
+
+  useInterceptEditorLinks(spaceId);
 
   // Running onBlur directly through the hook executes it twice for some reason.
   // Doing it imperatively here correctly only executes once.
@@ -181,3 +195,58 @@ export const Editor = React.memo(function Editor({
     </div>
   );
 });
+
+/**
+ * Sets up listeners to intercept clicks on links on entity pages and redirect them to the
+ * appropriate entity based on the `graph://` URI.
+ *
+ * This is one of the most hacky ways to do it, but is the least amount of effort to implement
+ * for now. Alternative approaches are to use Linkify, which tiptap uses internally, to render
+ * the links using a custom React component which can handle the `graph://` protocol, or to
+ * somehow render the links as a React component through tiptap itself.
+ */
+function useInterceptEditorLinks(spaceId: string) {
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    function handleClick(event: MouseEvent) {
+      const target = event.target;
+      if (!target) {
+        return;
+      }
+
+      // @ts-expect-error target doesn't have "closest" method in types
+      const link = target.closest('a');
+
+      if (!link) {
+        return;
+      }
+
+      // Check if the clicked element is a link
+      if (link.tagName === 'A') {
+        const originalUrl = link.href;
+
+        if (originalUrl.startsWith('graph://')) {
+          // Prevent the default link behavior
+          event.stopPropagation();
+          event.preventDefault();
+
+          const right: string = originalUrl.split('graph://')[1];
+          const [entityId] = right.split('/');
+          router.prefetch(NavUtils.toEntity(spaceId, entityId));
+          router.push(NavUtils.toEntity(spaceId, entityId));
+        }
+      }
+    }
+
+    document.addEventListener('click', handleClick);
+
+    return () => {
+      document.removeEventListener('click', handleClick);
+    };
+  }, [router, spaceId]);
+}
