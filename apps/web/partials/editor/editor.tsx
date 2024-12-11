@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
-import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/editor-store';
 import { removeIdAttributes } from '~/core/state/editor/utils';
@@ -102,6 +101,15 @@ export const Editor = React.memo(function Editor({
   );
 });
 
+/**
+ * Sets up listeners to intercept clicks on links on entity pages and redirect them to the
+ * appropriate entity based on the `graph://` URI.
+ *
+ * This is one of the most hacky ways to do it, but is the least amount of effort to implement
+ * for now. Alternative approaches are to use Linkify, which tiptap uses internally, to render
+ * the links using a custom React component which can handle the `graph://` protocol, or to
+ * somehow render the links as a React component through tiptap itself.
+ */
 function useInterceptEditorLinks(spaceId: string) {
   const router = useRouter();
 
@@ -116,7 +124,7 @@ function useInterceptEditorLinks(spaceId: string) {
         return;
       }
 
-      // @ts-expect-error idk
+      // @ts-expect-error target doesn't have "closest" method in types
       const link = target.closest('a');
 
       if (!link) {
