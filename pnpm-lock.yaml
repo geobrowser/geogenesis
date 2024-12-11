@@ -57,6 +57,7 @@ importers:
       '@tiptap/extension-hard-break': ^2.0.3
       '@tiptap/extension-heading': ^2.0.3
       '@tiptap/extension-image': 2.1.7
+      '@tiptap/extension-link': ^2.10.3
       '@tiptap/extension-list-item': ^2.0.3
       '@tiptap/extension-paragraph': ^2.0.3
       '@tiptap/extension-placeholder': 2.1.7
@@ -167,6 +168,7 @@ importers:
       '@tiptap/extension-hard-break': 2.0.3_@tiptap+core@2.1.7
       '@tiptap/extension-heading': 2.0.3_@tiptap+core@2.1.7
       '@tiptap/extension-image': 2.1.7_@tiptap+core@2.1.7
+      '@tiptap/extension-link': 2.10.3_wls5jda43mscbcbz3xg5qrtacm
       '@tiptap/extension-list-item': 2.0.3_@tiptap+core@2.1.7
       '@tiptap/extension-paragraph': 2.0.3_@tiptap+core@2.1.7
       '@tiptap/extension-placeholder': 2.1.7_wls5jda43mscbcbz3xg5qrtacm
@@ -5574,6 +5576,17 @@ packages:
       '@tiptap/core': ^2.0.0
     dependencies:
       '@tiptap/core': 2.1.7_@tiptap+pm@2.1.7
+    dev: false
+
+  /@tiptap/extension-link/2.10.3_wls5jda43mscbcbz3xg5qrtacm:
+    resolution: {integrity: sha512-8esKlkZBzEiNcpt7I8Cd6l1mWmCc/66pPbUq9LfnIniDXE3U+ahBf4m3TJltYFBGbiiTR/xqMtJyVHOpuLDtAw==}
+    peerDependencies:
+      '@tiptap/core': ^2.7.0
+      '@tiptap/pm': ^2.7.0
+    dependencies:
+      '@tiptap/core': 2.1.7_@tiptap+pm@2.1.7
+      '@tiptap/pm': 2.1.7
+      linkifyjs: 4.2.0
     dev: false
 
   /@tiptap/extension-list-item/2.0.3_@tiptap+core@2.1.7:
@@ -11720,7 +11733,7 @@ packages:
       debug: 4.3.4
       enhanced-resolve: 5.12.0
       eslint: 8.21.0
-      eslint-plugin-import: 2.26.0_m2m4u4ujm3f6v75yfbf66l5qly
+      eslint-plugin-import: 2.26.0_vfkjhpyu3ul4ompvtbiazva2r4
       get-tsconfig: 4.7.2
       globby: 13.1.2
       is-core-module: 2.13.0
@@ -16003,6 +16016,10 @@ packages:
       uc.micro: 1.0.6
     dev: false
 
+  /linkifyjs/4.2.0:
+    resolution: {integrity: sha512-pCj3PrQyATaoTYKHrgWRF3SJwsm61udVh+vuls/Rl6SptiDhgE7ziUIudAedRY9QEfynmM7/RmLEfPUyw1HPCw==}
+    dev: false
+
   /lit-element/3.3.2:
     resolution: {integrity: sha512-xXAeVWKGr4/njq0rGC9dethMnYCq5hpKYrgQZYTzawt9YQhMiXfD+T1RgrdY3NamOxwq2aXlb0vOI6e29CKgVQ==}
     dependencies:
@@ -20095,6 +20112,7 @@ packages:
   /source-map/0.6.1:
     resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
+    requiresBuild: true
     dev: true
 
   /sourcemap-codec/1.4.8:
