@@ -183,7 +183,7 @@ export const SelectEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
-              align="center"
+              className="w-[var(--radix-popper-anchor-width)]"
               forceMount
             >
               <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
