@@ -257,6 +257,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
     const name = attributeName ?? attributeId;
 
     switch (changeType) {
+      case 'NUMBER':
       case 'TEXT': {
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
