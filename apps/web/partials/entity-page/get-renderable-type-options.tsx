@@ -7,6 +7,7 @@ import { RenderableProperty, SwitchableRenderableType, ValueTypeId } from '~/cor
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
+import { Number } from '~/design-system/icons/number';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
@@ -150,7 +151,7 @@ export const getRenderableTypeSelectorOptions = (
       label: (
         <div className="flex items-center gap-2">
           <IconWrapper>
-            <Url />
+            <Number />
           </IconWrapper>
           <p>Number</p>
         </div>
