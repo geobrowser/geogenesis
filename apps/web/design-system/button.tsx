@@ -85,20 +85,34 @@ type SquareButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   isActive?: boolean;
 };
 
+const squareButtonClassNames = cva(
+  'relative box-border flex h-6 w-6 items-center justify-center rounded border bg-white text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
+  {
+    variants: {
+      isActive: {
+        true: 'border-text !bg-bg !text-text',
+        false: 'border-grey-02',
+      },
+      disabled: {
+        true: 'cursor-pointer',
+        false: '!hover:border-divider !hover:bg-divider cursor-pointer border-divider',
+      },
+    },
+    defaultVariants: {
+      disabled: false,
+      isActive: false,
+    },
+  }
+);
+
 export const SquareButton = forwardRef(function SquareButton(
   { icon, isActive = false, className = '', style = {}, disabled = false, children, ...rest }: SquareButtonProps,
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
-  const squareButtonClassNames = cva([
-    'relative box-border flex h-6 w-6 items-center justify-center rounded border bg-white text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
-    !isActive ? 'border-grey-02' : 'border-text !bg-bg !text-text',
-    disabled ? 'cursor-pointer' : '!hover:border-divider !hover:bg-divider cursor-pointer !border-divider !bg-divider',
-  ]);
-
   return (
     <button
       ref={ref}
-      className={squareButtonClassNames({ className })}
+      className={squareButtonClassNames({ className, isActive, disabled })}
       style={{ fontFeatureSettings: '"tnum" 1', ...style }}
       {...rest}
     >
@@ -111,7 +125,7 @@ type IconButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   icon: React.ReactNode;
 };
 
-const iconButtonClassNames = cva('background-transparent cursor-pointer border-none', {
+const iconButtonClassNames = cva('cursor-pointer border-none bg-white', {
   variants: {
     disabled: {
       true: 'cursor-pointer',
