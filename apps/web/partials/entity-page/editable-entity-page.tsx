@@ -312,14 +312,14 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
             return (
               <NumberField
                 value={renderable.value}
-                onChange={e =>
+                onChange={value =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                     payload: {
                       renderable,
                       value: {
                         type: 'NUMBER',
-                        value: e.target.value,
+                        value: value,
                       },
                     },
                   })
