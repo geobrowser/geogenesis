@@ -9,11 +9,13 @@ export type ValueType =
   | 'TEXT'
   | 'URL'
   | 'TIME'
+  // | 'NUMBER'
   // | GEO_LOCATION
   | 'CHECKBOX';
 
 export type Value = {
   type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX';
+  //  | 'NUMBER';
   value: string;
 };
 
@@ -141,7 +143,7 @@ export type ValueTypeId =
   | typeof SYSTEM_IDS.TEXT
   | typeof SYSTEM_IDS.RELATION
   | typeof SYSTEM_IDS.DATE
-  | typeof SYSTEM_IDS.WEB_URL
+  | typeof SYSTEM_IDS.URI
   | typeof SYSTEM_IDS.CHECKBOX;
 
 export type GeoType = {

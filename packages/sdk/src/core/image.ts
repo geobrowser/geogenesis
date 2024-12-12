@@ -21,7 +21,7 @@ export function make(src: string): MakeImageReturnType {
     ops: [
       ...Relation.make({
         fromId: entityId,
-        toId: SYSTEM_IDS.IMAGE,
+        toId: SYSTEM_IDS.IMAGE_TYPE,
         relationTypeId: SYSTEM_IDS.TYPES,
       }),
       {

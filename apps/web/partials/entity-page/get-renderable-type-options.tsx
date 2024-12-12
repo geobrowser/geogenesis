@@ -19,7 +19,7 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
       return 'CHECKBOX';
     case SYSTEM_IDS.DATE:
       return 'TIME';
-    case SYSTEM_IDS.WEB_URL:
+    case SYSTEM_IDS.URI:
       return 'URL';
     // @TODO(relations): Add relation support
     // @TODO(relations): Add image support

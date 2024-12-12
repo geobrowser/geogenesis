@@ -46,7 +46,7 @@ export function RelationDto(relation: SubstreamRelation) {
 function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
   const typeIds = types.map(relation => relation.entityId);
 
-  if (typeIds.includes(EntityId(SYSTEM_IDS.IMAGE))) {
+  if (typeIds.includes(EntityId(SYSTEM_IDS.IMAGE_TYPE))) {
     return 'IMAGE';
   }
 
