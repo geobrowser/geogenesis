@@ -31,6 +31,8 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.RELATION]: 'Relation',
   [SYSTEM_IDS.TEXT]: 'Text',
   [SYSTEM_IDS.CHECKBOX]: 'Checkbox',
+  [SYSTEM_IDS.NUMBER]: 'Number',
+  [SYSTEM_IDS.POINT]: 'Point',
 
   [SYSTEM_IDS.IMAGE_TYPE]: 'Image',
   [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: 'Image URL',
@@ -149,6 +151,8 @@ const schemaTypes: Record<string, string[]> = {
   [SYSTEM_IDS.SCHEMA_TYPE]: [SYSTEM_IDS.TEMPLATE_ATTRIBUTE],
   [SYSTEM_IDS.VIEW_TYPE]: [],
   [SYSTEM_IDS.TEXT]: [],
+  [SYSTEM_IDS.NUMBER]: [],
+  [SYSTEM_IDS.POINT]: [],
   [SYSTEM_IDS.CHECKBOX]: [],
   [SYSTEM_IDS.RELATION]: [],
   [SYSTEM_IDS.IMAGE_TYPE]: [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE],
