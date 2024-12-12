@@ -12,6 +12,8 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
       return { type: 'TIME', value: networkTriple.textValue };
     case 'URL':
       return { type: 'URL', value: networkTriple.textValue };
+    case 'NUMBER':
+      return { type: 'NUMBER', value: networkTriple.textValue };
   }
 }
 
