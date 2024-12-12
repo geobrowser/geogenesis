@@ -7,6 +7,7 @@ import { RenderableProperty, SwitchableRenderableType, ValueTypeId } from '~/cor
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
+import { Number } from '~/design-system/icons/number';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
@@ -19,7 +20,7 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
       return 'CHECKBOX';
     case SYSTEM_IDS.DATE:
       return 'TIME';
-    case SYSTEM_IDS.WEB_URL:
+    case SYSTEM_IDS.URI:
       return 'URL';
     // @TODO(relations): Add relation support
     // @TODO(relations): Add image support
@@ -137,6 +138,28 @@ export const getRenderableTypeSelectorOptions = (
       onClick: () =>
         onSelect({
           type: 'URL',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        }),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <IconWrapper>
+            <Number />
+          </IconWrapper>
+          <p>Number</p>
+        </div>
+      ),
+      value: 'NUMBER' as const,
+      onClick: () =>
+        onSelect({
+          type: 'NUMBER',
           entityId: renderable.entityId,
           entityName: renderable.entityName,
           attributeId: renderable.attributeId,

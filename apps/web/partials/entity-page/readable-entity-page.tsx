@@ -49,13 +49,13 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
             <div className="flex flex-wrap gap-2">
               {triples.map(renderable => {
                 switch (renderable.type) {
-                  case 'TEXT': {
+                  case 'TEXT':
+                  case 'NUMBER':
                     return (
                       <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
                         {renderable.value}
                       </Text>
                     );
-                  }
                   case 'CHECKBOX': {
                     const checked = getChecked(renderable.value);
 

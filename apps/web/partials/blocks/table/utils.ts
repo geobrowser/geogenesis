@@ -58,7 +58,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         value: '',
         placeholder: true,
       };
-    case SYSTEM_IDS.WEB_URL:
+    case SYSTEM_IDS.URI:
       return {
         type: 'URL',
         attributeId,

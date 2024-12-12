@@ -11,6 +11,7 @@ import { SquareButton } from '~/design-system/button';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageStringField, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -166,6 +167,25 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     <div className="flex w-full flex-wrap gap-2">
       {renderables.map(renderable => {
         switch (renderable.type) {
+          case 'NUMBER':
+            return (
+              <NumberField
+                key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                value={renderable.value}
+                onChange={value =>
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      renderable,
+                      value: {
+                        type: 'NUMBER',
+                        value: value,
+                      },
+                    },
+                  })
+                }
+              />
+            );
           case 'TEXT':
             return (
               <PageStringField

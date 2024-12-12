@@ -13,7 +13,10 @@ export const VALUE_TYPE = 'JwYkkjY2i6uuR4wrgFScwt';
 export const CHECKBOX = 'NtWv5uGJ1d15Mfk4ZdXfmU';
 export const DATE = 'UGr1YqqZbE2BbEpJR9U88H';
 export const TEXT = 'JBYTdEigecQHj2xhL3NeHV';
-export const WEB_URL = '5EQJAVKYDQWHZSfsawBtWa';
+export const URI = '5EQJAVKYDQWHZSfsawBtWa';
+export const NUMBER = 'Rjw5tGo76ukgvLxuYpXQkka';
+export const POINT = '9aNNLsQCRgFHEqRkWpd1wU';
+export const IMAGE = 'X8KB1uF84RYppghBSVvhqr';
 
 export const RELATION = 'AKDxovGvZaPSWnmKnSoZJY';
 /**
@@ -23,7 +26,7 @@ export const RELATION = 'AKDxovGvZaPSWnmKnSoZJY';
  */
 export const RELATION_VALUE_RELATIONSHIP_TYPE = 'LdAS7yWqF32E2J4doUDe5u';
 
-export const IMAGE = 'WpZ6MDcJZrfheC3XD7hyhh';
+export const IMAGE_TYPE = 'WpZ6MDcJZrfheC3XD7hyhh';
 export const IMAGE_FILE_TYPE_ATTRIBUTE = 'B3nyKkmERhFEcaVgoe6kAL';
 export const IMAGE_HEIGHT_ATTRIBUTE = 'GjaFuBBB8z63y9qr8dhaSP';
 export const IMAGE_URL_ATTRIBUTE = 'J6cw1v8xUHCFsEdPeuB1Uo';
