@@ -150,6 +150,28 @@ export const getRenderableTypeSelectorOptions = (
       label: (
         <div className="flex items-center gap-2">
           <IconWrapper>
+            <Url />
+          </IconWrapper>
+          <p>Number</p>
+        </div>
+      ),
+      value: 'NUMBER' as const,
+      onClick: () =>
+        onSelect({
+          type: 'NUMBER',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        }),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <IconWrapper>
             <RelationSmall />
           </IconWrapper>
           <p>Relation</p>

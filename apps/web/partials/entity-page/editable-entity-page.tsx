@@ -17,6 +17,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
@@ -307,6 +308,24 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
               />
             );
           }
+          case 'NUMBER':
+            return (
+              <NumberField
+                value={renderable.value}
+                onChange={e =>
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      renderable,
+                      value: {
+                        type: 'NUMBER',
+                        value: e.target.value,
+                      },
+                    },
+                  })
+                }
+              />
+            );
           case 'CHECKBOX': {
             const checked = getChecked(renderable.value);
 

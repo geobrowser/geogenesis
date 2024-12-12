@@ -7,6 +7,7 @@ export const valueTypeIds: Record<TripleValueType, ValueTypeId> = {
   TIME: SYSTEM_IDS.DATE,
   URL: SYSTEM_IDS.URI,
   CHECKBOX: SYSTEM_IDS.CHECKBOX,
+  NUMBER: SYSTEM_IDS.NUMBER,
 };
 
 export type FilterableValueType = TripleValueType | 'RELATION';
@@ -17,6 +18,7 @@ export const valueTypes: Record<ValueTypeId, FilterableValueType> = {
   [SYSTEM_IDS.DATE]: 'TIME',
   [SYSTEM_IDS.URI]: 'URL',
   [SYSTEM_IDS.CHECKBOX]: 'CHECKBOX',
+  [SYSTEM_IDS.NUMBER]: 'NUMBER',
 };
 
 export const valueTypeNames: Record<ValueTypeId, string> = {
@@ -25,4 +27,5 @@ export const valueTypeNames: Record<ValueTypeId, string> = {
   [SYSTEM_IDS.DATE]: 'Date',
   [SYSTEM_IDS.URI]: 'Web URL',
   [SYSTEM_IDS.CHECKBOX]: 'Checkbox',
+  [SYSTEM_IDS.NUMBER]: 'Number',
 };

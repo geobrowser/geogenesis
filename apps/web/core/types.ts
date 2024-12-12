@@ -9,13 +9,12 @@ export type ValueType =
   | 'TEXT'
   | 'URL'
   | 'TIME'
-  // | 'NUMBER'
+  | 'NUMBER'
   // | GEO_LOCATION
   | 'CHECKBOX';
 
 export type Value = {
-  type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX';
-  //  | 'NUMBER';
+  type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER';
   value: string;
 };
 
@@ -111,7 +110,7 @@ export type RenderableProperty =
 // The types of renderables don't map 1:1 to the triple value types. We might
 // also render relations with a specific type, e.g., an Image entity or a
 // Person entity, etc.
-export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URL' | 'TIME' | 'IMAGE' | 'CHECKBOX';
+export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URL' | 'TIME' | 'IMAGE' | 'CHECKBOX' | 'NUMBER';
 
 export type ReviewState =
   | 'idle'
@@ -144,7 +143,8 @@ export type ValueTypeId =
   | typeof SYSTEM_IDS.RELATION
   | typeof SYSTEM_IDS.DATE
   | typeof SYSTEM_IDS.URI
-  | typeof SYSTEM_IDS.CHECKBOX;
+  | typeof SYSTEM_IDS.CHECKBOX
+  | typeof SYSTEM_IDS.NUMBER;
 
 export type GeoType = {
   entityId: string;
