@@ -13,8 +13,10 @@ import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
 
+import { SmallButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
 import { Close } from '~/design-system/icons/close';
+import { RetrySmall } from '~/design-system/icons/retry-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { Warning } from '~/design-system/icons/warning';
 import { Spinner } from '~/design-system/spinner';
@@ -126,36 +128,42 @@ const StatusBar = () => {
                   >
                     {message[state.reviewState]}
                   </motion.span>
-                  <motion.button
-                    initial={{ opacity: 0, filter: 'blur(2px)' }}
-                    animate={{ opacity: 1, filter: 'blur(0px)' }}
-                    exit={{ opacity: 0, filter: 'blur(2px)' }}
-                    transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
-                    className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
-                    onClick={onCopyError}
-                  >
-                    <AnimatePresence mode="popLayout">
-                      {isCopied ? (
-                        <motion.div
-                          key="status-bar-error"
-                          initial={{ scale: 0.95, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.95, opacity: 0 }}
-                        >
-                          <TickSmall />
-                        </motion.div>
-                      ) : (
-                        <motion.div
-                          key="status-bar-error"
-                          initial={{ scale: 0.95, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.95, opacity: 0 }}
-                        >
-                          Copy error
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.button>
+                  {state?.retry ? (
+                    <SmallButton onClick={state.retry} variant="tertiary" icon={<RetrySmall />} className="-my-4">
+                      Retry
+                    </SmallButton>
+                  ) : (
+                    <motion.button
+                      initial={{ opacity: 0, filter: 'blur(2px)' }}
+                      animate={{ opacity: 1, filter: 'blur(0px)' }}
+                      exit={{ opacity: 0, filter: 'blur(2px)' }}
+                      transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
+                      className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
+                      onClick={onCopyError}
+                    >
+                      <AnimatePresence mode="popLayout">
+                        {isCopied ? (
+                          <motion.div
+                            key="status-bar-error"
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                          >
+                            <TickSmall />
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            key="status-bar-error"
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                          >
+                            Copy error
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.button>
+                  )}
                   <button onClick={() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' })}>
                     <Close />
                   </button>

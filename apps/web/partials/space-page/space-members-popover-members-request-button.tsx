@@ -2,17 +2,29 @@
 
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 
-interface Props {
-  votingPluginAddress: string | null;
-}
+import { Pending } from '~/design-system/pending';
 
-export function SpaceMembersPopoverMemberRequestButton({ votingPluginAddress }: Props) {
+type SpaceMembersPopoverMemberRequestButtonProps = {
+  votingPluginAddress: string | null;
+  hasRequestedSpaceMembership: boolean;
+};
+
+export function SpaceMembersPopoverMemberRequestButton({
+  votingPluginAddress,
+  hasRequestedSpaceMembership,
+}: SpaceMembersPopoverMemberRequestButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember(votingPluginAddress);
-  const text = status === 'idle' ? 'Request to join' : status === 'pending' ? 'Pending...' : 'Requested';
+  const text = ['idle', 'pending'].includes(status) ? 'Request to join' : 'Requested';
 
   return (
-    <button disabled={status !== 'idle'} onClick={() => requestToBeMember()}>
-      {text}
-    </button>
+    <Pending isPending={status === 'pending'} position="end">
+      {!hasRequestedSpaceMembership ? (
+        <button disabled={status !== 'idle'} onClick={() => requestToBeMember()}>
+          {text}
+        </button>
+      ) : (
+        <span>Requested</span>
+      )}
+    </Pending>
   );
 }

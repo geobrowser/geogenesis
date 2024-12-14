@@ -1,30 +1,36 @@
 'use client';
 
-import * as React from 'react';
-
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 
-interface Props {
+import { Pending } from '~/design-system/pending';
+
+type SpaceMembersJoinButtonProps = {
   spaceId: string;
   votingPluginAddress: string | null;
-}
+  hasRequestedSpaceMembership: boolean;
+};
 
-export function SpaceMembersJoinButton({ votingPluginAddress }: Props) {
+export function SpaceMembersJoinButton({
+  votingPluginAddress,
+  hasRequestedSpaceMembership,
+}: SpaceMembersJoinButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember(votingPluginAddress);
 
-  const onClick = async () => {
-    await requestToBeMember();
-  };
-
-  const text = status === 'idle' ? 'Join' : status === 'pending' ? 'Pending...' : 'Requested';
+  const text = ['idle', 'pending'].includes(status) ? 'Join' : 'Requested';
 
   return (
-    <button
-      onClick={onClick}
-      disabled={status !== 'idle'}
+    <Pending
+      isPending={status === 'pending'}
+      position="center"
       className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text"
     >
-      {text}
-    </button>
+      {!hasRequestedSpaceMembership ? (
+        <button onClick={() => requestToBeMember()} disabled={status !== 'idle'}>
+          {text}
+        </button>
+      ) : (
+        <span>Requested</span>
+      )}
+    </Pending>
   );
 }
