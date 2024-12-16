@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import {
-  createFiltersFromGraphQLStringAndSource,
+  createFiltersFromFilterStringAndSource,
   createGraphQLStringFromFilters,
   createGraphQLStringFromFiltersV2,
   upsertName,
@@ -35,7 +35,7 @@ interface RowQueryArgs {
   columns?: Schema[];
   pageNumber: number;
   entityId: string;
-  filterState?: Awaited<ReturnType<typeof createFiltersFromGraphQLStringAndSource>>;
+  filterState?: Awaited<ReturnType<typeof createFiltersFromFilterStringAndSource>>;
   source: Source;
   collectionItems: StoredRelation[];
 }
@@ -45,7 +45,7 @@ const queryKeys = {
     ['blocks', 'data', 'collection-items', collectionItemIds] as const,
   filterState: (filterString: string | null, source: Source) =>
     ['blocks', 'data', 'filter-state', filterString, source] as const,
-  columns: (filterState: Awaited<ReturnType<typeof createFiltersFromGraphQLStringAndSource>> | null) =>
+  columns: (filterState: Awaited<ReturnType<typeof createFiltersFromFilterStringAndSource>> | null) =>
     ['blocks', 'data', 'columns', filterState] as const,
   rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
   relationTypes: (columns?: Schema[]) => ['blocks', 'data', 'relation-types', columns],
@@ -121,7 +121,7 @@ export function useTableBlock() {
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
     queryKey: queryKeys.filterState(filterString, source),
     queryFn: async () => {
-      const filterState = await createFiltersFromGraphQLStringAndSource(filterString, source);
+      const filterState = await createFiltersFromFilterStringAndSource(filterString, source);
 
       return filterState;
     },

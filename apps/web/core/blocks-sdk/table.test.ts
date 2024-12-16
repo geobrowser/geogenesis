@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
 import {
-  createFiltersFromGraphQLStringAndSource,
+  createFiltersFromFilterStringAndSource,
   createGraphQLStringFromFilters,
   createGraphQLStringFromFiltersV2,
 } from './table';
@@ -101,7 +101,7 @@ describe('TableBlock SDK', () => {
      *
      * These four combinations can also be used together with an "and" filter
      */
-    const stringFilter = await createFiltersFromGraphQLStringAndSource(
+    const stringFilter = await createFiltersFromFilterStringAndSource(
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", stringValue_starts_with_nocase: "Value 1"}}`,
       {
         type: 'GEO',
@@ -117,7 +117,7 @@ describe('TableBlock SDK', () => {
       },
     ]);
 
-    const entityFilter = await createFiltersFromGraphQLStringAndSource(
+    const entityFilter = await createFiltersFromFilterStringAndSource(
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", entityValue: "id 1"}}`,
       {
         type: 'GEO',
@@ -126,7 +126,7 @@ describe('TableBlock SDK', () => {
 
     expect(entityFilter).toEqual([{ columnId: 'type', valueName: 'Entity Name', value: 'id 1', valueType: 'entity' }]);
 
-    const nameFilter = await createFiltersFromGraphQLStringAndSource(
+    const nameFilter = await createFiltersFromFilterStringAndSource(
       `{typeIds_contains_nocase: ["type-id"], name_starts_with_nocase: "id 1"}`,
       {
         type: 'GEO',
@@ -142,7 +142,7 @@ describe('TableBlock SDK', () => {
       },
     ]);
 
-    const andFilter = await createFiltersFromGraphQLStringAndSource(
+    const andFilter = await createFiltersFromFilterStringAndSource(
       `{and: [{typeIds_contains_nocase: ["type-id"]}, {entityOf_: {attribute: "type", stringValue_starts_with_nocase: "Value 1"}}, {entityOf_: {attribute: "type", entityValue: "id 1"}}, {name_starts_with_nocase: "id 1"}]}`,
       {
         type: 'GEO',
@@ -170,7 +170,7 @@ describe('TableBlock SDK', () => {
       },
     ]);
 
-    const spaceFilter = await createFiltersFromGraphQLStringAndSource(
+    const spaceFilter = await createFiltersFromFilterStringAndSource(
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {space: "0x0000000000000000000000000000000000000000"}}`,
       {
         type: 'GEO',

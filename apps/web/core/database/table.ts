@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { createFiltersFromGraphQLStringAndSource } from '../blocks-sdk/table';
+import { createFiltersFromFilterStringAndSource } from '../blocks-sdk/table';
 import { Entity } from '../io/dto/entities';
 import { fetchColumns } from '../io/fetch-columns';
 import { fetchTableRowEntities } from '../io/subgraph';
@@ -78,7 +78,7 @@ async function mergeTableRowEntitiesAsync(
 export async function mergeTableEntities({ options, source }: MergeTableEntitiesArgs) {
   const entities = await mergeTableRowEntitiesAsync(options);
 
-  const filterState = await createFiltersFromGraphQLStringAndSource(options.filter ?? '', source);
+  const filterState = await createFiltersFromFilterStringAndSource(options.filter ?? '', source);
 
   return entities.filter(entity => {
     for (const filter of filterState) {
