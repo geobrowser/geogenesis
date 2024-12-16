@@ -19,8 +19,8 @@
   opacity: 1;
 }
 
-.ProseMirror a {
-  @apply text-ctaPrimary underline hover:text-ctaHover;
+.ProseMirror .paragraph-node a {
+  @apply underline transition-colors duration-100 hover:text-grey-04;
 }
 
 .ProseMirror .tiptap-menu-trigger {

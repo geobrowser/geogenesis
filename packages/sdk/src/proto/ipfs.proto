@@ -65,22 +65,6 @@ enum ValueType {
   POINT = 6;
 }
 
-message Membership {
-  ActionType type = 1;
-  string name = 2;
-  string version = 3;
-  string id = 4;
-  string user = 5;
-}
-
-message Subspace {
-  ActionType type = 1;
-  string name = 2;
-  string version = 3;
-  string id = 4;
-  string subspace = 5;
-}
-
 enum ActionType {
   EMPTY = 0;
   ADD_EDIT = 1;
@@ -88,10 +72,6 @@ enum ActionType {
   REMOVE_SUBSPACE = 3;
   IMPORT_SPACE = 4;
   ARCHIVE_SPACE = 5;
-  ADD_EDITOR = 6;
-  REMOVE_EDITOR = 7;
-  ADD_MEMBER = 8;
-  REMOVE_MEMBER = 9;
 }
 
 message Import {
