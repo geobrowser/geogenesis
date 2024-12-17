@@ -42,7 +42,7 @@ export async function SpaceMembers({ spaceId }: Props) {
           trigger={<SpaceMembersChip spaceId={spaceId} />}
           content={
             <React.Suspense>
-              <SpaceMembersContent spaceId={spaceId} />
+              <SpaceMembersContent spaceId={spaceId} isPublicSpace={isPublicSpace} />
             </React.Suspense>
           }
         />
