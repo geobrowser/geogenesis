@@ -6,9 +6,11 @@ import { Environment } from '~/core/environment';
 
 import { graphql } from './graphql';
 
-const getFetchProposedEditorsQuery = (id: string) => `query {
+const getFetchProposedEditorsQuery = (id: string, time: number) => `query {
   space(id: "${id}") {
-    proposedEditors {
+    proposedEditors(
+      filter: {proposal: {status: {equalTo: PROPOSED}, endTime: {greaterThan: ${time}}}}
+    ) {
       nodes {
         accountId
       }
@@ -27,10 +29,11 @@ type NetworkResult = {
 export async function fetchProposedEditors(options: FetchProposedEditorsOptions): Promise<string[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
+  const now = Math.floor(Date.now() / 1_000);
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchProposedEditorsQuery(options.id),
+    query: getFetchProposedEditorsQuery(options.id, now),
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -51,7 +54,7 @@ export async function fetchProposedEditors(options: FetchProposedEditorsOptions)
               options.id
             } endpoint: ${endpoint}
 
-            queryString: ${getFetchProposedEditorsQuery(options.id)}
+            queryString: ${getFetchProposedEditorsQuery(options.id, now)}
             `,
             error.message
           );

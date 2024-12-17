@@ -6,9 +6,11 @@ import { Environment } from '~/core/environment';
 
 import { graphql } from './graphql';
 
-const getFetchProposedMembersQuery = (id: string) => `query {
+const getFetchProposedMembersQuery = (id: string, now: number) => `query {
   space(id: "${id}") {
-    proposedMembers {
+    proposedMembers(
+      filter: {proposal: {status: {equalTo: PROPOSED}, endTime: {greaterThan: ${now}}}}
+    ) {
       nodes {
         accountId
       }
@@ -27,10 +29,11 @@ type NetworkResult = {
 export async function fetchProposedMembers(options: FetchProposedMembersOptions): Promise<string[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
+  const now = Math.floor(Date.now() / 1_000);
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchProposedMembersQuery(options.id),
+    query: getFetchProposedMembersQuery(options.id, now),
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -51,7 +54,7 @@ export async function fetchProposedMembers(options: FetchProposedMembersOptions)
               options.id
             } endpoint: ${endpoint}
 
-            queryString: ${getFetchProposedMembersQuery(options.id)}
+            queryString: ${getFetchProposedMembersQuery(options.id, now)}
             `,
             error.message
           );

@@ -29,6 +29,8 @@ export async function SpaceMembers({ spaceId }: Props) {
     getHasRequestedSpaceMembership(spaceId, connectedAddress),
   ]);
 
+  const isPublicSpace = space.type === 'PUBLIC';
+
   if (!space) {
     return null;
   }
@@ -69,12 +71,12 @@ export async function SpaceMembers({ spaceId }: Props) {
         trigger={<SpaceMembersChip spaceId={spaceId} />}
         content={
           <React.Suspense>
-            <SpaceMembersContent spaceId={spaceId} />
+            <SpaceMembersContent spaceId={spaceId} isPublicSpace={isPublicSpace} />
           </React.Suspense>
         }
       />
 
-      {space.type === 'PUBLIC' ? (
+      {isPublicSpace ? (
         <>
           <div className="h-4 w-px bg-divider" />
           <SpaceMembersJoinButton

@@ -2,6 +2,8 @@
 
 import { useRequestToBeEditor } from '~/core/hooks/use-request-to-be-editor';
 
+import { Pending } from '~/design-system/pending';
+
 type SpaceEditorsPopoverEditorRequestButtonProps = {
   votingContractAddress: string | null;
   isMember: boolean;
@@ -16,7 +18,7 @@ export function SpaceEditorsPopoverEditorRequestButton({
   const { requestToBeEditor, status } = useRequestToBeEditor(votingContractAddress);
 
   return (
-    <>
+    <Pending isPending={status === 'pending'} position="end">
       {!hasRequestedSpaceEditorship ? (
         <button disabled={status !== 'idle'} onClick={() => requestToBeEditor()}>
           <RequestButtonText status={status} isMember={isMember} />
@@ -26,7 +28,7 @@ export function SpaceEditorsPopoverEditorRequestButton({
           <UnderVote />
         </span>
       )}
-    </>
+    </Pending>
   );
 }
 
@@ -41,8 +43,11 @@ const RequestButtonText = ({ status, isMember }: RequestButtonTextProps) => {
   switch (status) {
     case 'success':
       return <UnderVote />;
+    case 'pending':
     case 'idle':
       return 'Request editorship';
+    case 'error':
+      return 'Error';
     default:
       return null;
   }

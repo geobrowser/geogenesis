@@ -14,13 +14,12 @@ export function SpaceMembersPopoverMemberRequestButton({
   hasRequestedSpaceMembership,
 }: SpaceMembersPopoverMemberRequestButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember(votingPluginAddress);
-  const text = ['idle', 'pending'].includes(status) ? 'Request to join' : 'Requested';
 
   return (
     <Pending isPending={status === 'pending'} position="end">
       {!hasRequestedSpaceMembership ? (
         <button disabled={status !== 'idle'} onClick={() => requestToBeMember()}>
-          {text}
+          <RequestButtonText status={status} />
         </button>
       ) : (
         <span>Requested</span>
@@ -28,3 +27,21 @@ export function SpaceMembersPopoverMemberRequestButton({
     </Pending>
   );
 }
+
+type RequestButtonTextProps = {
+  status: 'error' | 'idle' | 'pending' | 'success';
+};
+
+const RequestButtonText = ({ status }: RequestButtonTextProps) => {
+  switch (status) {
+    case 'success':
+      return 'Requested';
+    case 'idle':
+    case 'pending':
+      return 'Request to join';
+    case 'error':
+      return 'Error';
+    default:
+      return null;
+  }
+};

@@ -44,6 +44,8 @@ export function useRequestToBeEditor(votingPluginAddress: string | null) {
       onLeft: error => {
         console.error(error);
         dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeEditor });
+        // Necessary to propogate error status to useMutation
+        throw error;
       },
       onRight: () => console.log('Successfully requested to be editor'),
     });

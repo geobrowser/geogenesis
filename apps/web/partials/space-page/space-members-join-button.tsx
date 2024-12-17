@@ -16,8 +16,6 @@ export function SpaceMembersJoinButton({
 }: SpaceMembersJoinButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember(votingPluginAddress);
 
-  const text = ['idle', 'pending'].includes(status) ? 'Join' : 'Requested';
-
   return (
     <Pending
       isPending={status === 'pending'}
@@ -26,7 +24,7 @@ export function SpaceMembersJoinButton({
     >
       {!hasRequestedSpaceMembership ? (
         <button onClick={() => requestToBeMember()} disabled={status !== 'idle'}>
-          {text}
+          <RequestButtonText status={status} />
         </button>
       ) : (
         <span>Requested</span>
@@ -34,3 +32,21 @@ export function SpaceMembersJoinButton({
     </Pending>
   );
 }
+
+type RequestButtonTextProps = {
+  status: 'error' | 'idle' | 'pending' | 'success';
+};
+
+const RequestButtonText = ({ status }: RequestButtonTextProps) => {
+  switch (status) {
+    case 'success':
+      return 'Requested';
+    case 'pending':
+    case 'idle':
+      return 'Join';
+    case 'error':
+      return 'Error';
+    default:
+      return null;
+  }
+};

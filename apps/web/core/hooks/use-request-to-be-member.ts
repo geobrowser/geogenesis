@@ -46,6 +46,8 @@ export function useRequestToBeMember(votingPluginAddress: string | null) {
       onLeft: error => {
         console.error(error);
         dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeMember });
+        // Necessary to propogate error status to useMutation
+        throw error;
       },
       onRight: () => console.log('Successfully requested to be member'),
     });
