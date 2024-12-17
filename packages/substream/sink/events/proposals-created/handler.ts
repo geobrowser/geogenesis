@@ -49,8 +49,6 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
 
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposals, block);
 
-    yield* _(Effect.logDebug('Writing accounts'));
-
     // This might be the very first onchain interaction for a wallet address,
     // so we need to make sure that any accounts are already created when we
     // process the proposals below, particularly for editor and member requests.

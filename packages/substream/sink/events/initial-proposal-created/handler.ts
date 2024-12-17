@@ -36,8 +36,6 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
       id: creator,
     }));
 
-    yield* _(Effect.logDebug('Writing accounts'));
-
     yield* _(writeAccounts(initialAccounts));
 
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposalsFromIpfs, block);
