@@ -1,6 +1,6 @@
 import type * as S from 'zapatos/schema';
 
-import type { BlockEvent, DeleteTripleOp, Op, SetTripleOp } from '~/sink/types';
+import type { BlockEvent, DeleteTripleOp, SetTripleOp } from '~/sink/types';
 import { createMergedVersionId } from '~/sink/utils/id';
 
 interface AggregateMergableVersionsArgs {
