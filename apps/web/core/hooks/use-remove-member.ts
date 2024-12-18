@@ -42,9 +42,7 @@ export function useRemoveMember(args: RemoveEditorArgs) {
         return writeTxHash;
       });
 
-      await Effect.runPromise(publishProgram).catch(error => {
-        throw error;
-      });
+      await Effect.runPromise(publishProgram);
     },
   });
 

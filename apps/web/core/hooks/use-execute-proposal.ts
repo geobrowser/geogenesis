@@ -25,9 +25,7 @@ export function useExecuteProposal({ address, onchainProposalId }: Args) {
         })
       );
 
-      const hash = await Effect.runPromise(txEffect).catch(error => {
-        throw error;
-      });
+      const hash = await Effect.runPromise(txEffect);
       console.log('Execute successful!', hash);
     },
   });

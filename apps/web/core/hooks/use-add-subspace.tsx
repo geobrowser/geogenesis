@@ -55,9 +55,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
         return hash;
       });
 
-      await Effect.runPromise(writeTxEffect).catch(error => {
-        throw error;
-      });
+      await Effect.runPromise(writeTxEffect);
     },
   });
 

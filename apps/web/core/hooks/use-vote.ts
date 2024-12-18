@@ -27,9 +27,7 @@ export function useVote({ address, onchainProposalId }: Args) {
         })
       );
 
-      const hash = await Effect.runPromise(txEffect).catch(error => {
-        throw error;
-      });
+      const hash = await Effect.runPromise(txEffect);
       console.log('Vote successful!', hash);
     },
   });

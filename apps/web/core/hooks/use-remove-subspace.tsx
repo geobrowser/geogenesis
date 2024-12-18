@@ -55,9 +55,7 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
         return hash;
       });
 
-      await Effect.runPromise(writeTxEffect).catch(error => {
-        throw error;
-      });
+      await Effect.runPromise(writeTxEffect);
     },
   });
 
