@@ -6,6 +6,8 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
+import { getHasRequestedSpaceMembership } from '~/partials/space-page/get-has-requested-space-membership';
+
 import { getIsMemberForSpace } from './get-is-member-for-space';
 import { SpaceMembersChip } from './space-members-chip';
 import { SpaceMembersDialogServerContainer } from './space-members-dialog-server-container';
@@ -21,11 +23,13 @@ interface Props {
 
 export async function SpaceMembers({ spaceId }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
-  const [isMember, space] = await Promise.all([
+  const [isMember, space, hasRequestedSpaceMembership] = await Promise.all([
     getIsMemberForSpace(spaceId, connectedAddress),
     cachedFetchSpace(spaceId),
-    // @TODO: Check if the user has already requested to be a member
+    getHasRequestedSpaceMembership(spaceId, connectedAddress),
   ]);
+
+  const isPublicSpace = space?.type === 'PUBLIC';
 
   if (!space) {
     return null;
@@ -38,7 +42,7 @@ export async function SpaceMembers({ spaceId }: Props) {
           trigger={<SpaceMembersChip spaceId={spaceId} />}
           content={
             <React.Suspense>
-              <SpaceMembersContent spaceId={spaceId} />
+              <SpaceMembersContent spaceId={spaceId} isPublicSpace={isPublicSpace} />
             </React.Suspense>
           }
         />
@@ -67,15 +71,19 @@ export async function SpaceMembers({ spaceId }: Props) {
         trigger={<SpaceMembersChip spaceId={spaceId} />}
         content={
           <React.Suspense>
-            <SpaceMembersContent spaceId={spaceId} />
+            <SpaceMembersContent spaceId={spaceId} isPublicSpace={isPublicSpace} />
           </React.Suspense>
         }
       />
 
-      {space.type === 'PUBLIC' ? (
+      {isPublicSpace ? (
         <>
           <div className="h-4 w-px bg-divider" />
-          <SpaceMembersJoinButton spaceId={spaceId} votingPluginAddress={space.mainVotingPluginAddress} />
+          <SpaceMembersJoinButton
+            spaceId={spaceId}
+            votingPluginAddress={space.mainVotingPluginAddress}
+            hasRequestedSpaceMembership={hasRequestedSpaceMembership}
+          />
         </>
       ) : null}
     </div>
