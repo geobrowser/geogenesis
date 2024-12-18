@@ -7,7 +7,7 @@ type Retry = (() => Promise<unknown>) | (() => unknown);
 export interface StatusBarState {
   reviewState: ReviewState;
   error: string | null;
-  retry?: Retry | null;
+  retry?: Retry;
 }
 
 export type StatusBarActions =
@@ -15,7 +15,7 @@ export type StatusBarActions =
       type: 'SET_REVIEW_STATE';
       payload: ReviewState;
     }
-  | { type: 'ERROR'; payload: string | null; retry?: Retry | null };
+  | { type: 'ERROR'; payload: string | null; retry?: Retry };
 
 export const statusBarReducer = (_: StatusBarState, action: StatusBarActions): StatusBarState => {
   switch (action.type) {
