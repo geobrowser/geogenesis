@@ -45,8 +45,8 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
         block,
         edits: schemaEditProposals.edits,
         ipfsVersions: schemaEditProposals.versions,
-        opsByEditId: schemaEditProposals.opsByEditId,
-        opsByEntityId: schemaEditProposals.opsByEntityId,
+        tripleOpsByEditId: schemaEditProposals.tripleOpsByEditId,
+        tripleOpsByEntityId: schemaEditProposals.tripleOpsByEntityId,
         editType,
       })
     );
@@ -55,29 +55,29 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
 
     // @TODO transactions are pretty slow for actual content writing for now, so
     // we are skipping writing the actual content in a transaction for now.
-    const write = Effect.tryPromise({
-      try: async () => {
-        // @TODO this can probably go into an effect somewhere that's defined after
-        // we aggregate all the appropriate data to write.
-        await Promise.all([
-          Edits.upsert(schemaEditProposals.edits),
-          Proposals.upsert(schemaEditProposals.proposals),
-          Versions.upsert(versionsWithStaleEntities, { chunked: true }),
-        ]);
+    yield* _(
+      Effect.tryPromise({
+        try: async () => {
+          // @TODO this can probably go into an effect somewhere that's defined after
+          // we aggregate all the appropriate data to write.
+          await Promise.all([
+            Edits.upsert(schemaEditProposals.edits),
+            Proposals.upsert(schemaEditProposals.proposals),
+            Versions.upsert(versionsWithStaleEntities, { chunked: true }),
+          ]);
 
-        return true;
-      },
-      catch: error => new CouldNotWriteInitialSpaceProposalsError(String(error)),
-    });
-
-    yield* _(write);
+          return true;
+        },
+        catch: error => new CouldNotWriteInitialSpaceProposalsError(String(error)),
+      })
+    );
 
     yield* _(Effect.logDebug('Writing content for edits'));
 
     const opsByNewVersions = yield* _(
       mergeOpsWithPreviousVersions({
         edits: schemaEditProposals.edits,
-        opsByVersionId: schemaEditProposals.opsByVersionId,
+        tripleOpsByVersionId: schemaEditProposals.tripleOpsByVersionId,
         versions: versionsWithStaleEntities,
       })
     );
@@ -85,8 +85,8 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
     yield* _(
       writeEdits({
         versions: versionsWithStaleEntities,
-        opsByVersionId: opsByNewVersions,
-        opsByEditId: schemaEditProposals.opsByEditId,
+        tripleOpsByVersionId: opsByNewVersions,
+        relationOpsByEditId: schemaEditProposals.relationOpsByEditId,
         block,
         editType,
         edits: schemaEditProposals.edits,

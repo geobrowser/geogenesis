@@ -30,7 +30,9 @@ function opsToBinary(ops: Op[]): OpBinary[] {
       case 'DELETE_RELATION':
         return new OpBinary({
           type: OpType.DELETE_RELATION,
-          relation: Relation.fromJson(o.relation),
+          relation: Relation.fromJson({
+            id: o.relation.id,
+          }),
         });
       case 'SET_BATCH_TRIPLE':
         return new OpBinary({
@@ -41,7 +43,9 @@ function opsToBinary(ops: Op[]): OpBinary[] {
       case 'DELETE_ENTITY':
         return new OpBinary({
           type: OpType.DELETE_ENTITY,
-          entity: Entity.fromJson(o.entity),
+          entity: Entity.fromJson({
+            id: o.entity.id,
+          }),
         });
       case 'SET_TRIPLE':
         return new OpBinary({

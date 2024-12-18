@@ -1,18 +1,18 @@
 import type * as S from 'zapatos/schema';
 
-import type { BlockEvent, Op } from '~/sink/types';
+import type { BlockEvent, DeleteTripleOp, Op, SetTripleOp } from '~/sink/types';
 import { createMergedVersionId } from '~/sink/utils/id';
 
 interface AggregateMergableVersionsArgs {
   manyVersionsByEntityId: Map<string, S.versions.Insertable[]>;
-  opsByVersionId: Map<string, Op[]>;
+  tripleOpsByVersionId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
   block: BlockEvent;
   editType: 'IMPORT' | 'DEFAULT';
 }
 
 export function aggregateMergableOps(args: AggregateMergableVersionsArgs) {
-  const { manyVersionsByEntityId, opsByVersionId, block } = args;
-  const newOpsByVersionId = new Map<string, Op[]>();
+  const { manyVersionsByEntityId, tripleOpsByVersionId, block } = args;
+  const newOpsByVersionId = new Map<string, (SetTripleOp | DeleteTripleOp)[]>();
 
   const newVersions = [...manyVersionsByEntityId.values()].map((versionsByEntityId): S.versions.Insertable | null => {
     // We handle mergable versions differently for imported edits vs default edits. For
@@ -24,7 +24,7 @@ export function aggregateMergableOps(args: AggregateMergableVersionsArgs) {
     const newVersionId = createMergedVersionId(versionsByEntityId.map(v => v.id.toString()));
 
     for (const version of versionsByEntityId) {
-      const opsForVersion = opsByVersionId.get(version.id.toString());
+      const opsForVersion = tripleOpsByVersionId.get(version.id.toString());
 
       if (opsForVersion) {
         const previousOpsForNewVersion = newOpsByVersionId.get(newVersionId);

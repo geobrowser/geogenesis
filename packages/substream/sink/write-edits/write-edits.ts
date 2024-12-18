@@ -3,9 +3,9 @@ import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { CurrentVersions, Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
+import { Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
-import type { BlockEvent, Op } from '../types';
+import type { BlockEvent, CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SetTripleOp } from '../types';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
 import { aggregateRelations } from './relations/aggregate-relations';
 import { writeTriples } from './write-triples';
@@ -24,8 +24,8 @@ class CouldNotWriteVersionSpacesError extends Data.TaggedError('CouldNotWriteVer
 interface PopulateContentArgs {
   block: BlockEvent;
   versions: Schema.versions.Insertable[];
-  opsByVersionId: Map<string, Op[]>;
-  opsByEditId: Map<string, Op[]>;
+  relationOpsByEditId: Map<string, (CreateRelationOp | DeleteRelationOp)[]>;
+  tripleOpsByVersionId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
   /**
    * We pass in any imported edits to write to the db since we need to
    * write the imported edits as if they are a single atomic unit rather
@@ -53,7 +53,7 @@ interface PopulateContentArgs {
  * versions as a single unit.
  */
 export function writeEdits(args: PopulateContentArgs) {
-  const { versions, opsByVersionId, opsByEditId, edits, block, editType } = args;
+  const { versions, tripleOpsByVersionId, relationOpsByEditId, edits, block, editType } = args;
   const spaceIdByEditId = new Map<string, string>();
 
   for (const edit of edits) {
@@ -84,7 +84,7 @@ export function writeEdits(args: PopulateContentArgs) {
       const editWithCreatedById: SchemaTripleEdit = {
         versonId: version.id.toString(),
         createdById: version.created_by_id.toString(),
-        ops: opsByVersionId.get(version.id.toString()) ?? [],
+        ops: tripleOpsByVersionId.get(version.id.toString()) ?? [],
       };
 
       const triplesForVersion = mapSchemaTriples(editWithCreatedById, block);
@@ -117,11 +117,10 @@ export function writeEdits(args: PopulateContentArgs) {
 
     const relations = yield* _(
       aggregateRelations({
-        opsByEditId,
+        relationOpsByEditId,
         versions,
         edits,
         editType,
-        spaceIdByEditId,
       })
     );
 
@@ -137,12 +136,6 @@ export function writeEdits(args: PopulateContentArgs) {
       (a, z) => a.space_id.toString() !== z.space_id.toString() && a.version_id.toString() !== z.version_id.toString()
     );
 
-    /**
-     * 1. Write versions with primitive metadata (e.g., name, description)
-     * 2. Write any new entities
-     * 3. Write spaces that a version belongs to
-     * 4. Write triples + relations
-     */
     yield* _(
       Effect.all(
         [
@@ -183,7 +176,7 @@ export function writeEdits(args: PopulateContentArgs) {
     // We run this after versions are written so that we can fetch all of the types for the
     // type entity and compare them against the type_of_id version for each relatons to see
     // of the type_of_id is for the type entity.
-    const versionTypes = yield* _(aggregateTypesFromRelationsAndTriples({ relations, triples: triplesWithCreatedBy }));
+    const versionTypes = yield* _(aggregateTypesFromRelationsAndTriples(relations));
     const spaceMetadata = yield* _(aggregateSpacesFromRelations(relations, versions, spaceIdByEditId));
 
     yield* _(
@@ -208,12 +201,7 @@ export function writeEdits(args: PopulateContentArgs) {
   });
 }
 
-interface AggregateTypesFromRelationsAndTriplesArgs {
-  relations: Schema.relations.Insertable[];
-  triples: OpWithCreatedBy[];
-}
-
-function aggregateTypesFromRelationsAndTriples({ relations, triples }: AggregateTypesFromRelationsAndTriplesArgs) {
+function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Insertable[]) {
   return Effect.gen(function* (_) {
     // entity version id -> type version ids
     const types = new Map<string, string[]>();
@@ -231,40 +219,10 @@ function aggregateTypesFromRelationsAndTriples({ relations, triples }: Aggregate
       }
     }
 
-    const triplesThatSetAType = triples.filter(
-      t =>
-        t.op === 'SET_TRIPLE' && t.triple.attribute_id === SYSTEM_IDS.TYPES && t.triple.value_type.toString() === 'URL'
-    );
-
-    const typeEntityIdsFromTriples = triplesThatSetAType
-      .map(t => t.triple.entity_value_id?.toString())
-      .filter(entityId => entityId !== undefined);
-
-    const versionsForTypeEntityIdsFromTriples = (yield* _(
-      Effect.forEach(
-        typeEntityIdsFromTriples,
-        entityId =>
-          Effect.promise(() => {
-            return CurrentVersions.selectOne({ entity_id: entityId });
-          }),
-        {
-          concurrency: 50,
-        }
-      )
-    )).flatMap(v => (v ? [v] : []));
-
-    for (const { triple } of triplesThatSetAType) {
-      // Find a version for the entity being used as the type
-      const typeVersionId = versionsForTypeEntityIdsFromTriples
-        .find(v => v.entity_id.toString() === triple.entity_value_id?.toString())
-        ?.version_id.toString();
-
-      if (typeVersionId) {
-        const versionId = triple.version_id.toString();
-        const alreadyFoundTypes = types.get(versionId) ?? [];
-
-        types.set(versionId, [...alreadyFoundTypes, typeVersionId]);
-      }
+    for (const relation of relations) {
+      const versionId = relation.type_of_id.toString();
+      const alreadyFoundTypes = types.get(versionId) ?? [];
+      types.set(versionId, [...alreadyFoundTypes, versionId]);
     }
 
     return [...types.entries()].flatMap(([versionId, typeIds]) => {

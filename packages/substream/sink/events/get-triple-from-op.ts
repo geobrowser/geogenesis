@@ -1,13 +1,17 @@
 import type * as S from 'zapatos/schema';
 
-import type { BlockEvent, Op, ValueType } from '../types';
+import type { BlockEvent, DeleteTripleOp, SetTripleOp, ValueType } from '../types';
 
 /**
  * @NOTE that we currently merge ops from previous versions of entities into new versions. If
  * an entity has triples from multiple spaces we need to keep the space_id of the original
  * triple instead of changing it to the space id of the edit being processed.
  */
-export function getTripleFromOp(op: Op, versionId: string, block: BlockEvent): S.triples.Insertable {
+export function getTripleFromOp(
+  op: SetTripleOp | DeleteTripleOp,
+  versionId: string,
+  block: BlockEvent
+): S.triples.Insertable {
   const { entity, attribute } = op.triple;
 
   if (op.type === 'SET_TRIPLE') {

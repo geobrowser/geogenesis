@@ -39,13 +39,33 @@ export type SetTripleOp = {
   };
 };
 
-type DeleteTripleOp = {
+export type DeleteTripleOp = {
   type: 'DELETE_TRIPLE';
   space: string;
   triple: {
     entity: string;
     attribute: string;
     value: Record<string, never>;
+  };
+};
+
+export type CreateRelationOp = {
+  type: 'CREATE_RELATION';
+  space: string;
+  relation: {
+    id: string;
+    index: string;
+    fromEntity: string;
+    toEntity: string;
+    type: string;
+  };
+};
+
+export type DeleteRelationOp = {
+  type: 'DELETE_RELATION';
+  space: string;
+  relation: {
+    id: string;
   };
 };
 
@@ -61,7 +81,7 @@ type DeleteTripleOp = {
  * an entity has triples from multiple spaces we need to keep the space_id of the original
  * triple instead of changing it to the space id of the edit being processed.
  */
-export type Op = SetTripleOp | DeleteTripleOp;
+export type Op = SetTripleOp | DeleteTripleOp | CreateRelationOp | DeleteRelationOp;
 
 export type Edit = {
   name: string;
