@@ -26,16 +26,19 @@ message ImportEdit {
   string name = 4;
   repeated Op ops = 5;
   repeated string authors = 6;
-  string createdBy = 7;
-  string createdAt = 8;
-  string blockHash = 9;
-  string blockNumber = 10;
-  string transactionHash = 11;
+  string created_by = 7;
+  string created_at = 8;
+  string block_hash = 9;
+  string block_number = 10;
+  string transaction_hash = 11;
 }
 
 message Op {
   OpType type = 1;
   Triple triple = 2;
+  Entity entity = 3;
+  Relation relation = 4;
+  repeated Triple triples = 5;
 }
 
 message Triple {
@@ -49,14 +52,31 @@ message Value {
   string value = 2;
 }
 
+message Relation {
+  string id = 1;
+  string type = 2;
+  string from_entity = 3;
+  string to_entity = 4;
+  string index = 5;
+}
+
+message Entity {
+  string id = 1;
+  repeated string types = 2;
+}
+
 enum OpType {
-  NONE = 0;
+  OP_TYPE_UNKNOWN = 0;
   SET_TRIPLE = 1;
   DELETE_TRIPLE = 2;
+  SET_TRIPLE_BATCH = 3;
+  DELETE_ENTITY = 4;
+  CREATE_RELATION = 5;
+  DELETE_RELATION = 6;
 }
 
 enum ValueType {
-  UNKNOWN = 0;
+  VALUE_TYPE_UNKNOWN = 0;
   TEXT = 1;
   NUMBER = 2;
   CHECKBOX = 3;
@@ -66,7 +86,7 @@ enum ValueType {
 }
 
 enum ActionType {
-  EMPTY = 0;
+  ACTION_TYPE_UNKNOWN = 0;
   ADD_EDIT = 1;
   ADD_SUBSPACE = 2;
   REMOVE_SUBSPACE = 3;
@@ -77,8 +97,8 @@ enum ActionType {
 message Import {
   string version = 1;
   ActionType type = 2;
-  string previousNetwork = 3;
-  string previousContractAddress = 4;
+  string previous_network = 3;
+  string previous_contract_address = 4;
   repeated string edits = 5;
 }
 
