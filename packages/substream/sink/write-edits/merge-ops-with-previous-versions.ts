@@ -2,24 +2,24 @@ import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
 import { CurrentVersions, Triples } from '../db';
-import type { Op } from '../types';
+import type { DeleteTripleOp, SetTripleOp } from '../types';
 
 interface MergeOpsWithPreviousVersionArgs {
   versions: Schema.versions.Insertable[];
-  opsByVersionId: Map<string, Op[]>;
+  tripleOpsByVersionId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
   edits: Schema.edits.Insertable[];
 }
 
 export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionArgs) {
   const spaceIdByEditId = new Map<string, string>();
-  const { versions, opsByVersionId } = args;
+  const { versions, tripleOpsByVersionId: opsByVersionId } = args;
 
   for (const edit of args.edits) {
     spaceIdByEditId.set(edit.id.toString(), edit.space_id.toString());
   }
 
   return Effect.gen(function* (_) {
-    const newOpsByVersionId = new Map<string, Op[]>();
+    const newOpsByVersionId = new Map<string, (SetTripleOp | DeleteTripleOp)[]>();
 
     const maybeLatestVersionForEntityIds = yield* _(
       Effect.forEach(
@@ -69,7 +69,7 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
         // Make sure that we put the last version's ops before the new version's
         // ops so that when we squash the ops later they're ordered correctly.
         newOpsByVersionId.set(version.id.toString(), [
-          ...lastVersionTriples.map((t): Op => {
+          ...lastVersionTriples.map((t): SetTripleOp => {
             return {
               type: 'SET_TRIPLE',
               space: t.space_id.toString(),

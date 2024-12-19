@@ -58,7 +58,7 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
 
   relationsToClone.forEach(relation => {
     newOps.push(
-      ...Relation.make({
+      Relation.make({
         fromId: newEntityId,
         toId: relation.toEntity.id,
         relationTypeId: relation.typeOf.id,
@@ -79,7 +79,7 @@ const cloneBlocks = async (blocksToClone: Array<RelationType>, newEntityId: stri
     blocksToClone.map(async block => {
       const newBlockId = ID.createEntityId();
 
-      const relationshipOps = Relation.make({
+      const relationshipOp = Relation.make({
         fromId: newEntityId,
         toId: newBlockId,
         relationTypeId: block.typeOf.id,
@@ -92,7 +92,7 @@ const cloneBlocks = async (blocksToClone: Array<RelationType>, newEntityId: stri
         entityName: block.toEntity.name ?? '',
       });
 
-      return [...relationshipOps, ...newBlockOps];
+      return [relationshipOp, ...newBlockOps];
     })
   );
 

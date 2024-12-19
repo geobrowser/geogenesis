@@ -1,3 +1,5 @@
+export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
+
 export type ValueType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'URL' | 'TIME' | 'POINT';
 
 export type Value = {
@@ -5,30 +7,57 @@ export type Value = {
   value: string;
 };
 
-/**
- * @see: Operations data spec is still WIP
- */
+type Triple = {
+  entity: string;
+  attribute: string;
+  value: Value;
+};
+
+type Entity = {
+  id: string;
+  types: string[];
+};
+
+export type SetBatchTripleOp = {
+  type: 'SET_BATCH_TRIPLE';
+  entity: Entity;
+  triples: Triple[];
+};
+
+export type DeleteEntityOp = {
+  type: 'DELETE_ENTITY';
+  entity: OmitStrict<Entity, 'types'>;
+};
+
 export type SetTripleOp = {
   type: 'SET_TRIPLE';
-  triple: {
-    entity: string;
-    attribute: string;
-    value: Value;
-  };
+  triple: Triple;
 };
 
-/**
- * @see: Operations data spec is still WIP
- */
 export type DeleteTripleOp = {
   type: 'DELETE_TRIPLE';
-  triple: {
-    entity: string;
-    attribute: string;
-  };
+  triple: OmitStrict<Triple, 'value'>;
 };
 
-export type Op = SetTripleOp | DeleteTripleOp;
+type Relation = {
+  id: string;
+  type: string;
+  fromEntity: string;
+  toEntity: string;
+  index: string;
+};
+
+export type CreateRelationOp = {
+  type: 'CREATE_RELATION';
+  relation: Relation;
+};
+
+export type DeleteRelationOp = {
+  type: 'DELETE_RELATION';
+  relation: Pick<Relation, 'id'>;
+};
+
+export type Op = SetTripleOp | DeleteTripleOp | SetBatchTripleOp | DeleteEntityOp | CreateRelationOp | DeleteRelationOp;
 
 export type EditProposalMetadata = {
   type: 'ADD_EDIT';

@@ -161,6 +161,7 @@ export interface Schema {
 }
 
 export type Relation = {
+  hasBeenPublished?: boolean;
   space: string;
   id: EntityId;
   index: string;

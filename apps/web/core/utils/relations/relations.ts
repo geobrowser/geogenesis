@@ -1,4 +1,4 @@
-import { Relation } from '@geogenesis/sdk';
+import { Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { EntityId } from '~/core/io/schema';
 import { Triple } from '~/core/types';
@@ -14,68 +14,68 @@ interface OpsToTriplesArgs {
 export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
   const { fromId, toId, spaceId, typeOfId } = args;
 
-  const [typeOp, fromOp, toOp, indexOp, typeOfOp] = Relation.make({
+  const { relation } = Relation.make({
     fromId,
     toId,
     relationTypeId: typeOfId,
   });
 
-  const entityId = args.relationId ?? typeOp.triple.entity;
+  const entityId = args.relationId ?? relation.id;
 
   return [
     {
       space: spaceId,
-      attributeId: typeOp.triple.attribute,
+      attributeId: SYSTEM_IDS.TYPES,
       attributeName: 'Types',
       entityId: entityId,
       entityName: null,
       value: {
         type: 'URL',
-        value: typeOp.triple.value.value,
+        value: SYSTEM_IDS.RELATION_TYPE,
       },
     },
     {
       space: spaceId,
-      attributeId: fromOp.triple.attribute,
+      attributeId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
       attributeName: 'From Entity',
       entityId: entityId,
       entityName: null,
       value: {
         type: 'URL',
-        value: fromOp.triple.value.value,
+        value: relation.fromEntity,
       },
     },
     {
       space: spaceId,
-      attributeId: toOp.triple.attribute,
+      attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
       attributeName: 'To Entity',
       entityId: entityId,
       entityName: null,
       value: {
         type: 'URL',
-        value: toOp.triple.value.value,
+        value: relation.toEntity,
       },
     },
     {
       space: spaceId,
-      attributeId: indexOp.triple.attribute,
+      attributeId: SYSTEM_IDS.RELATION_INDEX,
       attributeName: 'Index',
       entityId: entityId,
       entityName: null,
       value: {
         type: 'TEXT',
-        value: indexOp.triple.value.value,
+        value: relation.index,
       },
     },
     {
       space: spaceId,
-      attributeId: typeOfOp.triple.attribute,
+      attributeId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
       attributeName: 'Relation type',
       entityId: entityId,
       entityName: null,
       value: {
         type: 'URL',
-        value: typeOfOp.triple.value.value,
+        value: relation.type,
       },
     },
   ];

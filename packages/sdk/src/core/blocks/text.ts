@@ -33,5 +33,5 @@ export function make({ fromId, text, position }: TextBlockArgs): Op[] {
     position,
   });
 
-  return [...textBlockType, textBlockMarkdownText, ...textBlockRelation];
+  return [textBlockType, textBlockMarkdownText, textBlockRelation];
 }

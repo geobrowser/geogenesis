@@ -1,5 +1,3 @@
-// create cover image
-// create avatar image
 import { DataBlock, Position, PositionRange, Relation, SYSTEM_IDS, TextBlock, encodeBase58 } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
@@ -24,7 +22,7 @@ const TEST_ENTITY_ID = encodeBase58('62ef04337a56401db29ab40aa1d5c672');
 
 const testEntityNameOp: Op = {
   type: 'SET_TRIPLE',
-  space: SYSTEM_IDS.ROOT_SPACE_ID,
+  space: SPACE_ID,
   triple: {
     attribute: SYSTEM_IDS.NAME,
     entity: TEST_ENTITY_ID,
@@ -36,19 +34,22 @@ const testEntityNameOp: Op = {
 };
 
 const testEntityTypes: Op[] = [SYSTEM_IDS.PERSON_TYPE].flatMap(typeId => {
-  return Relation.make({
+  const newRelation = Relation.make({
     fromId: TEST_ENTITY_ID,
     toId: typeId,
     relationTypeId: SYSTEM_IDS.TYPES,
-  }).map(op => ({
-    ...op,
+  });
+
+  return {
+    ...newRelation,
     space: SPACE_ID,
-  }));
+  };
 });
 
 const testEntityBlocks = [
   ...TextBlock.make({ fromId: TEST_ENTITY_ID, text: 'Test entity text block' }),
   ...DataBlock.make({
+    name: 'Data block',
     fromId: TEST_ENTITY_ID,
     sourceType: 'GEO',
     position: Position.createBetween(PositionRange.FIRST),
@@ -76,6 +77,8 @@ const PROPOSAL: SinkEditProposal = {
 };
 
 export const bootstrapTest = Effect.gen(function* (_) {
+  yield* _(Effect.logDebug('Writing test bootstrap data'));
+
   yield* _(
     handleSpacesCreated(
       [

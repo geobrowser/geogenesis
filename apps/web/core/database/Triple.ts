@@ -31,13 +31,16 @@ export interface LocalTriple extends BaseTriple {
 }
 
 export class Triple {
-  static make(triple: BaseTriple): LocalTriple {
+  static make(
+    triple: BaseTriple,
+    options: { hasBeenPublished?: boolean; isDeleted?: boolean } = { hasBeenPublished: false, isDeleted: false }
+  ): LocalTriple {
     return {
       ...triple,
       id: ID.createTripleId(triple),
-      hasBeenPublished: false,
+      hasBeenPublished: options.hasBeenPublished ?? false,
       timestamp: new Date().toISOString(),
-      isDeleted: false,
+      isDeleted: options.hasBeenPublished ?? false,
     };
   }
 }

@@ -3,7 +3,7 @@ import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
 import { getFetchIpfsContentEffect } from '../../ipfs';
-import type { BlockEvent, Op, SinkEditProposal } from '../../types';
+import type { BlockEvent, Op, SetTripleOp, SinkEditProposal } from '../../types';
 import type { ChainEditPublished } from '../schema/edit-published';
 import { Decoder } from '~/sink/proto';
 
@@ -101,27 +101,38 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
           daoAddress: processedProposal.daoAddress,
           pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
           ops: parsedContent.ops.map((op): Op => {
-            if (op.type === 'SET_TRIPLE') {
-              return {
-                type: 'SET_TRIPLE',
-                space: maybeSpaceIdForSpacePlugin.id,
-                triple: op.triple,
-                // Have to do some weird transforms with import edits for some reason
-                // and Zod doesn't recognize the transform as a literal. Means we can't
-                // correctly discriminate between SET_TRIPLE and DELETE_TRIPLE structures.
-              } as Op;
+            switch (op.type) {
+              case 'SET_TRIPLE':
+                return {
+                  type: 'SET_TRIPLE',
+                  space: maybeSpaceIdForSpacePlugin.id,
+                  triple: op.triple,
+                } as SetTripleOp;
+              case 'DELETE_TRIPLE':
+                return {
+                  type: 'DELETE_TRIPLE',
+                  space: maybeSpaceIdForSpacePlugin.id,
+                  triple: {
+                    attribute: op.triple.attribute,
+                    entity: op.triple.entity,
+                    value: {},
+                  },
+                };
+              case 'CREATE_RELATION':
+                return {
+                  type: 'CREATE_RELATION',
+                  space: maybeSpaceIdForSpacePlugin.id,
+                  relation: op.relation,
+                };
+              case 'DELETE_RELATION':
+                return {
+                  type: 'DELETE_RELATION',
+                  space: maybeSpaceIdForSpacePlugin.id,
+                  relation: op.relation,
+                };
             }
-
-            return {
-              type: 'DELETE_TRIPLE',
-              space: maybeSpaceIdForSpacePlugin.id,
-              triple: {
-                attribute: op.triple.attribute,
-                entity: op.triple.entity,
-                value: {},
-              },
-            };
-          }), // @TODO: For non-import edits there's currently no event that includes the createdById
+          }),
+          // @TODO: For non-import edits there's currently no event that includes the createdById
           // for the caller. For public spaces we read it from the event that created the proposal,
           // but for actions that don't have a proposal we don't know who triggered the action, or
           // if the person who triggered the action is the person who actually wrote the content.
@@ -173,26 +184,36 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
             onchainProposalId: '-1',
             pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
             ops: e.ops.map((op): Op => {
-              if (op.type === 'SET_TRIPLE') {
-                return {
-                  type: 'SET_TRIPLE',
-                  space: maybeSpaceIdForSpacePlugin.id,
-                  triple: op.triple,
-                  // Have to do some weird transforms with import edits for some reason
-                  // and Zod doesn't recognize the transform as a literal. Means we can't
-                  // correctly discriminate between SET_TRIPLE and DELETE_TRIPLE structures.
-                } as Op;
+              switch (op.type) {
+                case 'SET_TRIPLE':
+                  return {
+                    type: 'SET_TRIPLE',
+                    space: maybeSpaceIdForSpacePlugin.id,
+                    triple: op.triple,
+                  } as SetTripleOp;
+                case 'DELETE_TRIPLE':
+                  return {
+                    type: 'DELETE_TRIPLE',
+                    space: maybeSpaceIdForSpacePlugin.id,
+                    triple: {
+                      attribute: op.triple.attribute,
+                      entity: op.triple.entity,
+                      value: {},
+                    },
+                  };
+                case 'CREATE_RELATION':
+                  return {
+                    type: 'CREATE_RELATION',
+                    space: maybeSpaceIdForSpacePlugin.id,
+                    relation: op.relation,
+                  };
+                case 'DELETE_RELATION':
+                  return {
+                    type: 'DELETE_RELATION',
+                    space: maybeSpaceIdForSpacePlugin.id,
+                    relation: op.relation,
+                  };
               }
-
-              return {
-                type: 'DELETE_TRIPLE',
-                space: maybeSpaceIdForSpacePlugin.id,
-                triple: {
-                  attribute: op.triple.attribute,
-                  entity: op.triple.entity,
-                  value: {},
-                },
-              };
             }),
             creator: getChecksumAddress(e.createdBy),
             space: maybeSpaceIdForSpacePlugin.id,

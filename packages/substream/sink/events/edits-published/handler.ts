@@ -4,7 +4,7 @@ import type * as S from 'zapatos/schema';
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
 import { CurrentVersions, Proposals, Versions } from '~/sink/db';
-import type { BlockEvent, Op, SinkEditProposal } from '~/sink/types';
+import type { BlockEvent, DeleteTripleOp, SetTripleOp, SinkEditProposal } from '~/sink/types';
 import { partition } from '~/sink/utils';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
@@ -32,7 +32,14 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
     yield* _(Effect.logInfo('Handling approved edits'));
 
     const {
-      schemaEditProposals: { opsByVersionId, versions, edits, opsByEditId, opsByEntityId },
+      schemaEditProposals: {
+        tripleOpsByVersionId,
+        versions,
+        edits,
+        tripleOpsByEditId,
+        tripleOpsByEntityId,
+        relationOpsByEditId,
+      },
     } = mapIpfsProposalToSchemaProposalByType(ipfsProposals, block);
 
     /**
@@ -61,8 +68,8 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
         block,
         edits: importedEdits,
         ipfsVersions: importedVersions,
-        opsByEditId: opsByEditId,
-        opsByEntityId: opsByEntityId,
+        tripleOpsByEditId,
+        tripleOpsByEntityId,
         editType: 'IMPORT',
       })
     );
@@ -72,8 +79,8 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
         block,
         edits: defaultEdits,
         ipfsVersions: defaultVersions,
-        opsByEditId: opsByEditId,
-        opsByEntityId: opsByEntityId,
+        tripleOpsByEditId,
+        tripleOpsByEntityId,
         editType: 'DEFAULT',
       })
     );
@@ -87,7 +94,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       aggregateMergedVersions({
         block,
         editType: 'DEFAULT',
-        opsByVersionId,
+        tripleOpsByVersionId,
         versions: defaultVersionsWithStaleEntities,
         edits: defaultEdits,
       })
@@ -97,7 +104,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       aggregateMergedVersions({
         block,
         editType: 'IMPORT',
-        opsByVersionId,
+        tripleOpsByVersionId,
         versions: importedVersionsWithStaleEntities,
         edits: importedEdits,
       })
@@ -119,8 +126,8 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
           }),
           writeEdits({
             versions: defaultMergedVersions,
-            opsByEditId,
-            opsByVersionId: defaultMergedOpsByVersionId,
+            relationOpsByEditId,
+            tripleOpsByVersionId: defaultMergedOpsByVersionId,
             edits: defaultEdits,
             block,
             editType: 'DEFAULT',
@@ -150,9 +157,9 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
      */
     yield* _(
       writeEdits({
-        opsByEditId,
+        relationOpsByEditId,
         versions: importedMergedVersions,
-        opsByVersionId: importedMergedOpsByVersionId,
+        tripleOpsByVersionId: importedMergedOpsByVersionId,
         block,
         edits: importedEdits,
         editType: 'IMPORT',
@@ -197,7 +204,7 @@ function aggregateCurrentVersions(
 interface AggregateMergedVersionsArgs {
   versions: S.versions.Insertable[];
   edits: S.edits.Insertable[];
-  opsByVersionId: Map<string, Op[]>;
+  tripleOpsByVersionId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
   block: BlockEvent;
   editType: 'IMPORT' | 'DEFAULT';
 }
@@ -241,14 +248,14 @@ function aggregateMergedVersions(args: AggregateMergedVersionsArgs) {
   //
   // Get the versions that have more than one version for the same entity id
   return Effect.gen(function* (_) {
-    const { versions, opsByVersionId, block, editType, edits } = args;
+    const { versions, tripleOpsByVersionId, block, editType, edits } = args;
     const manyVersionsByEntityId = aggregateMergableVersions(versions);
 
     // Merge the versions in this block with the same entity id into a new aggregated version
     // containing all the changes from each of the versions.
     const { mergedOpsByVersionId, mergedVersions } = aggregateMergableOps({
       manyVersionsByEntityId,
-      opsByVersionId,
+      tripleOpsByVersionId,
       block,
       editType,
     });
@@ -256,7 +263,7 @@ function aggregateMergedVersions(args: AggregateMergedVersionsArgs) {
     const opsMergedWithPreviousVersion = yield* _(
       mergeOpsWithPreviousVersions({
         edits,
-        opsByVersionId: mergedOpsByVersionId,
+        tripleOpsByVersionId: mergedOpsByVersionId,
         versions: mergedVersions,
       })
     );

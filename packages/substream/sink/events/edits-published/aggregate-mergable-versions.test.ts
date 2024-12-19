@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type * as S from 'zapatos/schema';
 
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
-import type { Op } from '~/sink/types';
+import type { DeleteTripleOp, SetTripleOp } from '~/sink/types';
 
 const versionsWithSameEntityId: S.versions.Insertable[] = [
   {
@@ -49,7 +49,7 @@ describe('aggregateMergableVersions', () => {
   });
 });
 
-const opsByVersionId = new Map<string, Op[]>([
+const opsByVersionId = new Map<string, (SetTripleOp | DeleteTripleOp)[]>([
   [
     '0',
     [
@@ -86,7 +86,7 @@ describe('aggregateMergableOps', () => {
 
     const { mergedOpsByVersionId } = aggregateMergableOps({
       manyVersionsByEntityId,
-      opsByVersionId: new Map(opsByVersionId),
+      tripleOpsByVersionId: new Map(opsByVersionId),
       block: {
         blockNumber: 0,
         cursor: '',
@@ -106,7 +106,7 @@ describe('aggregateMergableOps', () => {
 
     const { mergedVersions } = aggregateMergableOps({
       manyVersionsByEntityId,
-      opsByVersionId: new Map(opsByVersionId),
+      tripleOpsByVersionId: new Map(opsByVersionId),
       block: {
         blockNumber: 0,
         cursor: '',
@@ -129,7 +129,7 @@ describe('aggregateMergableOps', () => {
 
     const { mergedVersions } = aggregateMergableOps({
       manyVersionsByEntityId,
-      opsByVersionId: new Map(opsByVersionId),
+      tripleOpsByVersionId: new Map(opsByVersionId),
       block: {
         blockNumber: 0,
         cursor: '',
@@ -152,7 +152,7 @@ describe('aggregateMergableOps', () => {
 
     const { mergedVersions } = aggregateMergableOps({
       manyVersionsByEntityId,
-      opsByVersionId: new Map(opsByVersionId),
+      tripleOpsByVersionId: new Map(opsByVersionId),
       block: {
         blockNumber: 0,
         cursor: '',
@@ -169,7 +169,7 @@ describe('aggregateMergableOps', () => {
 
     const { mergedVersions } = aggregateMergableOps({
       manyVersionsByEntityId,
-      opsByVersionId: new Map(opsByVersionId),
+      tripleOpsByVersionId: new Map(opsByVersionId),
       block: {
         blockNumber: 0,
         cursor: '',
@@ -188,7 +188,7 @@ describe('aggregateMergableOps', () => {
 
     const { mergedVersions } = aggregateMergableOps({
       manyVersionsByEntityId,
-      opsByVersionId: new Map(opsByVersionId),
+      tripleOpsByVersionId: new Map(opsByVersionId),
       block: {
         blockNumber: 0,
         cursor: '',

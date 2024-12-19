@@ -15,7 +15,7 @@ import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
 import { Cookie } from '../cookie';
-import { CONDUIT_TESTNET } from './conduit-chain';
+import { GEOGENESIS } from './conduit-chain';
 
 // const LOCAL_CHAIN: Chain = {
 //   id: Number(Environment.options.development.chainId),
@@ -37,12 +37,12 @@ import { CONDUIT_TESTNET } from './conduit-chain';
 // };
 
 const realWalletConfig = createConfig({
-  chains: [CONDUIT_TESTNET],
+  chains: [GEOGENESIS],
   // This enables us to use a single injected connector but handle multiple wallet
   // extensions within the browser.
   multiInjectedProviderDiscovery: true,
   transports: {
-    [CONDUIT_TESTNET.id]: http(process.env.NEXT_PUBLIC_RPC_URL!),
+    [GEOGENESIS.id]: http(process.env.NEXT_PUBLIC_GEOGENESIS_RPC!),
   },
   ssr: true,
   connectors: [
@@ -76,9 +76,9 @@ const realWalletConfig = createConfig({
 });
 
 const mockConfig = createConfig({
-  chains: [CONDUIT_TESTNET],
+  chains: [GEOGENESIS],
   transports: {
-    [CONDUIT_TESTNET.id]: http(),
+    [GEOGENESIS.id]: http(),
   },
   connectors: [
     mock({

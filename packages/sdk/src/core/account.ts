@@ -1,13 +1,13 @@
 import { createGeoId } from '../id.js';
 import { Relation } from '../relation.js';
-import type { SetTripleOp } from '../types.js';
+import type { CreateRelationOp, SetTripleOp } from '../types.js';
 import { getChecksumAddress } from './get-checksum-address.js';
 import { ETHEREUM } from './ids/network.js';
 import { ACCOUNT_TYPE, ADDRESS_ATTRIBUTE, NAME, NETWORK_ATTRIBUTE, TYPES } from './ids/system.js';
 
 type MakeAccountReturnType = {
   accountId: string;
-  ops: SetTripleOp[];
+  ops: [CreateRelationOp, CreateRelationOp, SetTripleOp, SetTripleOp];
 };
 
 export function make(address: string): MakeAccountReturnType {
@@ -18,14 +18,14 @@ export function make(address: string): MakeAccountReturnType {
     accountId,
     ops: [
       // Types -> Account
-      ...Relation.make({
+      Relation.make({
         fromId: accountId,
         relationTypeId: TYPES,
         toId: ACCOUNT_TYPE,
       }),
       // Network -> Ethereum
       // Signals that the account is for the Ethereum family of chains
-      ...Relation.make({
+      Relation.make({
         fromId: accountId,
         relationTypeId: NETWORK_ATTRIBUTE,
         toId: ETHEREUM,

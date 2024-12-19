@@ -50,7 +50,3 @@ export function Navbar({ onSearchClick }: Props) {
     </nav>
   );
 }
-
-function SpaceSkeleton() {
-  return <Skeleton className="h-6 w-40" />;
-}

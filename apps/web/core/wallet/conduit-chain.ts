@@ -2,9 +2,9 @@ import { Chain } from 'viem';
 
 import { Environment } from '../environment';
 
-export const CONDUIT_TESTNET: Chain = {
+export const GEOGENESIS: Chain = {
   id: Number(Environment.options.production.chainId),
-  name: 'Geo Genesis Conduit Dev',
+  name: 'Geo Genesis',
   nativeCurrency: {
     name: 'Ethereum',
     symbol: 'ETH',

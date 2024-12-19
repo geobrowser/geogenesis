@@ -1,11 +1,11 @@
 import { createGeoId } from '../id.js';
 import { Relation } from '../relation.js';
 import { SYSTEM_IDS } from '../system-ids.js';
-import type { SetTripleOp } from '../types.js';
+import type { CreateRelationOp, Op, SetTripleOp } from '../types.js';
 
 type MakeImageReturnType = {
   imageId: string;
-  ops: SetTripleOp[];
+  ops: [CreateRelationOp, SetTripleOp];
 };
 
 /**
@@ -19,7 +19,7 @@ export function make(src: string): MakeImageReturnType {
   return {
     imageId: entityId,
     ops: [
-      ...Relation.make({
+      Relation.make({
         fromId: entityId,
         toId: SYSTEM_IDS.IMAGE_TYPE,
         relationTypeId: SYSTEM_IDS.TYPES,

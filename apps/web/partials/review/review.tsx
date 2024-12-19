@@ -7,6 +7,7 @@ import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
@@ -132,6 +133,15 @@ const ReviewChanges = () => {
     }, [activeSpace])
   );
 
+  const relationsFromSpace = useRelations(
+    React.useMemo(() => {
+      return {
+        selector: r => r.space === activeSpace,
+        includeDeleted: true,
+      };
+    }, [activeSpace])
+  );
+
   const { makeProposal } = usePublish();
   const [changes, isLoading] = useLocalChanges(activeSpace);
 
@@ -165,17 +175,17 @@ const ReviewChanges = () => {
     };
 
     // @TODO: Selectable publishing
-    // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
     await makeProposal({
       triples: triplesFromSpace,
+      relations: relationsFromSpace,
       spaceId: activeSpace,
       name: proposalName,
       onSuccess: () => {
         clearProposalName();
       },
     });
-  }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace]);
+  }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace, relationsFromSpace]);
 
   if (isLoading || !changes || isSpacesLoading) {
     return <div>Loading...</div>;
