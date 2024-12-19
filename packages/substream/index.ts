@@ -48,6 +48,7 @@ const main = Effect.gen(function* (_) {
       process.exit(1);
     }
 
+    console.log('bootstrapping test');
     const testBootstrap = yield* _(pipe(bootstrapTest, Effect.either));
 
     if (Either.isLeft(testBootstrap)) {

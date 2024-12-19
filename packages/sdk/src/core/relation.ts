@@ -2,6 +2,7 @@ import { INITIAL_RELATION_INDEX_VALUE } from '../../constants.js';
 import { createGeoId } from '../id.js';
 import { GraphUrl } from '../scheme.js';
 import { SYSTEM_IDS } from '../system-ids.js';
+import type { CreateRelationOp } from '../types.js';
 import { Position } from './position.js';
 
 interface CreateRelationArgs {
@@ -71,7 +72,22 @@ interface CreateRelationIndexOp {
   };
 }
 
-export function make(
+export function make(args: CreateRelationArgs): CreateRelationOp {
+  const newEntityId = createGeoId();
+
+  return {
+    type: 'CREATE_RELATION',
+    relation: {
+      id: newEntityId,
+      type: args.relationTypeId,
+      fromEntity: args.fromId,
+      toEntity: args.toId,
+      index:args.position ?? INITIAL_RELATION_INDEX_VALUE 
+    }
+  }
+}
+
+export function make_OLD(
   args: CreateRelationArgs
 ): readonly [
   CreateRelationTypeOp,

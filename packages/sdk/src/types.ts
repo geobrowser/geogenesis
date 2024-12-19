@@ -42,8 +42,8 @@ export type DeleteTripleOp = {
 type Relation = {
   id: string;
   type: string;
-  from: string;
-  to: string;
+  fromEntity: string;
+  toEntity: string;
   index: string;
 };
 

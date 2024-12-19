@@ -1,5 +1,3 @@
-// create cover image
-// create avatar image
 import { DataBlock, Position, PositionRange, Relation, SYSTEM_IDS, TextBlock, encodeBase58 } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
@@ -36,14 +34,16 @@ const testEntityNameOp: Op = {
 };
 
 const testEntityTypes: Op[] = [SYSTEM_IDS.PERSON_TYPE].flatMap(typeId => {
-  return Relation.make({
+  const newRelation = Relation.make({
     fromId: TEST_ENTITY_ID,
     toId: typeId,
     relationTypeId: SYSTEM_IDS.TYPES,
-  }).map(op => ({
-    ...op,
+  });
+
+  return {
+    ...newRelation,
     space: SPACE_ID,
-  }));
+  };
 });
 
 const testEntityBlocks = [
@@ -76,6 +76,8 @@ const PROPOSAL: SinkEditProposal = {
 };
 
 export const bootstrapTest = Effect.gen(function* (_) {
+  yield* _(Effect.logDebug('Writing test bootstrap data'));
+
   yield* _(
     handleSpacesCreated(
       [
