@@ -41,21 +41,21 @@ export const options: Record<AppEnv, AppConfig> = {
     rpc: 'http://localhost:8545',
     ipfs: IPFS_GATEWAY_PATH,
     api: 'http://localhost:5001/graphql',
-    bundler: `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${variables.accountAbstractionApiKey}`,
+    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   production: {
     chainId: '80451',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
     api: 'http://localhost:5001/graphql',
-    bundler: `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${variables.accountAbstractionApiKey}`,
+    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   testnet: {
     chainId: '80451',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
     api: 'https://geo-conduit.up.railway.app/graphql',
-    bundler: `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${variables.accountAbstractionApiKey}`,
+    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
 };
 

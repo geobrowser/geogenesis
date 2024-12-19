@@ -12,13 +12,14 @@ import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';
 import { useStatusBar } from '../state/status-bar-store';
-import { Triple as ITriple, ReviewState, SpaceGovernanceType } from '../types';
+import { Triple as ITriple, Relation, ReviewState, SpaceGovernanceType } from '../types';
 import { Triples } from '../utils/triples';
 import { sleepWithCallback } from '../utils/utils';
 import { useSmartAccount } from './use-smart-account';
 
 interface MakeProposalOptions {
   triples: ITriple[];
+  relations: Relation[];
   spaceId: string;
   name: string;
   onSuccess?: () => void;
@@ -39,7 +40,7 @@ export function usePublish() {
    * side effects.
    */
   const make = React.useCallback(
-    async ({ triples: triplesToPublish, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
+    async ({ triples: triplesToPublish, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
       if (!smartAccount) return;
       if (triplesToPublish.length < 1) return;
 
@@ -53,7 +54,7 @@ export function usePublish() {
           return;
         }
 
-        const ops = Triples.prepareTriplesForPublishing(triplesToPublish, spaceId);
+        const ops = Triples.prepareTriplesForPublishing(triplesToPublish, relations, spaceId);
 
         yield* makeProposal({
           name,
@@ -163,7 +164,7 @@ export function useBulkPublish() {
    * to IPFS + transact the IPFS hash onto Polygon.
    */
   const makeBulkProposal = React.useCallback(
-    async ({ triples, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
+    async ({ triples, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
       if (triples.length < 1) return;
       if (!smartAccount) return;
 
@@ -184,7 +185,7 @@ export function useBulkPublish() {
               type: 'SET_REVIEW_STATE',
               payload: newState,
             }),
-          ops: Triples.prepareTriplesForPublishing(triples, spaceId),
+          ops: Triples.prepareTriplesForPublishing(triples, relations, spaceId),
           smartAccount,
           space: {
             id: space.id,
