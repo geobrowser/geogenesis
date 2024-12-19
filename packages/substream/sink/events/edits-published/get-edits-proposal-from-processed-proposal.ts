@@ -124,6 +124,12 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
                   space: maybeSpaceIdForSpacePlugin.id,
                   relation: op.relation,
                 };
+              case 'DELETE_RELATION':
+                return {
+                  type: 'DELETE_RELATION',
+                  space: maybeSpaceIdForSpacePlugin.id,
+                  relation: op.relation,
+                };
             }
           }),
           // @TODO: For non-import edits there's currently no event that includes the createdById
@@ -198,6 +204,12 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
                 case 'CREATE_RELATION':
                   return {
                     type: 'CREATE_RELATION',
+                    space: maybeSpaceIdForSpacePlugin.id,
+                    relation: op.relation,
+                  };
+                case 'DELETE_RELATION':
+                  return {
+                    type: 'DELETE_RELATION',
                     space: maybeSpaceIdForSpacePlugin.id,
                     relation: op.relation,
                   };

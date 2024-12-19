@@ -168,16 +168,6 @@ export class IpfsMetadata extends Message<IpfsMetadata> {
    */
   type = ActionType.ACTION_TYPE_UNKNOWN;
 
-  /**
-   * @generated from field: string id = 3;
-   */
-  id = "";
-
-  /**
-   * @generated from field: string name = 4;
-   */
-  name = "";
-
   constructor(data?: PartialMessage<IpfsMetadata>) {
     super();
     proto3.util.initPartial(data, this);
@@ -188,8 +178,6 @@ export class IpfsMetadata extends Message<IpfsMetadata> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IpfsMetadata {

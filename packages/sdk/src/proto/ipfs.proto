@@ -6,8 +6,6 @@ message IpfsMetadata {
   // independently of other proposal types.
   string version = 1;
   ActionType type = 2;
-  string id = 3;
-  string name = 4;
 }
 
 message Edit {

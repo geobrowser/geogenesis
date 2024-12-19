@@ -135,6 +135,12 @@ export function getProposalFromIpfs(
                   space: maybeSpace.id,
                   relation: op.relation,
                 };
+              case 'DELETE_RELATION':
+                return {
+                  type: 'DELETE_RELATION',
+                  space: maybeSpace.id,
+                  relation: op.relation,
+                };
             }
           }),
           creator: getChecksumAddress(proposal.creator),
