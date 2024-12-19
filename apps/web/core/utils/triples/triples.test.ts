@@ -40,7 +40,7 @@ const RELATION: StoredRelation = {
 };
 
 describe('prepareTriplesForPublishing', () => {
-  it('maps to Create ops', () => {
+  it('maps created data to create ops', () => {
     const result = prepareTriplesForPublishing([TRIPLE], [RELATION], TRIPLE.space);
 
     expect(result).toEqual([
@@ -65,7 +65,7 @@ describe('prepareTriplesForPublishing', () => {
     ]);
   });
 
-  it('maps triples to delete ops', () => {
+  it('maps deleted data to delete ops', () => {
     const result = prepareTriplesForPublishing(
       [{ ...TRIPLE, isDeleted: true }],
       [{ ...RELATION, isDeleted: true }],
