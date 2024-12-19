@@ -27,6 +27,16 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
     t => t.space === spaceId && !t.hasBeenPublished && t.attributeId !== '' && t.entityId !== ''
   );
 
+  const validRelations = relations.filter(
+    r =>
+      r.space === spaceId &&
+      !r.hasBeenPublished &&
+      r.typeOf.id !== '' &&
+      r.fromEntity.id !== '' &&
+      r.toEntity.id !== '' &&
+      r.index !== ''
+  );
+
   // We store triples for relations locally so that we can render relations as normal
   // entities on an entity page. This also enables us to add arbitrary triples to a
   // relation entity at any point. It helps to have a unified model for reading and writing
@@ -37,7 +47,7 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
   const triplesForRelations = new Set(getTripleIdsForRelations(validTriples, relations));
   const triplesToPublish = validTriples.filter(t => !triplesForRelations.has(ID.createTripleId(t)));
 
-  const relationOps = relations.map((r): CreateRelationOp | DeleteRelationOp => {
+  const relationOps = validRelations.map((r): CreateRelationOp | DeleteRelationOp => {
     if (r.isDeleted) {
       return {
         type: 'DELETE_RELATION',

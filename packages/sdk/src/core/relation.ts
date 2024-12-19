@@ -6,6 +6,7 @@ import type { CreateRelationOp } from '../types.js';
 import { Position } from './position.js';
 
 interface CreateRelationArgs {
+  relationId?: string;
   fromId: string; // uuid
   toId: string; // uuid
   relationTypeId: string; // uuid
@@ -73,7 +74,7 @@ interface CreateRelationIndexOp {
 }
 
 export function make(args: CreateRelationArgs): CreateRelationOp {
-  const newEntityId = createGeoId();
+  const newEntityId = args.relationId ?? createGeoId();
 
   return {
     type: 'CREATE_RELATION',
