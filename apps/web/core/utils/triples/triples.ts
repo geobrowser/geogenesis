@@ -44,6 +44,9 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
   //
   // Here we filter out those relation local triples and only publish the ones that aren't
   // specifically for the required attributes on a relation.
+  //
+  // Alternative approach is to not store the ops for a relation locally and just materialize
+  // them when we render entity pages for relations.
   const triplesForRelations = getTriplesForRelations(validTriples, relations);
   const triplesToPublish = validTriples.filter(
     t => !triplesForRelations.some(relationTriple => relationTriple.id === t.id)

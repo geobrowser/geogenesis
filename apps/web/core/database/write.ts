@@ -1,14 +1,13 @@
 import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { atom } from 'jotai';
 
-import { createTripleId } from '../id/create-id';
 import { EntityId } from '../io/schema';
 import { store } from '../state/jotai-store';
 import { OmitStrict } from '../types';
 import { Relations } from '../utils/relations';
-import { Triples } from '../utils/triples';
+import { Triple } from './Triple';
 import { mergeEntityAsync } from './entities';
-import { RemoveOp, StoreOp, StoreRelation, StoredRelation, StoredTriple, UpsertOp } from './types';
+import { RemoveOp, StoreRelation, StoredRelation, StoredTriple, UpsertOp } from './types';
 
 export const localOpsAtom = atom<StoredTriple[]>([]);
 export const localRelationsAtom = atom<StoredRelation[]>([]);
@@ -60,7 +59,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
       },
     ]);
 
-    writeMany(triples.map(t => ({ op: { ...t, type: 'SET_TRIPLE' }, spaceId: args.spaceId })));
+    writeMany(triples.map(t => Triple.make(t)));
     return;
   }
 
@@ -115,39 +114,39 @@ export async function removeEntity(entityId: string, spaceId: string) {
 }
 
 export const upsert = (op: UpsertOp, spaceId: string) => {
-  writeMany([
-    {
-      op: {
-        ...op,
-        type: 'SET_TRIPLE',
-      },
-      spaceId,
-    },
-  ]);
+  const triple = Triple.make({ ...op, space: spaceId }, { hasBeenPublished: false, isDeleted: false });
+  writeMany([triple]);
 };
 
 export const upsertMany = (ops: UpsertOp[], spaceId: string) => {
-  writeMany(ops.map(op => ({ op: { ...op, type: 'SET_TRIPLE' }, spaceId })));
+  const triples = ops.map((op): StoredTriple => {
+    return Triple.make({ ...op, space: spaceId }, { hasBeenPublished: false, isDeleted: false });
+  });
+  writeMany(triples);
 };
 
 export const remove = (op: RemoveOp, spaceId: string) => {
   // We don't delete from our local store, but instead just set a tombstone
   // on the row. This is so we can still publish the changes as an op
   writeMany([
-    {
-      op: {
-        ...op,
-        type: 'DELETE_TRIPLE',
-      },
-      spaceId,
-    },
+    Triple.make(
+      { ...op, attributeName: null, entityName: null, space: spaceId, value: { type: 'TEXT', value: '' } },
+      { hasBeenPublished: false, isDeleted: true }
+    ),
   ]);
 };
 
 export const removeMany = (ops: RemoveOp[], spaceId: string) => {
+  const triples = ops.map(
+    (op): StoredTriple =>
+      Triple.make(
+        { ...op, attributeName: null, entityName: null, space: spaceId, value: { type: 'TEXT', value: '' } },
+        { hasBeenPublished: false, isDeleted: true }
+      )
+  );
   // We don't delete from our local store, but instead just set a tombstone
   // on the row. This is so we can still publish the changes as an op
-  writeMany(ops.map(op => ({ op: { ...op, type: 'DELETE_TRIPLE' }, spaceId })));
+  writeMany(triples);
 };
 
 export const restoreRelations = (relations: StoredRelation[]) => {
@@ -158,44 +157,9 @@ export const restore = (ops: StoredTriple[]) => {
   store.set(localOpsAtom, ops);
 };
 
-const writeMany = (ops: { op: StoreOp; spaceId: string }[]) => {
-  const triplesToWrite: StoredTriple[] = [];
-
-  for (const { op, spaceId } of ops) {
-    const triple: StoredTriple = {
-      id: createTripleId({ ...op, space: spaceId }),
-      entityId: op.entityId,
-      attributeId: op.attributeId,
-      // How do we make this work well with local image triples? We want
-      // to store just the image itself to make rendering images easy,
-      // but that's not actually how we publish the images. Maybe we
-      // need to update it on Triple.prepareForPublishing...?
-      value:
-        op.type === 'SET_TRIPLE'
-          ? op.value
-          : // We don't set value as null so just use placeholder value
-            {
-              type: 'TEXT',
-              value: '',
-            },
-
-      entityName: op.type === 'SET_TRIPLE' ? op.entityName : null,
-      attributeName: op.type === 'SET_TRIPLE' ? op.attributeName : null,
-      space: spaceId,
-      hasBeenPublished: false,
-      isDeleted: false,
-      timestamp: Triples.timestamp(),
-    };
-
-    if (op.type === 'DELETE_TRIPLE') {
-      triple.isDeleted = true;
-    }
-
-    triplesToWrite.push(triple);
-  }
-
+const writeMany = (triples: StoredTriple[]) => {
   // Can safely cast to string since we set the id above
-  const tripleIdsToWrite = new Set(triplesToWrite.map(t => t.id as string));
+  const tripleIdsToWrite = new Set(triples.map(t => t.id));
 
   // Unchanged triples aren't included in the existing set of triples
   // being upserted
@@ -203,7 +167,7 @@ const writeMany = (ops: { op: StoreOp; spaceId: string }[]) => {
     return !tripleIdsToWrite.has(t.id);
   });
 
-  store.set(localOpsAtom, [...unchangedTriples, ...triplesToWrite]);
+  store.set(localOpsAtom, [...unchangedTriples, ...triples]);
 };
 
 /**
