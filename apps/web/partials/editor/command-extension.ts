@@ -43,7 +43,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
         .filter(v => v.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
     },
     render() {
-      let reactRenderer: ReactRenderer<CommandListRef, CommandSuggestionItem>;
+      let reactRenderer: ReactRenderer<any, any>;
       let popup: Instance[];
 
       return {
