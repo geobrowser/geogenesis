@@ -1,9 +1,13 @@
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import { createVersionId } from '../../utils/id';
 import type {
   BlockEvent,
-  Op,
+  CreateRelationOp,
+  DeleteRelationOp,
+  DeleteTripleOp,
+  SetTripleOp,
   SinkEditProposal,
   SinkEditorshipProposal,
   SinkMembershipProposal,
@@ -196,16 +200,18 @@ function mapEditProposalToSchema(
   proposals: S.proposals.Insertable[];
   versions: S.versions.Insertable[];
   edits: S.edits.Insertable[];
-  opsByVersionId: Map<string, Op[]>;
-  opsByEntityId: Map<string, Op[]>;
-  opsByEditId: Map<string, Op[]>;
+  relationOpsByEditId: Map<string, (CreateRelationOp | DeleteRelationOp)[]>;
+  tripleOpsByVersionId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
+  tripleOpsByEntityId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
+  tripleOpsByEditId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
 } {
   const proposalsToWrite: S.proposals.Insertable[] = [];
   const versionsToWrite: S.versions.Insertable[] = [];
   const editsToWrite: S.edits.Insertable[] = [];
-  const opsByVersionId = new Map<string, Op[]>();
-  const opsByEntityId = new Map<string, Op[]>();
-  const opsByEditId = new Map<string, Op[]>();
+  const relationOpsByEditId = new Map<string, (CreateRelationOp | DeleteRelationOp)[]>();
+  const tripleOpsByVersionId = new Map<string, (SetTripleOp | DeleteTripleOp)[]>();
+  const tripleOpsByEntityId = new Map<string, (SetTripleOp | DeleteTripleOp)[]>();
+  const tripleOpsByEditId = new Map<string, (SetTripleOp | DeleteTripleOp)[]>();
 
   for (const p of proposals) {
     const spaceId = p.space;
@@ -234,7 +240,18 @@ function mapEditProposalToSchema(
       status: 'proposed',
     } satisfies S.proposals.Insertable);
 
-    const uniqueEntityIds = new Set(p.ops.map(op => op.triple.entity));
+    const uniqueEntityIds = new Set(
+      p.ops.map(op => {
+        switch (op.type) {
+          case 'CREATE_RELATION':
+          case 'DELETE_RELATION':
+            return op.relation.id;
+          case 'SET_TRIPLE':
+          case 'DELETE_TRIPLE':
+            return op.triple.entity;
+        }
+      })
+    );
 
     for (const entityId of [...uniqueEntityIds.values()]) {
       // For now we use a deterministic version for the proposed version id
@@ -253,22 +270,43 @@ function mapEditProposalToSchema(
         edit_id: p.proposalId,
       } satisfies S.versions.Insertable);
 
-      const opsForEntityId = p.ops.filter(o => o.triple.entity === entityId);
+      const opsForEntityId = p.ops
+        .filter(o => o.type === 'SET_TRIPLE' || o.type === 'DELETE_TRIPLE')
+        .filter(o => o.triple.entity === entityId);
 
-      opsByVersionId.set(id, opsForEntityId);
-      opsByEntityId.set(entityId, opsForEntityId);
+      const opsForEntityIdWhereRelation = p.ops
+        .filter(o => o.type === 'CREATE_RELATION' || o.type === 'DELETE_RELATION')
+        .filter(o => o.relation.id === entityId);
+
+      // Creating and deleting relations is done via the CREATE_RELATION or DELETE_RELATION op types.
+      // Here we map these op types into triple ops in order to write the triples to the db. This allows
+      // us to write the ops for each relation as if they are entities while also performing any side-effects
+      // related to the relations themselves by still using the CREATE_RELATION and DELETE_RELATION op types.
+      tripleOpsByVersionId.set(id, [...opsForEntityId, ...opsForEntityIdWhereRelation.flatMap(relationOpToTripleOps)]);
+      tripleOpsByEntityId.set(entityId, [
+        ...opsForEntityId,
+        ...opsForEntityIdWhereRelation.flatMap(relationOpToTripleOps),
+      ]);
     }
 
-    opsByEditId.set(p.proposalId, p.ops);
+    tripleOpsByEditId.set(
+      p.proposalId,
+      p.ops.filter(o => o.type === 'SET_TRIPLE' || o.type === 'DELETE_TRIPLE')
+    );
+    relationOpsByEditId.set(
+      p.proposalId,
+      p.ops.filter(o => o.type === 'CREATE_RELATION' || o.type === 'DELETE_RELATION')
+    );
   }
 
   return {
     proposals: proposalsToWrite,
     versions: versionsToWrite,
     edits: editsToWrite,
-    opsByVersionId,
-    opsByEntityId,
-    opsByEditId,
+    tripleOpsByVersionId,
+    tripleOpsByEntityId,
+    tripleOpsByEditId,
+    relationOpsByEditId,
   };
 }
 
@@ -289,4 +327,119 @@ export function mapIpfsProposalToSchemaProposalByType(
     schemaEditorshipProposals,
     schemaEditProposals,
   };
+}
+
+function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTripleOp | DeleteTripleOp)[] {
+  if (op.type === 'CREATE_RELATION') {
+    return [
+      {
+        type: 'SET_TRIPLE',
+        space: op.space,
+        triple: {
+          entity: op.relation.id,
+          attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+          value: {
+            type: 'URL',
+            value: GraphUrl.fromEntityId(op.relation.type),
+          },
+        },
+      },
+      {
+        type: 'SET_TRIPLE',
+        space: op.space,
+        triple: {
+          entity: op.relation.id,
+          attribute: SYSTEM_IDS.TYPES,
+          value: {
+            type: 'URL',
+            value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE),
+          },
+        },
+      },
+      {
+        type: 'SET_TRIPLE',
+        space: op.space,
+        triple: {
+          entity: op.relation.id,
+          attribute: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+          value: {
+            type: 'URL',
+            value: GraphUrl.fromEntityId(op.relation.fromEntity),
+          },
+        },
+      },
+      {
+        type: 'SET_TRIPLE',
+        space: op.space,
+        triple: {
+          entity: op.relation.id,
+          attribute: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+          value: {
+            type: 'URL',
+            value: GraphUrl.fromEntityId(op.relation.toEntity),
+          },
+        },
+      },
+      {
+        type: 'SET_TRIPLE',
+        space: op.space,
+        triple: {
+          entity: op.relation.id,
+          attribute: SYSTEM_IDS.RELATION_INDEX,
+          value: {
+            type: 'TEXT',
+            value: op.relation.index,
+          },
+        },
+      },
+    ];
+  }
+
+  return [
+    {
+      type: 'DELETE_TRIPLE',
+      space: op.space,
+      triple: {
+        entity: op.relation.id,
+        attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+        value: {},
+      },
+    },
+    {
+      type: 'DELETE_TRIPLE',
+      space: op.space,
+      triple: {
+        entity: op.relation.id,
+        attribute: SYSTEM_IDS.TYPES,
+        value: {},
+      },
+    },
+    {
+      type: 'DELETE_TRIPLE',
+      space: op.space,
+      triple: {
+        entity: op.relation.id,
+        attribute: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+        value: {},
+      },
+    },
+    {
+      type: 'DELETE_TRIPLE',
+      space: op.space,
+      triple: {
+        entity: op.relation.id,
+        attribute: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+        value: {},
+      },
+    },
+    {
+      type: 'DELETE_TRIPLE',
+      space: op.space,
+      triple: {
+        entity: op.relation.id,
+        attribute: SYSTEM_IDS.RELATION_INDEX,
+        value: {},
+      },
+    },
+  ];
 }

@@ -11,9 +11,9 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export enum OpType {
   /**
-   * @generated from enum value: NONE = 0;
+   * @generated from enum value: OP_TYPE_UNKNOWN = 0;
    */
-  NONE = 0,
+  OP_TYPE_UNKNOWN = 0,
 
   /**
    * @generated from enum value: SET_TRIPLE = 1;
@@ -24,12 +24,36 @@ export enum OpType {
    * @generated from enum value: DELETE_TRIPLE = 2;
    */
   DELETE_TRIPLE = 2,
+
+  /**
+   * @generated from enum value: SET_TRIPLE_BATCH = 3;
+   */
+  SET_TRIPLE_BATCH = 3,
+
+  /**
+   * @generated from enum value: DELETE_ENTITY = 4;
+   */
+  DELETE_ENTITY = 4,
+
+  /**
+   * @generated from enum value: CREATE_RELATION = 5;
+   */
+  CREATE_RELATION = 5,
+
+  /**
+   * @generated from enum value: DELETE_RELATION = 6;
+   */
+  DELETE_RELATION = 6,
 }
 // Retrieve enum metadata with: proto3.getEnumType(OpType)
 proto3.util.setEnumType(OpType, "OpType", [
-  { no: 0, name: "NONE" },
+  { no: 0, name: "OP_TYPE_UNKNOWN" },
   { no: 1, name: "SET_TRIPLE" },
   { no: 2, name: "DELETE_TRIPLE" },
+  { no: 3, name: "SET_TRIPLE_BATCH" },
+  { no: 4, name: "DELETE_ENTITY" },
+  { no: 5, name: "CREATE_RELATION" },
+  { no: 6, name: "DELETE_RELATION" },
 ]);
 
 /**
@@ -37,9 +61,9 @@ proto3.util.setEnumType(OpType, "OpType", [
  */
 export enum ValueType {
   /**
-   * @generated from enum value: UNKNOWN = 0;
+   * @generated from enum value: VALUE_TYPE_UNKNOWN = 0;
    */
-  UNKNOWN = 0,
+  VALUE_TYPE_UNKNOWN = 0,
 
   /**
    * @generated from enum value: TEXT = 1;
@@ -73,7 +97,7 @@ export enum ValueType {
 }
 // Retrieve enum metadata with: proto3.getEnumType(ValueType)
 proto3.util.setEnumType(ValueType, "ValueType", [
-  { no: 0, name: "UNKNOWN" },
+  { no: 0, name: "VALUE_TYPE_UNKNOWN" },
   { no: 1, name: "TEXT" },
   { no: 2, name: "NUMBER" },
   { no: 3, name: "CHECKBOX" },
@@ -87,9 +111,9 @@ proto3.util.setEnumType(ValueType, "ValueType", [
  */
 export enum ActionType {
   /**
-   * @generated from enum value: EMPTY = 0;
+   * @generated from enum value: ACTION_TYPE_UNKNOWN = 0;
    */
-  EMPTY = 0,
+  ACTION_TYPE_UNKNOWN = 0,
 
   /**
    * @generated from enum value: ADD_EDIT = 1;
@@ -115,39 +139,15 @@ export enum ActionType {
    * @generated from enum value: ARCHIVE_SPACE = 5;
    */
   ARCHIVE_SPACE = 5,
-
-  /**
-   * @generated from enum value: ADD_EDITOR = 6;
-   */
-  ADD_EDITOR = 6,
-
-  /**
-   * @generated from enum value: REMOVE_EDITOR = 7;
-   */
-  REMOVE_EDITOR = 7,
-
-  /**
-   * @generated from enum value: ADD_MEMBER = 8;
-   */
-  ADD_MEMBER = 8,
-
-  /**
-   * @generated from enum value: REMOVE_MEMBER = 9;
-   */
-  REMOVE_MEMBER = 9,
 }
 // Retrieve enum metadata with: proto3.getEnumType(ActionType)
 proto3.util.setEnumType(ActionType, "ActionType", [
-  { no: 0, name: "EMPTY" },
+  { no: 0, name: "ACTION_TYPE_UNKNOWN" },
   { no: 1, name: "ADD_EDIT" },
   { no: 2, name: "ADD_SUBSPACE" },
   { no: 3, name: "REMOVE_SUBSPACE" },
   { no: 4, name: "IMPORT_SPACE" },
   { no: 5, name: "ARCHIVE_SPACE" },
-  { no: 6, name: "ADD_EDITOR" },
-  { no: 7, name: "REMOVE_EDITOR" },
-  { no: 8, name: "ADD_MEMBER" },
-  { no: 9, name: "REMOVE_MEMBER" },
 ]);
 
 /**
@@ -166,17 +166,7 @@ export class IpfsMetadata extends Message<IpfsMetadata> {
   /**
    * @generated from field: ActionType type = 2;
    */
-  type = ActionType.EMPTY;
-
-  /**
-   * @generated from field: string id = 3;
-   */
-  id = "";
-
-  /**
-   * @generated from field: string name = 4;
-   */
-  name = "";
+  type = ActionType.ACTION_TYPE_UNKNOWN;
 
   constructor(data?: PartialMessage<IpfsMetadata>) {
     super();
@@ -188,8 +178,6 @@ export class IpfsMetadata extends Message<IpfsMetadata> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IpfsMetadata {
@@ -221,7 +209,7 @@ export class Edit extends Message<Edit> {
   /**
    * @generated from field: ActionType type = 2;
    */
-  type = ActionType.EMPTY;
+  type = ActionType.ACTION_TYPE_UNKNOWN;
 
   /**
    * @generated from field: string id = 3;
@@ -288,7 +276,7 @@ export class ImportEdit extends Message<ImportEdit> {
   /**
    * @generated from field: ActionType type = 2;
    */
-  type = ActionType.EMPTY;
+  type = ActionType.ACTION_TYPE_UNKNOWN;
 
   /**
    * @generated from field: string id = 3;
@@ -311,27 +299,27 @@ export class ImportEdit extends Message<ImportEdit> {
   authors: string[] = [];
 
   /**
-   * @generated from field: string createdBy = 7;
+   * @generated from field: string created_by = 7;
    */
   createdBy = "";
 
   /**
-   * @generated from field: string createdAt = 8;
+   * @generated from field: string created_at = 8;
    */
   createdAt = "";
 
   /**
-   * @generated from field: string blockHash = 9;
+   * @generated from field: string block_hash = 9;
    */
   blockHash = "";
 
   /**
-   * @generated from field: string blockNumber = 10;
+   * @generated from field: string block_number = 10;
    */
   blockNumber = "";
 
   /**
-   * @generated from field: string transactionHash = 11;
+   * @generated from field: string transaction_hash = 11;
    */
   transactionHash = "";
 
@@ -349,11 +337,11 @@ export class ImportEdit extends Message<ImportEdit> {
     { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "ops", kind: "message", T: Op, repeated: true },
     { no: 6, name: "authors", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 7, name: "createdBy", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "createdAt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "blockHash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "blockNumber", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "transactionHash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "created_by", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "block_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "block_number", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 11, name: "transaction_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ImportEdit {
@@ -380,12 +368,27 @@ export class Op extends Message<Op> {
   /**
    * @generated from field: OpType type = 1;
    */
-  type = OpType.NONE;
+  type = OpType.OP_TYPE_UNKNOWN;
 
   /**
    * @generated from field: Triple triple = 2;
    */
   triple?: Triple;
+
+  /**
+   * @generated from field: Entity entity = 3;
+   */
+  entity?: Entity;
+
+  /**
+   * @generated from field: Relation relation = 4;
+   */
+  relation?: Relation;
+
+  /**
+   * @generated from field: repeated Triple triples = 5;
+   */
+  triples: Triple[] = [];
 
   constructor(data?: PartialMessage<Op>) {
     super();
@@ -397,6 +400,9 @@ export class Op extends Message<Op> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(OpType) },
     { no: 2, name: "triple", kind: "message", T: Triple },
+    { no: 3, name: "entity", kind: "message", T: Entity },
+    { no: 4, name: "relation", kind: "message", T: Relation },
+    { no: 5, name: "triples", kind: "message", T: Triple, repeated: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Op {
@@ -472,7 +478,7 @@ export class Value extends Message<Value> {
   /**
    * @generated from field: ValueType type = 1;
    */
-  type = ValueType.UNKNOWN;
+  type = ValueType.VALUE_TYPE_UNKNOWN;
 
   /**
    * @generated from field: string value = 2;
@@ -509,124 +515,106 @@ export class Value extends Message<Value> {
 }
 
 /**
- * @generated from message Membership
+ * @generated from message Relation
  */
-export class Membership extends Message<Membership> {
+export class Relation extends Message<Relation> {
   /**
-   * @generated from field: ActionType type = 1;
-   */
-  type = ActionType.EMPTY;
-
-  /**
-   * @generated from field: string name = 2;
-   */
-  name = "";
-
-  /**
-   * @generated from field: string version = 3;
-   */
-  version = "";
-
-  /**
-   * @generated from field: string id = 4;
+   * @generated from field: string id = 1;
    */
   id = "";
 
   /**
-   * @generated from field: string user = 5;
+   * @generated from field: string type = 2;
    */
-  user = "";
+  type = "";
 
-  constructor(data?: PartialMessage<Membership>) {
+  /**
+   * @generated from field: string from_entity = 3;
+   */
+  fromEntity = "";
+
+  /**
+   * @generated from field: string to_entity = 4;
+   */
+  toEntity = "";
+
+  /**
+   * @generated from field: string index = 5;
+   */
+  index = "";
+
+  constructor(data?: PartialMessage<Relation>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Membership";
+  static readonly typeName = "Relation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "from_entity", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "to_entity", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "index", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Membership {
-    return new Membership().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Relation {
+    return new Relation().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Membership {
-    return new Membership().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Relation {
+    return new Relation().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Membership {
-    return new Membership().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Relation {
+    return new Relation().fromJsonString(jsonString, options);
   }
 
-  static equals(a: Membership | PlainMessage<Membership> | undefined, b: Membership | PlainMessage<Membership> | undefined): boolean {
-    return proto3.util.equals(Membership, a, b);
+  static equals(a: Relation | PlainMessage<Relation> | undefined, b: Relation | PlainMessage<Relation> | undefined): boolean {
+    return proto3.util.equals(Relation, a, b);
   }
 }
 
 /**
- * @generated from message Subspace
+ * @generated from message Entity
  */
-export class Subspace extends Message<Subspace> {
+export class Entity extends Message<Entity> {
   /**
-   * @generated from field: ActionType type = 1;
-   */
-  type = ActionType.EMPTY;
-
-  /**
-   * @generated from field: string name = 2;
-   */
-  name = "";
-
-  /**
-   * @generated from field: string version = 3;
-   */
-  version = "";
-
-  /**
-   * @generated from field: string id = 4;
+   * @generated from field: string id = 1;
    */
   id = "";
 
   /**
-   * @generated from field: string subspace = 5;
+   * @generated from field: repeated string types = 2;
    */
-  subspace = "";
+  types: string[] = [];
 
-  constructor(data?: PartialMessage<Subspace>) {
+  constructor(data?: PartialMessage<Entity>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Subspace";
+  static readonly typeName = "Entity";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "subspace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "types", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Subspace {
-    return new Subspace().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Entity {
+    return new Entity().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Subspace {
-    return new Subspace().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Entity {
+    return new Entity().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Subspace {
-    return new Subspace().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Entity {
+    return new Entity().fromJsonString(jsonString, options);
   }
 
-  static equals(a: Subspace | PlainMessage<Subspace> | undefined, b: Subspace | PlainMessage<Subspace> | undefined): boolean {
-    return proto3.util.equals(Subspace, a, b);
+  static equals(a: Entity | PlainMessage<Entity> | undefined, b: Entity | PlainMessage<Entity> | undefined): boolean {
+    return proto3.util.equals(Entity, a, b);
   }
 }
 
@@ -642,15 +630,15 @@ export class Import extends Message<Import> {
   /**
    * @generated from field: ActionType type = 2;
    */
-  type = ActionType.EMPTY;
+  type = ActionType.ACTION_TYPE_UNKNOWN;
 
   /**
-   * @generated from field: string previousNetwork = 3;
+   * @generated from field: string previous_network = 3;
    */
   previousNetwork = "";
 
   /**
-   * @generated from field: string previousContractAddress = 4;
+   * @generated from field: string previous_contract_address = 4;
    */
   previousContractAddress = "";
 
@@ -669,8 +657,8 @@ export class Import extends Message<Import> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 3, name: "previousNetwork", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "previousContractAddress", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "previous_network", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "previous_contract_address", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "edits", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 

@@ -1,6 +1,9 @@
+import { Relation } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
 import { Triple } from '~/core/database/Triple';
+import { StoredRelation } from '~/core/database/types';
+import { EntityId } from '~/core/io/schema';
 
 import { prepareTriplesForPublishing } from './triples';
 
@@ -16,10 +19,38 @@ const TRIPLE = Triple.make({
   },
 });
 
+const RELATION: StoredRelation = {
+  fromEntity: {
+    id: EntityId('1234'),
+    name: null,
+  },
+  id: EntityId('1234'),
+  index: '1234',
+  space: 'test-space',
+  toEntity: {
+    id: EntityId('1234'),
+    name: null,
+    renderableType: 'DATA',
+    value: EntityId('1234'),
+  },
+  typeOf: {
+    id: EntityId('1234'),
+    name: null,
+  },
+};
+
 describe('prepareTriplesForPublishing', () => {
-  it('maps triples to SET_TRIPLE op', () => {
-    const result = prepareTriplesForPublishing([TRIPLE], TRIPLE.space);
+  it('maps created data to create ops', () => {
+    const result = prepareTriplesForPublishing([TRIPLE], [RELATION], TRIPLE.space);
+
     expect(result).toEqual([
+      Relation.make({
+        relationId: RELATION.id,
+        fromId: RELATION.fromEntity.id,
+        relationTypeId: RELATION.typeOf.id,
+        toId: RELATION.toEntity.id,
+        position: RELATION.index,
+      }),
       {
         type: 'SET_TRIPLE',
         triple: {
@@ -34,9 +65,19 @@ describe('prepareTriplesForPublishing', () => {
     ]);
   });
 
-  it('maps triples to DELETE op', () => {
-    const result = prepareTriplesForPublishing([{ ...TRIPLE, isDeleted: true }], TRIPLE.space);
+  it('maps deleted data to delete ops', () => {
+    const result = prepareTriplesForPublishing(
+      [{ ...TRIPLE, isDeleted: true }],
+      [{ ...RELATION, isDeleted: true }],
+      TRIPLE.space
+    );
     expect(result).toEqual([
+      {
+        type: 'DELETE_RELATION',
+        relation: {
+          id: RELATION.id,
+        },
+      },
       {
         type: 'DELETE_TRIPLE',
         triple: {
@@ -47,23 +88,44 @@ describe('prepareTriplesForPublishing', () => {
     ]);
   });
 
-  it('filters triples from different space', () => {
-    const result = prepareTriplesForPublishing([TRIPLE], 'different test space');
+  it('filters ops from different space', () => {
+    const { opsToPublish: result } = prepareTriplesForPublishing([TRIPLE], [RELATION], 'different test space');
     expect(result.length).toEqual(0);
   });
 
-  it('filters already-published triples', () => {
-    const result = prepareTriplesForPublishing([{ ...TRIPLE, hasBeenPublished: true }], TRIPLE.space);
+  it('filters already-published ops', () => {
+    const { opsToPublish: result } = prepareTriplesForPublishing(
+      [{ ...TRIPLE, hasBeenPublished: true }],
+      [{ ...RELATION, hasBeenPublished: true }],
+      TRIPLE.space
+    );
     expect(result.length).toEqual(0);
   });
 
-  it('filters triples with empty entity id', () => {
-    const result = prepareTriplesForPublishing([{ ...TRIPLE, entityId: '' }], TRIPLE.space);
+  it('filters invalid ops where entity id is empty', () => {
+    const { opsToPublish: result } = prepareTriplesForPublishing(
+      [{ ...TRIPLE, entityId: '' }],
+      [{ ...RELATION, fromEntity: { id: EntityId(''), name: null } }],
+      TRIPLE.space
+    );
     expect(result.length).toEqual(0);
   });
 
-  it('filters triples with empty attribute id', () => {
-    const result = prepareTriplesForPublishing([{ ...TRIPLE, attributeId: '' }], TRIPLE.space);
+  it('filters invalid ops with empty attribute id', () => {
+    const { opsToPublish: result } = prepareTriplesForPublishing(
+      [{ ...TRIPLE, attributeId: '' }],
+      [{ ...RELATION, typeOf: { id: EntityId(''), name: null } }],
+      TRIPLE.space
+    );
+    expect(result.length).toEqual(0);
+  });
+
+  it('filters invalid ops with empty relation to entity id', () => {
+    const { opsToPublish: result } = prepareTriplesForPublishing(
+      [],
+      [{ ...RELATION, toEntity: { id: EntityId(''), name: null, renderableType: 'DATA', value: EntityId('') } }],
+      TRIPLE.space
+    );
     expect(result.length).toEqual(0);
   });
 });

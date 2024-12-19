@@ -1,7 +1,7 @@
 import { createGeoId } from '../../id.js';
 import { Relation } from '../../relation.js';
 import { SYSTEM_IDS } from '../../system-ids.js';
-import type { SetTripleOp } from '../../types.js';
+import type { CreateRelationOp, SetTripleOp } from '../../types.js';
 
 type DataBlockSourceType = 'QUERY' | 'COLLECTION' | 'GEO';
 
@@ -18,7 +18,7 @@ function getSourceTypeId(sourceType: DataBlockSourceType) {
 
 type DataBlockArgs = { fromId: string; sourceType: DataBlockSourceType; position?: string; name?: string };
 
-export function make({ fromId, sourceType, position, name }: DataBlockArgs): SetTripleOp[] {
+export function make({ fromId, sourceType, position, name }: DataBlockArgs): (SetTripleOp | CreateRelationOp)[] {
   const newBlockId = createGeoId();
 
   const dataBlockType = Relation.make({
@@ -40,7 +40,7 @@ export function make({ fromId, sourceType, position, name }: DataBlockArgs): Set
     position,
   });
 
-  const ops: SetTripleOp[] = [...dataBlockType, ...dataBlockSourceType, ...dataBlockRelation];
+  const ops: (SetTripleOp | CreateRelationOp)[] = [dataBlockType, dataBlockSourceType, dataBlockRelation];
 
   if (name) {
     ops.push({
