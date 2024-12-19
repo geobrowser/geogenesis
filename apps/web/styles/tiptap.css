@@ -7,7 +7,7 @@
 }
 
 .ProseMirror .paragraph-node a {
-  @apply underline transition-colors duration-100 hover:text-grey-04;
+  @apply text-ctaPrimary underline transition-colors duration-100 hover:text-ctaHover;
 }
 
 .ProseMirror .tiptap-block {
