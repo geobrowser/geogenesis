@@ -1,4 +1,4 @@
-import { CreateRelationOp, DeleteRelationOp, DeleteTripleOp, Op, SYSTEM_IDS, SetTripleOp } from '@geogenesis/sdk';
+import { CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SYSTEM_IDS, SetTripleOp } from '@geogenesis/sdk';
 
 import { Triple as T } from '~/core/database/Triple';
 import { StoredRelation, StoredTriple } from '~/core/database/types';
@@ -16,12 +16,12 @@ export function merge(local: StoredTriple[], remote: Triple[]): StoredTriple[] {
   const remoteTriplesWithoutLocalTriples = remote.filter(
     t => !localTripleIds.has(createTripleId({ ...t, space: t.space }))
   );
-  const remoteTriplesMappedToLocalTriples = remoteTriplesWithoutLocalTriples.map(T.make);
 
+  const remoteTriplesMappedToLocalTriples = remoteTriplesWithoutLocalTriples.map(t => T.make(t));
   return [...remoteTriplesMappedToLocalTriples, ...local];
 }
 
-export function prepareTriplesForPublishing(triples: Triple[], relations: StoredRelation[], spaceId: string): Op[] {
+export function prepareTriplesForPublishing(triples: Triple[], relations: StoredRelation[], spaceId: string) {
   const validTriples = triples.filter(
     // Deleted ops have a value of ''. Make sure we don't filter those out
     t => t.space === spaceId && !t.hasBeenPublished && t.attributeId !== '' && t.entityId !== ''
@@ -44,8 +44,10 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
   //
   // Here we filter out those relation local triples and only publish the ones that aren't
   // specifically for the required attributes on a relation.
-  const triplesForRelations = new Set(getTripleIdsForRelations(validTriples, relations));
-  const triplesToPublish = validTriples.filter(t => !triplesForRelations.has(ID.createTripleId(t)));
+  const triplesForRelations = getTriplesForRelations(validTriples, relations);
+  const triplesToPublish = validTriples.filter(
+    t => !triplesForRelations.some(relationTriple => relationTriple.id === t.id)
+  );
 
   const relationOps = validRelations.map((r): CreateRelationOp | DeleteRelationOp => {
     if (r.isDeleted) {
@@ -69,6 +71,7 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
     };
   });
 
+  // @TODO Need to add the relation triples
   const tripleOps = triplesToPublish.map((t): SetTripleOp | DeleteTripleOp => {
     if (t.isDeleted) {
       return {
@@ -93,7 +96,13 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
     };
   });
 
-  return [...relationOps, ...tripleOps];
+  return {
+    opsToPublish: [...relationOps, ...tripleOps],
+
+    // We return the relation triples so we can keep them locally when rendering
+    // entity pages for relations.
+    relationTriples: triplesForRelations,
+  };
 }
 
 const RELATION_ATTRIBUTES = [
@@ -104,7 +113,7 @@ const RELATION_ATTRIBUTES = [
   SYSTEM_IDS.RELATION_INDEX,
 ];
 
-function getTripleIdsForRelations(triples: Triple[], relations: Relation[]): string[] {
+function getTriplesForRelations(triples: Triple[], relations: Relation[]): Triple[] {
   const relationIds = relations.map(r => r.id);
 
   return triples
@@ -117,5 +126,10 @@ function getTripleIdsForRelations(triples: Triple[], relations: Relation[]): str
 
       return false;
     })
-    .map(t => ID.createTripleId(t));
+    .map(t => {
+      return {
+        ...t,
+        id: ID.createTripleId(t),
+      };
+    });
 }

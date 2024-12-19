@@ -89,12 +89,12 @@ describe('prepareTriplesForPublishing', () => {
   });
 
   it('filters ops from different space', () => {
-    const result = prepareTriplesForPublishing([TRIPLE], [RELATION], 'different test space');
+    const { opsToPublish: result } = prepareTriplesForPublishing([TRIPLE], [RELATION], 'different test space');
     expect(result.length).toEqual(0);
   });
 
   it('filters already-published ops', () => {
-    const result = prepareTriplesForPublishing(
+    const { opsToPublish: result } = prepareTriplesForPublishing(
       [{ ...TRIPLE, hasBeenPublished: true }],
       [{ ...RELATION, hasBeenPublished: true }],
       TRIPLE.space
@@ -103,7 +103,7 @@ describe('prepareTriplesForPublishing', () => {
   });
 
   it('filters invalid ops where entity id is empty', () => {
-    const result = prepareTriplesForPublishing(
+    const { opsToPublish: result } = prepareTriplesForPublishing(
       [{ ...TRIPLE, entityId: '' }],
       [{ ...RELATION, fromEntity: { id: EntityId(''), name: null } }],
       TRIPLE.space
@@ -112,7 +112,7 @@ describe('prepareTriplesForPublishing', () => {
   });
 
   it('filters invalid ops with empty attribute id', () => {
-    const result = prepareTriplesForPublishing(
+    const { opsToPublish: result } = prepareTriplesForPublishing(
       [{ ...TRIPLE, attributeId: '' }],
       [{ ...RELATION, typeOf: { id: EntityId(''), name: null } }],
       TRIPLE.space
@@ -121,7 +121,7 @@ describe('prepareTriplesForPublishing', () => {
   });
 
   it('filters invalid ops with empty relation to entity id', () => {
-    const result = prepareTriplesForPublishing(
+    const { opsToPublish: result } = prepareTriplesForPublishing(
       [],
       [{ ...RELATION, toEntity: { id: EntityId(''), name: null, renderableType: 'DATA', value: EntityId('') } }],
       TRIPLE.space

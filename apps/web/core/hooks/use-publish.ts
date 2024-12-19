@@ -6,7 +6,10 @@ import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
+import { Triple } from '../database/Triple';
+import { getRelations } from '../database/relations';
 import { getTriples } from '../database/triples';
+import { StoredTriple } from '../database/types';
 import { useWriteOps } from '../database/write';
 import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
@@ -27,7 +30,7 @@ interface MakeProposalOptions {
 }
 
 export function usePublish() {
-  const { restore } = useWriteOps();
+  const { restore, restoreRelations } = useWriteOps();
   const smartAccount = useSmartAccount();
   const { dispatch } = useStatusBar();
 
@@ -54,7 +57,11 @@ export function usePublish() {
           return;
         }
 
-        const ops = Triples.prepareTriplesForPublishing(triplesToPublish, relations, spaceId);
+        const { opsToPublish: ops, relationTriples } = Triples.prepareTriplesForPublishing(
+          triplesToPublish,
+          relations,
+          spaceId
+        );
 
         yield* makeProposal({
           name,
@@ -74,22 +81,36 @@ export function usePublish() {
           },
         });
 
-        const triplesBeingPublished = new Set(
-          triplesToPublish.map(a => {
+        const dataBeingPublished = new Set([
+          ...triplesToPublish.map(a => {
             return a.id;
-          })
-        );
+          }),
+          ...relations.map(a => {
+            return a.id;
+          }),
+        ]);
 
         // We filter out the actions that are being published from the actionsBySpace. We do this
         // since we need to update the entire state of the space with the published actions and the
         // unpublished actions being merged together.
         // If the actionsBySpace[spaceId] is empty, then we return an empty array
-        const nonPublishedOps = getTriples({
-          selector: t => t.space === spaceId && !triplesBeingPublished.has(t.id),
+        const nonPublishedTriples = getTriples({
+          selector: t => t.space === spaceId && !dataBeingPublished.has(t.id),
         });
 
-        const publishedOps = triplesToPublish.map(action => ({
-          ...action,
+        const nonPublishedRelations = getRelations({
+          selector: r => r.space === spaceId && !dataBeingPublished.has(r.id),
+        });
+
+        const publishedTriples: StoredTriple[] = [...triplesToPublish, ...relationTriples].map(triple =>
+          // We keep published relations' ops in memory so we can continue to render any relations
+          // as entity pages. These don't actually get published since we publish relations as
+          // a CREATE_RELATION and DELETE_RELATION op.
+          Triple.make(triple, { hasBeenPublished: true, isDeleted: triple.isDeleted })
+        );
+
+        const publishedRelations = relations.map(relation => ({
+          ...relation,
           // We keep published actions in memory to keep the UI optimistic. This is mostly done
           // because there is a period between publishing actions and the subgraph finishing indexing
           // where the UI would be in a state where the published actions are not showing up in the UI.
@@ -97,29 +118,8 @@ export function usePublish() {
           hasBeenPublished: true,
         }));
 
-        // Update the actionsBySpace for the current space to set the published actions
-        // as hasBeenPublished and merge with the existing actions in the space.
-        // @TODO(database): Need to correctly map the space for each op
-        restore([
-          ...publishedOps.map(t => {
-            return {
-              op: {
-                ...t,
-                type: t.isDeleted ? ('DELETE_TRIPLE' as const) : ('SET_TRIPLE' as const),
-              },
-              spaceId: t.space,
-            };
-          }),
-          ...nonPublishedOps.map(t => {
-            return {
-              op: {
-                ...t,
-                type: t.isDeleted ? ('DELETE_TRIPLE' as const) : ('SET_TRIPLE' as const),
-              },
-              spaceId: t.space,
-            };
-          }),
-        ]);
+        restoreRelations([...publishedRelations, ...nonPublishedRelations]);
+        restore([...publishedTriples, ...nonPublishedTriples]);
       });
 
       const result = await Effect.runPromise(Effect.either(publish));
@@ -147,7 +147,7 @@ export function usePublish() {
         onSuccess?.();
       }, 3000);
     },
-    [restore, smartAccount, dispatch]
+    [restore, smartAccount, dispatch, restoreRelations]
   );
 
   return {
@@ -185,7 +185,7 @@ export function useBulkPublish() {
               type: 'SET_REVIEW_STATE',
               payload: newState,
             }),
-          ops: Triples.prepareTriplesForPublishing(triples, relations, spaceId),
+          ops: Triples.prepareTriplesForPublishing(triples, relations, spaceId).opsToPublish,
           smartAccount,
           space: {
             id: space.id,

@@ -150,43 +150,12 @@ export const removeMany = (ops: RemoveOp[], spaceId: string) => {
   writeMany(ops.map(op => ({ op: { ...op, type: 'DELETE_TRIPLE' }, spaceId })));
 };
 
-export const restore = (ops: { op: StoreOp; spaceId: string }[]) => {
-  const triplesToWrite: StoredTriple[] = [];
+export const restoreRelations = (relations: StoredRelation[]) => {
+  store.set(localRelationsAtom, relations);
+};
 
-  for (const { op, spaceId } of ops) {
-    const triple: StoredTriple = {
-      id: createTripleId({ ...op, space: spaceId }),
-      entityId: op.entityId,
-      attributeId: op.attributeId,
-      // How do we make this work well with local image triples? We want
-      // to store just the image itself to make rendering images easy,
-      // but that's not actually how we publish the images. Maybe we
-      // need to update it on Triple.prepareForPublishing...?
-      value:
-        op.type === 'SET_TRIPLE'
-          ? op.value
-          : // We don't set value as null so just use placeholder value
-            {
-              type: 'TEXT',
-              value: '',
-            },
-
-      entityName: op.type === 'SET_TRIPLE' ? op.entityName : null,
-      attributeName: op.type === 'SET_TRIPLE' ? op.attributeName : null,
-      space: spaceId,
-      hasBeenPublished: false,
-      isDeleted: false,
-      timestamp: Triples.timestamp(),
-    };
-
-    if (op.type === 'DELETE_TRIPLE') {
-      triple.isDeleted = true;
-    }
-
-    triplesToWrite.push(triple);
-  }
-
-  store.set(localOpsAtom, triplesToWrite);
+export const restore = (ops: StoredTriple[]) => {
+  store.set(localOpsAtom, ops);
 };
 
 const writeMany = (ops: { op: StoreOp; spaceId: string }[]) => {
@@ -251,6 +220,7 @@ export function useWriteOps() {
     upsertMany,
     remove,
     restore,
+    restoreRelations,
   };
 }
 
