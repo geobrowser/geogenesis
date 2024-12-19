@@ -49,6 +49,7 @@ const testEntityTypes: Op[] = [SYSTEM_IDS.PERSON_TYPE].flatMap(typeId => {
 const testEntityBlocks = [
   ...TextBlock.make({ fromId: TEST_ENTITY_ID, text: 'Test entity text block' }),
   ...DataBlock.make({
+    name: 'Data block',
     fromId: TEST_ENTITY_ID,
     sourceType: 'GEO',
     position: Position.createBetween(PositionRange.FIRST),
