@@ -22,7 +22,7 @@ const TEST_ENTITY_ID = encodeBase58('62ef04337a56401db29ab40aa1d5c672');
 
 const testEntityNameOp: Op = {
   type: 'SET_TRIPLE',
-  space: SYSTEM_IDS.ROOT_SPACE_ID,
+  space: SPACE_ID,
   triple: {
     attribute: SYSTEM_IDS.NAME,
     entity: TEST_ENTITY_ID,
