@@ -30,11 +30,12 @@ describe('tripleFromOp', () => {
       created_at: 0,
       created_at_block: 0,
       entity_id: 'entity-id',
+      boolean_value: null,
       entity_value_id: null,
-      space_id: '0x1234',
+      space_id: 'space-1',
       text_value: 'test value',
       value_type: 'TEXT',
-      version_id: '0',
+      version_id: '0x1234',
     });
   });
 
@@ -62,11 +63,12 @@ describe('tripleFromOp', () => {
       created_at: 0,
       created_at_block: 0,
       entity_id: 'entity-id',
+      boolean_value: null,
       entity_value_id: null,
-      space_id: '0x1234',
+      space_id: 'space-1',
       text_value: null,
       value_type: 'TEXT',
-      version_id: '0',
+      version_id: '0x1234',
     });
   });
 });
