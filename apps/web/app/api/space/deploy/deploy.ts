@@ -68,6 +68,7 @@ interface DeployArgs {
 
 export function deploySpace(args: DeployArgs) {
   return Effect.gen(function* () {
+    yield* Effect.logInfo('Deploying space');
     const initialEditorAddress = getChecksumAddress(args.initialEditorAddress);
 
     if (args.type === 'default' && args.governanceType === undefined) {
@@ -76,6 +77,7 @@ export function deploySpace(args: DeployArgs) {
 
     const governanceType = getGovernanceTypeForSpaceType(args.type, args.governanceType);
 
+    yield* Effect.logInfo('Generating ops for space').pipe(Effect.annotateLogs({ type: args.type }));
     const ops = yield* Effect.tryPromise({
       try: () => generateOpsForSpaceType(args),
       catch: e => new GenerateOpsError(`Failed to generate ops: ${String(e)}`),
@@ -87,6 +89,7 @@ export function deploySpace(args: DeployArgs) {
       ops,
     });
 
+    yield* Effect.logInfo('Uploading EDIT to IPFS');
     const firstBlockContentUri = yield* new IpfsService(Environment.getConfig().ipfs).upload(initialContent);
 
     const plugins: PluginInstallationWithViem[] = [];
@@ -130,31 +133,27 @@ export function deploySpace(args: DeployArgs) {
     };
 
     const deployStartTime = Date.now();
+    yield* Effect.logInfo('Creating DAO');
 
-    const daoAddress = yield* Effect.retry(
+    const dao = yield* Effect.retry(
       Effect.tryPromise({
         try: async () => {
-          console.log('Creating DAO...');
           const steps = await createDao(createParams, deployParams);
           let dao = '';
+          let pluginAddresses = [];
 
           for await (const step of steps) {
             switch (step.key) {
               case DaoCreationSteps.CREATING:
-                console.log({ txHash: step.txHash });
                 break;
               case DaoCreationSteps.DONE: {
-                console.log({
-                  daoAddress: step.address,
-                  pluginAddresses: step.pluginAddresses,
-                });
-
                 dao = step.address;
+                pluginAddresses = step.pluginAddresses ?? [];
               }
             }
           }
 
-          return dao;
+          return { dao, pluginAddresses };
         },
         catch: e => new DeployDaoError(`Failed creating DAO: ${e}`),
       }),
@@ -170,12 +169,16 @@ export function deploySpace(args: DeployArgs) {
 
     const deployEndTime = Date.now() - deployStartTime;
     Telemetry.metric(Metrics.timing('deploy_dao_duration', deployEndTime));
+    yield* Effect.logInfo('Deployed DAO successfully!').pipe(
+      Effect.annotateLogs({ dao: dao.dao, pluginAddresses: dao.pluginAddresses })
+    );
 
     const waitStartTime = Date.now();
 
+    yield* Effect.logInfo('Waiting for DAO to be indexed into a space').pipe(Effect.annotateLogs({ dao: dao.dao }));
     const waitResult = yield* Effect.tryPromise({
       try: async () => {
-        const result = await waitForSpaceToBeIndexed(daoAddress);
+        const result = await waitForSpaceToBeIndexed(dao.dao);
         return result;
       },
       catch: e => new WaitForSpaceToBeIndexedError(`Failed waiting for space to be indexed: ${e}`),
@@ -183,6 +186,13 @@ export function deploySpace(args: DeployArgs) {
 
     const waitEndTime = Date.now() - waitStartTime;
     Telemetry.metric(Metrics.timing('wait_for_space_to_be_indexed_duration', waitEndTime));
+    yield* Effect.logInfo('Space indexed successfully').pipe(
+      Effect.annotateLogs({
+        dao: dao.dao,
+        pluginAddresses: dao.pluginAddresses,
+        spaceId: waitResult,
+      })
+    );
 
     return waitResult;
   });
@@ -220,8 +230,6 @@ class TimeoutError extends Error {
 }
 
 async function waitForSpaceToBeIndexed(daoAddress: string) {
-  console.log('Waiting for space to be indexed...');
-
   const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<{

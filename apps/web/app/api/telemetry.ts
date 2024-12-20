@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { Environment } from '~/core/environment';
 
 export type Metric = {

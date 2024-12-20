@@ -7,7 +7,7 @@ import { Telemetry } from '../telemetry';
 
 function upload(formData: FormData, url: string) {
   return Effect.gen(function* () {
-    console.log(`Posting to url`, url);
+    yield* Effect.logInfo(`Posting IPFS content to url`, url);
 
     const response = yield* Effect.tryPromise({
       try: () =>
@@ -35,7 +35,6 @@ function upload(formData: FormData, url: string) {
       catch: error => new IpfsParseResponseError(`Could not parse IPFS JSON response: ${error}`),
     });
 
-    console.log('ipfs hash', Hash);
     return `ipfs://${Hash}` as const;
   });
 }
@@ -57,6 +56,7 @@ export class IpfsService {
 
       const endTime = Date.now() - startTime;
       Telemetry.metric(Metrics.timing('ipfs_upload_binary_duration', endTime));
+      yield* Effect.logInfo(`Uploaded binary to IPFS successfully`).pipe(Effect.annotateLogs({ hash }));
 
       return hash;
     });
@@ -66,6 +66,7 @@ export class IpfsService {
     const url = `${this.ipfsUrl}/api/v0/add`;
 
     return Effect.gen(function* () {
+      yield* Effect.logInfo(`Uploading file to IPFS`);
       const startTime = Date.now();
 
       const formData = new FormData();
@@ -75,6 +76,7 @@ export class IpfsService {
 
       const endTime = Date.now() - startTime;
       Telemetry.metric(Metrics.timing('ipfs_upload_file_duration', endTime));
+      yield* Effect.logInfo(`Uploaded file to IPFS successfully`).pipe(Effect.annotateLogs({ hash }));
 
       return hash;
     });

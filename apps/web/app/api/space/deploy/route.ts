@@ -69,7 +69,11 @@ export async function GET(request: Request) {
     }
   );
 
-  const result = await Effect.runPromise(Effect.either(deployWithRetry));
+  const result = await Effect.runPromise(
+    Effect.either(deployWithRetry).pipe(
+      Effect.annotateLogs({ requestId, editor: initialEditorAddress, spaceName, type, governanceType })
+    )
+  );
 
   const timeEnd = Date.now() - timeStart;
   Telemetry.metric(Metrics.timing('deploy_space_duration', timeEnd));
