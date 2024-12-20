@@ -202,16 +202,12 @@ function mapEditProposalToSchema(
   edits: S.edits.Insertable[];
   relationOpsByEditId: Map<string, (CreateRelationOp | DeleteRelationOp)[]>;
   tripleOpsByVersionId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
-  tripleOpsByEntityId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
-  tripleOpsByEditId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
 } {
   const proposalsToWrite: S.proposals.Insertable[] = [];
   const versionsToWrite: S.versions.Insertable[] = [];
   const editsToWrite: S.edits.Insertable[] = [];
   const relationOpsByEditId = new Map<string, (CreateRelationOp | DeleteRelationOp)[]>();
   const tripleOpsByVersionId = new Map<string, (SetTripleOp | DeleteTripleOp)[]>();
-  const tripleOpsByEntityId = new Map<string, (SetTripleOp | DeleteTripleOp)[]>();
-  const tripleOpsByEditId = new Map<string, (SetTripleOp | DeleteTripleOp)[]>();
 
   for (const p of proposals) {
     const spaceId = p.space;
@@ -283,16 +279,8 @@ function mapEditProposalToSchema(
       // us to write the ops for each relation as if they are entities while also performing any side-effects
       // related to the relations themselves by still using the CREATE_RELATION and DELETE_RELATION op types.
       tripleOpsByVersionId.set(id, [...opsForEntityId, ...opsForEntityIdWhereRelation.flatMap(relationOpToTripleOps)]);
-      tripleOpsByEntityId.set(entityId, [
-        ...opsForEntityId,
-        ...opsForEntityIdWhereRelation.flatMap(relationOpToTripleOps),
-      ]);
     }
 
-    tripleOpsByEditId.set(
-      p.proposalId,
-      p.ops.filter(o => o.type === 'SET_TRIPLE' || o.type === 'DELETE_TRIPLE')
-    );
     relationOpsByEditId.set(
       p.proposalId,
       p.ops.filter(o => o.type === 'CREATE_RELATION' || o.type === 'DELETE_RELATION')
@@ -304,8 +292,6 @@ function mapEditProposalToSchema(
     versions: versionsToWrite,
     edits: editsToWrite,
     tripleOpsByVersionId,
-    tripleOpsByEntityId,
-    tripleOpsByEditId,
     relationOpsByEditId,
   };
 }

@@ -154,12 +154,14 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
 
         const relationsForEntity = nonDeletedRelationsFromPreviousVersion
           .map((r): Schema.relations.Insertable | null => {
-            const type = r.type_of ? latestVersionForChangedEntities[r.type_of.entity_id] : null;
-            const to = r.to_entity ? latestVersionForChangedEntities[r.to_entity.entity_id] : null;
-
-            if (!type || !to) {
-              return null;
-            }
+            // If the version for the to or type entity is not found, then we know there's not a new
+            // version for it in this edit, so we can use the existing version id.
+            const type = r.type_of
+              ? latestVersionForChangedEntities[r.type_of.entity_id] ?? r.type_of_id
+              : r.type_of_id;
+            const to = r.to_entity
+              ? latestVersionForChangedEntities[r.to_entity.entity_id] ?? r.to_version_id
+              : r.to_version_id;
 
             return {
               id: createGeoId(), // Not deterministic

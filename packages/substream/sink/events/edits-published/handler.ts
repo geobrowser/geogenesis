@@ -32,14 +32,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
     yield* _(Effect.logInfo('Handling approved edits'));
 
     const {
-      schemaEditProposals: {
-        tripleOpsByVersionId,
-        versions,
-        edits,
-        tripleOpsByEditId,
-        tripleOpsByEntityId,
-        relationOpsByEditId,
-      },
+      schemaEditProposals: { tripleOpsByVersionId, versions, edits, relationOpsByEditId },
     } = mapIpfsProposalToSchemaProposalByType(ipfsProposals, block);
 
     /**
@@ -68,8 +61,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
         block,
         edits: importedEdits,
         ipfsVersions: importedVersions,
-        tripleOpsByEditId,
-        tripleOpsByEntityId,
+        relationOpsByEditId,
         editType: 'IMPORT',
       })
     );
@@ -79,8 +71,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
         block,
         edits: defaultEdits,
         ipfsVersions: defaultVersions,
-        tripleOpsByEditId,
-        tripleOpsByEntityId,
+        relationOpsByEditId,
         editType: 'DEFAULT',
       })
     );
@@ -124,14 +115,16 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
             catch: error =>
               new CouldNotWriteMergedVersionsError(`Failed to insert merged versions. ${(error as Error).message}`),
           }),
-          writeEdits({
-            versions: defaultMergedVersions,
-            relationOpsByEditId,
-            tripleOpsByVersionId: defaultMergedOpsByVersionId,
-            edits: defaultEdits,
-            block,
-            editType: 'DEFAULT',
-          }),
+          defaultMergedVersions.length > 0
+            ? writeEdits({
+                versions: defaultMergedVersions,
+                relationOpsByEditId,
+                tripleOpsByVersionId: defaultMergedOpsByVersionId,
+                edits: defaultEdits,
+                block,
+                editType: 'DEFAULT',
+              })
+            : Effect.succeed(''),
           Effect.forEach(
             ipfsProposals,
             proposal =>
@@ -155,16 +148,18 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
      * imports have separate requirements for how they handle merging data for versions.
      * See comment in {@link writeEdits} for more details.
      */
-    yield* _(
-      writeEdits({
-        relationOpsByEditId,
-        versions: importedMergedVersions,
-        tripleOpsByVersionId: importedMergedOpsByVersionId,
-        block,
-        edits: importedEdits,
-        editType: 'IMPORT',
-      })
-    );
+    if (importedMergedVersions.length > 0) {
+      yield* _(
+        writeEdits({
+          relationOpsByEditId,
+          versions: importedMergedVersions,
+          tripleOpsByVersionId: importedMergedOpsByVersionId,
+          block,
+          edits: importedEdits,
+          editType: 'IMPORT',
+        })
+      );
+    }
 
     // Our `writeEdit` processing relies on reading the most previous valid version in order
     // to merge relations correctly. We shouldn't update the most current valid version of

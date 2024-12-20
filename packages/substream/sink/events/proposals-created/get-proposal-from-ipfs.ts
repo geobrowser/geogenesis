@@ -107,7 +107,7 @@ export function getProposalFromIpfs(
         const mappedProposal: SinkEditProposal = {
           ...proposal,
           type: 'ADD_EDIT',
-          name: validIpfsMetadata.name ?? null,
+          name: parsedContent.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),

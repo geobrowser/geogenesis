@@ -95,7 +95,7 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
 
         const contentProposal: SinkEditProposal = {
           type: 'ADD_EDIT',
-          name: validIpfsMetadata.name ?? null,
+          name: parsedContent.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: '-1',
           daoAddress: processedProposal.daoAddress,

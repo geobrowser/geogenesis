@@ -3,8 +3,6 @@ import { z } from 'zod';
 export const ZodIpfsMetadata = z.object({
   version: z.string().superRefine(v => v === '1.0.0'),
   type: z.union([z.literal('ADD_EDIT'), z.literal('IMPORT_SPACE')]),
-  id: z.string(),
-  name: z.string(),
 });
 
 const ZodEditSetTriplePayload = z.object({

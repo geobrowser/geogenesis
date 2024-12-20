@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
-import type { BlockEvent, Op } from '../types';
+import type { BlockEvent, CreateRelationOp, DeleteRelationOp } from '../types';
 import { makeVersionForStaleEntity } from './make-version-for-stale-entity';
 import {
   getStaleEntitiesFromDeletedRelations,
@@ -11,8 +11,7 @@ import {
 interface AggregateNewVersionsArgs {
   edits: Schema.edits.Insertable[];
   ipfsVersions: Schema.versions.Insertable[];
-  tripleOpsByEditId: Map<string, Op[]>;
-  tripleOpsByEntityId: Map<string, Op[]>;
+  relationOpsByEditId: Map<string, (CreateRelationOp | DeleteRelationOp)[]>;
   block: BlockEvent;
   editType: 'DEFAULT' | 'IMPORT';
 }
@@ -27,7 +26,7 @@ interface AggregateNewVersionsArgs {
  * @TODO does changing a relation also require making a new version for the from entity?
  */
 export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
-  const { edits, editType, tripleOpsByEditId, tripleOpsByEntityId, ipfsVersions, block } = args;
+  const { edits, editType, relationOpsByEditId, ipfsVersions, block } = args;
   const newVersions = ipfsVersions;
 
   return Effect.gen(function* (_) {
@@ -40,15 +39,12 @@ export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
       const versionsInEdit =
         editType === 'IMPORT' ? ipfsVersions : ipfsVersions.filter(v => v.edit_id.toString() === edit.id);
       const entitiesInEdit = new Set(versionsInEdit.map(v => v.entity_id.toString()));
-      const opsInEdit = tripleOpsByEditId.get(edit.id.toString()) ?? [];
+      const relationOpsInEdit = relationOpsByEditId.get(edit.id.toString()) ?? [];
 
-      const createdRelations = [...tripleOpsByEntityId.entries()]
-        .filter(([entityId]) => entitiesInEdit.has(entityId))
-        .flatMap(([, ops]) => ops.filter(o => o.type === 'CREATE_RELATION'));
+      const createdRelations = relationOpsInEdit.filter(r => r.type === 'CREATE_RELATION');
+      const deletedRelations = relationOpsInEdit.filter(r => r.type === 'DELETE_RELATION');
 
-      const entitiesFromDeletedRelations = yield* _(
-        getStaleEntitiesFromDeletedRelations(opsInEdit.filter(o => o.type === 'DELETE_RELATION'))
-      );
+      const entitiesFromDeletedRelations = yield* _(getStaleEntitiesFromDeletedRelations(deletedRelations));
 
       // Stale entities are entities which are referenced by the "from" field in
       // created or deleted relations where the entity does not have a new version

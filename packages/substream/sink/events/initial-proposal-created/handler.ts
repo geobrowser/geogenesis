@@ -45,8 +45,7 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
         block,
         edits: schemaEditProposals.edits,
         ipfsVersions: schemaEditProposals.versions,
-        tripleOpsByEditId: schemaEditProposals.tripleOpsByEditId,
-        tripleOpsByEntityId: schemaEditProposals.tripleOpsByEntityId,
+        relationOpsByEditId: schemaEditProposals.relationOpsByEditId,
         editType,
       })
     );

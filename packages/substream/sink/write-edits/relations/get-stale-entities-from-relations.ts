@@ -11,7 +11,7 @@ export function getStaleEntitiesInEdit(args: {
 }) {
   const { createdRelations, entitiesFromDeletedRelations: deletedRelations, entityIds } = args;
   const createdRelationFromIds = createdRelations.map(r => r.relation.fromEntity);
-  return [...createdRelationFromIds, ...deletedRelations].filter(fromId => !entityIds.has(fromId));
+  return [...createdRelationFromIds, ...deletedRelations].filter(entityId => !entityIds.has(entityId));
 }
 
 export function getStaleEntitiesFromDeletedRelations(ops: DeleteRelationOp[]) {
