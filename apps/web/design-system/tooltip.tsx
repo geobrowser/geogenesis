@@ -11,11 +11,14 @@ type TooltipProps = {
   trigger: ReactNode;
   label: ReactNode;
   position?: Position;
+  variant?: Variant;
 };
 
 type Position = 'top' | 'bottom' | 'left' | 'right';
 
-export const Tooltip = ({ trigger, label = '', position = 'bottom' }: TooltipProps) => {
+type Variant = 'light' | 'dark';
+
+export const Tooltip = ({ trigger, label = '', position = 'bottom', variant = 'dark' }: TooltipProps) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [x, y] = originCoordinates[position];
 
@@ -29,8 +32,9 @@ export const Tooltip = ({ trigger, label = '', position = 'bottom' }: TooltipPro
             <Content side={position} align="center" alignOffset={0} sideOffset={4} forceMount>
               <motion.div
                 className={cx(
-                  'relative w-full max-w-[192px] rounded bg-text p-2 text-white shadow-button focus:outline-none',
-                  positionClassName[position]
+                  'relative w-full focus:outline-none',
+                  positionClassName[position],
+                  variantClassName[variant]
                 )}
                 initial={{ opacity: 0, scale: 0.95, x, y }}
                 animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
@@ -41,8 +45,8 @@ export const Tooltip = ({ trigger, label = '', position = 'bottom' }: TooltipPro
                   bounce: 0,
                 }}
               >
-                <Arrow />
-                <div className="text-center text-breadcrumb">{label}</div>
+                {variant === 'dark' && <Arrow />}
+                <div>{label}</div>
               </motion.div>
             </Content>
           )}
@@ -64,4 +68,9 @@ const positionClassName: Record<Position, string> = {
   bottom: 'origin-top',
   left: 'origin-right',
   right: 'origin-left',
+};
+
+const variantClassName: Record<Variant, string> = {
+  light: 'bg-white text-text max-w-[250px] rounded p-3 shadow-lg text-metadata',
+  dark: 'bg-text text-white max-w-[192px] rounded p-2 shadow-button text-center text-breadcrumb',
 };

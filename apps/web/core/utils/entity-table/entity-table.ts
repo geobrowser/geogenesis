@@ -28,17 +28,20 @@ export function fromColumnsAndRows(entities: Entity[], columns: Schema[], collec
 
           const collectionEntity = collectionItemEntities?.find(
             entity =>
-              entity.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value ===
-              cell.entityId
+              entity.triples
+                .find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+                ?.value.value.startsWith(`graph://${cell.entityId}`)
           );
 
           if (collectionEntity) {
-            const sourceSpaceTriple = collectionEntity.triples.find(
-              triple => triple.attributeId === SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE
+            const url = new URL(
+              collectionEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value
+                .value ?? ''
             );
+            const sourceSpace = url.searchParams.get('s');
 
-            if (sourceSpaceTriple) {
-              cell.space = sourceSpaceTriple.value.value;
+            if (sourceSpace) {
+              cell.space = sourceSpace;
 
               const verifiedSourceTriple = collectionEntity.triples.find(
                 triple => triple.attributeId === SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE

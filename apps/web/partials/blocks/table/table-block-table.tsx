@@ -367,9 +367,9 @@ export const TableBlockTable = React.memo(
                               isEditMode={isEditable}
                             >
                               {isNameCell && verified && (
-                                <div>
-                                  <CheckCircle />
-                                </div>
+                                <span>
+                                  <CheckCircle color={isEditable ? 'text' : 'ctaPrimary'} />
+                                </span>
                               )}
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </TableCell>
