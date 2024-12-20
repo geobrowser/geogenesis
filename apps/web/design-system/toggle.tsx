@@ -12,7 +12,7 @@ export const Toggle = ({ checked, className = '', ...rest }: ToggleProps) => {
   return (
     <motion.div
       className={cx('relative inline-flex h-[10px] w-[16px] items-center rounded-full p-[1px]', className)}
-      style={{ justifyContent: checked ? 'end' : 'start', backgroundColor: checked ? 'black' : 'gray' }}
+      style={{ justifyContent: checked ? 'flex-end' : 'flex-start', backgroundColor: checked ? '#000000' : '#B6B6B6' }}
       transition={{ type: 'spring', duration: 1, bounce: 0 }}
       layout
       {...rest}

@@ -218,8 +218,6 @@ export const SelectEntity = ({
                                       onDone({
                                         id: result.id,
                                         name: result.name,
-                                        space: EntityId(SYSTEM_IDS.ROOT_SPACE_ID),
-                                        verified: false,
                                       });
                                       onQueryChange('');
                                     }}
