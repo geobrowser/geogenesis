@@ -9,10 +9,10 @@ import { GEOGENESIS } from './conduit-chain';
 const config: PrivyClientConfig = {
   defaultChain: GEOGENESIS,
   supportedChains: [GEOGENESIS],
+  loginMethods: ['email'],
   appearance: {
     showWalletLoginFirst: false,
     logo: '/static/favicon-320x180.png',
-    walletList: ['rainbow', 'coinbase_wallet', 'wallet_connect', 'metamask'],
   },
 };
 
