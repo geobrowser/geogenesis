@@ -61,8 +61,7 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
         default:
           yield* _(
             Effect.logError(
-              `Unknown error when fetching IPFS content for uri ${processedProposal.contentUri}. ${String(error)}`,
-              error
+              `Unknown error when fetching IPFS content for uri ${processedProposal.contentUri}. ${String(error)}`
             )
           );
           break;

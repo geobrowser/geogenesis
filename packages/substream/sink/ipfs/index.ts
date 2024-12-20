@@ -23,7 +23,11 @@ export function getFetchIpfsContentEffect(
   uri: string
 ): Effect.Effect<
   Buffer | null,
-  UnableToParseBase64Error | FailedFetchingIpfsContentError | UnableToParseJsonError | TimeoutException,
+  | UnableToParseBase64Error
+  | FailedFetchingIpfsContentError
+  | UnableToParseJsonError
+  | TimeoutException
+  | UnknownContentTypeError,
   never
 > {
   return Effect.gen(function* (unwrap) {
