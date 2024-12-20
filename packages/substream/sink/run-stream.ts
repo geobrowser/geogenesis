@@ -529,13 +529,15 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       for (const spaceId of createdSpaceIds ?? []) {
         const initialProposalsToWrite = getProposalsForSpaceIds([spaceId], proposals);
 
-        yield* _(
-          createInitialContentForSpaces({
-            proposals: initialProposalsToWrite,
-            block,
-            editType: 'IMPORT',
-          })
-        );
+        if (initialProposalsToWrite.length > 0) {
+          yield* _(
+            createInitialContentForSpaces({
+              proposals: initialProposalsToWrite,
+              block,
+              editType: 'IMPORT',
+            })
+          );
+        }
       }
 
       /**
@@ -546,16 +548,20 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       if (personalSpaceIds.length > 0) {
         const initialProposalsToWrite = getProposalsForSpaceIds(personalSpaceIds, proposals);
 
-        yield* _(
-          createInitialContentForSpaces({
-            proposals: initialProposalsToWrite,
-            block,
-            editType: 'DEFAULT',
-          })
-        );
+        if (initialProposalsToWrite.length > 0) {
+          yield* _(
+            createInitialContentForSpaces({
+              proposals: initialProposalsToWrite,
+              block,
+              editType: 'DEFAULT',
+            })
+          );
+        }
       }
 
-      yield* _(handleEditsPublished(proposals, createdSpaceIds ?? [], block));
+      if (proposals.length > 0) {
+        yield* _(handleEditsPublished(proposals, createdSpaceIds ?? [], block));
+      }
     }
 
     if (executedProposals.success) {
