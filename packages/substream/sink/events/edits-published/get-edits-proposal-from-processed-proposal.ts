@@ -74,6 +74,12 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
     const ipfsContent = maybeIpfsContent.right;
 
     if (!ipfsContent) {
+      yield* _(
+        Effect.logError(
+          `Failed to fetch IPFS content for proposal in dao ${processedProposal.daoAddress} with content hash ${processedProposal.contentUri}`
+        )
+      );
+
       return null;
     }
 
@@ -89,7 +95,14 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
       case 'ADD_EDIT': {
         const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
 
+        console.log('parsedContent', parsedContent);
+
         if (!parsedContent) {
+          yield* _(
+            Effect.logError(
+              `Failed to parse edit content for proposal in dao ${processedProposal.daoAddress} with content hash ${processedProposal.contentUri} metadata: ${validIpfsMetadata}`
+            )
+          );
           return null;
         }
 
@@ -140,6 +153,11 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
         const importResult = yield* _(Decoder.decodeImport(ipfsContent));
 
         if (!importResult) {
+          yield* _(
+            Effect.logError(
+              `Failed to parse import content for proposal in dao ${processedProposal.daoAddress} with content hash ${processedProposal.contentUri} metadata: ${validIpfsMetadata}`
+            )
+          );
           return null;
         }
 
