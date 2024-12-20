@@ -62,6 +62,12 @@ export type EditEvent =
         index?: string;
       };
     }
+  | {
+      type: 'DELETE_RELATION';
+      payload: {
+        relationId: string;
+      };
+    }
 
   // EVERYTHING BELOW THIS IS A LEGACY EVENT THAT WILL GET REMOVED
   | {
@@ -190,28 +196,7 @@ const listener =
 
         if (type === 'RELATION') {
           // Delete the previous triple and create a new relation entity
-          remove(renderable, context.spaceId);
-
-          const newRelation: StoreRelation = {
-            space: renderable.spaceId,
-            index: INITIAL_RELATION_INDEX_VALUE,
-            typeOf: {
-              id: EntityId(renderable.attributeId),
-              name: renderable.attributeName,
-            },
-            fromEntity: {
-              id: EntityId(renderable.entityId),
-              name: null,
-            },
-            toEntity: {
-              id: EntityId(''),
-              name: null,
-              renderableType: 'RELATION',
-              value: '',
-            },
-          };
-
-          return upsertRelation({ spaceId: context.spaceId, relation: newRelation });
+          return removeRelation({ relationId: EntityId(renderable.entityId), spaceId: context.spaceId });
         }
 
         // @TODO(relations): Add support for IMAGE
@@ -268,6 +253,11 @@ const listener =
       case 'DELETE_ENTITY': {
         const { triple } = event.payload;
         return remove(triple, context.spaceId);
+      }
+
+      case 'DELETE_RELATION': {
+        const { relationId } = event.payload;
+        return removeRelation({ relationId: EntityId(relationId), spaceId: context.spaceId });
       }
     }
   };
