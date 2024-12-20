@@ -94,8 +94,6 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
       case 'ADD_EDIT': {
         const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
 
-        console.log('parsedContent', parsedContent);
-
         if (!parsedContent) {
           yield* _(
             Effect.logError(
