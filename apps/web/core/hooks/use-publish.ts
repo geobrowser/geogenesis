@@ -47,9 +47,6 @@ export function usePublish() {
       if (!smartAccount) return;
       if (triplesToPublish.length < 1) return;
 
-      // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
-      // All of our contract calls rely on knowing plugin metadata so this is probably
-      // something we need for all of them.
       const space = await fetchSpace({ id: spaceId });
 
       const publish = Effect.gen(function* () {

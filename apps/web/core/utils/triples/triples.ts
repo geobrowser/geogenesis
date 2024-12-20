@@ -27,15 +27,20 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
     t => t.space === spaceId && !t.hasBeenPublished && t.attributeId !== '' && t.entityId !== ''
   );
 
-  const validRelations = relations.filter(
-    r =>
+  const validRelations = relations.filter(r => {
+    if (r.isDeleted) {
+      return r.space === spaceId && !r.hasBeenPublished;
+    }
+
+    return (
       r.space === spaceId &&
       !r.hasBeenPublished &&
       r.typeOf.id !== '' &&
       r.fromEntity.id !== '' &&
       r.toEntity.id !== '' &&
       r.index !== ''
-  );
+    );
+  });
 
   // We store triples for relations locally so that we can render relations as normal
   // entities on an entity page. This also enables us to add arbitrary triples to a
