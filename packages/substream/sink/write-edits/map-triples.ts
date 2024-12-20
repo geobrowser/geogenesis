@@ -1,7 +1,7 @@
 import type * as S from 'zapatos/schema';
 
 import { getTripleFromOp } from '../events/get-triple-from-op';
-import { type BlockEvent, type Op, type TripleOp } from '~/sink/types';
+import { type BlockEvent, type DeleteTripleOp, type SetTripleOp, type TripleOp } from '~/sink/types';
 
 export interface OpWithCreatedBy {
   createdById: string;
@@ -9,7 +9,7 @@ export interface OpWithCreatedBy {
   triple: S.triples.Insertable;
 }
 
-export type SchemaTripleEdit = { ops: Op[]; createdById: string; versonId: string };
+export type SchemaTripleEdit = { ops: (SetTripleOp | DeleteTripleOp)[]; createdById: string; versonId: string };
 
 export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
   const squashedOps = squashOps(edit.ops, edit.versonId);
@@ -33,18 +33,18 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
   });
 }
 
-function squashOps(ops: Op[], versionId: string): Op[] {
+function squashOps(ops: (SetTripleOp | DeleteTripleOp)[], versionId: string): (SetTripleOp | DeleteTripleOp)[] {
   // We take the last op for each (S,E,A,V) tuple
   const squashedOps = ops.reduce((acc, op) => {
     const idForOp = `${op.space}:${op.triple.entity}:${op.triple.attribute}:${versionId}`;
     acc.set(idForOp, op);
     return acc;
-  }, new Map<string, Op>());
+  }, new Map<string, SetTripleOp | DeleteTripleOp>());
 
   return [...squashedOps.values()];
 }
 
-function validateOps(ops: Op[]) {
+function validateOps(ops: (SetTripleOp | DeleteTripleOp)[]) {
   return ops.filter(o => {
     if (o.type === 'DELETE_TRIPLE') return true;
 

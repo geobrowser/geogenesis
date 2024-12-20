@@ -3,8 +3,6 @@ import { z } from 'zod';
 export const ZodIpfsMetadata = z.object({
   version: z.string().superRefine(v => v === '1.0.0'),
   type: z.union([z.literal('ADD_EDIT'), z.literal('IMPORT_SPACE')]),
-  id: z.string(),
-  name: z.string(),
 });
 
 const ZodEditSetTriplePayload = z.object({
@@ -57,7 +55,31 @@ const ZodEditDeleteTripleOp = z.object({
   triple: ZodEditDeleteTriplePayload,
 });
 
-export const ZodOp = z.union([ZodEditSetTripleOp, ZodEditDeleteTripleOp]);
+const ZodCreateRelationOp = z.object({
+  type: z
+    .literal(5)
+    .transform(() => 'CREATE_RELATION')
+    .superRefine(arg => arg === 'CREATE_RELATION'),
+  relation: z.object({
+    id: z.string(),
+    index: z.string(),
+    fromEntity: z.string(),
+    toEntity: z.string(),
+    type: z.string(),
+  }),
+});
+
+const ZodDeleteRelationOp = z.object({
+  type: z
+    .literal(6)
+    .transform(() => 'DELETE_RELATION')
+    .superRefine(arg => arg === 'DELETE_RELATION'),
+  relation: z.object({
+    id: z.string(),
+  }),
+});
+
+export const ZodOp = z.union([ZodEditSetTripleOp, ZodEditDeleteTripleOp, ZodCreateRelationOp, ZodDeleteRelationOp]);
 
 export const ZodEdit = z.object({
   version: z.string(),

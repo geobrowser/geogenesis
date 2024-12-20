@@ -17,7 +17,7 @@ binaries:
 modules:
   - name: map_successor_spaces_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -25,7 +25,7 @@ modules:
 
   - name: map_subspaces_added
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -33,7 +33,7 @@ modules:
 
   - name: map_subspaces_removed
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -41,7 +41,7 @@ modules:
 
   - name: map_spaces_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -49,7 +49,7 @@ modules:
 
   - name: map_governance_plugins_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -57,7 +57,7 @@ modules:
 
   - name: map_personal_admin_plugins_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -65,7 +65,7 @@ modules:
 
   - name: map_initial_editors_added
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -73,7 +73,7 @@ modules:
 
   - name: map_edits_published
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -81,7 +81,7 @@ modules:
 
   - name: map_votes_cast
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -89,7 +89,7 @@ modules:
 
   - name: map_proposals_executed
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -97,7 +97,7 @@ modules:
 
   - name: map_members_added
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -105,7 +105,7 @@ modules:
 
   - name: map_members_removed
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -113,7 +113,7 @@ modules:
 
   - name: map_editors_added
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -121,7 +121,7 @@ modules:
 
   - name: map_editors_removed
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -129,7 +129,7 @@ modules:
 
   - name: map_publish_edits_proposals_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -137,7 +137,7 @@ modules:
 
   - name: map_add_member_proposals_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -145,7 +145,7 @@ modules:
 
   - name: map_remove_member_proposals_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -153,7 +153,7 @@ modules:
 
   - name: map_add_editor_proposals_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -161,7 +161,7 @@ modules:
 
   - name: map_remove_editor_proposals_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -169,7 +169,7 @@ modules:
 
   - name: map_add_subspace_proposals_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -177,7 +177,7 @@ modules:
 
   - name: map_remove_subspace_proposals_created
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -185,7 +185,7 @@ modules:
 
   - name: geo_out
     kind: map
-    initialBlock: 620
+    initialBlock: 515
     inputs:
       - map: map_spaces_created
       - map: map_governance_plugins_created

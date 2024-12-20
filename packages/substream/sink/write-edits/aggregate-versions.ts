@@ -1,19 +1,17 @@
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
-import type { BlockEvent, Op } from '../types';
+import type { BlockEvent, CreateRelationOp, DeleteRelationOp } from '../types';
 import { makeVersionForStaleEntity } from './make-version-for-stale-entity';
 import {
   getStaleEntitiesFromDeletedRelations,
   getStaleEntitiesInEdit,
-  maybeEntityOpsToRelation,
 } from './relations/get-stale-entities-from-relations';
 
 interface AggregateNewVersionsArgs {
   edits: Schema.edits.Insertable[];
   ipfsVersions: Schema.versions.Insertable[];
-  opsByEditId: Map<string, Op[]>;
-  opsByEntityId: Map<string, Op[]>;
+  relationOpsByEditId: Map<string, (CreateRelationOp | DeleteRelationOp)[]>;
   block: BlockEvent;
   editType: 'DEFAULT' | 'IMPORT';
 }
@@ -28,7 +26,7 @@ interface AggregateNewVersionsArgs {
  * @TODO does changing a relation also require making a new version for the from entity?
  */
 export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
-  const { edits, editType, opsByEditId, opsByEntityId, ipfsVersions, block } = args;
+  const { edits, editType, relationOpsByEditId, ipfsVersions, block } = args;
   const newVersions = ipfsVersions;
 
   return Effect.gen(function* (_) {
@@ -41,14 +39,12 @@ export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
       const versionsInEdit =
         editType === 'IMPORT' ? ipfsVersions : ipfsVersions.filter(v => v.edit_id.toString() === edit.id);
       const entitiesInEdit = new Set(versionsInEdit.map(v => v.entity_id.toString()));
-      const opsInEdit = opsByEditId.get(edit.id.toString()) ?? [];
+      const relationOpsInEdit = relationOpsByEditId.get(edit.id.toString()) ?? [];
 
-      const createdRelations = [...opsByEntityId.entries()]
-        .filter(([entityId]) => entitiesInEdit.has(entityId))
-        .map(([entityId, ops]) => maybeEntityOpsToRelation(ops, entityId))
-        .filter(r => r !== null);
+      const createdRelations = relationOpsInEdit.filter(r => r.type === 'CREATE_RELATION');
+      const deletedRelations = relationOpsInEdit.filter(r => r.type === 'DELETE_RELATION');
 
-      const entitiesFromDeletedRelations = yield* _(getStaleEntitiesFromDeletedRelations(opsInEdit));
+      const entitiesFromDeletedRelations = yield* _(getStaleEntitiesFromDeletedRelations(deletedRelations));
 
       // Stale entities are entities which are referenced by the "from" field in
       // created or deleted relations where the entity does not have a new version
@@ -78,12 +74,6 @@ export function aggregateNewVersions(args: AggregateNewVersionsArgs) {
 
       // Append new versions for stale entities to versions in edit
       newVersions.push(...versionsForStaleEntities);
-
-      // Theoretically as soon as we append the new versions we can just let the existing
-      //     write flow continue as-is. But it wouldn't be ideal since we're doing a lot
-      //     of duplicated work and those db writes aren't contained to a tx'.
-      // Map aggregated relations to be version-aware
-      // Map aggregated relations to Map<VersionId, Relations[]>
     }
 
     return newVersions;

@@ -240,4 +240,4 @@ export const WEB_URL_ATTRIBUTE = '93stf6cgYvBsdPruRzq1KK';
 // Not sure what this is
 export const DEFAULT_TYPE = '7nJuuYkrKT62HCFxDygF1S';
 
-export const ROOT_SPACE_ID = 'NBDtpHimvrkmVu7vVBXX7b';
+export const ROOT_SPACE_ID = 'BJqiLPcSgfF8FRxkFr76Uy';

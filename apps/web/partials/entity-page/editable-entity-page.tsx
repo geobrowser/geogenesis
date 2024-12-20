@@ -232,9 +232,9 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
               isEditing
               onDelete={() => {
                 send({
-                  type: 'DELETE_RENDERABLE',
+                  type: 'DELETE_RELATION',
                   payload: {
-                    renderable: r,
+                    relationId: r.relationId,
                   },
                 });
               }}

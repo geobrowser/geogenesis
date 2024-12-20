@@ -49,7 +49,12 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
 
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposals, block);
 
-    yield* _(Effect.logDebug('Writing accounts'));
+    /**
+     * 1. Get all the ops in an edit and map them to proposals, versions, and groupBy ops
+     * 2. Aggregate new versions of entities in the edit based on the ops and relations
+     *    This includes new entities, and entities that become stale because a relation
+     *    has changed, either with new data or if the relation was created/deleted.
+     */
 
     // This might be the very first onchain interaction for a wallet address,
     // so we need to make sure that any accounts are already created when we
@@ -58,13 +63,12 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
 
     yield* _(Effect.logDebug(`Writing edit proposals: ${schemaEditProposals.proposals.length}`));
 
-    const versionsWithStaleEntities = yield* _(
+    const allNewVersionsInEdit = yield* _(
       aggregateNewVersions({
         block,
         edits: schemaEditProposals.edits,
         ipfsVersions: schemaEditProposals.versions,
-        opsByEditId: schemaEditProposals.opsByEditId,
-        opsByEntityId: schemaEditProposals.opsByEntityId,
+        relationOpsByEditId: schemaEditProposals.relationOpsByEditId,
         editType: 'DEFAULT',
       })
     );
@@ -79,7 +83,7 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
             // Content proposals
             Edits.upsert(schemaEditProposals.edits),
             Proposals.upsert(schemaEditProposals.proposals),
-            Versions.upsert(versionsWithStaleEntities),
+            Versions.upsert(allNewVersionsInEdit),
           ]);
         },
         catch: error => {
@@ -92,22 +96,20 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
     const opsByVersionId = yield* _(
       mergeOpsWithPreviousVersions({
         edits: schemaEditProposals.edits,
-        opsByVersionId: schemaEditProposals.opsByVersionId,
-        versions: versionsWithStaleEntities,
+        tripleOpsByVersionId: schemaEditProposals.tripleOpsByVersionId,
+        versions: allNewVersionsInEdit,
       })
     );
 
     yield* _(
-      Effect.either(
-        writeEdits({
-          versions: versionsWithStaleEntities,
-          opsByEditId: schemaEditProposals.opsByEditId,
-          opsByVersionId,
-          block,
-          editType: 'DEFAULT',
-          edits: schemaEditProposals.edits,
-        })
-      )
+      writeEdits({
+        versions: allNewVersionsInEdit,
+        tripleOpsByVersionId: opsByVersionId,
+        relationOpsByEditId: schemaEditProposals.relationOpsByEditId,
+        block,
+        editType: 'DEFAULT',
+        edits: schemaEditProposals.edits,
+      })
     );
   });
 }

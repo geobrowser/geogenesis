@@ -107,28 +107,41 @@ export function getProposalFromIpfs(
         const mappedProposal: SinkEditProposal = {
           ...proposal,
           type: 'ADD_EDIT',
-          name: validIpfsMetadata.name ?? null,
+          name: parsedContent.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
           ops: parsedContent.ops.map((op): Op => {
-            if (op.type === 'SET_TRIPLE') {
-              return {
-                type: 'SET_TRIPLE',
-                space: maybeSpace.id,
-                triple: op.triple,
-              } as SetTripleOp;
+            switch (op.type) {
+              case 'SET_TRIPLE':
+                return {
+                  type: 'SET_TRIPLE',
+                  space: maybeSpace.id,
+                  triple: op.triple,
+                } as SetTripleOp;
+              case 'DELETE_TRIPLE':
+                return {
+                  type: 'DELETE_TRIPLE',
+                  space: maybeSpace.id,
+                  triple: {
+                    attribute: op.triple.attribute,
+                    entity: op.triple.entity,
+                    value: {},
+                  },
+                };
+              case 'CREATE_RELATION':
+                return {
+                  type: 'CREATE_RELATION',
+                  space: maybeSpace.id,
+                  relation: op.relation,
+                };
+              case 'DELETE_RELATION':
+                return {
+                  type: 'DELETE_RELATION',
+                  space: maybeSpace.id,
+                  relation: op.relation,
+                };
             }
-
-            return {
-              type: 'DELETE_TRIPLE',
-              space: maybeSpace.id,
-              triple: {
-                attribute: op.triple.attribute,
-                entity: op.triple.entity,
-                value: {},
-              },
-            };
           }),
           creator: getChecksumAddress(proposal.creator),
           daoAddress: getChecksumAddress(proposal.daoAddress),

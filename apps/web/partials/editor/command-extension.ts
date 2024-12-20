@@ -5,7 +5,7 @@ import tippy from 'tippy.js';
 import type { Instance } from 'tippy.js';
 
 import { CommandSuggestionItem, commandItems } from './command-items';
-import { CommandList, CommandListRef } from './command-list';
+import { CommandList } from './command-list';
 
 export const CommandExtension = Extension.create<{
   suggestion: Omit<SuggestionOptions<CommandSuggestionItem>, 'editor'>;
@@ -43,7 +43,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
         .filter(v => v.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
     },
     render() {
-      let reactRenderer: ReactRenderer<CommandListRef, CommandSuggestionItem>;
+      let reactRenderer: ReactRenderer<any, any>;
       let popup: Instance[];
 
       return {
