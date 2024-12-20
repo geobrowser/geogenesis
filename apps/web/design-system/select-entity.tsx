@@ -24,6 +24,7 @@ import { Tooltip } from '~/design-system/tooltip';
 
 import { ArrowLeft } from './icons/arrow-left';
 import { InfoSmall } from './icons/info-small';
+import { RightArrowLong } from './icons/right-arrow-long';
 import { Search } from './icons/search';
 import { ResizableContainer } from './resizable-container';
 import { showingIdsAtom } from '~/atoms';
@@ -209,35 +210,61 @@ export const SelectEntity = ({
                         ) : (
                           <div className="divider-y-divider bg-white">
                             {results.map((result, index) => (
-                              <button
-                                key={index}
-                                onClick={() => setResult(result)}
-                                className="w-full px-3 py-2 hover:bg-grey-01"
-                              >
-                                <div className="truncate text-button text-text">{result.name}</div>
-                                {isShowingIds && (
-                                  <div className="mb-2 mt-1 text-footnoteMedium text-grey-04">{result.id}</div>
-                                )}
-                                <div className="mt-1 flex items-center gap-1">
-                                  <div className="inline-flex gap-0">
-                                    {(result.spaces ?? []).slice(0, 3).map(space => (
-                                      <div
-                                        key={space.spaceId}
-                                        className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                                      >
-                                        <img
-                                          src={getImagePath(space.image)}
-                                          alt=""
-                                          className="h-full w-full object-cover"
-                                        />
+                              <div key={index} className="w-full">
+                                <div className="p-1">
+                                  <button
+                                    onClick={() => {
+                                      setResult(null);
+                                      onDone({
+                                        id: result.id,
+                                        name: result.name,
+                                        space: EntityId(SYSTEM_IDS.ROOT_SPACE_ID),
+                                        verified: false,
+                                      });
+                                      onQueryChange('');
+                                    }}
+                                    className="relative z-10 flex w-full flex-col rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
+                                  >
+                                    <div className="truncate text-button text-text">{result.name}</div>
+                                    {isShowingIds && (
+                                      <div className="mb-2 mt-1 text-footnoteMedium text-grey-04">
+                                        Entity ID &mdash; {result.id}
                                       </div>
-                                    ))}
-                                  </div>
-                                  <div className="text-[0.75rem] font-medium text-grey-04">
-                                    {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
-                                  </div>
+                                    )}
+                                    <div className="mt-1 text-footnoteMedium text-grey-04">Any space</div>
+                                  </button>
                                 </div>
-                              </button>
+                                <div className="-mt-2 p-1">
+                                  <button
+                                    onClick={() => setResult(result)}
+                                    className="relative z-0 flex w-full items-center justify-between rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01"
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <div className="inline-flex gap-0">
+                                        {(result.spaces ?? []).slice(0, 3).map(space => (
+                                          <div
+                                            key={space.spaceId}
+                                            className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                                          >
+                                            <img
+                                              src={getImagePath(space.image)}
+                                              alt=""
+                                              className="h-full w-full object-cover"
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className="text-[0.75rem] font-medium text-grey-04">
+                                        {(result.spaces ?? []).length}{' '}
+                                        {pluralize('space', (result.spaces ?? []).length)}
+                                      </div>
+                                    </div>
+                                    <div className="size-[12px] *:size-[12px]">
+                                      <RightArrowLong color="grey-04" />
+                                    </div>
+                                  </button>
+                                </div>
+                              </div>
                             ))}
                           </div>
                         )}
@@ -251,40 +278,42 @@ export const SelectEntity = ({
                             <ArrowLeft color="grey-04" />
                           </button>
                         </div>
-                        <span className="p-2 text-smallButton text-grey-04">Select space version</span>
-                        <div className="flex flex-1 justify-end">
-                          <button className="p-2 text-smallButton text-grey-04">Settings</button>
+                        <div className="inline-flex flex-1 items-center gap-1 p-2 text-button text-text">
+                          <span>Select a space</span>
+                          <Tooltip
+                            trigger={
+                              <div className="*:size-[12px]">
+                                <InfoSmall color="grey-04" />
+                              </div>
+                            }
+                            label={`Selecting a specific space to link to will mean that any time you access this entity, it’ll take you to that space’s view on this entity.`}
+                            position="top"
+                            variant="light"
+                          />
                         </div>
+                        <div className="flex-1" />
+                      </div>
+                      <div className="flex w-full items-center justify-between bg-grey-01 px-3 py-1.5">
+                        <div className="inline-flex items-center gap-1">
+                          <div className="inline-flex items-center gap-1.5">
+                            <div className="text-footnoteMedium text-grey-04">Set relation as verified</div>
+                          </div>
+                          <Tooltip
+                            trigger={
+                              <div className="*:size-[12px]">
+                                <InfoSmall color="grey-04" />
+                              </div>
+                            }
+                            label={`Different versions of the same entity can live in one or multiple spaces. You can select which version of that entity you feel is the source of truth for the most legitimate information.`}
+                            position="top"
+                            variant="light"
+                          />
+                        </div>
+                        <button onClick={() => setIsVerified(!isVerified)}>
+                          <Toggle checked={isVerified} />
+                        </button>
                       </div>
                       <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">
-                        <button
-                          onClick={() => {
-                            setResult(null);
-                            onDone({
-                              id: result.id,
-                              name: result.name,
-                            });
-                            onQueryChange('');
-                          }}
-                          className="flex min-h-[60px] w-full items-center justify-between border-b border-divider px-3 py-2 hover:bg-grey-01"
-                        >
-                          <div>
-                            <div className="truncate text-button text-text">Any space</div>
-                            <div className="mt-0.5 text-footnote text-grey-04">
-                              Geo will select a space based on its own ranking
-                            </div>
-                          </div>
-                          <div className="flex items-center">
-                            {(result.spaces ?? []).slice(0, 3).map(space => (
-                              <div
-                                key={space.spaceId}
-                                className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                              >
-                                <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
-                              </div>
-                            ))}
-                          </div>
-                        </button>
                         {(result.spaces ?? []).map((space, index) => (
                           <button
                             key={index}
@@ -298,7 +327,7 @@ export const SelectEntity = ({
                               });
                               onQueryChange('');
                             }}
-                            className="flex w-full items-center justify-between border-b border-divider px-3 py-2 hover:bg-grey-01"
+                            className="flex w-full items-center justify-between border-t border-divider px-3 py-2 hover:bg-grey-01"
                           >
                             <div>
                               <div className="truncate text-button text-text">{space.name}</div>
@@ -316,7 +345,7 @@ export const SelectEntity = ({
                       </div>
                     </>
                   )}
-                  {!result ? (
+                  {!result && (
                     <div className="flex w-full items-center justify-between px-3 py-1.5">
                       <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
                         <Toggle checked={isShowingIds} />
@@ -325,24 +354,6 @@ export const SelectEntity = ({
                       <button onClick={onCreateNewEntity} className="text-smallButton text-grey-04">
                         Create new
                       </button>
-                    </div>
-                  ) : (
-                    <div className="flex w-full items-center justify-between px-3 py-1.5">
-                      <button onClick={() => setIsVerified(!isVerified)} className="inline-flex items-center gap-1.5">
-                        <Toggle checked={isVerified} />
-                        <div className="text-footnoteMedium text-grey-04">
-                          Set space as the verified source of truth
-                        </div>
-                      </button>
-                      <Tooltip
-                        trigger={
-                          <div className="*:size-[12px]">
-                            <InfoSmall color="grey-04" />
-                          </div>
-                        }
-                        label={`Different versions of the same entity can live in one or multiple spaces. You can select which version of that entity you feel is the source of truth for the most legitimate information.`}
-                        position="bottom"
-                      />
                     </div>
                   )}
                 </div>

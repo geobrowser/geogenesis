@@ -12,25 +12,29 @@ export const Toggle = ({ checked, className = '', ...rest }: ToggleProps) => {
       return (
         <div
           className={cx(
-            'inline-flex h-[10px] w-[16px] items-center justify-end rounded-full bg-black p-[1px]',
+            'relative inline-flex h-[10px] w-[16px] items-center justify-end rounded-full bg-black p-[1px]',
             className
           )}
           {...rest}
         >
           <div className="h-[8px] w-[8px] rounded-full bg-white" />
+          <Mousecatch />
         </div>
       );
     case false:
       return (
         <div
           className={cx(
-            'inline-flex h-[10px] w-[16px] items-center justify-start rounded-full bg-grey-03 p-[1px]',
+            'relative inline-flex h-[10px] w-[16px] items-center justify-start rounded-full bg-grey-03 p-[1px]',
             className
           )}
           {...rest}
         >
           <div className="h-[8px] w-[8px] rounded-full bg-white" />
+          <Mousecatch />
         </div>
       );
   }
 };
+
+const Mousecatch = () => <div className="absolute -inset-2" />;
