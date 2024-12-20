@@ -393,8 +393,8 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
     if (e.target.files) {
       const file = e.target.files[0];
       const ipfsUri = await ipfs.uploadFile(file);
-      const imageValue = Values.toImageValue(ipfsUri);
-      setImage(imageValue);
+      console.log('ipfs uri', ipfsUri);
+      setImage(ipfsUri);
     }
   };
 

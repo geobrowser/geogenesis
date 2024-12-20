@@ -32,7 +32,7 @@ export class IpfsClient {
     if (response.status >= 300) {
       const text = await response.text();
       console.log(text);
-      return `ipfs://${text}`;
+      return text as `ipfs://${string}`;
     }
 
     const { hash } = await response.json();
@@ -56,7 +56,7 @@ export class IpfsClient {
     if (response.status >= 300) {
       const text = await response.text();
       console.log(text);
-      return `ipfs://${text}`;
+      return text as `ipfs://${string}`;
     }
 
     const { hash } = await response.json();

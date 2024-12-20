@@ -2,7 +2,6 @@ import { Effect, Either, Schedule } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { IpfsUploadError } from '~/core/errors';
 import { slog } from '~/core/utils/utils';
 
 import { IpfsService } from '../ipfs-service';
@@ -19,14 +18,7 @@ export async function POST(request: Request) {
   const ipfs = new IpfsService(Environment.getConfig().ipfs);
 
   const effect = Effect.retry(
-    Effect.tryPromise({
-      try: async () => {
-        const hash = await ipfs.upload(Buffer.from(await file.arrayBuffer()));
-        console.log('hash', hash);
-        return `ipfs://${hash}` as const;
-      },
-      catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
-    }),
+    ipfs.upload(Buffer.from(await file.arrayBuffer())),
     Schedule.exponential('100 millis').pipe(Schedule.jittered)
   );
 
