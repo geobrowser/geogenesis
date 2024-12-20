@@ -274,6 +274,7 @@ importers:
       '@types/express': ^4.17.13
       '@types/node': ^20.14.2
       '@types/pg': ^8.10.9
+      '@types/response-time': ^2.3.8
       '@typescript-eslint/eslint-plugin': ^6.0.0
       '@typescript-eslint/parser': ^6.0.0
       cors: ^2.8.5
@@ -292,6 +293,7 @@ importers:
       postgraphile: ^4.14.0
       postgraphile-plugin-connection-filter: ^2.3.0
       prettier: ^3.0.3
+      response-time: ^2.3.3
       typescript: ^5.3.2
     dependencies:
       '@graphile-contrib/pg-order-by-related': 1.0.0
@@ -306,6 +308,7 @@ importers:
       pg: 8.11.3
       postgraphile: 4.14.0
       postgraphile-plugin-connection-filter: 2.3.0
+      response-time: 2.3.3
       typescript: 5.3.2
     devDependencies:
       '@trivago/prettier-plugin-sort-imports': 4.2.0_prettier@3.0.3
@@ -313,6 +316,7 @@ importers:
       '@types/express': 4.17.13
       '@types/node': 20.14.2
       '@types/pg': 8.10.9
+      '@types/response-time': 2.3.8
       '@typescript-eslint/eslint-plugin': 6.13.1_htrtcueika7fowsmdwmbgzazxy
       '@typescript-eslint/parser': 6.13.1_bekczya6st5f65shkeeehffngq
       eslint: 8.21.0
@@ -2659,7 +2663,7 @@ packages:
       '@metamask/json-rpc-engine': 7.3.3
       '@metamask/json-rpc-middleware-stream': 6.0.2
       '@metamask/object-multiplex': 2.0.0
-      '@metamask/rpc-errors': 6.3.1
+      '@metamask/rpc-errors': 6.4.0
       '@metamask/safe-event-emitter': 3.1.2
       '@metamask/utils': 8.5.0
       detect-browser: 5.3.0
@@ -2668,16 +2672,6 @@ packages:
       is-stream: 2.0.1
       readable-stream: 3.6.2
       webextension-polyfill: 0.10.0
-    transitivePeerDependencies:
-      - supports-color
-    dev: false
-
-  /@metamask/rpc-errors/6.3.1:
-    resolution: {integrity: sha512-ugDY7cKjF4/yH5LtBaOIKHw/AiGGSAmzptAUEiAEGr/78LwuzcXAxmzEQfSfMIfI+f9Djr8cttq1pRJJKfTuCg==}
-    engines: {node: '>=16.0.0'}
-    dependencies:
-      '@metamask/utils': 9.3.0
-      fast-safe-stringify: 2.1.1
     transitivePeerDependencies:
       - supports-color
     dev: false
@@ -2713,7 +2707,7 @@ packages:
       bufferutil: 4.0.8
       cross-fetch: 4.0.0
       date-fns: 2.30.0
-      debug: 4.3.5
+      debug: 4.4.0
       eciesjs: 0.3.19
       eventemitter2: 6.4.9
       readable-stream: 3.6.2
@@ -2801,7 +2795,7 @@ packages:
     engines: {node: '>=14.0.0'}
     dependencies:
       '@types/debug': 4.1.12
-      debug: 4.3.5
+      debug: 4.4.0
       semver: 7.6.3
       superstruct: 1.0.4
     transitivePeerDependencies:
@@ -3076,8 +3070,8 @@ packages:
       fastq: 1.13.0
     dev: true
 
-  /@opentelemetry/api/1.8.0:
-    resolution: {integrity: sha512-I/s6F7yKUDdtMsoBWXJe8Qz40Tui5vsuKCWJEWVL+5q9sSWRzzx6v2KeNsOBEwd94j0eWkpWCH4yB6rZg9Mf0w==}
+  /@opentelemetry/api/1.9.0:
+    resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
     engines: {node: '>=8.0.0'}
     dev: false
 
@@ -5688,6 +5682,13 @@ packages:
       '@types/prop-types': 15.7.5
       '@types/scheduler': 0.16.2
       csstype: 3.1.1
+
+  /@types/response-time/2.3.8:
+    resolution: {integrity: sha512-7qGaNYvdxc0zRab8oHpYx7AW17qj+G0xuag1eCrw3M2VWPJQ/HyKaaghWygiaOUl0y9x7QGQwppDpqLJ5V9pzw==}
+    dependencies:
+      '@types/express': 4.17.13
+      '@types/node': 20.14.2
+    dev: true
 
   /@types/scheduler/0.16.2:
     resolution: {integrity: sha512-hppQEBDmlwhFAXKJX2KnWLYu5yMfi91yazPb2l+lbJiwW+wdo1gNeRA+3RgNSO39WYX2euey41KEwnqesU2Jew==}
@@ -9289,7 +9290,7 @@ packages:
       debug: 4.3.4
       enhanced-resolve: 5.12.0
       eslint: 8.21.0
-      eslint-plugin-import: 2.26.0_vfkjhpyu3ul4ompvtbiazva2r4
+      eslint-plugin-import: 2.26.0_m2m4u4ujm3f6v75yfbf66l5qly
       get-tsconfig: 4.7.2
       globby: 13.1.2
       is-core-module: 2.13.0
@@ -9673,7 +9674,7 @@ packages:
   /ethereum-bloom-filters/1.1.0:
     resolution: {integrity: sha512-J1gDRkLpuGNvWYzWslBQR9cDV4nd4kfvVTE/Wy4Kkm4yb3EYRSlyi0eB/inTsSTTVyA0+HyzHgbr95Fn/Z1fSw==}
     dependencies:
-      '@noble/hashes': 1.4.0
+      '@noble/hashes': 1.6.1
     dev: false
 
   /ethereum-cryptography/2.2.1:
@@ -9851,7 +9852,7 @@ packages:
     resolution: {integrity: sha512-an2S5quJMiy5bnZKEf6AkfH/7r8CzHvhchU40gxN+OM6HPhe7Z9T1FUychcf2M9PpPOO0Hf7BAEfJkw2TDIBDw==}
     engines: {node: '>=12.0.0'}
     dependencies:
-      readable-stream: 3.6.2
+      readable-stream: 4.4.2
       webextension-polyfill: 0.10.0
     dev: false
 
@@ -11200,7 +11201,7 @@ packages:
       lodash.isstring: 4.0.1
       lodash.once: 4.1.1
       ms: 2.1.3
-      semver: 7.5.4
+      semver: 7.6.3
     dev: false
 
   /jsx-ast-utils/3.3.3:
@@ -11973,6 +11974,11 @@ packages:
     engines: {node: '>= 0.8'}
     dependencies:
       ee-first: 1.1.1
+    dev: false
+
+  /on-headers/1.0.2:
+    resolution: {integrity: sha512-pZAE+FJLoyITytdqK0U5s+FIpjN0JP3OzFi/u8Rx+EV5/W+JTWGXG8xFzevE7AjBfDqHv/8vL8qQsIhHnqRkrA==}
+    engines: {node: '>= 0.8'}
     dev: false
 
   /once/1.4.0:
@@ -12750,7 +12756,7 @@ packages:
     resolution: {integrity: sha512-6ZiOBfCywsD4k1BN9IX0uZhF+tJkV8q8llP64G5Hajs4JOeVLPCwpPVcpXy3BwYiUGgyJzsJJQeOIv7+hDSq8g==}
     engines: {node: ^16 || ^18 || >=20}
     dependencies:
-      '@opentelemetry/api': 1.8.0
+      '@opentelemetry/api': 1.9.0
       tdigest: 0.1.2
     dev: false
 
@@ -13364,6 +13370,14 @@ packages:
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
     dev: true
+
+  /response-time/2.3.3:
+    resolution: {integrity: sha512-SsjjOPHl/FfrTQNgmc5oen8Hr1Jxpn6LlHNXxCIFdYMHuK1kMeYMobb9XN3mvxaGQm3dbegqYFMX4+GDORfbWg==}
+    engines: {node: '>= 0.8.0'}
+    dependencies:
+      depd: 2.0.0
+      on-headers: 1.0.2
+    dev: false
 
   /reusify/1.0.4:
     resolution: {integrity: sha512-U9nH88a3fc/ekCF1l0/UP1IosiuIjyTh7hBvXVMHYgVcfGvt897Xguj2UOLDeI5BG2m7/uwyaLVT6fbtCwTyzw==}
