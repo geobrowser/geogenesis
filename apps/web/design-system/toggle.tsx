@@ -1,40 +1,27 @@
 import cx from 'classnames';
+import { motion } from 'framer-motion';
+import type { HTMLMotionProps } from 'framer-motion';
 
 import * as React from 'react';
 
 type ToggleProps = {
   checked: boolean;
-} & React.ComponentPropsWithoutRef<'div'>;
+} & HTMLMotionProps<'div'>;
 
 export const Toggle = ({ checked, className = '', ...rest }: ToggleProps) => {
-  switch (checked) {
-    case true:
-      return (
-        <div
-          className={cx(
-            'relative inline-flex h-[10px] w-[16px] items-center justify-end rounded-full bg-black p-[1px]',
-            className
-          )}
-          {...rest}
-        >
-          <div className="h-[8px] w-[8px] rounded-full bg-white" />
-          <Mousecatch />
-        </div>
-      );
-    case false:
-      return (
-        <div
-          className={cx(
-            'relative inline-flex h-[10px] w-[16px] items-center justify-start rounded-full bg-grey-03 p-[1px]',
-            className
-          )}
-          {...rest}
-        >
-          <div className="h-[8px] w-[8px] rounded-full bg-white" />
-          <Mousecatch />
-        </div>
-      );
-  }
+  return (
+    <motion.div
+      className={cx('relative inline-flex h-[10px] w-[16px] items-center rounded-full p-[1px]', className)}
+      style={{ justifyContent: checked ? 'end' : 'start', backgroundColor: checked ? 'black' : 'gray' }}
+      transition={{ type: 'spring', duration: 1, bounce: 0 }}
+      layout
+      {...rest}
+    >
+      <div className="h-[8px] w-[8px] rounded-full bg-white" />
+      <Mousecatch />
+    </motion.div>
+  );
 };
 
+// Increases the target size of the tappable area
 const Mousecatch = () => <div className="absolute -inset-2" />;

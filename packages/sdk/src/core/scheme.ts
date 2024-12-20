@@ -32,3 +32,10 @@ export function toEntityId(uri: GraphUri): string {
 
   return entity;
 }
+
+export function toSpaceId(uri: GraphUri): string | null {
+  const url = new URL(uri);
+  const space = url.searchParams.get('s');
+
+  return space;
+}

@@ -1,4 +1,5 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import type { GraphUri } from '@geogenesis/sdk';
 
 import { Entity } from '~/core/io/dto/entities';
 import { Cell, Row, Schema } from '~/core/types';
@@ -34,21 +35,22 @@ export function fromColumnsAndRows(entities: Entity[], columns: Schema[], collec
           );
 
           if (collectionEntity) {
-            const url = new URL(
-              collectionEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value
-                .value ?? ''
-            );
-            const sourceSpace = url.searchParams.get('s');
+            const url = collectionEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+              ?.value.value;
 
-            if (sourceSpace) {
-              cell.space = sourceSpace;
+            if (url?.startsWith('graph://')) {
+              const spaceId = GraphUrl.toSpaceId(url as GraphUri);
 
-              const verifiedSourceTriple = collectionEntity.triples.find(
-                triple => triple.attributeId === SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE
-              );
+              if (spaceId) {
+                cell.space = spaceId;
 
-              if (verifiedSourceTriple) {
-                cell.verified = verifiedSourceTriple.value.value === '1';
+                const verifiedSourceTriple = collectionEntity.triples.find(
+                  triple => triple.attributeId === SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE
+                );
+
+                if (verifiedSourceTriple) {
+                  cell.verified = verifiedSourceTriple.value.value === '1';
+                }
               }
             }
           }
