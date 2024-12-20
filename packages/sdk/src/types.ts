@@ -107,3 +107,5 @@ export enum VotingMode {
 }
 
 export type ProposalStatus = 'PROPOSED' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'EXECUTED';
+
+export type GraphUri = `graph://${string}`;
