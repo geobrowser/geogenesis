@@ -80,34 +80,3 @@ export function useAddEditor(args: AddEditorArgs) {
     status: isIdleAgain ? 'idle' : status,
   };
 }
-
-// We eventually might want to be able to add editors manually in public spaces
-// as well. Leaving this for now as a guideline for how we can use the same hook
-// but with different calldata based on the space type. We also do this already
-// in the usePublish and useAdd/RemoveSubspace hooks.
-// type GovernanceTypeCalldataArgs =
-//   | {
-//       type: 'PUBLIC';
-//       cid: `ipfs://${string}`;
-//       editor: `0x${string}`;
-//     }
-//   | { type: 'PERSONAL'; editor: `0x${string}` };
-
-// function getCalldataForSpaceType(args: GovernanceTypeCalldataArgs): `0x${string}` {
-//   switch (args.type) {
-//     case 'PUBLIC':
-//       return encodeFunctionData({
-//         functionName: 'proposeAddEditor',
-//         abi: MainVotingAbi,
-//         // @TODO: Function for encoding args
-//         args: [stringToHex(args.cid), args.editor],
-//       });
-//     case 'PERSONAL':
-//       return encodeFunctionData({
-//         functionName: 'submitNewEditor',
-//         abi: PersonalSpaceAdminAbi,
-//         // @TODO: Function for encoding args
-//         args: [args.editor],
-//       });
-//   }
-// }

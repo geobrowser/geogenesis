@@ -1,6 +1,7 @@
 'use client';
 
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
+import { useMutation } from '@tanstack/react-query';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -255,8 +256,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
     if (e.target.files) {
       const file = e.target.files[0];
       const ipfsUri = await ipfs.uploadFile(file);
-      const imageValue = Values.toImageValue(ipfsUri);
-      setAvatar(imageValue);
+      setAvatar(ipfsUri);
     }
   };
 
