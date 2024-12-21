@@ -3,6 +3,7 @@ import { Editor, Range } from '@tiptap/core';
 import * as React from 'react';
 
 import { IpfsClient } from '~/core/io/ipfs-client';
+import { getImagePath } from '~/core/utils/utils';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
@@ -102,8 +103,9 @@ export const commandItems: CommandSuggestionItem[] = [
       input.onchange = async (e: any) => {
         if (!e?.target?.files?.[0]) return;
         const file = e.target.files[0];
-        // @TODO(relations)
-        const src = await IpfsClient.uploadFile(file);
+        const ipfsUri = await IpfsClient.uploadFile(file);
+        const src = getImagePath(ipfsUri);
+
         editor.chain().focus().deleteRange(range).setImage({ src }).run();
       };
       input.click();

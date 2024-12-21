@@ -1,11 +1,14 @@
 'use client';
 
 import { Relation as R, SYSTEM_IDS } from '@geogenesis/sdk';
+import { Image } from '@geogenesis/sdk';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { Array } from 'effect';
 
 import * as React from 'react';
+
+import { getImageHash, getImagePath } from '~/core/utils/utils';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
@@ -77,7 +80,7 @@ function sortByIndex(a: RelationWithBlock, z: RelationWithBlock) {
 
 interface UpsertBlocksRelationsArgs {
   nextBlocks: { id: string; type: Content['type'] }[];
-  addedBlockIds: string[];
+  addedBlocks: { id: string; value: string }[];
   removedBlockIds: string[];
   blockRelations: RelationWithBlock[];
   spaceId: string;
@@ -91,7 +94,7 @@ const makeBlocksRelations = async ({
   blockRelations,
   spaceId,
   entityPageId,
-  addedBlockIds,
+  addedBlocks,
   removedBlockIds,
 }: UpsertBlocksRelationsArgs) => {
   if (nextBlocks.length > 0) {
@@ -106,11 +109,11 @@ const makeBlocksRelations = async ({
     const newBlocks: Relation[] = [];
     const nextBlockIds = nextBlocks.map(b => b.id);
 
-    for (const addedBlock of addedBlockIds) {
+    for (const addedBlock of addedBlocks) {
       const newRelationId = ID.createEntityId();
-      const block = nextBlocks.find(b => b.id === addedBlock)!;
+      const block = nextBlocks.find(b => b.id === addedBlock.id)!;
 
-      const position = nextBlockIds.indexOf(addedBlock);
+      const position = nextBlockIds.indexOf(addedBlock.id);
       // @TODO: noUncheckedIndexAccess
       const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
       const afterBlockIndex = nextBlockIds[position + 1] as string | undefined;
@@ -156,10 +159,10 @@ const makeBlocksRelations = async ({
           name: 'Blocks',
         },
         toEntity: {
-          id: EntityId(addedBlock),
+          id: EntityId(addedBlock.id),
           renderableType,
           name: null,
-          value: addedBlock,
+          value: addedBlock.value,
         },
         fromEntity: {
           id: EntityId(entityPageId),
@@ -219,18 +222,18 @@ export function useEditorStore() {
 
         const toEntity = relationForBlockId?.block;
 
-        // if (value?.type === 'IMAGE') {
-        //   return {
-        //     type: 'image',
-        //     attrs: {
-        //       spaceId,
-        //       id: blockId,
-        //       src: getImagePath(value.value),
-        //       alt: '',
-        //       title: '',
-        //     },
-        //   };
-        // }
+        if (toEntity?.type === 'IMAGE') {
+          return {
+            type: 'image',
+            attrs: {
+              spaceId,
+              id: blockId,
+              src: getImagePath(toEntity.value),
+              alt: '',
+              title: '',
+            },
+          };
+        }
 
         if (toEntity?.type === 'DATA') {
           return {
@@ -293,6 +296,7 @@ export function useEditorStore() {
         return {
           id: getNodeId(node),
           type: node.type as Content['type'],
+          attrs: node.attrs,
         };
       });
 
@@ -337,8 +341,35 @@ export function useEditorStore() {
           case SYSTEM_IDS.TEXT_BLOCK:
             DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.TEXT_BLOCK, spaceId), spaceId });
             break;
-          case SYSTEM_IDS.IMAGE_BLOCK:
+          case SYSTEM_IDS.IMAGE_BLOCK: {
+            const imageHash = getImageHash(node.attrs?.src);
+            const imageUrl = `ipfs://${imageHash}`;
+            const { ops } = Image.make(imageUrl);
+            const [, setTripleOp] = ops;
+
+            console.info('imageHash:', imageHash);
+
+            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.IMAGE_BLOCK, spaceId), spaceId });
+
+            // @TODO remove console.info for setTripleOp.triple.value.value
+            // console.info('setTripleOp.triple.value.value:', setTripleOp.triple.value.value);
+
+            DB.upsert(
+              {
+                value: {
+                  type: 'URL',
+                  value: setTripleOp.triple.value.value,
+                },
+                entityId: setTripleOp.triple.entity,
+                attributeId: setTripleOp.triple.attribute,
+                entityName: null,
+                attributeName: 'Image URL',
+              },
+              spaceId
+            );
+
             break;
+          }
           case SYSTEM_IDS.DATA_BLOCK: {
             // @TODO(performance): upsertMany
             for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId)) {
@@ -359,7 +390,12 @@ export function useEditorStore() {
 
       makeBlocksRelations({
         nextBlocks: newBlocks,
-        addedBlockIds,
+        addedBlocks: addedBlocks.map(block => {
+          const imageHash = getImageHash(block.attrs?.src ?? '');
+          const imageUrl = `ipfs://${imageHash}`;
+
+          return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
+        }),
         removedBlockIds,
         spaceId,
         blockRelations: blockRelations,
@@ -381,9 +417,7 @@ export function useEditorStore() {
             DB.upsertMany(ops, spaceId);
             break;
           }
-
           case 'image':
-            // createBlockImageTriple(node);
             break;
           default:
             break;
@@ -392,6 +426,9 @@ export function useEditorStore() {
     },
     [spaceId, blockRelations, blockIds, entityId]
   );
+
+  // @TODO remove console.info for editorJson
+  console.info('editorJson:', editorJson);
 
   return {
     upsertEditorState,

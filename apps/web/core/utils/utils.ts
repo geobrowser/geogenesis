@@ -192,12 +192,12 @@ export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
 };
 
 // Get the image hash from an image path
-// e.g., https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH -> HASH
+// e.g., https://gateway.lighthouse.storage/ipfs/HASH
 // e.g., ipfs://HASH -> HASH
 export const getImageHash = (value: string) => {
   // If the value includes a query parameter, it's thhe legacy hard coded IPFS gateway path
-  if (value.includes('?arg=')) {
-    const [, hash] = value.split('?arg=');
+  if (value.startsWith(IPFS_GATEWAY_READ_PATH)) {
+    const [, hash] = value.split(IPFS_GATEWAY_READ_PATH);
     return hash;
   } else if (value.includes('://')) {
     const [, hash] = value.split('://');
