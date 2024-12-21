@@ -274,7 +274,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockIds, blockRelations, initialBlocks]);
+  }, [blockIds, blockRelations, initialBlocks, spaceId]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
@@ -329,7 +329,7 @@ export function useEditorStore() {
             case 'paragraph':
               return SYSTEM_IDS.TEXT_BLOCK;
             case 'image':
-              return SYSTEM_IDS.IMAGE_BLOCK;
+              return SYSTEM_IDS.IMAGE_TYPE;
             default:
               return SYSTEM_IDS.TEXT_BLOCK;
           }
@@ -341,15 +341,13 @@ export function useEditorStore() {
           case SYSTEM_IDS.TEXT_BLOCK:
             DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.TEXT_BLOCK, spaceId), spaceId });
             break;
-          case SYSTEM_IDS.IMAGE_BLOCK: {
+          case SYSTEM_IDS.IMAGE_TYPE: {
             const imageHash = getImageHash(node.attrs?.src);
             const imageUrl = `ipfs://${imageHash}`;
             const { ops } = Image.make(imageUrl);
             const [, setTripleOp] = ops;
 
-            console.info('imageHash:', imageHash);
-
-            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.IMAGE_BLOCK, spaceId), spaceId });
+            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.IMAGE_TYPE, spaceId), spaceId });
 
             // @TODO remove console.info for setTripleOp.triple.value.value
             // console.info('setTripleOp.triple.value.value:', setTripleOp.triple.value.value);
@@ -360,7 +358,7 @@ export function useEditorStore() {
                   type: 'URL',
                   value: setTripleOp.triple.value.value,
                 },
-                entityId: setTripleOp.triple.entity,
+                entityId: node.id,
                 attributeId: setTripleOp.triple.attribute,
                 entityName: null,
                 attributeName: 'Image URL',
