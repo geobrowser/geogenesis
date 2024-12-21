@@ -422,9 +422,6 @@ export function useEditorStore() {
     [spaceId, blockRelations, blockIds, entityId]
   );
 
-  // @TODO remove console.info for editorJson
-  console.info('editorJson:', editorJson);
-
   return {
     upsertEditorState,
     editorJson,
