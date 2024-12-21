@@ -349,9 +349,6 @@ export function useEditorStore() {
 
             DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.IMAGE_TYPE, spaceId), spaceId });
 
-            // @TODO remove console.info for setTripleOp.triple.value.value
-            // console.info('setTripleOp.triple.value.value:', setTripleOp.triple.value.value);
-
             DB.upsert(
               {
                 value: {
