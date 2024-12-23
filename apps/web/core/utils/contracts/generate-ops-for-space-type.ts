@@ -37,6 +37,15 @@ export const generateOpsForSpaceType = async ({
     })
   );
 
+  // Add the space configuration type to every deployed space entity
+  ops.push(
+    Relation.make({
+      fromId: newEntityId,
+      toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+      relationTypeId: SYSTEM_IDS.TYPES,
+    })
+  );
+
   // Add space type-specific ops
   switch (type) {
     case 'personal': {
@@ -67,13 +76,6 @@ export const generateOpsForSpaceType = async ({
       break;
     }
     default: {
-      ops.push(
-        Relation.make({
-          fromId: newEntityId,
-          toId: SYSTEM_IDS.SPACE_CONFIGURATION,
-          relationTypeId: SYSTEM_IDS.TYPES,
-        })
-      );
       break;
     }
   }

@@ -528,7 +528,6 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
        */
       for (const spaceId of createdSpaceIds ?? []) {
         const initialProposalsToWrite = getProposalsForSpaceIds([spaceId], proposals);
-
         if (initialProposalsToWrite.length > 0) {
           yield* _(
             createInitialContentForSpaces({
