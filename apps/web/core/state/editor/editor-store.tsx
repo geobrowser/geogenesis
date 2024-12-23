@@ -12,7 +12,7 @@ import { getImageHash, getImagePath } from '~/core/utils/utils';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
-import { useRelations } from '../../database/relations';
+import { getRelations, useRelations } from '../../database/relations';
 import { getTriples } from '../../database/triples';
 import { DB } from '../../database/write';
 import { ID } from '../../id';
@@ -97,91 +97,91 @@ const makeBlocksRelations = async ({
   addedBlocks,
   removedBlockIds,
 }: UpsertBlocksRelationsArgs) => {
-  if (nextBlocks.length > 0) {
-    // We store the new collection items being created so we can check if the new
-    // ordering for a block is dependent on other blocks being created at the same time.
-    //
-    // @TODO Ideally this isn't needed as ordering should be updated as the users are making
-    // changes, but right now that would require updating the actions store for every keystroke
-    // which could cause performance problems in the app. We need more granular reactive state
-    // from our store to prevent potentially re-rendering _everything_ that depends on the store
-    // when changes are made anywhere.
-    const newBlocks: Relation[] = [];
-    const nextBlockIds = nextBlocks.map(b => b.id);
+  // We store the new collection items being created so we can check if the new
+  // ordering for a block is dependent on other blocks being created at the same time.
+  //
+  // @TODO Ideally this isn't needed as ordering should be updated as the users are making
+  // changes, but right now that would require updating the actions store for every keystroke
+  // which could cause performance problems in the app. We need more granular reactive state
+  // from our store to prevent potentially re-rendering _everything_ that depends on the store
+  // when changes are made anywhere.
+  const newBlocks: Relation[] = [];
+  const nextBlockIds = nextBlocks.map(b => b.id);
 
-    for (const addedBlock of addedBlocks) {
-      const newRelationId = ID.createEntityId();
-      const block = nextBlocks.find(b => b.id === addedBlock.id)!;
+  for (const addedBlock of addedBlocks) {
+    const newRelationId = ID.createEntityId();
+    const block = nextBlocks.find(b => b.id === addedBlock.id)!;
 
-      const position = nextBlockIds.indexOf(addedBlock.id);
-      // @TODO: noUncheckedIndexAccess
-      const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
-      const afterBlockIndex = nextBlockIds[position + 1] as string | undefined;
+    const position = nextBlockIds.indexOf(addedBlock.id);
+    // @TODO: noUncheckedIndexAccess
+    const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
+    const afterBlockIndex = nextBlockIds[position + 1] as string | undefined;
 
-      // Check both the existing blocks and any that are created as part of this update
-      // tick. This is necessary as right now we don't update the Geo state until the
-      // user blurs the editor. See the comment earlier in this function.
-      const beforeCollectionItemIndex =
-        blockRelations.find(c => c.block.id === beforeBlockIndex)?.index ??
-        newBlocks.find(c => c.id === beforeBlockIndex)?.index;
-      const afterCollectionItemIndex =
-        blockRelations.find(c => c.block.id === afterBlockIndex)?.index ??
-        newBlocks.find(c => c.id === afterBlockIndex)?.index;
+    // Check both the existing blocks and any that are created as part of this update
+    // tick. This is necessary as right now we don't update the Geo state until the
+    // user blurs the editor. See the comment earlier in this function.
+    const beforeCollectionItemIndex =
+      blockRelations.find(c => c.block.id === beforeBlockIndex)?.index ??
+      newBlocks.find(c => c.id === beforeBlockIndex)?.index;
+    const afterCollectionItemIndex =
+      blockRelations.find(c => c.block.id === afterBlockIndex)?.index ??
+      newBlocks.find(c => c.id === afterBlockIndex)?.index;
 
-      const newTripleOrdering = R.reorder({
-        relationId: newRelationId,
-        beforeIndex: beforeCollectionItemIndex,
-        afterIndex: afterCollectionItemIndex,
-      });
+    const newTripleOrdering = R.reorder({
+      relationId: newRelationId,
+      beforeIndex: beforeCollectionItemIndex,
+      afterIndex: afterCollectionItemIndex,
+    });
 
-      const renderableType = ((): RenderableEntityType => {
-        switch (block.type) {
-          case 'paragraph':
-          case 'text':
-          case 'heading':
-          case 'listItem':
-          case 'bulletList':
-          case 'orderedList':
-            return 'TEXT';
-          case 'tableNode':
-            return 'DATA';
-          case 'image':
-            return 'IMAGE';
-        }
-      })();
+    const renderableType = ((): RenderableEntityType => {
+      switch (block.type) {
+        case 'paragraph':
+        case 'text':
+        case 'heading':
+        case 'listItem':
+        case 'bulletList':
+        case 'orderedList':
+          return 'TEXT';
+        case 'tableNode':
+          return 'DATA';
+        case 'image':
+          return 'IMAGE';
+      }
+    })();
 
-      const newRelation: Relation = {
-        space: spaceId,
-        id: newRelationId,
-        index: newTripleOrdering.triple.value.value,
-        typeOf: {
-          id: EntityId(SYSTEM_IDS.BLOCKS),
-          name: 'Blocks',
-        },
-        toEntity: {
-          id: EntityId(addedBlock.id),
-          renderableType,
-          name: null,
-          value: addedBlock.value,
-        },
-        fromEntity: {
-          id: EntityId(entityPageId),
-          name: null,
-        },
-      };
+    const newRelation: Relation = {
+      space: spaceId,
+      id: newRelationId,
+      index: newTripleOrdering.triple.value.value,
+      typeOf: {
+        id: EntityId(SYSTEM_IDS.BLOCKS),
+        name: 'Blocks',
+      },
+      toEntity: {
+        id: EntityId(addedBlock.id),
+        renderableType,
+        name: null,
+        value: addedBlock.value,
+      },
+      fromEntity: {
+        id: EntityId(entityPageId),
+        name: null,
+      },
+    };
 
-      DB.upsertRelation({ relation: newRelation, spaceId });
-      newBlocks.push(newRelation);
-    }
+    DB.upsertRelation({ relation: newRelation, spaceId });
+    newBlocks.push(newRelation);
+  }
 
-    const relationIdsForRemovedBlocks = blockRelations.filter(r => removedBlockIds.includes(r.block.id));
-    for (const relation of relationIdsForRemovedBlocks) {
-      // @TODO(performance) removeMany
-      DB.removeRelation({
-        relationId: relation.relationId,
-        spaceId,
-      });
-    }
+  const relationIdsForRemovedBlocks = blockRelations.filter(r => removedBlockIds.includes(r.block.id));
+  console.log('deleted block relations', relationIdsForRemovedBlocks);
+
+  for (const relation of relationIdsForRemovedBlocks) {
+    // @TODO(performance) removeMany
+    DB.removeRelation({
+      relationId: relation.relationId,
+      spaceId,
+    });
   }
 };
 
@@ -198,6 +198,8 @@ export function useEditorStore() {
   )
     .map(relationToRelationWithBlock)
     .sort(sortByIndex);
+
+  console.log('block relations', { blockRelations, entityId });
 
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
@@ -382,6 +384,8 @@ export function useEditorStore() {
         // @TODO(performance) removeMany
         DB.removeEntity(removedBlockId, spaceId);
       }
+
+      console.log('making block relations');
 
       makeBlocksRelations({
         nextBlocks: newBlocks,
