@@ -7,7 +7,7 @@ export default function Page() {
 
   const onClick = () => {
     deploy.deploy({
-      type: 'personal',
+      type: 'default',
       governanceType: 'PERSONAL',
       spaceName: 'Root',
     });

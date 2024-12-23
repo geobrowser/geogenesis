@@ -7,9 +7,9 @@ import { Decoder } from '~/sink/proto';
 
 function fetchSpaceImportFromIpfs(ipfsUri: string) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logDebug('Fetching space import from IPFS'));
+    yield* _(Effect.logDebug('Checking if new space is an import via IPFS content'));
     yield* _(
-      Effect.logDebug(`Fetching IPFS content for space import
+      Effect.logDebug(`Fetching IPFS content for potential space import
       ipfsUri: ${ipfsUri}`)
     );
 

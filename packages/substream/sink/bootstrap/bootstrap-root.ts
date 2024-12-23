@@ -6,7 +6,7 @@ import { handleInitialGovernanceSpaceEditorsAdded } from '../events/initial-edit
 import { createInitialContentForSpaces } from '../events/initial-proposal-created/handler';
 import { handleProposalsExecuted } from '../events/proposals-executed/handler';
 import { handleGovernancePluginCreated, handleSpacesCreated } from '../events/spaces-created/handler';
-import type { CreateRelationOp, Op, SetTripleOp, SinkEditProposal } from '../types';
+import type { CreateRelationOp, Op, SinkEditProposal } from '../types';
 import { templateOps } from './bootstrap-templates';
 import {
   DAO_ADDRESS,
@@ -222,32 +222,6 @@ const attributeValueTypeOps: CreateRelationOp[] = Object.entries(attributes).fla
   };
 });
 
-// Temporary until we import the actual root space
-const spaceTypeRelation = Relation.make({
-  fromId: SPACE_ID,
-  toId: SYSTEM_IDS.SPACE_CONFIGURATION,
-  relationTypeId: SYSTEM_IDS.TYPES,
-});
-
-const spaceType: [CreateRelationOp, SetTripleOp] = [
-  {
-    ...spaceTypeRelation,
-    space: SPACE_ID,
-  },
-  {
-    space: SPACE_ID,
-    type: 'SET_TRIPLE',
-    triple: {
-      attribute: SYSTEM_IDS.NAME,
-      entity: SPACE_ID,
-      value: {
-        type: 'TEXT',
-        value: 'Root',
-      },
-    },
-  },
-];
-
 const typeOps: CreateRelationOp[] = Object.keys(schemaTypes).flatMap(typeId => {
   const newRelation = Relation.make({
     fromId: typeId,
@@ -306,7 +280,6 @@ const editProposal: SinkEditProposal = {
     ...attributeOps,
     ...attributeValueTypeOps,
     ...typeOps,
-    ...spaceType,
     ...typeSchemaOps,
     ...templateOps,
     ...entitiesWithTypesOps,

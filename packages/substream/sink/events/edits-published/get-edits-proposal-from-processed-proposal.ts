@@ -1,4 +1,4 @@
-import { getChecksumAddress } from '@geogenesis/sdk';
+import { SYSTEM_IDS, getChecksumAddress } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
@@ -152,6 +152,14 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
           startTime: block.timestamp.toString(),
           contentUri: processedProposal.contentUri,
         };
+
+        console.log(
+          'blocks',
+          parsedContent.ops
+            .filter(o => o.type === 'CREATE_RELATION')
+            .filter(o => o.relation.fromEntity === 'SG12CesNYkfA6NanrkRizb')
+            .filter(o => o.relation.type === SYSTEM_IDS.BLOCKS)
+        );
 
         return contentProposal;
       }
