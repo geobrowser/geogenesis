@@ -12,7 +12,7 @@ import { getImageHash, getImagePath } from '~/core/utils/utils';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
-import { getRelations, useRelations } from '../../database/relations';
+import { useRelations } from '../../database/relations';
 import { getTriples } from '../../database/triples';
 import { DB } from '../../database/write';
 import { ID } from '../../id';
@@ -174,7 +174,6 @@ const makeBlocksRelations = async ({
   }
 
   const relationIdsForRemovedBlocks = blockRelations.filter(r => removedBlockIds.includes(r.block.id));
-  console.log('deleted block relations', relationIdsForRemovedBlocks);
 
   for (const relation of relationIdsForRemovedBlocks) {
     // @TODO(performance) removeMany
@@ -198,8 +197,6 @@ export function useEditorStore() {
   )
     .map(relationToRelationWithBlock)
     .sort(sortByIndex);
-
-  console.log('block relations', { blockRelations, entityId });
 
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
