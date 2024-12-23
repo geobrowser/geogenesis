@@ -153,14 +153,6 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
           contentUri: processedProposal.contentUri,
         };
 
-        console.log(
-          'blocks',
-          parsedContent.ops
-            .filter(o => o.type === 'CREATE_RELATION')
-            .filter(o => o.relation.fromEntity === 'SG12CesNYkfA6NanrkRizb')
-            .filter(o => o.relation.type === SYSTEM_IDS.BLOCKS)
-        );
-
         return contentProposal;
       }
       // The initial content set might not be an Edit and instead be an import. If it's an import
