@@ -382,8 +382,6 @@ export function useEditorStore() {
         DB.removeEntity(removedBlockId, spaceId);
       }
 
-      console.log('making block relations');
-
       makeBlocksRelations({
         nextBlocks: newBlocks,
         addedBlocks: addedBlocks.map(block => {
