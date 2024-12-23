@@ -2,7 +2,6 @@ import { createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
-import { getDeletedRelationsFromOps } from './get-deleted-relations-from-ops';
 import { CurrentVersions } from '~/sink/db';
 import { Relations } from '~/sink/db/relations';
 import type { CreateRelationOp, DeleteRelationOp } from '~/sink/types';
@@ -61,6 +60,8 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
       ...new Set([...versions.map(v => v.entity_id.toString()), ...entitiesReferencedByNewRelations]),
     ];
 
+    console.log('referenced entities in block', { referencedEntitiesInBlock, relationOpsByEditId });
+
     const dbVersionsForEntitiesReferencedInBlock = (yield* _(
       Effect.forEach(
         referencedEntitiesInBlock,
@@ -96,12 +97,16 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
       .filter(v => Boolean(v))
       .flat();
 
-    const deletedRelations = yield* _(collectDeletedRelationIds(relationOpsByEditId));
+    const deletedRelations = collectDeletedRelationIds(relationOpsByEditId);
+
+    console.log('deleted relations', deletedRelations);
 
     // We process relations by edit id so that we can use either the latest or any version
     // in the specific edit when referencing to, from, and type within a relation. Otherwise
     // we can have relations referencing versions in different edits which doesn't make sense.
     for (const edit of edits) {
+      console.log('ops', JSON.stringify(relationOpsByEditId.get(edit.id.toString()), null, 2));
+
       const editId = edit.id.toString();
       const latestVersionForChangedEntities: Record<string, string> = {};
       const blockVersionsForEdit = versions.filter(v => v.edit_id.toString() === editId);
@@ -138,8 +143,10 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
       }
 
       const nonDeletedDbRelations = latestRelationsFromDbForVersions.filter(
-        latestRelation => !deletedRelationsForEdit.has(latestRelation.id.toString())
+        latestRelation => !deletedRelationsForEdit.has(latestRelation.entity_id.toString())
       );
+
+      console.log('nonDeletedDbRelations', nonDeletedDbRelations);
 
       const relationsFromDbToWrite = blockVersionsForEdit.flatMap(v => {
         const lastDbVersionForEntityId = lastDbVersionByEntityId.get(v.entity_id.toString());
@@ -231,21 +238,19 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
  * defined as a relation.
  */
 function collectDeletedRelationIds(opsByEditId: Map<string, (DeleteRelationOp | CreateRelationOp)[]>) {
-  return Effect.gen(function* (_) {
-    // edit id -> relation id[]
-    const deletedRelationIdsByEditId = new Map<string, string[]>();
+  // edit id -> relation id[]
+  const deletedRelationIdsByEditId = new Map<string, string[]>();
 
-    for (const [editId, ops] of opsByEditId.entries()) {
-      const deletedRelations = yield* _(getDeletedRelationsFromOps(ops.filter(o => o.type === 'DELETE_RELATION')));
+  for (const [editId, ops] of opsByEditId.entries()) {
+    const deleteOps = ops.filter(o => o.type === 'DELETE_RELATION');
 
-      deletedRelationIdsByEditId.set(
-        editId,
-        deletedRelations.map(r => r.id.toString())
-      );
-    }
+    deletedRelationIdsByEditId.set(
+      editId,
+      deleteOps.map(o => o.relation.id)
+    );
+  }
 
-    return deletedRelationIdsByEditId;
-  });
+  return deletedRelationIdsByEditId;
 }
 
 function getEntitiesReferencedByNewRelations(relationOps: (CreateRelationOp | DeleteRelationOp)[]): string[] {
