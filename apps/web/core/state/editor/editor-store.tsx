@@ -110,7 +110,7 @@ const makeBlocksRelations = async ({
     const nextBlockIds = nextBlocks.map(b => b.id);
 
     for (const addedBlock of addedBlocks) {
-      const newRelationId = ID.createEntityId();
+      const newRelationEntityId = ID.createEntityId();
       const block = nextBlocks.find(b => b.id === addedBlock.id)!;
 
       const position = nextBlockIds.indexOf(addedBlock.id);
@@ -129,7 +129,7 @@ const makeBlocksRelations = async ({
         newBlocks.find(c => c.id === afterBlockIndex)?.index;
 
       const newTripleOrdering = R.reorder({
-        relationId: newRelationId,
+        relationId: newRelationEntityId,
         beforeIndex: beforeCollectionItemIndex,
         afterIndex: afterCollectionItemIndex,
       });
@@ -152,7 +152,7 @@ const makeBlocksRelations = async ({
 
       const newRelation: Relation = {
         space: spaceId,
-        id: newRelationId,
+        id: newRelationEntityId,
         index: newTripleOrdering.triple.value.value,
         typeOf: {
           id: EntityId(SYSTEM_IDS.BLOCKS),

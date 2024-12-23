@@ -60,8 +60,6 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
       ...new Set([...versions.map(v => v.entity_id.toString()), ...entitiesReferencedByNewRelations]),
     ];
 
-    console.log('referenced entities in block', { referencedEntitiesInBlock, relationOpsByEditId });
-
     const dbVersionsForEntitiesReferencedInBlock = (yield* _(
       Effect.forEach(
         referencedEntitiesInBlock,
@@ -99,14 +97,10 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
 
     const deletedRelations = collectDeletedRelationIds(relationOpsByEditId);
 
-    console.log('deleted relations', deletedRelations);
-
     // We process relations by edit id so that we can use either the latest or any version
     // in the specific edit when referencing to, from, and type within a relation. Otherwise
     // we can have relations referencing versions in different edits which doesn't make sense.
     for (const edit of edits) {
-      console.log('ops', JSON.stringify(relationOpsByEditId.get(edit.id.toString()), null, 2));
-
       const editId = edit.id.toString();
       const latestVersionForChangedEntities: Record<string, string> = {};
       const blockVersionsForEdit = versions.filter(v => v.edit_id.toString() === editId);
@@ -145,8 +139,6 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
       const nonDeletedDbRelations = latestRelationsFromDbForVersions.filter(
         latestRelation => !deletedRelationsForEdit.has(latestRelation.entity_id.toString())
       );
-
-      console.log('nonDeletedDbRelations', nonDeletedDbRelations);
 
       const relationsFromDbToWrite = blockVersionsForEdit.flatMap(v => {
         const lastDbVersionForEntityId = lastDbVersionByEntityId.get(v.entity_id.toString());
