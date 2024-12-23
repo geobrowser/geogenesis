@@ -526,18 +526,18 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
        * We process newly created spaces differently than existing spaces, mostly due to the possibility
        * of a created space containing an import.
        */
-      // for (const spaceId of createdSpaceIds ?? []) {
-      // const initialProposalsToWrite = getProposalsForSpaceIds([spaceId], proposals);
-      // if (initialProposalsToWrite.length > 0) {
-      //   yield* _(
-      //     createInitialContentForSpaces({
-      //       proposals: initialProposalsToWrite,
-      //       block,
-      //       editType: 'IMPORT',
-      //     })
-      //   );
-      // }
-      // }
+      for (const spaceId of createdSpaceIds ?? []) {
+        const initialProposalsToWrite = getProposalsForSpaceIds([spaceId], proposals);
+        if (initialProposalsToWrite.length > 0) {
+          yield* _(
+            createInitialContentForSpaces({
+              proposals: initialProposalsToWrite,
+              block,
+              editType: 'IMPORT',
+            })
+          );
+        }
+      }
 
       /**
        * We run import spaces one-at-a-time but run default edits in spaces all at once. This is
