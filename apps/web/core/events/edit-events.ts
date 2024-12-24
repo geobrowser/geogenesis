@@ -148,7 +148,14 @@ const listener =
         // When we change the attribute for a renderable we actually change
         // the id. We delete the previous renderable here so we don't still
         // render the old renderable.
-        remove(renderable, context.spaceId);
+        remove(
+          {
+            attributeId: renderable.attributeId,
+            attributeName: renderable.attributeName,
+            entityId: renderable.entityId,
+          },
+          context.spaceId
+        );
 
         if (renderable.type === 'RELATION') {
           return upsert(
