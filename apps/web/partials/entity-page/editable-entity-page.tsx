@@ -190,8 +190,6 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
     },
   });
 
-  // const { upsert } = useWriteOps();
-
   const hasPlaceholders = relations.some(r => r.placeholder === true);
   const typeOfId = relations[0].attributeId;
   const typeOfName = relations[0].attributeName;
