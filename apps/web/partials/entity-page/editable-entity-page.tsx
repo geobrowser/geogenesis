@@ -1,11 +1,14 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { Image } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
+import { DB } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
 import { useRenderables } from '~/core/hooks/use-renderables';
+import { EntityId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Relation, RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
 import { Triple as ITriple } from '~/core/types';
@@ -16,7 +19,7 @@ import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
@@ -64,7 +67,9 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
             const selectorOptions = getRenderableTypeSelectorOptions(
               firstRenderable,
               placeholderRenderable => {
-                send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+                if (!firstRenderable.placeholder) {
+                  send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+                }
                 addPlaceholderRenderable(placeholderRenderable);
               },
               send
@@ -185,9 +190,12 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
     },
   });
 
+  // const { upsert } = useWriteOps();
+
   const hasPlaceholders = relations.some(r => r.placeholder === true);
   const typeOfId = relations[0].attributeId;
   const typeOfName = relations[0].attributeName;
+  const typeOfRenderableType = relations[0].type;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -197,13 +205,63 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
         const renderableType = r.type;
         const relationValue = r.value;
 
-        if (renderableType === 'IMAGE') {
+        if (renderableType === 'IMAGE' && r.placeholder === true) {
           return (
-            <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue ?? '')} />
+            <div key={`relation-upload-image-${relationId}`}>
+              <PageImageField
+                onImageChange={imageSrc => {
+                  const { imageId, ops } = Image.make(imageSrc);
+                  const [createRelationOp, setTripleOp] = ops;
+
+                  send({
+                    type: 'UPSERT_RELATION',
+                    payload: {
+                      fromEntityId: createRelationOp.relation.fromEntity,
+                      toEntityId: createRelationOp.relation.toEntity,
+                      toEntityName: null,
+                      typeOfId: EntityId(SYSTEM_IDS.IMAGE_TYPE),
+                      typeOfName: 'Types',
+                    },
+                  });
+
+                  DB.upsert(
+                    {
+                      value: {
+                        type: 'URL',
+                        value: setTripleOp.triple.value.value,
+                      },
+                      entityId: imageId,
+                      attributeId: setTripleOp.triple.attribute,
+                      entityName: null,
+                      attributeName: 'Image URL',
+                    },
+                    spaceId
+                  );
+
+                  send({
+                    type: 'UPSERT_RELATION',
+                    payload: {
+                      fromEntityId: id,
+                      toEntityId: imageId,
+                      toEntityName: null,
+                      typeOfId: r.attributeId,
+                      typeOfName: r.attributeName,
+                      renderableType: 'IMAGE',
+                      value: setTripleOp.triple.value.value,
+                    },
+                  });
+                }}
+                onImageRemove={() => console.log(`remove`)}
+              />
+            </div>
           );
         }
 
-        if (r.placeholder === true) {
+        if (renderableType === 'IMAGE') {
+          return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue)} />;
+        }
+
+        if (renderableType === 'RELATION' && r.placeholder === true) {
           return (
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
@@ -246,7 +304,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
           </div>
         );
       })}
-      {!hasPlaceholders && (
+      {!hasPlaceholders && typeOfRenderableType === 'RELATION' && (
         <div className="mt-1">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}

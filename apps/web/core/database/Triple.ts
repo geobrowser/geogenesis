@@ -40,7 +40,7 @@ export class Triple {
       id: ID.createTripleId(triple),
       hasBeenPublished: options.hasBeenPublished ?? false,
       timestamp: new Date().toISOString(),
-      isDeleted: options.hasBeenPublished ?? false,
+      isDeleted: options.isDeleted ?? false,
     };
   }
 }

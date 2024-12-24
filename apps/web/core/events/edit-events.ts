@@ -60,6 +60,7 @@ export type EditEvent =
         // a block in between other blocks, or we'll creating an image relation.
         renderableType?: RenderableEntityType;
         index?: string;
+        value?: string;
       };
     }
   | {
@@ -115,7 +116,8 @@ const listener =
       }
 
       case 'UPSERT_RELATION': {
-        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName, renderableType, index } = event.payload;
+        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName, renderableType, index, value } =
+          event.payload;
         const { spaceId } = context;
 
         const newRelation: StoreRelation = {
@@ -133,7 +135,7 @@ const listener =
             id: EntityId(toEntityId),
             name: toEntityName,
             renderableType: renderableType ?? 'RELATION',
-            value: toEntityId, // @TODO(relations): Add support for writing images
+            value: value ?? toEntityId,
           },
         };
 
@@ -225,6 +227,7 @@ const listener =
 
         return remove(
           {
+            attributeName: renderable.attributeName,
             attributeId: renderable.attributeId,
             entityId: context.entityId,
           },

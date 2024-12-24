@@ -130,7 +130,13 @@ export const remove = (op: RemoveOp, spaceId: string) => {
   // on the row. This is so we can still publish the changes as an op
   writeMany([
     Triple.make(
-      { ...op, attributeName: null, entityName: null, space: spaceId, value: { type: 'TEXT', value: '' } },
+      {
+        ...op,
+        attributeName: op.attributeName ?? null,
+        entityName: null,
+        space: spaceId,
+        value: op.value ?? { type: 'TEXT', value: '' },
+      },
       { hasBeenPublished: false, isDeleted: true }
     ),
   ]);
@@ -140,7 +146,13 @@ export const removeMany = (ops: RemoveOp[], spaceId: string) => {
   const triples = ops.map(
     (op): StoredTriple =>
       Triple.make(
-        { ...op, attributeName: null, entityName: null, space: spaceId, value: { type: 'TEXT', value: '' } },
+        {
+          ...op,
+          attributeName: op.attributeName ?? null,
+          entityName: null,
+          space: spaceId,
+          value: op.value ?? { type: 'TEXT', value: '' },
+        },
         { hasBeenPublished: false, isDeleted: true }
       )
   );
