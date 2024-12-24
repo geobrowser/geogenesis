@@ -30,6 +30,7 @@ export function toRenderables({
   // any entities with those types. We want to show any properties from the schema that
   // aren't already set on the entity.
   const attributesWithAValue = new Set([...triples.map(t => t.attributeId), ...relations.map(r => r.typeOf.id)]);
+
   const placeholders = new Set([...(placeholderRenderables?.map(r => r.attributeId) ?? [])]);
 
   // Make some placeholder triples derived from the schema. We later hide and show these depending
@@ -47,6 +48,7 @@ export function toRenderables({
         attributeName: s.name,
         spaceId,
         value: '',
+        placeholder: true,
       };
     });
 
