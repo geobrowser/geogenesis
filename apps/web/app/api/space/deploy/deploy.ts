@@ -108,9 +108,9 @@ export function deploySpace(args: DeployArgs) {
         votingSettings: {
           votingMode: VotingMode.EarlyExecution,
           supportThreshold: 50_000,
-          duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
+          duration: BigInt(60 * 60 * 4), // 4 hours
         },
-        memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
+        memberAccessProposalDuration: BigInt(60 * 60 * 4), // 4 hours
         initialEditors: [getChecksumAddress(initialEditorAddress)],
         pluginUpgrader: getChecksumAddress(initialEditorAddress),
       };
