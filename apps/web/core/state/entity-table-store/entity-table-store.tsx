@@ -9,7 +9,6 @@ import * as React from 'react';
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { MergeTableEntitiesArgs, mergeTableEntities } from '~/core/database/table';
 import { useWriteOps } from '~/core/database/write';
-import { SpaceId } from '~/core/io/schema';
 import { createType as insertType } from '~/core/type/create-type';
 import { GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
@@ -84,10 +83,6 @@ export function useEntityTable() {
        */
       const entities = await mergeTableEntities({
         options: params,
-        source: {
-          type: 'SPACES',
-          value: [SpaceId(spaceId)],
-        },
       });
 
       hydrated.current = true;

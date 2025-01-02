@@ -43,8 +43,7 @@ interface RowQueryArgs {
 const queryKeys = {
   collectionItemEntities: (collectionItemIds: EntityId[]) =>
     ['blocks', 'data', 'collection-items', collectionItemIds] as const,
-  filterState: (filterString: string | null, source: Source) =>
-    ['blocks', 'data', 'filter-state', filterString, source] as const,
+  filterState: (filterString: string | null) => ['blocks', 'data', 'filter-state', filterString] as const,
   columns: (filterState: Awaited<ReturnType<typeof createFiltersFromFilterStringAndSource>> | null) =>
     ['blocks', 'data', 'columns', filterState] as const,
   rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
@@ -121,9 +120,9 @@ export function useTableBlock() {
    */
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
     placeholderData: keepPreviousData,
-    queryKey: queryKeys.filterState(filterString, source),
+    queryKey: queryKeys.filterState(filterString),
     queryFn: async () => {
-      const filterState = await createFiltersFromFilterStringAndSource(filterString, source);
+      const filterState = await createFiltersFromFilterStringAndSource(filterString);
 
       return filterState;
     },
@@ -162,8 +161,10 @@ export function useTableBlock() {
         skip: pageNumber * PAGE_SIZE,
       };
 
+      // @TODO: filter local entities based on filter state
+
       if (source.type === 'SPACES' || source.type === 'GEO') {
-        return await mergeTableEntities({ options: params, source });
+        return await mergeTableEntities({ options: params, filterState });
       }
 
       if (source.type === 'COLLECTION') {

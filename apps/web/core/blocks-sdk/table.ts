@@ -6,16 +6,33 @@ import { mergeEntityAsync } from '../database/entities';
 import { useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
 import { fetchSpace } from '../io/subgraph';
-import { Source } from '../state/editor/types';
 import { OmitStrict, ValueTypeId } from '../types';
 import { FilterableValueType, valueTypes } from '../value-types';
 
-type Filter = {
+export type Filter = {
   columnId: string;
   valueType: FilterableValueType;
   value: string;
   valueName: string | null;
 };
+
+const AttributeFilter = Schema.Struct({
+  attribute: Schema.String,
+  is: Schema.String,
+});
+
+type AttributeFilter = Schema.Schema.Type<typeof AttributeFilter>;
+
+const Property = Schema.Union(AttributeFilter);
+
+const FilterString = Schema.Struct({
+  where: Schema.Struct({
+    spaces: Schema.Array(Schema.String),
+    AND: Schema.optional(Schema.Array(Property)),
+    OR: Schema.optional(Schema.Array(Property)),
+  }),
+});
+type FilterString = Schema.Schema.Type<typeof FilterString>;
 
 export function upsertName({
   newName,
@@ -75,64 +92,47 @@ export function upsertName({
  * ```
  */
 export function createFilterStringFromFilters(filters: OmitStrict<Filter, 'valueName'>[]): string {
-  const test = {
+  const filter: FilterString = {
     where: {
-      spaces: [],
-      AND: {
-        [SYSTEM_IDS.TYPES]: {
-          is: SYSTEM_IDS.SCHEMA_TYPE,
-        },
-      },
+      spaces: filters.filter(f => f.columnId === SYSTEM_IDS.SPACE_FILTER).map(f => f.value),
+      AND: filters
+        .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
+        .map(f => {
+          return {
+            attribute: f.columnId,
+            is: f.value,
+          };
+        }),
     },
   };
 
-  return JSON.stringify(test);
+  const maybeEncoded = Schema.encodeUnknownEither(FilterString)(filter);
+
+  return Either.match(maybeEncoded, {
+    onLeft: error => {
+      console.info('Error encoding filter string, defaulting to empty filter string', { filters, filter, error });
+      return '';
+    },
+    onRight: value => {
+      return JSON.stringify(value);
+    },
+  });
 }
 
-const AttributeFilter = Schema.Struct({
-  attribute: Schema.String,
-  is: Schema.String,
-});
-
-type AttributeFilter = Schema.Schema.Type<typeof AttributeFilter>;
-
-const Property = Schema.Union(AttributeFilter);
-
-const FilterString = Schema.Struct({
-  where: Schema.Struct({
-    spaces: Schema.Array(Schema.String),
-    AND: Schema.optional(Schema.Array(Property)),
-    OR: Schema.optional(Schema.Array(Property)),
-  }),
-});
-
-export async function createFiltersFromFilterStringAndSource(
-  filterString: string | null,
-  source: Source
-): Promise<Filter[]> {
-  // @TODO designs
-  // Fetch value types of all filters
-  // How do we handle space filtering? One space at a time for now? Spaces at top level?
+export async function createFiltersFromFilterStringAndSource(filterString: string | null): Promise<Filter[]> {
   // How do we set source spaces? Maybe we don't need to?
   // Delete source spaces logic and ALL_OF_GEO logic.
   //     All we care about now is the data source type, either collection or query
   // Handle errors decoding
-  const test = {
-    where: {
-      spaces: ['Tjd19N2ecQfMERACkAUE76'], // implicit OR
-      AND: [
-        {
-          attribute: SYSTEM_IDS.TYPES,
-          is: SYSTEM_IDS.SCHEMA_TYPE,
-        },
-      ],
-    },
-  };
 
-  const filter = JSON.stringify(test);
+  console.log('filter string in create filters', filterString);
+
+  if (!filterString) {
+    return [];
+  }
 
   // handle errors
-  const where = JSON.parse(filter);
+  const where = JSON.parse(filterString);
   const decoded = Schema.decodeUnknownEither(FilterString)(where);
 
   const filtersFromString = Either.match(decoded, {
@@ -149,6 +149,7 @@ export async function createFiltersFromFilterStringAndSource(
   });
 
   if (!filtersFromString) {
+    console.log('No filters from string', filtersFromString);
     return [];
   }
 
@@ -242,8 +243,8 @@ export function createGraphQLStringFromFilters(
       }
 
       if (filter.valueType === 'TEXT') {
-        // value is just the stringValue of the triple
-        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, stringValue: { equalToInsensitive: "${filter.value}"} } }`;
+        // value is just the textValue of the triple
+        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, textValue: { equalToInsensitive: "${filter.value}"} } }`;
       }
 
       // We don't support other value types yet

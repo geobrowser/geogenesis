@@ -2,13 +2,13 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { createFiltersFromFilterStringAndSource } from '../blocks-sdk/table';
+import { Filter } from '../blocks-sdk/table';
 import { Entity } from '../io/dto/entities';
 import { fetchColumns } from '../io/fetch-columns';
+import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
-import { Source } from '../state/editor/types';
 import { Schema, Value } from '../types';
 import { EntityWithSchema, getEntities_experimental, mergeEntity, mergeEntityAsync } from './entities';
 import { getRelations } from './relations';
@@ -22,7 +22,7 @@ const queryKeys = {
 };
 
 export interface MergeTableEntitiesArgs {
-  source: Source;
+  filterState: Filter[];
   options: {
     first?: number;
     skip?: number;
@@ -37,7 +37,8 @@ export interface MergeTableEntitiesArgs {
  * 3. Filter them with a selector (either manual one or one derived from FilterState)
  */
 async function mergeTableRowEntitiesAsync(
-  options: Parameters<typeof fetchTableRowEntities>[0]
+  options: Parameters<typeof fetchTableRowEntities>[0],
+  filterState: Filter[]
 ): Promise<EntityWithSchema[]> {
   const cachedEntities = await queryClient.fetchQuery({
     queryKey: queryKeys.remoteRows(options),
@@ -47,19 +48,44 @@ async function mergeTableRowEntitiesAsync(
   const remoteMergedEntities = cachedEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
   const alreadyMergedEntitiesIds = new Set(remoteMergedEntities.map(e => e.id));
 
+  // @TODO why relation and not triple too?
   // Get all local entities with at least one relation. If we've passed in typeIds
   // as a filter then we should only return local entities that match those ids.
   //
   // Our queries usually require at least one type which is why we can safely use
   // the relations merging to aggregate entities.
-  const localEntities = getRelations({
-    selector: () => {
-      // @TODO(data-block): Map the filter string into a selector so local relations
-      // are correctly filtered.
-      return true;
-    },
-  })
-    .map(r => r.fromEntity.id)
+  const localEntities = await getEntities_experimental();
+  const filteredLocalEntities = Object.values(localEntities)
+    .filter(entity => {
+      for (const filter of filterState) {
+        if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
+          const maybeTripleSpace = entity.triples.find(
+            t => t.attributeId === SYSTEM_IDS.SPACE_FILTER && t.space === filter.value
+          );
+
+          const maybeRelationSpace = entity.relationsOut.find(r => r.space === filter.value);
+          return maybeTripleSpace || maybeRelationSpace;
+        }
+
+        if (filter.valueType === 'RELATION') {
+          return entity.relationsOut.some(r => r.typeOf.id === filter.columnId && r.toEntity.id === filter.value);
+        }
+
+        return entity.triples.some(triple => {
+          if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
+            // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
+            // attached to a triple in the data model. Once we represents entities across multiple spaces
+            // this filter likely won't make sense anymore.
+            // @TODO: We now store the entitySpaces on the entity itself
+            return triple.space.includes(filter.value);
+          }
+
+          return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
+        });
+      }
+    })
+    .map(e => e.id)
+
     // Filter out entities we've already merged so we don't fetch them again
     .filter(id => !alreadyMergedEntitiesIds.has(id));
 
@@ -68,35 +94,15 @@ async function mergeTableRowEntitiesAsync(
   // all the data needed to merge it with the local state, filter and render it.
   // @TODO(performance): Batch instead of fetching an unknown number of them at once.
   const localMergedEntities = await queryClient.fetchQuery({
-    queryKey: queryKeys.localRows(localEntities),
-    queryFn: () => Promise.all(localEntities.map(id => mergeEntityAsync(id))),
+    queryKey: queryKeys.localRows(filteredLocalEntities),
+    queryFn: () => Promise.all(filteredLocalEntities.map(id => mergeEntityAsync(EntityId(id)))),
   });
 
   return [...localMergedEntities, ...remoteMergedEntities];
 }
 
-export async function mergeTableEntities({ options, source }: MergeTableEntitiesArgs) {
-  const entities = await mergeTableRowEntitiesAsync(options);
-
-  const filterState = await createFiltersFromFilterStringAndSource(options.filter ?? '', source);
-
-  return entities.filter(entity => {
-    for (const filter of filterState) {
-      return entity.triples.some(triple => {
-        if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
-          // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
-          // attached to a triple in the data model. Once we represents entities across multiple spaces
-          // this filter likely won't make sense anymore.
-          // @TODO: We now store the entitySpaces on the entity itself
-          return triple.space.includes(filter.value);
-        }
-
-        return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
-      });
-    }
-
-    return true;
-  });
+export async function mergeTableEntities({ options, filterState }: MergeTableEntitiesArgs) {
+  return await mergeTableRowEntitiesAsync(options, filterState);
 }
 
 export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
