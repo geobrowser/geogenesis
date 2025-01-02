@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
+import { Filter } from '~/core/blocks-sdk/table';
+import { useTableBlock } from '~/core/state/table-block-store';
 import { FilterableValueType, valueTypes } from '~/core/value-types';
 
 import { SmallButton } from '~/design-system/button';
@@ -8,7 +9,7 @@ import { CreateSmall } from '~/design-system/icons/create-small';
 
 import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 
-type RenderableFilter = TableBlockFilter & { columnName: string };
+type RenderableFilter = Filter & { columnName: string };
 
 export function TableBlockEditableFilters() {
   const { setFilterState, columns, filterState } = useTableBlock();

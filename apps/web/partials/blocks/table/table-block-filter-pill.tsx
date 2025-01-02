@@ -1,5 +1,5 @@
+import { Filter } from '~/core/blocks-sdk/table';
 import { useEditable } from '~/core/state/editable-store';
-import { TableBlockFilter } from '~/core/state/table-block-store';
 
 import { IconButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
@@ -20,7 +20,7 @@ export function TableBlockFilterPill({
   filter,
   onDelete,
 }: {
-  filter: TableBlockFilter & { columnName: string };
+  filter: Filter & { columnName: string };
   onDelete: () => void;
 }) {
   const { editable } = useEditable();
