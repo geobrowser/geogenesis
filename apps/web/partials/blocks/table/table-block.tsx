@@ -1,20 +1,15 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
 
 import * as React from 'react';
 
-import { mergeEntityAsync } from '~/core/database/entities';
-import { upsertRelation } from '~/core/database/write';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { ID } from '~/core/id';
-import { EntityId } from '~/core/io/schema';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -114,10 +109,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       columnName: columns.find(c => c.id === f.columnId)?.name ?? '',
     };
   });
-
-  const filteredAttributes: Array<[string, string]> = filterState
-    .filter(filter => filter.columnId !== SYSTEM_IDS.SPACE_FILTER && filter.columnId !== SYSTEM_IDS.TYPES)
-    .map(filter => [filter.columnId, filter.value]);
 
   const filteredTypes: Array<string> = filterState
     .filter(filter => filter.columnId === SYSTEM_IDS.TYPES)

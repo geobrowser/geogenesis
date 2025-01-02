@@ -1,13 +1,10 @@
-import { BASE58_ALLOWED_CHARS, SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { BASE58_ALLOWED_CHARS } from '@geogenesis/sdk';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { IPFS_GATEWAY_READ_PATH } from '~/core/constants';
 import { EntityId } from '~/core/io/schema';
 
-import { mergeEntityAsync } from '../database/entities';
-import { upsertRelation } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/schema';
