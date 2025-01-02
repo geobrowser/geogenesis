@@ -4,15 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { FilterString, createFiltersFromFilterString, createGraphQLStringFromFilters } from './table';
 
 describe('TableBlock SDK', () => {
-  /**
-   * There are several combinations of filters that can be applied to a table block.
-   * 1. String field with a string value
-   * 2. Entity field with an entity ID as the value
-   * 3. String field targeting the Name column
-   * 4. A null type id
-   *
-   * These four combinations can also be used together with an "and" filter
-   */
   it('Builds a graphql query from table block filters', () => {
     const stringFilter = createGraphQLStringFromFilters([
       {
