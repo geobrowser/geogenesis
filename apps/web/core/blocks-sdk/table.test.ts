@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createFiltersFromFilterStringAndSource,
   createGraphQLStringFromFilters,
-  createGraphQLStringFromFiltersV2,
+  createGraphQLStringFromFilters,
 } from './table';
 
 describe('TableBlock SDK', () => {
@@ -188,7 +188,7 @@ describe('TableBlock SDK', () => {
   });
 
   it('Builds a graphql query from table block filters for the postgraphile-based substreams API', () => {
-    const stringFilter = createGraphQLStringFromFiltersV2([
+    const stringFilter = createGraphQLStringFromFilters([
       {
         columnId: 'type',
         value: 'Value 1',
@@ -198,7 +198,7 @@ describe('TableBlock SDK', () => {
 
     expect(stringFilter).toMatchSnapshot();
 
-    const entityFilter = createGraphQLStringFromFiltersV2([
+    const entityFilter = createGraphQLStringFromFilters([
       {
         columnId: 'type',
         value: 'id 1',
@@ -208,7 +208,7 @@ describe('TableBlock SDK', () => {
 
     expect(entityFilter).toMatchSnapshot();
 
-    const nameFilter = createGraphQLStringFromFiltersV2([
+    const nameFilter = createGraphQLStringFromFilters([
       {
         columnId: SYSTEM_IDS.NAME,
         value: 'id 1',
@@ -218,7 +218,7 @@ describe('TableBlock SDK', () => {
 
     expect(nameFilter).toMatchSnapshot();
 
-    const andFilter = createGraphQLStringFromFiltersV2([
+    const andFilter = createGraphQLStringFromFilters([
       {
         columnId: 'type',
         value: 'Value 1',
@@ -238,7 +238,7 @@ describe('TableBlock SDK', () => {
 
     expect(andFilter).toMatchSnapshot();
 
-    const spaceFilter = createGraphQLStringFromFiltersV2([
+    const spaceFilter = createGraphQLStringFromFilters([
       {
         columnId: SYSTEM_IDS.SPACE_FILTER,
         valueType: 'TEXT',
@@ -248,7 +248,7 @@ describe('TableBlock SDK', () => {
 
     expect(spaceFilter).toMatchSnapshot();
 
-    const nullTypeIdFilter = createGraphQLStringFromFiltersV2([]);
+    const nullTypeIdFilter = createGraphQLStringFromFilters([]);
 
     expect(nullTypeIdFilter).toEqual('');
   });

@@ -4,9 +4,9 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import {
+  createFilterStringFromFilters,
   createFiltersFromFilterStringAndSource,
   createGraphQLStringFromFilters,
-  createGraphQLStringFromFiltersV2,
   upsertName,
 } from '../blocks-sdk/table';
 import { useEntity } from '../database/entities';
@@ -154,7 +154,7 @@ export function useTableBlock() {
     queryFn: async () => {
       if (!columns || !filterState) return [];
 
-      const filterString = createGraphQLStringFromFiltersV2(filterState);
+      const filterString = createGraphQLStringFromFilters(filterState);
 
       const params: MergeTableEntitiesArgs['options'] = {
         filter: filterString,
@@ -215,7 +215,7 @@ export function useTableBlock() {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString = newState.length === 0 ? '' : createGraphQLStringFromFilters(newState);
+      const newFiltersString = newState.length === 0 ? '' : createFilterStringFromFilters(newState);
 
       const entityName = blockEntity.name ?? '';
 
