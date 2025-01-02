@@ -1,26 +1,17 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { type DeleteRelationOp } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import { Relations } from '~/sink/db/relations';
-import type { Op } from '~/sink/types';
 
-type PartialOp = {
-  attribute: Op['triple']['attribute'];
-  entity: Op['triple']['entity'];
-  opType: Op['type'];
-};
-
-export function getDeletedRelationsFromOps(ops: PartialOp[]) {
+export function getDeletedRelationsFromOps(ops: DeleteRelationOp[]) {
   return Effect.gen(function* (_) {
     // DELETE_TRIPLE ops don't store the value of the deleted op, so we have no way
     // of knowing if the op being deleted here is actually a relation unless we query
     // the Relations table with the entity id.
-    const entityIdsForDeletedTypeOps = ops
-      .filter(o => o.opType === 'DELETE_TRIPLE' && o.attribute === SYSTEM_IDS.TYPES)
-      .map(o => o.entity);
+    const entityIdOfDeletedRelations = ops.map(o => o.relation.id);
 
     const getRelations = Effect.forEach(
-      entityIdsForDeletedTypeOps,
+      entityIdOfDeletedRelations,
       entityId =>
         Effect.promise(() => {
           return Relations.selectOne({

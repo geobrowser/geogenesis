@@ -4,15 +4,15 @@ import { PrivyProvider as Privy, PrivyClientConfig } from '@privy-io/react-auth'
 
 import * as React from 'react';
 
-import { CONDUIT_TESTNET } from './conduit-chain';
+import { GEOGENESIS } from './conduit-chain';
 
 const config: PrivyClientConfig = {
-  defaultChain: CONDUIT_TESTNET,
-  supportedChains: [CONDUIT_TESTNET],
+  defaultChain: GEOGENESIS,
+  supportedChains: [GEOGENESIS],
+  loginMethods: ['email'],
   appearance: {
     showWalletLoginFirst: false,
     logo: '/static/favicon-320x180.png',
-    walletList: ['rainbow', 'coinbase_wallet', 'wallet_connect', 'metamask'],
   },
 };
 

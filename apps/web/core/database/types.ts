@@ -9,9 +9,11 @@ export interface StoredTriple extends Triple {
 export type StoredRelation = Relation & { isDeleted?: boolean };
 
 type WriteStoreOp = OmitStrict<SetTripleAppOp, 'id'>;
-type DeleteStoreOp = OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
+type DeleteStoreOp = OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'> & {
+  attributeName?: string | null;
+  value?: DeleteTripleAppOp['value'];
+};
 export type UpsertOp = OmitStrict<WriteStoreOp, 'type'>;
 export type RemoveOp = OmitStrict<DeleteStoreOp, 'type'>;
 
-export type StoreOp = WriteStoreOp | DeleteStoreOp;
 export type StoreRelation = OmitStrict<Relation, 'id'> & { id?: EntityId };

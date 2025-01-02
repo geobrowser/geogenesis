@@ -89,7 +89,8 @@ export function useTableBlock() {
 
   const collectionItemIds = collectionItems?.map(c => c.id) ?? [];
 
-  const { data: collectionItemEntities, isLoading: isLoadingCollectionItemEntities } = useQuery({
+  const { data: collectionItemEntities } = useQuery({
+    placeholderData: keepPreviousData,
     enabled: collectionItems.length > 0,
     queryKey: queryKeys.collectionItemEntities(collectionItemIds),
     queryFn: async () => {
@@ -119,6 +120,7 @@ export function useTableBlock() {
    * only includes _data_ filters, but not _where_ to query from.
    */
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
+    placeholderData: keepPreviousData,
     queryKey: queryKeys.filterState(filterString, source),
     queryFn: async () => {
       const filterState = await createFiltersFromFilterStringAndSource(filterString, source);
@@ -130,6 +132,7 @@ export function useTableBlock() {
   // We need the entities before we can fetch the columns since we need to know the
   // types of the entities when rendering a collection source.
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
+    placeholderData: keepPreviousData,
     queryKey: queryKeys.columns(filterState ?? null),
     queryFn: async () => {
       const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES).map(f => f.value) ?? [];
@@ -177,6 +180,7 @@ export function useTableBlock() {
   }, [tableEntities, columns, collectionItemEntities]);
 
   const { data: columnRelationTypes } = useQuery({
+    placeholderData: keepPreviousData,
     enabled: columns !== undefined,
     queryKey: queryKeys.relationTypes(columns),
     queryFn: async () => {
@@ -277,7 +281,7 @@ export function useTableBlock() {
     entityId,
     spaceId,
 
-    isLoading: isLoadingColumns || isLoadingEntities || isLoadingFilterState || isLoadingCollectionItemEntities,
+    isLoading: isLoadingColumns || isLoadingEntities || isLoadingFilterState,
 
     name: blockEntity.name,
     setName,

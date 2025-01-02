@@ -6,7 +6,7 @@ import { handleInitialGovernanceSpaceEditorsAdded } from '../events/initial-edit
 import { createInitialContentForSpaces } from '../events/initial-proposal-created/handler';
 import { handleProposalsExecuted } from '../events/proposals-executed/handler';
 import { handleGovernancePluginCreated, handleSpacesCreated } from '../events/spaces-created/handler';
-import type { Op, SinkEditProposal } from '../types';
+import type { CreateRelationOp, Op, SinkEditProposal } from '../types';
 import { templateOps } from './bootstrap-templates';
 import {
   DAO_ADDRESS,
@@ -196,89 +196,72 @@ const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
   } satisfies Op;
 });
 
-const attributeOps: Op[] = Object.keys(attributes).flatMap(attributeId => {
-  return Relation.make({
+const attributeOps: CreateRelationOp[] = Object.keys(attributes).flatMap(attributeId => {
+  const newRelation = Relation.make({
     fromId: attributeId,
     toId: SYSTEM_IDS.ATTRIBUTE,
     relationTypeId: SYSTEM_IDS.TYPES,
-  }).map(op => ({
-    ...op,
+  });
+
+  return {
+    ...newRelation,
     space: SPACE_ID,
-  }));
+  };
 });
 
-const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attributeId, valueType]) => {
-  return Relation.make({
+const attributeValueTypeOps: CreateRelationOp[] = Object.entries(attributes).flatMap(([attributeId, valueType]) => {
+  const newRelation = Relation.make({
     fromId: attributeId,
     toId: valueType,
     relationTypeId: SYSTEM_IDS.VALUE_TYPE,
-  }).map(op => ({
-    ...op,
+  });
+
+  return {
+    ...newRelation,
     space: SPACE_ID,
-  }));
+  };
 });
 
-// Temporary
-const spaceType = Relation.make({
-  fromId: SPACE_ID,
-  toId: SYSTEM_IDS.SPACE_CONFIGURATION,
-  relationTypeId: SYSTEM_IDS.TYPES,
-})
-  .map((o): Op => {
-    return {
-      ...o,
-      space: SPACE_ID,
-    };
-  })
-  .concat([
-    {
-      space: SPACE_ID,
-      type: 'SET_TRIPLE',
-      triple: {
-        attribute: SYSTEM_IDS.NAME,
-        entity: SPACE_ID,
-        value: {
-          type: 'TEXT',
-          value: 'Root',
-        },
-      },
-    },
-  ]);
-
-const typeOps: Op[] = Object.keys(schemaTypes).flatMap(typeId => {
-  return Relation.make({
+const typeOps: CreateRelationOp[] = Object.keys(schemaTypes).flatMap(typeId => {
+  const newRelation = Relation.make({
     fromId: typeId,
     toId: SYSTEM_IDS.SCHEMA_TYPE,
     relationTypeId: SYSTEM_IDS.TYPES,
-  }).map(op => ({
-    ...op,
+  });
+
+  return {
+    ...newRelation,
     space: SPACE_ID,
-  }));
+  };
 });
 
-const typeSchemaOps: Op[] = Object.entries(schemaTypes).flatMap(([typeId, attributeIds]) => {
+const typeSchemaOps: CreateRelationOp[] = Object.entries(schemaTypes).flatMap(([typeId, attributeIds]) => {
   return attributeIds.flatMap(attributeId => {
-    return Relation.make({
+    const newRelation = Relation.make({
       fromId: typeId,
       toId: attributeId,
       relationTypeId: SYSTEM_IDS.ATTRIBUTES,
-    }).map(op => ({
-      ...op,
+    });
+
+    return {
+      ...newRelation,
       space: SPACE_ID,
-    }));
+    };
   });
 });
 
-const entitiesWithTypesOps: Op[] = Object.entries(types).flatMap(([entityId, typeIds]) => {
+const entitiesWithTypesOps: CreateRelationOp[] = Object.entries(types).flatMap(([entityId, typeIds]) => {
   return typeIds.flatMap(typeId => {
-    return Relation.make({
+    const newRelation = Relation.make({
       fromId: entityId,
       toId: typeId,
       relationTypeId: SYSTEM_IDS.TYPES,
-    }).map(op => ({
-      ...op,
+    });
+
+    return {
+      ...newRelation,
       space: SPACE_ID,
-    }));
+    };
   });
 });
 
@@ -297,7 +280,6 @@ const editProposal: SinkEditProposal = {
     ...attributeOps,
     ...attributeValueTypeOps,
     ...typeOps,
-    ...spaceType,
     ...typeSchemaOps,
     ...templateOps,
     ...entitiesWithTypesOps,

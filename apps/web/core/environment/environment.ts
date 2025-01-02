@@ -1,7 +1,7 @@
 import { IPFS_GATEWAY_PATH } from '../constants';
 import { AppEnv } from '../types';
 
-type SupportedChainId = '31337' | '19411';
+type SupportedChainId = '31337' | '80451';
 
 export type AppConfig = {
   chainId: SupportedChainId;
@@ -20,6 +20,8 @@ type IVars = Readonly<{
   geoPk: string;
   accountAbstractionApiKey: string;
   isTestEnv: boolean;
+  telemetryUrl?: string;
+  telemetryApiKey?: string;
 }>;
 
 export const variables: IVars = {
@@ -27,8 +29,10 @@ export const variables: IVars = {
   isTestEnv: process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true',
   liveBlocksPublicKey: process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY!,
   geoPk: process.env.GEO_PK!,
+  telemetryUrl: process.env.TELEMETRY_URL,
+  telemetryApiKey: process.env.TELEMETRY_TOKEN,
   privyAppId: process.env.NEXT_PUBLIC_PRIVY_APP_ID!,
-  rpcEndpoint: process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!,
+  rpcEndpoint: process.env.NEXT_PUBLIC_GEOGENESIS_RPC!,
   walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
   accountAbstractionApiKey: process.env.NEXT_PUBLIC_PIMLICO_API_KEY!,
 };
@@ -41,21 +45,21 @@ export const options: Record<AppEnv, AppConfig> = {
     rpc: 'http://localhost:8545',
     ipfs: IPFS_GATEWAY_PATH,
     api: 'http://localhost:5001/graphql',
-    bundler: `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${variables.accountAbstractionApiKey}`,
+    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   production: {
-    chainId: '19411',
+    chainId: '80451',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
-    api: 'https://geo-conduit.up.railway.app/graphql',
-    bundler: `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${variables.accountAbstractionApiKey}`,
+    api: 'https://geo-mainnet.up.railway.app/graphql',
+    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   testnet: {
-    chainId: '19411',
+    chainId: '80451',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
     api: 'https://geo-conduit.up.railway.app/graphql',
-    bundler: `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${variables.accountAbstractionApiKey}`,
+    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
 };
 

@@ -40,7 +40,10 @@ export function useRemoveEditor(args: RemoveEditorArgs) {
 
       const res = await Effect.runPromise(Effect.either(writeTxEffect));
       Either.match(res, {
-        onLeft: error => console.error(error),
+        onLeft: error => {
+          console.error(error);
+          throw error;
+        },
         onRight: () => console.log('Successfully removed editor'),
       });
     },

@@ -60,6 +60,13 @@ export type EditEvent =
         // a block in between other blocks, or we'll creating an image relation.
         renderableType?: RenderableEntityType;
         index?: string;
+        value?: string;
+      };
+    }
+  | {
+      type: 'DELETE_RELATION';
+      payload: {
+        relationId: string;
       };
     }
 
@@ -109,7 +116,8 @@ const listener =
       }
 
       case 'UPSERT_RELATION': {
-        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName, renderableType, index } = event.payload;
+        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName, renderableType, index, value } =
+          event.payload;
         const { spaceId } = context;
 
         const newRelation: StoreRelation = {
@@ -127,7 +135,7 @@ const listener =
             id: EntityId(toEntityId),
             name: toEntityName,
             renderableType: renderableType ?? 'RELATION',
-            value: toEntityId, // @TODO(relations): Add support for writing images
+            value: value ?? toEntityId,
           },
         };
 
@@ -140,7 +148,14 @@ const listener =
         // When we change the attribute for a renderable we actually change
         // the id. We delete the previous renderable here so we don't still
         // render the old renderable.
-        remove(renderable, context.spaceId);
+        remove(
+          {
+            attributeId: renderable.attributeId,
+            attributeName: renderable.attributeName,
+            entityId: renderable.entityId,
+          },
+          context.spaceId
+        );
 
         if (renderable.type === 'RELATION') {
           return upsert(
@@ -190,28 +205,7 @@ const listener =
 
         if (type === 'RELATION') {
           // Delete the previous triple and create a new relation entity
-          remove(renderable, context.spaceId);
-
-          const newRelation: StoreRelation = {
-            space: renderable.spaceId,
-            index: INITIAL_RELATION_INDEX_VALUE,
-            typeOf: {
-              id: EntityId(renderable.attributeId),
-              name: renderable.attributeName,
-            },
-            fromEntity: {
-              id: EntityId(renderable.entityId),
-              name: null,
-            },
-            toEntity: {
-              id: EntityId(''),
-              name: null,
-              renderableType: 'RELATION',
-              value: '',
-            },
-          };
-
-          return upsertRelation({ spaceId: context.spaceId, relation: newRelation });
+          return removeRelation({ relationId: EntityId(renderable.entityId), spaceId: context.spaceId });
         }
 
         // @TODO(relations): Add support for IMAGE
@@ -240,6 +234,7 @@ const listener =
 
         return remove(
           {
+            attributeName: renderable.attributeName,
             attributeId: renderable.attributeId,
             entityId: context.entityId,
           },
@@ -268,6 +263,11 @@ const listener =
       case 'DELETE_ENTITY': {
         const { triple } = event.payload;
         return remove(triple, context.spaceId);
+      }
+
+      case 'DELETE_RELATION': {
+        const { relationId } = event.payload;
+        return removeRelation({ relationId: EntityId(relationId), spaceId: context.spaceId });
       }
     }
   };

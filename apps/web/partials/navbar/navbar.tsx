@@ -1,8 +1,9 @@
+import cx from 'classnames';
+
 import { ClientOnly } from '~/design-system/client-only';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { Search } from '~/design-system/icons/search';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Skeleton } from '~/design-system/skeleton';
 
 import { CreateSpaceDropdown } from '../create-space/create-space-dropdown';
 import { NavbarActions } from './navbar-actions';
@@ -14,7 +15,12 @@ interface Props {
 
 export function Navbar({ onSearchClick }: Props) {
   return (
-    <nav className="flex h-11 w-full items-center justify-between gap-1 border-b border-divider px-4 py-1">
+    <nav
+      className={cx(
+        'flex h-11 w-full items-center justify-between gap-1 border-b border-divider px-4 py-1',
+        process.env.NODE_ENV === 'development' && 'sticky top-0 z-100 bg-white'
+      )}
+    >
       <div className="flex items-center gap-8 md:gap-4">
         <Link href="/spaces">
           <GeoLogoLarge />
@@ -49,8 +55,4 @@ export function Navbar({ onSearchClick }: Props) {
       </ClientOnly>
     </nav>
   );
-}
-
-function SpaceSkeleton() {
-  return <Skeleton className="h-6 w-40" />;
 }

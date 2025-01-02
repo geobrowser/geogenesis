@@ -37,6 +37,15 @@ export const generateOpsForSpaceType = async ({
     })
   );
 
+  // Add the space configuration type to every deployed space entity
+  ops.push(
+    Relation.make({
+      fromId: newEntityId,
+      toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+      relationTypeId: SYSTEM_IDS.TYPES,
+    })
+  );
+
   // Add space type-specific ops
   switch (type) {
     case 'personal': {
@@ -47,7 +56,7 @@ export const generateOpsForSpaceType = async ({
 
       ops.push(...accountOps);
       ops.push(
-        ...Relation.make({
+        Relation.make({
           fromId: newEntityId,
           relationTypeId: SYSTEM_IDS.ACCOUNTS_ATTRIBUTE,
           toId: accountId,
@@ -67,13 +76,6 @@ export const generateOpsForSpaceType = async ({
       break;
     }
     default: {
-      ops.push(
-        ...Relation.make({
-          fromId: newEntityId,
-          toId: SYSTEM_IDS.SPACE_CONFIGURATION,
-          relationTypeId: SYSTEM_IDS.TYPES,
-        })
-      );
       break;
     }
   }
@@ -86,7 +88,7 @@ export const generateOpsForSpaceType = async ({
 
     // Creates the relation pointing to the image entity
     ops.push(
-      ...Relation.make({
+      Relation.make({
         fromId: newEntityId,
         toId: imageId, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
@@ -102,7 +104,7 @@ export const generateOpsForSpaceType = async ({
 
     // Creates the relation pointing to the image entity
     ops.push(
-      ...Relation.make({
+      Relation.make({
         fromId: newEntityId,
         toId: imageId, // Set the avatar relation to point to the entity id of the new entity
         relationTypeId: SYSTEM_IDS.COVER_ATTRIBUTE,

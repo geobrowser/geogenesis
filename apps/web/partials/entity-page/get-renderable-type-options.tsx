@@ -7,6 +7,7 @@ import { RenderableProperty, SwitchableRenderableType, ValueTypeId } from '~/cor
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
+import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { Text } from '~/design-system/icons/text';
@@ -22,9 +23,10 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
       return 'TIME';
     case SYSTEM_IDS.URI:
       return 'URL';
-    // @TODO(relations): Add relation support
-    // @TODO(relations): Add image support
-    // Currently we don't have a value type id for relations
+    case SYSTEM_IDS.RELATION:
+      return 'RELATION';
+    case SYSTEM_IDS.IMAGE:
+      return 'IMAGE';
     default:
       return 'TEXT';
   }
@@ -102,14 +104,37 @@ export const getRenderableTypeSelectorOptions = (
         });
       },
     },
-    // @TODO(relations): Add image support
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <IconWrapper>
+            <Image />
+          </IconWrapper>
+          <p>Image</p>
+        </div>
+      ),
+      value: 'IMAGE' as const,
+      onClick: () =>
+        onSelect({
+          type: 'IMAGE',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
+          relationId: '',
+          valueName: null,
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        }),
+    },
     {
       label: (
         <div className="flex items-center gap-2">
           <IconWrapper>
             <Date />
           </IconWrapper>
-          <p>Date</p>
+          <p>Date & time</p>
         </div>
       ),
       value: 'TIME' as const,
@@ -131,7 +156,7 @@ export const getRenderableTypeSelectorOptions = (
           <IconWrapper>
             <Url />
           </IconWrapper>
-          <p>URI</p>
+          <p>URL</p>
         </div>
       ),
       value: 'URL' as const,

@@ -144,7 +144,8 @@ export type ValueTypeId =
   | typeof SYSTEM_IDS.DATE
   | typeof SYSTEM_IDS.URI
   | typeof SYSTEM_IDS.CHECKBOX
-  | typeof SYSTEM_IDS.NUMBER;
+  | typeof SYSTEM_IDS.NUMBER
+  | typeof SYSTEM_IDS.IMAGE;
 
 export type GeoType = {
   entityId: string;
@@ -161,6 +162,7 @@ export interface Schema {
 }
 
 export type Relation = {
+  hasBeenPublished?: boolean;
   space: string;
   id: EntityId;
   index: string;

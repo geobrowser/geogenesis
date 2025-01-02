@@ -15,11 +15,19 @@ class UnableToParseJsonError extends Error {
   _tag: 'UnableToParseJsonError' = 'UnableToParseJsonError';
 }
 
+class UnknownContentTypeError extends Error {
+  _tag: 'UnknownContentTypeError' = 'UnknownContentTypeError';
+}
+
 export function getFetchIpfsContentEffect(
   uri: string
 ): Effect.Effect<
   Buffer | null,
-  UnableToParseBase64Error | FailedFetchingIpfsContentError | UnableToParseJsonError | TimeoutException,
+  | UnableToParseBase64Error
+  | FailedFetchingIpfsContentError
+  | UnableToParseJsonError
+  | TimeoutException
+  | UnknownContentTypeError,
   never
 > {
   return Effect.gen(function* (unwrap) {
@@ -75,6 +83,7 @@ export function getFetchIpfsContentEffect(
       );
 
       if (Either.isLeft(mainGatewayResponse)) {
+        yield* unwrap(Effect.logError(`Couldn't fetch IPFS content from uri, ${mainGatewayResponse.left.message}`));
         yield* unwrap(Effect.fail(new FailedFetchingIpfsContentError(`Unable to fetch IPFS content from uri ${uri}`)));
         return null;
       }
@@ -92,6 +101,13 @@ export function getFetchIpfsContentEffect(
         })
       );
     }
+
+    yield* unwrap(
+      Effect.logError(
+        `Encountered unknown content type when decoding content hash ${uri}. IPFS CIDs should start with ipfs://`
+      )
+    );
+    yield* unwrap(Effect.fail(new UnknownContentTypeError(`Unknown content type when decoding content hash ${uri}`)));
 
     // We only support IPFS URIs or base64 encoded content with the above format
     return null;

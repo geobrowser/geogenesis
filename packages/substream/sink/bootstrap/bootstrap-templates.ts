@@ -1,4 +1,4 @@
-import { DataBlock, Position, PositionRange, Relation, SYSTEM_IDS, TextBlock } from '@geogenesis/sdk';
+import { DataBlock, Position, Relation, SYSTEM_IDS, TextBlock } from '@geogenesis/sdk';
 
 import type { Op } from '../types';
 import { SPACE_ID } from './constants';
@@ -40,7 +40,7 @@ const NONPROFIT: Template[] = [
         position: POSITIONS.second,
       }),
     ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
-    types: [SYSTEM_IDS.NONPROFIT_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.SPACE_CONFIGURATION],
+    types: [SYSTEM_IDS.NONPROFIT_TYPE, SYSTEM_IDS.PROJECT_TYPE],
     extraData: [],
     foreignTypes: [],
   },
@@ -57,7 +57,7 @@ const NONPROFIT: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.NONPROFIT_POSTS_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.POSTS_PAGE,
@@ -78,7 +78,7 @@ const NONPROFIT: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.NONPROFIT_PROJECTS_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.PROJECTS_PAGE,
@@ -99,7 +99,7 @@ const NONPROFIT: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.NONPROFIT_TEAM_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.PROJECTS_PAGE,
@@ -126,7 +126,7 @@ const NONPROFIT: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.NONPROFIT_FINANCES_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.FINANCES_PAGE,
@@ -158,7 +158,7 @@ const COMPANY: Template[] = [
         position: POSITIONS.third,
       }),
     ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
-    types: [SYSTEM_IDS.SPACE_CONFIGURATION, SYSTEM_IDS.COMPANY_TYPE],
+    types: [SYSTEM_IDS.COMPANY_TYPE],
     extraData: [],
     foreignTypes: [],
   },
@@ -175,7 +175,7 @@ const COMPANY: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.COMPANY_POSTS_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.POSTS_PAGE,
@@ -196,7 +196,7 @@ const COMPANY: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Events page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.COMPANY_EVENTS_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.EVENTS_PAGE,
@@ -217,7 +217,7 @@ const COMPANY: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Jobs page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.COMPANY_JOBS_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.JOBS_PAGE,
@@ -238,7 +238,7 @@ const COMPANY: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Products page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.COMPANY_PRODUCTS_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.PRODUCTS_PAGE,
@@ -259,7 +259,7 @@ const COMPANY: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Services page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.COMPANY_SERVICES_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.SERVICES_PAGE,
@@ -280,7 +280,7 @@ const COMPANY: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Team page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.COMPANY_TEAM_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.TEAM_PAGE,
@@ -318,7 +318,7 @@ const PERSON: Template[] = [
         position: POSITIONS.fourth,
       }),
     ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
-    types: [SYSTEM_IDS.SPACE_CONFIGURATION, SYSTEM_IDS.PERSON_TYPE],
+    types: [SYSTEM_IDS.PERSON_TYPE],
     extraData: [],
     foreignTypes: [],
   },
@@ -335,7 +335,7 @@ const PERSON: Template[] = [
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
-      ...Relation.make({
+      Relation.make({
         fromId: SYSTEM_IDS.PERSON_POSTS_PAGE_TEMPLATE,
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.POSTS_PAGE,

@@ -57,6 +57,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
 
     await makeBulkProposal({
       triples: triples,
+      relations: [],
       spaceId,
       name: proposalName,
       onSuccess: () => {

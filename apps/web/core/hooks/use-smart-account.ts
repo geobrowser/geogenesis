@@ -7,7 +7,7 @@ import {
   createSmartAccountClient,
   walletClientToSmartAccountSigner,
 } from 'permissionless';
-import { signerToSafeSmartAccount } from 'permissionless/accounts';
+import { signerToSafeSmartAccount, signerToSimpleSmartAccount } from 'permissionless/accounts';
 import { pimlicoBundlerActions, pimlicoPaymasterActions } from 'permissionless/actions/pimlico';
 import { useCookies } from 'react-cookie';
 import { createClient, createPublicClient, http } from 'viem';
@@ -16,7 +16,7 @@ import { useWalletClient } from 'wagmi';
 
 import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { Environment } from '../environment';
-import { CONDUIT_TESTNET } from '../wallet/conduit-chain';
+import { GEOGENESIS } from '../wallet/conduit-chain';
 
 export function useSmartAccount() {
   const { data: walletClient } = useWalletClient();
@@ -29,36 +29,42 @@ export function useSmartAccount() {
         return null;
       }
 
-      const transport = http(process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!);
+      const transport = http(process.env.NEXT_PUBLIC_GEOGENESIS_RPC!);
       const bundlerTransport = http(Environment.getConfig().bundler);
 
       const publicClient = createPublicClient({
         transport,
-        chain: CONDUIT_TESTNET,
+        chain: GEOGENESIS,
       });
 
       const signer = walletClientToSmartAccountSigner(walletClient);
 
-      const safeAccount = await signerToSafeSmartAccount(publicClient, {
+      // const safeAccount = await signerToSafeSmartAccount(publicClient, {
+      //   signer: signer,
+      //   entryPoint: ENTRYPOINT_ADDRESS_V07,
+      //   safeVersion: '1.4.1',
+      // });
+
+      const safeAccount = await signerToSimpleSmartAccount(publicClient, {
         signer: signer,
         entryPoint: ENTRYPOINT_ADDRESS_V07,
-        safeVersion: '1.4.1',
+        factoryAddress: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985',
       });
 
       const bundlerClient = createClient({
         transport: bundlerTransport,
-        chain: CONDUIT_TESTNET,
+        chain: GEOGENESIS,
       })
         .extend(bundlerActions(ENTRYPOINT_ADDRESS_V07))
         .extend(pimlicoBundlerActions(ENTRYPOINT_ADDRESS_V07));
 
       const paymasterClient = createClient({
         transport: bundlerTransport,
-        chain: CONDUIT_TESTNET,
+        chain: GEOGENESIS,
       }).extend(pimlicoPaymasterActions(ENTRYPOINT_ADDRESS_V07));
 
       const smartAccount = createSmartAccountClient({
-        chain: CONDUIT_TESTNET,
+        chain: GEOGENESIS,
         account: safeAccount,
         bundlerTransport,
         middleware: {

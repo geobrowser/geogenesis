@@ -123,9 +123,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                   isEditing
                   onDelete={() => {
                     send({
-                      type: 'DELETE_RENDERABLE',
+                      type: 'DELETE_RELATION',
                       payload: {
-                        renderable: r,
+                        relationId,
                       },
                     });
                   }}
