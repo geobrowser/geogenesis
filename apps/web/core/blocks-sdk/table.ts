@@ -226,7 +226,7 @@ export function createGraphQLStringFromFilters(filters: OmitStrict<Filter, 'valu
         return `name: { startsWithInsensitive: "${filter.value}" }`;
       }
 
-      if (filter.columnId === SYSTEM_IDS.SPACE_FILTER && filter.valueType === 'TEXT') {
+      if (filter.columnId === SYSTEM_IDS.SPACE_FILTER && filter.valueType === 'RELATION') {
         return `versionSpaces: {
           some: {
             spaceId: { equalTo: "${filter.value}" }

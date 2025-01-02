@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import {
+  Filter,
   createFilterStringFromFilters,
   createFiltersFromFilterString,
   createGraphQLStringFromFilters,
@@ -25,8 +26,7 @@ import { Schema } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
-import { FilterableValueType } from '../value-types';
-import { getSource, removeSources, upsertSource } from './editor/sources';
+import { getSource, removeSourceType, upsertSourceType } from './editor/sources';
 import { Source } from './editor/types';
 
 export const PAGE_SIZE = 9;
@@ -50,13 +50,6 @@ const queryKeys = {
   relationTypes: (columns?: Schema[]) => ['blocks', 'data', 'relation-types', columns],
 };
 
-export interface TableBlockFilter {
-  columnId: string;
-  valueType: FilterableValueType;
-  value: string;
-  valueName: string | null;
-}
-
 export function useTableBlock() {
   const { entityId, spaceId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
@@ -65,38 +58,6 @@ export function useTableBlock() {
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
     id: React.useMemo(() => EntityId(entityId), [entityId]),
-  });
-
-  const source: Source = React.useMemo(() => {
-    return getSource(blockEntity.id, blockEntity.relationsOut, SpaceId(spaceId));
-  }, [blockEntity.id, blockEntity.relationsOut, spaceId]);
-
-  const collectionItems = useRelations(
-    React.useMemo(() => {
-      return {
-        mergeWith: blockEntity.relationsOut,
-        selector: r => {
-          if (source.type !== 'COLLECTION') return false;
-
-          // Return all local relations pointing to the collection id in the source block
-          // @TODO(data blocks): Merge with any remote collection items
-          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
-        },
-      };
-    }, [blockEntity.relationsOut, source])
-  );
-
-  const collectionItemIds = collectionItems?.map(c => c.id) ?? [];
-
-  const { data: collectionItemEntities } = useQuery({
-    placeholderData: keepPreviousData,
-    enabled: collectionItems.length > 0,
-    queryKey: queryKeys.collectionItemEntities(collectionItemIds),
-    queryFn: async () => {
-      const entities = await mergeCollectionItemEntitiesAsync(collectionItemIds);
-
-      return entities;
-    },
   });
 
   const filterTriple = React.useMemo(() => {
@@ -120,11 +81,48 @@ export function useTableBlock() {
    */
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
     placeholderData: keepPreviousData,
+    initialData: [],
+    enabled: filterString !== null,
     queryKey: queryKeys.filterState(filterString),
     queryFn: async () => {
-      const filterState = await createFiltersFromFilterString(filterString);
+      return await createFiltersFromFilterString(filterString);
+    },
+  });
 
-      return filterState;
+  const source: Source = React.useMemo(() => {
+    return getSource({
+      blockId: blockEntity.id,
+      dataEntityRelations: blockEntity.relationsOut,
+      currentSpaceId: SpaceId(spaceId),
+      filterState: filterState ?? [],
+    });
+  }, [blockEntity.id, blockEntity.relationsOut, spaceId, filterState]);
+
+  const collectionItems = useRelations(
+    React.useMemo(() => {
+      return {
+        mergeWith: blockEntity.relationsOut,
+        selector: r => {
+          if (source.type !== 'COLLECTION') return false;
+
+          // Return all local relations pointing to the collection id in the source block
+          // @TODO(data blocks): Merge with any remote collection items
+          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
+        },
+      };
+    }, [blockEntity.relationsOut, source])
+  );
+
+  const collectionItemIds = collectionItems?.map(c => c.toEntity.id) ?? [];
+
+  const { data: collectionItemEntities } = useQuery({
+    placeholderData: keepPreviousData,
+    enabled: collectionItems.length > 0,
+    queryKey: queryKeys.collectionItemEntities(collectionItemIds),
+    queryFn: async () => {
+      const entities = await mergeCollectionItemEntitiesAsync(collectionItemIds);
+
+      return entities;
     },
   });
 
@@ -160,8 +158,6 @@ export function useTableBlock() {
         first: PAGE_SIZE + 1,
         skip: pageNumber * PAGE_SIZE,
       };
-
-      // @TODO: filter local entities based on filter state
 
       if (source.type === 'SPACES' || source.type === 'GEO') {
         return await mergeTableEntities({ options: params, filterState });
@@ -212,7 +208,7 @@ export function useTableBlock() {
   );
 
   const setFilterState = React.useCallback(
-    (filters: TableBlockFilter[]) => {
+    (filters: Filter[]) => {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
@@ -239,11 +235,34 @@ export function useTableBlock() {
 
   const setSource = React.useCallback(
     (newSource: Source) => {
+      // We have three source types
+      // 1. Collection
+      // 2. Query
+      // For each source type we need to change the source type
+      // For `spaces` we need to update the filter string by setting the new
+      // filter state
       // @TODO: This should handle setting the source based on what user selected
-      removeSources({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
-      upsertSource({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
+      removeSourceType({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
+      upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
+
+      if (newSource.type === 'SPACES') {
+        // We only allow one space filter at a time currently, so remove any existing space filters before
+        // adding the new one.
+        const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER) ?? [];
+
+        setFilterState([
+          ...filtersWithoutSpaces,
+          { columnId: SYSTEM_IDS.SPACE_FILTER, valueType: 'RELATION', value: newSource.value[0], valueName: null },
+        ]);
+      }
+
+      if (newSource.type === 'GEO') {
+        const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER) ?? [];
+
+        setFilterState(filtersWithoutSpaces);
+      }
     },
-    [entityId, blockEntity.relationsOut, spaceId]
+    [entityId, blockEntity.relationsOut, spaceId, setFilterState, filterState]
   );
 
   const setName = React.useCallback(
