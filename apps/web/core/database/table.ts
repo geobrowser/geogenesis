@@ -48,12 +48,6 @@ async function mergeTableRowEntitiesAsync(
   const remoteMergedEntities = cachedEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
   const alreadyMergedEntitiesIds = new Set(remoteMergedEntities.map(e => e.id));
 
-  // @TODO why relation and not triple too?
-  // Get all local entities with at least one relation. If we've passed in typeIds
-  // as a filter then we should only return local entities that match those ids.
-  //
-  // Our queries usually require at least one type which is why we can safely use
-  // the relations merging to aggregate entities.
   const localEntities = await getEntities_experimental();
   const filteredLocalEntities = Object.values(localEntities)
     .filter(entity => {

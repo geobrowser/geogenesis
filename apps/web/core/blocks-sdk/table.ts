@@ -125,8 +125,6 @@ export async function createFiltersFromFilterStringAndSource(filterString: strin
   //     All we care about now is the data source type, either collection or query
   // Handle errors decoding
 
-  console.log('filter string in create filters', filterString);
-
   if (!filterString) {
     return [];
   }
