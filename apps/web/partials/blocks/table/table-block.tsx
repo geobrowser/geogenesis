@@ -110,11 +110,13 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     };
   });
 
-  const attributes: Array<[string, string]> =
-    filterState && filterState.length > 0
-      ? // filters can include 'space', which is not an attribute
-        filterState.filter(filter => filter.columnId !== 'space').map(filter => [filter.columnId, filter.value])
-      : [];
+  const filteredAttributes: Array<[string, string]> = filterState
+    .filter(filter => filter.columnId !== SYSTEM_IDS.SPACE_FILTER && filter.columnId !== SYSTEM_IDS.TYPES)
+    .map(filter => [filter.columnId, filter.value]);
+
+  const filteredTypes: Array<string> = filterState
+    .filter(filter => filter.columnId === SYSTEM_IDS.TYPES)
+    .map(filter => filter.value);
 
   const hasPagination = hasPreviousPage || hasNextPage;
 
@@ -136,7 +138,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             shownColumnIds={shownColumnIds}
           />
           {isEditing && (
-            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), undefined, attributes)}>
+            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), filteredTypes, filteredAttributes)}>
               <Create />
             </Link>
           )}

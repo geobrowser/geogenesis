@@ -1,10 +1,13 @@
-import { BASE58_ALLOWED_CHARS } from '@geogenesis/sdk';
+import { BASE58_ALLOWED_CHARS, SYSTEM_IDS } from '@geogenesis/sdk';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { IPFS_GATEWAY_READ_PATH } from '~/core/constants';
-import type { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/schema';
 
+import { mergeEntityAsync } from '../database/entities';
+import { upsertRelation } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/schema';
@@ -16,6 +19,34 @@ export function intersperse<T>(elements: T[], separator: T | (({ index }: { inde
   );
 }
 
+async function addTypesToEntityId(entityId: string, spaceId: string, typeIds: string[]) {
+  const types = await Promise.all(typeIds.map(typeId => mergeEntityAsync(EntityId(typeId))));
+
+  for (const type of types) {
+    upsertRelation({
+      spaceId,
+      relation: {
+        index: INITIAL_RELATION_INDEX_VALUE,
+        space: spaceId,
+        fromEntity: {
+          id: EntityId(entityId),
+          name: null,
+        },
+        toEntity: {
+          id: type.id,
+          name: type.name,
+          renderableType: 'RELATION',
+          value: type.id,
+        },
+        typeOf: {
+          id: EntityId(SYSTEM_IDS.TYPES),
+          name: 'Types',
+        },
+      },
+    });
+  }
+}
+
 export const NavUtils = {
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
@@ -24,15 +55,17 @@ export const NavUtils = {
   toEntity: (
     spaceId: string,
     newEntityId: string,
-    typeId?: string | null,
+    typeIds?: Array<string> | null,
     attributes?: Array<[string, string]> | null
   ) => {
-    if (typeId && attributes && attributes?.length > 0) {
-      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}&attributes=${encodeURI(JSON.stringify(attributes))}`;
+    if (typeIds && typeIds.length > 0 && attributes && attributes?.length > 0) {
+      addTypesToEntityId(newEntityId, spaceId, typeIds);
+      return `/space/${spaceId}/${newEntityId}`;
     }
 
-    if (typeId) {
-      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}`;
+    if (typeIds && typeIds.length > 0) {
+      addTypesToEntityId(newEntityId, spaceId, typeIds);
+      return `/space/${spaceId}/${newEntityId}`;
     }
 
     if (attributes && attributes.length > 0) {
