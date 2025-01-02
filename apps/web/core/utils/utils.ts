@@ -19,34 +19,6 @@ export function intersperse<T>(elements: T[], separator: T | (({ index }: { inde
   );
 }
 
-async function addTypesToEntityId(entityId: string, spaceId: string, typeIds: string[]) {
-  const types = await Promise.all(typeIds.map(typeId => mergeEntityAsync(EntityId(typeId))));
-
-  for (const type of types) {
-    upsertRelation({
-      spaceId,
-      relation: {
-        index: INITIAL_RELATION_INDEX_VALUE,
-        space: spaceId,
-        fromEntity: {
-          id: EntityId(entityId),
-          name: null,
-        },
-        toEntity: {
-          id: type.id,
-          name: type.name,
-          renderableType: 'RELATION',
-          value: type.id,
-        },
-        typeOf: {
-          id: EntityId(SYSTEM_IDS.TYPES),
-          name: 'Types',
-        },
-      },
-    });
-  }
-}
-
 export const NavUtils = {
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
@@ -59,12 +31,10 @@ export const NavUtils = {
     attributes?: Array<[string, string]> | null
   ) => {
     if (typeIds && typeIds.length > 0 && attributes && attributes?.length > 0) {
-      addTypesToEntityId(newEntityId, spaceId, typeIds);
       return `/space/${spaceId}/${newEntityId}`;
     }
 
     if (typeIds && typeIds.length > 0) {
-      addTypesToEntityId(newEntityId, spaceId, typeIds);
       return `/space/${spaceId}/${newEntityId}`;
     }
 
