@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import {
   createFilterStringFromFilters,
-  createFiltersFromFilterStringAndSource,
+  createFiltersFromFilterString,
   createGraphQLStringFromFilters,
   upsertName,
 } from '../blocks-sdk/table';
@@ -35,7 +35,7 @@ interface RowQueryArgs {
   columns?: Schema[];
   pageNumber: number;
   entityId: string;
-  filterState?: Awaited<ReturnType<typeof createFiltersFromFilterStringAndSource>>;
+  filterState?: Awaited<ReturnType<typeof createFiltersFromFilterString>>;
   source: Source;
   collectionItems: StoredRelation[];
 }
@@ -44,7 +44,7 @@ const queryKeys = {
   collectionItemEntities: (collectionItemIds: EntityId[]) =>
     ['blocks', 'data', 'collection-items', collectionItemIds] as const,
   filterState: (filterString: string | null) => ['blocks', 'data', 'filter-state', filterString] as const,
-  columns: (filterState: Awaited<ReturnType<typeof createFiltersFromFilterStringAndSource>> | null) =>
+  columns: (filterState: Awaited<ReturnType<typeof createFiltersFromFilterString>> | null) =>
     ['blocks', 'data', 'columns', filterState] as const,
   rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
   relationTypes: (columns?: Schema[]) => ['blocks', 'data', 'relation-types', columns],
@@ -122,7 +122,7 @@ export function useTableBlock() {
     placeholderData: keepPreviousData,
     queryKey: queryKeys.filterState(filterString),
     queryFn: async () => {
-      const filterState = await createFiltersFromFilterStringAndSource(filterString);
+      const filterState = await createFiltersFromFilterString(filterString);
 
       return filterState;
     },

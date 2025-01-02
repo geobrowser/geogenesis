@@ -32,7 +32,7 @@ const FilterString = Schema.Struct({
     OR: Schema.optional(Schema.Array(Property)),
   }),
 });
-type FilterString = Schema.Schema.Type<typeof FilterString>;
+export type FilterString = Schema.Schema.Type<typeof FilterString>;
 
 export function upsertName({
   newName,
@@ -119,7 +119,7 @@ export function createFilterStringFromFilters(filters: OmitStrict<Filter, 'value
   });
 }
 
-export async function createFiltersFromFilterStringAndSource(filterString: string | null): Promise<Filter[]> {
+export async function createFiltersFromFilterString(filterString: string | null): Promise<Filter[]> {
   // How do we set source spaces? Maybe we don't need to?
   // Delete source spaces logic and ALL_OF_GEO logic.
   //     All we care about now is the data source type, either collection or query
@@ -154,7 +154,7 @@ export async function createFiltersFromFilterStringAndSource(filterString: strin
   const filters: Filter[] = [];
 
   const unresolvedSpaceFilters = Promise.all(
-    filtersFromString.spaces.map(async spaceId => {
+    filtersFromString.spaces.map(async (spaceId): Promise<Filter> => {
       const spaceName = await getSpaceName(spaceId);
 
       return {
@@ -162,7 +162,7 @@ export async function createFiltersFromFilterStringAndSource(filterString: strin
         valueType: 'RELATION',
         value: spaceId,
         valueName: spaceName,
-      } satisfies Filter;
+      };
     })
   );
 
@@ -185,7 +185,7 @@ async function getSpaceName(spaceId: string) {
   return space?.spaceConfig.name ?? null;
 }
 
-async function getResolvedFilter(filter: AttributeFilter) {
+async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
   const maybeAttributeEntity = await mergeEntityAsync(EntityId(filter.attribute));
   const valueType = maybeAttributeEntity.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.VALUE_TYPE)?.toEntity.id;
 
@@ -197,7 +197,7 @@ async function getResolvedFilter(filter: AttributeFilter) {
       value: filter.is,
       valueName: valueEntity?.name ?? null,
       valueType: 'RELATION',
-    } satisfies Filter;
+    };
   }
 
   return {
@@ -205,16 +205,10 @@ async function getResolvedFilter(filter: AttributeFilter) {
     value: filter.is,
     valueName: null,
     valueType: valueTypes[(valueType ?? SYSTEM_IDS.TEXT) as ValueTypeId] ?? SYSTEM_IDS.TEXT,
-  } satisfies Filter;
+  };
 }
 
-export function createGraphQLStringFromFilters(
-  filters: {
-    columnId: string;
-    valueType: FilterableValueType;
-    value: string;
-  }[]
-): string {
+export function createGraphQLStringFromFilters(filters: OmitStrict<Filter, 'valueName'>[]): string {
   if (filters.length === 0) return '';
 
   const filtersAsStrings = filters
