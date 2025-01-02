@@ -10,6 +10,7 @@ import * as React from 'react';
 
 import { mergeEntityAsync } from '~/core/database/entities';
 import { upsertRelation } from '~/core/database/write';
+import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -43,7 +44,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
-  const [nextEntityId, setNextEntityId] = React.useState(ID.createEntityId());
 
   const {
     columns,
@@ -59,7 +59,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     view,
     placeholder,
     source,
-    entityId,
   } = useTableBlock();
 
   const allColumns = columns.map(column => ({
@@ -124,6 +123,8 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     .filter(filter => filter.columnId === SYSTEM_IDS.TYPES)
     .map(filter => filter.value);
 
+  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, filteredTypes);
+
   const hasPagination = hasPreviousPage || hasNextPage;
 
   return (
@@ -144,15 +145,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             shownColumnIds={shownColumnIds}
           />
           {isEditing && (
-            <Link
-              onClick={() => {
-                console.log('adding types');
-                addTypesToEntityId(nextEntityId, spaceId, filteredTypes);
-                // Real jank but it works
-                setNextEntityId(ID.createEntityId());
-              }}
-              href={NavUtils.toEntity(spaceId, nextEntityId, filteredTypes, filteredAttributes)}
-            >
+            <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
               <Create />
             </Link>
           )}
@@ -316,32 +309,4 @@ export function TableBlockError({ spaceId, blockId }: { spaceId: string; blockId
       </div>
     </div>
   );
-}
-
-async function addTypesToEntityId(entityId: string, spaceId: string, typeIds: string[]) {
-  const types = await Promise.all(typeIds.map(typeId => mergeEntityAsync(EntityId(typeId))));
-
-  for (const type of types) {
-    upsertRelation({
-      spaceId,
-      relation: {
-        index: INITIAL_RELATION_INDEX_VALUE,
-        space: spaceId,
-        fromEntity: {
-          id: EntityId(entityId),
-          name: null,
-        },
-        toEntity: {
-          id: type.id,
-          name: type.name,
-          renderableType: 'RELATION',
-          value: type.id,
-        },
-        typeOf: {
-          id: EntityId(SYSTEM_IDS.TYPES),
-          name: 'Types',
-        },
-      },
-    });
-  }
 }
