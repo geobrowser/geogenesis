@@ -83,6 +83,7 @@ export function useEntityTable() {
        */
       const entities = await mergeTableEntities({
         options: params,
+        filterState: [],
       });
 
       hydrated.current = true;
