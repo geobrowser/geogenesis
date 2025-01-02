@@ -8,7 +8,6 @@ import * as React from 'react';
 import { DB } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { EntityId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Relation, RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
 import { Triple as ITriple } from '~/core/types';
@@ -217,7 +216,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
                       fromEntityId: createRelationOp.relation.fromEntity,
                       toEntityId: createRelationOp.relation.toEntity,
                       toEntityName: null,
-                      typeOfId: EntityId(SYSTEM_IDS.IMAGE_TYPE),
+                      typeOfId: createRelationOp.relation.type,
                       typeOfName: 'Types',
                     },
                   });
