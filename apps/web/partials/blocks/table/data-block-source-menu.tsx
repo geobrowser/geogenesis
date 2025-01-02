@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { SpaceConfigEntity } from '~/core/io/dto/spaces';
 import { SpaceId } from '~/core/io/schema';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { getImagePath } from '~/core/utils/utils';
@@ -110,10 +109,10 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
   const { query, setQuery, spaces: queriedSpaces } = useSpacesQuery();
   const { setSource, source } = useTableBlock();
 
-  const handleToggleSpace = (spaceConfig: SpaceConfigEntity) => {
+  const handleToggleSpace = (spaceId: string) => {
     setSource({
       type: 'SPACES',
-      value: [SpaceId(spaceConfig.spaceId)],
+      value: [SpaceId(spaceId)],
     });
   };
 
@@ -133,7 +132,7 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
           const active = source.type === 'SPACES' && source.value.includes(SpaceId(space.id));
 
           return (
-            <MenuItem key={space.id} onClick={() => handleToggleSpace(space)} active={active} className="group">
+            <MenuItem key={space.id} onClick={() => handleToggleSpace(space.spaceId)} active={active} className="group">
               <div className="flex items-center gap-2">
                 <div className="flex-shrink-0">
                   <img

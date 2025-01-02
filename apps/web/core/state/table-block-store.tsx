@@ -4,9 +4,10 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import {
-  createFiltersFromGraphQLStringAndSource,
+  Filter,
+  createFilterStringFromFilters,
+  createFiltersFromFilterString,
   createGraphQLStringFromFilters,
-  createGraphQLStringFromFiltersV2,
   upsertName,
 } from '../blocks-sdk/table';
 import { useEntity } from '../database/entities';
@@ -25,8 +26,7 @@ import { Schema } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
-import { FilterableValueType } from '../value-types';
-import { getSource, removeSources, upsertSource } from './editor/sources';
+import { getSource, removeSourceType, upsertSourceType } from './editor/sources';
 import { Source } from './editor/types';
 
 export const PAGE_SIZE = 9;
@@ -35,7 +35,7 @@ interface RowQueryArgs {
   columns?: Schema[];
   pageNumber: number;
   entityId: string;
-  filterState?: Awaited<ReturnType<typeof createFiltersFromGraphQLStringAndSource>>;
+  filterState?: Awaited<ReturnType<typeof createFiltersFromFilterString>>;
   source: Source;
   collectionItems: StoredRelation[];
 }
@@ -43,20 +43,12 @@ interface RowQueryArgs {
 const queryKeys = {
   collectionItemEntities: (collectionItemIds: EntityId[]) =>
     ['blocks', 'data', 'collection-items', collectionItemIds] as const,
-  filterState: (filterString: string | null, source: Source) =>
-    ['blocks', 'data', 'filter-state', filterString, source] as const,
-  columns: (filterState: Awaited<ReturnType<typeof createFiltersFromGraphQLStringAndSource>> | null) =>
+  filterState: (filterString: string | null) => ['blocks', 'data', 'filter-state', filterString] as const,
+  columns: (filterState: Awaited<ReturnType<typeof createFiltersFromFilterString>> | null) =>
     ['blocks', 'data', 'columns', filterState] as const,
   rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
   relationTypes: (columns?: Schema[]) => ['blocks', 'data', 'relation-types', columns],
 };
-
-export interface TableBlockFilter {
-  columnId: string;
-  valueType: FilterableValueType;
-  value: string;
-  valueName: string | null;
-}
 
 export function useTableBlock() {
   const { entityId, spaceId } = useTableBlockInstance();
@@ -66,38 +58,6 @@ export function useTableBlock() {
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
     id: React.useMemo(() => EntityId(entityId), [entityId]),
-  });
-
-  const source: Source = React.useMemo(() => {
-    return getSource(blockEntity.id, blockEntity.relationsOut, SpaceId(spaceId));
-  }, [blockEntity.id, blockEntity.relationsOut, spaceId]);
-
-  const collectionItems = useRelations(
-    React.useMemo(() => {
-      return {
-        mergeWith: blockEntity.relationsOut,
-        selector: r => {
-          if (source.type !== 'COLLECTION') return false;
-
-          // Return all local relations pointing to the collection id in the source block
-          // @TODO(data blocks): Merge with any remote collection items
-          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
-        },
-      };
-    }, [blockEntity.relationsOut, source])
-  );
-
-  const collectionItemIds = collectionItems?.map(c => c.id) ?? [];
-
-  const { data: collectionItemEntities } = useQuery({
-    placeholderData: keepPreviousData,
-    enabled: collectionItems.length > 0,
-    queryKey: queryKeys.collectionItemEntities(collectionItemIds),
-    queryFn: async () => {
-      const entities = await mergeCollectionItemEntitiesAsync(collectionItemIds);
-
-      return entities;
-    },
   });
 
   const filterTriple = React.useMemo(() => {
@@ -121,11 +81,48 @@ export function useTableBlock() {
    */
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
     placeholderData: keepPreviousData,
-    queryKey: queryKeys.filterState(filterString, source),
+    initialData: [],
+    enabled: filterString !== null,
+    queryKey: queryKeys.filterState(filterString),
     queryFn: async () => {
-      const filterState = await createFiltersFromGraphQLStringAndSource(filterString, source);
+      return await createFiltersFromFilterString(filterString);
+    },
+  });
 
-      return filterState;
+  const source: Source = React.useMemo(() => {
+    return getSource({
+      blockId: blockEntity.id,
+      dataEntityRelations: blockEntity.relationsOut,
+      currentSpaceId: SpaceId(spaceId),
+      filterState: filterState ?? [],
+    });
+  }, [blockEntity.id, blockEntity.relationsOut, spaceId, filterState]);
+
+  const collectionItems = useRelations(
+    React.useMemo(() => {
+      return {
+        mergeWith: blockEntity.relationsOut,
+        selector: r => {
+          if (source.type !== 'COLLECTION') return false;
+
+          // Return all local relations pointing to the collection id in the source block
+          // @TODO(data blocks): Merge with any remote collection items
+          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
+        },
+      };
+    }, [blockEntity.relationsOut, source])
+  );
+
+  const collectionItemIds = collectionItems?.map(c => c.toEntity.id) ?? [];
+
+  const { data: collectionItemEntities } = useQuery({
+    placeholderData: keepPreviousData,
+    enabled: collectionItems.length > 0,
+    queryKey: queryKeys.collectionItemEntities(collectionItemIds),
+    queryFn: async () => {
+      const entities = await mergeCollectionItemEntitiesAsync(collectionItemIds);
+
+      return entities;
     },
   });
 
@@ -154,7 +151,7 @@ export function useTableBlock() {
     queryFn: async () => {
       if (!columns || !filterState) return [];
 
-      const filterString = createGraphQLStringFromFiltersV2(filterState);
+      const filterString = createGraphQLStringFromFilters(filterState);
 
       const params: MergeTableEntitiesArgs['options'] = {
         filter: filterString,
@@ -163,7 +160,7 @@ export function useTableBlock() {
       };
 
       if (source.type === 'SPACES' || source.type === 'GEO') {
-        return await mergeTableEntities({ options: params, source });
+        return await mergeTableEntities({ options: params, filterState });
       }
 
       if (source.type === 'COLLECTION') {
@@ -211,11 +208,11 @@ export function useTableBlock() {
   );
 
   const setFilterState = React.useCallback(
-    (filters: TableBlockFilter[]) => {
+    (filters: Filter[]) => {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString = newState.length === 0 ? '' : createGraphQLStringFromFilters(newState);
+      const newFiltersString = newState.length === 0 ? '' : createFilterStringFromFilters(newState);
 
       const entityName = blockEntity.name ?? '';
 
@@ -238,11 +235,34 @@ export function useTableBlock() {
 
   const setSource = React.useCallback(
     (newSource: Source) => {
+      // We have three source types
+      // 1. Collection
+      // 2. Query
+      // For each source type we need to change the source type
+      // For `spaces` we need to update the filter string by setting the new
+      // filter state
       // @TODO: This should handle setting the source based on what user selected
-      removeSources({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
-      upsertSource({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
+      removeSourceType({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
+      upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
+
+      if (newSource.type === 'SPACES') {
+        // We only allow one space filter at a time currently, so remove any existing space filters before
+        // adding the new one.
+        const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER) ?? [];
+
+        setFilterState([
+          ...filtersWithoutSpaces,
+          { columnId: SYSTEM_IDS.SPACE_FILTER, valueType: 'RELATION', value: newSource.value[0], valueName: null },
+        ]);
+      }
+
+      if (newSource.type === 'GEO') {
+        const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER) ?? [];
+
+        setFilterState(filtersWithoutSpaces);
+      }
     },
-    [entityId, blockEntity.relationsOut, spaceId]
+    [entityId, blockEntity.relationsOut, spaceId, setFilterState, filterState]
   );
 
   const setName = React.useCallback(

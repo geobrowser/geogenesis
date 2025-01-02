@@ -229,11 +229,11 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
       valueTypeId,
     };
   });
-  const schema = schemaWithoutValueType.map(s => {
+  const schema = schemaWithoutValueType.map((s): Schema => {
     return {
       ...s,
       valueType: (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SYSTEM_IDS.TEXT) as ValueTypeId,
-    } satisfies Schema;
+    };
   });
 
   // If the schema exists already in the list then we should dedupe it.

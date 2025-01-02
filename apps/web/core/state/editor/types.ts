@@ -44,7 +44,6 @@ export type CollectionSource = {
   value: string;
 };
 
-// @TODO add support for `collections` with multiple `collectionId`s
 export type MultipleSources = {
   type: 'SPACES'; // | 'collections';
   value: Array<SpaceId>;
