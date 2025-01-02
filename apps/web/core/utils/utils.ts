@@ -24,24 +24,7 @@ export const NavUtils = {
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => `/space/${spaceId}`,
   toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
-  toEntity: (
-    spaceId: string,
-    newEntityId: string,
-    typeIds?: Array<string> | null,
-    attributes?: Array<[string, string]> | null
-  ) => {
-    if (typeIds && typeIds.length > 0 && attributes && attributes?.length > 0) {
-      return `/space/${spaceId}/${newEntityId}`;
-    }
-
-    if (typeIds && typeIds.length > 0) {
-      return `/space/${spaceId}/${newEntityId}`;
-    }
-
-    if (attributes && attributes.length > 0) {
-      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?attributes=${encodeURI(JSON.stringify(attributes))}`);
-    }
-
+  toEntity: (spaceId: string, newEntityId: string) => {
     return `/space/${spaceId}/${newEntityId}`;
   },
   toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
