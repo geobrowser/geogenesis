@@ -17,6 +17,6 @@ export function useOnboardGuard() {
   const { profile } = useGeoProfile(address);
 
   return {
-    canShowElement: Boolean(profile?.profileLink && user),
+    shouldShowElement: Boolean(profile?.profileLink && user),
   };
 }

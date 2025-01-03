@@ -18,9 +18,9 @@ export function CreateSpaceDropdown() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const { canShowElement } = useOnboardGuard();
+  const { shouldShowElement } = useOnboardGuard();
 
-  if (!canShowElement) {
+  if (!shouldShowElement) {
     return null;
   }
 
