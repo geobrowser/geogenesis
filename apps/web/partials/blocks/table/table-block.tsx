@@ -67,9 +67,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
   const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME];
 
-  // @TODO(relations): This should live on the relation pointing to the block and not the block itself. It is
-  // also a relation and not a triple.
-  const viewTriple = (blockEntity?.triples ?? []).find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
+  const viewRelation = blockEntity.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -129,7 +127,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             color="grey-04"
           />
 
-          <DataBlockViewMenu activeView={view} viewTriple={viewTriple} isLoading={isLoading} />
+          <DataBlockViewMenu activeView={view} viewRelation={viewRelation} isLoading={isLoading} />
           <TableBlockContextMenu
             allColumns={allColumns}
             shownColumnRelations={shownColumnRelations}

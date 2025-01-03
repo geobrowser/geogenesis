@@ -317,9 +317,9 @@ const getView = (blockEntity: Entity | null | undefined): DataBlockView => {
   let view: DataBlockView = 'TABLE';
 
   if (blockEntity) {
-    const viewTriple = blockEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
+    const viewRelation = blockEntity.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
-    switch (viewTriple?.value.value) {
+    switch (viewRelation?.toEntity.id) {
       case SYSTEM_IDS.TABLE_VIEW:
         view = 'TABLE';
         break;
