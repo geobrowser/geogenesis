@@ -1,6 +1,4 @@
-import { Effect } from 'effect';
-
-import { Environment } from '~/core/environment';
+import { ServerEnvironment } from './environment';
 
 export type Metric = {
   name: string;
@@ -19,7 +17,7 @@ export type Metric = {
 
 export class Telemetry {
   static metric(metric: Metric) {
-    const { telemetryApiKey, telemetryUrl } = Environment.variables;
+    const { telemetryApiKey, telemetryUrl } = ServerEnvironment;
 
     if (!telemetryUrl || !telemetryApiKey) {
       return;
