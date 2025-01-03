@@ -3,7 +3,7 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { IPFS_GATEWAY_READ_PATH } from '~/core/constants';
-import type { EntityId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/schema';
 
 import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';
@@ -21,24 +21,7 @@ export const NavUtils = {
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => `/space/${spaceId}`,
   toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
-  toEntity: (
-    spaceId: string,
-    newEntityId: string,
-    typeId?: string | null,
-    attributes?: Array<[string, string]> | null
-  ) => {
-    if (typeId && attributes && attributes?.length > 0) {
-      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}&attributes=${encodeURI(JSON.stringify(attributes))}`;
-    }
-
-    if (typeId) {
-      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}`;
-    }
-
-    if (attributes && attributes.length > 0) {
-      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?attributes=${encodeURI(JSON.stringify(attributes))}`);
-    }
-
+  toEntity: (spaceId: string, newEntityId: string) => {
     return `/space/${spaceId}/${newEntityId}`;
   },
   toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {

@@ -51,8 +51,6 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     },
   });
 
-  useDeriveNewSchemaFromParams();
-
   return (
     <>
       <div className="rounded-lg border border-grey-02 shadow-button">
@@ -421,104 +419,4 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
       })}
     </div>
   );
-}
-
-// const EMPTY_ARRAY_AS_ENCODED_URI = '%5B%5D';
-
-function useDeriveNewSchemaFromParams() {
-  // const { subgraph, config } = Services.useServices();
-  // const { upsertMany } = useWriteOps();
-  // const { id, spaceId, name } = useEntityPageStore();
-  // const searchParams = useSearchParams();
-  // const encodedAttributes = searchParams?.get('attributes') ?? EMPTY_ARRAY_AS_ENCODED_URI;
-  // const attributes = JSON.parse(decodeURI(encodedAttributes));
-  // const typeId = searchParams?.get('typeId') ?? null;
-  // const send = useEditEvents({
-  //   context: {
-  //     entityId: id,
-  //     spaceId,
-  //     entityName: name ?? '',
-  //   },
-  // });
-  // const [hasSetType, setHasSetType] = useState(false);
-  // const [hasSetAttributes, setHasSetAttributes] = useState(false);
-  // useEffect(() => {
-  //   if (hasSetType) return;
-  //   const setTypeTriple = async () => {
-  //     // @TODO: Abstract to a hook and with useSearchParams instad of passing down the params
-  //     if (typeId) {
-  //       const typeEntity = await subgraph.fetchEntity({ id: typeId ?? '' });
-  //       if (typeEntity) {
-  //         send({
-  //           type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
-  //           payload: {
-  //             attributeId: 'type',
-  //             attributeName: 'Types',
-  //             entityId: typeEntity.id,
-  //             entityName: typeEntity.name || '',
-  //           },
-  //         });
-  //         const templateTriple = typeEntity.triples.find(
-  //           triple => triple.attributeId === SYSTEM_IDS.TEMPLATE_ATTRIBUTE
-  //         );
-  //         if (templateTriple) {
-  //           const templateEntity = await subgraph.fetchEntity({ id: templateTriple.value.value ?? '' });
-  //           if (templateEntity) {
-  //             const newTriples = await cloneEntity({
-  //               oldEntityId: templateEntity.id,
-  //               entityName: name ?? '',
-  //               entityId: id,
-  //               spaceId,
-  //             });
-  //             upsertMany(newTriples, spaceId);
-  //           }
-  //         }
-  //       }
-  //     } else if (name === '') {
-  //       // @TODO(relations)
-  //       send({
-  //         type: 'CREATE_ENTITY_TRIPLE',
-  //         payload: {
-  //           attributeId: 'type',
-  //           attributeName: 'Types',
-  //         },
-  //       });
-  //     }
-  //   };
-  //   setTypeTriple();
-  //   setHasSetType(true);
-  // }, [hasSetType, send, typeId, config, subgraph, name, upsertMany, spaceId, id]);
-  // useEffect(() => {
-  //   if (!hasSetType) return;
-  //   if (hasSetAttributes) return;
-  //   const setAttributesTriples = async () => {
-  //     if (!attributes || attributes.length === 0) return;
-  //     const attributeEntities = await Promise.all(
-  //       attributes.map((filter: Attribute) => {
-  //         return Promise.all([
-  //           subgraph.fetchEntity({ id: filter[0] ?? '' }),
-  //           subgraph.fetchEntity({ id: filter[1] ?? '' }),
-  //         ]);
-  //       })
-  //     );
-  //     attributeEntities.forEach((attributeEntities: [Entity | null, Entity | null]) => {
-  //       const idEntity = attributeEntities[0];
-  //       const valueEntity = attributeEntities[1];
-  //       if (!idEntity || !valueEntity) return;
-  //       send({
-  //         type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
-  //         payload: {
-  //           attributeId: idEntity.id,
-  //           attributeName: idEntity.name ?? '',
-  //           entityId: valueEntity.id,
-  //           entityName: valueEntity.name || '',
-  //         },
-  //       });
-  //     });
-  //   };
-  //   if (attributes && attributes.length > 0) {
-  //     setAttributesTriples();
-  //   }
-  //   setHasSetAttributes(true);
-  // }, [hasSetType, hasSetAttributes, subgraph, config, send, attributes]);
 }

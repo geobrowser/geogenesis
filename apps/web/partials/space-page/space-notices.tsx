@@ -13,8 +13,8 @@ import { useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { ID } from '~/core/id';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
@@ -36,6 +36,7 @@ type SpaceNoticesProps = {
 export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps) => {
   const { isEditor } = useAccessControl(spaceId);
   const isEditing = useUserIsEditing(spaceId);
+  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, [SYSTEM_IDS.POST_TYPE]);
 
   if (spaceType === 'person') {
     if (isEditor) {
@@ -88,7 +89,7 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
             title={`Write and publish your first post`}
             action={
               <div className="flex h-[38px] items-end">
-                <SimpleButton href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.POST_TYPE)}>
+                <SimpleButton onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
                   Write a post
                 </SimpleButton>
               </div>
@@ -130,9 +131,7 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
             title={`Write and publish your first post`}
             action={
               <div className="flex h-[38px] items-end">
-                <SimpleButton href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.POST_TYPE)}>
-                  Write a post
-                </SimpleButton>
+                <SimpleButton href={NavUtils.toEntity(spaceId, nextEntityId)}>Write a post</SimpleButton>
               </div>
             }
           />
@@ -146,11 +145,7 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
             color="purple"
             media={<img src="/posts.png" alt="" className="h-24 w-auto object-contain" />}
             title={`Write and publish your first post`}
-            action={
-              <SimpleButton href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.POST_TYPE)}>
-                Write a post
-              </SimpleButton>
-            }
+            action={<SimpleButton href={NavUtils.toEntity(spaceId, nextEntityId)}>Write a post</SimpleButton>}
           />
           <Notice
             id="nonprofitFindOrAddProjects"

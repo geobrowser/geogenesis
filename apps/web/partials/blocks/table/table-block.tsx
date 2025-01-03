@@ -7,9 +7,9 @@ import produce from 'immer';
 
 import * as React from 'react';
 
+import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { ID } from '~/core/id';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -110,11 +110,11 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     };
   });
 
-  const attributes: Array<[string, string]> =
-    filterState && filterState.length > 0
-      ? // filters can include 'space', which is not an attribute
-        filterState.filter(filter => filter.columnId !== 'space').map(filter => [filter.columnId, filter.value])
-      : [];
+  const filteredTypes: Array<string> = filterState
+    .filter(filter => filter.columnId === SYSTEM_IDS.TYPES)
+    .map(filter => filter.value);
+
+  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, filteredTypes);
 
   const hasPagination = hasPreviousPage || hasNextPage;
 
@@ -136,7 +136,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             shownColumnIds={shownColumnIds}
           />
           {isEditing && (
-            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), undefined, attributes)}>
+            <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
               <Create />
             </Link>
           )}
