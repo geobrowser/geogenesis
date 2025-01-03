@@ -18,7 +18,7 @@ function getFetchResultsQuery(query: string | undefined, typeIds?: string[], fir
             some: { type: { entityId: { in: ["${typeIds.join('","')}"] } } }
           }`
       : // Filter out block entities by default
-        `versionTypes: { every: { type: { entityId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.DATA_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}"] } } } }`;
+        `versionTypes: { every: { type: { entityId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.DATA_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.PAGE_TYPE}"] } } } }`;
 
   const constructedWhere = `{name: {startsWithInsensitive: ${JSON.stringify(query)}} ${typeIdsString} }`;
 
