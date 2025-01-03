@@ -9,6 +9,7 @@ import * as React from 'react';
 
 import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
+import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
@@ -28,6 +29,8 @@ export function NavbarActions() {
   const smartAccount = useSmartAccount();
   const address = smartAccount?.account.address;
   const { isLoading, account } = useGeoAccount(address);
+
+  const { shouldShowElement } = useOnboardGuard();
 
   if (!address) {
     return <GeoConnectButton />;
@@ -73,12 +76,14 @@ export function NavbarActions() {
             </AvatarMenuItem>
           </>
         )} */}
-        <AvatarMenuItem>
-          <Link href="/home" className="flex items-center gap-2 grayscale">
-            <Home />
-            <p className="text-button">Personal home</p>
-          </Link>
-        </AvatarMenuItem>
+        {shouldShowElement && (
+          <AvatarMenuItem>
+            <Link href="/home" className="flex items-center gap-2 grayscale">
+              <Home />
+              <p className="text-button">Personal home</p>
+            </Link>
+          </AvatarMenuItem>
+        )}
         <AvatarMenuItem>
           <GeoConnectButton />
         </AvatarMenuItem>
