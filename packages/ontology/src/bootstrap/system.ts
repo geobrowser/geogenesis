@@ -24,7 +24,6 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source Space',
   [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: 'Verified Source',
-  [SYSTEM_IDS.FOREIGN_TYPES]: 'Foreign Types',
 
   // Data blocks
   [SYSTEM_IDS.VIEW_TYPE]: 'View',
@@ -81,6 +80,8 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.EVENTS_PAGE]: 'Events page',
   [SYSTEM_IDS.SERVICES_PAGE]: 'Services page',
   [SYSTEM_IDS.PRODUCTS_PAGE]: 'Products page',
+
+  [SYSTEM_IDS.POST_TYPE]: 'Post',
 };
 
 const attributes: Record<string, string> = {
@@ -97,7 +98,6 @@ const attributes: Record<string, string> = {
 
   // Data blocks
   [SYSTEM_IDS.VIEW_ATTRIBUTE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.FOREIGN_TYPES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.MARKDOWN_CONTENT]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.BLOCKS]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.FILTER]: SYSTEM_IDS.TEXT,
@@ -139,7 +139,7 @@ const schemaTypes: Record<string, string[]> = {
   [SYSTEM_IDS.URL]: [],
   [SYSTEM_IDS.IMAGE]: [],
   [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE],
-  [SYSTEM_IDS.SPACE_CONFIGURATION]: [SYSTEM_IDS.FOREIGN_TYPES, SYSTEM_IDS.BLOCKS],
+  [SYSTEM_IDS.SPACE_CONFIGURATION]: [],
   [SYSTEM_IDS.IMAGE_BLOCK]: [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE],
   [SYSTEM_IDS.DATA_BLOCK]: [],
   [SYSTEM_IDS.TEXT_BLOCK]: [SYSTEM_IDS.MARKDOWN_CONTENT],
