@@ -1,5 +1,16 @@
 import { IPFS_GATEWAY_PATH } from '../constants';
 import { AppEnv } from '../types';
+import {
+  ACCOUNT_ABSTRACTION_API_KEY,
+  APP_ENV,
+  LIVEBLOCKS_PUBLIC_KEY,
+  ONBOARD_CODE,
+  ONBOARD_FLAG,
+  PRIVY_APP_ID,
+  RPC_ENDPOINT,
+  TEST_ENV,
+  WALLETCONNECT_PROJECT_ID,
+} from './config';
 
 type SupportedChainId = '31337' | '80451';
 
@@ -17,28 +28,22 @@ type IVars = Readonly<{
   walletConnectProjectId: string;
   privyAppId: string;
   rpcEndpoint: string;
-  geoPk: string;
   accountAbstractionApiKey: string;
   isTestEnv: boolean;
-  telemetryUrl?: string;
-  telemetryApiKey?: string;
   onboardFlag: string;
   onboardCode: string;
 }>;
 
 export const variables: IVars = {
-  appEnv: process.env.NEXT_PUBLIC_APP_ENV!,
-  isTestEnv: process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true',
-  liveBlocksPublicKey: process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY!,
-  geoPk: process.env.GEO_PK!,
-  telemetryUrl: process.env.TELEMETRY_URL,
-  telemetryApiKey: process.env.TELEMETRY_TOKEN,
-  privyAppId: process.env.NEXT_PUBLIC_PRIVY_APP_ID!,
-  rpcEndpoint: process.env.NEXT_PUBLIC_GEOGENESIS_RPC!,
-  walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
-  accountAbstractionApiKey: process.env.NEXT_PUBLIC_PIMLICO_API_KEY!,
-  onboardFlag: process.env.NEXT_PUBLIC_ONBOARD_FLAG!,
-  onboardCode: process.env.NEXT_PUBLIC_ONBOARD_CODE!,
+  appEnv: APP_ENV!,
+  isTestEnv: TEST_ENV === 'true',
+  liveBlocksPublicKey: LIVEBLOCKS_PUBLIC_KEY!,
+  privyAppId: PRIVY_APP_ID!,
+  rpcEndpoint: RPC_ENDPOINT!,
+  walletConnectProjectId: WALLETCONNECT_PROJECT_ID!,
+  accountAbstractionApiKey: ACCOUNT_ABSTRACTION_API_KEY!,
+  onboardFlag: ONBOARD_FLAG!,
+  onboardCode: ONBOARD_CODE!,
 };
 
 // @TODO: This eventually completely comes from our environment instead of hardcoded here.

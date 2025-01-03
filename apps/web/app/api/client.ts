@@ -5,7 +5,9 @@ import { Environment } from '~/core/environment';
 import { GEOGENESIS } from '~/core/wallet/conduit-chain';
 import { walletClientToSigner } from '~/core/wallet/wallet-client-to-signer';
 
-const geoAccount = privateKeyToAccount(Environment.variables.geoPk as `0x${string}`);
+import { ServerEnvironment } from './environment';
+
+const geoAccount = privateKeyToAccount(ServerEnvironment.geoPk as `0x${string}`);
 
 export const walletClient = createWalletClient({
   account: geoAccount,
