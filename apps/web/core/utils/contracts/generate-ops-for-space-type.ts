@@ -1,4 +1,4 @@
-import { Account, Image, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
+import { Account, CONTENT_IDS, Image, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import type { SpaceType } from '~/core/types';
@@ -91,7 +91,7 @@ export const generateOpsForSpaceType = async ({
       Relation.make({
         fromId: newEntityId,
         toId: imageId, // Set the avatar relation to point to the entity id of the new entity
-        relationTypeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+        relationTypeId: CONTENT_IDS.AVATAR_ATTRIBUTE,
       })
     );
   }

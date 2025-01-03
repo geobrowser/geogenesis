@@ -1,7 +1,7 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { CONTENT_IDS, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { EntityId } from '~/core/io/schema';
-import { Triple as ITriple, Relation, RenderableProperty, ValueTypeId } from '~/core/types';
+import { Triple as ITriple, Relation, RenderableProperty } from '~/core/types';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -59,7 +59,7 @@ export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
  */
 export function avatar(relations?: Relation[]): string | null {
   if (!relations) return null;
-  return relations.find(r => r.typeOf.id === EntityId(SYSTEM_IDS.AVATAR_ATTRIBUTE))?.toEntity.value ?? null;
+  return relations.find(r => r.typeOf.id === EntityId(CONTENT_IDS.AVATAR_ATTRIBUTE))?.toEntity.value ?? null;
 }
 
 /**

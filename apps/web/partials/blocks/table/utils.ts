@@ -47,7 +47,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         relationId: '',
         placeholder: true,
       };
-    case SYSTEM_IDS.DATE:
+    case SYSTEM_IDS.TIME:
       return {
         type: 'TIME',
         attributeId,
@@ -58,7 +58,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         value: '',
         placeholder: true,
       };
-    case SYSTEM_IDS.URI:
+    case SYSTEM_IDS.URL:
       return {
         type: 'URL',
         attributeId,
