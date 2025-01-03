@@ -11,12 +11,12 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
     const { attributeId: attributeIdA, attributeName: attributeNameA } = tripleA;
     const { attributeId: attributeIdB, attributeName: attributeNameB } = tripleB;
 
-    const isNameA = attributeIdA === SYSTEM_IDS.NAME;
-    const isNameB = attributeIdB === SYSTEM_IDS.NAME;
-    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION;
-    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION;
-    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES;
-    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES;
+    const isNameA = attributeIdA === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isNameB = attributeIdB === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
+    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
 
     const aIndex = schemaAttributeIds.indexOf(attributeIdA);
     const bIndex = schemaAttributeIds.indexOf(attributeIdB);
@@ -59,12 +59,12 @@ export function sortRenderables(renderables: RenderableProperty[]) {
     const { attributeId: attributeIdA, attributeName: attributeNameA } = renderableA;
     const { attributeId: attributeIdB, attributeName: attributeNameB } = renderableB;
 
-    const isNameA = attributeIdA === SYSTEM_IDS.NAME;
-    const isNameB = attributeIdB === SYSTEM_IDS.NAME;
-    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION;
-    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION;
-    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES;
-    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES;
+    const isNameA = attributeIdA === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isNameB = attributeIdB === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
+    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
 
     if (isNameA && !isNameB) return -1;
     if (!isNameA && isNameB) return 1;

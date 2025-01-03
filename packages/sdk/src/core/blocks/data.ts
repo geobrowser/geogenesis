@@ -1,7 +1,7 @@
 import { createGeoId } from '../../id.js';
 import { Relation } from '../../relation.js';
+import { SYSTEM_IDS } from '../../system-ids.js';
 import type { CreateRelationOp, SetTripleOp } from '../../types.js';
-import { SYSTEM_IDS } from '~/src/system-ids.js';
 
 type DataBlockSourceType = 'QUERY' | 'COLLECTION' | 'GEO';
 

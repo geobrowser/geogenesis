@@ -1,6 +1,6 @@
 'use client';
 
-import { CONTENT_IDS, SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
@@ -81,7 +81,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   }, [triples]);
 
   const nameTripleSpaces = React.useMemo(() => {
-    return triples.filter(t => t.attributeId === SYSTEM_IDS.NAME).map(t => t.space);
+    return triples.filter(t => t.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE).map(t => t.space);
   }, [triples]);
 
   const spaces = React.useMemo(() => {
@@ -152,7 +152,7 @@ export function mergeEntity({ id, mergeWith }: MergeEntityArgs): EntityWithSchem
   return {
     id: EntityId(id),
     name,
-    nameTripleSpaces: mergedTriples.filter(t => t.attributeId === SYSTEM_IDS.NAME).map(t => t.space),
+    nameTripleSpaces: mergedTriples.filter(t => t.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE).map(t => t.space),
     // @TODO add real merging logic
     spaces: mergeWith?.spaces ?? [],
     description,
@@ -272,8 +272,8 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
 }
 
 /**
- * Types are defined either a relation with a Relation type of SYSTEM_IDS.TYPES,
- * or a triple with an attribute id of SYSTEM_IDS.TYPES. We expect that only
+ * Types are defined either a relation with a Relation type of SYSTEM_IDS.TYPES_ATTRIBUTE,
+ * or a triple with an attribute id of SYSTEM_IDS.TYPES_ATTRIBUTE. We expect that only
  * system entities will use the triples approach, mostly to avoid recursive
  * type definitions.
  *
@@ -284,7 +284,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
  */
 export function readTypes(relations: Relation[]): { id: EntityId; name: string | null }[] {
   const typeIdsViaRelations = relations
-    .filter(r => r.typeOf.id === SYSTEM_IDS.TYPES)
+    .filter(r => r.typeOf.id === SYSTEM_IDS.TYPES_ATTRIBUTE)
     .map(r => ({
       id: EntityId(r.toEntity.id),
       name: r.toEntity.name,

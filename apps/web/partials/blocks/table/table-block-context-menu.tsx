@@ -589,7 +589,7 @@ const ToggleColumn = ({
 //           //   t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
 //           // )?.value.value as ValueTypeId;
 
-//           // const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
+//           // const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
 
 //           // return (
 //           //   <div key={attributeEntity.id} className="flex items-center gap-4">

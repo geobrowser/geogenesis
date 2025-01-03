@@ -29,7 +29,7 @@ export const generateOpsForSpaceType = async ({
   ops.push(
     Ops.create({
       entity: newEntityId,
-      attribute: SYSTEM_IDS.NAME,
+      attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
       value: {
         type: 'TEXT',
         value: spaceName,
@@ -42,7 +42,7 @@ export const generateOpsForSpaceType = async ({
     Relation.make({
       fromId: newEntityId,
       toId: SYSTEM_IDS.SPACE_CONFIGURATION,
-      relationTypeId: SYSTEM_IDS.TYPES,
+      relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
     })
   );
 

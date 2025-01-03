@@ -57,7 +57,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
     // @TODO: Fix
     return;
     // const foreignTypeTriple = typeEntity.triples.find(
-    //   triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.value === SYSTEM_IDS.SCHEMA_TYPE
+    //   triple => triple.attributeId === SYSTEM_IDS.TYPES_ATTRIBUTE && triple.value.value === SYSTEM_IDS.SCHEMA_TYPE
     // );
 
     // if (!foreignTypeTriple) return;

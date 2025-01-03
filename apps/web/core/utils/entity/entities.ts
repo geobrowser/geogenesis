@@ -8,7 +8,7 @@ import { Triple as ITriple, Relation, RenderableProperty, ValueTypeId } from '~/
  * description of the entity.
  *
  * We assume that the Description triple's attribute for an Entity will match the expected
- * system Description attribute ID at SYSTEM_IDS.DESCRIPTION. However, anybody can
+ * system Description attribute ID at SYSTEM_IDS.DESCRIPTION_ATTRIBUTE. However, anybody can
  * set up a triple that references _any_ attribute whose name is "Description."
  *
  * We currently handle this in the UI by checking the system ID for Description as well
@@ -23,7 +23,7 @@ export function description(triples: ITriple[]): string | null {
 }
 
 export function descriptionTriple(triples: ITriple[]): ITriple | undefined {
-  return triples.find(triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION);
+  return triples.find(triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE);
 }
 
 /**
@@ -36,18 +36,18 @@ export function name(triples: ITriple[]): string | null {
 }
 
 export function nameFromRenderable(renderables: RenderableProperty[]): string | null {
-  const value = renderables.find(r => r.attributeId === SYSTEM_IDS.NAME && r.type === 'TEXT')?.value as
+  const value = renderables.find(r => r.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE && r.type === 'TEXT')?.value as
     | string
     | undefined;
   return value ?? null;
 }
 
 export function nameTriple(triples: ITriple[]): ITriple | undefined {
-  return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
+  return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
 }
 
 export function nameTriples(triples: ITriple[]): ITriple[] {
-  return triples.filter(triple => triple.attributeId === SYSTEM_IDS.NAME);
+  return triples.filter(triple => triple.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
 }
 
 export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {

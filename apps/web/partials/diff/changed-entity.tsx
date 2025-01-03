@@ -676,7 +676,7 @@ export const Chip = ({ status = 'UNCHANGED', children }: ChipProps) => {
 //     typeIds: [],
 //   });
 //   const filtersWithColumnName = filters.map(f => {
-//     if (f.columnId === SYSTEM_IDS.NAME) {
+//     if (f.columnId === SYSTEM_IDS.NAME_ATTRIBUTE) {
 //       return {
 //         ...f,
 //         columnName: 'Name',

@@ -9,7 +9,7 @@ const triplesWithSystemDescriptionAttribute: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
-    attributeId: SYSTEM_IDS.DESCRIPTION,
+    attributeId: SYSTEM_IDS.DESCRIPTION_ATTRIBUTE,
     attributeName: 'Description',
     value: {
       type: 'TEXT',
@@ -24,7 +24,7 @@ const triplesWithSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
-    attributeId: SYSTEM_IDS.DESCRIPTION,
+    attributeId: SYSTEM_IDS.DESCRIPTION_ATTRIBUTE,
     attributeName: 'Description',
     value: {
       value: 'valueId',
@@ -69,7 +69,7 @@ const triplesWithNonSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
 
 /**
  * We assume that the Description triple's attribute for an Entity will match the expected
- * system Description attribute ID at SYSTEM_IDS.DESCRIPTION. However, anybody can
+ * system Description attribute ID at SYSTEM_IDS.DESCRIPTION_ATTRIBUTE. However, anybody can
  * set up a triple that references _any_ attribute whose name is "Description."
  *
  * We currently handle this in the UI by checking the system ID for Description as well
@@ -108,7 +108,7 @@ const triplesWithSystemNameAttribute: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
-    attributeId: SYSTEM_IDS.NAME,
+    attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
     attributeName: 'Name',
     entityName: 'banana',
     space: 'spaceId',
@@ -123,7 +123,7 @@ const triplesWithSystemNameAttributeAndNameIsEntity: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
-    attributeId: SYSTEM_IDS.NAME,
+    attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
     attributeName: 'Name',
     entityName: 'banana',
     space: 'spaceId',

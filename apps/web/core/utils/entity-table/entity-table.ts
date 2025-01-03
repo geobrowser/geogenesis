@@ -21,7 +21,7 @@ export function fromColumnsAndRows(entities: Entity[], columns: Schema[], collec
           name,
         };
 
-        const isNameCell = column.id === SYSTEM_IDS.NAME;
+        const isNameCell = column.id === SYSTEM_IDS.NAME_ATTRIBUTE;
 
         if (isNameCell) {
           cell.description = description;

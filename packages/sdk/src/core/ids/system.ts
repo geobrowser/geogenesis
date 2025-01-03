@@ -195,21 +195,26 @@ export const NETWORK_ATTRIBUTE = 'MuMLDVbHAmRjZQjhyk3HGx';
 export const PERSON_TYPE = 'GfN9BK2oicLiBHrUavteS8';
 export const NETWORK_TYPE = 'YCLXoVZho6C4S51g4AbF3C';
 
+export const GOALS_ATTRIBUTE = 'WNcdorfdj7ZprmwvmRiRtG';
+export const GOAL_TYPE = '2y44qmFiLjZWmgkZ64EM7c';
+export const MEMBERSHIP_CONTRACT_ADDRESS = 'DDkwCoB8p1mHzXTedShcFv';
+export const MISSION_ATTRIBUTE = 'VGbyCo12NC8yTUhnhMHu1z';
+export const PLACEHOLDER_IMAGE = 'ENYn2afpf2koqBfyff7CGE';
+export const PLACEHOLDER_TEXT = 'AuihGk1yXCkfCcpMSwhfho';
+export const TAB_TYPE = '6ym81VzJiHx32nV8e5h52q';
+export const ROLE_ATTRIBUTE = 'VGKSRGzxCRvQxpJP7CB4wj';
+
+// Do we still need these?
+export const DEFAULT_TYPE = '7nJuuYkrKT62HCFxDygF1S';
 export const BROADER_CLAIMS_ATTRIBUTE = 'RWkXuBRdVqDAiHKQisTZZ4';
 export const BROADER_SPACES = 'CHwmK8bk4KMCqBNiV2waL9';
 export const CLAIMS_FROM_ATTRIBUTE = 'JdNBawSt1fp9EdozJdmThR';
 export const DEFINITIONS_ATTRIBUTE = '256myJaotY6FB6wGiC5mtk';
 export const EMAIL_ATTRIBUTE = '2QafYRmRHP2Hd18W3Tj9zu';
 export const FOREIGN_TYPES = 'R32hqus9ojU3Twsz3HDuxf';
-export const GOALS_ATTRIBUTE = 'WNcdorfdj7ZprmwvmRiRtG';
-export const GOAL_TYPE = '2y44qmFiLjZWmgkZ64EM7c';
-export const MEMBERSHIP_CONTRACT_ADDRESS = 'DDkwCoB8p1mHzXTedShcFv';
-export const MISSION_ATTRIBUTE = 'VGbyCo12NC8yTUhnhMHu1z';
 export const NONPROFIT_CATEGORIES_ATTRIBUTE = '64uVL5vKHmfqBC94hwNzHZ';
 export const PERSON_ATTRIBUTE = 'W2aFZPy5nnU3DgdkWJCNVn';
 export const PHONE_NUMBER_ATTRIBUTE = '3zhuyrcqFjeaVgC5oHHqTJ';
-export const PLACEHOLDER_IMAGE = 'ENYn2afpf2koqBfyff7CGE';
-export const PLACEHOLDER_TEXT = 'AuihGk1yXCkfCcpMSwhfho';
 export const QUOTES_ATTRIBUTE = 'XXAf2w4C5f4URDhhpH8nUG';
 export const REGION_ATTRIBUTE = 'CGC6KXy8wcqf7vpZv8HH4i';
 export const REGION_TYPE = 'Qu6vfQq68ecZ4PkihJ4nZN';
@@ -218,11 +223,7 @@ export const RELEVANT_QUESTIONS_ATTRIBUTE = 'Po4uUtzinhjDwXJP5QNCMp';
 export const SPEAKERS_ATTRIBUTE = '9nZuGhssmkEBn9DtRca8Gm';
 export const STREET_ADDRESS_ATTRIBUTE = '8kx7oQvdCZRXLfUksucwCv';
 export const SUBCLAIMS_ATTRIBUTE = '2DFyYPbh5Yy2PnWTbi3uL5';
-export const TAB_TYPE = '6ym81VzJiHx32nV8e5h52q';
 export const VALUES_ATTRIBUTE = '3c5k2MpF9PRYAZ925qTKNi';
 export const VISION_ATTRIBUTE = 'AAMDNTaJtS2i4aWp59zEAk';
-
-// Not sure what this is
-export const DEFAULT_TYPE = '7nJuuYkrKT62HCFxDygF1S';
 
 export const ROOT_SPACE_ID = 'WdiG8PT2LowgHGuRjBruqG';
