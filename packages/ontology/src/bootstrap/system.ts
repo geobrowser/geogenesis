@@ -1,27 +1,9 @@
-import { NETWORK_IDS, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
-import { Effect } from 'effect';
-
-import { handleEditsPublished } from '../events/edits-published/handler';
-import { handleInitialGovernanceSpaceEditorsAdded } from '../events/initial-editors-added/handler';
-import { createInitialContentForSpaces } from '../events/initial-proposal-created/handler';
-import { handleProposalsExecuted } from '../events/proposals-executed/handler';
-import { handleGovernancePluginCreated, handleSpacesCreated } from '../events/spaces-created/handler';
-import type { CreateRelationOp, Op, SinkEditProposal } from '../types';
-import { templateOps } from './bootstrap-templates';
-import {
-  DAO_ADDRESS,
-  INITIAL_BLOCK,
-  MAIN_VOTING_ADDRESS,
-  MEMBER_ACCESS_ADDRESS,
-  ROOT_SPACE_CREATED_AT,
-  ROOT_SPACE_CREATED_BY_ID,
-  SPACE_ADDRESS,
-  SPACE_ID,
-} from './constants';
+import { type CreateRelationOp, NETWORK_IDS, type Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 const names: Record<string, string> = {
   [SYSTEM_IDS.TYPES_ATTRIBUTE]: 'Types',
   [SYSTEM_IDS.ATTRIBUTE]: 'Attribute',
+  [SYSTEM_IDS.COVER_ATTRIBUTE]: 'Cover',
   [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: 'Relation Type',
   [SYSTEM_IDS.ATTRIBUTES]: 'Attributes',
   [SYSTEM_IDS.SCHEMA_TYPE]: 'Type',
@@ -37,8 +19,8 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.IMAGE_TYPE]: 'Image',
   [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: 'Image URL',
 
-  [SYSTEM_IDS.DATE]: 'Date',
-  [SYSTEM_IDS.URI]: 'Web URL',
+  [SYSTEM_IDS.TIME]: 'Date',
+  [SYSTEM_IDS.URL]: 'Web URL',
   [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source Space',
   [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: 'Verified Source',
@@ -101,6 +83,7 @@ const names: Record<string, string> = {
 };
 
 const attributes: Record<string, string> = {
+  [SYSTEM_IDS.COVER_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
   [SYSTEM_IDS.TYPES_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.ATTRIBUTES]: SYSTEM_IDS.RELATION,
@@ -124,7 +107,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.RELATION_TO_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: SYSTEM_IDS.RELATION,
 
-  [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.URI,
+  [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.URL,
   [SYSTEM_IDS.BROADER_SPACES]: SYSTEM_IDS.RELATION,
 
   [SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE]: SYSTEM_IDS.RELATION,
@@ -149,8 +132,8 @@ const schemaTypes: Record<string, string[]> = {
   [SYSTEM_IDS.CHECKBOX]: [],
   [SYSTEM_IDS.RELATION]: [],
   [SYSTEM_IDS.IMAGE_TYPE]: [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE],
-  [SYSTEM_IDS.DATE]: [],
-  [SYSTEM_IDS.URI]: [],
+  [SYSTEM_IDS.TIME]: [],
+  [SYSTEM_IDS.URL]: [],
   [SYSTEM_IDS.IMAGE]: [],
   [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE],
   [SYSTEM_IDS.SPACE_CONFIGURATION]: [SYSTEM_IDS.FOREIGN_TYPES, SYSTEM_IDS.BLOCKS],
@@ -177,7 +160,6 @@ const types: Record<string, string[]> = {
 const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
   return {
     type: 'SET_TRIPLE',
-    space: SPACE_ID,
     triple: {
       attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
       entity: entityId,
@@ -190,138 +172,54 @@ const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
 });
 
 const attributeOps: CreateRelationOp[] = Object.keys(attributes).flatMap(attributeId => {
-  const newRelation = Relation.make({
+  return Relation.make({
     fromId: attributeId,
     toId: SYSTEM_IDS.ATTRIBUTE,
     relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
   });
-
-  return {
-    ...newRelation,
-    space: SPACE_ID,
-  };
 });
 
 const attributeValueTypeOps: CreateRelationOp[] = Object.entries(attributes).flatMap(([attributeId, valueType]) => {
-  const newRelation = Relation.make({
+  return Relation.make({
     fromId: attributeId,
     toId: valueType,
     relationTypeId: SYSTEM_IDS.VALUE_TYPE,
   });
-
-  return {
-    ...newRelation,
-    space: SPACE_ID,
-  };
 });
 
 const typeOps: CreateRelationOp[] = Object.keys(schemaTypes).flatMap(typeId => {
-  const newRelation = Relation.make({
+  return Relation.make({
     fromId: typeId,
     toId: SYSTEM_IDS.SCHEMA_TYPE,
     relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
   });
-
-  return {
-    ...newRelation,
-    space: SPACE_ID,
-  };
 });
 
 const typeSchemaOps: CreateRelationOp[] = Object.entries(schemaTypes).flatMap(([typeId, attributeIds]) => {
   return attributeIds.flatMap(attributeId => {
-    const newRelation = Relation.make({
+    return Relation.make({
       fromId: typeId,
       toId: attributeId,
       relationTypeId: SYSTEM_IDS.ATTRIBUTES,
     });
-
-    return {
-      ...newRelation,
-      space: SPACE_ID,
-    };
   });
 });
 
 const entitiesWithTypesOps: CreateRelationOp[] = Object.entries(types).flatMap(([entityId, typeIds]) => {
   return typeIds.flatMap(typeId => {
-    const newRelation = Relation.make({
+    return Relation.make({
       fromId: entityId,
       toId: typeId,
       relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
     });
-
-    return {
-      ...newRelation,
-      space: SPACE_ID,
-    };
   });
 });
 
-const editProposal: SinkEditProposal = {
-  type: 'ADD_EDIT',
-  proposalId: '-1',
-  onchainProposalId: '-1',
-  creator: ROOT_SPACE_CREATED_BY_ID,
-  name: 'Root Space Bootstrap',
-  endTime: ROOT_SPACE_CREATED_AT.toString(),
-  startTime: ROOT_SPACE_CREATED_AT.toString(),
-  contentUri: 'bootstrapped-so-no-uri',
-  daoAddress: DAO_ADDRESS,
-  ops: [
-    ...nameOps,
-    ...attributeOps,
-    ...attributeValueTypeOps,
-    ...typeOps,
-    ...typeSchemaOps,
-    ...templateOps,
-    ...entitiesWithTypesOps,
-  ],
-  pluginAddress: MAIN_VOTING_ADDRESS,
-  space: SPACE_ID,
-};
-
-export const bootstrapRoot = Effect.gen(function* (_) {
-  yield* _(
-    handleSpacesCreated(
-      [
-        {
-          daoAddress: DAO_ADDRESS,
-          spaceAddress: SPACE_ADDRESS,
-          id: SPACE_ID,
-        },
-      ],
-      INITIAL_BLOCK
-    )
-  );
-
-  yield* _(
-    handleGovernancePluginCreated(
-      [
-        {
-          daoAddress: DAO_ADDRESS,
-          mainVotingAddress: MAIN_VOTING_ADDRESS,
-          memberAccessAddress: MEMBER_ACCESS_ADDRESS,
-        },
-      ],
-      INITIAL_BLOCK
-    )
-  );
-
-  yield* _(
-    handleInitialGovernanceSpaceEditorsAdded(
-      [
-        {
-          addresses: [ROOT_SPACE_CREATED_BY_ID],
-          pluginAddress: MAIN_VOTING_ADDRESS,
-          daoAddress: DAO_ADDRESS,
-        },
-      ],
-      INITIAL_BLOCK
-    )
-  );
-
-  yield* _(createInitialContentForSpaces({ proposals: [editProposal], block: INITIAL_BLOCK, editType: 'IMPORT' }));
-  yield* _(handleEditsPublished([editProposal], [SPACE_ID], INITIAL_BLOCK));
-  yield* _(handleProposalsExecuted([editProposal]));
-});
+export const ops: Op[] = [
+  ...nameOps,
+  ...attributeOps,
+  ...attributeValueTypeOps,
+  ...typeOps,
+  ...typeSchemaOps,
+  ...entitiesWithTypesOps,
+];

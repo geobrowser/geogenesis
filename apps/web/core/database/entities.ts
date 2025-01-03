@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { CONTENT_IDS, SYSTEM_IDS } from '@geogenesis/sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
@@ -246,17 +246,22 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
       // Name, description, and types are always required for every entity even
       // if they aren't defined in the schema.
       {
-        id: EntityId(SYSTEM_IDS.NAME),
+        id: EntityId(SYSTEM_IDS.NAME_ATTRIBUTE),
         name: 'Name',
         valueType: SYSTEM_IDS.TEXT,
       },
       {
-        id: EntityId(SYSTEM_IDS.DESCRIPTION),
+        id: EntityId(SYSTEM_IDS.DESCRIPTION_ATTRIBUTE),
         name: 'Description',
         valueType: SYSTEM_IDS.TEXT,
       },
       {
-        id: EntityId(SYSTEM_IDS.TYPES),
+        id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
+        name: 'Types',
+        valueType: SYSTEM_IDS.RELATION,
+      },
+      {
+        id: EntityId(SYSTEM_IDS.COVER_ATTRIBUTE),
         name: 'Types',
         valueType: SYSTEM_IDS.RELATION,
       },

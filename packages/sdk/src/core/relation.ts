@@ -16,7 +16,7 @@ interface CreateRelationArgs {
 type CreateRelationTypeOp = {
   type: 'SET_TRIPLE';
   triple: {
-    attribute: typeof SYSTEM_IDS.TYPES;
+    attribute: typeof SYSTEM_IDS.TYPES_ATTRIBUTE;
     entity: string;
     value: {
       type: 'URL';
@@ -83,9 +83,9 @@ export function make(args: CreateRelationArgs): CreateRelationOp {
       type: args.relationTypeId,
       fromEntity: args.fromId,
       toEntity: args.toId,
-      index:args.position ?? INITIAL_RELATION_INDEX_VALUE 
-    }
-  }
+      index: args.position ?? INITIAL_RELATION_INDEX_VALUE,
+    },
+  };
 }
 
 export function make_OLD(
@@ -103,7 +103,7 @@ export function make_OLD(
     {
       type: 'SET_TRIPLE',
       triple: {
-        attribute: SYSTEM_IDS.TYPES,
+        attribute: SYSTEM_IDS.TYPES_ATTRIBUTE,
         entity: newEntityId,
         value: {
           type: 'URL',
