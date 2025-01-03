@@ -20,7 +20,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: 'Image URL',
 
   [SYSTEM_IDS.TIME]: 'Date',
-  [SYSTEM_IDS.URL]: 'Web URL',
+  [SYSTEM_IDS.URL]: 'URL',
   [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source Space',
   [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: 'Verified Source',
