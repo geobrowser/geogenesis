@@ -22,6 +22,8 @@ type IVars = Readonly<{
   isTestEnv: boolean;
   telemetryUrl?: string;
   telemetryApiKey?: string;
+  onboardFlag: string;
+  onboardCode: string;
 }>;
 
 export const variables: IVars = {
@@ -35,6 +37,8 @@ export const variables: IVars = {
   rpcEndpoint: process.env.NEXT_PUBLIC_GEOGENESIS_RPC!,
   walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
   accountAbstractionApiKey: process.env.NEXT_PUBLIC_PIMLICO_API_KEY!,
+  onboardFlag: process.env.NEXT_PUBLIC_ONBOARD_FLAG!,
+  onboardCode: process.env.NEXT_PUBLIC_ONBOARD_CODE!,
 };
 
 // @TODO: This eventually completely comes from our environment instead of hardcoded here.
