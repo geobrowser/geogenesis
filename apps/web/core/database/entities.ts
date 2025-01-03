@@ -1,7 +1,7 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 import { atom, useAtomValue } from 'jotai';
@@ -38,6 +38,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
 
   const { data: remoteData } = useQuery({
     enabled: !initialData,
+    placeholderData: keepPreviousData,
     queryKey: ['useEntity', spaceId, id, initialData],
     initialData,
     queryFn: async ({ signal }) => {
@@ -97,6 +98,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
 
   const { data: schema } = useQuery({
     queryKey: ['entity-schema-for-merging', id, types],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const typesIds = [...new Set(types.map(t => t.id))];
       return await getSchemaFromTypeIds(typesIds);
