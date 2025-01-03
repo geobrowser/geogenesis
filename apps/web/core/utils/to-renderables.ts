@@ -84,8 +84,6 @@ export function toRenderables({
       }
     });
 
-  console.log('schemaRenderable', schema);
-
   const triplesToRenderable = triples.map((t): TripleRenderableProperty => {
     return {
       type: t.value.type,
