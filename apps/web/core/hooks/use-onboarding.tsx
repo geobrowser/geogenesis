@@ -1,6 +1,6 @@
 import { usePrivy } from '@privy-io/react-auth';
 import { atom, useAtom } from 'jotai';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 import { useCallback, useEffect } from 'react';
 
