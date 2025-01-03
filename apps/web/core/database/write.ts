@@ -1,3 +1,5 @@
+'use client';
+
 import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { atom } from 'jotai';
 
@@ -7,10 +9,39 @@ import { OmitStrict } from '../types';
 import { Relations } from '../utils/relations';
 import { Triple } from './Triple';
 import { mergeEntityAsync } from './entities';
+import { db } from './indexeddb';
 import { RemoveOp, StoreRelation, StoredRelation, StoredTriple, UpsertOp } from './types';
 
-export const localOpsAtom = atom<StoredTriple[]>([]);
-export const localRelationsAtom = atom<StoredRelation[]>([]);
+const opsWithPersistence = () => {
+  const baseAtom = atom<StoredTriple[]>([]);
+
+  baseAtom.onMount = setValue => {
+    (async () => {
+      const stored = await db.triples.toArray();
+
+      setValue(stored);
+    })();
+  };
+
+  return baseAtom;
+};
+
+const relationsWithPersistence = () => {
+  const baseAtom = atom<StoredRelation[]>([]);
+
+  baseAtom.onMount = setValue => {
+    (async () => {
+      const stored = await db.relations.toArray();
+
+      setValue(stored);
+    })();
+  };
+
+  return baseAtom;
+};
+
+export const localOpsAtom = opsWithPersistence();
+export const localRelationsAtom = relationsWithPersistence();
 
 type UpsertRelationArgs = {
   type: 'SET_RELATION';
