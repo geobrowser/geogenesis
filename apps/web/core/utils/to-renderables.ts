@@ -1,3 +1,5 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+
 import {
   Relation,
   RelationRenderableProperty,
@@ -6,6 +8,7 @@ import {
   Triple,
   TripleRenderableProperty,
 } from '../types';
+import { valueTypes } from '../value-types';
 
 interface ToRenderablesArgs {
   entityId: string;
@@ -37,20 +40,51 @@ export function toRenderables({
   // on if the entity has filled these fields or not.
   // @TODO: We need to know the schema value type to know the type of renderable we need
   // to show. We can default to TEXT for now.
-  const schemaRenderable = (schema ?? [])
+  const schemaRenderables = (schema ?? [])
     .filter(renderable => !attributesWithAValue.has(renderable.id) && !placeholders.has(renderable.id))
-    .map((s): TripleRenderableProperty => {
-      return {
-        type: 'TEXT',
-        entityId: entityId,
-        entityName: entityName,
-        attributeId: s.id,
-        attributeName: s.name,
-        spaceId,
-        value: '',
-        placeholder: true,
-      };
+    .map((s): TripleRenderableProperty | RelationRenderableProperty => {
+      switch (s.valueType) {
+        case SYSTEM_IDS.RELATION:
+          return {
+            type: 'RELATION',
+            relationId: s.id,
+            valueName: s.name,
+            entityId: entityId,
+            entityName: entityName,
+            attributeId: s.id,
+            attributeName: s.name,
+            spaceId,
+            value: '',
+            placeholder: true,
+          };
+        case SYSTEM_IDS.IMAGE:
+          return {
+            type: 'IMAGE',
+            relationId: s.id,
+            valueName: s.name,
+            entityId: entityId,
+            entityName: entityName,
+            attributeId: s.id,
+            attributeName: s.name,
+            spaceId,
+            value: '',
+            placeholder: true,
+          };
+        default:
+          return {
+            type: (valueTypes[s.valueType] as TripleRenderableProperty['type']) ?? 'TEXT',
+            entityId: entityId,
+            entityName: entityName,
+            attributeId: s.id,
+            attributeName: s.name,
+            spaceId,
+            value: '',
+            placeholder: true,
+          };
+      }
     });
+
+  console.log('schemaRenderable', schema);
 
   const triplesToRenderable = triples.map((t): TripleRenderableProperty => {
     return {
@@ -85,7 +119,7 @@ export function toRenderables({
   return [
     ...triplesToRenderable,
     ...relationsToRenderable,
-    ...schemaRenderable,
+    ...schemaRenderables,
     // If we've finished entering data for a Property and written it to the DB we don't need
     // to show the placeholder for that attribute anymore.
     ...(placeholderRenderables ?? []).filter(r => !attributesWithAValue.has(r.attributeId)),
