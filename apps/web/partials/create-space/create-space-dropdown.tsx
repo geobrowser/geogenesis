@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import { useState } from 'react';
 
+import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -16,6 +17,12 @@ export function CreateSpaceDropdown() {
   const router = useRouter();
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const { shouldShowElement } = useOnboardGuard();
+
+  if (!shouldShowElement) {
+    return null;
+  }
 
   return (
     <Menu
