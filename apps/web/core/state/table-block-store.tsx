@@ -51,9 +51,12 @@ const queryKeys = {
 };
 
 export function useTableBlock() {
-  const { entityId, spaceId } = useTableBlockInstance();
+  const { entityId, spaceId, relationId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
   const { upsert } = useWriteOps();
+
+  // @TODO remove console.info for relationId
+  console.info('relationId in table block:', relationId);
 
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
@@ -375,21 +378,25 @@ const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string 
   },
 };
 
-const TableBlockContext = React.createContext<{ entityId: string; spaceId: string } | undefined>(undefined);
+const TableBlockContext = React.createContext<{ entityId: string; spaceId: string; relationId: string } | undefined>(
+  undefined
+);
 
 interface Props {
   spaceId: string;
   children: React.ReactNode;
   entityId: string;
+  relationId: string;
 }
 
-export function TableBlockProvider({ spaceId, children, entityId }: Props) {
+export function TableBlockProvider({ spaceId, children, entityId, relationId }: Props) {
   const store = React.useMemo(() => {
     return {
       spaceId,
       entityId,
+      relationId,
     };
-  }, [spaceId, entityId]);
+  }, [spaceId, entityId, relationId]);
 
   return <TableBlockContext.Provider value={store}>{children}</TableBlockContext.Provider>;
 }

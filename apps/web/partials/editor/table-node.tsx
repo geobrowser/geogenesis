@@ -44,21 +44,32 @@ export const TableNode = Node.create({
 
 function TableNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId } = useEditorInstance();
-  const { id } = node.attrs;
+  const { id, relationId } = node.attrs;
+
+  // @TODO remove console.info for relationId
+  console.info('relationId in table node component:', relationId);
 
   return (
     <NodeViewWrapper>
       <div contentEditable="false">
-        <TableNodeChildren spaceId={spaceId} entityId={id} />
+        <TableNodeChildren spaceId={spaceId} entityId={id} relationId={relationId} />
       </div>
     </NodeViewWrapper>
   );
 }
 
-function TableNodeChildren({ spaceId, entityId }: { spaceId: string; entityId: string }) {
+function TableNodeChildren({
+  spaceId,
+  entityId,
+  relationId,
+}: {
+  spaceId: string;
+  entityId: string;
+  relationId: string;
+}) {
   return (
     <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={entityId} />}>
-      <TableBlockProvider spaceId={spaceId} entityId={entityId}>
+      <TableBlockProvider spaceId={spaceId} entityId={entityId} relationId={relationId}>
         <TableBlock spaceId={spaceId} />
       </TableBlockProvider>
     </ErrorBoundary>
