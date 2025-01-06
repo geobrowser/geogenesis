@@ -20,7 +20,7 @@ export default function Custom404() {
         <Button>
           <Link href={NavUtils.toRoot()}>
             <Text variant="button" color="white">
-              Go to all spaces
+              Go to root space
             </Text>
           </Link>
         </Button>
