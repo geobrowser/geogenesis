@@ -262,8 +262,8 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
       },
       {
         id: EntityId(SYSTEM_IDS.COVER_ATTRIBUTE),
-        name: 'Types',
-        valueType: SYSTEM_IDS.RELATION,
+        name: 'Cover',
+        valueType: SYSTEM_IDS.IMAGE,
       },
       ...schema,
     ],
