@@ -175,15 +175,19 @@ export const NONPROFIT_TEAM_PAGE_TEMPLATE = 'K51CbDqxW35osbjPo5ZF77';
  * Defines the type of the page being copied when creating an entity
  * from a template.
  */
+export const ABOUT_PAGE = 'Xn4sgn16Peoe64NSoARRv4';
+export const EDUCATION_PAGE = 'Qh8AQ8hQhXiaAbe8HkgAJV';
+export const EVENTS_PAGE = 'K97FaTqrx54jdiM93vZ1Fc';
+export const FINANCES_PAGE = 'R6FDYEK9CCdEQuxjuRjA2U';
+export const JOBS_PAGE = 'PJzxY3isAL3hGx1bRkYdPf';
+export const ONTOLOGY_PAGE = 'Ee2Es1b9PkfnR7nsbY2ubE';
+export const PEOPLE_PAGE = '5PatoErephYf1ZJ8U6rNz8';
 export const POSTS_PAGE = 'E3jboNrTeuopjKgJ45ykBd';
 export const PRODUCTS_PAGE = 'Cnf53HgY8T7Fwcq8choaRn';
 export const PROJECTS_PAGE = '3scJVFciFuhmaXe852pT3F';
 export const SERVICES_PAGE = '2V8pajmGDJt8egodkJeoPC';
 export const SPACES_PAGE = 'JAPV1HvzUBXH1advi47FWN';
 export const TEAM_PAGE = 'BWMHGbpR31xTbjvk4QZdQA';
-export const EVENTS_PAGE = 'K97FaTqrx54jdiM93vZ1Fc';
-export const FINANCES_PAGE = 'R6FDYEK9CCdEQuxjuRjA2U';
-export const JOBS_PAGE = 'PJzxY3isAL3hGx1bRkYdPf';
 
 export const FINANCE_OVERVIEW_TYPE = '5LHixDnR2vBTx26kmbnyih';
 export const FINANCE_SUMMMARY_TYPE = '8zrMWkTeDkfxbGn1U1MjLx';
@@ -208,7 +212,6 @@ export const ROLE_ATTRIBUTE = 'VGKSRGzxCRvQxpJP7CB4wj';
 // Do we still need these?
 export const DEFAULT_TYPE = '7nJuuYkrKT62HCFxDygF1S';
 export const BROADER_CLAIMS_ATTRIBUTE = 'RWkXuBRdVqDAiHKQisTZZ4';
-export const BROADER_SPACES = 'CHwmK8bk4KMCqBNiV2waL9';
 export const CLAIMS_FROM_ATTRIBUTE = 'JdNBawSt1fp9EdozJdmThR';
 export const DEFINITIONS_ATTRIBUTE = '256myJaotY6FB6wGiC5mtk';
 export const EMAIL_ATTRIBUTE = '2QafYRmRHP2Hd18W3Tj9zu';
@@ -226,4 +229,4 @@ export const SUBCLAIMS_ATTRIBUTE = '2DFyYPbh5Yy2PnWTbi3uL5';
 export const VALUES_ATTRIBUTE = '3c5k2MpF9PRYAZ925qTKNi';
 export const VISION_ATTRIBUTE = 'AAMDNTaJtS2i4aWp59zEAk';
 
-export const ROOT_SPACE_ID = 'WZy2QLZdwAjmdDAf3dibRq';
+export const ROOT_SPACE_ID = '8uHjimZYrUVKa4JCo1Loiy';
