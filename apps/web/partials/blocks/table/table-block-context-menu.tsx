@@ -387,7 +387,6 @@ const ToggleColumn = ({
     const attributeName = 'Shown Columns';
 
     if (!isShown) {
-      // @TODO(relations): create relation
       upsert(
         {
           entityId,
