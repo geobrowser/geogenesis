@@ -170,6 +170,9 @@ export const NONPROFIT_PROJECTS_PAGE_TEMPLATE = 'JkJDTY4f3Xc6APZKna5kGh';
 export const NONPROFIT_SERVICE_TYPE = 'GZao3GpaUjMrX14VB2LoNR';
 export const NONPROFIT_SPACE_CONFIGURATION_TEMPLATE = 'HEuj9VYAF5z1KQ8x37Uzze';
 export const NONPROFIT_TEAM_PAGE_TEMPLATE = 'K51CbDqxW35osbjPo5ZF77';
+export const ONTOLOGY_PAGE_TEMPLATE = 'JjEDWDpLYS7tYBKi4vCdwc';
+export const EDUCATION_PAGE_TEMPLATE = 'RHuzjGkGothjuwGN6TLXDx';
+export const ABOUT_PAGE_TEMPLATE = '78qghJm6whF5proE9G93pX';
 
 /**
  * Defines the type of the page being copied when creating an entity
