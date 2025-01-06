@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { NavUtils } from '~/core/utils/utils';
+
 import { Button } from '~/design-system/button';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
@@ -16,9 +18,9 @@ export default function Custom404() {
         </Text>
         <Spacer height={16} />
         <Button>
-          <Link href="/spaces">
+          <Link href={NavUtils.toRoot()}>
             <Text variant="button" color="white">
-              Go to all spaces
+              Go to root space
             </Text>
           </Link>
         </Button>

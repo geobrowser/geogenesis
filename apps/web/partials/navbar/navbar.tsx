@@ -1,5 +1,7 @@
 import cx from 'classnames';
 
+import { NavUtils } from '~/core/utils/utils';
+
 import { ClientOnly } from '~/design-system/client-only';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { Search } from '~/design-system/icons/search';
@@ -22,7 +24,7 @@ export function Navbar({ onSearchClick }: Props) {
       )}
     >
       <div className="flex items-center gap-8 md:gap-4">
-        <Link href="/spaces">
+        <Link href={NavUtils.toRoot()}>
           <GeoLogoLarge />
         </Link>
         <NavbarSpaceMetadata />
