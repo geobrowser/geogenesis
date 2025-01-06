@@ -1,5 +1,6 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
@@ -10,6 +11,7 @@ import * as React from 'react';
 import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
+import { usePathSegments } from '~/core/hooks/use-path-segments';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
@@ -140,6 +142,12 @@ const MotionPopoverContent = motion(Popover.Content);
 
 const useSpaceId = () => {
   const params = useParams();
+  const segment = usePathSegments();
+
+  if (segment[0] === 'root') {
+    return SYSTEM_IDS.ROOT_SPACE_ID;
+  }
+
   const spaceId = params?.['id'] as string | undefined;
   return spaceId;
 };
