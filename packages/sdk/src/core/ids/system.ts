@@ -229,4 +229,4 @@ export const SUBCLAIMS_ATTRIBUTE = '2DFyYPbh5Yy2PnWTbi3uL5';
 export const VALUES_ATTRIBUTE = '3c5k2MpF9PRYAZ925qTKNi';
 export const VISION_ATTRIBUTE = 'AAMDNTaJtS2i4aWp59zEAk';
 
-export const ROOT_SPACE_ID = '3ETzFS7g87ci5jLA7BiveE';
+export const ROOT_SPACE_ID = 'HHC4V7EyETbYs5K9dpTd4G';

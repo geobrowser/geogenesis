@@ -75,7 +75,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.PROJECT_TYPE]: 'Project',
   [SYSTEM_IDS.COMPANY_TYPE]: 'Company',
   [SYSTEM_IDS.PAGE_TYPE]: 'Page',
-  [SYSTEM_IDS.PEOPLE_PAGE]: 'People',
+  [SYSTEM_IDS.PEOPLE_PAGE]: 'People page',
   [SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE]: 'Page type',
   [SYSTEM_IDS.POSTS_PAGE]: 'Posts page',
   [SYSTEM_IDS.PROJECTS_PAGE]: 'Projects page',
