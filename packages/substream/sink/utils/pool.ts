@@ -9,9 +9,9 @@ const make = Effect.gen(function* (_) {
   return new pg.Pool({
     connectionString: Secret.value(environment.databaseUrl),
     max: 50,
-    idleTimeoutMillis: 1000,
-    connectionTimeoutMillis: 1000,
-    maxUses: 7500,
+    idleTimeoutMillis: 1_000,
+    connectionTimeoutMillis: 10_000,
+    maxUses: 7_500,
   });
 });
 

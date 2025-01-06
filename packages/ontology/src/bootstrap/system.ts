@@ -18,6 +18,8 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.POINT]: 'Point',
   [SYSTEM_IDS.IMAGE]: 'Image',
 
+  [SYSTEM_IDS.ROOT_SPACE_TYPE]: 'Root',
+
   [SYSTEM_IDS.IMAGE_TYPE]: 'Image',
   [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: 'Image URL',
 
@@ -131,6 +133,7 @@ const attributes: Record<string, string> = {
 // These types include the default types and attributes for a given type. There might be more
 // attributes on a type than are listed here if they were later added by users.
 const schemaTypes: Record<string, string[]> = {
+  [SYSTEM_IDS.ROOT_SPACE_TYPE]: [],
   [SYSTEM_IDS.SCHEMA_TYPE]: [SYSTEM_IDS.TEMPLATE_ATTRIBUTE],
   [SYSTEM_IDS.VIEW_TYPE]: [],
   [SYSTEM_IDS.TEXT]: [],

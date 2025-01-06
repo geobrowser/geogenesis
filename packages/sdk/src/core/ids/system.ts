@@ -138,6 +138,7 @@ export const COMPANY_TYPE = 'UhpHYoFEzAov9WwqtDwQk4';
 export const NONPROFIT_TYPE = 'RemzN69c24othsp2rP7yMX';
 export const POST_TYPE = 'X7KuZJQewaCiCy9QV2vjyv';
 export const PROJECT_TYPE = '9vk7Q3pz7US3s2KePFQrJT';
+export const ROOT_SPACE_TYPE = 'k7vbnMPxzdtGL2J3uaB6d';
 export const SPACE_CONFIGURATION = 'EXWTH2k6qquguZ8CCfMp9K';
 
 /** Templates */
@@ -213,7 +214,6 @@ export const DEFINITIONS_ATTRIBUTE = '256myJaotY6FB6wGiC5mtk';
 export const EMAIL_ATTRIBUTE = '2QafYRmRHP2Hd18W3Tj9zu';
 export const FOREIGN_TYPES = 'R32hqus9ojU3Twsz3HDuxf';
 export const NONPROFIT_CATEGORIES_ATTRIBUTE = '64uVL5vKHmfqBC94hwNzHZ';
-export const PERSON_ATTRIBUTE = 'W2aFZPy5nnU3DgdkWJCNVn';
 export const PHONE_NUMBER_ATTRIBUTE = '3zhuyrcqFjeaVgC5oHHqTJ';
 export const QUOTES_ATTRIBUTE = 'XXAf2w4C5f4URDhhpH8nUG';
 export const REGION_ATTRIBUTE = 'CGC6KXy8wcqf7vpZv8HH4i';
