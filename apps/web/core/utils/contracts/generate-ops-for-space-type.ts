@@ -37,6 +37,15 @@ export const generateOpsForSpaceType = async ({
     })
   );
 
+  // @TODO: Remove
+  ops.push(
+    Relation.make({
+      fromId: newEntityId,
+      toId: SYSTEM_IDS.ROOT_SPACE_TYPE,
+      relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+    })
+  );
+
   // Add the space configuration type to every deployed space entity
   ops.push(
     Relation.make({

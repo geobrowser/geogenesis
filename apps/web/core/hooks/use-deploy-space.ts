@@ -45,7 +45,7 @@ export function useDeploySpace() {
         const { spaceName, type, governanceType } = args;
 
         const url = new URL(
-          `/api/space/deploy?spaceName=${spaceName}&type=${type}&initialEditorAddress=${initialEditorAddress}`,
+          `/api/bootstrap/deploy?spaceName=${spaceName}&type=${type}&initialEditorAddress=${initialEditorAddress}`,
           window.location.href
         );
 

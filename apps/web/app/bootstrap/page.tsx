@@ -8,10 +8,10 @@ export default function Page() {
   const onClick = () => {
     deploy.deploy({
       type: 'default',
-      governanceType: 'PERSONAL',
-      spaceName: 'Root',
+      governanceType: 'PUBLIC',
+      spaceName: 'Geo',
     });
   };
 
-  return <div onClick={onClick}>Bootstrap</div>;
+  return <button onClick={onClick}>Bootstrap</button>;
 }
