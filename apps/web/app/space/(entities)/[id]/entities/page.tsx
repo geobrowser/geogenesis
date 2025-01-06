@@ -73,7 +73,7 @@ const getData = async ({
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     filter: TableBlockSdk.createGraphQLStringFromFilters([
       {
-        columnId: SYSTEM_IDS.NAME,
+        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
         value: initialParams.query,
         valueType: 'TEXT',
       },

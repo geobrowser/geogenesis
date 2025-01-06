@@ -19,9 +19,9 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
       return 'TEXT';
     case SYSTEM_IDS.CHECKBOX:
       return 'CHECKBOX';
-    case SYSTEM_IDS.DATE:
+    case SYSTEM_IDS.TIME:
       return 'TIME';
-    case SYSTEM_IDS.URI:
+    case SYSTEM_IDS.URL:
       return 'URL';
     case SYSTEM_IDS.RELATION:
       return 'RELATION';

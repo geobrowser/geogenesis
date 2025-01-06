@@ -30,7 +30,7 @@ describe('TableBlock SDK', () => {
 
     const nameFilter = createGraphQLStringFromFilters([
       {
-        columnId: SYSTEM_IDS.NAME,
+        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
         value: 'id 1',
         valueType: 'TEXT',
       },
@@ -40,12 +40,12 @@ describe('TableBlock SDK', () => {
 
     const andFilter = createGraphQLStringFromFilters([
       {
-        columnId: SYSTEM_IDS.TYPES,
+        columnId: SYSTEM_IDS.TYPES_ATTRIBUTE,
         value: 'Value 1',
         valueType: 'RELATION',
       },
       {
-        columnId: SYSTEM_IDS.NAME,
+        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
         value: 'id 1',
         valueType: 'TEXT',
       },
@@ -91,11 +91,11 @@ describe('TableBlock SDK', () => {
         spaces: ['0x0000000000000000000000000000000000000000'],
         AND: [
           {
-            attribute: SYSTEM_IDS.TYPES,
+            attribute: SYSTEM_IDS.TYPES_ATTRIBUTE,
             is: SYSTEM_IDS.SCHEMA_TYPE,
           },
           {
-            attribute: SYSTEM_IDS.NAME,
+            attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
             is: 'name',
           },
         ],
@@ -112,13 +112,13 @@ describe('TableBlock SDK', () => {
         valueName: null,
       },
       {
-        columnId: SYSTEM_IDS.TYPES,
+        columnId: SYSTEM_IDS.TYPES_ATTRIBUTE,
         value: SYSTEM_IDS.SCHEMA_TYPE,
         valueType: 'RELATION',
         valueName: 'Type',
       },
       {
-        columnId: SYSTEM_IDS.NAME,
+        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
         value: 'name',
         valueType: 'TEXT',
         valueName: null,
@@ -149,7 +149,7 @@ describe('TableBlock SDK', () => {
 
     const nameFilter = createGraphQLStringFromFilters([
       {
-        columnId: SYSTEM_IDS.NAME,
+        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
         value: 'id 1',
         valueType: 'TEXT',
       },
@@ -169,7 +169,7 @@ describe('TableBlock SDK', () => {
         valueType: 'RELATION',
       },
       {
-        columnId: SYSTEM_IDS.NAME,
+        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
         value: 'id 1',
         valueType: 'TEXT',
       },

@@ -1,4 +1,4 @@
-import { Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
+import { CONTENT_IDS, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
@@ -35,7 +35,7 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
   newOps.push(
     Ops.create({
       entity: newEntityId,
-      attribute: SYSTEM_IDS.NAME,
+      attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
       value: {
         type: 'TEXT',
         value: newEntityName,
@@ -99,4 +99,4 @@ const cloneBlocks = async (blocksToClone: Array<RelationType>, newEntityId: stri
   return allOps.flat();
 };
 
-const SKIPPED_ATTRIBUTES = [SYSTEM_IDS.NAME, SYSTEM_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.BLOCKS];
+const SKIPPED_ATTRIBUTES = [SYSTEM_IDS.NAME_ATTRIBUTE, CONTENT_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.BLOCKS];

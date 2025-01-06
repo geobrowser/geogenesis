@@ -251,7 +251,7 @@ const listener =
           {
             entityId: context.entityId,
             entityName: name,
-            attributeId: SYSTEM_IDS.NAME,
+            attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
             attributeName: 'Name',
             value: { type: 'TEXT', value: name },
           },

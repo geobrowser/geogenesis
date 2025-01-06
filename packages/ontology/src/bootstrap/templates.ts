@@ -1,7 +1,4 @@
-import { DataBlock, Position, Relation, SYSTEM_IDS, TextBlock } from '@geogenesis/sdk';
-
-import type { Op } from '../types';
-import { SPACE_ID } from './constants';
+import { DataBlock, type Op, Position, Relation, SYSTEM_IDS, TextBlock } from '@geogenesis/sdk';
 
 type Template = {
   id: string;
@@ -39,7 +36,7 @@ const NONPROFIT: Template[] = [
         text: `We're thrilled to have you here. At our core, we are driven by a passionate commitment to positive change. As a community, we believe in the power of collective action to make a difference, no matter how big or small. Together, we can create meaningful impact and contribute to a better world. Thank you for joining us on this journey towards a brighter future.`,
         position: POSITIONS.second,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.NONPROFIT_TYPE, SYSTEM_IDS.PROJECT_TYPE],
     extraData: [],
     foreignTypes: [],
@@ -53,7 +50,7 @@ const NONPROFIT: Template[] = [
         sourceType: 'GEO',
         name: 'Posts',
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
@@ -62,7 +59,7 @@ const NONPROFIT: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.POSTS_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
   {
@@ -74,7 +71,7 @@ const NONPROFIT: Template[] = [
         sourceType: 'GEO',
         name: 'Projects',
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
@@ -83,7 +80,7 @@ const NONPROFIT: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.PROJECTS_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
   {
@@ -95,7 +92,7 @@ const NONPROFIT: Template[] = [
         sourceType: 'COLLECTION',
         name: 'Projects',
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
@@ -104,7 +101,7 @@ const NONPROFIT: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.PROJECTS_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
   {
@@ -122,7 +119,7 @@ const NONPROFIT: Template[] = [
         name: 'Finance Summaries',
         position: POSITIONS.second,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
@@ -131,7 +128,7 @@ const NONPROFIT: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.FINANCES_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
 ];
@@ -157,7 +154,7 @@ const COMPANY: Template[] = [
         name: 'Goals',
         position: POSITIONS.third,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.COMPANY_TYPE],
     extraData: [],
     foreignTypes: [],
@@ -171,7 +168,7 @@ const COMPANY: Template[] = [
         sourceType: 'GEO',
         name: 'Posts',
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
@@ -180,7 +177,7 @@ const COMPANY: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.POSTS_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
   {
@@ -192,7 +189,7 @@ const COMPANY: Template[] = [
         sourceType: 'GEO',
         name: 'Events',
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Events page
@@ -201,7 +198,7 @@ const COMPANY: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.EVENTS_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
   {
@@ -213,7 +210,7 @@ const COMPANY: Template[] = [
         sourceType: 'GEO',
         name: 'Job openings',
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Jobs page
@@ -222,7 +219,7 @@ const COMPANY: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.JOBS_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
   {
@@ -234,7 +231,7 @@ const COMPANY: Template[] = [
         sourceType: 'GEO',
         name: 'Products',
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Products page
@@ -243,7 +240,7 @@ const COMPANY: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.PRODUCTS_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
   {
@@ -255,7 +252,7 @@ const COMPANY: Template[] = [
         sourceType: 'GEO',
         name: 'Services',
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Services page
@@ -264,7 +261,7 @@ const COMPANY: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.SERVICES_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
   {
@@ -276,7 +273,7 @@ const COMPANY: Template[] = [
         sourceType: 'COLLECTION',
         name: 'Team members',
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Team page
@@ -285,7 +282,7 @@ const COMPANY: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.TEAM_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
 ];
@@ -317,7 +314,7 @@ const PERSON: Template[] = [
         name: 'Skills',
         position: POSITIONS.fourth,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PERSON_TYPE],
     extraData: [],
     foreignTypes: [],
@@ -331,7 +328,7 @@ const PERSON: Template[] = [
         sourceType: 'GEO',
         name: 'Posts',
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })) as Op[],
+    ],
     types: [SYSTEM_IDS.PAGE_TYPE],
     extraData: [
       // Page type -> Posts page
@@ -340,34 +337,31 @@ const PERSON: Template[] = [
         relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
         toId: SYSTEM_IDS.POSTS_PAGE,
       }),
-    ].map(o => ({ ...o, space: SPACE_ID })),
+    ],
     foreignTypes: [],
   },
 ];
 
-export const templateOps: Op[] = [...NONPROFIT, ...COMPANY, ...PERSON]
-  .flatMap(t => {
-    const nameOp: Op = {
-      type: 'SET_TRIPLE',
-      space: SPACE_ID,
-      triple: {
-        attribute: SYSTEM_IDS.NAME,
-        entity: t.id,
-        value: {
-          type: 'TEXT',
-          value: t.name,
-        },
+export const ops: Op[] = [...NONPROFIT, ...COMPANY, ...PERSON].flatMap(t => {
+  const nameOp: Op = {
+    type: 'SET_TRIPLE',
+    triple: {
+      attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
+      entity: t.id,
+      value: {
+        type: 'TEXT',
+        value: t.name,
       },
-    };
+    },
+  };
 
-    const typesOps = t.types.map(typeId =>
-      Relation.make({
-        fromId: t.id,
-        relationTypeId: SYSTEM_IDS.TYPES,
-        toId: typeId,
-      })
-    );
+  const typesOps = t.types.map(typeId =>
+    Relation.make({
+      fromId: t.id,
+      relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+      toId: typeId,
+    })
+  );
 
-    return [nameOp, ...typesOps.flat(), ...t.blocks, ...t.extraData];
-  })
-  .map(o => ({ ...o, space: SPACE_ID }));
+  return [nameOp, ...typesOps.flat(), ...t.blocks, ...t.extraData];
+});

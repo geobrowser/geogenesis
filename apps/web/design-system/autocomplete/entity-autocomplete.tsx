@@ -87,7 +87,7 @@ export function EntityAutocompleteDialog({ onDone, selectedIds, filterByTypes, s
     upsert(
       {
         entityId: newEntityId,
-        attributeId: SYSTEM_IDS.NAME,
+        attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
         entityName: autocomplete.query,
         attributeName: 'Name',
         value: {
@@ -103,7 +103,7 @@ export function EntityAutocompleteDialog({ onDone, selectedIds, filterByTypes, s
         upsert(
           {
             entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
+            attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
             entityName: autocomplete.query,
             attributeName: 'Types',
             value: {
@@ -123,7 +123,7 @@ export function EntityAutocompleteDialog({ onDone, selectedIds, filterByTypes, s
     //       {
     //         type: 'SET_TRIPLE',
     //         entityId: newEntityId,
-    //         attributeId: SYSTEM_IDS.TYPES,
+    //         attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
     //         entityName: autocomplete.query,
     //         attributeName: 'Types',
     //         value: {

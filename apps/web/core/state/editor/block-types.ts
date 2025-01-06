@@ -15,7 +15,7 @@ export function getRelationForBlockType(
     space: spaceId,
     index: INITIAL_RELATION_INDEX_VALUE,
     typeOf: {
-      id: EntityId(SYSTEM_IDS.TYPES),
+      id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
       name: 'Types',
     },
     toEntity: {

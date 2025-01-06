@@ -120,7 +120,7 @@ export const SelectEntity = ({
     upsert(
       {
         entityId: newEntityId,
-        attributeId: SYSTEM_IDS.NAME,
+        attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
         entityName: query,
         attributeName: 'Name',
         value: {
@@ -136,7 +136,7 @@ export const SelectEntity = ({
         upsert(
           {
             entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
+            attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
             entityName: query,
             attributeName: 'Types',
             value: {

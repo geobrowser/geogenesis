@@ -65,7 +65,7 @@ export function useTypesStore(): {
     React.useMemo(() => {
       return {
         mergeWith: initialTypes,
-        selector: t => t.attributeId === SYSTEM_IDS.TYPES && t.value.value === SYSTEM_IDS.SCHEMA_TYPE,
+        selector: t => t.attributeId === SYSTEM_IDS.TYPES_ATTRIBUTE && t.value.value === SYSTEM_IDS.SCHEMA_TYPE,
       };
     }, [initialTypes])
   );
