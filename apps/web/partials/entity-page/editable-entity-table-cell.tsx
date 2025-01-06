@@ -42,7 +42,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     },
   });
 
-  const isNameCell = attributeId === SYSTEM_IDS.NAME;
+  const isNameCell = attributeId === SYSTEM_IDS.NAME_ATTRIBUTE;
 
   const allowedTypes = columnRelationTypes
     ? columnRelationTypes.length > 0

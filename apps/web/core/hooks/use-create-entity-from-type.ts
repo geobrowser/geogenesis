@@ -43,7 +43,7 @@ async function addTypesToEntityId(entityId: string, spaceId: string, typeIds: st
           value: type.id,
         },
         typeOf: {
-          id: EntityId(SYSTEM_IDS.TYPES),
+          id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
           name: 'Types',
         },
       },

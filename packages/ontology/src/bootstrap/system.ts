@@ -1,28 +1,11 @@
-import { NETWORK_IDS, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
-import { Effect } from 'effect';
-
-import { handleEditsPublished } from '../events/edits-published/handler';
-import { handleInitialGovernanceSpaceEditorsAdded } from '../events/initial-editors-added/handler';
-import { createInitialContentForSpaces } from '../events/initial-proposal-created/handler';
-import { handleProposalsExecuted } from '../events/proposals-executed/handler';
-import { handleGovernancePluginCreated, handleSpacesCreated } from '../events/spaces-created/handler';
-import type { CreateRelationOp, Op, SinkEditProposal } from '../types';
-import { templateOps } from './bootstrap-templates';
-import {
-  DAO_ADDRESS,
-  INITIAL_BLOCK,
-  MAIN_VOTING_ADDRESS,
-  MEMBER_ACCESS_ADDRESS,
-  ROOT_SPACE_CREATED_AT,
-  ROOT_SPACE_CREATED_BY_ID,
-  SPACE_ADDRESS,
-  SPACE_ID,
-} from './constants';
+import { type CreateRelationOp, NETWORK_IDS, type Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 const names: Record<string, string> = {
-  [SYSTEM_IDS.TYPES]: 'Types',
-  [SYSTEM_IDS.NAME]: 'Name',
+  [SYSTEM_IDS.TYPES_ATTRIBUTE]: 'Types',
+  [SYSTEM_IDS.NAME_ATTRIBUTE]: 'Name',
+  [SYSTEM_IDS.DESCRIPTION_ATTRIBUTE]: 'Description',
   [SYSTEM_IDS.ATTRIBUTE]: 'Attribute',
+  [SYSTEM_IDS.COVER_ATTRIBUTE]: 'Cover',
   [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: 'Relation Type',
   [SYSTEM_IDS.ATTRIBUTES]: 'Attributes',
   [SYSTEM_IDS.SCHEMA_TYPE]: 'Type',
@@ -33,17 +16,18 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.CHECKBOX]: 'Checkbox',
   [SYSTEM_IDS.NUMBER]: 'Number',
   [SYSTEM_IDS.POINT]: 'Point',
+  [SYSTEM_IDS.IMAGE]: 'Image',
+
+  [SYSTEM_IDS.ROOT_SPACE_TYPE]: 'Root',
 
   [SYSTEM_IDS.IMAGE_TYPE]: 'Image',
   [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: 'Image URL',
 
-  [SYSTEM_IDS.DATE]: 'Date',
-  [SYSTEM_IDS.URI]: 'Web URL',
-  [SYSTEM_IDS.DESCRIPTION]: 'Description',
+  [SYSTEM_IDS.TIME]: 'Date',
+  [SYSTEM_IDS.URL]: 'URL',
   [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source Space',
   [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: 'Verified Source',
-  [SYSTEM_IDS.FOREIGN_TYPES]: 'Foreign Types',
 
   // Data blocks
   [SYSTEM_IDS.VIEW_TYPE]: 'View',
@@ -63,8 +47,6 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.PLACEHOLDER_TEXT]: 'Placeholder Text',
 
   [SYSTEM_IDS.PERSON_TYPE]: 'Person',
-  [SYSTEM_IDS.AVATAR_ATTRIBUTE]: 'Avatar',
-  [SYSTEM_IDS.COVER_ATTRIBUTE]: 'Cover',
   [SYSTEM_IDS.ACCOUNTS_ATTRIBUTE]: 'Accounts',
   [SYSTEM_IDS.NETWORK_TYPE]: 'Network',
   [SYSTEM_IDS.NETWORK_ATTRIBUTE]: 'Network',
@@ -72,7 +54,8 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.ACCOUNT_TYPE]: 'Account',
   [NETWORK_IDS.ETHEREUM]: 'Ethereum',
 
-  [SYSTEM_IDS.BROADER_SPACES]: 'Broader Spaces',
+  [SYSTEM_IDS.ROLE_ATTRIBUTE]: 'Role',
+
   [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: 'Relation Value Types',
 
   [SYSTEM_IDS.RELATION_TYPE]: 'Relation',
@@ -101,22 +84,26 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.EVENTS_PAGE]: 'Events page',
   [SYSTEM_IDS.SERVICES_PAGE]: 'Services page',
   [SYSTEM_IDS.PRODUCTS_PAGE]: 'Products page',
+
+  [SYSTEM_IDS.POST_TYPE]: 'Post',
 };
 
 const attributes: Record<string, string> = {
-  [SYSTEM_IDS.TYPES]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.NAME_ATTRIBUTE]: SYSTEM_IDS.TEXT,
+  [SYSTEM_IDS.DESCRIPTION_ATTRIBUTE]: SYSTEM_IDS.TEXT,
+  [SYSTEM_IDS.COVER_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
+  [SYSTEM_IDS.TYPES_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.ATTRIBUTES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.VALUE_TYPE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.DESCRIPTION]: SYSTEM_IDS.TEXT,
-  [SYSTEM_IDS.NAME]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: SYSTEM_IDS.CHECKBOX,
 
+  [SYSTEM_IDS.ROLE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
+
   // Data blocks
   [SYSTEM_IDS.VIEW_ATTRIBUTE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.FOREIGN_TYPES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.MARKDOWN_CONTENT]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.BLOCKS]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.FILTER]: SYSTEM_IDS.TEXT,
@@ -129,7 +116,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.RELATION_TO_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: SYSTEM_IDS.RELATION,
 
-  [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.URI,
+  [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.URL,
   [SYSTEM_IDS.BROADER_SPACES]: SYSTEM_IDS.RELATION,
 
   [SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE]: SYSTEM_IDS.RELATION,
@@ -138,8 +125,6 @@ const attributes: Record<string, string> = {
 
   [SYSTEM_IDS.PAGE_TYPE]: SYSTEM_IDS.RELATION,
 
-  [SYSTEM_IDS.AVATAR_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
-  [SYSTEM_IDS.COVER_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
   [SYSTEM_IDS.ACCOUNTS_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.NETWORK_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.ADDRESS_ATTRIBUTE]: SYSTEM_IDS.TEXT,
@@ -148,6 +133,7 @@ const attributes: Record<string, string> = {
 // These types include the default types and attributes for a given type. There might be more
 // attributes on a type than are listed here if they were later added by users.
 const schemaTypes: Record<string, string[]> = {
+  [SYSTEM_IDS.ROOT_SPACE_TYPE]: [],
   [SYSTEM_IDS.SCHEMA_TYPE]: [SYSTEM_IDS.TEMPLATE_ATTRIBUTE],
   [SYSTEM_IDS.VIEW_TYPE]: [],
   [SYSTEM_IDS.TEXT]: [],
@@ -156,14 +142,14 @@ const schemaTypes: Record<string, string[]> = {
   [SYSTEM_IDS.CHECKBOX]: [],
   [SYSTEM_IDS.RELATION]: [],
   [SYSTEM_IDS.IMAGE_TYPE]: [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE],
-  [SYSTEM_IDS.DATE]: [],
-  [SYSTEM_IDS.URI]: [],
+  [SYSTEM_IDS.TIME]: [],
+  [SYSTEM_IDS.URL]: [],
+  [SYSTEM_IDS.IMAGE]: [],
   [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE],
-  [SYSTEM_IDS.SPACE_CONFIGURATION]: [SYSTEM_IDS.FOREIGN_TYPES, SYSTEM_IDS.BLOCKS],
+  [SYSTEM_IDS.SPACE_CONFIGURATION]: [],
   [SYSTEM_IDS.IMAGE_BLOCK]: [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE],
   [SYSTEM_IDS.DATA_BLOCK]: [],
   [SYSTEM_IDS.TEXT_BLOCK]: [SYSTEM_IDS.MARKDOWN_CONTENT],
-  [SYSTEM_IDS.PERSON_TYPE]: [SYSTEM_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.COVER_ATTRIBUTE],
   [SYSTEM_IDS.ACCOUNT_TYPE]: [SYSTEM_IDS.NETWORK_ATTRIBUTE, SYSTEM_IDS.ADDRESS_ATTRIBUTE],
   [SYSTEM_IDS.NETWORK_TYPE]: [],
   [SYSTEM_IDS.NONPROFIT_TYPE]: [],
@@ -184,9 +170,8 @@ const types: Record<string, string[]> = {
 const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
   return {
     type: 'SET_TRIPLE',
-    space: SPACE_ID,
     triple: {
-      attribute: SYSTEM_IDS.NAME,
+      attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
       entity: entityId,
       value: {
         type: 'TEXT',
@@ -197,138 +182,54 @@ const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
 });
 
 const attributeOps: CreateRelationOp[] = Object.keys(attributes).flatMap(attributeId => {
-  const newRelation = Relation.make({
+  return Relation.make({
     fromId: attributeId,
     toId: SYSTEM_IDS.ATTRIBUTE,
-    relationTypeId: SYSTEM_IDS.TYPES,
+    relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
   });
-
-  return {
-    ...newRelation,
-    space: SPACE_ID,
-  };
 });
 
 const attributeValueTypeOps: CreateRelationOp[] = Object.entries(attributes).flatMap(([attributeId, valueType]) => {
-  const newRelation = Relation.make({
+  return Relation.make({
     fromId: attributeId,
     toId: valueType,
     relationTypeId: SYSTEM_IDS.VALUE_TYPE,
   });
-
-  return {
-    ...newRelation,
-    space: SPACE_ID,
-  };
 });
 
 const typeOps: CreateRelationOp[] = Object.keys(schemaTypes).flatMap(typeId => {
-  const newRelation = Relation.make({
+  return Relation.make({
     fromId: typeId,
     toId: SYSTEM_IDS.SCHEMA_TYPE,
-    relationTypeId: SYSTEM_IDS.TYPES,
+    relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
   });
-
-  return {
-    ...newRelation,
-    space: SPACE_ID,
-  };
 });
 
 const typeSchemaOps: CreateRelationOp[] = Object.entries(schemaTypes).flatMap(([typeId, attributeIds]) => {
   return attributeIds.flatMap(attributeId => {
-    const newRelation = Relation.make({
+    return Relation.make({
       fromId: typeId,
       toId: attributeId,
       relationTypeId: SYSTEM_IDS.ATTRIBUTES,
     });
-
-    return {
-      ...newRelation,
-      space: SPACE_ID,
-    };
   });
 });
 
 const entitiesWithTypesOps: CreateRelationOp[] = Object.entries(types).flatMap(([entityId, typeIds]) => {
   return typeIds.flatMap(typeId => {
-    const newRelation = Relation.make({
+    return Relation.make({
       fromId: entityId,
       toId: typeId,
-      relationTypeId: SYSTEM_IDS.TYPES,
+      relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
     });
-
-    return {
-      ...newRelation,
-      space: SPACE_ID,
-    };
   });
 });
 
-const editProposal: SinkEditProposal = {
-  type: 'ADD_EDIT',
-  proposalId: '-1',
-  onchainProposalId: '-1',
-  creator: ROOT_SPACE_CREATED_BY_ID,
-  name: 'Root Space Bootstrap',
-  endTime: ROOT_SPACE_CREATED_AT.toString(),
-  startTime: ROOT_SPACE_CREATED_AT.toString(),
-  contentUri: 'bootstrapped-so-no-uri',
-  daoAddress: DAO_ADDRESS,
-  ops: [
-    ...nameOps,
-    ...attributeOps,
-    ...attributeValueTypeOps,
-    ...typeOps,
-    ...typeSchemaOps,
-    ...templateOps,
-    ...entitiesWithTypesOps,
-  ],
-  pluginAddress: MAIN_VOTING_ADDRESS,
-  space: SPACE_ID,
-};
-
-export const bootstrapRoot = Effect.gen(function* (_) {
-  yield* _(
-    handleSpacesCreated(
-      [
-        {
-          daoAddress: DAO_ADDRESS,
-          spaceAddress: SPACE_ADDRESS,
-          id: SPACE_ID,
-        },
-      ],
-      INITIAL_BLOCK
-    )
-  );
-
-  yield* _(
-    handleGovernancePluginCreated(
-      [
-        {
-          daoAddress: DAO_ADDRESS,
-          mainVotingAddress: MAIN_VOTING_ADDRESS,
-          memberAccessAddress: MEMBER_ACCESS_ADDRESS,
-        },
-      ],
-      INITIAL_BLOCK
-    )
-  );
-
-  yield* _(
-    handleInitialGovernanceSpaceEditorsAdded(
-      [
-        {
-          addresses: [ROOT_SPACE_CREATED_BY_ID],
-          pluginAddress: MAIN_VOTING_ADDRESS,
-          daoAddress: DAO_ADDRESS,
-        },
-      ],
-      INITIAL_BLOCK
-    )
-  );
-
-  yield* _(createInitialContentForSpaces({ proposals: [editProposal], block: INITIAL_BLOCK, editType: 'IMPORT' }));
-  yield* _(handleEditsPublished([editProposal], [SPACE_ID], INITIAL_BLOCK));
-  yield* _(handleProposalsExecuted([editProposal]));
-});
+export const ops: Op[] = [
+  ...nameOps,
+  ...attributeOps,
+  ...attributeValueTypeOps,
+  ...typeOps,
+  ...typeSchemaOps,
+  ...entitiesWithTypesOps,
+];

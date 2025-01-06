@@ -44,7 +44,7 @@ const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedC
     columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
-        const isNameColumn = column.id === SYSTEM_IDS.NAME;
+        const isNameColumn = column.id === SYSTEM_IDS.NAME_ATTRIBUTE;
 
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
@@ -219,7 +219,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
                   return (
                     <TableCell
                       key={cellId}
-                      isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && isEditable}
+                      isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE) && isEditable}
                       href={NavUtils.toEntity(space, entityId)}
                       isExpandable={isExpandable}
                       isExpanded={expandedCells[cellId]}

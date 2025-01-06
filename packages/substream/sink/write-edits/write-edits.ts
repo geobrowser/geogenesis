@@ -91,9 +91,9 @@ export function writeEdits(args: PopulateContentArgs) {
       triplesWithCreatedBy.push(...triplesForVersion);
 
       const setTriples = triplesForVersion.filter(t => t.op === 'SET_TRIPLE');
-      const nameTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.NAME);
+      const nameTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.NAME_ATTRIBUTE);
 
-      const descriptionTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION);
+      const descriptionTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE);
 
       const name = nameTriple?.triple.text_value?.toString();
       const description = descriptionTriple?.triple.text_value?.toString();
@@ -206,7 +206,7 @@ function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Inser
     // entity version id -> type version ids
     const types = new Map<string, string[]>();
     const typeVersionIds = new Set(
-      (yield* _(Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES })))).map(v => v.id)
+      (yield* _(Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES_ATTRIBUTE })))).map(v => v.id)
     );
 
     for (const relation of relations) {
@@ -248,7 +248,7 @@ function aggregateSpacesFromRelations(
     const [typesVersions, spaceConfigsVersions] = yield* _(
       Effect.all(
         [
-          Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES })),
+          Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES_ATTRIBUTE })),
           Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.SPACE_CONFIGURATION })),
         ],
         { concurrency: 2 }

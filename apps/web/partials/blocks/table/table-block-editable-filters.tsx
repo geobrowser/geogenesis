@@ -21,7 +21,7 @@ export function TableBlockEditableFilters() {
     // @TODO(data blocks): We should add the default filters to the data model
     // itself instead of manually here.
     // {
-    //   columnId: SYSTEM_IDS.NAME,
+    //   columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
     //   columnName: 'Name',
     //   valueType: valueTypes[SYSTEM_IDS.TEXT],
     //   value: '',
@@ -84,12 +84,12 @@ function sortFilters(filters: RenderableFilter[]): RenderableFilter[] {
     const { columnId: attributeIdA, columnName: attributeNameA } = renderableA;
     const { columnId: attributeIdB, columnName: attributeNameB } = renderableB;
 
-    const isNameA = attributeIdA === SYSTEM_IDS.NAME;
-    const isNameB = attributeIdB === SYSTEM_IDS.NAME;
-    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION;
-    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION;
-    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES;
-    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES;
+    const isNameA = attributeIdA === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isNameB = attributeIdB === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
+    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
 
     if (isNameA && !isNameB) return -1;
     if (!isNameA && isNameB) return 1;

@@ -17,13 +17,14 @@ interface Props {
 }
 
 export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpanded }: Props) => {
-  const isNameCell = columnId === SYSTEM_IDS.NAME;
+  const isNameCell = columnId === SYSTEM_IDS.NAME_ATTRIBUTE;
 
   if (isNameCell) {
     // the name might exist but be empty, fall back to the entity id in this case.
     const value =
-      (renderables.find(r => r.type === 'TEXT' && r.attributeId === SYSTEM_IDS.NAME)?.value as string | undefined) ??
-      entityId;
+      (renderables.find(r => r.type === 'TEXT' && r.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE)?.value as
+        | string
+        | undefined) ?? entityId;
     return <CellContent key={value} href={NavUtils.toEntity(space, entityId)} isExpanded={isExpanded} value={value} />;
   }
 

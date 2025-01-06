@@ -23,7 +23,7 @@ export function make({ fromId, sourceType, position, name }: DataBlockArgs): (Se
 
   const dataBlockType = Relation.make({
     fromId: newBlockId,
-    relationTypeId: SYSTEM_IDS.TYPES,
+    relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
     toId: SYSTEM_IDS.DATA_BLOCK,
   });
 
@@ -46,7 +46,7 @@ export function make({ fromId, sourceType, position, name }: DataBlockArgs): (Se
     ops.push({
       type: 'SET_TRIPLE',
       triple: {
-        attribute: SYSTEM_IDS.NAME,
+        attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
         entity: newBlockId,
         value: {
           type: 'TEXT',

@@ -17,7 +17,7 @@ export function createType(
     space: spaceId,
     entityId,
     entityName,
-    attributeId: SYSTEM_IDS.NAME,
+    attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
     attributeName: 'Name',
     value: { type: 'TEXT', value: entityName },
   });
@@ -27,7 +27,7 @@ export function createType(
     relation: Relation.make({
       space: spaceId,
       typeOf: {
-        id: SYSTEM_IDS.TYPES,
+        id: SYSTEM_IDS.TYPES_ATTRIBUTE,
         name: 'Types',
       },
       fromEntity: {

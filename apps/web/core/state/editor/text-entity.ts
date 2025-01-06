@@ -7,7 +7,7 @@ import * as Parser from './parser';
 import { getNodeId, getNodeName, getTextNodeHtml } from './utils';
 
 interface UpsertNameOp extends UpsertOp {
-  attributeId: typeof SYSTEM_IDS.NAME;
+  attributeId: typeof SYSTEM_IDS.NAME_ATTRIBUTE;
   attributeName: 'Name';
   value: { type: 'TEXT'; value: string };
 }
@@ -35,7 +35,7 @@ export function getTextEntityOps(node: JSONContent): [UpsertNameOp, UpsertMarkdo
       // name
       entityId: blockEntityId,
       entityName: entityName,
-      attributeId: SYSTEM_IDS.NAME,
+      attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
       attributeName: 'Name',
       value: { type: 'TEXT' as const, value: entityName },
     },

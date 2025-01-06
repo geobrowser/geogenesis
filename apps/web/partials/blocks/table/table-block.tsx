@@ -65,7 +65,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     ...(blockEntity?.relationsOut ?? []).filter(relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS),
   ];
 
-  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME];
+  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
 
   // @TODO(relations): This should live on the relation pointing to the block and not the block itself. It is
   // also a relation and not a triple.
@@ -82,14 +82,14 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
    * Name and Space are treated specially throughout this code path.
    */
   const filtersWithColumnName = filterState.map(f => {
-    if (f.columnId === SYSTEM_IDS.NAME) {
+    if (f.columnId === SYSTEM_IDS.NAME_ATTRIBUTE) {
       return {
         ...f,
         columnName: 'Name',
       };
     }
 
-    if (f.columnId === SYSTEM_IDS.TYPES) {
+    if (f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE) {
       return {
         ...f,
         columnName: 'Types',
@@ -111,7 +111,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   });
 
   const filteredTypes: Array<string> = filterState
-    .filter(filter => filter.columnId === SYSTEM_IDS.TYPES)
+    .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
     .map(filter => filter.value);
 
   const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, filteredTypes);

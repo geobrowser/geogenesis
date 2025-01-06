@@ -173,7 +173,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           space: spaceId,
           entityId: newEntityId,
           entityName: entity[entityNameIndex],
-          attributeId: SYSTEM_IDS.NAME,
+          attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
           attributeName: 'Name',
           value: {
             type: 'TEXT',

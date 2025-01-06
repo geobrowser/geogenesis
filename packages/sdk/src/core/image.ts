@@ -22,7 +22,7 @@ export function make(src: string): MakeImageReturnType {
       Relation.make({
         fromId: entityId,
         toId: SYSTEM_IDS.IMAGE_TYPE,
-        relationTypeId: SYSTEM_IDS.TYPES,
+        relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
       }),
       {
         type: 'SET_TRIPLE',

@@ -141,8 +141,8 @@ export type FilterState = FilterClause[];
 export type ValueTypeId =
   | typeof SYSTEM_IDS.TEXT
   | typeof SYSTEM_IDS.RELATION
-  | typeof SYSTEM_IDS.DATE
-  | typeof SYSTEM_IDS.URI
+  | typeof SYSTEM_IDS.TIME
+  | typeof SYSTEM_IDS.URL
   | typeof SYSTEM_IDS.CHECKBOX
   | typeof SYSTEM_IDS.NUMBER
   | typeof SYSTEM_IDS.IMAGE;

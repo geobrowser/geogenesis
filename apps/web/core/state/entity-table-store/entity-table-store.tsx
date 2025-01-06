@@ -46,7 +46,7 @@ export function useEntityTable() {
 
   const filterString = TableBlockSdk.createGraphQLStringFromFilters([
     {
-      columnId: SYSTEM_IDS.NAME,
+      columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
       value: query,
       valueType: 'TEXT',
     },

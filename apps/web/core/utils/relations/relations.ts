@@ -25,7 +25,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
   return [
     {
       space: spaceId,
-      attributeId: SYSTEM_IDS.TYPES,
+      attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
       attributeName: 'Types',
       entityId: entityId,
       entityName: null,

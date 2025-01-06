@@ -335,7 +335,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
         space: op.space,
         triple: {
           entity: op.relation.id,
-          attribute: SYSTEM_IDS.TYPES,
+          attribute: SYSTEM_IDS.TYPES_ATTRIBUTE,
           value: {
             type: 'URL',
             value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE),
@@ -396,7 +396,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
       space: op.space,
       triple: {
         entity: op.relation.id,
-        attribute: SYSTEM_IDS.TYPES,
+        attribute: SYSTEM_IDS.TYPES_ATTRIBUTE,
         value: {},
       },
     },

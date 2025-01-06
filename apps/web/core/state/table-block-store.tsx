@@ -132,7 +132,7 @@ export function useTableBlock() {
     placeholderData: keepPreviousData,
     queryKey: queryKeys.columns(filterState ?? null),
     queryFn: async () => {
-      const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES).map(f => f.value) ?? [];
+      const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
       return await mergeColumns(typesInFilter);
     },
   });

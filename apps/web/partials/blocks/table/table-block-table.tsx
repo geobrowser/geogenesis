@@ -56,7 +56,7 @@ const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedC
     columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
-        const isNameColumn = column.id === SYSTEM_IDS.NAME;
+        const isNameColumn = column.id === SYSTEM_IDS.NAME_ATTRIBUTE;
 
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
@@ -339,15 +339,15 @@ export const TableBlockTable = React.memo(
                           const cellId = `${row.original.entityId}-${cell.column.id}`;
                           const firstTriple = cell.getValue<Cell>()?.triples[0];
 
-                          const isNameCell = Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME);
+                          const isNameCell = Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
                           const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
                           const isShown = shownColumnIds.includes(cell.column.id);
 
                           const href = NavUtils.toEntity(
-                            isNameCell ? row.original.columns[SYSTEM_IDS.NAME]?.space ?? space : space,
+                            isNameCell ? row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space : space,
                             entityId
                           );
-                          const { verified } = row.original.columns[SYSTEM_IDS.NAME];
+                          const { verified } = row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
 
                           return (
                             <TableCell
@@ -387,7 +387,7 @@ export const TableBlockTable = React.memo(
         return (
           <div className="flex flex-col gap-4">
             {rows.map((row, index: number) => {
-              const nameCell = row.columns[SYSTEM_IDS.NAME];
+              const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
               const { entityId, name, description, image, verified } = nameCell;
               const href = NavUtils.toEntity(nameCell?.space ?? space, entityId);
 
@@ -425,7 +425,7 @@ export const TableBlockTable = React.memo(
         return (
           <div className="grid grid-cols-3 gap-x-4 gap-y-10">
             {rows.map((row, index: number) => {
-              const nameCell = row.columns[SYSTEM_IDS.NAME];
+              const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
               const { entityId, name, image, verified } = nameCell;
               const href = NavUtils.toEntity(nameCell?.space ?? space, entityId);
 

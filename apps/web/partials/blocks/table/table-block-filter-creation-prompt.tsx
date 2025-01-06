@@ -112,7 +112,7 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
     case 'onOpenChange':
       return {
         open: action.payload.open,
-        selectedColumn: SYSTEM_IDS.NAME,
+        selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
         value: {
           type: 'string',
           value: '',
@@ -153,7 +153,7 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
     case 'done':
       return {
         open: false,
-        selectedColumn: SYSTEM_IDS.NAME,
+        selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
         value: {
           type: 'string',
           value: '',
@@ -166,7 +166,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
   const { columnRelationTypes } = useTableBlock();
 
   const [state, dispatch] = React.useReducer(reducer, {
-    selectedColumn: SYSTEM_IDS.NAME,
+    selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
     value: { type: 'string', value: '' },
     open: false,
   });

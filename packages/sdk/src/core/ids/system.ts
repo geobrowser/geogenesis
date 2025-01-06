@@ -1,19 +1,18 @@
-export const TYPES = 'KEyred99SGesjDMcbB1oD2';
 export const ATTRIBUTE = 'LgKenoh2EfWrvqJqN6A7Ci';
 export const SCHEMA_TYPE = 'VdTsW1mGiy1XSooJaBBLc4';
 export const ATTRIBUTES = 'CBZs8pfSk5WHdujaAAKdD8';
 
-export const NAME = 'GG8Z4cSkjv8CywbkLqVU5M';
-export const DESCRIPTION = 'QoTdezDypdQrs7wq1tTRnb';
-export const AVATAR_ATTRIBUTE = '399xP4sGWSoepxeEnp3UdR';
+export const NAME_ATTRIBUTE = 'GG8Z4cSkjv8CywbkLqVU5M';
+export const DESCRIPTION_ATTRIBUTE = 'QoTdezDypdQrs7wq1tTRnb';
 export const COVER_ATTRIBUTE = 'DTEcNh4xFNvsqoX9bfF6qS';
+export const TYPES_ATTRIBUTE = 'KEyred99SGesjDMcbB1oD2';
 
 /** Value types */
 export const VALUE_TYPE = 'JwYkkjY2i6uuR4wrgFScwt';
 export const CHECKBOX = 'NtWv5uGJ1d15Mfk4ZdXfmU';
-export const DATE = 'UGr1YqqZbE2BbEpJR9U88H';
+export const TIME = 'UGr1YqqZbE2BbEpJR9U88H';
 export const TEXT = 'JBYTdEigecQHj2xhL3NeHV';
-export const URI = '5EQJAVKYDQWHZSfsawBtWa';
+export const URL = '5EQJAVKYDQWHZSfsawBtWa';
 export const NUMBER = 'Rjw5tGo76ukgvLxuYpXQkka';
 export const POINT = '9aNNLsQCRgFHEqRkWpd1wU';
 export const IMAGE = 'X8KB1uF84RYppghBSVvhqr';
@@ -139,6 +138,7 @@ export const COMPANY_TYPE = 'UhpHYoFEzAov9WwqtDwQk4';
 export const NONPROFIT_TYPE = 'RemzN69c24othsp2rP7yMX';
 export const POST_TYPE = 'X7KuZJQewaCiCy9QV2vjyv';
 export const PROJECT_TYPE = '9vk7Q3pz7US3s2KePFQrJT';
+export const ROOT_SPACE_TYPE = 'k7vbnMPxzdtGL2J3uaB6d';
 export const SPACE_CONFIGURATION = 'EXWTH2k6qquguZ8CCfMp9K';
 
 /** Templates */
@@ -196,48 +196,34 @@ export const NETWORK_ATTRIBUTE = 'MuMLDVbHAmRjZQjhyk3HGx';
 export const PERSON_TYPE = 'GfN9BK2oicLiBHrUavteS8';
 export const NETWORK_TYPE = 'YCLXoVZho6C4S51g4AbF3C';
 
-export const CLAIM_TYPE = 'KeG9eTM8NUYFMAjnsvF4Dg';
-export const BROADER_CLAIMS_ATTRIBUTE = 'RWkXuBRdVqDAiHKQisTZZ4';
-export const BROADER_GOALS_ATTRIBUTE = 'EtNH2yJmrEK1Mcv7S5MjPN';
-export const BROADER_SPACES = 'CHwmK8bk4KMCqBNiV2waL9';
-export const BROADER_TOPICS_ATTRIBUTE = 'P9apCagMDXQVdjgAZftxU5';
-export const CLAIMS_FROM_ATTRIBUTE = 'JdNBawSt1fp9EdozJdmThR';
-export const DEFINITIONS_ATTRIBUTE = '256myJaotY6FB6wGiC5mtk';
-export const EMAIL_ATTRIBUTE = '2QafYRmRHP2Hd18W3Tj9zu';
-export const FOREIGN_TYPES = 'R32hqus9ojU3Twsz3HDuxf';
 export const GOALS_ATTRIBUTE = 'WNcdorfdj7ZprmwvmRiRtG';
 export const GOAL_TYPE = '2y44qmFiLjZWmgkZ64EM7c';
 export const MEMBERSHIP_CONTRACT_ADDRESS = 'DDkwCoB8p1mHzXTedShcFv';
 export const MISSION_ATTRIBUTE = 'VGbyCo12NC8yTUhnhMHu1z';
-export const NONPROFIT_CATEGORIES_ATTRIBUTE = '64uVL5vKHmfqBC94hwNzHZ';
-export const OPPOSING_ARGUMENTS_ATTRIBUTE = 'Agk2hbiBWsgHVXxpFAc7z5';
-export const PERSON_ATTRIBUTE = 'W2aFZPy5nnU3DgdkWJCNVn';
-export const PHONE_NUMBER_ATTRIBUTE = '3zhuyrcqFjeaVgC5oHHqTJ';
 export const PLACEHOLDER_IMAGE = 'ENYn2afpf2koqBfyff7CGE';
 export const PLACEHOLDER_TEXT = 'AuihGk1yXCkfCcpMSwhfho';
+export const TAB_TYPE = '6ym81VzJiHx32nV8e5h52q';
+export const ROLE_ATTRIBUTE = 'VGKSRGzxCRvQxpJP7CB4wj';
+
+// Do we still need these?
+export const DEFAULT_TYPE = '7nJuuYkrKT62HCFxDygF1S';
+export const BROADER_CLAIMS_ATTRIBUTE = 'RWkXuBRdVqDAiHKQisTZZ4';
+export const BROADER_SPACES = 'CHwmK8bk4KMCqBNiV2waL9';
+export const CLAIMS_FROM_ATTRIBUTE = 'JdNBawSt1fp9EdozJdmThR';
+export const DEFINITIONS_ATTRIBUTE = '256myJaotY6FB6wGiC5mtk';
+export const EMAIL_ATTRIBUTE = '2QafYRmRHP2Hd18W3Tj9zu';
+export const FOREIGN_TYPES = 'R32hqus9ojU3Twsz3HDuxf';
+export const NONPROFIT_CATEGORIES_ATTRIBUTE = '64uVL5vKHmfqBC94hwNzHZ';
+export const PHONE_NUMBER_ATTRIBUTE = '3zhuyrcqFjeaVgC5oHHqTJ';
 export const QUOTES_ATTRIBUTE = 'XXAf2w4C5f4URDhhpH8nUG';
 export const REGION_ATTRIBUTE = 'CGC6KXy8wcqf7vpZv8HH4i';
 export const REGION_TYPE = 'Qu6vfQq68ecZ4PkihJ4nZN';
 export const RELATED_TOPICS_ATTRIBUTE = 'SDw38koZeFukda9FWU9bfW';
 export const RELEVANT_QUESTIONS_ATTRIBUTE = 'Po4uUtzinhjDwXJP5QNCMp';
-export const ROLE_ATTRIBUTE = 'VGKSRGzxCRvQxpJP7CB4wj';
-export const SOURCES_ATTRIBUTE = 'A7NJF2WPh8VhmvbfVWiyLo';
 export const SPEAKERS_ATTRIBUTE = '9nZuGhssmkEBn9DtRca8Gm';
 export const STREET_ADDRESS_ATTRIBUTE = '8kx7oQvdCZRXLfUksucwCv';
 export const SUBCLAIMS_ATTRIBUTE = '2DFyYPbh5Yy2PnWTbi3uL5';
-export const SUBGOALS_ATTRIBUTE = 'WX9xtsWqFPmAXcTBF833cF';
-export const SUBTOPICS_ATTRIBUTE = '89cuddDgriDAZJV6oy8zmt';
-export const SUPPORTING_ARGUMENTS_ATTRIBUTE = '4gFz5SYHWkBJoAANfCt61v';
-export const TAB_TYPE = '6ym81VzJiHx32nV8e5h52q';
-export const TAGS_ATTRIBUTE = '5d9VVey3wusmk98Uv3v5LM';
-export const TAG_TYPE = 'UnP1LtXV3EhrhvRADFcMZK';
-export const TOPICS_ATTRIBUTE = '9bCuX6B9KZDSaY8xtghNZo';
-export const TOPIC_TYPE = 'Cj7JSjWKbcdgmUjcLWNR4V';
 export const VALUES_ATTRIBUTE = '3c5k2MpF9PRYAZ925qTKNi';
 export const VISION_ATTRIBUTE = 'AAMDNTaJtS2i4aWp59zEAk';
-export const WEB_URL_ATTRIBUTE = '93stf6cgYvBsdPruRzq1KK';
-
-// Not sure what this is
-export const DEFAULT_TYPE = '7nJuuYkrKT62HCFxDygF1S';
 
 export const ROOT_SPACE_ID = 'WdiG8PT2LowgHGuRjBruqG';
