@@ -194,6 +194,24 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     },
   ];
 
+  const ROOT_TABS = [
+    {
+      label: 'Education',
+      href: `${NavUtils.toSpace(params.id)}/education`,
+      priority: 2 as const,
+    },
+    {
+      label: 'Ontology',
+      href: `${NavUtils.toSpace(params.id)}/ontology`,
+      priority: 2 as const,
+    },
+    {
+      label: 'About',
+      href: `${NavUtils.toSpace(params.id)}/about`,
+      priority: 2 as const,
+    },
+  ];
+
   const SOME_SPACES_TABS = [
     {
       label: 'Governance',
@@ -201,6 +219,10 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       priority: 2 as const,
     },
   ];
+
+  if (typeIds.includes(SYSTEM_IDS.ROOT_SPACE_TYPE)) {
+    tabs.push(...ROOT_TABS);
+  }
 
   // Order of how we add the tabs matters. We want to
   // show "content-based" tabs first, then "space-based" tabs.

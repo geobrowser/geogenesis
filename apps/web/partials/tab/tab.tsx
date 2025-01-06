@@ -66,4 +66,7 @@ const pageTypeEntityIds: Record<string, string> = {
   projects: SYSTEM_IDS.PROJECTS_PAGE,
   finances: SYSTEM_IDS.FINANCES_PAGE,
   spaces: SYSTEM_IDS.SPACES_PAGE,
+  ontology: SYSTEM_IDS.ONTOLOGY_PAGE,
+  education: SYSTEM_IDS.EDUCATION_PAGE,
+  about: SYSTEM_IDS.ABOUT_PAGE,
 };
