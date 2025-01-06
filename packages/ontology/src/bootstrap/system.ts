@@ -75,6 +75,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.PROJECT_TYPE]: 'Project',
   [SYSTEM_IDS.COMPANY_TYPE]: 'Company',
   [SYSTEM_IDS.PAGE_TYPE]: 'Page',
+  [SYSTEM_IDS.PEOPLE_PAGE]: 'People',
   [SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE]: 'Page type',
   [SYSTEM_IDS.POSTS_PAGE]: 'Posts page',
   [SYSTEM_IDS.PROJECTS_PAGE]: 'Projects page',
@@ -84,6 +85,9 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.EVENTS_PAGE]: 'Events page',
   [SYSTEM_IDS.SERVICES_PAGE]: 'Services page',
   [SYSTEM_IDS.PRODUCTS_PAGE]: 'Products page',
+  [SYSTEM_IDS.ABOUT_PAGE]: 'About page',
+  [SYSTEM_IDS.EDUCATION_PAGE]: 'Education page',
+  [SYSTEM_IDS.ONTOLOGY_PAGE]: 'Ontology page',
 
   [SYSTEM_IDS.POST_TYPE]: 'Post',
 };
@@ -117,7 +121,6 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: SYSTEM_IDS.RELATION,
 
   [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.URL,
-  [SYSTEM_IDS.BROADER_SPACES]: SYSTEM_IDS.RELATION,
 
   [SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
