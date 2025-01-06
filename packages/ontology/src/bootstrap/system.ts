@@ -2,6 +2,8 @@ import { type CreateRelationOp, NETWORK_IDS, type Op, Relation, SYSTEM_IDS } fro
 
 const names: Record<string, string> = {
   [SYSTEM_IDS.TYPES_ATTRIBUTE]: 'Types',
+  [SYSTEM_IDS.NAME_ATTRIBUTE]: 'Name',
+  [SYSTEM_IDS.DESCRIPTION_ATTRIBUTE]: 'Description',
   [SYSTEM_IDS.ATTRIBUTE]: 'Attribute',
   [SYSTEM_IDS.COVER_ATTRIBUTE]: 'Cover',
   [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: 'Relation Type',
@@ -85,6 +87,8 @@ const names: Record<string, string> = {
 };
 
 const attributes: Record<string, string> = {
+  [SYSTEM_IDS.NAME_ATTRIBUTE]: SYSTEM_IDS.TEXT,
+  [SYSTEM_IDS.DESCRIPTION_ATTRIBUTE]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.COVER_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
   [SYSTEM_IDS.TYPES_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
