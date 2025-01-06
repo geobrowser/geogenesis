@@ -178,6 +178,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           const hasValidEvent = result.right;
 
+          yield* _(
+            Effect.tryPromise({
+              try: () => writeCursor(message.cursor, blockNumber),
+              catch: () => new CouldNotWriteCursorError(),
+            })
+          );
+
           if (hasValidEvent) {
             yield* _(Effect.logInfo(`Finished processing block ${blockNumber}`));
           }
@@ -220,14 +227,6 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     const cursor = message.cursor;
     const blockNumber = Number(message.clock?.number.toString());
     const timestamp = Number(message.clock?.timestamp?.seconds.toString());
-
-    // @TODO: Should not write cursor until we have processed all events in it
-    yield* _(
-      Effect.tryPromise({
-        try: () => writeCursor(cursor, blockNumber),
-        catch: () => new CouldNotWriteCursorError(),
-      })
-    );
 
     const mapOutput = message.output?.mapOutput;
 
@@ -505,7 +504,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
             });
           }),
           {
-            concurrency: 50,
+            concurrency: 15,
           }
         )
       );
