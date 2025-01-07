@@ -368,6 +368,7 @@ export const SubstreamVersion = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
   entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
   edit: Schema.Struct({
+    id: Schema.String,
     name: Schema.String,
     createdAt: Schema.Number,
     createdById: Schema.String,

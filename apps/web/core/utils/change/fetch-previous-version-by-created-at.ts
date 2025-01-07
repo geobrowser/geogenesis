@@ -25,6 +25,7 @@ const query = (createdAt: number, entityId: string, spaceId: string) => {
       nodes {
         ${versionFragment}
         edit {
+          id
           name
           createdAt
           createdById
