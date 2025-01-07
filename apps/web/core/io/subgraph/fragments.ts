@@ -35,41 +35,19 @@ export const versionTypesFragment = `
 `;
 
 export const tripleFragment = `
-  attribute {
-    id
-    currentVersion {
-      version {
-        id
-        name
-      }
-    }
+  attributeVersion {
+    entityId
+    name
   }
-  entity {
-    id
-    currentVersion {
-      version {
-        id
-        name
-      }
-    }
-  }
-  entityValue {
-    id
-    currentVersion {
-      version {
-        id
-        name
-        ${versionTypesFragment}
-      }
-    }
+  version {
+    entityId
+    name
   }
   numberValue
   textValue
   booleanValue
   valueType
-  space {
-    id
-  }
+  spaceId
 `;
 
 /**
