@@ -2,11 +2,11 @@ import { Op } from '@geogenesis/sdk';
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
-import check from 'tiny-invariant';
 import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
+import { check } from '../check';
 import { Triple } from '../database/Triple';
 import { getRelations } from '../database/relations';
 import { getTriples } from '../database/triples';
@@ -271,27 +271,16 @@ function makeProposal(args: MakeProposalArgs) {
 
     const [, cidContains] = cid.split('ipfs://');
 
-    if (!cid.startsWith('ipfs://')) {
-      yield* Effect.fail(new IpfsUploadError(`CID ${cid} does not start with ipfs://`));
-      return;
-    }
-
-    if (cidContains === undefined || cidContains === '') {
-      yield* Effect.fail(new IpfsUploadError(`CID ${cid} is not valid `));
-      return;
-    }
-
-    check(cid.startsWith('ipfs://'), 'CID does not start with ipfs://');
-    check(cidContains !== undefined && cidContains !== '', 'CID is not valid');
-
-    return;
+    // yield* check(() => cid.startsWith('ipfs://'), 'CID does not start with ipfs://');
+    // yield* check(() => cidContains !== undefined && cidContains !== '', 'CID is not valid');
 
     const callData = getCalldataForSpaceGovernanceType({
       type: space.type,
       cid,
       spacePluginAddress: space.spacePluginAddress,
     });
-    return;
+    // return;
+
     return yield* Effect.tryPromise({
       try: () =>
         smartAccount.sendTransaction({
