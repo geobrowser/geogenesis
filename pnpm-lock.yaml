@@ -1,5 +1,10 @@
 lockfileVersion: 5.4
 
+patchedDependencies:
+  permissionless@0.1.29:
+    hash: 7kf7a4ub3lssmzof2kggpayh4m
+    path: patches/permissionless@0.1.29.patch
+
 importers:
 
   .:
@@ -210,7 +215,7 @@ importers:
       lokijs: 1.5.12
       next: 14.2.5_cnxlxqo7rotnclzc2lhjf3vjiq
       papaparse: 5.3.2
-      permissionless: 0.1.29_viem@2.13.8
+      permissionless: 0.1.29_7kf7a4ub3lssmzof2kggpayh4m_viem@2.13.8
       pino-pretty: 10.2.0
       pluralize: 8.0.0
       raw-body: 2.5.1
@@ -12336,13 +12341,14 @@ packages:
   /pathval/1.1.1:
     resolution: {integrity: sha512-Dp6zGqpTdETdR63lehJYPeIOqpiNBNtc7BpWSLrOje7UaIsE5aY92r/AunQA7rsXvet3lrJ3JnZX29UPTKXyKQ==}
 
-  /permissionless/0.1.29_viem@2.13.8:
+  /permissionless/0.1.29_7kf7a4ub3lssmzof2kggpayh4m_viem@2.13.8:
     resolution: {integrity: sha512-jKkgl3G2b4hv5DvX2U8v0OI3JfX+nEzj9a6zsrcXuJaLZdS14td4tExnlmBY93nUN6lRC6NfPZjdLbi8Dkzz7w==}
     peerDependencies:
       viem: ^2.9.17
     dependencies:
       viem: 2.13.8_typescript@5.5.3
     dev: false
+    patched: true
 
   /pg-cloudflare/1.1.1:
     resolution: {integrity: sha512-xWPagP/4B6BgFO+EKz3JONXv3YDgvkbVrGw2mTo3D6tVDQRh1e7cqVGvyR3BE+eQgAvx1XhW/iEASj4/jCWl3Q==}
