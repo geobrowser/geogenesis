@@ -11,6 +11,12 @@ CREATE INDEX version_types_version_id ON public.version_types(version_id, type_i
 CREATE INDEX triple_entity_id
     on triples (entity_id);
 
+CREATE INDEX triple_attribute_id
+    on triples (attribute_id);
+
+CREATE INDEX triple_attribute_version_id
+    on triples (attribute_version_id);
+
 CREATE INDEX triple_version_id
     on triples (version_id);
 

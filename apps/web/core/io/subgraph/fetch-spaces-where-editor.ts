@@ -17,7 +17,12 @@ const getFetchSpacesWhereEditorQuery = (address: string) => `query {
       spacesMetadata {
         nodes {
           entity {
-            ${versionFragment}
+            id
+            currentVersion {
+              version {
+                ${versionFragment}
+              }
+            }
           }
         }
       }

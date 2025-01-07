@@ -6,12 +6,13 @@ import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
+// import { check } from '../check';
 import { Triple } from '../database/Triple';
 import { getRelations } from '../database/relations';
 import { getTriples } from '../database/triples';
 import { StoredTriple } from '../database/types';
 import { useWriteOps } from '../database/write';
-import { TransactionWriteFailedError } from '../errors';
+import { IpfsUploadError, TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';
 import { useStatusBar } from '../state/status-bar-store';
@@ -45,7 +46,7 @@ export function usePublish() {
   const make = React.useCallback(
     async ({ triples: triplesToPublish, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
       if (!smartAccount) return;
-      if (triplesToPublish.length < 1) return;
+      if (triplesToPublish.length === 0 && relations.length === 0) return;
 
       const space = await fetchSpace({ id: spaceId });
 
@@ -59,6 +60,11 @@ export function usePublish() {
           relations,
           spaceId
         );
+
+        if (ops.length === 0) {
+          console.error('resulting ops are empty, cancelling publish');
+          return;
+        }
 
         yield* makeProposal({
           name,
@@ -162,7 +168,7 @@ export function useBulkPublish() {
    */
   const makeBulkProposal = React.useCallback(
     async ({ triples, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
-      if (triples.length < 1) return;
+      if (triples.length === 0) return;
       if (!smartAccount) return;
 
       // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
@@ -245,6 +251,10 @@ function makeProposal(args: MakeProposalArgs) {
   const proposal = createEditProposal({ name, ops, author: smartAccount.account.address });
 
   const writeTxEffect = Effect.gen(function* () {
+    if (ops.length === 0) {
+      return;
+    }
+
     if (space.type === 'PUBLIC' && !space.mainVotingPluginAddress) {
       console.error('public space does not have main voting plugin address');
       return;
@@ -259,11 +269,17 @@ function makeProposal(args: MakeProposalArgs) {
     const cid = yield* IpfsEffectClient.upload(proposal);
     onChangePublishState('publishing-contract');
 
+    const [, cidContains] = cid.split('ipfs://');
+
+    // yield* check(() => cid.startsWith('ipfs://'), 'CID does not start with ipfs://');
+    // yield* check(() => cidContains !== undefined && cidContains !== '', 'CID is not valid');
+
     const callData = getCalldataForSpaceGovernanceType({
       type: space.type,
       cid,
       spacePluginAddress: space.spacePluginAddress,
     });
+    // return;
 
     return yield* Effect.tryPromise({
       try: () =>
@@ -300,14 +316,12 @@ function getCalldataForSpaceGovernanceType(args: GovernanceTypeCalldataArgs) {
       return encodeFunctionData({
         functionName: 'proposeEdits',
         abi: MainVotingAbi,
-        // @TODO: Function for encoding args
         args: [stringToHex(args.cid), args.cid, args.spacePluginAddress as `0x${string}`],
       });
     case 'PERSONAL':
       return encodeFunctionData({
         functionName: 'submitEdits',
         abi: PersonalSpaceAdminAbi,
-        // @TODO: Function for encoding args
         args: [args.cid, args.spacePluginAddress as `0x${string}`],
       });
   }

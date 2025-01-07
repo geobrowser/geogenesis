@@ -18,11 +18,6 @@ const SubstreamType = Schema.Struct({
 
 export type SubstreamType = Schema.Schema.Type<typeof SubstreamType>;
 
-const Nameable = Schema.Struct({
-  name: Schema.NullOr(Schema.String),
-});
-type Nameable = Schema.Schema.Type<typeof Nameable>;
-
 const Identifiable = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
 });
@@ -147,19 +142,15 @@ type SubstreamSpaceWithoutMetadata = Schema.Schema.Type<typeof SubstreamSpaceWit
 export const SubstreamTriple = Schema.extend(
   SubstreamValue,
   Schema.Struct({
-    entity: Schema.Struct({
-      id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-      currentVersion: Schema.Struct({
-        version: Schema.extend(Identifiable, Nameable),
-      }),
+    version: Schema.Struct({
+      entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
+      name: Schema.NullOr(Schema.String),
     }),
-    attribute: Schema.Struct({
-      id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-      currentVersion: Schema.Struct({
-        version: Schema.extend(Identifiable, Nameable),
-      }),
+    attributeVersion: Schema.Struct({
+      entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
+      name: Schema.NullOr(Schema.String),
     }),
-    space: SubstreamSpaceWithoutMetadata.pick('id'),
+    spaceId: Schema.String.pipe(Schema.fromBrand(EntityId)),
   })
 );
 
@@ -368,6 +359,7 @@ export const SubstreamVersion = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
   entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
   edit: Schema.Struct({
+    id: Schema.String,
     name: Schema.String,
     createdAt: Schema.Number,
     createdById: Schema.String,

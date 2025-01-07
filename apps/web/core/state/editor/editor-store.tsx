@@ -409,6 +409,7 @@ export function useEditorStore() {
             // createTableBlockMetadata(node);
             break;
           case 'bulletList':
+          case 'heading':
           case 'paragraph': {
             const ops = TextEntity.getTextEntityOps(node);
             DB.upsertMany(ops, spaceId);
