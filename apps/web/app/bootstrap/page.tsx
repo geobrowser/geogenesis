@@ -9,7 +9,7 @@ export default function Page() {
     deploy.deploy({
       type: 'default',
       governanceType: 'PUBLIC',
-      spaceName: 'Geo',
+      spaceName: 'Geo test 1',
     });
   };
 
