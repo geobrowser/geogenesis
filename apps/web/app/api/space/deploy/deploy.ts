@@ -205,7 +205,13 @@ function getGovernanceTypeForSpaceType(type: SpaceType, governanceType?: SpaceGo
       // should exist based on the space type.
       return governanceType ?? 'PUBLIC';
 
-    // @TODO: Space types for each of the governance types
+    case 'academic-field':
+    case 'dao':
+    case 'industry':
+    case 'interest-group':
+    case 'region':
+    case 'protocol':
+      return 'PUBLIC';
     default:
       return 'PERSONAL';
   }
