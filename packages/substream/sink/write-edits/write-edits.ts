@@ -3,7 +3,7 @@ import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
+import { CurrentVersions, Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import type { BlockEvent, CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SetTripleOp } from '../types';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
@@ -54,8 +54,8 @@ interface PopulateContentArgs {
  */
 export function writeEdits(args: PopulateContentArgs) {
   const { versions, tripleOpsByVersionId, relationOpsByEditId, edits, block, editType } = args;
-  const spaceIdByEditId = new Map<string, string>();
 
+  const spaceIdByEditId = new Map<string, string>();
   for (const edit of edits) {
     spaceIdByEditId.set(edit.id.toString(), edit.space_id.toString());
   }
@@ -65,7 +65,26 @@ export function writeEdits(args: PopulateContentArgs) {
   const versionsWithMetadata: Schema.versions.Insertable[] = [];
   const versionSpaces: Schema.version_spaces.Insertable[] = [];
 
+  const versionsByEdit = new Map<string, Schema.versions.Insertable[]>();
+  for (const version of versions) {
+    const editId = version.edit_id.toString();
+    const versionsForEdit = versionsByEdit.get(editId) ?? [];
+    versionsByEdit.set(editId, [...versionsForEdit, version]);
+  }
+
   return Effect.gen(function* (_) {
+    // Aggregate all of the attribute versions for each edit
+    const attributeVersionsByEdit = yield* _(
+      aggregateAttributeVersions({
+        edits,
+        versionsByEdit,
+        tripleOpsByVersionId,
+        editType,
+      })
+    );
+
+    console.log('attribute versions by edit id', attributeVersionsByEdit);
+
     // We might get multiple proposals at once in the same block that change the same set of entities.
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
@@ -87,7 +106,14 @@ export function writeEdits(args: PopulateContentArgs) {
         ops: tripleOpsByVersionId.get(version.id.toString()) ?? [],
       };
 
-      const triplesForVersion = mapSchemaTriples(editWithCreatedById, block);
+      const maybeAttributeVersions = attributeVersionsByEdit.get(version.edit_id.toString());
+
+      if (!maybeAttributeVersions) {
+        console.error(`No attribute versions for edit ${version.edit_id}`);
+        continue;
+      }
+
+      const triplesForVersion = mapSchemaTriples(editWithCreatedById, maybeAttributeVersions, block);
       triplesWithCreatedBy.push(...triplesForVersion);
 
       const setTriples = triplesForVersion.filter(t => t.op === 'SET_TRIPLE');
@@ -308,5 +334,75 @@ function aggregateSpacesFromRelations(
         return spaceMetadata;
       })
       .filter(m => m !== null);
+  });
+}
+
+type AggregateAttributeVersionsArgs = {
+  tripleOpsByVersionId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
+  versionsByEdit: Map<string, Schema.versions.Insertable[]>;
+  edits: Schema.edits.Insertable[];
+  editType: 'IMPORT' | 'DEFAULT';
+};
+
+type AttributeVersionIdsByEditId = Map<string, Map<string, string>>;
+
+function aggregateAttributeVersions(args: AggregateAttributeVersionsArgs): Effect.Effect<AttributeVersionIdsByEditId> {
+  const { tripleOpsByVersionId, versionsByEdit, edits, editType } = args;
+  // Get all of the attribute entity ids for each edit
+  // Get current version for all entity ids
+  // Overwrite with any new versions in the edit
+  const attributeEntityIds = [...tripleOpsByVersionId.values()].flatMap(ops => ops.map(o => o.triple.attribute));
+  const uniqueAttributeEntityIds = dedupeWith(attributeEntityIds, (a, b) => a === b);
+
+  return Effect.gen(function* (_) {
+    const maybeCurrentVersionForAttributeIds = (yield* _(
+      Effect.forEach(
+        uniqueAttributeEntityIds,
+        entityId => Effect.promise(() => CurrentVersions.selectOne({ entity_id: entityId })),
+        { concurrency: 15 }
+      )
+    )).filter(v => !!v);
+
+    const currentVersionByEntityId = new Map<string, string>();
+    for (const version of maybeCurrentVersionForAttributeIds) {
+      currentVersionByEntityId.set(version.entity_id.toString(), version.version_id.toString());
+    }
+
+    const attributeVersionIdsByEditId = new Map<string, Map<string, string>>();
+
+    for (const edit of edits) {
+      const editId = edit.id.toString();
+      const versionsInEdit = versionsByEdit.get(editId) ?? [];
+      const attributeVersionsInEditByEntityId = new Map<string, string>();
+
+      // If we're reading a set of imported edits we want to use all of the versions
+      // from the set and not just the versions from the current edit. This is because
+      // an edit in an import might reference an edit in the import that hasn't been
+      // "accepted" yet. We should treat these edits as if they are a single atomic
+      // unit that will eventually be accepted.
+
+      const versions = editType === 'IMPORT' ? [...versionsByEdit.values()].flat() : versionsInEdit;
+      // Merge the versions from this block for this edit with any versions for this entity
+      // from the database. We favor any versions from the block over the versions in the
+      // database.
+      const allReferencedAttributeVersions = [
+        ...maybeCurrentVersionForAttributeIds.map(cv => {
+          return {
+            id: cv.version_id,
+            entity_id: cv.entity_id,
+          };
+        }),
+
+        ...versions,
+      ];
+
+      for (const version of allReferencedAttributeVersions) {
+        attributeVersionsInEditByEntityId.set(version.entity_id.toString(), version.id.toString());
+      }
+
+      attributeVersionIdsByEditId.set(editId, attributeVersionsInEditByEntityId);
+    }
+
+    return attributeVersionIdsByEditId;
   });
 }

@@ -136,6 +136,7 @@ CREATE TABLE public.triples (
     space_id text NOT NULL REFERENCES public.spaces(id),
     entity_id text NOT NULL REFERENCES public.entities(id),
     attribute_id text NOT NULL REFERENCES public.entities(id),
+    attribute_version_id text NOT NULL REFERENCES public.versions(id),
     value_type triple_value_type NOT NULL,
     number_value text,
     text_value text,
@@ -248,7 +249,6 @@ ALTER TABLE
 ALTER TABLE
     public.versions DISABLE TRIGGER ALL;
 ALTER TABLE
-
     public.edits DISABLE TRIGGER ALL;
 
 ALTER TABLE
