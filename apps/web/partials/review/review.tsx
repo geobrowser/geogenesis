@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
-import { deleteAll } from '~/core/database/write';
+import { DB } from '~/core/database/write';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
@@ -267,7 +267,7 @@ const ReviewChanges = () => {
               <div>
                 <SmallButton
                   onClick={() => {
-                    deleteAll(activeSpace);
+                    DB.deleteAll(activeSpace);
                   }}
                 >
                   Delete all

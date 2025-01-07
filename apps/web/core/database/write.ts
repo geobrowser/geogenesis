@@ -247,4 +247,5 @@ export const DB = {
   upsertRelation,
   removeRelation,
   removeEntity,
+  deleteAll,
 };
