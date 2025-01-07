@@ -23,6 +23,7 @@ const query = (entityId: string, page = 0) => {
       nodes {
         ${versionFragment}
         edit {
+          id
           name
           createdAt
           createdById

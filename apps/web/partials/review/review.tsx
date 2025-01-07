@@ -15,6 +15,7 @@ import { usePublish } from '~/core/hooks/use-publish';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { Triples } from '~/core/utils/triples';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -122,7 +123,6 @@ const ReviewChanges = () => {
   // Proposal state
   const [proposals, setProposals] = useState<Proposals>({});
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
-  const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
 
   const triplesFromSpace = useTriples(
@@ -142,6 +142,10 @@ const ReviewChanges = () => {
       };
     }, [activeSpace])
   );
+
+  const isReadyToPublish =
+    proposalName?.length > 3 &&
+    Triples.prepareTriplesForPublishing(triplesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
 
   const { makeProposal } = usePublish();
   const [changes, isLoading] = useLocalChanges(activeSpace);

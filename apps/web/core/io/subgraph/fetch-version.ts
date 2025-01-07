@@ -20,6 +20,7 @@ const query = (versionId: string) => {
     version(id: "${versionId}") {
       ${versionFragment}
       edit {
+        id
         name
         createdAt
         createdById
