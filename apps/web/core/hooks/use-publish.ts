@@ -2,6 +2,7 @@ import { Op } from '@geogenesis/sdk';
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
+import check from 'tiny-invariant';
 import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
@@ -11,7 +12,7 @@ import { getRelations } from '../database/relations';
 import { getTriples } from '../database/triples';
 import { StoredTriple } from '../database/types';
 import { useWriteOps } from '../database/write';
-import { TransactionWriteFailedError } from '../errors';
+import { IpfsUploadError, TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';
 import { useStatusBar } from '../state/status-bar-store';
@@ -268,12 +269,27 @@ function makeProposal(args: MakeProposalArgs) {
     const cid = yield* IpfsEffectClient.upload(proposal);
     onChangePublishState('publishing-contract');
 
+    const [cidStartsWith, cidContains] = cid.split('ipfs://');
+
+    if (cidStartsWith !== 'ipfs://') {
+      yield* Effect.fail(new IpfsUploadError(`CID ${cid} does not start with ipfs://`));
+      return;
+    }
+
+    if (cidContains === null || cidContains === '') {
+      yield* Effect.fail(new IpfsUploadError(`CID ${cid} is not valid `));
+      return;
+    }
+
+    check(cidStartsWith === 'ipfs://', 'CID does not start with ipfs://');
+    check(cidContains !== null && cidContains !== '', 'CID is not valid');
+
     const callData = getCalldataForSpaceGovernanceType({
       type: space.type,
       cid,
       spacePluginAddress: space.spacePluginAddress,
     });
-
+    return;
     return yield* Effect.tryPromise({
       try: () =>
         smartAccount.sendTransaction({
