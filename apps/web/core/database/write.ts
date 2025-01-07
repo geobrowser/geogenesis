@@ -213,6 +213,14 @@ const writeMany = (triples: StoredTriple[]) => {
   store.set(localOpsAtom, [...unchangedTriples, ...triples]);
 };
 
+export const deleteAll = (spaceId: string) => {
+  const triples = store.get(localOpsAtom).filter(t => t.space !== spaceId);
+  store.set(localOpsAtom, triples);
+
+  const relations = store.get(localRelationsAtom).filter(r => r.space !== spaceId);
+  store.set(localRelationsAtom, relations);
+};
+
 /**
  * Hook to write to the ops event stream. The ops event stream is mapped by
  * downstream consumers that transform the stream to other data models like
@@ -239,4 +247,5 @@ export const DB = {
   upsertRelation,
   removeRelation,
   removeEntity,
+  deleteAll,
 };
