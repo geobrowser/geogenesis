@@ -30,6 +30,7 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
         spacesMetadata {
           nodes {
             entity {
+              id
               currentVersion {
                 version {
                   ${versionFragment}
