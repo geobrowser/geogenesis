@@ -133,7 +133,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             shownColumnRelations={shownColumnRelations}
             shownColumnIds={shownColumnIds}
           />
-          {isEditing && (
+          {isEditing && source.type !== 'COLLECTION' && (
             <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
               <Create />
             </Link>

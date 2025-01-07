@@ -52,6 +52,7 @@ importers:
       '@testing-library/react': ^13.4.0
       '@testing-library/user-event': ^14.4.3
       '@tiptap/core': 2.10.4
+      '@tiptap/extension-bold': ^2.10.3
       '@tiptap/extension-bubble-menu': 2.10.4
       '@tiptap/extension-bullet-list': ^2.10.4
       '@tiptap/extension-document': ^2.10.4
@@ -59,6 +60,7 @@ importers:
       '@tiptap/extension-hard-break': ^2.0.3
       '@tiptap/extension-heading': ^2.10.4
       '@tiptap/extension-image': 2.10.4
+      '@tiptap/extension-italic': ^2.10.3
       '@tiptap/extension-link': ^2.10.3
       '@tiptap/extension-list-item': ^2.10.4
       '@tiptap/extension-paragraph': ^2.10.4
@@ -168,6 +170,7 @@ importers:
       '@tanstack/react-query-devtools': 5.45.0_sdlhsektwb4qfbag3o346pwpza
       '@tanstack/react-table': 8.5.15_biqbaboplfbrettd7655fr4n2y
       '@tiptap/core': 2.10.4_@tiptap+pm@2.10.4
+      '@tiptap/extension-bold': 2.11.0_@tiptap+core@2.10.4
       '@tiptap/extension-bubble-menu': 2.10.4_yviab3heeqx4xnwfwxpcrnob24
       '@tiptap/extension-bullet-list': 2.10.4_@tiptap+core@2.10.4
       '@tiptap/extension-document': 2.10.4_@tiptap+core@2.10.4
@@ -175,6 +178,7 @@ importers:
       '@tiptap/extension-hard-break': 2.0.3_@tiptap+core@2.10.4
       '@tiptap/extension-heading': 2.10.4_@tiptap+core@2.10.4
       '@tiptap/extension-image': 2.10.4_@tiptap+core@2.10.4
+      '@tiptap/extension-italic': 2.11.0_@tiptap+core@2.10.4
       '@tiptap/extension-link': 2.10.3_yviab3heeqx4xnwfwxpcrnob24
       '@tiptap/extension-list-item': 2.10.4_@tiptap+core@2.10.4
       '@tiptap/extension-paragraph': 2.10.4_@tiptap+core@2.10.4
@@ -5250,6 +5254,14 @@ packages:
       '@tiptap/pm': 2.10.4
     dev: false
 
+  /@tiptap/extension-bold/2.11.0_@tiptap+core@2.10.4:
+    resolution: {integrity: sha512-3x9BQZHYD5xFA0pCEneEMHZyIoxYo4NKcbhR4CLxGad1Xd+5g109nr1+eZ1JgvnChkeVf1eD6SaQE2A28lxR5g==}
+    peerDependencies:
+      '@tiptap/core': ^2.7.0
+    dependencies:
+      '@tiptap/core': 2.10.4_@tiptap+pm@2.10.4
+    dev: false
+
   /@tiptap/extension-bubble-menu/2.10.4_yviab3heeqx4xnwfwxpcrnob24:
     resolution: {integrity: sha512-GVtZwJaQyLBptMsmDtYl5GEobd1Uu7C9sc9Z+PdXwMuxmFfg+j07bCKCj5JJj/tjgXCSLVxWdTlDHxNrgzQHjw==}
     peerDependencies:
@@ -5316,6 +5328,14 @@ packages:
 
   /@tiptap/extension-image/2.10.4_@tiptap+core@2.10.4:
     resolution: {integrity: sha512-fPdAqP4M1zwz5jyrQNIEL4OvvGeJso45svaaBLV342yRLOpbVIgAp/RsuWSGDQTUWoGhdkHdIrbH2bUGNEbMBg==}
+    peerDependencies:
+      '@tiptap/core': ^2.7.0
+    dependencies:
+      '@tiptap/core': 2.10.4_@tiptap+pm@2.10.4
+    dev: false
+
+  /@tiptap/extension-italic/2.11.0_@tiptap+core@2.10.4:
+    resolution: {integrity: sha512-T+jjS0gOsvNzQXVTSArmUp/kt2R9OikPQaV1DI60bfjO0rknOgtG0tbwZmfbugzwc07RbpxOYFy3vBxMLDsksA==}
     peerDependencies:
       '@tiptap/core': ^2.7.0
     dependencies:
