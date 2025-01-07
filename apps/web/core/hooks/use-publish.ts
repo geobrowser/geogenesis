@@ -276,7 +276,7 @@ function makeProposal(args: MakeProposalArgs) {
       return;
     }
 
-    if (cidContains === null || cidContains === '') {
+    if (cidContains === undefined || cidContains === '') {
       yield* Effect.fail(new IpfsUploadError(`CID ${cid} is not valid `));
       return;
     }

@@ -31,11 +31,30 @@ export class IpfsClient {
 
     if (response.status >= 300) {
       const text = await response.text();
-      console.log(text);
+      const [protocol, cid] = text.split('ipfs://');
+
+      if (protocol !== 'ipfs://') {
+        throw new IpfsUploadError(`Could not parse IPFS text response with status >= 300: ${text}`);
+      }
+
+      if (cid === undefined || cid === '') {
+        throw new IpfsUploadError(`Could not parse IPFS text response with status >= 300: ${text}`);
+      }
+
       return text as `ipfs://${string}`;
     }
 
     const { hash } = await response.json();
+
+    const [protocol, cid] = hash.split('ipfs://');
+
+    if (protocol !== 'ipfs://') {
+      throw new IpfsUploadError(`Could not parse IPFS response: ${hash}`);
+    }
+
+    if (cid === undefined || cid === '') {
+      throw new IpfsUploadError(`Could not parse IPFS response: ${hash}`);
+    }
 
     console.log('ipfs hash', hash);
     return hash;
