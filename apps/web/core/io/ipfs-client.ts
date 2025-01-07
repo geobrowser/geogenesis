@@ -2,6 +2,19 @@ import { Effect } from 'effect';
 
 import { IpfsUploadError } from '~/core/errors';
 
+export function validateCid(cid: string) {
+  const [, cidContains] = cid.split('ipfs://');
+  if (!cid.startsWith('ipfs://')) {
+    throw new IpfsUploadError(`CID ${cid} does not start with ipfs://`);
+  }
+
+  if (cidContains === undefined || cidContains === '') {
+    throw new IpfsUploadError(`CID ${cid} is not valid `);
+  }
+
+  return true;
+}
+
 /**
  * This class provides a simple namespace for interacting with the API routes
  * used for uploading binary or files to IPFS. All IPFS interactions are done
@@ -31,30 +44,12 @@ export class IpfsClient {
 
     if (response.status >= 300) {
       const text = await response.text();
-      const [protocol, cid] = text.split('ipfs://');
-
-      if (protocol !== 'ipfs://') {
-        throw new IpfsUploadError(`Could not parse IPFS text response with status >= 300: ${text}`);
-      }
-
-      if (cid === undefined || cid === '') {
-        throw new IpfsUploadError(`Could not parse IPFS text response with status >= 300: ${text}`);
-      }
-
+      validateCid(text);
       return text as `ipfs://${string}`;
     }
 
     const { hash } = await response.json();
-
-    const [protocol, cid] = hash.split('ipfs://');
-
-    if (protocol !== 'ipfs://') {
-      throw new IpfsUploadError(`Could not parse IPFS response: ${hash}`);
-    }
-
-    if (cid === undefined || cid === '') {
-      throw new IpfsUploadError(`Could not parse IPFS response: ${hash}`);
-    }
+    validateCid(hash);
 
     console.log('ipfs hash', hash);
     return hash;
@@ -74,11 +69,14 @@ export class IpfsClient {
 
     if (response.status >= 300) {
       const text = await response.text();
-      console.log(text);
+      validateCid(text);
+
       return text as `ipfs://${string}`;
     }
 
     const { hash } = await response.json();
+    validateCid(hash);
+
     console.log('ipfs hash', hash);
     return hash;
   }
