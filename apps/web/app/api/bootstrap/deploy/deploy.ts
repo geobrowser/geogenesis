@@ -67,6 +67,9 @@ interface DeployArgs {
   baseUrl: string;
 }
 
+const GENESIS_COMMIT_MESSAGE =
+  'Synchronizing every individual’s hopes and dreams into a shared reality. Block by block. Tick to tock. Interleaved. A genesis timeline is weaving the fabric of a new civilization with a beating heart.';
+
 export function deploySpace(args: DeployArgs) {
   return Effect.gen(function* () {
     yield* Effect.logInfo('Deploying space');
@@ -85,7 +88,7 @@ export function deploySpace(args: DeployArgs) {
     });
 
     const initialContent = createEditProposal({
-      name: args.spaceName,
+      name: GENESIS_COMMIT_MESSAGE,
       author: getChecksumAddress('0x993C35bB9A042692479b1CD7a1583f284d6bD5EC'),
       // @TODO Root
       ops: [...ops, ...(bootstrap as Op[])],
