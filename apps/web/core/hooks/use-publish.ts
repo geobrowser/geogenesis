@@ -6,7 +6,7 @@ import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
-import { check } from '../check';
+// import { check } from '../check';
 import { Triple } from '../database/Triple';
 import { getRelations } from '../database/relations';
 import { getTriples } from '../database/triples';
