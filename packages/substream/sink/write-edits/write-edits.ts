@@ -344,11 +344,19 @@ type AggregateAttributeVersionsArgs = {
 
 type AttributeVersionIdsByEditId = Map<string, Map<string, string>>;
 
+/**
+ * All data models in the knowledge graph which reference entities should also (or instead)
+ * reference a specific version of that entity. This function takes all of the attribute ids
+ * for each triple in the block and aggregates the latest version id for those attributes.
+ * These attribute version ids are later written to the triples written in this block.
+ *
+ * By default we take the latest version of each attribute from the db (the current version).
+ * If the attribute itself is being changed in an edit, we use the new version id from the edit
+ * instead of the current version id.
+ */
 function aggregateAttributeVersions(args: AggregateAttributeVersionsArgs): Effect.Effect<AttributeVersionIdsByEditId> {
   const { tripleOpsByVersionId, versionsByEdit, edits, editType } = args;
-  // Get all of the attribute entity ids for each edit
-  // Get current version for all entity ids
-  // Overwrite with any new versions in the edit
+
   const attributeEntityIds = [...tripleOpsByVersionId.values()].flatMap(ops => ops.map(o => o.triple.attribute));
   const uniqueAttributeEntityIds = dedupeWith(attributeEntityIds, (a, b) => a === b);
 
@@ -378,8 +386,8 @@ function aggregateAttributeVersions(args: AggregateAttributeVersionsArgs): Effec
       // an edit in an import might reference an edit in the import that hasn't been
       // "accepted" yet. We should treat these edits as if they are a single atomic
       // unit that will eventually be accepted.
-
       const versions = editType === 'IMPORT' ? [...versionsByEdit.values()].flat() : versionsInEdit;
+
       // Merge the versions from this block for this edit with any versions for this entity
       // from the database. We favor any versions from the block over the versions in the
       // database.
