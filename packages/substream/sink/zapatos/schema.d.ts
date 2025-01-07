@@ -3235,6 +3235,12 @@ declare module 'zapatos/schema' {
       */
       attribute_id: string;
       /**
+      * **triples.attribute_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_version_id: string;
+      /**
       * **triples.value_type**
       * - `triple_value_type` in database
       * - `NOT NULL`, no default
@@ -3302,6 +3308,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       attribute_id: string;
+      /**
+      * **triples.attribute_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_version_id: string;
       /**
       * **triples.value_type**
       * - `triple_value_type` in database
@@ -3371,6 +3383,12 @@ declare module 'zapatos/schema' {
       */
       attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **triples.attribute_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **triples.value_type**
       * - `triple_value_type` in database
       * - `NOT NULL`, no default
@@ -3439,6 +3457,12 @@ declare module 'zapatos/schema' {
       */
       attribute_id: string | db.Parameter<string> | db.SQLFragment;
       /**
+      * **triples.attribute_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_version_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **triples.value_type**
       * - `triple_value_type` in database
       * - `NOT NULL`, no default
@@ -3506,6 +3530,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **triples.attribute_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **triples.value_type**
       * - `triple_value_type` in database

@@ -10,6 +10,7 @@ import type { BlockEvent, DeleteTripleOp, SetTripleOp, ValueType } from '../type
 export function getTripleFromOp(
   op: SetTripleOp | DeleteTripleOp,
   versionId: string,
+  attributeVersionId: string,
   block: BlockEvent
 ): S.triples.Insertable {
   const { entity, attribute } = op.triple;
@@ -20,14 +21,15 @@ export function getTripleFromOp(
     const values = getValue(value_type, value);
 
     return {
+      ...values,
       version_id: versionId,
       space_id: op.space,
       entity_id: entity,
       attribute_id: attribute,
+      attribute_version_id: attributeVersionId,
       value_type,
       created_at: block.timestamp,
       created_at_block: block.blockNumber,
-      ...values,
     };
   }
 
@@ -36,6 +38,7 @@ export function getTripleFromOp(
     space_id: op.space,
     entity_id: entity,
     attribute_id: attribute,
+    attribute_version_id: attributeVersionId,
     value_type: 'TEXT', // this doesn't matter for deletes, but we populate it anyway for more ergonomic types
     created_at: block.timestamp,
     created_at_block: block.blockNumber,
