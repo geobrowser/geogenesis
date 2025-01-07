@@ -269,9 +269,9 @@ function makeProposal(args: MakeProposalArgs) {
     const cid = yield* IpfsEffectClient.upload(proposal);
     onChangePublishState('publishing-contract');
 
-    const [cidStartsWith, cidContains] = cid.split('ipfs://');
+    const [, cidContains] = cid.split('ipfs://');
 
-    if (cidStartsWith !== 'ipfs://') {
+    if (!cid.startsWith('ipfs://')) {
       yield* Effect.fail(new IpfsUploadError(`CID ${cid} does not start with ipfs://`));
       return;
     }
@@ -281,8 +281,10 @@ function makeProposal(args: MakeProposalArgs) {
       return;
     }
 
-    check(cidStartsWith === 'ipfs://', 'CID does not start with ipfs://');
-    check(cidContains !== null && cidContains !== '', 'CID is not valid');
+    check(cid.startsWith('ipfs://'), 'CID does not start with ipfs://');
+    check(cidContains !== undefined && cidContains !== '', 'CID is not valid');
+
+    return;
 
     const callData = getCalldataForSpaceGovernanceType({
       type: space.type,
@@ -325,14 +327,12 @@ function getCalldataForSpaceGovernanceType(args: GovernanceTypeCalldataArgs) {
       return encodeFunctionData({
         functionName: 'proposeEdits',
         abi: MainVotingAbi,
-        // @TODO: Function for encoding args
         args: [stringToHex(args.cid), args.cid, args.spacePluginAddress as `0x${string}`],
       });
     case 'PERSONAL':
       return encodeFunctionData({
         functionName: 'submitEdits',
         abi: PersonalSpaceAdminAbi,
-        // @TODO: Function for encoding args
         args: [args.cid, args.spacePluginAddress as `0x${string}`],
       });
   }
