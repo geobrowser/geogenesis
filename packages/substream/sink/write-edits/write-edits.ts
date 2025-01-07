@@ -83,8 +83,6 @@ export function writeEdits(args: PopulateContentArgs) {
       })
     );
 
-    console.log('attribute versions by edit id', attributeVersionsByEdit);
-
     // We might get multiple proposals at once in the same block that change the same set of entities.
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
