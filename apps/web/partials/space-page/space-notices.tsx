@@ -256,7 +256,7 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
         }}
         spaceId={spaceId}
         allowedTypes={[
-          { typeName: 'Space', typeId: SYSTEM_IDS.SPACE_CONFIGURATION, spaceIdOfAttribute: SYSTEM_IDS.ROOT_SPACE_ID },
+          { typeName: 'Space', typeId: SYSTEM_IDS.SPACE_TYPE, spaceIdOfAttribute: SYSTEM_IDS.ROOT_SPACE_ID },
           { typeName: 'Project', typeId: SYSTEM_IDS.PROJECT_TYPE, spaceIdOfAttribute: SYSTEM_IDS.ROOT_SPACE_ID },
         ]}
         inputClassName="!py-[3.5px]"

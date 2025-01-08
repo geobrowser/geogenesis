@@ -56,7 +56,7 @@ export const generateOpsForSpaceType = async ({
   ops.push(
     Relation.make({
       fromId: newEntityId,
-      toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+      toId: SYSTEM_IDS.SPACE_TYPE,
       relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
     })
   );

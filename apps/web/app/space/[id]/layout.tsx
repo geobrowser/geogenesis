@@ -238,7 +238,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     tabs.push(...PERSON_TABS);
   }
 
-  if (typeIds.includes(SYSTEM_IDS.SPACE_CONFIGURATION)) {
+  if (typeIds.includes(SYSTEM_IDS.SPACE_TYPE)) {
     tabs.push(...ALL_SPACES_TABS);
     if (!typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
       tabs.push(...SOME_SPACES_TABS);

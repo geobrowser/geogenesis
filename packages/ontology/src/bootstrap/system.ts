@@ -7,10 +7,10 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.ATTRIBUTE]: 'Attribute',
   [SYSTEM_IDS.COVER_ATTRIBUTE]: 'Cover',
   [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: 'Relation type',
-  [SYSTEM_IDS.ATTRIBUTES]: 'Attributes',
+  [SYSTEM_IDS.PROPERTIES]: 'Properties',
   [SYSTEM_IDS.SCHEMA_TYPE]: 'Type',
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: 'Template',
-  [SYSTEM_IDS.VALUE_TYPE]: 'Value type',
+  [SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE]: 'Value type',
   [SYSTEM_IDS.RELATION]: 'Relation',
   [SYSTEM_IDS.TEXT]: 'Text',
   [SYSTEM_IDS.CHECKBOX]: 'Checkbox',
@@ -25,7 +25,7 @@ const names: Record<string, string> = {
 
   [SYSTEM_IDS.TIME]: 'Date',
   [SYSTEM_IDS.URL]: 'URL',
-  [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
+  [SYSTEM_IDS.SPACE_TYPE]: 'Space',
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source space',
   [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: 'Verified source',
 
@@ -75,8 +75,9 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.PROJECT_TYPE]: 'Project',
   [SYSTEM_IDS.COMPANY_TYPE]: 'Company',
   [SYSTEM_IDS.PAGE_TYPE]: 'Page',
-  [SYSTEM_IDS.PEOPLE_PAGE]: 'People page',
   [SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE]: 'Page type',
+  [SYSTEM_IDS.NEWS_PAGE]: 'News page',
+  [SYSTEM_IDS.PEOPLE_PAGE]: 'People page',
   [SYSTEM_IDS.POSTS_PAGE]: 'Posts page',
   [SYSTEM_IDS.PROJECTS_PAGE]: 'Projects page',
   [SYSTEM_IDS.FINANCES_PAGE]: 'Finances page',
@@ -90,6 +91,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.ONTOLOGY_PAGE]: 'Ontology page',
 
   [SYSTEM_IDS.POST_TYPE]: 'Post',
+
 };
 
 const attributes: Record<string, string> = {
@@ -98,9 +100,9 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.COVER_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
   [SYSTEM_IDS.TYPES_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.ATTRIBUTES]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.PROPERTIES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.VALUE_TYPE]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: SYSTEM_IDS.CHECKBOX,
 
@@ -148,8 +150,8 @@ const schemaTypes: Record<string, string[]> = {
   [SYSTEM_IDS.TIME]: [],
   [SYSTEM_IDS.URL]: [],
   [SYSTEM_IDS.IMAGE]: [],
-  [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE],
-  [SYSTEM_IDS.SPACE_CONFIGURATION]: [],
+  [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE],
+  [SYSTEM_IDS.SPACE_TYPE]: [],
   [SYSTEM_IDS.IMAGE_BLOCK]: [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE],
   [SYSTEM_IDS.DATA_BLOCK]: [],
   [SYSTEM_IDS.TEXT_BLOCK]: [SYSTEM_IDS.MARKDOWN_CONTENT],
@@ -196,7 +198,7 @@ const attributeValueTypeOps: CreateRelationOp[] = Object.entries(attributes).fla
   return Relation.make({
     fromId: attributeId,
     toId: valueType,
-    relationTypeId: SYSTEM_IDS.VALUE_TYPE,
+    relationTypeId: SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE,
   });
 });
 
@@ -213,7 +215,7 @@ const typeSchemaOps: CreateRelationOp[] = Object.entries(schemaTypes).flatMap(([
     return Relation.make({
       fromId: typeId,
       toId: attributeId,
-      relationTypeId: SYSTEM_IDS.ATTRIBUTES,
+      relationTypeId: SYSTEM_IDS.PROPERTIES,
     });
   });
 });
