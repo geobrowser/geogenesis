@@ -2,8 +2,9 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { SpaceGovernanceType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import { Address, EntityId, type Address as IAddress, SpaceId, SubstreamEntity, SubstreamSpace } from '../schema';
-import { Entity, EntityDto } from './entities';
+import { Address, EntityId, type Address as IAddress, SpaceId, SubstreamSpace, SubstreamVersion } from '../schema';
+import { Entity } from './entities';
+import { VersionDto } from './versions';
 
 export type Space = {
   id: SpaceId;
@@ -11,7 +12,6 @@ export type Space = {
   editors: string[];
   members: string[];
   spaceConfig: SpaceConfigEntity;
-
   daoAddress: IAddress;
   spacePluginAddress: IAddress;
   mainVotingPluginAddress: Address | null;
@@ -25,7 +25,7 @@ export type SpaceConfigEntity = Entity & {
 };
 
 export function SpaceDto(space: SubstreamSpace): Space {
-  const spaceConfigEntity = SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.entity);
+  const spaceConfigEntity = SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.version);
 
   return {
     id: space.id,
@@ -42,8 +42,8 @@ export function SpaceDto(space: SubstreamSpace): Space {
   };
 }
 
-export function SpaceMetadataDto(spaceId: string, metadata: SubstreamEntity | undefined | null): SpaceConfigEntity {
-  const entity = metadata ? EntityDto(metadata) : null;
+export function SpaceMetadataDto(spaceId: string, metadata: SubstreamVersion | undefined | null): SpaceConfigEntity {
+  const entity = metadata ? VersionDto(metadata) : null;
 
   const spaceConfigWithImage: SpaceConfigEntity = entity
     ? {

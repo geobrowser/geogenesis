@@ -97,5 +97,5 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     return null;
   }
 
-  return SpaceDto(decodedSpace);
+  return SpaceDto(networkSpace as SubstreamSpace);
 }

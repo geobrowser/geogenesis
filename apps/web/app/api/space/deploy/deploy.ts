@@ -13,7 +13,7 @@ import { VotingMode, getChecksumAddress } from '@geogenesis/sdk';
 import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
-import { providers } from 'ethers';
+import { ethers, providers } from 'ethers';
 import { v4 as uuid } from 'uuid';
 import { encodeFunctionData, stringToHex, zeroAddress } from 'viem';
 
@@ -55,6 +55,9 @@ class GenerateOpsError extends Error {
 class WaitForSpaceToBeIndexedError extends Error {
   readonly _tag = 'WaitForSpaceToBeIndexedError';
 }
+
+const RATIO_BASE = ethers.BigNumber.from(10).pow(6); // 100% => 10**6
+const pctToRatio = (x: number) => RATIO_BASE.mul(x).div(100);
 
 interface DeployArgs {
   type: SpaceType;
@@ -107,7 +110,7 @@ export function deploySpace(args: DeployArgs) {
       const governancePluginConfig: Parameters<typeof getGovernancePluginInstallItem>[0] = {
         votingSettings: {
           votingMode: VotingMode.EarlyExecution,
-          supportThreshold: 50_000,
+          supportThreshold: pctToRatio(50),
           duration: BigInt(60 * 60 * 4), // 4 hours
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 4), // 4 hours
@@ -205,7 +208,13 @@ function getGovernanceTypeForSpaceType(type: SpaceType, governanceType?: SpaceGo
       // should exist based on the space type.
       return governanceType ?? 'PUBLIC';
 
-    // @TODO: Space types for each of the governance types
+    case 'academic-field':
+    case 'dao':
+    case 'industry':
+    case 'interest-group':
+    case 'region':
+    case 'protocol':
+      return 'PUBLIC';
     default:
       return 'PERSONAL';
   }
@@ -218,7 +227,9 @@ const query = (daoAddress: string) => ` {
 
       spacesMetadata {
         nodes {
-          entityId
+          version {
+            entityId
+          }
         }
       }
     }

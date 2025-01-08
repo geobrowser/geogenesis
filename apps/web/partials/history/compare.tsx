@@ -5,7 +5,6 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 
 import { useVersionChanges } from '~/core/hooks/use-version-changes';
-import { EntityId } from '~/core/io/schema';
 import { useDiff } from '~/core/state/diff-store';
 import { formatShortAddress } from '~/core/utils/utils';
 

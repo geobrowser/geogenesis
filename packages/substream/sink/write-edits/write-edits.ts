@@ -3,7 +3,7 @@ import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
+import { CurrentVersions, Entities, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import type { BlockEvent, CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SetTripleOp } from '../types';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
@@ -14,9 +14,7 @@ class CouldNotWriteVersionsError extends Data.TaggedError('CouldNotWriteVersions
 class CouldNotWriteEntitiesError extends Data.TaggedError('CouldNotWriteEntitiesError')<{ message: string }> {}
 class CouldNotWriteRelationsError extends Data.TaggedError('CouldNotWriteRelationsError')<{ message: string }> {}
 class CouldNotWriteVersionTypesError extends Data.TaggedError('CouldNotWriteVersionTypesError')<{ message: string }> {}
-class CouldNotWriteSpaceMetadataError extends Data.TaggedError('CouldNotWriteSpaceMetadataError')<{
-  message: string;
-}> {}
+
 class CouldNotWriteVersionSpacesError extends Data.TaggedError('CouldNotWriteVersionSpacesError')<{
   message: string;
 }> {}
@@ -54,8 +52,8 @@ interface PopulateContentArgs {
  */
 export function writeEdits(args: PopulateContentArgs) {
   const { versions, tripleOpsByVersionId, relationOpsByEditId, edits, block, editType } = args;
-  const spaceIdByEditId = new Map<string, string>();
 
+  const spaceIdByEditId = new Map<string, string>();
   for (const edit of edits) {
     spaceIdByEditId.set(edit.id.toString(), edit.space_id.toString());
   }
@@ -65,7 +63,24 @@ export function writeEdits(args: PopulateContentArgs) {
   const versionsWithMetadata: Schema.versions.Insertable[] = [];
   const versionSpaces: Schema.version_spaces.Insertable[] = [];
 
+  const versionsByEdit = new Map<string, Schema.versions.Insertable[]>();
+  for (const version of versions) {
+    const editId = version.edit_id.toString();
+    const versionsForEdit = versionsByEdit.get(editId) ?? [];
+    versionsByEdit.set(editId, [...versionsForEdit, version]);
+  }
+
   return Effect.gen(function* (_) {
+    // Aggregate all of the attribute versions for each edit
+    const attributeVersionsByEdit = yield* _(
+      aggregateAttributeVersions({
+        edits,
+        versionsByEdit,
+        tripleOpsByVersionId,
+        editType,
+      })
+    );
+
     // We might get multiple proposals at once in the same block that change the same set of entities.
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
@@ -87,7 +102,14 @@ export function writeEdits(args: PopulateContentArgs) {
         ops: tripleOpsByVersionId.get(version.id.toString()) ?? [],
       };
 
-      const triplesForVersion = mapSchemaTriples(editWithCreatedById, block);
+      const maybeAttributeVersions = attributeVersionsByEdit.get(version.edit_id.toString());
+
+      if (!maybeAttributeVersions) {
+        console.error(`No attribute versions for edit ${version.edit_id}`);
+        continue;
+      }
+
+      const triplesForVersion = mapSchemaTriples(editWithCreatedById, maybeAttributeVersions, block);
       triplesWithCreatedBy.push(...triplesForVersion);
 
       const setTriples = triplesForVersion.filter(t => t.op === 'SET_TRIPLE');
@@ -177,7 +199,6 @@ export function writeEdits(args: PopulateContentArgs) {
     // type entity and compare them against the type_of_id version for each relatons to see
     // of the type_of_id is for the type entity.
     const versionTypes = yield* _(aggregateTypesFromRelationsAndTriples(relations));
-    const spaceMetadata = yield* _(aggregateSpacesFromRelations(relations, versions, spaceIdByEditId));
 
     yield* _(
       Effect.tryPromise({
@@ -189,15 +210,21 @@ export function writeEdits(args: PopulateContentArgs) {
       })
     );
 
-    yield* _(
-      Effect.tryPromise({
-        try: () => SpaceMetadata.upsert(spaceMetadata),
-        catch: error =>
-          new CouldNotWriteSpaceMetadataError({
-            message: `Failed to insert space metadata. ${(error as Error).message}`,
-          }),
-      })
-    );
+    // There should only be one space metadata entry per space
+    // It has to be one set as a current version/accepted and not one that hasn't
+    // been accepted yet.
+    const spaceMetadata = yield* _(aggregateSpacesFromRelations(relations));
+    return spaceMetadata;
+
+    // yield* _(
+    //   Effect.tryPromise({
+    //     try: () => SpaceMetadata.upsert(spaceMetadata),
+    //     catch: error =>
+    //       new CouldNotWriteSpaceMetadataError({
+    //         message: `Failed to insert space metadata. ${(error as Error).message}`,
+    //       }),
+    //   })
+    // );
   });
 }
 
@@ -236,15 +263,8 @@ function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Inser
   });
 }
 
-function aggregateSpacesFromRelations(
-  relations: Schema.relations.Insertable[],
-  versions: Schema.versions.Insertable[],
-  spaceIdByEditId: Map<string, string>
-) {
+export function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) {
   return Effect.gen(function* (_) {
-    // space entity id -> entityIds[]
-    const spaceConfigEntityVersionIds = new Set<string>();
-
     const [typesVersions, spaceConfigsVersions] = yield* _(
       Effect.all(
         [
@@ -258,55 +278,98 @@ function aggregateSpacesFromRelations(
     const typeVersionIds = new Set(typesVersions.map(v => v.id.toString()));
     const spaceConfigVersionIds = new Set(spaceConfigsVersions.map(v => v.id.toString()));
 
+    const spaceMetadatas: Schema.spaces_metadata.Insertable[] = [];
+
     for (const relation of relations) {
       const fromVersionId = relation.from_version_id.toString();
       const toVersionId = relation.to_version_id.toString();
 
       if (typeVersionIds.has(relation.type_of_id.toString()) && spaceConfigVersionIds.has(toVersionId)) {
-        spaceConfigEntityVersionIds.add(fromVersionId);
+        spaceMetadatas.push({
+          space_id: relation.space_id,
+          version_id: fromVersionId,
+        });
       }
     }
 
-    // Map space config entity versions to their entity ids
-    // Map all space config entity version ids from this block to their entity ids and space ids
-    const entityIdByVersionId = new Map<string, string>();
+    return spaceMetadatas;
+  });
+}
 
-    for (const version of versions) {
-      entityIdByVersionId.set(version.id.toString(), version.entity_id.toString());
+type AggregateAttributeVersionsArgs = {
+  tripleOpsByVersionId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
+  versionsByEdit: Map<string, Schema.versions.Insertable[]>;
+  edits: Schema.edits.Insertable[];
+  editType: 'IMPORT' | 'DEFAULT';
+};
+
+type AttributeVersionIdsByEditId = Map<string, Map<string, string>>;
+
+/**
+ * All data models in the knowledge graph which reference entities should also (or instead)
+ * reference a specific version of that entity. This function takes all of the attribute ids
+ * for each triple in the block and aggregates the latest version id for those attributes.
+ * These attribute version ids are later written to the triples written in this block.
+ *
+ * By default we take the latest version of each attribute from the db (the current version).
+ * If the attribute itself is being changed in an edit, we use the new version id from the edit
+ * instead of the current version id.
+ */
+function aggregateAttributeVersions(args: AggregateAttributeVersionsArgs): Effect.Effect<AttributeVersionIdsByEditId> {
+  const { tripleOpsByVersionId, versionsByEdit, edits, editType } = args;
+
+  const attributeEntityIds = [...tripleOpsByVersionId.values()].flatMap(ops => ops.map(o => o.triple.attribute));
+  const uniqueAttributeEntityIds = dedupeWith(attributeEntityIds, (a, b) => a === b);
+
+  return Effect.gen(function* (_) {
+    const maybeCurrentVersionForAttributeIds = (yield* _(
+      Effect.forEach(
+        uniqueAttributeEntityIds,
+        entityId => Effect.promise(() => CurrentVersions.selectOne({ entity_id: entityId })),
+        { concurrency: 15 }
+      )
+    )).filter(v => !!v);
+
+    const currentVersionByEntityId = new Map<string, string>();
+    for (const version of maybeCurrentVersionForAttributeIds) {
+      currentVersionByEntityId.set(version.entity_id.toString(), version.version_id.toString());
     }
 
-    const versionIdToEditId = versions.reduce(
-      (acc, v) => {
-        acc.set(v.id.toString(), v.edit_id.toString());
-        return acc;
-      },
-      // version id -> edit id
-      new Map<string, string>()
-    );
+    const attributeVersionIdsByEditId = new Map<string, Map<string, string>>();
 
-    const spaceVersions = [...versionIdToEditId.entries()].reduce(
-      (acc, [versionId, editId]) => {
-        acc.set(versionId, spaceIdByEditId.get(editId)!);
-        return acc;
-      },
-      // version id -> space id
-      new Map<string, string>()
-    );
+    for (const edit of edits) {
+      const editId = edit.id.toString();
+      const versionsInEdit = versionsByEdit.get(editId) ?? [];
+      const attributeVersionsInEditByEntityId = new Map<string, string>();
 
-    return [...spaceConfigEntityVersionIds.values()]
-      .map(spaceConfigEntityVersionId => {
-        const entityIdForVersionId = entityIdByVersionId.get(spaceConfigEntityVersionId);
-        if (!entityIdForVersionId) {
-          return null;
-        }
+      // If we're reading a set of imported edits we want to use all of the versions
+      // from the set and not just the versions from the current edit. This is because
+      // an edit in an import might reference an edit in the import that hasn't been
+      // "accepted" yet. We should treat these edits as if they are a single atomic
+      // unit that will eventually be accepted.
+      const versions = editType === 'IMPORT' ? [...versionsByEdit.values()].flat() : versionsInEdit;
 
-        const spaceMetadata: Schema.spaces_metadata.Insertable = {
-          space_id: spaceVersions.get(spaceConfigEntityVersionId)!,
-          entity_id: entityIdForVersionId,
-        };
+      // Merge the versions from this block for this edit with any versions for this entity
+      // from the database. We favor any versions from the block over the versions in the
+      // database.
+      const allReferencedAttributeVersions = [
+        ...maybeCurrentVersionForAttributeIds.map(cv => {
+          return {
+            id: cv.version_id,
+            entity_id: cv.entity_id,
+          };
+        }),
 
-        return spaceMetadata;
-      })
-      .filter(m => m !== null);
+        ...versions,
+      ];
+
+      for (const version of allReferencedAttributeVersions) {
+        attributeVersionsInEditByEntityId.set(version.entity_id.toString(), version.id.toString());
+      }
+
+      attributeVersionIdsByEditId.set(editId, attributeVersionsInEditByEntityId);
+    }
+
+    return attributeVersionIdsByEditId;
   });
 }

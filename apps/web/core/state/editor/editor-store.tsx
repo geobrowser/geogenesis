@@ -187,16 +187,16 @@ const makeBlocksRelations = async ({
 export function useEditorStore() {
   const { id: entityId, spaceId, initialBlockRelations, initialBlocks } = useEditorInstance();
 
-  const blockRelations = useRelations(
+  const relations = useRelations(
     React.useMemo(() => {
       return {
         mergeWith: initialBlockRelations,
         selector: r => r.fromEntity.id === entityId && r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS),
       };
     }, [initialBlockRelations, entityId])
-  )
-    .map(relationToRelationWithBlock)
-    .sort(sortByIndex);
+  );
+
+  const blockRelations = relations.map(relationToRelationWithBlock).sort(sortByIndex);
 
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
@@ -235,10 +235,14 @@ export function useEditorStore() {
         }
 
         if (toEntity?.type === 'DATA') {
+          const relationId = relations.find(r => r.toEntity.id === blockId)?.id;
+
           return {
             type: 'tableNode',
             attrs: {
               id: blockId,
+              relationId,
+              spaceId,
             },
           };
         }
@@ -273,7 +277,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockIds, blockRelations, initialBlocks, spaceId]);
+  }, [blockIds, blockRelations, initialBlocks, relations, spaceId]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
@@ -406,6 +410,7 @@ export function useEditorStore() {
             // createTableBlockMetadata(node);
             break;
           case 'bulletList':
+          case 'heading':
           case 'paragraph': {
             const ops = TextEntity.getTextEntityOps(node);
             DB.upsertMany(ops, spaceId);
@@ -425,5 +430,7 @@ export function useEditorStore() {
     upsertEditorState,
     editorJson,
     blockIds,
+    relations,
+    blockRelations,
   };
 }

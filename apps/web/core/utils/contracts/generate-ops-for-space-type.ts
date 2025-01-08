@@ -90,9 +90,71 @@ export const generateOpsForSpaceType = async ({
       ops.push(...nonprofitOps);
       break;
     }
-    default: {
+    case 'academic-field':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.ACADEMIC_FIELD_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
       break;
-    }
+    case 'dao':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.DAO_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    case 'government-org':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.GOVERNMENT_ORG_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    case 'industry':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.INDUSTRY_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    case 'interest-group':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.INTEREST_GROUP_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    case 'protocol':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.PROTOCOL_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    case 'region':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.REGION_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    default:
+      break;
   }
 
   if (spaceAvatarUri) {

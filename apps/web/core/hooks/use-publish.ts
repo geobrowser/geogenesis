@@ -6,12 +6,13 @@ import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
+// import { check } from '../check';
 import { Triple } from '../database/Triple';
 import { getRelations } from '../database/relations';
 import { getTriples } from '../database/triples';
 import { StoredTriple } from '../database/types';
 import { useWriteOps } from '../database/write';
-import { TransactionWriteFailedError } from '../errors';
+import { IpfsUploadError, TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';
 import { useStatusBar } from '../state/status-bar-store';
@@ -268,11 +269,17 @@ function makeProposal(args: MakeProposalArgs) {
     const cid = yield* IpfsEffectClient.upload(proposal);
     onChangePublishState('publishing-contract');
 
+    const [, cidContains] = cid.split('ipfs://');
+
+    // yield* check(() => cid.startsWith('ipfs://'), 'CID does not start with ipfs://');
+    // yield* check(() => cidContains !== undefined && cidContains !== '', 'CID is not valid');
+
     const callData = getCalldataForSpaceGovernanceType({
       type: space.type,
       cid,
       spacePluginAddress: space.spacePluginAddress,
     });
+    // return;
 
     return yield* Effect.tryPromise({
       try: () =>
@@ -309,14 +316,12 @@ function getCalldataForSpaceGovernanceType(args: GovernanceTypeCalldataArgs) {
       return encodeFunctionData({
         functionName: 'proposeEdits',
         abi: MainVotingAbi,
-        // @TODO: Function for encoding args
         args: [stringToHex(args.cid), args.cid, args.spacePluginAddress as `0x${string}`],
       });
     case 'PERSONAL':
       return encodeFunctionData({
         functionName: 'submitEdits',
         abi: PersonalSpaceAdminAbi,
-        // @TODO: Function for encoding args
         args: [args.cid, args.spacePluginAddress as `0x${string}`],
       });
   }

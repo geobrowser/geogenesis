@@ -35,41 +35,19 @@ export const versionTypesFragment = `
 `;
 
 export const tripleFragment = `
-  attribute {
-    id
-    currentVersion {
-      version {
-        id
-        name
-      }
-    }
+  attributeVersion {
+    entityId
+    name
   }
-  entity {
-    id
-    currentVersion {
-      version {
-        id
-        name
-      }
-    }
-  }
-  entityValue {
-    id
-    currentVersion {
-      version {
-        id
-        name
-        ${versionTypesFragment}
-      }
-    }
+  version {
+    entityId
+    name
   }
   numberValue
   textValue
   booleanValue
   valueType
-  space {
-    id
-  }
+  spaceId
 `;
 
 /**
@@ -186,23 +164,37 @@ export const versionFragment = `
 `;
 
 export const spaceMetadataFragment = `
-  id
-  name
-  description
-  versionSpaces {
+  spacesMetadata(
+    first: 1
+    orderBy: VERSION_BY_VERSION_ID__CREATED_AT_DESC
+    filter: {
+      version: {
+        edit: { proposals: { some: { status: { equalTo: ACCEPTED } } } }
+      }
+    }) {
     nodes {
-      spaceId
-    }
-  }
-  ${versionTypesFragment}
-  relationsByFromVersionId {
-    nodes {
-      ${relationFragment}
-    }
-  }
-  triples {
-    nodes {
-      ${tripleFragment}
+      version {
+        id
+        entityId
+        name
+        description
+        versionSpaces {
+          nodes {
+            spaceId
+          }
+        }
+        ${versionTypesFragment}
+        relationsByFromVersionId {
+          nodes {
+            ${relationFragment}
+          }
+        }
+        triples {
+          nodes {
+            ${tripleFragment}
+          }
+        }
+      }
     }
   }
 `;
@@ -226,19 +218,7 @@ export const spaceFragment = `
   }
 
   createdAtBlock
-
-  spacesMetadata {
-    nodes {
-      entity {
-        id
-        currentVersion {
-          version {
-            ${versionFragment}
-          }
-        }
-      }
-    }
-  }
+  ${spaceMetadataFragment}
 `;
 
 export const resultEntityFragment = `

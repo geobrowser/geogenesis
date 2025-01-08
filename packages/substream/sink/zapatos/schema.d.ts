@@ -3140,11 +3140,11 @@ declare module 'zapatos/schema' {
       */
       space_id: string;
       /**
-      * **spaces_metadata.entity_id**
+      * **spaces_metadata.version_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_id: string;
+      version_id: string;
     }
     export interface JSONSelectable {
       /**
@@ -3154,11 +3154,11 @@ declare module 'zapatos/schema' {
       */
       space_id: string;
       /**
-      * **spaces_metadata.entity_id**
+      * **spaces_metadata.version_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_id: string;
+      version_id: string;
     }
     export interface Whereable {
       /**
@@ -3168,11 +3168,11 @@ declare module 'zapatos/schema' {
       */
       space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **spaces_metadata.entity_id**
+      * **spaces_metadata.version_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -3182,11 +3182,11 @@ declare module 'zapatos/schema' {
       */
       space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **spaces_metadata.entity_id**
+      * **spaces_metadata.version_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_id: string | db.Parameter<string> | db.SQLFragment;
+      version_id: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -3196,13 +3196,13 @@ declare module 'zapatos/schema' {
       */
       space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **spaces_metadata.entity_id**
+      * **spaces_metadata.version_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
-    export type UniqueIndex = 'space_metadata_unique_entity_space_pair';
+    export type UniqueIndex = 'spaces_metadata_unique_id';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
     export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
@@ -3234,6 +3234,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       attribute_id: string;
+      /**
+      * **triples.attribute_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_version_id: string;
       /**
       * **triples.value_type**
       * - `triple_value_type` in database
@@ -3302,6 +3308,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       attribute_id: string;
+      /**
+      * **triples.attribute_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_version_id: string;
       /**
       * **triples.value_type**
       * - `triple_value_type` in database
@@ -3371,6 +3383,12 @@ declare module 'zapatos/schema' {
       */
       attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **triples.attribute_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **triples.value_type**
       * - `triple_value_type` in database
       * - `NOT NULL`, no default
@@ -3439,6 +3457,12 @@ declare module 'zapatos/schema' {
       */
       attribute_id: string | db.Parameter<string> | db.SQLFragment;
       /**
+      * **triples.attribute_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_version_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **triples.value_type**
       * - `triple_value_type` in database
       * - `NOT NULL`, no default
@@ -3506,6 +3530,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **triples.attribute_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **triples.value_type**
       * - `triple_value_type` in database

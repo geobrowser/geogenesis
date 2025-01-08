@@ -136,6 +136,7 @@ CREATE TABLE public.triples (
     space_id text NOT NULL REFERENCES public.spaces(id),
     entity_id text NOT NULL REFERENCES public.entities(id),
     attribute_id text NOT NULL REFERENCES public.entities(id),
+    attribute_version_id text NOT NULL REFERENCES public.versions(id),
     value_type triple_value_type NOT NULL,
     number_value text,
     text_value text,
@@ -148,8 +149,8 @@ CREATE TABLE public.triples (
 
 CREATE TABLE public.spaces_metadata (
     space_id text NOT NULL REFERENCES public.spaces(id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
-    CONSTRAINT space_metadata_unique_entity_space_pair UNIQUE (entity_id, space_id)
+    version_id text NOT NULL REFERENCES public.versions(id),
+    CONSTRAINT spaces_metadata_unique_id UNIQUE (space_id)
 );
 
 CREATE TABLE public.proposal_votes (
@@ -248,7 +249,6 @@ ALTER TABLE
 ALTER TABLE
     public.versions DISABLE TRIGGER ALL;
 ALTER TABLE
-
     public.edits DISABLE TRIGGER ALL;
 
 ALTER TABLE
