@@ -22,16 +22,16 @@ const POSITIONS = getBlockPositions();
 
 const NONPROFIT: Template[] = [
   {
-    id: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
+    id: SYSTEM_IDS.NONPROFIT_OVERVIEW_PAGE_TEMPLATE,
     name: 'Nonprofit Space Configuration Template',
     blocks: [
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.NONPROFIT_OVERVIEW_PAGE_TEMPLATE,
         text: '## Welcome to our nonprofit!',
         position: POSITIONS.first,
       }),
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.NONPROFIT_OVERVIEW_PAGE_TEMPLATE,
         text: `We're thrilled to have you here. At our core, we are driven by a passionate commitment to positive change. As a community, we believe in the power of collective action to make a difference, no matter how big or small. Together, we can create meaningful impact and contribute to a better world. Thank you for joining us on this journey towards a brighter future.`,
         position: POSITIONS.second,
       }),
@@ -129,21 +129,21 @@ const NONPROFIT: Template[] = [
 
 const COMPANY: Template[] = [
   {
-    id: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+    id: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
     name: 'Company Space Configuration Template',
     blocks: [
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
         text: '## Welcome to our company!',
         position: POSITIONS.first,
       }),
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
         text: `We're dedicated to pushing boundaries and fostering innovation. With a focus on excellence and a passion for progress, we strive to make a positive impact in everything we do. From our talented team to our cutting-edge solutions, we're committed to delivering unparalleled quality and service to our customers.`,
         position: POSITIONS.second,
       }),
       ...DataBlock.make({
-        fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
         sourceType: 'COLLECTION',
         name: 'Goals',
         position: POSITIONS.third,
@@ -276,27 +276,27 @@ const COMPANY: Template[] = [
 
 const PERSON: Template[] = [
   {
-    id: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+    id: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
     name: 'Person Space Configuration Template',
     blocks: [
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
         text: '## Welcome to my personal space',
         position: POSITIONS.first,
       }),
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
         text: `This space is where I compile my interests, posts, collections, and a summary of myself, along with anything else I'd like to share with the broader Geo community.`,
         position: POSITIONS.second,
       }),
       ...DataBlock.make({
-        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
         sourceType: 'COLLECTION',
         name: 'Goals',
         position: POSITIONS.third,
       }),
       ...DataBlock.make({
-        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
         sourceType: 'COLLECTION',
         name: 'Skills',
         position: POSITIONS.fourth,
