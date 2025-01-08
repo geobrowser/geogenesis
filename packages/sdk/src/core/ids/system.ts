@@ -134,10 +134,17 @@ export const VERIFIED_SOURCE_ATTRIBUTE = '5jodArZNFzucsYzQaDVFBL';
 export const SOURCE_SPACE_ATTRIBUTE = 'GzkEQP3yedWjXE8QPFKEwV';
 
 /** Core types */
+export const ACADEMIC_FIELD_TYPE = 'ExCjm3rzYVfpMRwDchdrEe';
 export const COMPANY_TYPE = 'UhpHYoFEzAov9WwqtDwQk4';
+export const DAO_TYPE = 'Hh8hc47TMBvRsD4oqUNxP9';
+export const GOVERNMENT_ORG_TYPE = 'MokrHqV4jZhBfPN3mLPjM8';
+export const INDUSTRY_TYPE = 'YA7mhzaafD2vnjekmcnLER';
+export const INTEREST_GROUP_TYPE = '6VSi54UDKnL34BWHBqdzee';
 export const NONPROFIT_TYPE = 'RemzN69c24othsp2rP7yMX';
 export const POST_TYPE = 'X7KuZJQewaCiCy9QV2vjyv';
 export const PROJECT_TYPE = '9vk7Q3pz7US3s2KePFQrJT';
+export const PROTOCOL_TYPE = 'R9Xo87Q6oaxfSBrHvVQFdS';
+export const REGION_TYPE = 'Qu6vfQq68ecZ4PkihJ4nZN';
 export const ROOT_SPACE_TYPE = 'k7vbnMPxzdtGL2J3uaB6d';
 export const SPACE_CONFIGURATION = 'EXWTH2k6qquguZ8CCfMp9K';
 
@@ -220,7 +227,6 @@ export const NONPROFIT_CATEGORIES_ATTRIBUTE = '64uVL5vKHmfqBC94hwNzHZ';
 export const PHONE_NUMBER_ATTRIBUTE = '3zhuyrcqFjeaVgC5oHHqTJ';
 export const QUOTES_ATTRIBUTE = 'XXAf2w4C5f4URDhhpH8nUG';
 export const REGION_ATTRIBUTE = 'CGC6KXy8wcqf7vpZv8HH4i';
-export const REGION_TYPE = 'Qu6vfQq68ecZ4PkihJ4nZN';
 export const RELATED_TOPICS_ATTRIBUTE = 'SDw38koZeFukda9FWU9bfW';
 export const RELEVANT_QUESTIONS_ATTRIBUTE = 'Po4uUtzinhjDwXJP5QNCMp';
 export const SPEAKERS_ATTRIBUTE = '9nZuGhssmkEBn9DtRca8Gm';
