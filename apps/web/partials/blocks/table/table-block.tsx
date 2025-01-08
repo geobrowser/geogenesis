@@ -67,10 +67,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
   const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
 
-  // @TODO(relations): This should live on the relation pointing to the block and not the block itself. It is
-  // also a relation and not a triple.
-  const viewTriple = (blockEntity?.triples ?? []).find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
-
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
    * special handling when creating the graphql string.
@@ -129,7 +125,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             color="grey-04"
           />
 
-          <DataBlockViewMenu activeView={view} viewTriple={viewTriple} isLoading={isLoading} />
+          <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu
             allColumns={allColumns}
             shownColumnRelations={shownColumnRelations}
