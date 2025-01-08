@@ -55,6 +55,9 @@ const names: Record<string, string> = {
   [CONTENT_IDS.PERSON_ATTRIBUTE]: 'Person',
   [CONTENT_IDS.PROJECT_ATTRIBUTE]: 'Project',
   [CONTENT_IDS.RELATED_SPACES_ATTRIBUTE]: 'Related spaces',
+
+  [CONTENT_IDS.VALUE_TYPE]: 'Value',
+  [CONTENT_IDS.PRINCIPLE_TYPE]: 'Principle',
 };
 
 const attributes: Record<string, string> = {
@@ -284,6 +287,8 @@ const schemaTypes: Record<string, string[]> = {
     CONTENT_IDS.RELATED_PROJECTS_ATTRIBUTE,
     CONTENT_IDS.RELATED_TOPICS_ATTRIBUTE,
   ],
+  [CONTENT_IDS.VALUE_TYPE]: [],
+  [CONTENT_IDS.PRINCIPLE_TYPE]: [],
 };
 
 const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
@@ -312,7 +317,7 @@ const attributeValueTypeOps: CreateRelationOp[] = Object.entries(attributes).fla
   return Relation.make({
     fromId: attributeId,
     toId: valueType,
-    relationTypeId: SYSTEM_IDS.VALUE_TYPE,
+    relationTypeId: SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE,
   });
 });
 
@@ -329,7 +334,7 @@ const typeSchemaOps: CreateRelationOp[] = Object.entries(schemaTypes).flatMap(([
     return Relation.make({
       fromId: typeId,
       toId: attributeId,
-      relationTypeId: SYSTEM_IDS.ATTRIBUTES,
+      relationTypeId: SYSTEM_IDS.PROPERTIES,
     });
   });
 });

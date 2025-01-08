@@ -269,7 +269,7 @@ export function aggregateSpacesFromRelations(relations: Schema.relations.Inserta
       Effect.all(
         [
           Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES_ATTRIBUTE })),
-          Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.SPACE_CONFIGURATION })),
+          Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.SPACE_TYPE })),
         ],
         { concurrency: 2 }
       )
