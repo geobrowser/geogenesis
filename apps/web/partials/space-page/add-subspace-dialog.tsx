@@ -57,9 +57,9 @@ interface ContentProps {
 const subspacesQuery = (name: string, notIn: string[]) => `
   {
     spaces(
-      filter: { spacesMetadata: { some: { entity: { currentVersion: { version: { name: { includesInsensitive: "${name}" } } } } } }, id: { notIn: ${JSON.stringify(
-        notIn
-      )} } }
+            filter: { spacesMetadatum: { version: { name: { includesInsensitive: "${name}" } } } }, id: { notIn: ${JSON.stringify(
+              notIn
+            )} } }
       first: 10
     ) {
       nodes {
