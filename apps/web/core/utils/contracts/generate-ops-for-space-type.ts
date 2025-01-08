@@ -1,4 +1,4 @@
-import { Account, CONTENT_IDS, Image, Op, Relation, SYSTEM_IDS, TextBlock } from '@geogenesis/sdk';
+import { Account, CONTENT_IDS, Image, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import type { SpaceType } from '~/core/types';
@@ -36,21 +36,6 @@ export const generateOpsForSpaceType = async ({
       },
     })
   );
-
-  // @TODO: Remove
-  // ----------
-  ops.push(
-    Relation.make({
-      fromId: newEntityId,
-      toId: SYSTEM_IDS.ROOT_SPACE_TYPE,
-      relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-    })
-  );
-
-  ops.push(...makeEducationTabOps());
-  ops.push(...makeAboutTabOps());
-  ops.push(...makeOntologyTabOps());
-  // ----------
 
   // Add the space configuration type to every deployed space entity
   ops.push(
@@ -191,93 +176,3 @@ export const generateOpsForSpaceType = async ({
 
   return ops;
 };
-
-function makeEducationTabOps() {
-  const educationTabId = ID.createEntityId();
-  const ops: Op[] = [];
-
-  ops.push(
-    Relation.make({
-      fromId: educationTabId,
-      relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-      toId: SYSTEM_IDS.PAGE_TYPE,
-    })
-  );
-
-  ops.push(
-    Relation.make({
-      fromId: educationTabId,
-      relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
-      toId: SYSTEM_IDS.EDUCATION_PAGE,
-    })
-  );
-
-  ops.push(
-    ...TextBlock.make({
-      fromId: educationTabId,
-      text: 'Discover guides, lessons and tutorials to learn and grow your expertise.',
-    })
-  );
-
-  return ops;
-}
-
-function makeAboutTabOps() {
-  const aboutTabId = ID.createEntityId();
-  const ops: Op[] = [];
-
-  ops.push(
-    Relation.make({
-      fromId: aboutTabId,
-      relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-      toId: SYSTEM_IDS.PAGE_TYPE,
-    })
-  );
-
-  ops.push(
-    Relation.make({
-      fromId: aboutTabId,
-      relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
-      toId: SYSTEM_IDS.ABOUT_PAGE,
-    })
-  );
-
-  ops.push(
-    ...TextBlock.make({
-      fromId: aboutTabId,
-      text: 'This is our purpose and what we aim to achieve.',
-    })
-  );
-
-  return ops;
-}
-
-function makeOntologyTabOps() {
-  const ontologyTabId = ID.createEntityId();
-  const ops: Op[] = [];
-
-  ops.push(
-    Relation.make({
-      fromId: ontologyTabId,
-      relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-      toId: SYSTEM_IDS.PAGE_TYPE,
-    })
-  );
-
-  ops.push(
-    Relation.make({
-      fromId: ontologyTabId,
-      relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
-      toId: SYSTEM_IDS.ONTOLOGY_PAGE,
-    })
-  );
-
-  ops.push(
-    ...TextBlock.make({
-      fromId: ontologyTabId,
-      text: 'These are the core types and attributes we use to structure information.',
-    })
-  );
-
-  return ops;
-}
