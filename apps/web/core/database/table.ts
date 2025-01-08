@@ -106,7 +106,7 @@ export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
   });
 
   const localAttributesForSelectedType = getRelations({
-    selector: r => r.typeOf.id === SYSTEM_IDS.ATTRIBUTES && typeIds.includes(r.fromEntity.id),
+    selector: r => r.typeOf.id === SYSTEM_IDS.PROPERTIES && typeIds.includes(r.fromEntity.id),
   }).map((r): Schema => {
     return {
       id: r.toEntity.id,

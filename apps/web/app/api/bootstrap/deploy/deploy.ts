@@ -9,7 +9,7 @@ import {
 import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
-import { VotingMode, getChecksumAddress } from '@geogenesis/sdk';
+import { Op, VotingMode, getChecksumAddress } from '@geogenesis/sdk';
 import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
@@ -26,15 +26,16 @@ import { slog } from '~/core/utils/utils';
 import { publicClient, signer, walletClient } from '../../client';
 import { IpfsService } from '../../ipfs/ipfs-service';
 import { Metrics } from '../../metrics';
-import { Telemetry } from '../../telemetry';
-import { abi as DaoFactoryAbi } from './abi';
+import { abi as DaoFactoryAbi } from '../../space/deploy/abi';
 import {
   CreateGeoDaoParams,
   PluginInstallationWithViem,
   getGovernancePluginInstallItem,
   getPersonalSpaceGovernancePluginInstallItem,
   getSpacePluginInstallItem,
-} from './encodings';
+} from '../../space/deploy/encodings';
+import { Telemetry } from '../../telemetry';
+import { bootstrap } from './bootstrap';
 
 const deployParams = {
   network: SupportedNetworks.LOCAL, // I don't think this matters but is required by Aragon SDK
@@ -56,9 +57,6 @@ class WaitForSpaceToBeIndexedError extends Error {
   readonly _tag = 'WaitForSpaceToBeIndexedError';
 }
 
-const RATIO_BASE = ethers.BigNumber.from(10).pow(6); // 100% => 10**6
-const pctToRatio = (x: number) => RATIO_BASE.mul(x).div(100);
-
 interface DeployArgs {
   type: SpaceType;
   governanceType?: SpaceGovernanceType;
@@ -68,6 +66,12 @@ interface DeployArgs {
   initialEditorAddress: string;
   baseUrl: string;
 }
+
+const GENESIS_COMMIT_MESSAGE =
+  'Synchronizing every individual’s hopes and dreams into a shared reality. Block by block. Tick to tock. Interleaved. A genesis timeline is weaving the fabric of a new civilization with a beating heart.';
+
+const RATIO_BASE = ethers.BigNumber.from(10).pow(6); // 100% => 10**6
+const pctToRatio = (x: number) => RATIO_BASE.mul(x).div(100);
 
 export function deploySpace(args: DeployArgs) {
   return Effect.gen(function* () {
@@ -87,9 +91,10 @@ export function deploySpace(args: DeployArgs) {
     });
 
     const initialContent = createEditProposal({
-      name: args.spaceName,
-      author: initialEditorAddress,
-      ops,
+      name: GENESIS_COMMIT_MESSAGE,
+      author: getChecksumAddress('0x993C35bB9A042692479b1CD7a1583f284d6bD5EC'),
+      // @TODO Root
+      ops: [...ops, ...(bootstrap as Op[])],
     });
 
     yield* Effect.logInfo('Uploading EDIT to IPFS');
@@ -101,7 +106,7 @@ export function deploySpace(args: DeployArgs) {
       firstBlockContentUri,
       // @HACK: Using a different upgrader from the governance plugin to work around
       // a limitation in Aragon.
-      pluginUpgrader: getChecksumAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
+      pluginUpgrader: getChecksumAddress('0x993C35bB9A042692479b1CD7a1583f284d6bD5EC'),
     });
 
     plugins.push(spacePluginInstallItem);
@@ -114,8 +119,12 @@ export function deploySpace(args: DeployArgs) {
           duration: BigInt(60 * 60 * 4), // 4 hours
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 4), // 4 hours
-        initialEditors: [getChecksumAddress(initialEditorAddress)],
-        pluginUpgrader: getChecksumAddress(initialEditorAddress),
+        initialEditors: [
+          getChecksumAddress('0x993C35bB9A042692479b1CD7a1583f284d6bD5EC'),
+          getChecksumAddress('0xdfDEe2b64319Ce3Db9621EbdDB73972E8F8E039F'),
+          getChecksumAddress('0x37c99F17a3ef155CA4BC212872F074Cae449243d'),
+        ],
+        pluginUpgrader: getChecksumAddress('0x37c99F17a3ef155CA4BC212872F074Cae449243d'),
       };
 
       const governancePluginInstallItem = getGovernancePluginInstallItem(governancePluginConfig);
@@ -208,13 +217,7 @@ function getGovernanceTypeForSpaceType(type: SpaceType, governanceType?: SpaceGo
       // should exist based on the space type.
       return governanceType ?? 'PUBLIC';
 
-    case 'academic-field':
-    case 'dao':
-    case 'industry':
-    case 'interest-group':
-    case 'region':
-    case 'protocol':
-      return 'PUBLIC';
+    // @TODO: Space types for each of the governance types
     default:
       return 'PERSONAL';
   }

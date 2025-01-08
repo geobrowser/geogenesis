@@ -86,7 +86,7 @@ const getData = async (spaceId: string, entityId: string) => {
   const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && nameTripleSpace) {
+  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_TYPE) && nameTripleSpace) {
     console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
 
     return redirect(NavUtils.toSpace(spaceId));

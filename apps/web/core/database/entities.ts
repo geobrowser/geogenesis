@@ -209,7 +209,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
   );
 
   const schemaWithoutValueType = schemaEntities.flatMap((e): Schema[] => {
-    const attributeRelations = e.relationsOut.filter(t => t.typeOf.id === SYSTEM_IDS.ATTRIBUTES);
+    const attributeRelations = e.relationsOut.filter(t => t.typeOf.id === SYSTEM_IDS.PROPERTIES);
 
     if (attributeRelations.length === 0) {
       return [];
@@ -225,7 +225,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
 
   const attributes = await Promise.all(schemaWithoutValueType.map(a => mergeEntityAsync(EntityId(a.id))));
   const valueTypes = attributes.map(a => {
-    const valueTypeId = a.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.VALUE_TYPE)?.toEntity.id;
+    const valueTypeId = a.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE)?.toEntity.id;
     return {
       attributeId: a.id,
       valueTypeId,
