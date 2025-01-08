@@ -18,12 +18,6 @@ const SubstreamType = Schema.Struct({
 
 export type SubstreamType = Schema.Schema.Type<typeof SubstreamType>;
 
-const Identifiable = Schema.Struct({
-  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-});
-
-type Identifiable = Schema.Schema.Type<typeof Identifiable>;
-
 export type SpaceId = string & Brand.Brand<'SpaceId'>;
 export const SpaceId = Brand.nominal<SpaceId>();
 
@@ -192,6 +186,49 @@ const SubstreamRelation = Schema.Struct({
 
 export type SubstreamRelation = Schema.Schema.Type<typeof SubstreamRelation>;
 
+export const SubstreamVersion = Schema.Struct({
+  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+  entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
+  // edit: Schema.Struct({
+  //   id: Schema.String,
+  //   name: Schema.String,
+  //   createdAt: Schema.Number,
+  //   createdById: Schema.String,
+  // }),
+  name: Schema.NullOr(Schema.String),
+  description: Schema.NullOr(Schema.String),
+  versionSpaces: Schema.Struct({
+    nodes: Schema.Array(
+      Schema.Struct({
+        spaceId: Schema.String,
+      })
+    ),
+  }),
+  versionTypes: SubstreamVersionTypes,
+  relationsByFromVersionId: Schema.Struct({
+    nodes: Schema.Array(SubstreamRelation),
+  }),
+  triples: Schema.Struct({
+    nodes: Schema.Array(SubstreamTriple),
+  }),
+});
+
+export type SubstreamVersion = Schema.Schema.Type<typeof SubstreamVersion>;
+
+export const SubstreamVersionWithEdit = Schema.extend(
+  SubstreamVersion,
+  Schema.Struct({
+    edit: Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      createdAt: Schema.Number,
+      createdById: Schema.String,
+    }),
+  })
+);
+
+export type SubstreamVersionWithEdit = Schema.Schema.Type<typeof SubstreamVersionWithEdit>;
+
 /**
  * Entities
  */
@@ -235,21 +272,12 @@ export const SubstreamSpace = Schema.extend(
     // at a given time. Once we add cardinality as part of schemas we can make some
     // safer assumptions about how many entities of a given type exist.
     spacesMetadata: Schema.Struct({
-      nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
+      nodes: Schema.Array(Schema.Struct({ version: SubstreamVersion })),
     }),
   })
 );
 
 export type SubstreamSpace = Schema.Schema.Type<typeof SubstreamSpace>;
-
-export const SubstreamSpaceEntityConfig = Schema.Struct({
-  id: Schema.String.pipe(Schema.fromBrand(SpaceId)),
-  spacesMetadata: Schema.Struct({
-    nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
-  }),
-});
-
-export type SubstreamSpaceConfigEntityConfig = Schema.Schema.Type<typeof SubstreamSpaceEntityConfig>;
 
 // Subspaces are currently only used in the app as a subset of all the properties
 // available on a space, which is why they are a special type.
@@ -266,7 +294,7 @@ export const SubstreamSubspace = Schema.extend(
       totalCount: Schema.Number,
     }),
     spacesMetadata: Schema.Struct({
-      nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
+      nodes: Schema.Array(Schema.Struct({ version: SubstreamVersion })),
     }),
   })
 );
@@ -318,6 +346,15 @@ export const SubstreamVote = Schema.Struct({
 
 export type SubstreamVote = Schema.Schema.Type<typeof SubstreamVote>;
 
+export const SubstreamSpaceEntityConfig = Schema.Struct({
+  id: Schema.String.pipe(Schema.fromBrand(SpaceId)),
+  spacesMetadata: Schema.Struct({
+    nodes: Schema.Array(Schema.Struct({ version: SubstreamVersion })),
+  }),
+});
+
+export type SubstreamSpaceConfigEntityConfig = Schema.Schema.Type<typeof SubstreamSpaceEntityConfig>;
+
 export const ProposalType = Schema.Union(
   Schema.Literal('ADD_EDIT'),
   Schema.Literal('ADD_MEMBER'),
@@ -354,32 +391,3 @@ export const SubstreamProposal = Schema.Struct({
 });
 
 export type SubstreamProposal = Schema.Schema.Type<typeof SubstreamProposal>;
-
-export const SubstreamVersion = Schema.Struct({
-  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  edit: Schema.Struct({
-    id: Schema.String,
-    name: Schema.String,
-    createdAt: Schema.Number,
-    createdById: Schema.String,
-  }),
-  name: Schema.NullOr(Schema.String),
-  description: Schema.NullOr(Schema.String),
-  versionSpaces: Schema.Struct({
-    nodes: Schema.Array(
-      Schema.Struct({
-        spaceId: Schema.String,
-      })
-    ),
-  }),
-  versionTypes: SubstreamVersionTypes,
-  relationsByFromVersionId: Schema.Struct({
-    nodes: Schema.Array(SubstreamRelation),
-  }),
-  triples: Schema.Struct({
-    nodes: Schema.Array(SubstreamTriple),
-  }),
-});
-
-export type SubstreamVersion = Schema.Schema.Type<typeof SubstreamVersion>;

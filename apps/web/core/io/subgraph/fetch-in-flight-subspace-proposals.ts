@@ -33,13 +33,8 @@ const inflightSubspacesForSpaceIdQuery = (spaceId: string, endTime: number) =>
                 }
                 spacesMetadata {
                   nodes {
-                    entity {
-                      id
-                      currentVersion {
-                        version {
-                          ${spaceMetadataFragment}
-                        }
-                      }
+                    version {
+                      ${spaceMetadataFragment}
                     }
                   }
                 }

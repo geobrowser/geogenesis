@@ -43,13 +43,8 @@ export const getFetchProposalQuery = (id: string) => `query {
       id
       spacesMetadata {
         nodes {
-          entity {
-            id
-            currentVersion {
-              version {
-                ${spaceMetadataFragment}
-              }
-            }
+          version {
+            ${spaceMetadataFragment}
           }
         }
       }

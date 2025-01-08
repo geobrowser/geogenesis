@@ -100,14 +100,9 @@ export async function getActiveProposalsForSpacesWhereEditor(
         space {
           id
           spacesMetadata {
-            nodes {
-              entity {
-                id
-                currentVersion {
-                  version {
-                    ${spaceMetadataFragment}
-                  }
-                }
+            nodes { 
+              version {
+                  ${spaceMetadataFragment}
               }
             }
           }

@@ -30,13 +30,8 @@ const spacesQuery = (name: string) => `
         id
         spacesMetadata {
           nodes {
-            entity {
-              id
-              currentVersion {
-                version {
-                  ${spaceMetadataFragment}
-                }
-              }
+            version {
+              ${spaceMetadataFragment}
             }
           }
         }
@@ -117,7 +112,7 @@ export function useSpacesQuery() {
           return null;
         },
         onRight: space => {
-          return SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.entity);
+          return SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.version);
         },
       });
     })

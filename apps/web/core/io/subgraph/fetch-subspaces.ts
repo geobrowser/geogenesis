@@ -7,7 +7,7 @@ import { Environment } from '~/core/environment';
 import { SpaceGovernanceType } from '~/core/types';
 
 import { Subspace, SubspaceDto } from '../dto/subspaces';
-import { SubstreamEntity, SubstreamSubspace } from '../schema';
+import { SubstreamSubspace, SubstreamVersion } from '../schema';
 import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -29,13 +29,8 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
 
         spacesMetadata {
           nodes {
-            entity {
-              id
-              currentVersion {
-                version {
-                  ${versionFragment}
-                }
-              }
+            version {
+              ${versionFragment}
             }
           }
         }
@@ -53,7 +48,7 @@ interface NetworkResult {
         daoAddress: string;
         spaceEditors: { totalCount: number };
         spaceMembers: { totalCount: number };
-        spacesMetadata: { nodes: { entity: SubstreamEntity }[] };
+        spacesMetadata: { nodes: { version: SubstreamVersion }[] };
       };
     }[];
   };

@@ -123,6 +123,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
                 edits: defaultEdits,
                 block,
                 editType: 'DEFAULT',
+                isAccepted: true,
               })
             : Effect.succeed(''),
           Effect.forEach(
@@ -157,6 +158,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
           block,
           edits: importedEdits,
           editType: 'IMPORT',
+          isAccepted: true,
         })
       );
     }

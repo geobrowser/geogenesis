@@ -73,13 +73,8 @@ const subspacesQuery = (name: string, notIn: string[]) => `
         }
         spacesMetadata {
           nodes {
-            entity {
-              id
-              currentVersion {
-                version {
-                  ${spaceMetadataFragment}
-                }
-              }
+            version {
+              ${spaceMetadataFragment}
             }
           }
         }

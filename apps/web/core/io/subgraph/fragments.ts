@@ -207,13 +207,8 @@ export const spaceFragment = `
 
   spacesMetadata {
     nodes {
-      entity {
-        id
-        currentVersion {
-          version {
-            ${versionFragment}
-          }
-        }
+      version {
+        ${versionFragment}
       }
     }
   }

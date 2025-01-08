@@ -39,6 +39,7 @@ interface PopulateContentArgs {
    */
   editType: 'IMPORT' | 'DEFAULT';
   edits: Schema.edits.Insertable[];
+  isAccepted?: boolean;
 }
 
 /**
@@ -53,7 +54,7 @@ interface PopulateContentArgs {
  * versions as a single unit.
  */
 export function writeEdits(args: PopulateContentArgs) {
-  const { versions, tripleOpsByVersionId, relationOpsByEditId, edits, block, editType } = args;
+  const { versions, tripleOpsByVersionId, relationOpsByEditId, edits, block, editType, isAccepted } = args;
 
   const spaceIdByEditId = new Map<string, string>();
   for (const edit of edits) {
@@ -201,7 +202,6 @@ export function writeEdits(args: PopulateContentArgs) {
     // type entity and compare them against the type_of_id version for each relatons to see
     // of the type_of_id is for the type entity.
     const versionTypes = yield* _(aggregateTypesFromRelationsAndTriples(relations));
-    const spaceMetadata = yield* _(aggregateSpacesFromRelations(relations, versions, spaceIdByEditId));
 
     yield* _(
       Effect.tryPromise({
@@ -213,15 +213,19 @@ export function writeEdits(args: PopulateContentArgs) {
       })
     );
 
-    yield* _(
-      Effect.tryPromise({
-        try: () => SpaceMetadata.upsert(spaceMetadata),
-        catch: error =>
-          new CouldNotWriteSpaceMetadataError({
-            message: `Failed to insert space metadata. ${(error as Error).message}`,
-          }),
-      })
-    );
+    if (isAccepted) {
+      const spaceMetadata = yield* _(aggregateSpacesFromRelations(relations, versions, spaceIdByEditId));
+
+      yield* _(
+        Effect.tryPromise({
+          try: () => SpaceMetadata.upsert(spaceMetadata),
+          catch: error =>
+            new CouldNotWriteSpaceMetadataError({
+              message: `Failed to insert space metadata. ${(error as Error).message}`,
+            }),
+        })
+      );
+    }
   });
 }
 
@@ -319,14 +323,9 @@ function aggregateSpacesFromRelations(
 
     return [...spaceConfigEntityVersionIds.values()]
       .map(spaceConfigEntityVersionId => {
-        const entityIdForVersionId = entityIdByVersionId.get(spaceConfigEntityVersionId);
-        if (!entityIdForVersionId) {
-          return null;
-        }
-
         const spaceMetadata: Schema.spaces_metadata.Insertable = {
           space_id: spaceVersions.get(spaceConfigEntityVersionId)!,
-          entity_id: entityIdForVersionId,
+          version_id: spaceConfigEntityVersionId,
         };
 
         return spaceMetadata;
