@@ -9,11 +9,11 @@ import {
 import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
-import { Op, Relation, VotingMode, getChecksumAddress } from '@geogenesis/sdk';
+import { Op, VotingMode, getChecksumAddress } from '@geogenesis/sdk';
 import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
-import { providers } from 'ethers';
+import { ethers, providers } from 'ethers';
 import { v4 as uuid } from 'uuid';
 import { encodeFunctionData, stringToHex, zeroAddress } from 'viem';
 
@@ -70,6 +70,9 @@ interface DeployArgs {
 const GENESIS_COMMIT_MESSAGE =
   'Synchronizing every individual’s hopes and dreams into a shared reality. Block by block. Tick to tock. Interleaved. A genesis timeline is weaving the fabric of a new civilization with a beating heart.';
 
+const RATIO_BASE = ethers.BigNumber.from(10).pow(6); // 100% => 10**6
+const pctToRatio = (x: number) => RATIO_BASE.mul(x).div(100);
+
 export function deploySpace(args: DeployArgs) {
   return Effect.gen(function* () {
     yield* Effect.logInfo('Deploying space');
@@ -112,7 +115,7 @@ export function deploySpace(args: DeployArgs) {
       const governancePluginConfig: Parameters<typeof getGovernancePluginInstallItem>[0] = {
         votingSettings: {
           votingMode: VotingMode.EarlyExecution,
-          supportThreshold: 50_000,
+          supportThreshold: pctToRatio(50),
           duration: BigInt(60 * 60 * 4), // 4 hours
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 4), // 4 hours
