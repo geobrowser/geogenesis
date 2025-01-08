@@ -13,13 +13,13 @@ export const generateOpsForCompany = async (spaceConfigEntityId: string, spaceNa
     jobsPageOps,
   ] = await Promise.all([
     cloneEntity({
-      oldEntityId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+      oldEntityId: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
       entityId: spaceConfigEntityId,
       entityName: spaceName,
     }),
     cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_POSTS_PAGE_TEMPLATE,
-      entityName: 'Posts',
+      entityName: '',
     }),
     // cloneEntity({
     //   oldEntityId: SYSTEM_IDS.COMPANY_PRODUCTS_PAGE_TEMPLATE,
@@ -31,15 +31,15 @@ export const generateOpsForCompany = async (spaceConfigEntityId: string, spaceNa
     // }),
     cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_EVENTS_PAGE_TEMPLATE,
-      entityName: 'Events',
+      entityName: '',
     }),
     cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_TEAM_PAGE_TEMPLATE,
-      entityName: 'Team',
+      entityName: '',
     }),
     cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_JOBS_PAGE_TEMPLATE,
-      entityName: 'Jobs',
+      entityName: '',
     }),
   ]);
 

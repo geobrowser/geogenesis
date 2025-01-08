@@ -49,13 +49,13 @@ export const generateOpsForIndustry = async (spaceConfigEntityId: string, spaceN
   ]);
 
   return [
-    ...industryOverviewPageOps,
-    ...industryNewsPageOps,
-    ...industryEventsPageOps,
-    ...industryProjectsPageOps,
-    ...industryPeoplePageOps,
-    ...industryJobsPageOps,
-    ...industryOntologyPageOps,
-    ...industryAboutPageOps,
+    // ...industryOverviewPageOps,
+    // ...industryNewsPageOps,
+    // ...industryEventsPageOps,
+    // ...industryProjectsPageOps,
+    // ...industryPeoplePageOps,
+    // ...industryJobsPageOps,
+    // ...industryOntologyPageOps,
+    // ...industryAboutPageOps,
   ];
 };
