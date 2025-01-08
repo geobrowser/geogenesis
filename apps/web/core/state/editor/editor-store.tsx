@@ -242,6 +242,7 @@ export function useEditorStore() {
             attrs: {
               id: blockId,
               relationId,
+              spaceId,
             },
           };
         }

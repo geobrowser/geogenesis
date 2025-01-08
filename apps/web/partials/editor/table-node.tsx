@@ -27,6 +27,9 @@ export const TableNode = Node.create({
 
   addAttributes() {
     return {
+      relationId: {
+        default: '',
+      },
       spaceId: {
         default: '',
       },
@@ -45,9 +48,6 @@ export const TableNode = Node.create({
 function TableNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId } = useEditorInstance();
   const { id, relationId } = node.attrs;
-
-  // @TODO remove console.info for relationId
-  console.info('relationId in table node component:', relationId);
 
   return (
     <NodeViewWrapper>

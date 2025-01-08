@@ -15,7 +15,6 @@ import { EntityId } from '~/core/io/schema';
 import { useTableBlock } from '~/core/state/table-block-store';
 import type { DataBlockView } from '~/core/state/table-block-store';
 import { Relation } from '~/core/types';
-import { sleep } from '~/core/utils/utils';
 
 import { Check } from '~/design-system/icons/check';
 import { Close } from '~/design-system/icons/close';
@@ -33,9 +32,9 @@ type TableBlockViewMenuProps = {
   isLoading: boolean;
 };
 
-export function DataBlockViewMenu({ activeView, viewRelation, isLoading }: TableBlockViewMenuProps) {
+export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { spaceId, entityId, name } = useTableBlock();
+  const { spaceId, relationId, viewRelation } = useTableBlock();
 
   const isEditing = useUserIsEditing(spaceId);
 
@@ -68,11 +67,10 @@ export function DataBlockViewMenu({ activeView, viewRelation, isLoading }: Table
               <ToggleView
                 key={view.value}
                 spaceId={spaceId}
-                entityId={entityId}
-                entityName={name ?? null}
                 activeView={activeView}
                 view={view}
                 viewRelation={viewRelation}
+                relationId={relationId}
                 isLoading={isLoading}
               />
             );
@@ -104,26 +102,20 @@ const DATA_BLOCK_VIEWS: Array<DataBlockViewDetails> = [
 
 type ToggleViewProps = {
   spaceId: string;
-  entityId: string;
-  entityName: string | null;
+  relationId: string;
   activeView: DataBlockView;
   view: DataBlockViewDetails;
   viewRelation?: Relation;
   isLoading: boolean;
 };
 
-const ToggleView = ({ spaceId, entityId, entityName, activeView, view, viewRelation, isLoading }: ToggleViewProps) => {
+const ToggleView = ({ spaceId, activeView, view, viewRelation, relationId, isLoading }: ToggleViewProps) => {
   const isActive = !isLoading && activeView === view.value;
 
   const onToggleView = useCallback(async () => {
     if (!isActive) {
       if (viewRelation) {
         DB.removeRelation({ relationId: viewRelation.id, spaceId });
-
-        // may not be necessary, but since `deleteRelation` inside of `removeRelation` is an
-        // unawaited async function, we want to guarantee that `viewRelations[0]` in the data
-        // block store always represents the newly created view relation below
-        await sleep(100);
       }
 
       const newRelation: StoreRelation = {
@@ -134,8 +126,8 @@ const ToggleView = ({ spaceId, entityId, entityName, activeView, view, viewRelat
           name: 'View',
         },
         fromEntity: {
-          id: EntityId(entityId),
-          name: entityName,
+          id: EntityId(relationId),
+          name: '',
         },
         toEntity: {
           id: EntityId(view.id),
@@ -150,7 +142,7 @@ const ToggleView = ({ spaceId, entityId, entityName, activeView, view, viewRelat
         spaceId,
       });
     }
-  }, [entityId, entityName, isActive, spaceId, view.id, view.name, viewRelation]);
+  }, [isActive, relationId, spaceId, view.id, view.name, viewRelation]);
 
   return (
     <MenuItem active={isActive}>

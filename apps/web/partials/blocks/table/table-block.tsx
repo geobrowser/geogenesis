@@ -67,8 +67,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
   const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
 
-  const viewRelation = blockEntity.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
-
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
    * special handling when creating the graphql string.
@@ -127,7 +125,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             color="grey-04"
           />
 
-          <DataBlockViewMenu activeView={view} viewRelation={viewRelation} isLoading={isLoading} />
+          <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu
             allColumns={allColumns}
             shownColumnRelations={shownColumnRelations}

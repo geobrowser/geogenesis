@@ -22,7 +22,7 @@ import { StoredRelation } from '../database/types';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { Schema } from '../types';
+import { Relation, Schema } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
@@ -55,8 +55,12 @@ export function useTableBlock() {
   const [pageNumber, setPageNumber] = React.useState(0);
   const { upsert } = useWriteOps();
 
-  // @TODO remove console.info for relationId
-  console.info('relationId in table block:', relationId);
+  const blockRelation = useEntity({
+    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
+    id: React.useMemo(() => EntityId(relationId), [relationId]),
+  });
+
+  const viewRelation = blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
@@ -280,11 +284,12 @@ export function useTableBlock() {
     [upsert, entityId, spaceId]
   );
 
-  const view = getView(blockEntity);
+  const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
 
   return {
     blockEntity,
+    relationId,
     source,
     setSource,
 
@@ -309,6 +314,7 @@ export function useTableBlock() {
     name: blockEntity.name,
     setName,
     view,
+    viewRelation,
     placeholder,
     collectionItems,
   };
@@ -316,12 +322,10 @@ export function useTableBlock() {
 
 export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY';
 
-const getView = (blockEntity: Entity | null | undefined): DataBlockView => {
+const getView = (viewRelation: Relation | undefined): DataBlockView => {
   let view: DataBlockView = 'TABLE';
 
-  if (blockEntity) {
-    const viewRelation = blockEntity.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
-
+  if (viewRelation) {
     switch (viewRelation?.toEntity.id) {
       case SYSTEM_IDS.TABLE_VIEW:
         view = 'TABLE';
