@@ -16,6 +16,21 @@ export type Filter = {
   valueName: string | null;
 };
 
+/**
+ * We support two types of filters, either a filter on a set of entities,
+ * or a filter on a specific entity. These each have different filter
+ * semantics.
+ *
+ * e.g.,
+ * attribute: SYSTEM_IDS.TYPES_ATTRIBUTE, is: SYSTEM_IDS.PERSON_TYPE
+ * The above returns all entities that are type: Person
+ *
+ * entity: '1234', relationType: SYSTEM_IDS.TYPES_ATTRIBUTE
+ * The above returns all the type relations for entity 1234
+ *
+ * The latter is basically a "Relations View" on an entity where the latter
+ * is a query across the knowledge graph data set.
+ */
 const AttributeFilter = Schema.Struct({
   attribute: Schema.String,
   is: Schema.String,
@@ -27,7 +42,8 @@ const Property = Schema.Union(AttributeFilter);
 
 const FilterString = Schema.Struct({
   where: Schema.Struct({
-    spaces: Schema.Array(Schema.String),
+    entity: Schema.optional(Schema.String),
+    spaces: Schema.optional(Schema.Array(Schema.String)),
     AND: Schema.optional(Schema.Array(Property)),
     OR: Schema.optional(Schema.Array(Property)),
   }),
@@ -59,38 +75,6 @@ export function upsertName({
   );
 }
 
-/**
- * Takes the table filters and converts them to the GraphQL string used to
- * query the table using the filters. We include the typeId from the table
- * in the graphql string to make sure we're filtering by the correct type.
- *
- * We treat Name and Space as special filters.
- *
- * e.g. these filters
- * ```ts
- * const filters = [{
- *   columnId: 'type',
- *   value: 'd73a9e43-923e-4102-87da-5d3176ac9df2', // entity ID for 'Blockchain'
- *   valueType: 'entity',
- *  },
- *  {
- *   columnId: 'type',
- *   value: '48a331d1-a6d6-49ca-bc23-78f3378eb959', // entity ID for 'Layer 1'
- *   valueType: 'entity',
- * }]
- * ```
- *
- * would output to
- * ```ts
- * `{
- *    and: [
- *      {entityOf_: {attribute: "type", entityValue: "d73a9e43-923e-4102-87da-5d3176ac9df2"}},
- *      {entityOf_: {attribute: "type", entityValue: "48a331d1-a6d6-49ca-bc23-78f3378eb959"}},
- *      name: "Bitcoin"
- *    ]
- * }`
- * ```
- */
 export function createFilterStringFromFilters(filters: OmitStrict<Filter, 'valueName'>[]): string {
   const filter: FilterString = {
     where: {
@@ -120,14 +104,23 @@ export function createFilterStringFromFilters(filters: OmitStrict<Filter, 'value
 }
 
 export async function createFiltersFromFilterString(filterString: string | null): Promise<Filter[]> {
-  // How do we set source spaces? Maybe we don't need to?
-  // Delete source spaces logic and ALL_OF_GEO logic.
-  //     All we care about now is the data source type, either collection or query
-  // Handle errors decoding
-
   if (!filterString) {
     return [];
   }
+
+  const filter: FilterString = {
+    where: {
+      entity: 'KyhWaF9omBKsCbnMVJpibK',
+      AND: [
+        {
+          attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+          is: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        },
+      ],
+    },
+  };
+
+  filterString = JSON.stringify(filter);
 
   // handle errors
   const where = JSON.parse(filterString);
@@ -139,6 +132,13 @@ export async function createFiltersFromFilterString(filterString: string | null)
       return null;
     },
     onRight: value => {
+      if (value.where.entity) {
+        return {
+          entity: value.where.entity,
+          AND: value.where.AND ?? [],
+        };
+      }
+
       return {
         spaces: value.where.spaces,
         AND: value.where.AND ?? [],
@@ -153,18 +153,22 @@ export async function createFiltersFromFilterString(filterString: string | null)
 
   const filters: Filter[] = [];
 
-  const unresolvedSpaceFilters = Promise.all(
-    filtersFromString.spaces.map(async (spaceId): Promise<Filter> => {
-      const spaceName = await getSpaceName(spaceId);
+  const unresolvedSpaceFilters = filtersFromString.spaces
+    ? Promise.all(
+        filtersFromString.spaces.map(async (spaceId): Promise<Filter> => {
+          const spaceName = await getSpaceName(spaceId);
 
-      return {
-        columnId: SYSTEM_IDS.SPACE_FILTER,
-        valueType: 'RELATION',
-        value: spaceId,
-        valueName: spaceName,
-      };
-    })
-  );
+          return {
+            columnId: SYSTEM_IDS.SPACE_FILTER,
+            valueType: 'RELATION',
+            value: spaceId,
+            valueName: spaceName,
+          };
+        })
+      )
+    : [];
+
+  const unresolvedEntityFilters = filtersFromString.entity ? getResolvedEntity(filtersFromString.entity) : null;
 
   const unresolvedAttributeFilters = Promise.all(
     filtersFromString.AND.map(async filter => {
@@ -172,10 +176,15 @@ export async function createFiltersFromFilterString(filterString: string | null)
     })
   );
 
-  const [spaceFilters, attributeFilters] = await Promise.all([unresolvedSpaceFilters, unresolvedAttributeFilters]);
+  const [spaceFilters, attributeFilters, entityFilter] = await Promise.all([
+    unresolvedSpaceFilters,
+    unresolvedAttributeFilters,
+    unresolvedEntityFilters,
+  ]);
 
   filters.push(...spaceFilters);
   filters.push(...attributeFilters);
+  if (entityFilter) filters.push(entityFilter);
 
   return filters;
 }
@@ -183,6 +192,26 @@ export async function createFiltersFromFilterString(filterString: string | null)
 async function getSpaceName(spaceId: string) {
   const space = await fetchSpace({ id: spaceId });
   return space?.spaceConfig.name ?? null;
+}
+
+async function getResolvedEntity(entityId: string): Promise<Filter> {
+  const entity = await mergeEntityAsync(EntityId(entityId));
+
+  if (!entity) {
+    return {
+      columnId: SYSTEM_IDS.ENTITY_FILTER,
+      valueType: 'RELATION',
+      value: entityId,
+      valueName: null,
+    };
+  }
+
+  return {
+    columnId: SYSTEM_IDS.ENTITY_FILTER,
+    valueType: 'RELATION',
+    value: entityId,
+    valueName: entity.name,
+  };
 }
 
 async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
