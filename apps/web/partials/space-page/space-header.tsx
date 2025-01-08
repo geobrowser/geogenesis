@@ -9,7 +9,6 @@ import { PLACEHOLDER_SPACE_IMAGE, ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
-import { useDiff } from '~/core/state/diff-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -43,8 +42,6 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
     getNextPageParam: (_lastPage, pages) => pages.length,
     initialPageParam: 0,
   });
-
-  const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
   const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
 
@@ -85,16 +82,11 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
           {proposals?.pages?.length === 0 && <HistoryEmpty />}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>
-              {group.map((p, index) => (
+              {group.map(p => (
                 <HistoryItem
                   key={p.id}
-                  onClick={() => {
-                    setCompareMode('proposals');
-                    setPreviousProposal(group[index + 1]?.id ?? '');
-                    setSelectedProposal(p.id);
-                    setIsCompareOpen(true);
-                  }}
-                  changeCount={0}
+                  spaceId={spaceId}
+                  proposalId={p.id}
                   createdAt={p.createdAt}
                   createdBy={p.createdBy}
                   name={p.name}

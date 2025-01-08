@@ -3,15 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchVersion } from '../io/subgraph/fetch-version';
 import { Change } from '../utils/change';
 
-interface VersionChangesArgs {
+interface ProposalChangesArgs {
   spaceId?: string;
   beforeVersionId: string;
   afterVersionId: string;
 }
 
-export const useVersionChanges = (args: VersionChangesArgs) => {
+export const useProposalChanges = (args: ProposalChangesArgs) => {
   const { data, isLoading } = useQuery({
-    queryKey: ['version-changes', args],
+    queryKey: ['proposal-changes', args],
     queryFn: async () => {
       const [beforeVersion, afterVersion] = await Promise.all([
         fetchVersion({ versionId: args.beforeVersionId }),

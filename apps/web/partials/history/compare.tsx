@@ -183,145 +183,133 @@ const Proposals = () => {
   const { selectedProposal, previousProposal, setIsCompareOpen } = useDiff();
   // const [data, isLoading] = useChangesFromProposals(selectedProposal, previousProposal);
 
-  return <div>Proposals temporarily disabled</div>;
+  return null;
 
-  // if (isLoading) {
-  //   return <div className="text-metadataMedium">Loading...</div>;
-  // }
+  const [data, isLoading] = useVersionChanges({
+    spaceId: undefined,
+    afterVersionId: selectedVersion,
+    beforeVersionId: previousVersion,
+  });
 
-  // if (data === undefined) {
-  //   return <div className="text-metadataMedium">No proposals found.</div>;
-  // }
+  if (isLoading) {
+    return <div className="text-metadataMedium">Loading...</div>;
+  }
 
-  // const { changes, proposals } = data;
+  if (data === undefined || data === null) {
+    return <div className="text-metadataMedium">No versions found.</div>;
+  }
 
-  // if (!proposals.selected) {
-  //   return <div className="text-metadataMedium">No proposals found.</div>;
-  // }
+  const { beforeVersion, afterVersion, changes } = data;
 
-  // const changedEntityIds = Object.keys(changes);
+  // @TODO: Fix change count
+  const selectedVersionChangeCount = 0;
 
-  // let selectedVersionChangeCount = 0;
+  const selectedVersionLastEditedDate = afterVersion.createdAt * 1000;
 
-  // // @TODO: fix
-  // // if (proposals.selected) {
-  // //   const proposal: Proposal = proposals.selected;
+  const selectedVersionFormattedLastEditedDate = new Date(selectedVersionLastEditedDate).toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 
-  // //   selectedVersionChangeCount = proposal.proposedVersions.reduce<AppOp[]>(
-  // //     (acc, version) => acc.concat(version.ops),
-  // //     []
-  // //   ).length;
-  // // }
+  const selectedVersionLastEditedTime = new Date(selectedVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 
-  // const selectedVersionFormattedLastEditedDate = new Date(proposals.selected.createdAt * 1000).toLocaleDateString(
-  //   undefined,
-  //   {
-  //     day: '2-digit',
-  //     month: 'short',
-  //     year: 'numeric',
-  //   }
-  // );
+  let previousVersionChangeCount;
+  let previousVersionFormattedLastEditedDate;
+  let previousVersionLastEditedTime;
 
-  // const selectedVersionLastEditedTime = new Date(selectedVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
-  //   hour: '2-digit',
-  //   minute: '2-digit',
-  //   hour12: false,
-  // });
+  if (beforeVersion) {
+    // @TODO: Fix change count
+    previousVersionChangeCount = 0;
 
-  // let previousVersionChangeCount;
-  // let previousVersionFormattedLastEditedDate;
-  // let previousVersionLastEditedTime;
+    previousVersionFormattedLastEditedDate = new Date(beforeVersion.createdAt * 1000).toLocaleDateString(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
 
-  // if (proposals.previous) {
-  //   // @TODO: fix
-  //   // const proposal: Proposal = proposals.previous;
-  //   // previousVersionChangeCount = proposal.proposedVersions.reduce<AppOp[]>(
-  //   //   (acc, version) => acc.concat(version.ops),
-  //   //   []
-  //   // ).length;
-  //   // previousVersionFormattedLastEditedDate = new Date(proposal.createdAt * 1000).toLocaleDateString(undefined, {
-  //   //   day: '2-digit',
-  //   //   month: 'short',
-  //   //   year: 'numeric',
-  //   // });
-  //   // previousVersionLastEditedTime = new Date(previousVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
-  //   //   hour: '2-digit',
-  //   //   minute: '2-digit',
-  //   //   hour12: false,
-  //   // });
-  // }
+    previousVersionLastEditedTime = new Date(previousVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
 
-  // return (
-  //   <div className="relative flex flex-col gap-16">
-  //     <div>
-  //       <div className="flex gap-8">
-  //         <div className="flex-1">
-  //           <div className="text-body">Previous proposal</div>
-  //           {proposals.previous && (
-  //             <>
-  //               <div className="text-mediumTitle">{proposals.previous.name}</div>
-  //               <div className="mt-1 flex items-center gap-4">
-  //                 <Link
-  //                   href={proposals.previous.createdBy.profileLink ? proposals.previous.createdBy.profileLink : ''}
-  //                   className="inline-flex items-center gap-1"
-  //                   onClick={() => setIsCompareOpen(false)}
-  //                 >
-  //                   <div className="relative h-3 w-3 overflow-hidden rounded-full">
-  //                     <Avatar
-  //                       alt={`Avatar for ${proposals.previous.createdBy.name ?? proposals.previous.createdBy.id}`}
-  //                       avatarUrl={proposals.previous.createdBy.avatarUrl}
-  //                       value={proposals.previous.createdBy.name ?? proposals.previous.createdBy.id}
-  //                     />
-  //                   </div>
-  //                   <p className="text-smallButton">
-  //                     {proposals.previous.createdBy.name ?? formatShortAddress(proposals.previous.createdBy.id)}
-  //                   </p>
-  //                 </Link>
-  //                 <div>
-  //                   <p className="text-smallButton">
-  //                     {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
-  //                     {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
-  //                   </p>
-  //                 </div>
-  //               </div>
-  //             </>
-  //           )}
-  //         </div>
-  //         <div className="flex-1">
-  //           <div className="text-body">Selected proposal</div>
-  //           <div className="text-mediumTitle">{proposals.selected.name}</div>
-  //           <div className="mt-1 flex items-center gap-4">
-  //             <Link
-  //               href={proposals.selected.createdBy.profileLink ? proposals.selected.createdBy.profileLink : ''}
-  //               className="inline-flex items-center gap-1"
-  //               onClick={() => setIsCompareOpen(false)}
-  //             >
-  //               <div className="relative h-3 w-3 overflow-hidden rounded-full">
-  //                 <Avatar
-  //                   alt={`Avatar for ${proposals.selected.createdBy.name ?? proposals.selected.createdBy.id}`}
-  //                   avatarUrl={proposals.selected.createdBy.avatarUrl}
-  //                   value={proposals.selected.createdBy.name ?? proposals.selected.createdBy.id}
-  //                 />
-  //               </div>
-  //               <p className="text-smallButton">
-  //                 {proposals.selected.createdBy.name ?? formatShortAddress(proposals.selected.createdBy.id)}
-  //               </p>
-  //             </Link>
-  //             <div>
-  //               <p className="text-smallButton">
-  //                 {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
-  //                 {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
-  //               </p>
-  //             </div>
-  //           </div>
-  //         </div>
-  //       </div>
-  //     </div>
-  //     <div className="flex flex-col gap-16 divide-y divide-grey-02">
-  //       {changedEntityIds.map((entityId: EntityId) => (
-  //         <ChangedEntity key={entityId} change={changes[entityId]} entityId={entityId} />
-  //       ))}
-  //     </div>
-  //   </div>
-  // );
+  return (
+    <div className="relative flex flex-col gap-16">
+      <div>
+        <div className="flex gap-8">
+          <div className="flex-1">
+            <div className="text-body">Previous version</div>
+            {beforeVersion && (
+              <>
+                <div className="text-mediumTitle">{beforeVersion.name}</div>
+                <div className="mt-1 flex items-center gap-4">
+                  <PrefetchLink
+                    href={beforeVersion.createdBy.profileLink ? beforeVersion.createdBy.profileLink : ''}
+                    className="inline-flex items-center gap-1"
+                    onClick={() => setIsCompareOpen(false)}
+                  >
+                    <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                      <Avatar
+                        alt={`Avatar for ${beforeVersion.createdBy.name ?? beforeVersion.createdBy.id}`}
+                        avatarUrl={beforeVersion.createdBy.avatarUrl}
+                        value={beforeVersion.createdBy.name ?? beforeVersion.createdBy.id}
+                      />
+                    </div>
+                    <p className="text-smallButton">
+                      {beforeVersion.createdBy.name ?? formatShortAddress(beforeVersion.createdBy.id)}
+                    </p>
+                  </PrefetchLink>
+                  <div>
+                    <p className="text-smallButton">
+                      {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
+                      {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="text-body">Selected version</div>
+            <div className="text-mediumTitle">{afterVersion.name}</div>
+            <div className="mt-1 flex items-center gap-4">
+              <PrefetchLink
+                href={afterVersion.createdBy.profileLink ? afterVersion.createdBy.profileLink : ''}
+                className="inline-flex items-center gap-1"
+                onClick={() => setIsCompareOpen(false)}
+              >
+                <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                  <Avatar
+                    alt={`Avatar for ${afterVersion.createdBy.name ?? afterVersion.createdBy.id}`}
+                    avatarUrl={afterVersion.createdBy.avatarUrl}
+                    value={afterVersion.createdBy.name ?? afterVersion.createdBy.id}
+                  />
+                </div>
+                <p className="text-smallButton">
+                  {afterVersion.createdBy.name ?? formatShortAddress(afterVersion.createdBy.id)}
+                </p>
+              </PrefetchLink>
+              <div>
+                <p className="text-smallButton">
+                  {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
+                  {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col gap-16 divide-y divide-grey-02">
+        {changes.map(change => (
+          <ChangedEntity key={change.id} change={change} />
+        ))}
+      </div>
+    </div>
+  );
 };

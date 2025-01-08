@@ -6,6 +6,7 @@ import { Environment } from '~/core/environment';
 
 import { HistoryVersionDto } from '../dto/versions';
 import { SubstreamVersionWithEdit } from '../schema';
+import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
 import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -27,6 +28,11 @@ const query = (entityId: string, page = 0) => {
           name
           createdAt
           createdById
+          proposals {
+            nodes {
+              id
+            }
+          }
         }
       }
     }
@@ -37,7 +43,7 @@ interface NetworkResult {
   versions: { nodes: SubstreamVersionWithEdit[] };
 }
 
-export async function fetchVersions(args: FetchVersionsArgs) {
+export async function fetchHistoryVersions(args: FetchVersionsArgs) {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
@@ -81,6 +87,7 @@ export async function fetchVersions(args: FetchVersionsArgs) {
   });
 
   const networkVersions = await Effect.runPromise(withFallbacks);
+  const profilesForProposals = await fetchProfilesByAddresses(networkVersions.map(p => p.edit.createdById));
 
   const versions = networkVersions
     .map(v => {
@@ -92,7 +99,8 @@ export async function fetchVersions(args: FetchVersionsArgs) {
           return null;
         },
         onRight: result => {
-          return HistoryVersionDto(result);
+          const maybeProfile = profilesForProposals.find(profile => profile.address === result.edit.createdById);
+          return HistoryVersionDto(result, maybeProfile);
         },
       });
     })

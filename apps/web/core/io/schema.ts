@@ -223,6 +223,13 @@ export const SubstreamVersionWithEdit = Schema.extend(
       name: Schema.String,
       createdAt: Schema.Number,
       createdById: Schema.String,
+      proposals: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.Struct({
+            id: Schema.String,
+          })
+        ),
+      }),
     }),
   })
 );
