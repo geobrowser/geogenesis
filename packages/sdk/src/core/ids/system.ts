@@ -161,6 +161,15 @@ export const PAGE_TYPE_ATTRIBUTE = 'DD9FKRZ3XezaKEGUszMB3r';
   These define the entity id to copy when creating an entity from
   a template.
   */
+export const INDUSTRY_OVERVIEW_PAGE_TEMPLATE = 'Tgm2ubmm9VjAZFZACJLTZC';
+export const INDUSTRY_NEWS_PAGE_TEMPLATE = '2GXJSWAqkw5B8JtvWZ9hnX';
+export const INDUSTRY_EVENTS_PAGE_TEMPLATE = 'NVZnC2af2v3ptuNqjMC9Mu';
+export const INDUSTRY_PROJECTS_PAGE_TEMPLATE = 'WQLU4rAJLwBBSHcLN4uHad';
+export const INDUSTRY_PEOPLE_PAGE_TEMPLATE = 'JMbQ5nH8wWLxRki6eQYLTB';
+export const INDUSTRY_JOBS_PAGE_TEMPLATE = 'RNtMm9U2zmevNCQTHHwbgb';
+export const INDUSTRY_ONTOLOGY_PAGE_TEMPLATE = 'AkJKSSB2AbQKXAWjqYV9Qh';
+export const INDUSTRY_ABOUT_PAGE_TEMPLATE = 'P6tM8upNJ83frWtMtmHXve';
+
 export const COMPANY_EVENTS_PAGE_TEMPLATE = '4CTRE9hBWqb7CjiaxQx47C';
 export const COMPANY_JOBS_PAGE_TEMPLATE = 'DSANGC24exwsRWXrfikKb7';
 export const COMPANY_POSTS_PAGE_TEMPLATE = 'AHLknvNrbs7CBao2i58mo5';
@@ -187,6 +196,7 @@ export const EDUCATION_PAGE = 'Qh8AQ8hQhXiaAbe8HkgAJV';
 export const EVENTS_PAGE = 'K97FaTqrx54jdiM93vZ1Fc';
 export const FINANCES_PAGE = 'R6FDYEK9CCdEQuxjuRjA2U';
 export const JOBS_PAGE = 'PJzxY3isAL3hGx1bRkYdPf';
+export const NEWS_PAGE = 'Ss6NVRoX8HKaEyFTEYNdUv';
 export const ONTOLOGY_PAGE = 'Ee2Es1b9PkfnR7nsbY2ubE';
 export const PEOPLE_PAGE = '5PatoErephYf1ZJ8U6rNz8';
 export const POSTS_PAGE = 'E3jboNrTeuopjKgJ45ykBd';
