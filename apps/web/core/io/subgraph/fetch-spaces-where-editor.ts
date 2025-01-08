@@ -6,26 +6,15 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 
 import { SpaceConfigEntity, SpaceMetadataDto } from '../dto/spaces';
-import { SpaceId, SubstreamEntity } from '../schema';
-import { versionFragment } from './fragments';
+import { SpaceId, SubstreamVersion } from '../schema';
+import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 const getFetchSpacesWhereEditorQuery = (address: string) => `query {
   spaces(filter: { spaceEditors: { some: { accountId: { equalTo: "${address}" } } } }) {
     nodes {
       id
-      spacesMetadata {
-        nodes {
-          entity {
-            id
-            currentVersion {
-              version {
-                ${versionFragment}
-              }
-            }
-          }
-        }
-      }
+      ${spaceMetadataFragment}
     }
   }
 }`;
@@ -34,7 +23,7 @@ interface NetworkResult {
   spaces: {
     nodes: {
       id: string;
-      spacesMetadata: { nodes: { entity: SubstreamEntity }[] };
+      spacesMetadata: { nodes: { version: SubstreamVersion }[] };
     }[];
   };
 }
@@ -115,7 +104,7 @@ export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWher
 const SpaceWhereEditorSchema = Schema.Struct({
   id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
   spacesMetadata: Schema.Struct({
-    nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
+    nodes: Schema.Array(Schema.Struct({ version: SubstreamVersion })),
   }),
 });
 
@@ -127,7 +116,7 @@ type SpaceWhereEditor = {
 };
 
 function SpaceWhereEditorDto(space: SpaceWhereEditorSchema) {
-  const spaceConfigWithImage = SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.entity);
+  const spaceConfigWithImage = SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.version);
 
   return {
     id: space.id,

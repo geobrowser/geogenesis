@@ -9,21 +9,13 @@ export class SpaceMetadata {
     if (options.chunked) {
       for (let i = 0; i < metadata.length; i += CHUNK_SIZE) {
         const chunk = metadata.slice(i, i + CHUNK_SIZE);
-        await db
-          .upsert('spaces_metadata', chunk, db.constraint('space_metadata_unique_entity_space_pair'), {
-            updateColumns: db.doNothing,
-          })
-          .run(pool);
+        await db.upsert('spaces_metadata', chunk, db.constraint('spaces_metadata_unique_id')).run(pool);
       }
 
       return;
     }
 
-    return await db
-      .upsert('spaces_metadata', metadata, db.constraint('space_metadata_unique_entity_space_pair'), {
-        updateColumns: db.doNothing,
-      })
-      .run(pool);
+    return await db.upsert('spaces_metadata', metadata, db.constraint('spaces_metadata_unique_id')).run(pool);
   }
 
   static remove(metadataEntry: S.spaces_metadata.Whereable) {

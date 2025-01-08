@@ -22,7 +22,7 @@ const makeLocalRelationsAtomWithSelector = ({ selector, includeDeleted = false, 
   return selectAtom(
     makeRelationsAtomFamily(mergeWith),
     relations => {
-      return relations.filter(r => (selector ? selector(r) : true) && (includeDeleted ? true : !r.isDeleted));
+      return relations.filter(r => (selector ? selector(r) : true) && (!includeDeleted ? !r.isDeleted : true));
     },
     equal
   );

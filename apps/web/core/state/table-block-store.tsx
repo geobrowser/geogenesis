@@ -22,7 +22,7 @@ import { StoredRelation } from '../database/types';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { Schema } from '../types';
+import { Relation, Schema } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
@@ -51,9 +51,16 @@ const queryKeys = {
 };
 
 export function useTableBlock() {
-  const { entityId, spaceId } = useTableBlockInstance();
+  const { entityId, spaceId, relationId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
   const { upsert } = useWriteOps();
+
+  const blockRelation = useEntity({
+    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
+    id: React.useMemo(() => EntityId(relationId), [relationId]),
+  });
+
+  const viewRelation = blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
@@ -277,11 +284,12 @@ export function useTableBlock() {
     [upsert, entityId, spaceId]
   );
 
-  const view = getView(blockEntity);
+  const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
 
   return {
     blockEntity,
+    relationId,
     source,
     setSource,
 
@@ -306,6 +314,7 @@ export function useTableBlock() {
     name: blockEntity.name,
     setName,
     view,
+    viewRelation,
     placeholder,
     collectionItems,
   };
@@ -313,13 +322,11 @@ export function useTableBlock() {
 
 export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY';
 
-const getView = (blockEntity: Entity | null | undefined): DataBlockView => {
+const getView = (viewRelation: Relation | undefined): DataBlockView => {
   let view: DataBlockView = 'TABLE';
 
-  if (blockEntity) {
-    const viewTriple = blockEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
-
-    switch (viewTriple?.value.value) {
+  if (viewRelation) {
+    switch (viewRelation?.toEntity.id) {
       case SYSTEM_IDS.TABLE_VIEW:
         view = 'TABLE';
         break;
@@ -375,21 +382,25 @@ const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string 
   },
 };
 
-const TableBlockContext = React.createContext<{ entityId: string; spaceId: string } | undefined>(undefined);
+const TableBlockContext = React.createContext<{ entityId: string; spaceId: string; relationId: string } | undefined>(
+  undefined
+);
 
 interface Props {
   spaceId: string;
   children: React.ReactNode;
   entityId: string;
+  relationId: string;
 }
 
-export function TableBlockProvider({ spaceId, children, entityId }: Props) {
+export function TableBlockProvider({ spaceId, children, entityId, relationId }: Props) {
   const store = React.useMemo(() => {
     return {
       spaceId,
       entityId,
+      relationId,
     };
-  }, [spaceId, entityId]);
+  }, [spaceId, entityId, relationId]);
 
   return <TableBlockContext.Provider value={store}>{children}</TableBlockContext.Provider>;
 }

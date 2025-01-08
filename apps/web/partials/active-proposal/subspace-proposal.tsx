@@ -126,18 +126,7 @@ const getSubspaceInProposalQuery = (proposalId: string) => `query {
         spaceMembers {
           totalCount
         }
-        spacesMetadata {
-          nodes {
-            entity {
-              id
-              currentVersion {
-                version {
-                  ${spaceMetadataFragment}
-                }
-              }
-            }
-          }
-        }
+        ${spaceMetadataFragment}
       }
     }
   }
