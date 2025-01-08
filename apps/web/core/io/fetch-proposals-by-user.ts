@@ -25,13 +25,7 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
         type
         space {
           id
-          spacesMetadata {
-            nodes {
-              version {
-                ${spaceMetadataFragment}
-              }
-            }
-          }
+          ${spaceMetadataFragment}
         }
         createdAtBlock
         createdById

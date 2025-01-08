@@ -27,14 +27,7 @@ const spacesQuery = (name: string) => `
       first: 10
     ) {
       nodes {
-        id
-        spacesMetadata {
-          nodes {
-            version {
-              ${spaceMetadataFragment}
-            }
-          }
-        }
+        ${spaceMetadataFragment}
       }
     }
   }

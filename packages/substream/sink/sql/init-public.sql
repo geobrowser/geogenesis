@@ -150,7 +150,7 @@ CREATE TABLE public.triples (
 CREATE TABLE public.spaces_metadata (
     space_id text NOT NULL REFERENCES public.spaces(id),
     version_id text NOT NULL REFERENCES public.versions(id),
-    CONSTRAINT space_metadata_unique_entity_space_pair UNIQUE (version_id, space_id)
+    CONSTRAINT spaces_metadata_unique_id UNIQUE (space_id)
 );
 
 CREATE TABLE public.proposal_votes (

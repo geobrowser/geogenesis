@@ -1,9 +1,10 @@
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
+import { exit } from 'process';
 import type * as S from 'zapatos/schema';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
-import { CurrentVersions, Proposals, Versions } from '~/sink/db';
+import { CurrentVersions, Proposals, SpaceMetadata, Versions } from '~/sink/db';
 import type { BlockEvent, DeleteTripleOp, SetTripleOp, SinkEditProposal } from '~/sink/types';
 import { partition } from '~/sink/utils';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
@@ -115,17 +116,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
             catch: error =>
               new CouldNotWriteMergedVersionsError(`Failed to insert merged versions. ${(error as Error).message}`),
           }),
-          defaultMergedVersions.length > 0
-            ? writeEdits({
-                versions: defaultMergedVersions,
-                relationOpsByEditId,
-                tripleOpsByVersionId: defaultMergedOpsByVersionId,
-                edits: defaultEdits,
-                block,
-                editType: 'DEFAULT',
-                isAccepted: true,
-              })
-            : Effect.succeed(''),
+
           Effect.forEach(
             ipfsProposals,
             proposal =>
@@ -144,24 +135,32 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       )
     );
 
+    const spaceMetadataForDefaultEdits = yield* _(
+      writeEdits({
+        versions: defaultMergedVersions,
+        relationOpsByEditId,
+        tripleOpsByVersionId: defaultMergedOpsByVersionId,
+        edits: defaultEdits,
+        block,
+        editType: 'DEFAULT',
+      })
+    );
+
     /**
      * We treat imported edits and non-imported edits as separate units of work since
      * imports have separate requirements for how they handle merging data for versions.
      * See comment in {@link writeEdits} for more details.
      */
-    if (importedMergedVersions.length > 0) {
-      yield* _(
-        writeEdits({
-          relationOpsByEditId,
-          versions: importedMergedVersions,
-          tripleOpsByVersionId: importedMergedOpsByVersionId,
-          block,
-          edits: importedEdits,
-          editType: 'IMPORT',
-          isAccepted: true,
-        })
-      );
-    }
+    const spaceMetadataForImportedEdits = yield* _(
+      writeEdits({
+        relationOpsByEditId,
+        versions: importedMergedVersions,
+        tripleOpsByVersionId: importedMergedOpsByVersionId,
+        block,
+        edits: importedEdits,
+        editType: 'IMPORT',
+      })
+    );
 
     // Our `writeEdit` processing relies on reading the most previous valid version in order
     // to merge relations correctly. We shouldn't update the most current valid version of
@@ -174,9 +173,29 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       })
     );
 
+    // Go through current versions to see which ones are spaces or not
+    const metadata = [...spaceMetadataForDefaultEdits, ...spaceMetadataForImportedEdits];
+    const metadataWithCurrentVersions = metadata.filter(m =>
+      currentVersions.some(cv => cv.version_id === m.version_id)
+    );
+
+    yield* _(
+      Effect.tryPromise({
+        try: () => SpaceMetadata.upsert(metadataWithCurrentVersions),
+        catch: error =>
+          new CouldNotWriteSpaceMetadataError({
+            message: `Failed to insert space metadata. ${(error as Error).message}`,
+          }),
+      })
+    );
+
     yield* _(Effect.logInfo('Approved edits created'));
   });
 }
+
+class CouldNotWriteSpaceMetadataError extends Data.TaggedError('CouldNotWriteSpaceMetadataError')<{
+  message: string;
+}> {}
 
 function aggregateCurrentVersions(
   versions: S.versions.Insertable[],

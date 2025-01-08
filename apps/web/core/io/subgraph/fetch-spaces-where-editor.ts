@@ -7,20 +7,14 @@ import { Environment } from '~/core/environment';
 
 import { SpaceConfigEntity, SpaceMetadataDto } from '../dto/spaces';
 import { SpaceId, SubstreamVersion } from '../schema';
-import { versionFragment } from './fragments';
+import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 const getFetchSpacesWhereEditorQuery = (address: string) => `query {
   spaces(filter: { spaceEditors: { some: { accountId: { equalTo: "${address}" } } } }) {
     nodes {
       id
-      spacesMetadata {
-        nodes {
-          version {
-            ${versionFragment}
-          }
-        }
-      }
+      ${spaceMetadataFragment}
     }
   }
 }`;

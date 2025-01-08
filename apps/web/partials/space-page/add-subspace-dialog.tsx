@@ -71,13 +71,7 @@ const subspacesQuery = (name: string, notIn: string[]) => `
         spaceEditors {
           totalCount
         }
-        spacesMetadata {
-          nodes {
-            version {
-              ${spaceMetadataFragment}
-            }
-          }
-        }
+        ${spaceMetadataFragment}
       }
     }
   }
