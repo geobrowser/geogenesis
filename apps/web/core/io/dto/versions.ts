@@ -3,7 +3,9 @@ import { Profile } from '~/core/types';
 import { SubstreamVersion, SubstreamVersionWithEdit } from '../schema';
 import { Entity, EntityDto } from './entities';
 
-export type Version = Entity;
+export type Version = Entity & {
+  versionId: string;
+};
 
 export type HistoryVersion = Entity & {
   createdAt: number;
@@ -20,6 +22,7 @@ export function VersionDto(version: SubstreamVersion): Version {
         version,
       },
     }),
+    versionId: version.id,
   };
 }
 

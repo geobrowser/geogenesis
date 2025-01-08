@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 
-import { VersionDto } from '../dto/versions';
+import { HistoryVersionDto } from '../dto/versions';
 import { SubstreamVersionWithEdit } from '../schema';
 import { versionFragment } from './fragments';
 import { graphql } from './graphql';
@@ -92,7 +92,7 @@ export async function fetchVersions(args: FetchVersionsArgs) {
           return null;
         },
         onRight: result => {
-          return VersionDto(result);
+          return HistoryVersionDto(result);
         },
       });
     })
