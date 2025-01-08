@@ -10,7 +10,7 @@ interface VersionChangesArgs {
 }
 
 export const useVersionChanges = (args: VersionChangesArgs) => {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['version-changes', args],
     queryFn: async () => {
       const [beforeVersion, afterVersion] = await Promise.all([

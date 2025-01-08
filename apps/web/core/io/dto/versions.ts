@@ -12,6 +12,7 @@ export type HistoryVersion = Entity & {
   createdBy: Profile;
   editName: string;
   versionId: string;
+  proposalId: string;
 };
 
 export function VersionDto(version: SubstreamVersion): Version {
@@ -26,7 +27,7 @@ export function VersionDto(version: SubstreamVersion): Version {
   };
 }
 
-export function HistoryVersionDto(version: SubstreamVersionWithEdit): HistoryVersion {
+export function HistoryVersionDto(version: SubstreamVersionWithEdit, profile?: Profile): HistoryVersion {
   return {
     ...EntityDto({
       id: version.entityId,
@@ -36,8 +37,9 @@ export function HistoryVersionDto(version: SubstreamVersionWithEdit): HistoryVer
     }),
     versionId: version.id,
     editName: version.edit.name,
+    proposalId: version.edit.proposals.nodes[0].id,
     createdAt: version.edit.createdAt,
-    createdBy: {
+    createdBy: profile ?? {
       address: version.edit.createdById as `0x${string}`,
       avatarUrl: '',
       coverUrl: '',
