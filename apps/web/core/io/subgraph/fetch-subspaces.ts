@@ -42,7 +42,9 @@ interface NetworkResult {
         daoAddress: string;
         spaceEditors: { totalCount: number };
         spaceMembers: { totalCount: number };
-        spacesMetadata: { nodes: { version: SubstreamVersion }[] };
+        spacesMetadatum: {
+          version: SubstreamVersion;
+        };
       };
     }[];
   };

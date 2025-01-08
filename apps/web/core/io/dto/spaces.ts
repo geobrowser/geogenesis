@@ -25,7 +25,7 @@ export type SpaceConfigEntity = Entity & {
 };
 
 export function SpaceDto(space: SubstreamSpace): Space {
-  const spaceConfigEntity = SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.version);
+  const spaceConfigEntity = SpaceMetadataDto(space.id, space.spacesMetadatum.version);
 
   return {
     id: space.id,

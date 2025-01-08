@@ -164,35 +164,26 @@ export const versionFragment = `
 `;
 
 export const spaceMetadataFragment = `
-  spacesMetadata(
-    first: 1
-    orderBy: VERSION_BY_VERSION_ID__CREATED_AT_DESC
-    filter: {
-      version: {
-        edit: { proposals: { some: { status: { equalTo: ACCEPTED } } } }
+  spacesMetadatum {
+    version {
+      id
+      entityId
+      name
+      description
+      versionSpaces {
+        nodes {
+          spaceId
+        }
       }
-    }) {
-    nodes {
-      version {
-        id
-        entityId
-        name
-        description
-        versionSpaces {
-          nodes {
-            spaceId
-          }
+      ${versionTypesFragment}
+      relationsByFromVersionId {
+        nodes {
+          ${relationFragment}
         }
-        ${versionTypesFragment}
-        relationsByFromVersionId {
-          nodes {
-            ${relationFragment}
-          }
-        }
-        triples {
-          nodes {
-            ${tripleFragment}
-          }
+      }
+      triples {
+        nodes {
+          ${tripleFragment}
         }
       }
     }

@@ -10,7 +10,7 @@ export type Subspace = {
 };
 
 export function SubspaceDto(subspace: SubstreamSubspace) {
-  const spaceConfigWithImage = SpaceMetadataDto(subspace.id, subspace.spacesMetadata.nodes[0]?.version);
+  const spaceConfigWithImage = SpaceMetadataDto(subspace.id, subspace.spacesMetadatum.version);
 
   return {
     id: subspace.id,

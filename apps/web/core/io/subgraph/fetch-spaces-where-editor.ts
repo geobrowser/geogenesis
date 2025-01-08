@@ -23,7 +23,7 @@ interface NetworkResult {
   spaces: {
     nodes: {
       id: string;
-      spacesMetadata: { nodes: { version: SubstreamVersion }[] };
+      spacesMetadatum: SubstreamVersion;
     }[];
   };
 }
@@ -103,9 +103,7 @@ export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWher
 
 const SpaceWhereEditorSchema = Schema.Struct({
   id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
-  spacesMetadata: Schema.Struct({
-    nodes: Schema.Array(Schema.Struct({ version: SubstreamVersion })),
-  }),
+  spacesMetadatum: SubstreamVersion,
 });
 
 type SpaceWhereEditorSchema = Schema.Schema.Type<typeof SpaceWhereEditorSchema>;
@@ -116,7 +114,7 @@ type SpaceWhereEditor = {
 };
 
 function SpaceWhereEditorDto(space: SpaceWhereEditorSchema) {
-  const spaceConfigWithImage = SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.version);
+  const spaceConfigWithImage = SpaceMetadataDto(space.id, space.spacesMetadatum);
 
   return {
     id: space.id,
