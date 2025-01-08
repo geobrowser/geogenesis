@@ -8,7 +8,7 @@ export const COVER_ATTRIBUTE = 'DTEcNh4xFNvsqoX9bfF6qS';
 export const TYPES_ATTRIBUTE = 'KEyred99SGesjDMcbB1oD2';
 
 /** Value types */
-export const VALUE_TYPE = 'JwYkkjY2i6uuR4wrgFScwt';
+export const VALUE_TYPE_ATTRIBUTE = 'JwYkkjY2i6uuR4wrgFScwt';
 export const CHECKBOX = 'NtWv5uGJ1d15Mfk4ZdXfmU';
 export const TIME = 'UGr1YqqZbE2BbEpJR9U88H';
 export const TEXT = 'JBYTdEigecQHj2xhL3NeHV';
@@ -212,6 +212,8 @@ export const NETWORK_TYPE = 'YCLXoVZho6C4S51g4AbF3C';
 
 export const GOALS_ATTRIBUTE = 'WNcdorfdj7ZprmwvmRiRtG';
 export const GOAL_TYPE = '2y44qmFiLjZWmgkZ64EM7c';
+export const VALUE_TYPE = 'Y1HG66QvvthrmL3dredT53';
+export const PRINCIPLE_TYPE = '2tjghBgapq2CNRsUPMhZ5b';
 export const MEMBERSHIP_CONTRACT_ADDRESS = 'DDkwCoB8p1mHzXTedShcFv';
 export const MISSION_ATTRIBUTE = 'VGbyCo12NC8yTUhnhMHu1z';
 export const PLACEHOLDER_IMAGE = 'ENYn2afpf2koqBfyff7CGE';
