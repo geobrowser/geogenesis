@@ -60,8 +60,7 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '80451',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
-    // api: 'https://geo-mainnet.up.railway.app/graphql',
-    api: 'http://localhost:5001/graphql',
+    api: 'https://geo-mainnet.up.railway.app/graphql',
     bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   testnet: {
