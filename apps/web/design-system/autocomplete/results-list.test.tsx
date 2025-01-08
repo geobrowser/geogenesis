@@ -21,7 +21,7 @@ const space: Space = {
     description: 'Description-1',
     types: [
       {
-        id: SYSTEM_IDS.SPACE_CONFIGURATION,
+        id: SYSTEM_IDS.SPACE_TYPE,
         name: 'Space Configuration',
       },
     ],

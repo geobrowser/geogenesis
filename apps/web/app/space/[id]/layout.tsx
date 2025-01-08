@@ -61,8 +61,10 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   const hasPostsPage = getHasPage(tabEntities, SYSTEM_IDS.POSTS_PAGE);
   // const hasProductsPage = getHasPage(tabEntities, SYSTEM_IDS.PRODUCTS_PAGE);
   // const hasServicesPage = getHasPage(tabEntities, SYSTEM_IDS.SERVICES_PAGE);
+  const hasNewsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
   const hasEventsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
   const hasProjectsPage = getHasPage(tabEntities, SYSTEM_IDS.PROJECTS_PAGE);
+  const hasPeoplePage = getHasPage(tabEntities, SYSTEM_IDS.PEOPLE_PAGE);
   const hasJobsPage = getHasPage(tabEntities, SYSTEM_IDS.JOBS_PAGE);
   const hasFinancesPage = getHasPage(tabEntities, SYSTEM_IDS.FINANCES_PAGE);
 
@@ -79,6 +81,49 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       teamCount = roleTriples.length;
     }
   }
+
+  const INDUSTRY_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'News',
+      href: `${NavUtils.toSpace(params.id)}/news`,
+      priority: 1 as const,
+      hidden: !hasNewsPage,
+    },
+    {
+      label: 'Events',
+      href: `${NavUtils.toSpace(params.id)}/events`,
+      priority: 1 as const,
+      hidden: !hasEventsPage,
+    },
+    {
+      label: 'Projects',
+      href: `${NavUtils.toSpace(params.id)}/projects`,
+      priority: 1 as const,
+      hidden: !hasProjectsPage,
+    },
+    {
+      label: 'People',
+      href: `${NavUtils.toSpace(params.id)}/people`,
+      priority: 1 as const,
+      hidden: !hasPeoplePage,
+    },
+    {
+      label: 'Jobs',
+      href: `${NavUtils.toSpace(params.id)}/jobs`,
+      priority: 1 as const,
+      hidden: !hasJobsPage,
+    },
+    {
+      label: 'Activity',
+      href: `${NavUtils.toSpace(params.id)}/activity`,
+      priority: 3 as const,
+    },
+  ];
 
   const COMPANY_TABS = [
     {
@@ -226,6 +271,11 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
 
   // Order of how we add the tabs matters. We want to
   // show "content-based" tabs first, then "space-based" tabs.
+
+  if (typeIds.includes(SYSTEM_IDS.INDUSTRY_TYPE)) {
+    tabs.push(...INDUSTRY_TABS);
+  }
+
   if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
     tabs.push(...COMPANY_TABS);
   }
@@ -238,7 +288,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     tabs.push(...PERSON_TABS);
   }
 
-  if (typeIds.includes(SYSTEM_IDS.SPACE_CONFIGURATION)) {
+  if (typeIds.includes(SYSTEM_IDS.SPACE_TYPE)) {
     tabs.push(...ALL_SPACES_TABS);
     if (!typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
       tabs.push(...SOME_SPACES_TABS);

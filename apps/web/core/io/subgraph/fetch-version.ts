@@ -4,8 +4,8 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 
-import { VersionDto } from '../dto/versions';
-import { SubstreamVersion } from '../schema';
+import { HistoryVersionDto } from '../dto/versions';
+import { SubstreamVersionWithEdit } from '../schema';
 import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -20,6 +20,7 @@ const query = (versionId: string) => {
     version(id: "${versionId}") {
       ${versionFragment}
       edit {
+        id
         name
         createdAt
         createdById
@@ -29,7 +30,7 @@ const query = (versionId: string) => {
 };
 
 interface NetworkResult {
-  version: SubstreamVersion | null;
+  version: SubstreamVersionWithEdit | null;
 }
 
 export async function fetchVersion(args: FetchVersionsArgs) {
@@ -81,7 +82,7 @@ export async function fetchVersion(args: FetchVersionsArgs) {
     return null;
   }
 
-  const decoded = Schema.decodeEither(SubstreamVersion)(networkVersion);
+  const decoded = Schema.decodeEither(SubstreamVersionWithEdit)(networkVersion);
 
   return Either.match(decoded, {
     onLeft: error => {
@@ -93,7 +94,7 @@ export async function fetchVersion(args: FetchVersionsArgs) {
       return null;
     },
     onRight: result => {
-      return VersionDto(result);
+      return HistoryVersionDto(result);
     },
   });
 }

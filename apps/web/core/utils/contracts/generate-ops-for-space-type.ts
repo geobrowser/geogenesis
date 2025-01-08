@@ -3,6 +3,7 @@ import { Account, CONTENT_IDS, Image, Op, Relation, SYSTEM_IDS } from '@geogenes
 import { ID } from '~/core/id';
 import type { SpaceType } from '~/core/types';
 import { generateOpsForCompany } from '~/core/utils/contracts/generate-ops-for-company';
+import { generateOpsForIndustry } from '~/core/utils/contracts/generate-ops-for-industry';
 import { generateOpsForNonprofit } from '~/core/utils/contracts/generate-ops-for-nonprofit';
 import { generateOpsForPerson } from '~/core/utils/contracts/generate-ops-for-person';
 import { Ops } from '~/core/utils/ops';
@@ -41,7 +42,7 @@ export const generateOpsForSpaceType = async ({
   ops.push(
     Relation.make({
       fromId: newEntityId,
-      toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+      toId: SYSTEM_IDS.SPACE_TYPE,
       relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
     })
   );
@@ -75,9 +76,67 @@ export const generateOpsForSpaceType = async ({
       ops.push(...nonprofitOps);
       break;
     }
-    default: {
+    case 'academic-field':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.ACADEMIC_FIELD_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    case 'dao':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.DAO_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    case 'government-org':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.GOVERNMENT_ORG_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    case 'industry': {
+      const industryOps = await generateOpsForIndustry(newEntityId, spaceName);
+      ops.push(...industryOps);
       break;
     }
+    case 'interest-group':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.INTEREST_GROUP_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    case 'protocol':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.PROTOCOL_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    case 'region':
+      ops.push(
+        Relation.make({
+          fromId: newEntityId,
+          toId: SYSTEM_IDS.REGION_TYPE,
+          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        })
+      );
+      break;
+    default:
+      break;
   }
 
   if (spaceAvatarUri) {

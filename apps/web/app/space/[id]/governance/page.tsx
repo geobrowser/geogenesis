@@ -21,7 +21,7 @@ interface Props {
 }
 
 const votingPeriod = '4h';
-const passThreshold = '51%';
+const passThreshold = '50%';
 
 export const dynamic = 'force-dynamic';
 

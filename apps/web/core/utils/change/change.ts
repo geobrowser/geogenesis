@@ -9,6 +9,7 @@ import { Proposal } from '~/core/io/dto/proposals';
 import { Version } from '~/core/io/dto/versions';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
+import { fetchVersion } from '~/core/io/subgraph/fetch-version';
 import { queryClient } from '~/core/query-client';
 import type { Relation, Triple } from '~/core/types';
 
@@ -94,7 +95,9 @@ export async function fromActiveProposal(proposal: Proposal): Promise<EntityChan
   const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId });
 
   // Version entity ids are mapped to the version.id
-  const currentVersionsForEntityIds = await Promise.all(versionsByEditId.map(v => fetchEntity({ id: v.id })));
+  const currentVersionsForEntityIds = await Promise.all(
+    versionsByEditId.map(v => fetchVersion({ versionId: v.versionId }))
+  );
 
   return aggregateChanges({
     spaceId: proposal.space.id,

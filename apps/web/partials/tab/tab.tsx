@@ -57,16 +57,18 @@ const getPageTypeEntityId = (slug: string): string | null => {
 };
 
 const pageTypeEntityIds: Record<string, string> = {
+  about: SYSTEM_IDS.ABOUT_PAGE,
+  education: SYSTEM_IDS.EDUCATION_PAGE,
+  events: SYSTEM_IDS.EVENTS_PAGE,
+  finances: SYSTEM_IDS.FINANCES_PAGE,
+  jobs: SYSTEM_IDS.JOBS_PAGE,
+  ontology: SYSTEM_IDS.ONTOLOGY_PAGE,
+  news: SYSTEM_IDS.NEWS_PAGE,
+  people: SYSTEM_IDS.PEOPLE_PAGE,
   posts: SYSTEM_IDS.POSTS_PAGE,
   products: SYSTEM_IDS.PRODUCTS_PAGE,
-  services: SYSTEM_IDS.SERVICES_PAGE,
-  events: SYSTEM_IDS.EVENTS_PAGE,
-  team: SYSTEM_IDS.TEAM_PAGE,
-  jobs: SYSTEM_IDS.JOBS_PAGE,
   projects: SYSTEM_IDS.PROJECTS_PAGE,
-  finances: SYSTEM_IDS.FINANCES_PAGE,
+  services: SYSTEM_IDS.SERVICES_PAGE,
   spaces: SYSTEM_IDS.SPACES_PAGE,
-  ontology: SYSTEM_IDS.ONTOLOGY_PAGE,
-  education: SYSTEM_IDS.EDUCATION_PAGE,
-  about: SYSTEM_IDS.ABOUT_PAGE,
+  team: SYSTEM_IDS.TEAM_PAGE,
 };

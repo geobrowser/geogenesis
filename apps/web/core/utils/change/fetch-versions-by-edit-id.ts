@@ -18,6 +18,7 @@ const query = (editId: string) => {
       nodes {
         ${versionFragment}
         edit {
+          id
           name
           createdAt
           createdById

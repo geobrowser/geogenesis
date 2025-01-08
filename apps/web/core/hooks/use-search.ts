@@ -57,7 +57,8 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
               signal,
               first: 10,
             }),
-          catch: () => {
+          catch: error => {
+            console.error('error', error);
             return new Subgraph.Errors.AbortError();
           },
         })

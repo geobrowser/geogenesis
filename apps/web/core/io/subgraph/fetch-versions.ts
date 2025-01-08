@@ -4,8 +4,8 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 
-import { VersionDto } from '../dto/versions';
-import { SubstreamVersion } from '../schema';
+import { HistoryVersionDto } from '../dto/versions';
+import { SubstreamVersionWithEdit } from '../schema';
 import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -23,6 +23,7 @@ const query = (entityId: string, page = 0) => {
       nodes {
         ${versionFragment}
         edit {
+          id
           name
           createdAt
           createdById
@@ -33,7 +34,7 @@ const query = (entityId: string, page = 0) => {
 };
 
 interface NetworkResult {
-  versions: { nodes: SubstreamVersion[] };
+  versions: { nodes: SubstreamVersionWithEdit[] };
 }
 
 export async function fetchVersions(args: FetchVersionsArgs) {
@@ -83,7 +84,7 @@ export async function fetchVersions(args: FetchVersionsArgs) {
 
   const versions = networkVersions
     .map(v => {
-      const decoded = Schema.decodeEither(SubstreamVersion)(v);
+      const decoded = Schema.decodeEither(SubstreamVersionWithEdit)(v);
 
       return Either.match(decoded, {
         onLeft: error => {
@@ -91,7 +92,7 @@ export async function fetchVersions(args: FetchVersionsArgs) {
           return null;
         },
         onRight: result => {
-          return VersionDto(result);
+          return HistoryVersionDto(result);
         },
       });
     })

@@ -9,11 +9,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
+import { DB } from '~/core/database/write';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { Triples } from '~/core/utils/triples';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -22,7 +24,6 @@ import { Blank } from '~/design-system/icons/blank';
 import { Close } from '~/design-system/icons/close';
 import { Dash } from '~/design-system/icons/dash';
 import { Tick } from '~/design-system/icons/tick';
-import { Trash } from '~/design-system/icons/trash';
 import { SlideUp } from '~/design-system/slide-up';
 
 import { ChangedEntity } from '../diff/changed-entity';
@@ -121,7 +122,7 @@ const ReviewChanges = () => {
   // Proposal state
   const [proposals, setProposals] = useState<Proposals>({});
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
-  const isReadyToPublish = proposalName?.length > 3;
+  // Entity Id -> Attribute Id -> boolean
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
 
   const triplesFromSpace = useTriples(
@@ -142,6 +143,10 @@ const ReviewChanges = () => {
     }, [activeSpace])
   );
 
+  const isReadyToPublish =
+    proposalName?.length > 3 &&
+    Triples.prepareTriplesForPublishing(triplesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
+
   const { makeProposal } = usePublish();
   const [changes, isLoading] = useLocalChanges(activeSpace);
 
@@ -149,8 +154,12 @@ const ReviewChanges = () => {
     // @TODO(database)
   }, []);
 
-  const handleStaging = (attributeId: string, unstaged: boolean) => {
+  const handleStaging = (entityId: string, attributeId: string) => {
+    const newChanges = { ...unstagedChanges };
+    newChanges[entityId] = {};
+
     // if (!unstaged) {
+
     //   setUnstagedChanges({
     //     ...unstagedChanges,
     //     [entityId]: {
@@ -262,7 +271,7 @@ const ReviewChanges = () => {
               <div>
                 <SmallButton
                   onClick={() => {
-                    // @TODO(database)
+                    DB.deleteAll(activeSpace);
                   }}
                 >
                   Delete all
@@ -289,24 +298,24 @@ const ReviewChanges = () => {
                 <ChangedEntity
                   key={change.id}
                   change={change}
-                  deleteAllComponent={
-                    <div className="absolute right-0 top-0">
-                      <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
-                    </div>
-                  }
-                  renderAttributeStagingComponent={attributeId => (
-                    <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-                      <SquareButton
-                        onClick={handleDeleteActions}
-                        icon={<Trash />}
-                        className="opacity-0 group-hover:opacity-100"
-                      />
-                      <SquareButton
-                        onClick={() => handleStaging(attributeId, false)}
-                        icon={unstaged ? <Blank /> : <Tick />}
-                      />
-                    </div>
-                  )}
+                  // deleteAllComponent={
+                  //   <div className="absolute right-0 top-0">
+                  //     <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
+                  //   </div>
+                  // }
+                  // renderAttributeStagingComponent={attributeId => (
+                  //   <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+                  //     <SquareButton
+                  //       onClick={handleDeleteActions}
+                  //       icon={<Trash />}
+                  //       className="opacity-0 group-hover:opacity-100"
+                  //     />
+                  //     <SquareButton
+                  //       onClick={() => handleStaging(attributeId, false)}
+                  //       icon={unstaged ? <Blank /> : <Tick />}
+                  //     />
+                  //   </div>
+                  // )}
                 />
               ))}
             </div>

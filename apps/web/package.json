@@ -94,6 +94,7 @@
     "react-use-measure": "^2.1.1",
     "sharp": "^0.32.6",
     "showdown": "^2.1.0",
+    "tiny-invariant": "^1.3.3",
     "tippy.js": "^6.3.7",
     "viem": "^2.7.11",
     "wagmi": "^2.5.7"

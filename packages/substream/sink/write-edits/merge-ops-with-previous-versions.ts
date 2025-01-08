@@ -12,7 +12,7 @@ interface MergeOpsWithPreviousVersionArgs {
 
 export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionArgs) {
   const spaceIdByEditId = new Map<string, string>();
-  const { versions, tripleOpsByVersionId: opsByVersionId } = args;
+  const { versions, tripleOpsByVersionId } = args;
 
   for (const edit of args.edits) {
     spaceIdByEditId.set(edit.id.toString(), edit.space_id.toString());
@@ -60,7 +60,7 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
     const triplesForLastVersion = Object.fromEntries(triplesForLastVersionTuples);
 
     for (const version of versions) {
-      const opsForVersion = opsByVersionId.get(version.id.toString()) ?? [];
+      const opsForVersion = tripleOpsByVersionId.get(version.id.toString()) ?? [];
       const lastVersionId = lastVersionForEntityId[version.entity_id.toString()];
 
       if (lastVersionId) {

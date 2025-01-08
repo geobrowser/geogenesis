@@ -108,7 +108,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
 
   const decodedEntity = Either.match(entityOrError, {
     onLeft: error => {
-      console.error(`Unable to decode entity ${entity.currentVersion.version.id} with error ${error}`);
+      console.error(`Unable to decode entity ${entity.id} with error ${error}`);
       return null;
     },
     onRight: entity => {

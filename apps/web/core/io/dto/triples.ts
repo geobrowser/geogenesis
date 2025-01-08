@@ -1,4 +1,4 @@
-import { Value } from '~/core/types';
+import { Triple, Value } from '~/core/types';
 
 import { SubstreamTriple } from '../schema';
 
@@ -17,16 +17,16 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
   }
 }
 
-export function TripleDto(triple: SubstreamTriple) {
-  const entity = triple.entity;
-  const attribute = triple.attribute;
+export function TripleDto(triple: SubstreamTriple): Triple {
+  const entity = triple.version;
+  const attribute = triple.attributeVersion;
 
   return {
-    entityId: entity.id,
-    entityName: entity.currentVersion.version.name,
-    attributeId: attribute.id,
-    attributeName: attribute.currentVersion.version.name,
+    entityId: entity.entityId,
+    entityName: entity.name,
+    attributeId: attribute.entityId,
+    attributeName: attribute.name,
     value: extractValue(triple),
-    space: triple.space.id,
+    space: triple.spaceId,
   };
 }
