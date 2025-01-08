@@ -3,7 +3,7 @@ import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { CurrentVersions, Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
+import { CurrentVersions, Entities, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import type { BlockEvent, CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SetTripleOp } from '../types';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
@@ -14,9 +14,7 @@ class CouldNotWriteVersionsError extends Data.TaggedError('CouldNotWriteVersions
 class CouldNotWriteEntitiesError extends Data.TaggedError('CouldNotWriteEntitiesError')<{ message: string }> {}
 class CouldNotWriteRelationsError extends Data.TaggedError('CouldNotWriteRelationsError')<{ message: string }> {}
 class CouldNotWriteVersionTypesError extends Data.TaggedError('CouldNotWriteVersionTypesError')<{ message: string }> {}
-class CouldNotWriteSpaceMetadataError extends Data.TaggedError('CouldNotWriteSpaceMetadataError')<{
-  message: string;
-}> {}
+
 class CouldNotWriteVersionSpacesError extends Data.TaggedError('CouldNotWriteVersionSpacesError')<{
   message: string;
 }> {}
@@ -265,7 +263,7 @@ function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Inser
   });
 }
 
-function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) {
+export function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) {
   return Effect.gen(function* (_) {
     const [typesVersions, spaceConfigsVersions] = yield* _(
       Effect.all(

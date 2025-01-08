@@ -1,4 +1,5 @@
 import { Data, Effect } from 'effect';
+import { dedupeWith } from 'effect/ReadonlyArray';
 import { exit } from 'process';
 import type * as S from 'zapatos/schema';
 
@@ -9,7 +10,8 @@ import type { BlockEvent, DeleteTripleOp, SetTripleOp, SinkEditProposal } from '
 import { partition } from '~/sink/utils';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
-import { writeEdits } from '~/sink/write-edits/write-edits';
+import { aggregateRelations } from '~/sink/write-edits/relations/aggregate-relations';
+import { aggregateSpacesFromRelations, writeEdits } from '~/sink/write-edits/write-edits';
 
 export class ProposalDoesNotExistError extends Error {
   readonly _tag = 'ProposalDoesNotExistError';
@@ -33,133 +35,49 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
     yield* _(Effect.logInfo('Handling approved edits'));
 
     const {
-      schemaEditProposals: { tripleOpsByVersionId, versions, edits, relationOpsByEditId },
+      schemaEditProposals: { versions, relationOpsByEditId, edits },
     } = mapIpfsProposalToSchemaProposalByType(ipfsProposals, block);
 
-    /**
-     * We treat imported edits and non-imported edits as separate units of work since
-     * imports have separate requirements for how they handle merging data for versions.
-     * See comment in {@link writeEdits} for more details.
-     */
-    const [importedEdits, defaultEdits] = partition(edits, e => createdSpaceIds.includes(e.space_id.toString()));
-    const [importedVersions, defaultVersions] = partition(versions, v =>
-      importedEdits.some(e => e.id.toString() === v.edit_id.toString())
+    const nonstaleVersions = yield* _(
+      aggregateNewVersions({
+        block,
+        edits: edits,
+        ipfsVersions: versions,
+        relationOpsByEditId,
+        editType: 'DEFAULT',
+      })
     );
 
-    yield* _(Effect.logDebug('Aggregating new versions for imported + default edits'));
-
     /**
-     * There might be entities that aren't changed in an edit, and therefore don't
-     * have a new version. These entities, however, might have new relations coming
-     * from them. We treat any new relations from an entity as a new version, so
-     * we need to detect and create those entities.
+     * @TODO
+     * There is an edge case where there may be multiple versions created for an entity
+     * across multiple spaces. Each version might have a different set of changes applied
+     * to them in the edits. When both are accepted we need to merge the changes from each
+     * version into a single version which has all of the changes across all of the spaces.
      *
-     * This is required due to the way versioning works as we only update the triples
-     * and relations on an entity whenever a new version is created.
+     * Alternatively we only scope versions to one space at a time rather than having a
+     * unified version across all spaces. This would mean that we never need to merge, but
+     * clients would have to be aware of which version to query for.
+     *
+     * Currently this data service doesn't solve for this edge case, partly because block sizes
+     * are very small on Arbitrum One, and partly because we haven't settled on the API spec
+     * yet which would inform the right approach.
      */
-    const importedVersionsWithStaleEntities = yield* _(
-      aggregateNewVersions({
-        block,
-        edits: importedEdits,
-        ipfsVersions: importedVersions,
-        relationOpsByEditId,
-        editType: 'IMPORT',
-      })
-    );
-
-    const defaultVersionsWithStaleEntities = yield* _(
-      aggregateNewVersions({
-        block,
-        edits: defaultEdits,
-        ipfsVersions: defaultVersions,
-        relationOpsByEditId,
-        editType: 'DEFAULT',
-      })
-    );
-
-    /**
-     * If multiple versions for the same entity are approved in the same block we need to merge
-     * them into a new version that contains the contents of each version. This merged version
-     * is then set as the current version of the entity.
-     */
-    const { mergedOpsByVersionId: defaultMergedOpsByVersionId, mergedVersions: defaultMergedVersions } = yield* _(
-      aggregateMergedVersions({
-        block,
-        editType: 'DEFAULT',
-        tripleOpsByVersionId,
-        versions: defaultVersionsWithStaleEntities,
-        edits: defaultEdits,
-      })
-    );
-
-    const { mergedOpsByVersionId: importedMergedOpsByVersionId, mergedVersions: importedMergedVersions } = yield* _(
-      aggregateMergedVersions({
-        block,
-        editType: 'IMPORT',
-        tripleOpsByVersionId,
-        versions: importedVersionsWithStaleEntities,
-        edits: importedEdits,
-      })
-    );
-
-    const allMergedVersions = [...defaultMergedVersions, ...importedMergedVersions];
-    const allCreatedVersions = [...defaultVersionsWithStaleEntities, ...importedVersionsWithStaleEntities];
-    const currentVersions = aggregateCurrentVersions(allCreatedVersions, allMergedVersions);
-
-    yield* _(Effect.logDebug('Writing approved edits + versions'));
 
     yield* _(
-      Effect.all(
-        [
+      Effect.forEach(
+        ipfsProposals,
+        proposal =>
           Effect.tryPromise({
-            try: () => Versions.upsert(allMergedVersions),
-            catch: error =>
-              new CouldNotWriteMergedVersionsError(`Failed to insert merged versions. ${(error as Error).message}`),
+            try: () => Proposals.setAcceptedById(proposal.proposalId),
+            catch: error => {
+              return new ProposalDoesNotExistError(String(error));
+            },
           }),
-
-          Effect.forEach(
-            ipfsProposals,
-            proposal =>
-              Effect.tryPromise({
-                try: () => Proposals.setAcceptedById(proposal.proposalId),
-                catch: error => {
-                  return new ProposalDoesNotExistError(String(error));
-                },
-              }),
-            {
-              concurrency: 50,
-            }
-          ),
-        ],
-        { concurrency: 50 }
+        {
+          concurrency: 50,
+        }
       )
-    );
-
-    const spaceMetadataForDefaultEdits = yield* _(
-      writeEdits({
-        versions: defaultMergedVersions,
-        relationOpsByEditId,
-        tripleOpsByVersionId: defaultMergedOpsByVersionId,
-        edits: defaultEdits,
-        block,
-        editType: 'DEFAULT',
-      })
-    );
-
-    /**
-     * We treat imported edits and non-imported edits as separate units of work since
-     * imports have separate requirements for how they handle merging data for versions.
-     * See comment in {@link writeEdits} for more details.
-     */
-    const spaceMetadataForImportedEdits = yield* _(
-      writeEdits({
-        relationOpsByEditId,
-        versions: importedMergedVersions,
-        tripleOpsByVersionId: importedMergedOpsByVersionId,
-        block,
-        edits: importedEdits,
-        editType: 'IMPORT',
-      })
     );
 
     // Our `writeEdit` processing relies on reading the most previous valid version in order
@@ -167,21 +85,36 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
     // an entity until after the writeEdits processing is finished.
     yield* _(
       Effect.tryPromise({
-        try: () => CurrentVersions.upsert(currentVersions),
+        try: () =>
+          CurrentVersions.upsert(
+            nonstaleVersions.map(v => {
+              return {
+                entity_id: v.entity_id,
+                version_id: v.id,
+              };
+            })
+          ),
         catch: error =>
           new CouldNotWriteCurrentVersionsError(`Failed to insert current versions. ${(error as Error).message}`),
       })
     );
 
-    // Go through current versions to see which ones are spaces or not
-    const metadata = [...spaceMetadataForDefaultEdits, ...spaceMetadataForImportedEdits];
-    const metadataWithCurrentVersions = metadata.filter(m =>
-      currentVersions.some(cv => cv.version_id === m.version_id)
+    // Do we only care about the relations in this edit? I think we care about all of them
+    // because the version of the space entity may have changed.
+    const relations = yield* _(
+      aggregateRelations({
+        relationOpsByEditId,
+        versions: nonstaleVersions,
+        edits,
+        editType: 'DEFAULT',
+      })
     );
+
+    const spaceMetadatum = yield* _(aggregateSpacesFromRelations(relations));
 
     yield* _(
       Effect.tryPromise({
-        try: () => SpaceMetadata.upsert(metadataWithCurrentVersions),
+        try: () => SpaceMetadata.upsert(dedupeWith(spaceMetadatum, (a, z) => a.space_id === z.space_id)),
         catch: error =>
           new CouldNotWriteSpaceMetadataError({
             message: `Failed to insert space metadata. ${(error as Error).message}`,
@@ -196,97 +129,3 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
 class CouldNotWriteSpaceMetadataError extends Data.TaggedError('CouldNotWriteSpaceMetadataError')<{
   message: string;
 }> {}
-
-function aggregateCurrentVersions(
-  versions: S.versions.Insertable[],
-  mergedVersions: S.versions.Insertable[]
-): S.current_versions.Insertable[] {
-  // entityId -> versionId
-  const currentVersions = new Map<string, string>();
-
-  // Favor merged versions over versions
-  for (const version of [...versions, ...mergedVersions]) {
-    currentVersions.set(version.entity_id.toString(), version.id.toString());
-  }
-
-  return [...currentVersions.entries()].map(([entityId, versionId]): S.current_versions.Insertable => {
-    return {
-      entity_id: entityId,
-      version_id: versionId,
-    };
-  });
-}
-
-interface AggregateMergedVersionsArgs {
-  versions: S.versions.Insertable[];
-  edits: S.edits.Insertable[];
-  tripleOpsByVersionId: Map<string, (SetTripleOp | DeleteTripleOp)[]>;
-  block: BlockEvent;
-  editType: 'IMPORT' | 'DEFAULT';
-}
-
-/**
- * Merges versions from the same entity into a new version. If many versions change
- * the same entity in the same block we need to make sure that there exists a version
- * that contains all of the changes from each of the versions. If we don't, then we
- * end up in a situation where there are many valid versions for the same entity at one
- * time, and none of them contain all of the changes from the other versions.
- *
- * @NOTE that this only occurs in scenarios where many versions for the same entity are
- * approved/executed in the same block.
- *
- * There's a few ways to solve this issue:
- * 1. At query time we materialize all of the "valid" versions for an entity and merge
- *    them before returning to the caller. This is effectively duplicating the work in
- *    the API server that the indexer is already doing for versions.
- * 2. We can make a new version at indexing time to handle the aggregated versions. The
- *    downside of this approach is that we create more duplicated triples as well as
- *    rewrites history. This acts similarly to how "merge" commit works in git.
- * 3. We don't merge at all and rely on the clients to merge all concurrently valid versions.
- *    This won't work as each version wouldn't correctly handle possible deleted triples
- *    across versions unless we stored the triples as ops with their opType, which we
- *    don't currently do.
- *
- * This function implements #2. The implementation might change in the future as we get more
- * feedback on our versioning mechanisms.
- */
-function aggregateMergedVersions(args: AggregateMergedVersionsArgs) {
-  // @NOTE:
-  // We still use the re-fetched data from IPFS since we need to re-apply all of the ops
-  // from each of the merged versions into the new version.
-  //
-  // One approach we could attempt instead is to read the triples from the db (vs IPFS) for
-  // each version and then write all of those to the new version. The problem with this approach
-  // is that it doesn't account for deletions, so you can end up with a triple that was
-  // deleted in one of the merged versions still existing on the merged version. Alternatively
-  // we could store the ops in the db as well, but for now we'll just re-fetch from IPFS since
-  // we already have that workflow in place.
-  //
-  // Get the versions that have more than one version for the same entity id
-  return Effect.gen(function* (_) {
-    const { versions, tripleOpsByVersionId, block, editType, edits } = args;
-    const manyVersionsByEntityId = aggregateMergableVersions(versions);
-
-    // Merge the versions in this block with the same entity id into a new aggregated version
-    // containing all the changes from each of the versions.
-    const { mergedOpsByVersionId, mergedVersions } = aggregateMergableOps({
-      manyVersionsByEntityId,
-      tripleOpsByVersionId,
-      block,
-      editType,
-    });
-
-    const opsMergedWithPreviousVersion = yield* _(
-      mergeOpsWithPreviousVersions({
-        edits,
-        tripleOpsByVersionId: mergedOpsByVersionId,
-        versions: mergedVersions,
-      })
-    );
-
-    return {
-      mergedVersions,
-      mergedOpsByVersionId: opsMergedWithPreviousVersion,
-    };
-  });
-}
