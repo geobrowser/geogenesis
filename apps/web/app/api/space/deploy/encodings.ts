@@ -5,6 +5,7 @@ import {
   PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
   SPACE_PLUGIN_REPO_ADDRESS,
 } from '@geogenesis/sdk/contracts';
+import { ethers } from 'ethers';
 import { encodeAbiParameters } from 'viem';
 
 import { ZERO_ADDRESS } from '~/core/constants';
@@ -94,7 +95,7 @@ export function getPersonalSpaceGovernancePluginInstallItem({
 export function getGovernancePluginInstallItem(params: {
   votingSettings: {
     votingMode: VotingMode;
-    supportThreshold: number;
+    supportThreshold: ethers.BigNumber;
     duration: bigint;
   };
   initialEditors: `0x${string}`[];
