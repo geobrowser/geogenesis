@@ -224,7 +224,9 @@ const query = (daoAddress: string) => ` {
 
       spacesMetadata {
         nodes {
-          entityId
+          version {
+            entityId
+          }
         }
       }
     }

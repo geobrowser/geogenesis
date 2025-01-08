@@ -3,7 +3,7 @@ import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { CurrentVersions, Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
+import { CurrentVersions, Entities, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import type { BlockEvent, CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SetTripleOp } from '../types';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
@@ -14,9 +14,7 @@ class CouldNotWriteVersionsError extends Data.TaggedError('CouldNotWriteVersions
 class CouldNotWriteEntitiesError extends Data.TaggedError('CouldNotWriteEntitiesError')<{ message: string }> {}
 class CouldNotWriteRelationsError extends Data.TaggedError('CouldNotWriteRelationsError')<{ message: string }> {}
 class CouldNotWriteVersionTypesError extends Data.TaggedError('CouldNotWriteVersionTypesError')<{ message: string }> {}
-class CouldNotWriteSpaceMetadataError extends Data.TaggedError('CouldNotWriteSpaceMetadataError')<{
-  message: string;
-}> {}
+
 class CouldNotWriteVersionSpacesError extends Data.TaggedError('CouldNotWriteVersionSpacesError')<{
   message: string;
 }> {}
@@ -201,7 +199,6 @@ export function writeEdits(args: PopulateContentArgs) {
     // type entity and compare them against the type_of_id version for each relatons to see
     // of the type_of_id is for the type entity.
     const versionTypes = yield* _(aggregateTypesFromRelationsAndTriples(relations));
-    const spaceMetadata = yield* _(aggregateSpacesFromRelations(relations, versions, spaceIdByEditId));
 
     yield* _(
       Effect.tryPromise({
@@ -213,15 +210,21 @@ export function writeEdits(args: PopulateContentArgs) {
       })
     );
 
-    yield* _(
-      Effect.tryPromise({
-        try: () => SpaceMetadata.upsert(spaceMetadata),
-        catch: error =>
-          new CouldNotWriteSpaceMetadataError({
-            message: `Failed to insert space metadata. ${(error as Error).message}`,
-          }),
-      })
-    );
+    // There should only be one space metadata entry per space
+    // It has to be one set as a current version/accepted and not one that hasn't
+    // been accepted yet.
+    const spaceMetadata = yield* _(aggregateSpacesFromRelations(relations));
+    return spaceMetadata;
+
+    // yield* _(
+    //   Effect.tryPromise({
+    //     try: () => SpaceMetadata.upsert(spaceMetadata),
+    //     catch: error =>
+    //       new CouldNotWriteSpaceMetadataError({
+    //         message: `Failed to insert space metadata. ${(error as Error).message}`,
+    //       }),
+    //   })
+    // );
   });
 }
 
@@ -260,15 +263,8 @@ function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Inser
   });
 }
 
-function aggregateSpacesFromRelations(
-  relations: Schema.relations.Insertable[],
-  versions: Schema.versions.Insertable[],
-  spaceIdByEditId: Map<string, string>
-) {
+export function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) {
   return Effect.gen(function* (_) {
-    // space entity id -> entityIds[]
-    const spaceConfigEntityVersionIds = new Set<string>();
-
     const [typesVersions, spaceConfigsVersions] = yield* _(
       Effect.all(
         [
@@ -282,56 +278,21 @@ function aggregateSpacesFromRelations(
     const typeVersionIds = new Set(typesVersions.map(v => v.id.toString()));
     const spaceConfigVersionIds = new Set(spaceConfigsVersions.map(v => v.id.toString()));
 
+    const spaceMetadatas: Schema.spaces_metadata.Insertable[] = [];
+
     for (const relation of relations) {
       const fromVersionId = relation.from_version_id.toString();
       const toVersionId = relation.to_version_id.toString();
 
       if (typeVersionIds.has(relation.type_of_id.toString()) && spaceConfigVersionIds.has(toVersionId)) {
-        spaceConfigEntityVersionIds.add(fromVersionId);
+        spaceMetadatas.push({
+          space_id: relation.space_id,
+          version_id: fromVersionId,
+        });
       }
     }
 
-    // Map space config entity versions to their entity ids
-    // Map all space config entity version ids from this block to their entity ids and space ids
-    const entityIdByVersionId = new Map<string, string>();
-
-    for (const version of versions) {
-      entityIdByVersionId.set(version.id.toString(), version.entity_id.toString());
-    }
-
-    const versionIdToEditId = versions.reduce(
-      (acc, v) => {
-        acc.set(v.id.toString(), v.edit_id.toString());
-        return acc;
-      },
-      // version id -> edit id
-      new Map<string, string>()
-    );
-
-    const spaceVersions = [...versionIdToEditId.entries()].reduce(
-      (acc, [versionId, editId]) => {
-        acc.set(versionId, spaceIdByEditId.get(editId)!);
-        return acc;
-      },
-      // version id -> space id
-      new Map<string, string>()
-    );
-
-    return [...spaceConfigEntityVersionIds.values()]
-      .map(spaceConfigEntityVersionId => {
-        const entityIdForVersionId = entityIdByVersionId.get(spaceConfigEntityVersionId);
-        if (!entityIdForVersionId) {
-          return null;
-        }
-
-        const spaceMetadata: Schema.spaces_metadata.Insertable = {
-          space_id: spaceVersions.get(spaceConfigEntityVersionId)!,
-          entity_id: entityIdForVersionId,
-        };
-
-        return spaceMetadata;
-      })
-      .filter(m => m !== null);
+    return spaceMetadatas;
   });
 }
 

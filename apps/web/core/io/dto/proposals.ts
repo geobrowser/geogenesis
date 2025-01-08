@@ -3,7 +3,7 @@ import { OmitStrict, Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { ProposalStatus, ProposalType, SubstreamProposal, SubstreamVote } from '../schema';
-import { EntityDto } from './entities';
+import { VersionDto } from './versions';
 
 export type VoteWithProfile = SubstreamVote & { voter: Profile };
 
@@ -46,8 +46,8 @@ export function ProposalDto(
     profileLink: null,
   };
 
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity;
-  const entity = spaceConfig ? EntityDto(spaceConfig) : null;
+  const spaceConfig = proposal.space.spacesMetadata.nodes[0].version;
+  const entity = spaceConfig ? VersionDto(spaceConfig) : null;
 
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
@@ -109,8 +109,8 @@ export function ProposalWithoutVotersDto(
     profileLink: null,
   };
 
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity;
-  const entity = spaceConfig ? EntityDto(spaceConfig) : null;
+  const spaceConfig = proposal.space.spacesMetadata.nodes[0].version;
+  const entity = spaceConfig ? VersionDto(spaceConfig) : null;
 
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
