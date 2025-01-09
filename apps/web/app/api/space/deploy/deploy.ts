@@ -248,6 +248,8 @@ async function waitForSpaceToBeIndexed(daoAddress: string) {
     query: query(daoAddress),
   });
 
+  console.log('query', query(daoAddress));
+
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* () {
     const resultOrError = yield* Effect.either(graphqlFetchEffect);
 
@@ -285,7 +287,7 @@ async function waitForSpaceToBeIndexed(daoAddress: string) {
       return null;
     }
 
-    if (!maybeSpace.spacesMetadatum.version) {
+    if (!maybeSpace.spacesMetadatum) {
       yield* Effect.fail(new TimeoutError('Could not find deployed space'));
       return null;
     }
