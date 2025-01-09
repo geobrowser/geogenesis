@@ -187,17 +187,6 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
 
   const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
 
-  React.useEffect(() => {
-    if (source.type === 'ENTITY') {
-      dispatch({
-        type: 'selectColumn',
-        payload: {
-          columnId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
-        },
-      });
-    }
-  }, [source]);
-
   const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
 
   const onDone = () => {
