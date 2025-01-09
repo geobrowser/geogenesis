@@ -4,7 +4,7 @@ import { PrivyProvider as Privy, PrivyClientConfig } from '@privy-io/react-auth'
 
 import * as React from 'react';
 
-import { GEOGENESIS } from './conduit-chain';
+import { GEOGENESIS } from './geo-chain';
 
 const config: PrivyClientConfig = {
   defaultChain: GEOGENESIS,
