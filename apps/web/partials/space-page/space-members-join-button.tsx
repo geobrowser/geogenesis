@@ -24,19 +24,23 @@ export function SpaceMembersJoinButton({
   }
 
   return (
-    <Pending
-      isPending={status === 'pending'}
-      position="center"
-      className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text"
-    >
-      {!hasRequestedSpaceMembership ? (
-        <button onClick={() => requestToBeMember()} disabled={status !== 'idle'}>
-          <RequestButtonText status={status} />
-        </button>
-      ) : (
-        <span>Requested</span>
-      )}
-    </Pending>
+    <>
+      <div className="h-4 w-px bg-divider" />
+
+      <Pending
+        isPending={status === 'pending'}
+        position="center"
+        className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text"
+      >
+        {!hasRequestedSpaceMembership ? (
+          <button onClick={() => requestToBeMember()} disabled={status !== 'idle'}>
+            <RequestButtonText status={status} />
+          </button>
+        ) : (
+          <span>Requested</span>
+        )}
+      </Pending>
+    </>
   );
 }
 
