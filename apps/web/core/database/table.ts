@@ -175,8 +175,6 @@ export async function mergeEntitySourceTypeEntities(entityId: string, filterStat
     return [];
   }
 
-  // @TODO:
-  // encode/decode as filter string
   const entityIdsToFetch = entity.relationsOut.filter(r => r.typeOf.id === maybeRelationType).map(r => r.toEntity.id);
 
   const cachedRemoteEntities = await queryClient.fetchQuery({

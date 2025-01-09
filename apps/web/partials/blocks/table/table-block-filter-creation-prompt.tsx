@@ -250,8 +250,6 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                   <div className="flex flex-1">
                     <Select
                       options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
-                      // For some reason setting this as the initial value in the reducer doesn't work,
-                      // so for now we hard code it for this specific source type
                       value={state.selectedColumn}
                       onChange={onSelectColumnToFilter}
                     />
