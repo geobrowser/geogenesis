@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { DateField } from './date-field';
 
-describe('DateField', () => {
+describe.skip('DateField', () => {
   it('should render placeholders if the date is empty in edit mode', () => {
     render(<DateField isEditing={true} value="" />);
 

@@ -132,6 +132,7 @@
     "eslint-plugin-react": "^7.31.11",
     "eslint-plugin-react-hooks": "^4.6.0",
     "fake-indexeddb": "^4.0.2",
+    "happy-dom": "^16.5.3",
     "jsdom": "^20.0.0",
     "postcss": "^8.4.21",
     "prettier": "^3.0.3",
