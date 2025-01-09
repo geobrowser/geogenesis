@@ -52,3 +52,9 @@ export const CONTINENTS_ATTRIBUTE = '4W6gL14KsToDLy5yUEdawU';
 export const PERSON_ATTRIBUTE = 'W2aFZPy5nnU3DgdkWJCNVn';
 export const PROJECT_ATTRIBUTE = 'V7XvcnLXtbj7T2rvdNtKid';
 export const RELATED_SPACES_ATTRIBUTE = 'CHwmK8bk4KMCqBNiV2waL9';
+
+/**
+ * Migration 1
+ */
+export const VALUE_TYPE = 'Y1HG66QvvthrmL3dredT53';
+export const PRINCIPLE_TYPE = '2tjghBgapq2CNRsUPMhZ5b';

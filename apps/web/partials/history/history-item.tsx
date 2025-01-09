@@ -1,23 +1,19 @@
-import pluralize from 'pluralize';
-
 import { Profile } from '~/core/types';
-import { GeoDate, formatShortAddress } from '~/core/utils/utils';
+import { GeoDate, NavUtils, formatShortAddress } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { PrefetchLink } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 interface Props {
-  // We want to group together all changes to the same property into a single
-  // change count. i.e., a proposed change may have multiple action taken on
-  // the same triple, we want to make sure that only renders as a single change.
-  onClick?: () => void;
-  changeCount: number;
   createdAt: number;
   createdBy: Profile;
   name: string | null;
+  spaceId: string;
+  proposalId: string;
 }
 
-export function HistoryItem({ onClick, changeCount, createdAt, createdBy, name }: Props) {
+export function HistoryItem({ spaceId, proposalId, createdAt, createdBy, name }: Props) {
   const lastEditedDate = GeoDate.fromGeoTime(createdAt);
 
   // e.g. Mar 12, 2023
@@ -39,12 +35,12 @@ export function HistoryItem({ onClick, changeCount, createdAt, createdBy, name }
   const versionName = name ?? `${formatShortAddress(createdBy.id)} – ${formattedLastEditedDate}`;
 
   return (
-    <button
-      onClick={onClick}
+    <PrefetchLink
+      href={NavUtils.toProposal(spaceId, proposalId)}
       className="relative z-10 block w-full bg-white px-2 py-3 text-grey-04 hover:bg-bg hover:text-text"
     >
       <div className="flex items-center justify-between">
-        <Text as="h1" variant="metadataMedium" className="mb-2 !text-sm">
+        <Text as="h1" variant="metadataMedium" className="mb-2 truncate text-ellipsis !text-sm">
           {versionName}
         </Text>
       </div>
@@ -61,10 +57,10 @@ export function HistoryItem({ onClick, changeCount, createdAt, createdBy, name }
         </div>
         <div className="flex">
           <p className="text-smallButton">
-            {changeCount} {pluralize('edit', changeCount)} · {formattedLastEditedDate} · {lastEditedTime}
+            {formattedLastEditedDate} · {lastEditedTime}
           </p>
         </div>
       </div>
-    </button>
+    </PrefetchLink>
   );
 }

@@ -216,7 +216,8 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 
 async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
   const maybeAttributeEntity = await mergeEntityAsync(EntityId(filter.attribute));
-  const valueType = maybeAttributeEntity.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.VALUE_TYPE)?.toEntity.id;
+  const valueType = maybeAttributeEntity.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE)
+    ?.toEntity.id;
 
   if (valueType === SYSTEM_IDS.RELATION) {
     const valueEntity = await mergeEntityAsync(EntityId(filter.is));

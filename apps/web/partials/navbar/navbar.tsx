@@ -50,6 +50,14 @@ export function Navbar({ onSearchClick }: Props) {
           >
             <Search />
           </button>
+          <a
+            className="text-button font-normal text-grey-04 transition-colors duration-200 hover:text-text"
+            href="https://elfin-share-6f1.notion.site/175273e214eb80258d30ee6755415ce2?pvs=105"
+            rel="noreferrer noopener"
+            target="_blank"
+          >
+            Early access
+          </a>
           <div className="flex items-center sm:hidden">
             <NavbarActions />
           </div>

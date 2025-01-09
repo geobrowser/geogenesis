@@ -51,7 +51,7 @@ import { editingColumnsAtom } from '~/atoms';
 //       {
 //         entityId: entityId,
 //         entityName: attribute.name,
-//         attributeId: SYSTEM_IDS.ATTRIBUTES,
+//         attributeId: SYSTEM_IDS.PROPERTIES,
 //         attributeName: 'Attributes',
 //         value: {
 //           type: 'ENTITY',
@@ -84,7 +84,7 @@ import { editingColumnsAtom } from '~/atoms';
 
 //     remove(
 //       Triples.withId({
-//         attributeId: SYSTEM_IDS.ATTRIBUTES,
+//         attributeId: SYSTEM_IDS.PROPERTIES,
 //         attributeName: 'Attributes',
 //         entityId: entityId,
 //         entityName: entityName,

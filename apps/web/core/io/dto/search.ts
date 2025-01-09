@@ -11,7 +11,7 @@ export type SearchResult = {
 
 export function SearchResultDto(result: SubstreamSearchResult): SearchResult {
   const spaces = result.currentVersion.version.versionSpaces.nodes.flatMap(result =>
-    SpaceMetadataDto(result.space.id, result.space.spacesMetadata.nodes[0]?.version)
+    SpaceMetadataDto(result.space.id, result.space.spacesMetadatum.version)
   );
 
   return {

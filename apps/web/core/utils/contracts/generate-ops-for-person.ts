@@ -5,7 +5,7 @@ import { cloneEntity } from './clone-entity';
 export const generateOpsForPerson = async (spaceConfigEntityId: string, spaceName: string) => {
   const [spaceConfigurationActions, postsPageActions] = await Promise.all([
     cloneEntity({
-      oldEntityId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+      oldEntityId: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
       entityId: spaceConfigEntityId,
       entityName: spaceName,
     }),

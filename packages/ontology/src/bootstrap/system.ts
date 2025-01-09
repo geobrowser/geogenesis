@@ -6,11 +6,11 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.DESCRIPTION_ATTRIBUTE]: 'Description',
   [SYSTEM_IDS.ATTRIBUTE]: 'Attribute',
   [SYSTEM_IDS.COVER_ATTRIBUTE]: 'Cover',
-  [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: 'Relation Type',
-  [SYSTEM_IDS.ATTRIBUTES]: 'Attributes',
+  [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: 'Relation type',
+  [SYSTEM_IDS.PROPERTIES]: 'Properties',
   [SYSTEM_IDS.SCHEMA_TYPE]: 'Type',
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: 'Template',
-  [SYSTEM_IDS.VALUE_TYPE]: 'Value type',
+  [SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE]: 'Value type',
   [SYSTEM_IDS.RELATION]: 'Relation',
   [SYSTEM_IDS.TEXT]: 'Text',
   [SYSTEM_IDS.CHECKBOX]: 'Checkbox',
@@ -25,26 +25,26 @@ const names: Record<string, string> = {
 
   [SYSTEM_IDS.TIME]: 'Date',
   [SYSTEM_IDS.URL]: 'URL',
-  [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
-  [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source Space',
-  [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: 'Verified Source',
+  [SYSTEM_IDS.SPACE_TYPE]: 'Space',
+  [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source space',
+  [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: 'Verified source',
 
   // Data blocks
   [SYSTEM_IDS.VIEW_TYPE]: 'View',
-  [SYSTEM_IDS.DATA_BLOCK]: 'Data Block',
+  [SYSTEM_IDS.DATA_BLOCK]: 'Data block',
   [SYSTEM_IDS.VIEW_ATTRIBUTE]: 'View',
-  [SYSTEM_IDS.GALLERY_VIEW]: 'Gallery View',
-  [SYSTEM_IDS.TABLE_VIEW]: 'Table View',
-  [SYSTEM_IDS.LIST_VIEW]: 'List View',
-  [SYSTEM_IDS.SHOWN_COLUMNS]: 'Shown Columns',
-  [SYSTEM_IDS.TEXT_BLOCK]: 'Text Block',
-  [SYSTEM_IDS.IMAGE_BLOCK]: 'Image Block',
+  [SYSTEM_IDS.GALLERY_VIEW]: 'Gallery view',
+  [SYSTEM_IDS.TABLE_VIEW]: 'Table view',
+  [SYSTEM_IDS.LIST_VIEW]: 'List view',
+  [SYSTEM_IDS.SHOWN_COLUMNS]: 'Shown columns',
+  [SYSTEM_IDS.TEXT_BLOCK]: 'Text block',
+  [SYSTEM_IDS.IMAGE_BLOCK]: 'Image block',
   [SYSTEM_IDS.BLOCKS]: 'Blocks',
   [SYSTEM_IDS.FILTER]: 'Filter',
   [SYSTEM_IDS.SPACE_FILTER]: 'Space filter',
-  [SYSTEM_IDS.MARKDOWN_CONTENT]: 'Markdown Content',
-  [SYSTEM_IDS.PLACEHOLDER_IMAGE]: 'Placeholder Image',
-  [SYSTEM_IDS.PLACEHOLDER_TEXT]: 'Placeholder Text',
+  [SYSTEM_IDS.MARKDOWN_CONTENT]: 'Markdown content',
+  [SYSTEM_IDS.PLACEHOLDER_IMAGE]: 'Placeholder image',
+  [SYSTEM_IDS.PLACEHOLDER_TEXT]: 'Placeholder text',
 
   [SYSTEM_IDS.PERSON_TYPE]: 'Person',
   [SYSTEM_IDS.ACCOUNTS_ATTRIBUTE]: 'Accounts',
@@ -56,27 +56,28 @@ const names: Record<string, string> = {
 
   [SYSTEM_IDS.ROLE_ATTRIBUTE]: 'Role',
 
-  [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: 'Relation Value Types',
+  [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: 'Relation value types',
 
   [SYSTEM_IDS.RELATION_TYPE]: 'Relation',
   [SYSTEM_IDS.RELATION_INDEX]: 'Index',
   [SYSTEM_IDS.RELATION_TO_ATTRIBUTE]: 'To entity',
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: 'From entity',
 
-  [SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE]: 'Data Source',
-  [SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE]: 'Data Source Type',
-  [SYSTEM_IDS.COLLECTION_DATA_SOURCE]: 'Collection Data Source',
-  [SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE]: 'Geo Data Source',
-  [SYSTEM_IDS.QUERY_DATA_SOURCE]: 'Query Data Source',
-  [SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE]: 'Collection Item',
+  [SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE]: 'Data source',
+  [SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE]: 'Data source type',
+  [SYSTEM_IDS.COLLECTION_DATA_SOURCE]: 'Collection data source',
+  [SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE]: 'Geo data source',
+  [SYSTEM_IDS.QUERY_DATA_SOURCE]: 'Query data source',
+  [SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE]: 'Collection item',
 
   // Templates + Space Layouts
   [SYSTEM_IDS.NONPROFIT_TYPE]: 'Nonprofit',
   [SYSTEM_IDS.PROJECT_TYPE]: 'Project',
   [SYSTEM_IDS.COMPANY_TYPE]: 'Company',
   [SYSTEM_IDS.PAGE_TYPE]: 'Page',
-  [SYSTEM_IDS.PEOPLE_PAGE]: 'People page',
   [SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE]: 'Page type',
+  [SYSTEM_IDS.NEWS_PAGE]: 'News page',
+  [SYSTEM_IDS.PEOPLE_PAGE]: 'People page',
   [SYSTEM_IDS.POSTS_PAGE]: 'Posts page',
   [SYSTEM_IDS.PROJECTS_PAGE]: 'Projects page',
   [SYSTEM_IDS.FINANCES_PAGE]: 'Finances page',
@@ -90,6 +91,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.ONTOLOGY_PAGE]: 'Ontology page',
 
   [SYSTEM_IDS.POST_TYPE]: 'Post',
+
 };
 
 const attributes: Record<string, string> = {
@@ -98,9 +100,9 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.COVER_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
   [SYSTEM_IDS.TYPES_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.ATTRIBUTES]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.PROPERTIES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.VALUE_TYPE]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE]: SYSTEM_IDS.CHECKBOX,
 
@@ -126,7 +128,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE]: SYSTEM_IDS.RELATION,
 
-  [SYSTEM_IDS.PAGE_TYPE]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
 
   [SYSTEM_IDS.ACCOUNTS_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.NETWORK_ATTRIBUTE]: SYSTEM_IDS.RELATION,
@@ -148,8 +150,8 @@ const schemaTypes: Record<string, string[]> = {
   [SYSTEM_IDS.TIME]: [],
   [SYSTEM_IDS.URL]: [],
   [SYSTEM_IDS.IMAGE]: [],
-  [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE],
-  [SYSTEM_IDS.SPACE_CONFIGURATION]: [],
+  [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE],
+  [SYSTEM_IDS.SPACE_TYPE]: [],
   [SYSTEM_IDS.IMAGE_BLOCK]: [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE],
   [SYSTEM_IDS.DATA_BLOCK]: [],
   [SYSTEM_IDS.TEXT_BLOCK]: [SYSTEM_IDS.MARKDOWN_CONTENT],
@@ -196,7 +198,7 @@ const attributeValueTypeOps: CreateRelationOp[] = Object.entries(attributes).fla
   return Relation.make({
     fromId: attributeId,
     toId: valueType,
-    relationTypeId: SYSTEM_IDS.VALUE_TYPE,
+    relationTypeId: SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE,
   });
 });
 
@@ -213,7 +215,7 @@ const typeSchemaOps: CreateRelationOp[] = Object.entries(schemaTypes).flatMap(([
     return Relation.make({
       fromId: typeId,
       toId: attributeId,
-      relationTypeId: SYSTEM_IDS.ATTRIBUTES,
+      relationTypeId: SYSTEM_IDS.PROPERTIES,
     });
   });
 });

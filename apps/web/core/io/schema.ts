@@ -223,6 +223,13 @@ export const SubstreamVersionWithEdit = Schema.extend(
       name: Schema.String,
       createdAt: Schema.Number,
       createdById: Schema.String,
+      proposals: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.Struct({
+            id: Schema.String,
+          })
+        ),
+      }),
     }),
   })
 );
@@ -268,11 +275,8 @@ export type SubstreamEntity = Schema.Schema.Type<typeof SubstreamEntity>;
 export const SubstreamSpace = Schema.extend(
   SubstreamSpaceWithoutMetadata,
   Schema.Struct({
-    // There might be more than one instance of an entity with type: Space in a space
-    // at a given time. Once we add cardinality as part of schemas we can make some
-    // safer assumptions about how many entities of a given type exist.
-    spacesMetadata: Schema.Struct({
-      nodes: Schema.Array(Schema.Struct({ version: SubstreamVersion })),
+    spacesMetadatum: Schema.Struct({
+      version: SubstreamVersion,
     }),
   })
 );
@@ -293,8 +297,8 @@ export const SubstreamSubspace = Schema.extend(
     spaceMembers: Schema.Struct({
       totalCount: Schema.Number,
     }),
-    spacesMetadata: Schema.Struct({
-      nodes: Schema.Array(Schema.Struct({ version: SubstreamVersion })),
+    spacesMetadatum: Schema.Struct({
+      version: SubstreamVersion,
     }),
   })
 );
@@ -348,8 +352,8 @@ export type SubstreamVote = Schema.Schema.Type<typeof SubstreamVote>;
 
 export const SubstreamSpaceEntityConfig = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(SpaceId)),
-  spacesMetadata: Schema.Struct({
-    nodes: Schema.Array(Schema.Struct({ version: SubstreamVersion })),
+  spacesMetadatum: Schema.Struct({
+    version: SubstreamVersion,
   }),
 });
 

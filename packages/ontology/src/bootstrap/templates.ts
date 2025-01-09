@@ -5,7 +5,6 @@ type Template = {
   name: string;
   blocks: Op[];
   types: string[]; // system ids
-  foreignTypes: string[]; // system ids
   extraData: Op[];
 };
 
@@ -23,23 +22,22 @@ const POSITIONS = getBlockPositions();
 
 const NONPROFIT: Template[] = [
   {
-    id: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
+    id: SYSTEM_IDS.NONPROFIT_OVERVIEW_PAGE_TEMPLATE,
     name: 'Nonprofit Space Configuration Template',
     blocks: [
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.NONPROFIT_OVERVIEW_PAGE_TEMPLATE,
         text: '## Welcome to our nonprofit!',
         position: POSITIONS.first,
       }),
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.NONPROFIT_OVERVIEW_PAGE_TEMPLATE,
         text: `We're thrilled to have you here. At our core, we are driven by a passionate commitment to positive change. As a community, we believe in the power of collective action to make a difference, no matter how big or small. Together, we can create meaningful impact and contribute to a better world. Thank you for joining us on this journey towards a brighter future.`,
         position: POSITIONS.second,
       }),
     ],
     types: [SYSTEM_IDS.NONPROFIT_TYPE, SYSTEM_IDS.PROJECT_TYPE],
     extraData: [],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.NONPROFIT_POSTS_PAGE_TEMPLATE,
@@ -60,7 +58,6 @@ const NONPROFIT: Template[] = [
         toId: SYSTEM_IDS.POSTS_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.NONPROFIT_PROJECTS_PAGE_TEMPLATE,
@@ -81,7 +78,6 @@ const NONPROFIT: Template[] = [
         toId: SYSTEM_IDS.PROJECTS_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.NONPROFIT_TEAM_PAGE_TEMPLATE,
@@ -102,7 +98,6 @@ const NONPROFIT: Template[] = [
         toId: SYSTEM_IDS.PROJECTS_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.NONPROFIT_FINANCES_PAGE_TEMPLATE,
@@ -129,27 +124,26 @@ const NONPROFIT: Template[] = [
         toId: SYSTEM_IDS.FINANCES_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
 ];
 
 const COMPANY: Template[] = [
   {
-    id: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+    id: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
     name: 'Company Space Configuration Template',
     blocks: [
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
         text: '## Welcome to our company!',
         position: POSITIONS.first,
       }),
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
         text: `We're dedicated to pushing boundaries and fostering innovation. With a focus on excellence and a passion for progress, we strive to make a positive impact in everything we do. From our talented team to our cutting-edge solutions, we're committed to delivering unparalleled quality and service to our customers.`,
         position: POSITIONS.second,
       }),
       ...DataBlock.make({
-        fromId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
         sourceType: 'COLLECTION',
         name: 'Goals',
         position: POSITIONS.third,
@@ -157,7 +151,6 @@ const COMPANY: Template[] = [
     ],
     types: [SYSTEM_IDS.COMPANY_TYPE],
     extraData: [],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.COMPANY_POSTS_PAGE_TEMPLATE,
@@ -178,7 +171,6 @@ const COMPANY: Template[] = [
         toId: SYSTEM_IDS.POSTS_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.COMPANY_EVENTS_PAGE_TEMPLATE,
@@ -199,7 +191,6 @@ const COMPANY: Template[] = [
         toId: SYSTEM_IDS.EVENTS_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.COMPANY_JOBS_PAGE_TEMPLATE,
@@ -220,7 +211,6 @@ const COMPANY: Template[] = [
         toId: SYSTEM_IDS.JOBS_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.COMPANY_PRODUCTS_PAGE_TEMPLATE,
@@ -241,7 +231,6 @@ const COMPANY: Template[] = [
         toId: SYSTEM_IDS.PRODUCTS_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.COMPANY_SERVICES_PAGE_TEMPLATE,
@@ -262,7 +251,6 @@ const COMPANY: Template[] = [
         toId: SYSTEM_IDS.SERVICES_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.COMPANY_TEAM_PAGE_TEMPLATE,
@@ -283,33 +271,32 @@ const COMPANY: Template[] = [
         toId: SYSTEM_IDS.TEAM_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
 ];
 
 const PERSON: Template[] = [
   {
-    id: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+    id: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
     name: 'Person Space Configuration Template',
     blocks: [
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
         text: '## Welcome to my personal space',
         position: POSITIONS.first,
       }),
       ...TextBlock.make({
-        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
         text: `This space is where I compile my interests, posts, collections, and a summary of myself, along with anything else I'd like to share with the broader Geo community.`,
         position: POSITIONS.second,
       }),
       ...DataBlock.make({
-        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
         sourceType: 'COLLECTION',
         name: 'Goals',
         position: POSITIONS.third,
       }),
       ...DataBlock.make({
-        fromId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
+        fromId: SYSTEM_IDS.PERSON_OVERVIEW_PAGE_TEMPLATE,
         sourceType: 'COLLECTION',
         name: 'Skills',
         position: POSITIONS.fourth,
@@ -317,7 +304,6 @@ const PERSON: Template[] = [
     ],
     types: [SYSTEM_IDS.PERSON_TYPE],
     extraData: [],
-    foreignTypes: [],
   },
   {
     id: SYSTEM_IDS.PERSON_POSTS_PAGE_TEMPLATE,
@@ -338,11 +324,75 @@ const PERSON: Template[] = [
         toId: SYSTEM_IDS.POSTS_PAGE,
       }),
     ],
-    foreignTypes: [],
   },
 ];
 
-export const ops: Op[] = [...NONPROFIT, ...COMPANY, ...PERSON].flatMap(t => {
+const ROOT: Template[] = [
+  {
+    id: SYSTEM_IDS.ONTOLOGY_PAGE_TEMPLATE,
+    name: 'Ontology Page Template',
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      Relation.make({
+        fromId: SYSTEM_IDS.ONTOLOGY_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.ONTOLOGY_PAGE,
+      }),
+    ],
+    blocks: [
+      ...TextBlock.make({
+        fromId: SYSTEM_IDS.ONTOLOGY_PAGE_TEMPLATE,
+        text: 'These are the core types and attributes we use to structure information.',
+        position: POSITIONS.first,
+      }),
+    ]
+  },
+  {
+    id: SYSTEM_IDS.EDUCATION_PAGE_TEMPLATE,
+    name: 'Education Page Template',
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      Relation.make({
+        fromId: SYSTEM_IDS.EDUCATION_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.EDUCATION_PAGE,
+      }),
+    ],
+    blocks: [
+      ...TextBlock.make({
+        fromId: SYSTEM_IDS.EDUCATION_PAGE_TEMPLATE,
+        text: 'Discover guides, lessons and tutorials to learn and grow your expertise.',
+        position: POSITIONS.first,
+      }),
+    ]
+  },
+  {
+    id: SYSTEM_IDS.ABOUT_PAGE_TEMPLATE,
+    name: 'About Page Template',
+    types: [SYSTEM_IDS.PAGE_TYPE],
+    extraData: [
+      Relation.make({
+        fromId: SYSTEM_IDS.ABOUT_PAGE_TEMPLATE,
+        relationTypeId: SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE,
+        toId: SYSTEM_IDS.ABOUT_PAGE,
+      }),
+    ],
+    blocks: [
+      ...TextBlock.make({
+        fromId: SYSTEM_IDS.ABOUT_PAGE_TEMPLATE,
+        text: '## Mission',
+        position: POSITIONS.first,
+      }),
+      ...TextBlock.make({
+        fromId: SYSTEM_IDS.ABOUT_PAGE_TEMPLATE,
+        text: 'This is our purpose and what we aim to achieve.',
+        position: POSITIONS.second,
+      })
+    ]
+  }
+]
+
+export const ops: Op[] = [...ROOT, ...NONPROFIT, ...COMPANY, ...PERSON].flatMap(t => {
   const nameOp: Op = {
     type: 'SET_TRIPLE',
     triple: {

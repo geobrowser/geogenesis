@@ -1,23 +1,27 @@
-export const ATTRIBUTE = 'LgKenoh2EfWrvqJqN6A7Ci';
+export const ATTRIBUTE = 'GscJ2GELQjmLoaVrYyR3xm';
 export const SCHEMA_TYPE = 'VdTsW1mGiy1XSooJaBBLc4';
-export const ATTRIBUTES = 'CBZs8pfSk5WHdujaAAKdD8';
+export const PROPERTIES = '9zBADaYzyfzyFJn4GU1cC';
 
-export const NAME_ATTRIBUTE = 'GG8Z4cSkjv8CywbkLqVU5M';
-export const DESCRIPTION_ATTRIBUTE = 'QoTdezDypdQrs7wq1tTRnb';
-export const COVER_ATTRIBUTE = 'DTEcNh4xFNvsqoX9bfF6qS';
-export const TYPES_ATTRIBUTE = 'KEyred99SGesjDMcbB1oD2';
+export const NAME_ATTRIBUTE = 'LuBWqZAu6pz54eiJS5mLv8';
+export const DESCRIPTION_ATTRIBUTE = 'LA1DqP5v6QAdsgLPXGF3YA';
+export const COVER_ATTRIBUTE = '7YHk6qYkNDaAtNb8GwmysF';
+export const TYPES_ATTRIBUTE = 'Jfmby78N4BCseZinBmdVov';
+export const BLOCKS = 'QYbjCM6NT9xmh2hFGsqpQX';
 
 /** Value types */
-export const VALUE_TYPE = 'JwYkkjY2i6uuR4wrgFScwt';
-export const CHECKBOX = 'NtWv5uGJ1d15Mfk4ZdXfmU';
-export const TIME = 'UGr1YqqZbE2BbEpJR9U88H';
-export const TEXT = 'JBYTdEigecQHj2xhL3NeHV';
-export const URL = '5EQJAVKYDQWHZSfsawBtWa';
-export const NUMBER = 'Rjw5tGo76ukgvLxuYpXQkka';
-export const POINT = '9aNNLsQCRgFHEqRkWpd1wU';
+export const VALUE_TYPE_ATTRIBUTE = 'WQfdWjboZWFuTseDhG5Cw1';
+export const CHECKBOX = 'G9NpD4c7GB7nH5YU9Tesgf';
+export const TIME = '3mswMrL91GuYTfBq29EuNE';
+export const TEXT = 'LckSTmjBrYAJaFcDs89am5';
+export const URL = '5xroh3gbWYbWY4oR3nFXzy';
+export const NUMBER = 'LBdMpTNyycNffsF51t2eSp';
+export const POINT = 'UZBZNbA7Uhx1f8ebLi1Qj5';
 export const IMAGE = 'X8KB1uF84RYppghBSVvhqr';
 
 export const RELATION = 'AKDxovGvZaPSWnmKnSoZJY';
+
+export const SPACE_TYPE = '7gzF671tq5JTZ13naG4tnr';
+
 /**
  * Defines the relation value types for a relation. e.g., a Persons
  * attribute must only contain relations where the to entity is type
@@ -25,13 +29,11 @@ export const RELATION = 'AKDxovGvZaPSWnmKnSoZJY';
  */
 export const RELATION_VALUE_RELATIONSHIP_TYPE = 'LdAS7yWqF32E2J4doUDe5u';
 
-export const IMAGE_TYPE = 'WpZ6MDcJZrfheC3XD7hyhh';
+export const IMAGE_TYPE = 'Q1LaZhnzj8AtCzx8T1HRMf';
 export const IMAGE_FILE_TYPE_ATTRIBUTE = 'B3nyKkmERhFEcaVgoe6kAL';
 export const IMAGE_HEIGHT_ATTRIBUTE = 'GjaFuBBB8z63y9qr8dhaSP';
 export const IMAGE_URL_ATTRIBUTE = 'J6cw1v8xUHCFsEdPeuB1Uo';
 export const IMAGE_WIDTH_ATTRIBUTE = 'Xb3useEUkWV1Y9zYYkq4xp';
-
-export const BLOCKS = 'XbVubxtJCexLsmEhTUKPG';
 
 /** Data blocks */
 // @TODO: data block instead of TABLE_BLOCK
@@ -106,17 +108,17 @@ export const MARKDOWN_CONTENT = 'V9A2298ZHL135zFRH4qcRg';
  * marriage itself, and not John or Jane. This representation of the
  * marriage also only exists in the context of John and Jane.
  */
-export const RELATION_TYPE = 'XAeYjgogh9zKBz4g8pB9wG';
-export const RELATION_FROM_ATTRIBUTE = '3ZZFJ1dDBk7zTvN5x3XRR3';
-export const RELATION_TO_ATTRIBUTE = 'NToMyNnNkCvFh1McQLm4Rm';
-export const RELATION_TYPE_ATTRIBUTE = 'DGKmqmiyVPZ7Tfe18VksjN';
+export const RELATION_TYPE = 'QtC4Ay8HNLwSd1kSARgcDE';
+export const RELATION_FROM_ATTRIBUTE = 'RERshk4JoYoMC17r1qAo9J';
+export const RELATION_TO_ATTRIBUTE = 'Qx8dASiTNsxxP3rJbd4Lzd';
+export const RELATION_TYPE_ATTRIBUTE = '3WxYoAVreE4qFhkDUs5J3q';
 /*
  * Relations can be ordered using fractional indexing. By default we
  * add an index to every relation so that ordering can be added to
  * any relation at any point without having to add indexes to relations
  * post-creation.
  */
-export const RELATION_INDEX = 'gEfvT3cW16tyPmFEGA9bp';
+export const RELATION_INDEX = 'WNopXUYxsSsE51gkJGWghe';
 
 /**
  * Defines whether a relation has been "verified." Verification can
@@ -147,7 +149,6 @@ export const PROJECT_TYPE = '9vk7Q3pz7US3s2KePFQrJT';
 export const PROTOCOL_TYPE = 'R9Xo87Q6oaxfSBrHvVQFdS';
 export const REGION_TYPE = 'Qu6vfQq68ecZ4PkihJ4nZN';
 export const ROOT_SPACE_TYPE = 'k7vbnMPxzdtGL2J3uaB6d';
-export const SPACE_CONFIGURATION = 'EXWTH2k6qquguZ8CCfMp9K';
 
 /** Templates */
 export const TEMPLATE_ATTRIBUTE = 'Sb7ZvdGsCDm2r1mNZBA5ft';
@@ -162,22 +163,33 @@ export const PAGE_TYPE_ATTRIBUTE = 'DD9FKRZ3XezaKEGUszMB3r';
   These define the entity id to copy when creating an entity from
   a template.
   */
+export const INDUSTRY_ABOUT_PAGE_TEMPLATE = 'P6tM8upNJ83frWtMtmHXve';
+export const INDUSTRY_EVENTS_PAGE_TEMPLATE = 'NVZnC2af2v3ptuNqjMC9Mu';
+export const INDUSTRY_JOBS_PAGE_TEMPLATE = 'RNtMm9U2zmevNCQTHHwbgb';
+export const INDUSTRY_NEWS_PAGE_TEMPLATE = '2GXJSWAqkw5B8JtvWZ9hnX';
+export const INDUSTRY_ONTOLOGY_PAGE_TEMPLATE = 'AkJKSSB2AbQKXAWjqYV9Qh';
+export const INDUSTRY_OVERVIEW_PAGE_TEMPLATE = 'Tgm2ubmm9VjAZFZACJLTZC';
+export const INDUSTRY_PEOPLE_PAGE_TEMPLATE = 'JMbQ5nH8wWLxRki6eQYLTB';
+export const INDUSTRY_PROJECTS_PAGE_TEMPLATE = 'WQLU4rAJLwBBSHcLN4uHad';
 export const COMPANY_EVENTS_PAGE_TEMPLATE = '4CTRE9hBWqb7CjiaxQx47C';
 export const COMPANY_JOBS_PAGE_TEMPLATE = 'DSANGC24exwsRWXrfikKb7';
+export const COMPANY_OVERVIEW_PAGE_TEMPLATE = 'QZwChwTixtbLDv3HSX5E6n';
 export const COMPANY_POSTS_PAGE_TEMPLATE = 'AHLknvNrbs7CBao2i58mo5';
 export const COMPANY_PRODUCTS_PAGE_TEMPLATE = '7Dp2MBb1tjMk6igDaYTZtb';
 export const COMPANY_SERVICES_PAGE_TEMPLATE = 'NRLUry4uMctKx6yiC2GP9F';
-export const COMPANY_SPACE_CONFIGURATION_TEMPLATE = 'QZwChwTixtbLDv3HSX5E6n';
 export const COMPANY_TEAM_PAGE_TEMPLATE = 'B59SUroy7uy9yCHF9AD9mP';
-export const PERSON_SPACE_CONFIGURATION_TEMPLATE = 'EJuFuEz17wdVCk9ctEAkW7';
+export const PERSON_OVERVIEW_PAGE_TEMPLATE = 'EJuFuEz17wdVCk9ctEAkW7';
 export const PERSON_POSTS_PAGE_TEMPLATE = '98wgvodwzidmVA4ryVzGX6';
 export const NONPROFIT_FINANCES_PAGE_TEMPLATE = 'G3PRyzNzRNWn4m7S4sESQG';
 export const NONPROFIT_ID_NUMBER_ATTRIBUTE = 'Qv1R7wDaem6uBTE5TYQihB';
+export const NONPROFIT_OVERVIEW_PAGE_TEMPLATE = 'HEuj9VYAF5z1KQ8x37Uzze';
 export const NONPROFIT_POSTS_PAGE_TEMPLATE = 'G8iePrDZk2SkqL9QEW6nCR';
 export const NONPROFIT_PROJECTS_PAGE_TEMPLATE = 'JkJDTY4f3Xc6APZKna5kGh';
 export const NONPROFIT_SERVICE_TYPE = 'GZao3GpaUjMrX14VB2LoNR';
-export const NONPROFIT_SPACE_CONFIGURATION_TEMPLATE = 'HEuj9VYAF5z1KQ8x37Uzze';
 export const NONPROFIT_TEAM_PAGE_TEMPLATE = 'K51CbDqxW35osbjPo5ZF77';
+export const ONTOLOGY_PAGE_TEMPLATE = 'JjEDWDpLYS7tYBKi4vCdwc';
+export const EDUCATION_PAGE_TEMPLATE = 'RHuzjGkGothjuwGN6TLXDx';
+export const ABOUT_PAGE_TEMPLATE = '78qghJm6whF5proE9G93pX';
 
 /**
  * Defines the type of the page being copied when creating an entity
@@ -188,6 +200,7 @@ export const EDUCATION_PAGE = 'Qh8AQ8hQhXiaAbe8HkgAJV';
 export const EVENTS_PAGE = 'K97FaTqrx54jdiM93vZ1Fc';
 export const FINANCES_PAGE = 'R6FDYEK9CCdEQuxjuRjA2U';
 export const JOBS_PAGE = 'PJzxY3isAL3hGx1bRkYdPf';
+export const NEWS_PAGE = 'Ss6NVRoX8HKaEyFTEYNdUv';
 export const ONTOLOGY_PAGE = 'Ee2Es1b9PkfnR7nsbY2ubE';
 export const PEOPLE_PAGE = '5PatoErephYf1ZJ8U6rNz8';
 export const POSTS_PAGE = 'E3jboNrTeuopjKgJ45ykBd';
@@ -236,4 +249,4 @@ export const SUBCLAIMS_ATTRIBUTE = '2DFyYPbh5Yy2PnWTbi3uL5';
 export const VALUES_ATTRIBUTE = '3c5k2MpF9PRYAZ925qTKNi';
 export const VISION_ATTRIBUTE = 'AAMDNTaJtS2i4aWp59zEAk';
 
-export const ROOT_SPACE_ID = 'EAfWZ8ZjFCUnvfDJruuyrD';
+export const ROOT_SPACE_ID = '25omwWh6HYgeRQKCaSpVpa';

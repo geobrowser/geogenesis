@@ -16,17 +16,18 @@ import { SpaceMetadataDto } from '../io/dto/spaces';
 
 type NetworkResult = {
   spaces: {
-    nodes: Array<Pick<SubstreamSpace, 'spacesMetadata' | 'id'>>;
+    nodes: Array<Pick<SubstreamSpace, 'spacesMetadatum' | 'id'>>;
   };
 };
 
 const spacesQuery = (name: string) => `
   {
     spaces(
-      filter: { spacesMetadata: { some: { entity: { currentVersion: { version: { name: { includesInsensitive: "${name}" } } } } } } } 
+      filter: { spacesMetadatum: { version: { name: { includesInsensitive: "${name}" } } } }
       first: 10
     ) {
       nodes {
+        id
         ${spaceMetadataFragment}
       }
     }
@@ -105,7 +106,7 @@ export function useSpacesQuery() {
           return null;
         },
         onRight: space => {
-          return SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.version);
+          return SpaceMetadataDto(space.id, space.spacesMetadatum.version);
         },
       });
     })

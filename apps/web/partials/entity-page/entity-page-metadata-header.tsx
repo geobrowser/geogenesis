@@ -4,8 +4,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
-import { useDiff } from '~/core/state/diff-store';
+import { fetchHistoryVersions } from '~/core/io/subgraph/fetch-history-versions';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 
 import { SmallButton } from '~/design-system/button';
@@ -30,13 +29,12 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`entity-versions-for-entityId-${id}`],
-    queryFn: ({ signal, pageParam = 0 }) => fetchVersions({ entityId: id, page: pageParam, signal }),
+    queryFn: ({ signal, pageParam = 0 }) => fetchHistoryVersions({ entityId: id, page: pageParam, signal }),
     getNextPageParam: (_lastPage, pages) => pages.length,
     initialPageParam: 0,
   });
 
   const { types } = useEntityPageStore();
-  const { setCompareMode, setSelectedVersion, setPreviousVersion, setIsCompareOpen } = useDiff();
 
   const isOnePage = versions?.pages && versions.pages[0].length < 5;
 
@@ -62,17 +60,11 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
           {versions?.pages?.length === 0 && <HistoryEmpty />}
           {renderedVersions?.map((group, index) => (
             <React.Fragment key={index}>
-              {group.map((v, index) => (
+              {group.map(v => (
                 <HistoryItem
                   key={v.id}
-                  onClick={() => {
-                    setCompareMode('versions');
-                    setPreviousVersion(group[index + 1]?.versionId ?? '');
-                    setSelectedVersion(v.versionId);
-                    setIsCompareOpen(true);
-                  }}
-                  // @TODO: Fix change count
-                  changeCount={0}
+                  spaceId={spaceId}
+                  proposalId={v.proposalId}
                   createdAt={v.createdAt}
                   createdBy={v.createdBy}
                   name={v.editName}

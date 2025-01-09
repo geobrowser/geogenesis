@@ -1,11 +1,16 @@
 'use client';
 
+import { useInfiniteQuery } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import { fetchCompletedProposals } from '~/core/io/subgraph/fetch-completed-proposals';
 import { NavUtils } from '~/core/utils/utils';
 
+import { SmallButton } from '~/design-system/button';
+import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
@@ -13,6 +18,8 @@ import { Create } from '~/design-system/icons/create';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { HistoryEmpty } from '../history/history-empty';
+import { HistoryItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 
 interface SpacePageMetadataHeaderProps {
@@ -35,29 +42,29 @@ export function SpacePageMetadataHeader({
 
   // const { subgraph } = Services.useServices();
 
-  // const {
-  //   data: proposals,
-  //   isFetching,
-  //   isFetchingNextPage,
-  //   fetchNextPage,
-  // } = useInfiniteQuery({
-  //   queryKey: [`space-proposals-for-space-${spaceId}`],
-  //   queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
-  //   getNextPageParam: (_lastPage, pages) => pages.length,
-  // });
+  const {
+    data: proposals,
+    isFetching,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    enabled: open,
+    initialPageParam: 0,
+    queryKey: [`space-proposals-for-space-${spaceId}`],
+    queryFn: ({ pageParam = 0 }) => fetchCompletedProposals({ spaceId, page: pageParam }),
+    getNextPageParam: (_lastPage, pages) => pages.length,
+  });
 
-  // const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
+  const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
 
-  // const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
+  const isLastPage =
+    proposals?.pages &&
+    proposals.pages.length > 1 &&
+    proposals.pages[proposals.pages.length - 1]?.[0]?.id === proposals.pages[proposals.pages.length - 2]?.[0]?.id;
 
-  // const isLastPage =
-  //   proposals?.pages &&
-  //   proposals.pages.length > 1 &&
-  //   proposals.pages[proposals.pages.length - 1]?.[0]?.id === proposals.pages[proposals.pages.length - 2]?.[0]?.id;
+  const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
 
-  // const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
-
-  // const showMore = !isOnePage && !isLastPage;
+  const showMore = !isOnePage && !isLastPage;
 
   const additionalTypeChips = typeNames
     .filter(t => t !== 'Space')
@@ -93,20 +100,14 @@ export function SpacePageMetadataHeader({
           </Link>
         )}
         <HistoryPanel>
-          History is temporarily disabled
-          {/* {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
+          {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>
-              {group.map((p, index) => (
+              {group.map(p => (
                 <HistoryItem
                   key={p.id}
-                  onClick={() => {
-                    setCompareMode('proposals');
-                    setPreviousProposal(group[index + 1]?.id ?? '');
-                    setSelectedProposal(p.id);
-                    setIsCompareOpen(true);
-                  }}
-                  changeCount={p.proposedVersions.reduce<AppOp[]>((acc, version) => acc.concat(version.ops), []).length}
+                  spaceId={spaceId}
+                  proposalId={p.id}
                   createdAt={p.createdAt}
                   createdBy={p.createdBy}
                   name={p.name}
@@ -124,7 +125,7 @@ export function SpacePageMetadataHeader({
                 </SmallButton>
               )}
             </div>
-          )} */}
+          )}
         </HistoryPanel>
         <Menu
           open={open}

@@ -46,8 +46,8 @@ export function ProposalDto(
     profileLink: null,
   };
 
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].version;
-  const entity = spaceConfig ? VersionDto(spaceConfig) : null;
+  const spaceConfig = proposal.space.spacesMetadatum;
+  const entity = spaceConfig ? VersionDto(spaceConfig.version) : null;
 
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
@@ -109,8 +109,8 @@ export function ProposalWithoutVotersDto(
     profileLink: null,
   };
 
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].version;
-  const entity = spaceConfig ? VersionDto(spaceConfig) : null;
+  const spaceConfig = proposal.space.spacesMetadatum;
+  const entity = spaceConfig ? VersionDto(spaceConfig.version) : null;
 
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,

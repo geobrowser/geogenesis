@@ -51,7 +51,7 @@ export function nameTriples(triples: ITriple[]): ITriple[] {
 }
 
 export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
-  return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
+  return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE);
 }
 
 /**
