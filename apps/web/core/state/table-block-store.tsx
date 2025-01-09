@@ -128,7 +128,9 @@ export function useTableBlock() {
     enabled: collectionItems.length > 0,
     queryKey: queryKeys.collectionItemEntities(collectionItemIds),
     queryFn: async () => {
-      const entities = await mergeCollectionItemEntitiesAsync(collectionItemIds);
+      const entities = await mergeCollectionItemEntitiesAsync({
+        entityIds: collectionItemIds,
+      });
 
       return entities;
     },
@@ -169,7 +171,7 @@ export function useTableBlock() {
       };
 
       if (source.type === 'ENTITY') {
-        return await mergeEntitySourceTypeEntities(source.value, filterState);
+        return await mergeEntitySourceTypeEntities(source.value, filterString, filterState);
       }
 
       if (source.type === 'SPACES' || source.type === 'GEO') {
@@ -177,7 +179,10 @@ export function useTableBlock() {
       }
 
       if (source.type === 'COLLECTION') {
-        return await mergeCollectionItemEntitiesAsync(collectionItems.map(c => c.toEntity.id));
+        return mergeCollectionItemEntitiesAsync({
+          entityIds: collectionItems.map(c => c.toEntity.id),
+          filterString,
+        });
       }
 
       return [];

@@ -9,10 +9,10 @@ import { SubstreamEntity } from '../schema';
 import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
-const query = (entityIds: string[]) => {
+const query = (entityIds: string[], filterString?: string) => {
   return `query {
     entities(
-      filter: { id: { in: ${JSON.stringify(entityIds)} } }
+      filter: { id: { in: ${JSON.stringify(entityIds)} } ${filterString ?? ''} }
     ) {
       nodes {
         id
@@ -30,12 +30,18 @@ interface NetworkResult {
   entities: { nodes: SubstreamEntity[] };
 }
 
-export async function fetchEntitiesBatch(entityIds: string[], signal?: AbortController['signal']): Promise<Entity[]> {
+export async function fetchEntitiesBatch(
+  entityIds: string[],
+  filterString?: string,
+  signal?: AbortController['signal']
+): Promise<Entity[]> {
   const queryId = v4();
+
+  console.log('filter string', filterString);
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
-    query: query(entityIds),
+    query: query(entityIds, filterString),
     signal,
   });
 
@@ -53,7 +59,7 @@ export async function fetchEntitiesBatch(entityIds: string[], signal?: AbortCont
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchCollectionItemEntities. queryId: ${queryId}
+            `Encountered runtime graphql error in fetchEntitiesBatch. queryId: ${queryId}
             queryString: ${query(entityIds)}
             `,
             error.message
@@ -62,7 +68,7 @@ export async function fetchEntitiesBatch(entityIds: string[], signal?: AbortCont
           return [];
 
         default:
-          console.error(`${error._tag}: Unable to fetch table collection item entities, queryId: ${queryId}`);
+          console.error(`${error._tag}: Unable to fetch entities, queryId: ${queryId}`);
           return [];
       }
     }
