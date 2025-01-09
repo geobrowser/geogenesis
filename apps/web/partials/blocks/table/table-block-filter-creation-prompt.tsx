@@ -112,12 +112,8 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
       };
     case 'onOpenChange':
       return {
+        ...state,
         open: action.payload.open,
-        selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
-        value: {
-          type: 'string',
-          value: '',
-        },
       };
     case 'selectColumn':
       // @TODO: The value should be based on the selected column value type
@@ -163,30 +159,44 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
   }
 };
 
+function getInitialState(source: Source): PromptState {
+  if (source.type === 'ENTITY') {
+    return {
+      selectedColumn: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+      value: {
+        type: 'entity',
+        entityId: source.value,
+        entityName: source.name,
+      },
+      open: false,
+    };
+  }
+
+  return {
+    selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
+    value: {
+      type: 'string',
+      value: '',
+    },
+    open: false,
+  };
+}
+
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
   const { columnRelationTypes, source } = useTableBlock();
 
-  const [state, dispatch] = React.useReducer(
-    reducer,
-    source.type === 'ENTITY'
-      ? {
-          selectedColumn: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
-          value: {
-            type: 'entity',
-            entityId: source.value,
-            entityName: source.name,
-          },
-          open: false,
-        }
-      : {
-          selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
-          value: {
-            type: 'string',
-            value: '',
-          },
-          open: false,
-        }
-  );
+  const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
+
+  React.useEffect(() => {
+    if (source.type === 'ENTITY') {
+      dispatch({
+        type: 'selectColumn',
+        payload: {
+          columnId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+        },
+      });
+    }
+  }, [source]);
 
   const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
 
@@ -253,7 +263,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                       options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
                       // For some reason setting this as the initial value in the reducer doesn't work,
                       // so for now we hard code it for this specific source type
-                      value={source.type === 'ENTITY' ? SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE : state.selectedColumn}
+                      value={state.selectedColumn}
                       onChange={onSelectColumnToFilter}
                     />
                   </div>
