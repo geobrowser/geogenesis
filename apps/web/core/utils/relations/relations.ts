@@ -1,4 +1,4 @@
-import { Relation, SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { EntityId } from '~/core/io/schema';
 import { Triple } from '~/core/types';
@@ -31,7 +31,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityName: null,
       value: {
         type: 'URL',
-        value: SYSTEM_IDS.RELATION_TYPE,
+        value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE),
       },
     },
     {
@@ -42,7 +42,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityName: null,
       value: {
         type: 'URL',
-        value: relation.fromEntity,
+        value: GraphUrl.fromEntityId(relation.fromEntity),
       },
     },
     {
@@ -53,7 +53,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityName: null,
       value: {
         type: 'URL',
-        value: relation.toEntity,
+        value: GraphUrl.fromEntityId(relation.toEntity),
       },
     },
     {
@@ -75,7 +75,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityName: null,
       value: {
         type: 'URL',
-        value: relation.type,
+        value: GraphUrl.fromEntityId(relation.type),
       },
     },
   ];
