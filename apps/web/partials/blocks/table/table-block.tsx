@@ -192,6 +192,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             placeholder={placeholder}
             view={view}
             source={source}
+            filterState={filterState}
           />
         )}
         {hasPagination && (
