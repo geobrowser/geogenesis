@@ -47,6 +47,7 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
     return {
       type: 'ENTITY',
       value: maybeEntityFilter.value,
+      name: maybeEntityFilter.valueName,
     };
   }
 
