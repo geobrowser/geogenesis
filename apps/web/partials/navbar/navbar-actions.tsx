@@ -15,6 +15,7 @@ import { usePathSegments } from '~/core/hooks/use-path-segments';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
+import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
@@ -84,7 +85,7 @@ export function NavbarActions() {
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {/* {account?.onchainProfile?.homeSpaceId && (
+        {account?.profile.profileLink && (
           <>
             <AvatarMenuItem>
               <div className="flex items-center gap-2">
@@ -93,7 +94,7 @@ export function NavbarActions() {
                 </div>
                 <Link
                   prefetch={false}
-                  href={NavUtils.toSpace(account.onchainProfile.homeSpaceId)}
+                  href={NavUtils.toSpace(account.profile.profileLink.split('/')[2])}
                   className="text-button"
                 >
                   Personal space
@@ -101,7 +102,7 @@ export function NavbarActions() {
               </div>
             </AvatarMenuItem>
           </>
-        )} */}
+        )}
         {shouldShowElement && (
           <AvatarMenuItem>
             <Link href="/home" className="flex items-center gap-2 grayscale">

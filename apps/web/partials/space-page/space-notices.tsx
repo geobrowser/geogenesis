@@ -306,12 +306,16 @@ const CustomCopy = () => (
 );
 
 const spaces: SpaceData[] = [
-  { id: `1`, name: `Crypto`, image: `ipfs://QmZ3DG2sJJ97tg81QXhmpNuJhfu7wPMbSY8PbQq8HjDrHi` },
-  { id: `2`, name: `US Politics`, image: `ipfs://Qmapijr8TKb5wKa9y9iBtqt1rTvjq5LQd238y9XbPo46W8` },
-  { id: `3`, name: `Social Work`, image: `ipfs://QmdFGfsfspuCdubtJjnTfEcTsNr47voySUXTi3Pf8VW8uw` },
-  { id: `4`, name: `Philosophy`, image: `ipfs://Qme1VbiszsjLAUcFzDbnikWCpNB6HpDEzMENmhEeYpLvfX` },
-  { id: `5`, name: `San Francisco`, image: `ipfs://QmPusCwgMnhTFiXstYthTGSWr7nnC5Vab3V8xTcK4h1hbV` },
-  { id: `6`, name: `Travel`, image: `ipfs://QmdQEwqswMLHYBjphH3guHpZYCm4NqfXqkcM5j4CBpMu8w` },
+  {
+    id: `SgjATMbm41LX6naizMqBVd`,
+    name: `Crypto`,
+    image: `https://gateway.lighthouse.storage/ipfs/bafkreid3fybsnf2ezqgh7aku3bzsnz2i357kqrtlv5tkudrgx5r6qmd2aa`,
+  },
+  // { id: `2`, name: `US Politics`, image: `ipfs://Qmapijr8TKb5wKa9y9iBtqt1rTvjq5LQd238y9XbPo46W8` },
+  // { id: `3`, name: `Social Work`, image: `ipfs://QmdFGfsfspuCdubtJjnTfEcTsNr47voySUXTi3Pf8VW8uw` },
+  // { id: `4`, name: `Philosophy`, image: `ipfs://Qme1VbiszsjLAUcFzDbnikWCpNB6HpDEzMENmhEeYpLvfX` },
+  // { id: `5`, name: `San Francisco`, image: `ipfs://QmPusCwgMnhTFiXstYthTGSWr7nnC5Vab3V8xTcK4h1hbV` },
+  // { id: `6`, name: `Travel`, image: `ipfs://QmdQEwqswMLHYBjphH3guHpZYCm4NqfXqkcM5j4CBpMu8w` },
 ];
 
 const JoinSpaces = () => {
