@@ -35,7 +35,21 @@ export function NavbarActions() {
   const { shouldShowElement } = useOnboardGuard();
 
   if (!address) {
-    return <GeoConnectButton />;
+    return (
+      <div className="flex items-center gap-4">
+        {!shouldShowElement && (
+          <a
+            className="text-button font-normal text-ctaPrimary transition-colors duration-200 hover:text-ctaHover"
+            href="https://elfin-share-6f1.notion.site/175273e214eb80258d30ee6755415ce2?pvs=105"
+            rel="noreferrer noopener"
+            target="_blank"
+          >
+            Early access
+          </a>
+        )}
+        <GeoConnectButton />
+      </div>
+    );
   }
 
   if (isLoading) {
@@ -50,6 +64,16 @@ export function NavbarActions() {
   return (
     <div className="flex items-center gap-4">
       <ModeToggle />
+      {!shouldShowElement && (
+        <a
+          className="text-button font-normal text-ctaPrimary transition-colors duration-200 hover:text-ctaHover"
+          href="https://elfin-share-6f1.notion.site/175273e214eb80258d30ee6755415ce2?pvs=105"
+          rel="noreferrer noopener"
+          target="_blank"
+        >
+          Early access
+        </a>
+      )}
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">

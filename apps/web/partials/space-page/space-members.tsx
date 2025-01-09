@@ -77,14 +77,11 @@ export async function SpaceMembers({ spaceId }: Props) {
       />
 
       {isPublicSpace ? (
-        <>
-          <div className="h-4 w-px bg-divider" />
-          <SpaceMembersJoinButton
-            spaceId={spaceId}
-            votingPluginAddress={space.mainVotingPluginAddress}
-            hasRequestedSpaceMembership={hasRequestedSpaceMembership}
-          />
-        </>
+        <SpaceMembersJoinButton
+          spaceId={spaceId}
+          votingPluginAddress={space.mainVotingPluginAddress}
+          hasRequestedSpaceMembership={hasRequestedSpaceMembership}
+        />
       ) : null}
     </div>
   );

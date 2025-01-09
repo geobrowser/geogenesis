@@ -1,5 +1,6 @@
 'use client';
 
+import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 
 import { Pending } from '~/design-system/pending';
@@ -16,20 +17,30 @@ export function SpaceMembersJoinButton({
 }: SpaceMembersJoinButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember(votingPluginAddress);
 
+  const { shouldShowElement } = useOnboardGuard();
+
+  if (!shouldShowElement) {
+    return null;
+  }
+
   return (
-    <Pending
-      isPending={status === 'pending'}
-      position="center"
-      className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text"
-    >
-      {!hasRequestedSpaceMembership ? (
-        <button onClick={() => requestToBeMember()} disabled={status !== 'idle'}>
-          <RequestButtonText status={status} />
-        </button>
-      ) : (
-        <span>Requested</span>
-      )}
-    </Pending>
+    <>
+      <div className="h-4 w-px bg-divider" />
+
+      <Pending
+        isPending={status === 'pending'}
+        position="center"
+        className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text"
+      >
+        {!hasRequestedSpaceMembership ? (
+          <button onClick={() => requestToBeMember()} disabled={status !== 'idle'}>
+            <RequestButtonText status={status} />
+          </button>
+        ) : (
+          <span>Requested</span>
+        )}
+      </Pending>
+    </>
   );
 }
 
