@@ -23,7 +23,7 @@ export async function SpaceEditorsChip({ spaceId }: Props) {
         ))}
       </AvatarGroup>
 
-      <p>
+      <p className="whitespace-nowrap">
         {totalEditors} {pluralize('editor', totalEditors)}
       </p>
     </div>

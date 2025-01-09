@@ -23,7 +23,7 @@ export async function SpaceMembersChip({ spaceId }: Props) {
         ))}
       </AvatarGroup>
 
-      <p>
+      <p className="whitespace-nowrap">
         {totalMembers} {pluralize('member', totalMembers)}
       </p>
     </div>

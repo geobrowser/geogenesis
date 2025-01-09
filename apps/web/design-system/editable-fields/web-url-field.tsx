@@ -4,6 +4,11 @@ import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
 
+import { useEntity } from '~/core/database/entities';
+import { EntityId } from '~/core/io/schema';
+
+import { LinkableChip } from '~/design-system/chip';
+
 const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 focus:outline-none', {
   variants: {
     variant: {
@@ -11,7 +16,7 @@ const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 fo
       tableCell: 'text-tableCell',
     },
     editable: {
-      false: 'text-ctaPrimary hover:text-ctaHover transition-colors duration-75 truncate no-underline hover:underline',
+      false: 'truncate text-ctaPrimary no-underline transition-colors duration-75 hover:text-ctaHover hover:underline',
     },
   },
   defaultVariants: {
@@ -36,6 +41,13 @@ export function WebUrlField({ variant = 'body', isEditing = false, ...props }: P
   React.useEffect(() => {
     setLocalValue(props.value);
   }, [props.value]);
+
+  // @TODO render a separate component so we don't use this hook for regular urls
+  const entity = useEntity({ id: EntityId(props.value.split('graph://')[1]) });
+
+  if (props.value.startsWith('graph://')) {
+    return <LinkableChip href={`./${entity.id}`}>{entity.name}</LinkableChip>;
+  }
 
   return isEditing ? (
     <input

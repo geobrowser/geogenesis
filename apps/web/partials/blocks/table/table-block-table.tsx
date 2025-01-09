@@ -411,7 +411,7 @@ export const TableBlockTable = React.memo(
                             <CheckCircle />
                           </div>
                         )}
-                        <div className="truncate text-mediumTitle font-medium text-text">{name}</div>
+                        <div className="truncate text-smallTitle font-medium text-text">{name}</div>
                       </div>
                       {description && <div className="mt-0.5 text-metadata text-grey-04">{description}</div>}
                     </div>
@@ -447,7 +447,7 @@ export const TableBlockTable = React.memo(
                         <CheckCircle />
                       </div>
                     )}
-                    <div className="truncate text-mediumTitle font-medium text-text">{name}</div>
+                    <div className="truncate text-smallTitle font-medium text-text">{name}</div>
                   </div>
                 </Link>
               );
