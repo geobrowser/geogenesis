@@ -92,6 +92,10 @@ export class GeoDate {
     hour: string;
     minute: string;
   }): string {
+    if (hour === '') {
+      return new Date(`${year}-${month}-${day}`).toISOString();
+    }
+
     let paddedHour = hour;
     let paddedMinute = minute;
 
@@ -101,6 +105,14 @@ export class GeoDate {
 
     if (Number(hour) < 10 && hour !== '') {
       paddedHour = hour.padStart(2, '0');
+    }
+
+    if (minute === '') {
+      paddedMinute = '00';
+    }
+
+    if (hour === '') {
+      paddedHour = '00';
     }
 
     try {
