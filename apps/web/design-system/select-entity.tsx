@@ -1,4 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -32,6 +32,7 @@ import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
   onDone: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
+  onCreateEntity?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
   spaceId: string;
   allowedTypes?: RelationValueType[];
   placeholder?: string;
@@ -83,6 +84,7 @@ const containerStyles = cva('relative', {
 
 export const SelectEntity = ({
   onDone,
+  onCreateEntity,
   spaceId,
   allowedTypes,
   placeholder = 'Find or create...',
@@ -132,22 +134,14 @@ export const SelectEntity = ({
       spaceId
     );
 
-    if (allowedTypes) {
-      allowedTypes.forEach(type => {
-        upsert(
-          {
-            entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-            entityName: query,
-            attributeName: 'Types',
-            value: {
-              type: 'URL',
-              value: GraphUrl.fromEntityId(type.typeId),
-            },
-          },
-          spaceId
-        );
-      });
+    // This component is used in many different use-cases across the system, so we
+    // need to be able to pass in a callback. onCreateEntity is used to enable to
+    // caller to add arbitrary data to an entity when it's created.
+    //
+    // e.g., you're in a collection and create a new entity, we want to add the current
+    // filters to the created entity. This enables the caller to hook into the creation.
+    if (onCreateEntity) {
+      onCreateEntity({ id: newEntityId, name: query });
     }
 
     onDone({ id: newEntityId, name: query });

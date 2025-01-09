@@ -1,6 +1,7 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import {
   ColumnDef,
   createColumnHelper,
@@ -17,8 +18,10 @@ import Image from 'next/image';
 import * as React from 'react';
 import { useState } from 'react';
 
+import { Filter } from '~/core/blocks-sdk/table';
 import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
+import { DB } from '~/core/database/write';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
@@ -197,11 +200,12 @@ interface Props {
   view: DataBlockView;
   source: Source;
   placeholder: { text: string; image: string };
+  filterState: Filter[];
 }
 
 // eslint-disable-next-line react/display-name
 export const TableBlockTable = React.memo(
-  ({ rows, space, columns, shownColumnIds, placeholder, view, source }: Props) => {
+  ({ rows, space, columns, shownColumnIds, placeholder, view, source, filterState }: Props) => {
     const isEditingColumns = useAtomValue(editingColumnsAtom);
 
     const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
@@ -227,6 +231,36 @@ export const TableBlockTable = React.memo(
         isEditable: isEditable,
       },
     });
+
+    const onCreateNewEntity = (
+      entity: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }
+    ) => {
+      for (const filter of filterState) {
+        if (filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE) {
+          DB.upsertRelation({
+            spaceId: space,
+            relation: {
+              space,
+              index: INITIAL_RELATION_INDEX_VALUE,
+              fromEntity: {
+                id: entity.id,
+                name: entity.name,
+              },
+              typeOf: {
+                id: EntityId(filter.columnId),
+                name: 'Types',
+              },
+              toEntity: {
+                id: EntityId(filter.value),
+                name: filter.valueName,
+                renderableType: 'RELATION',
+                value: filter.value,
+              },
+            },
+          });
+        }
+      }
+    };
 
     const onSelectCollectionItem = (
       entity: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }
@@ -326,7 +360,11 @@ export const TableBlockTable = React.memo(
                 <tbody>
                   {source.type === 'COLLECTION' && isEditable && (
                     <TableCell width={784} isExpanded={false} toggleExpanded={() => {}} isShown>
-                      <SelectEntity spaceId={space} onDone={onSelectCollectionItem} />
+                      <SelectEntity
+                        spaceId={space}
+                        onDone={onSelectCollectionItem}
+                        onCreateEntity={onCreateNewEntity}
+                      />
                     </TableCell>
                   )}
                   {table.getRowModel().rows.map((row, index: number) => {
