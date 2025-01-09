@@ -12,34 +12,45 @@ import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 type RenderableFilter = Filter & { columnName: string };
 
 export function TableBlockEditableFilters() {
-  const { setFilterState, columns, filterState } = useTableBlock();
+  const { setFilterState, columns, filterState, source } = useTableBlock();
 
   // We treat Name, Typs and Space as special filters even though they are not
   // always columns on the type schema for a table. We allow users to be able
   // to filter by name and space.
-  const filterableColumns: RenderableFilter[] = [
-    // @TODO(data blocks): We should add the default filters to the data model
-    // itself instead of manually here.
-    // {
-    //   columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
-    //   columnName: 'Name',
-    //   valueType: valueTypes[SYSTEM_IDS.TEXT],
-    //   value: '',
-    //   valueName: null,
-    // },
-    ...columns
-      .map(c => {
-        return {
-          columnId: c.id,
-          columnName: c.name ?? '',
-          valueType: valueTypes[c.valueType],
-          value: '',
-          valueName: null,
-        };
-      })
-      // Filter out any columns with names and any columns that are not entity or string value types
-      .flatMap(c => (c.columnName !== '' && (c.valueType === 'RELATION' || c.valueType === 'TEXT') ? [c] : [])),
-  ];
+  const filterableColumns: RenderableFilter[] =
+    source.type !== 'ENTITY'
+      ? [
+          // @TODO(data blocks): We should add the default filters to the data model
+          // itself instead of manually here.
+          // {
+          //   columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
+          //   columnName: 'Name',
+          //   valueType: valueTypes[SYSTEM_IDS.TEXT],
+          //   value: '',
+          //   valueName: null,
+          // },
+          ...columns
+            .map(c => {
+              return {
+                columnId: c.id,
+                columnName: c.name ?? '',
+                valueType: valueTypes[c.valueType],
+                value: '',
+                valueName: null,
+              };
+            })
+            // Filter out any columns with names and any columns that are not entity or string value types
+            .flatMap(c => (c.columnName !== '' && (c.valueType === 'RELATION' || c.valueType === 'TEXT') ? [c] : [])),
+        ]
+      : [
+          {
+            columnId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+            columnName: 'Relation type',
+            valueType: 'RELATION',
+            value: '',
+            valueName: null,
+          },
+        ];
 
   const sortedFilters = sortFilters(filterableColumns);
 
@@ -54,15 +65,18 @@ export function TableBlockEditableFilters() {
     valueType: FilterableValueType;
     valueName: string | null;
   }) => {
-    setFilterState([
-      ...filterState,
-      {
-        valueType,
-        columnId,
-        value,
-        valueName,
-      },
-    ]);
+    setFilterState(
+      [
+        ...filterState,
+        {
+          valueType,
+          columnId,
+          value,
+          valueName,
+        },
+      ],
+      source
+    );
   };
 
   return (

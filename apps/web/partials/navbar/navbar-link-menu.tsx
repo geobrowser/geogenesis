@@ -74,7 +74,7 @@ function getComponentRoute({ urlComponents, index, spaceNames, spaceImages }: Ge
 
   switch (index) {
     case 0:
-      return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
+      return { path: '/root', title: 'Root', img: '/spaces.png' };
     case 1:
       return { path: `/space/${component}`, title: spaceNames[component] ?? '', img: spaceImages[component] ?? '' };
     default:

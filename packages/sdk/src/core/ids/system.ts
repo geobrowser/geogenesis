@@ -51,6 +51,7 @@ export const QUERY_DATA_SOURCE = '8HkP7HCufp2HcCFajuJFcq';
  */
 export const FILTER = '3YqoLJ7uAPmthXyXmXKoSa';
 export const SPACE_FILTER = 'JiFmyuFYeoiRSiY286m7A2';
+export const ENTITY_FILTER = 'TWrUhTe6E8tKCJr9vfCzxT';
 
 /**
  * Defines that a relation type is COLLECTION_ITEM. This is used by
