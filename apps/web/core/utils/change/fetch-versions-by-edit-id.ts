@@ -14,7 +14,7 @@ interface FetchVersionsArgs {
 
 const query = (editId: string) => {
   return `query {
-    versions(filter: { editId: {equalTo: ${JSON.stringify(editId)}}}) {
+    versions(filter: { editId: {equalTo: ${JSON.stringify(editId)}}} first: 10) {
       nodes {
         ${versionFragment}
         edit {
