@@ -42,11 +42,6 @@ const nextConfig = {
         permanent: true,
       },
       {
-        source: '/early-access',
-        destination: 'https://forms.gle/yZwahT6GoYcjNK2Y6',
-        permanent: false,
-      },
-      {
         source: '/future-thinkers',
         destination: 'https://forms.gle/WkgcmQhnqKACXeQW6',
         permanent: false,
