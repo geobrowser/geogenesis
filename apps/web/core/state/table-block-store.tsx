@@ -321,6 +321,7 @@ export function useTableBlock() {
   const placeholder = getPlaceholder(blockEntity, view);
 
   return {
+    blockEntity,
     relationId,
     source,
     setSource,
