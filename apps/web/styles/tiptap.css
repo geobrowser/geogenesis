@@ -6,6 +6,10 @@
   margin-bottom: 0 !important; /* Override Tiptap's margin-bottom */
 }
 
+.ProseMirror .paragraph-node a {
+  @apply text-ctaPrimary transition-colors duration-100 hover:text-ctaHover;
+}
+
 .ProseMirror .tiptap-block {
   position: relative;
 }
@@ -97,7 +101,7 @@
 }
 
 .ProseMirror .node-tableNode {
-  @apply mt-8;
+  @apply [&:not(:first-child)]:mt-12;
 }
 
 .ProseMirror ul {
