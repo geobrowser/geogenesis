@@ -16,6 +16,7 @@ import {
   MergeTableEntitiesArgs,
   mergeCollectionItemEntitiesAsync,
   mergeColumns,
+  mergeEntitySourceTypeEntities,
   mergeTableEntities,
 } from '../database/table';
 import { StoredRelation } from '../database/types';
@@ -147,6 +148,7 @@ export function useTableBlock() {
   const { data: tableEntities, isLoading: isLoadingEntities } = useQuery({
     enabled: columns !== undefined && filterState !== undefined,
     placeholderData: keepPreviousData,
+    // @TODO: Should re-run when the relations for the entity source changes
     queryKey: queryKeys.rows({
       columns,
       pageNumber,
@@ -165,6 +167,10 @@ export function useTableBlock() {
         first: PAGE_SIZE + 1,
         skip: pageNumber * PAGE_SIZE,
       };
+
+      if (source.type === 'ENTITY') {
+        return await mergeEntitySourceTypeEntities(source.value, filterState);
+      }
 
       if (source.type === 'SPACES' || source.type === 'GEO') {
         return await mergeTableEntities({ options: params, filterState });
@@ -215,11 +221,11 @@ export function useTableBlock() {
   );
 
   const setFilterState = React.useCallback(
-    (filters: Filter[]) => {
+    (filters: Filter[], source: Source) => {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString = newState.length === 0 ? '' : createFilterStringFromFilters(newState);
+      const newFiltersString = newState.length === 0 ? '' : createFilterStringFromFilters(newState, source);
 
       const entityName = blockEntity.name ?? '';
 
@@ -252,21 +258,37 @@ export function useTableBlock() {
       removeSourceType({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
       upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 
+      if (newSource.type === 'ENTITY') {
+        setFilterState(
+          [
+            {
+              columnId: SYSTEM_IDS.ENTITY_FILTER,
+              valueType: 'RELATION',
+              value: newSource.value,
+              valueName: newSource.name,
+            },
+          ],
+          newSource
+        );
+      }
+
       if (newSource.type === 'SPACES') {
         // We only allow one space filter at a time currently, so remove any existing space filters before
         // adding the new one.
         const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER) ?? [];
 
-        setFilterState([
-          ...filtersWithoutSpaces,
-          { columnId: SYSTEM_IDS.SPACE_FILTER, valueType: 'RELATION', value: newSource.value[0], valueName: null },
-        ]);
+        setFilterState(
+          [
+            ...filtersWithoutSpaces,
+            { columnId: SYSTEM_IDS.SPACE_FILTER, valueType: 'RELATION', value: newSource.value[0], valueName: null },
+          ],
+          newSource
+        );
       }
 
       if (newSource.type === 'GEO') {
         const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER) ?? [];
-
-        setFilterState(filtersWithoutSpaces);
+        setFilterState(filtersWithoutSpaces, newSource);
       }
     },
     [entityId, blockEntity.relationsOut, spaceId, setFilterState, filterState]

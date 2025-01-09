@@ -39,18 +39,24 @@ type Mark = {
   text: string;
 };
 
-export type CollectionSource = {
+type EntitySource = {
+  type: 'ENTITY';
+  value: string; // EntityId
+  name: string | null;
+};
+
+type CollectionSource = {
   type: 'COLLECTION';
   value: string;
 };
 
-export type MultipleSources = {
+type MultipleSources = {
   type: 'SPACES'; // | 'collections';
   value: Array<SpaceId>;
 };
 
-export type AllOfGeoSource = {
+type AllOfGeoSource = {
   type: 'GEO'; // we don't care about the value since we aren't querying based on a specific space or collection
 };
 
-export type Source = CollectionSource | MultipleSources | AllOfGeoSource;
+export type Source = CollectionSource | MultipleSources | AllOfGeoSource | EntitySource;

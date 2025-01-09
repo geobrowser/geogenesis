@@ -9,6 +9,7 @@ import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Space } from '~/core/io/dto/spaces';
+import { Source } from '~/core/state/editor/types';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { FilterableValueType } from '~/core/value-types';
 
@@ -163,13 +164,29 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
 };
 
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const { columnRelationTypes } = useTableBlock();
+  const { columnRelationTypes, source } = useTableBlock();
 
-  const [state, dispatch] = React.useReducer(reducer, {
-    selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
-    value: { type: 'string', value: '' },
-    open: false,
-  });
+  const [state, dispatch] = React.useReducer(
+    reducer,
+    source.type === 'ENTITY'
+      ? {
+          selectedColumn: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+          value: {
+            type: 'entity',
+            entityId: source.value,
+            entityName: source.name,
+          },
+          open: false,
+        }
+      : {
+          selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
+          value: {
+            type: 'string',
+            value: '',
+          },
+          open: false,
+        }
+  );
 
   const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
 
@@ -234,7 +251,9 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                   <div className="flex flex-1">
                     <Select
                       options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
-                      value={state.selectedColumn}
+                      // For some reason setting this as the initial value in the reducer doesn't work,
+                      // so for now we hard code it for this specific source type
+                      value={source.type === 'ENTITY' ? SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE : state.selectedColumn}
                       onChange={onSelectColumnToFilter}
                     />
                   </div>

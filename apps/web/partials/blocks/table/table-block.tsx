@@ -100,6 +100,20 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       };
     }
 
+    if (f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) {
+      return {
+        ...f,
+        columnName: 'Relation type',
+      };
+    }
+
+    if (f.columnId === SYSTEM_IDS.ENTITY_FILTER) {
+      return {
+        ...f,
+        columnName: 'Entity',
+      };
+    }
+
     return {
       ...f,
       columnName: columns.find(c => c.id === f.columnId)?.name ?? '',
@@ -166,7 +180,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
                         draft.splice(index, 1);
                       });
 
-                      setFilterState(newFilterState);
+                      setFilterState(newFilterState, source);
                     }}
                   />
                 );

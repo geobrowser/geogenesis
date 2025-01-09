@@ -6,6 +6,7 @@ import { mergeEntityAsync } from '../database/entities';
 import { useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
 import { fetchSpace } from '../io/subgraph';
+import { Source } from '../state/editor/types';
 import { OmitStrict, ValueTypeId } from '../types';
 import { FilterableValueType, valueTypes } from '../value-types';
 
@@ -75,20 +76,40 @@ export function upsertName({
   );
 }
 
-export function createFilterStringFromFilters(filters: OmitStrict<Filter, 'valueName'>[]): string {
-  const filter: FilterString = {
-    where: {
-      spaces: filters.filter(f => f.columnId === SYSTEM_IDS.SPACE_FILTER).map(f => f.value),
-      AND: filters
-        .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
-        .map(f => {
-          return {
-            attribute: f.columnId,
-            is: f.value,
-          };
-        }),
-    },
-  };
+export function createFilterStringFromFilters(filters: OmitStrict<Filter, 'valueName'>[], source: Source): string {
+  let filter: FilterString | null = null;
+
+  if (source.type === 'ENTITY') {
+    filter = {
+      where: {
+        entity: source.value,
+        AND: filters
+          .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER && f.columnId !== SYSTEM_IDS.ENTITY_FILTER)
+          .map(f => {
+            return {
+              attribute: f.columnId,
+              is: f.value,
+            };
+          }),
+      },
+    };
+  }
+
+  if (source.type === 'SPACES') {
+    filter = {
+      where: {
+        spaces: filters.filter(f => f.columnId === SYSTEM_IDS.SPACE_FILTER).map(f => f.value),
+        AND: filters
+          .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
+          .map(f => {
+            return {
+              attribute: f.columnId,
+              is: f.value,
+            };
+          }),
+      },
+    };
+  }
 
   const maybeEncoded = Schema.encodeUnknownEither(FilterString)(filter);
 
@@ -107,20 +128,6 @@ export async function createFiltersFromFilterString(filterString: string | null)
   if (!filterString) {
     return [];
   }
-
-  const filter: FilterString = {
-    where: {
-      entity: 'KyhWaF9omBKsCbnMVJpibK',
-      AND: [
-        {
-          attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
-          is: SYSTEM_IDS.TYPES_ATTRIBUTE,
-        },
-      ],
-    },
-  };
-
-  filterString = JSON.stringify(filter);
 
   // handle errors
   const where = JSON.parse(filterString);

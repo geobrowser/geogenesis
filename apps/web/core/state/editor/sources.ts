@@ -40,6 +40,16 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
   const sourceType = dataEntityRelations.find(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE)?.toEntity
     .id;
 
+  // @TODO Should this just be a source type?
+  const maybeEntityFilter = filterState.find(f => f.columnId === SYSTEM_IDS.ENTITY_FILTER);
+
+  if (maybeEntityFilter) {
+    return {
+      type: 'ENTITY',
+      value: maybeEntityFilter.value,
+    };
+  }
+
   if (sourceType === SYSTEM_IDS.COLLECTION_DATA_SOURCE) {
     // We default to using the block as the collection source. Any defined collection items
     // will point from the block itself.

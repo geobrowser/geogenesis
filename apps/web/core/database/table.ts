@@ -16,9 +16,10 @@ import { getRelations } from './relations';
 const queryKeys = {
   remoteRows: (options: Parameters<typeof fetchTableRowEntities>[0]) =>
     ['blocks', 'data', 'query', 'rows', options] as const,
-  localRows: (entityIds: string[]) => ['blocks', 'data', 'query', 'rows', 'merged', entityIds] as const,
+  localRows: (entityIds: string[]) => ['blocks', 'data', 'query', 'rows', 'merging', entityIds] as const,
   columns: (typeIds: string[]) => ['blocks', 'data', 'query', 'columns', 'merging', typeIds] as const,
   remoteCollectionItems: (entityIds: string[]) => ['blocks', 'data', 'collection', 'merging', entityIds] as const,
+  remoteEntities: (entityIds: string[]) => ['blocks', 'data', 'entity', 'merging', entityIds] as const,
 };
 
 export interface MergeTableEntitiesArgs {
@@ -164,4 +165,29 @@ function filterValue(value: Value, valueToFilter: string) {
     default:
       return false;
   }
+}
+
+export async function mergeEntitySourceTypeEntities(entityId: string, filterState: Filter[]) {
+  const entity = await mergeEntityAsync(EntityId(entityId));
+  const maybeRelationType = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE)?.value;
+
+  if (!maybeRelationType) {
+    return [];
+  }
+
+  // @TODO:
+  // encode/decode as filter string
+  const entityIdsToFetch = entity.relationsOut.filter(r => r.typeOf.id === maybeRelationType).map(r => r.toEntity.id);
+
+  const cachedRemoteEntities = await queryClient.fetchQuery({
+    queryKey: queryKeys.remoteEntities(entityIdsToFetch),
+    queryFn: ({ signal }) => fetchEntitiesBatch(entityIdsToFetch, signal),
+    staleTime: Duration.toMillis(Duration.seconds(20)),
+  });
+
+  const mergedRemoteEntities = cachedRemoteEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
+
+  const localEntities = await getEntities_experimental();
+  const relevantLocalEntities = Object.values(localEntities).filter(e => entityIdsToFetch.includes(e.id));
+  return dedupeWith([...relevantLocalEntities, ...mergedRemoteEntities], (a, b) => a.id === b.id);
 }
