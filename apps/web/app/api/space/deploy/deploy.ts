@@ -248,8 +248,6 @@ async function waitForSpaceToBeIndexed(daoAddress: string) {
     query: query(daoAddress),
   });
 
-  console.log('query', query(daoAddress));
-
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* () {
     const resultOrError = yield* Effect.either(graphqlFetchEffect);
 
