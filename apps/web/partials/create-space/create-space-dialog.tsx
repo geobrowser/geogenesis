@@ -14,7 +14,6 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { Services } from '~/core/services';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
-import { Values } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';

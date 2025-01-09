@@ -9,6 +9,7 @@ import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Space } from '~/core/io/dto/spaces';
+import { Source } from '~/core/state/editor/types';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { FilterableValueType } from '~/core/value-types';
 
@@ -111,12 +112,8 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
       };
     case 'onOpenChange':
       return {
+        ...state,
         open: action.payload.open,
-        selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
-        value: {
-          type: 'string',
-          value: '',
-        },
       };
     case 'selectColumn':
       // @TODO: The value should be based on the selected column value type
@@ -162,14 +159,33 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
   }
 };
 
-export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const { columnRelationTypes } = useTableBlock();
+function getInitialState(source: Source): PromptState {
+  if (source.type === 'ENTITY') {
+    return {
+      selectedColumn: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+      value: {
+        type: 'entity',
+        entityId: source.value,
+        entityName: source.name,
+      },
+      open: false,
+    };
+  }
 
-  const [state, dispatch] = React.useReducer(reducer, {
+  return {
     selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
-    value: { type: 'string', value: '' },
+    value: {
+      type: 'string',
+      value: '',
+    },
     open: false,
-  });
+  };
+}
+
+export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
+  const { columnRelationTypes, source } = useTableBlock();
+
+  const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
 
   const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
 
