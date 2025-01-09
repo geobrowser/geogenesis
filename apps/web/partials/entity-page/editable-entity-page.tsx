@@ -402,7 +402,25 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
             );
           }
           case 'TIME': {
-            return <DateField key={renderable.attributeId} isEditing={true} value={renderable.value} />;
+            return (
+              <DateField
+                onBlur={time =>
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      value: {
+                        value: time,
+                        type: 'TIME',
+                      },
+                      renderable,
+                    },
+                  })
+                }
+                key={renderable.attributeId}
+                isEditing={true}
+                value={renderable.value}
+              />
+            );
           }
 
           case 'URL': {
@@ -411,6 +429,18 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
                 key={renderable.attributeId}
                 placeholder="Add a URI"
                 isEditing={true}
+                onBlur={event =>
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      value: {
+                        value: event.target.value,
+                        type: 'URL',
+                      },
+                      renderable,
+                    },
+                  })
+                }
                 value={renderable.value}
               />
             );
