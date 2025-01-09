@@ -48,10 +48,10 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     setFilterState,
     isLoading,
     hasNextPage,
-    blockEntity,
     hasPreviousPage,
     pageNumber,
     view,
+    shownColumnIds,
     placeholder,
     source,
   } = useTableBlock();
@@ -60,12 +60,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     id: column.id,
     name: column.name,
   }));
-
-  const shownColumnRelations = [
-    ...(blockEntity?.relationsOut ?? []).filter(relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS),
-  ];
-
-  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -140,11 +134,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           />
 
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
-          <TableBlockContextMenu
-            allColumns={allColumns}
-            shownColumnRelations={shownColumnRelations}
-            shownColumnIds={shownColumnIds}
-          />
+          <TableBlockContextMenu allColumns={allColumns} />
           {isEditing && source.type !== 'COLLECTION' && (
             <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
               <Create />
