@@ -19,6 +19,29 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        source: '/spaces',
+        destination: '/root',
+        permanent: false,
+      },
+      {
+        // governing public knowledge
+        source: '/space/0x2B5357e08aE291848Ff467eB1a8239d2e392bef5/c714d348-c4a5-44be-bd3c-fe56f241b0eb',
+        destination: '/space/6tfhqywXtteatMeGUtd5EB/5WHP8BuoCdSiqtfy87SYWG',
+        permanent: true,
+      },
+      {
+        // grc-20
+        source: '/space/0x2B5357e08aE291848Ff467eB1a8239d2e392bef5/54337cb3-55e7-4d2a-952b-b328aa3a1d58',
+        destination: '/space/6tfhqywXtteatMeGUtd5EB/5FkVvS4mTz6Ge7wHkAUMRk',
+        permanent: true,
+      },
+      {
+        // knowledge graphs are web3
+        source: '/space/0x2B5357e08aE291848Ff467eB1a8239d2e392bef5/0e42984f-bf78-4f52-8b1e-4f04af6611b5',
+        destination: '/space/6tfhqywXtteatMeGUtd5EB/XYo6aR3VqFQSEcf6AeTikW',
+        permanent: true,
+      },
+      {
         source: '/early-access',
         destination: 'https://forms.gle/yZwahT6GoYcjNK2Y6',
         permanent: false,
