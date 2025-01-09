@@ -234,6 +234,11 @@ function ModeToggle() {
 
   useKeyboardShortcuts(memoizedShortcuts);
 
+  if (!spaceId) {
+    // Only show toggle on pages that are editable
+    return null;
+  }
+
   return (
     <button
       onClick={onToggle}
