@@ -11,7 +11,7 @@ import * as React from 'react';
 import { useCallback } from 'react';
 import { useState } from 'react';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { IPFS_GATEWAY_PATH, IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -307,22 +307,19 @@ const CustomCopy = () => (
 
 const spaces: SpaceData[] = [
   {
-    id: `SgjATMbm41LX6naizMqBVd`,
-    name: `Crypto`,
-    image: `https://gateway.lighthouse.storage/ipfs/bafkreid3fybsnf2ezqgh7aku3bzsnz2i357kqrtlv5tkudrgx5r6qmd2aa`,
+    id: 'SgjATMbm41LX6naizMqBVd',
+    name: 'Crypto',
+    image: 'bafkreid3fybsnf2ezqgh7aku3bzsnz2i357kqrtlv5tkudrgx5r6qmd2aa',
   },
-  // { id: `2`, name: `US Politics`, image: `ipfs://Qmapijr8TKb5wKa9y9iBtqt1rTvjq5LQd238y9XbPo46W8` },
-  // { id: `3`, name: `Social Work`, image: `ipfs://QmdFGfsfspuCdubtJjnTfEcTsNr47voySUXTi3Pf8VW8uw` },
-  // { id: `4`, name: `Philosophy`, image: `ipfs://Qme1VbiszsjLAUcFzDbnikWCpNB6HpDEzMENmhEeYpLvfX` },
-  // { id: `5`, name: `San Francisco`, image: `ipfs://QmPusCwgMnhTFiXstYthTGSWr7nnC5Vab3V8xTcK4h1hbV` },
-  // { id: `6`, name: `Travel`, image: `ipfs://QmdQEwqswMLHYBjphH3guHpZYCm4NqfXqkcM5j4CBpMu8w` },
 ];
 
 const JoinSpaces = () => {
   return (
     <div className="flex flex-wrap gap-2 pr-16">
       {spaces.map(space => {
-        const spaceImage = space?.image ? getImagePath(space.image) : PLACEHOLDER_SPACE_IMAGE;
+        const spaceImage = space?.image
+          ? getImagePath(`${IPFS_GATEWAY_READ_PATH}/${space.image}`)
+          : PLACEHOLDER_SPACE_IMAGE;
 
         return (
           <Link
