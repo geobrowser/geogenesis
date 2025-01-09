@@ -15,7 +15,7 @@ import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
 import { Cookie } from '../cookie';
-import { GEOGENESIS } from './conduit-chain';
+import { GEOGENESIS } from './geo-chain';
 
 // const LOCAL_CHAIN: Chain = {
 //   id: Number(Environment.options.development.chainId),

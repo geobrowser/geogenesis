@@ -2,7 +2,7 @@ import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { Environment } from '~/core/environment';
-import { GEOGENESIS } from '~/core/wallet/conduit-chain';
+import { GEOGENESIS } from '~/core/wallet/geo-chain';
 import { walletClientToSigner } from '~/core/wallet/wallet-client-to-signer';
 
 import { ServerEnvironment } from './environment';

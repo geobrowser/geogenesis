@@ -129,7 +129,7 @@ export async function fetchProfileViaWalletsTripleAddress(address: string): Prom
 
 function defaultProfile(address: string): Profile {
   return {
-    id: '',
+    id: address,
     address: address as `0x${string}`,
     avatarUrl: null,
     coverUrl: null,

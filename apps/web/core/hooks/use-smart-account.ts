@@ -16,7 +16,7 @@ import { useWalletClient } from 'wagmi';
 
 import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { Environment } from '../environment';
-import { GEOGENESIS } from '../wallet/conduit-chain';
+import { GEOGENESIS } from '../wallet/geo-chain';
 
 export function useSmartAccount() {
   const { data: walletClient } = useWalletClient();
