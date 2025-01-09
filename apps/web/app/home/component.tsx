@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { Proposal } from '~/core/io/dto/proposals';
 import { fetchProfile } from '~/core/io/subgraph';
 import {
   NavUtils,
@@ -168,6 +169,8 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
     proposedMember.address ?? proposedMember.name ?? proposedMember.id ?? proposedMember.address
   }`;
 
+  console.log('proposal name', proposalName);
+
   const ProfileHeader = proposedMember.profileLink ? (
     <Link href={proposedMember.profileLink} className="w-full">
       <div className="flex items-center justify-between">
@@ -222,6 +225,23 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
   );
 }
 
+function getProposalName(proposal: Proposal): string {
+  switch (proposal.type) {
+    case 'ADD_EDIT':
+      return proposal.name ?? `Add edit to ${proposal.space.name}`;
+    case 'ADD_EDITOR':
+      return `Add editor to ${proposal.space.name}`;
+    case 'REMOVE_EDITOR':
+      return `Remove editor from ${proposal.space.name}`;
+    case 'ADD_SUBSPACE':
+      return `Add subspace to ${proposal.space.name}`;
+    case 'REMOVE_SUBSPACE':
+      return `Remove subspace from ${proposal.space.name}`;
+  }
+
+  throw new Error(`Unknown proposal type: ${proposal.type}`);
+}
+
 async function PendingContentProposal({ proposal, user }: PendingMembershipProposalProps) {
   const space = await cachedFetchSpace(proposal.space.id);
 
@@ -243,10 +263,12 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
   const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
+  const proposalName = getProposalName(proposal);
+
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
       <Link href={NavUtils.toProposal(proposal.space.id, proposal.id)}>
-        <div className="text-smallTitle">{proposal.name}</div>
+        <div className="text-smallTitle">{proposalName}</div>
       </Link>
       <div className="flex w-full items-center gap-1.5 text-breadcrumb text-grey-04">
         <div className="inline-flex items-center gap-3 text-breadcrumb text-grey-04">
