@@ -56,9 +56,7 @@ describe('GeoDate', () => {
 
 describe('getImagePath', () => {
   it('an IPFS pre-fixed string returns the Geo IPFS gateway path', () => {
-    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(
-      'https://api.thegraph.com/ipfs/api/v0/cat?arg=QmBananaSandwich'
-    );
+    expect(getImagePath('ipfs://QmBananaSandwich')).toBe('https://gateway.lighthouse.storage/ipfs/QmBananaSandwich');
   });
 
   it('an HTTP pre-fixed string returns the same string', () => {
@@ -76,7 +74,7 @@ describe('getImageHash', () => {
   });
 
   it('an HTTP path returns the IPFS hash', () => {
-    expect(getImageHash('https://api.thegraph.com/ipfs/api/v0/cat?arg=QmBananaSandwich')).toBe('QmBananaSandwich');
+    expect(getImageHash('https://gateway.lighthouse.storage/ipfs/QmBananaSandwich')).toBe('QmBananaSandwich');
   });
 
   it('a non-HTTP and non-IPFS path returns the same string', () => {

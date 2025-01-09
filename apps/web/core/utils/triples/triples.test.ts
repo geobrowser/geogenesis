@@ -41,9 +41,9 @@ const RELATION: StoredRelation = {
 
 describe('prepareTriplesForPublishing', () => {
   it('maps created data to create ops', () => {
-    const result = prepareTriplesForPublishing([TRIPLE], [RELATION], TRIPLE.space);
+    const { opsToPublish } = prepareTriplesForPublishing([TRIPLE], [RELATION], TRIPLE.space);
 
-    expect(result).toEqual([
+    expect(opsToPublish).toEqual([
       Relation.make({
         relationId: RELATION.id,
         fromId: RELATION.fromEntity.id,
@@ -66,12 +66,12 @@ describe('prepareTriplesForPublishing', () => {
   });
 
   it('maps deleted data to delete ops', () => {
-    const result = prepareTriplesForPublishing(
+    const { opsToPublish } = prepareTriplesForPublishing(
       [{ ...TRIPLE, isDeleted: true }],
       [{ ...RELATION, isDeleted: true }],
       TRIPLE.space
     );
-    expect(result).toEqual([
+    expect(opsToPublish).toEqual([
       {
         type: 'DELETE_RELATION',
         relation: {
