@@ -111,6 +111,21 @@ export function createFilterStringFromFilters(filters: OmitStrict<Filter, 'value
     };
   }
 
+  if (source.type === 'COLLECTION' || source.type === 'GEO') {
+    filter = {
+      where: {
+        AND: filters
+          .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
+          .map(f => {
+            return {
+              attribute: f.columnId,
+              is: f.value,
+            };
+          }),
+      },
+    };
+  }
+
   const maybeEncoded = Schema.encodeUnknownEither(FilterString)(filter);
 
   return Either.match(maybeEncoded, {
