@@ -35,7 +35,6 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
     queryFn: ({ signal, pageParam = 0 }) => fetchHistoryVersions({ entityId: id, page: pageParam, signal }),
     getNextPageParam: (_lastPage, pages) => pages.length,
     initialPageParam: 0,
-    enabled: isHistoryOpen,
   });
 
   const { types } = useEntityPageStore();
