@@ -22,16 +22,20 @@ interface EntityPageMetadataHeaderProps {
 }
 
 export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHeaderProps) {
+  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
+
   const {
     data: versions,
     isFetching,
     isFetchingNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
+    enabled: isHistoryOpen,
     queryKey: [`entity-versions-for-entityId-${id}`],
     queryFn: ({ signal, pageParam = 0 }) => fetchHistoryVersions({ entityId: id, page: pageParam, signal }),
     getNextPageParam: (_lastPage, pages) => pages.length,
     initialPageParam: 0,
+    enabled: isHistoryOpen,
   });
 
   const { types } = useEntityPageStore();
@@ -56,7 +60,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
         ))}
       </ul>
       <div className="flex items-center gap-3">
-        <HistoryPanel>
+        <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
           {versions?.pages?.length === 0 && <HistoryEmpty />}
           {renderedVersions?.map((group, index) => (
             <React.Fragment key={index}>

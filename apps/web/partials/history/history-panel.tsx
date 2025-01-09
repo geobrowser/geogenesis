@@ -1,5 +1,3 @@
-'use client';
-
 import * as React from 'react';
 
 import { History } from '~/design-system/icons/history';
@@ -7,11 +5,11 @@ import { Menu } from '~/design-system/menu';
 
 interface Props {
   children: React.ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function HistoryPanel({ children }: Props) {
-  const [open, onOpenChange] = React.useState(false);
-
+export function HistoryPanel({ children, open, onOpenChange }: Props) {
   return (
     <Menu
       open={open}
