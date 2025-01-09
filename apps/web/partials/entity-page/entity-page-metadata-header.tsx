@@ -4,12 +4,8 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
-import { useDiff } from '~/core/state/diff-store';
+import { fetchHistoryVersions } from '~/core/io/subgraph/fetch-history-versions';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { EntityType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -23,10 +19,9 @@ import { EntityPageTypeChip } from './entity-page-type-chip';
 interface EntityPageMetadataHeaderProps {
   id: string;
   spaceId: string;
-  types: Array<EntityType>;
 }
 
-export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: EntityPageMetadataHeaderProps) {
+export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHeaderProps) {
   const {
     data: versions,
     isFetching,
@@ -34,13 +29,12 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`entity-versions-for-entityId-${id}`],
-    queryFn: ({ signal, pageParam = 0 }) => fetchVersions({ entityId: id, page: pageParam, signal }),
+    queryFn: ({ signal, pageParam = 0 }) => fetchHistoryVersions({ entityId: id, page: pageParam, signal }),
     getNextPageParam: (_lastPage, pages) => pages.length,
+    initialPageParam: 0,
   });
 
-  const { actionsFromSpace } = useActionsStore();
-  const { triples } = useEntityPageStore();
-  const { setCompareMode, setSelectedVersion, setPreviousVersion, setIsCompareOpen } = useDiff();
+  const { types } = useEntityPageStore();
 
   const isOnePage = versions?.pages && versions.pages[0].length < 5;
 
@@ -50,9 +44,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
     versions.pages[versions.pages.length - 1]?.[0]?.id === versions.pages[versions.pages.length - 2]?.[0]?.id;
 
   const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
-
   const showMore = !isOnePage && !isLastPage;
-  const types = triples.length === 0 && actionsFromSpace.length === 0 ? serverTypes : Entity.types(triples);
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -68,20 +60,14 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
           {versions?.pages?.length === 0 && <HistoryEmpty />}
           {renderedVersions?.map((group, index) => (
             <React.Fragment key={index}>
-              {group.map((v, index) => (
+              {group.map(v => (
                 <HistoryItem
                   key={v.id}
-                  onClick={() => {
-                    setCompareMode('versions');
-                    setPreviousVersion(group[index + 1]?.id ?? '');
-                    setSelectedVersion(v.id);
-                    setIsCompareOpen(true);
-                  }}
-                  // @TODO: Fix change count
-                  changeCount={0}
+                  spaceId={spaceId}
+                  proposalId={v.proposalId}
                   createdAt={v.createdAt}
                   createdBy={v.createdBy}
-                  name={v.name}
+                  name={v.editName}
                 />
               ))}
             </React.Fragment>

@@ -14,8 +14,6 @@ type DiffState = {
   setIsCompareOpen: (value: boolean) => void;
   compareMode: CompareMode;
   setCompareMode: (value: CompareMode) => void;
-  activeEntity: string;
-  setActiveEntity: (value: string) => void;
   selectedVersion: string;
   setSelectedVersion: (value: string) => void;
   previousVersion: string;
@@ -39,8 +37,6 @@ const initialDiffState = {
   setIsCompareOpen: (value: boolean) => null,
   compareMode: 'versions' as CompareMode,
   setCompareMode: (value: CompareMode) => null,
-  activeEntity: '',
-  setActiveEntity: (value: string) => null,
   selectedVersion: '',
   setSelectedVersion: (value: string) => null,
   previousVersion: '',
@@ -63,7 +59,6 @@ export const DiffProvider = ({ children }: DiffProviderProps) => {
   const [isReadyToPublish, setIsReadyToPublish] = useState<boolean>(false);
   const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
   const [compareMode, setCompareMode] = useState<CompareMode>('versions');
-  const [activeEntity, setActiveEntity] = useState<string>('');
   const [selectedVersion, setSelectedVersion] = useState<string>('');
   const [previousVersion, setPreviousVersion] = useState<string>('');
   const [selectedProposal, setSelectedProposal] = useState<string>('');
@@ -82,8 +77,6 @@ export const DiffProvider = ({ children }: DiffProviderProps) => {
         setIsCompareOpen,
         compareMode,
         setCompareMode,
-        activeEntity,
-        setActiveEntity,
         selectedVersion,
         setSelectedVersion,
         previousVersion,

@@ -3,8 +3,11 @@ import pluralize from 'pluralize';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 
+import { getHasRequestedSpaceEditorship } from '~/partials/space-page/get-has-requested-space-editorship';
+
 import { getEditorsForSpace } from './get-editors-for-space';
 import { getIsEditorForSpace } from './get-is-editor-for-space';
+import { getIsMemberForSpace } from './get-is-member-for-space';
 import { SpaceEditorsPopoverEditorRequestButton } from './space-editors-popover-editor-request-button';
 import { MemberRow } from './space-member-row';
 
@@ -15,16 +18,19 @@ interface Props {
 export async function SpaceEditorsContent({ spaceId }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
-  const [{ allEditors: allMembers, totalEditors }, isEditor] = await Promise.all([
-    getEditorsForSpace(spaceId),
-    getIsEditorForSpace(spaceId, connectedAddress),
-  ]);
+  const [{ allEditors, totalEditors, votingPluginAddress }, isEditor, isMember, hasRequestedSpaceEditorship] =
+    await Promise.all([
+      getEditorsForSpace(spaceId),
+      getIsEditorForSpace(spaceId, connectedAddress),
+      getIsMemberForSpace(spaceId, connectedAddress),
+      getHasRequestedSpaceEditorship(spaceId, connectedAddress),
+    ]);
 
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
       <div className="max-h-[265px] overflow-hidden overflow-y-auto">
-        {allMembers.map(e => (
-          <MemberRow key={e.id} editor={e} />
+        {allEditors.map(e => (
+          <MemberRow key={e.id} user={e} />
         ))}
       </div>
 
@@ -34,11 +40,19 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
         </p>
         {isEditor ? (
           <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            {connectedAddress ? 'Leave as editor' : 'Connect wallet'}
+            {connectedAddress ? 'Leave as editor' : 'Sign in to join'}
           </button>
         ) : (
           <div className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            {connectedAddress ? <SpaceEditorsPopoverEditorRequestButton spaceId={spaceId} /> : 'Connect wallet'}
+            {connectedAddress ? (
+              <SpaceEditorsPopoverEditorRequestButton
+                votingContractAddress={votingPluginAddress}
+                isMember={isMember}
+                hasRequestedSpaceEditorship={hasRequestedSpaceEditorship}
+              />
+            ) : (
+              'Sign in to join'
+            )}
           </div>
         )}
       </div>

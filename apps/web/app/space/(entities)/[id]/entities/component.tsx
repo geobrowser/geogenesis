@@ -1,7 +1,8 @@
+import { Space } from '~/core/io/dto/spaces';
 import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
 import { EntityTableStoreProvider } from '~/core/state/entity-table-store/entity-table-store-provider';
 import { TypesStoreProvider } from '~/core/state/types-store/types-store';
-import { Column, Row, Space, Triple } from '~/core/types';
+import { Row, Schema, Triple } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -15,7 +16,7 @@ interface Props {
   spaceImage: string | null;
   initialSelectedType: Triple | null;
   initialTypes: Triple[];
-  initialColumns: Column[];
+  initialColumns: Schema[];
   initialRows: Row[];
   initialParams: InitialEntityTableStoreParams;
 }

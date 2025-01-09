@@ -1,51 +1,79 @@
+import { IPFS_GATEWAY_PATH } from '../constants';
 import { AppEnv } from '../types';
+import {
+  ACCOUNT_ABSTRACTION_API_KEY,
+  APP_ENV,
+  LIVEBLOCKS_PUBLIC_KEY,
+  ONBOARD_CODE,
+  ONBOARD_FLAG,
+  PRIVY_APP_ID,
+  RPC_ENDPOINT,
+  TEST_ENV,
+  WALLETCONNECT_PROJECT_ID,
+} from './config';
 
-type SupportedChainId = '137' | '80002' | '31337'; // Polygon, Amoy, Local dev
+type SupportedChainId = '31337' | '80451';
 
 export type AppConfig = {
   chainId: SupportedChainId;
   rpc: string;
   ipfs: string;
-  membershipSubgraph: string;
-  profileSubgraph: string;
   api: string;
+  bundler: string;
 };
 
-export const DEFAULT_ENV: AppEnv = 'production';
+type IVars = Readonly<{
+  liveBlocksPublicKey: string;
+  appEnv: string;
+  walletConnectProjectId: string;
+  privyAppId: string;
+  rpcEndpoint: string;
+  accountAbstractionApiKey: string;
+  isTestEnv: boolean;
+  onboardFlag: string;
+  onboardCode: string;
+}>;
 
+export const variables: IVars = {
+  appEnv: APP_ENV!,
+  isTestEnv: TEST_ENV === 'true',
+  liveBlocksPublicKey: LIVEBLOCKS_PUBLIC_KEY!,
+  privyAppId: PRIVY_APP_ID!,
+  rpcEndpoint: RPC_ENDPOINT!,
+  walletConnectProjectId: WALLETCONNECT_PROJECT_ID!,
+  accountAbstractionApiKey: ACCOUNT_ABSTRACTION_API_KEY!,
+  onboardFlag: ONBOARD_FLAG!,
+  onboardCode: ONBOARD_CODE!,
+};
+
+// @TODO: This eventually completely comes from our environment instead of hardcoded here.
+// We can ensure our env matches the right schema in `make` above.
 export const options: Record<AppEnv, AppConfig> = {
   development: {
     chainId: '31337',
     rpc: 'http://localhost:8545',
-    ipfs: 'https://api.thegraph.com/ipfs',
-    membershipSubgraph: '',
-    profileSubgraph: '',
+    ipfs: IPFS_GATEWAY_PATH,
     api: 'http://localhost:5001/graphql',
-  },
-  testnet: {
-    chainId: '80002',
-    rpc: 'https://amoy.rpc.pinax.network/v1/b8919f1097c55c9d52d12f46421d3a94bae7251c12d9b98a/',
-    ipfs: 'https://api.thegraph.com/ipfs',
-    membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-mumbai',
-    profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry-mumbai',
-    api: 'https://geobrowser-amoy.up.railway.app/graphql',
+    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   production: {
-    chainId: '137',
-    rpc: 'https://polygon-rpc.com',
-    ipfs: 'https://api.thegraph.com/ipfs',
-    // @TODO: This will no longer be used once we merge in our new L3 infra
-    membershipSubgraph: `https://gateway-arbitrum.network.thegraph.com/api/${process.env.NEXT_PUBLIC_GRAPH_KEY}/subgraphs/id/2VDkVan8Pm9Lz6zTuoXyBnuFr9jUkaE3jG1LWJfNF2QU`,
-    profileSubgraph: `https://gateway-arbitrum.network.thegraph.com/api/${process.env.NEXT_PUBLIC_GRAPH_KEY}/subgraphs/id/4cYtdYa4czLwo28a1Ku41xosjofQNxbyDFeBZUdqmrVb`,
-    api: 'https://geo-protocol.up.railway.app/graphql',
+    chainId: '80451',
+    rpc: variables.rpcEndpoint,
+    ipfs: IPFS_GATEWAY_PATH,
+    api: 'https://geo-mainnet.up.railway.app/graphql',
+    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
+  },
+  testnet: {
+    chainId: '80451',
+    rpc: variables.rpcEndpoint,
+    ipfs: IPFS_GATEWAY_PATH,
+    api: 'https://geo-conduit.up.railway.app/graphql',
+    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
 };
 
-export const getConfig = (env?: string): AppConfig => {
-  if (!env) {
-    console.log(`No env passed in. Defaulting to ${DEFAULT_ENV}`);
-    return options['production'];
-  }
+export const getConfig = (): AppConfig => {
+  const env = variables.appEnv;
 
   if (!(env in options)) {
     console.error(`No config for env ${env}`);

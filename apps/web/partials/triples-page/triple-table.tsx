@@ -13,8 +13,6 @@ import { useState } from 'react';
 import { Triple, Value } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
-import { LinkableChip } from '~/design-system/chip';
-import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { TableCell } from '~/design-system/table/cell';
 import { CellContent } from '~/design-system/table/cell-content';
 import { EmptyTableText, Table, TableHeader, TableRow } from '~/design-system/table/styles';
@@ -73,14 +71,6 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
       case 'value': {
         const value = cellData as Value;
 
-        if (value.type === 'entity') {
-          return <LinkableChip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</LinkableChip>;
-        }
-
-        if (value.type === 'image') {
-          return <ImageZoom imageSrc={value.value} variant="avatar" />;
-        }
-
         return <CellContent isExpanded={table.options?.meta?.expandedCells[cellId]} value={value.value} />;
       }
     }
@@ -111,8 +101,7 @@ export const TripleTable = ({ space, triples }: Props) => {
     meta: {
       expandedCells,
       space,
-      isEditor: false,
-      editable: false,
+      isEditable: false,
     },
   });
 
@@ -145,7 +134,7 @@ export const TripleTable = ({ space, triples }: Props) => {
 
                 return (
                   <TableCell
-                    isExpandable={cell.column.id === 'value' && (cell.getValue() as Value).type === 'string'}
+                    isExpandable={cell.column.id === 'value' && (cell.getValue() as Value).type === 'TEXT'}
                     isExpanded={expandedCells[cellId]}
                     width={cell.column.getSize()}
                     key={cell.id}

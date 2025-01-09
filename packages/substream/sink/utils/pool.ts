@@ -1,14 +1,20 @@
-import * as dotenv from 'dotenv';
+import { Effect, Secret, pipe } from 'effect';
 import * as pg from 'pg';
 
-import { invariant } from './invariant';
+import { Environment, EnvironmentLive } from '../environment';
 
-dotenv.config();
+const make = Effect.gen(function* (_) {
+  const environment = yield* _(Environment);
 
-invariant(process.env.DATABASE_URL, 'DATABASE_URL is required');
-export const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 97,
+  return new pg.Pool({
+    connectionString: Secret.value(environment.databaseUrl),
+    max: 50,
+    idleTimeoutMillis: 1_000,
+    connectionTimeoutMillis: 10_000,
+    maxUses: 7_500,
+  });
 });
+
+export const pool = pipe(make, Effect.provideService(Environment, EnvironmentLive), Effect.runSync);
 
 pool.on('error', err => console.error('Pool Error', err)); // don't let a pg restart kill your app

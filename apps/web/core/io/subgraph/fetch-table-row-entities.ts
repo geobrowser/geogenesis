@@ -1,13 +1,14 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity as IEntity } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
 
+import { Entity, EntityDto } from '../dto/entities';
+import { SubstreamEntity } from '../schema';
+import { versionFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 // this differs from the fetchEntities method in that we pass in a custom graphql string that represents
 // the set of custom Table filters set on the table. These filters have small differences from the other
@@ -16,34 +17,15 @@ import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 // Ideally we let the caller define the logic for fetching and handling the result, but for now we are
 // following the pre-existing pattern.
 function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
+  const maybeFilter = filter === '' ? '' : `filter: {currentVersion: {version: {${filter}}}}`;
+
   return `query {
-    geoEntities(filter: ${filter} first: ${first} offset: ${skip} orderBy: UPDATED_AT_DESC) {
+    entities(${maybeFilter} first: ${first} offset: ${skip} orderBy: UPDATED_AT_DESC) {
       nodes {
         id
-        name
-        triplesByEntityId(filter: { isStale: { equalTo: false } }) {
-          nodes {
-            id
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-            isProtected
-            space {
-              id
-            }
+        currentVersion {
+          version {
+            ${versionFragment}
           }
         }
       }
@@ -54,20 +36,19 @@ function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
 export interface FetchTableRowEntitiesOptions {
   first?: number;
   skip?: number;
-  typeIds?: string[];
   filter: string; // this is a graphql query string
   signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
-  geoEntities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamEntity[] };
 }
 
-export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<IEntity[]> {
+export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<Entity[]> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchTableRowsQuery(options.filter, options.first, options.skip),
     signal: options?.signal,
   });
@@ -96,7 +77,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
           );
 
           return {
-            geoEntities: { nodes: [] },
+            entities: { nodes: [] },
           };
 
         default:
@@ -105,7 +86,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
           );
 
           return {
-            geoEntities: { nodes: [] },
+            entities: { nodes: [] },
           };
       }
     }
@@ -113,32 +94,21 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
     return resultOrError.right;
   });
 
-  const { geoEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  return geoEntities.nodes.map(result => {
-    const networkTriples = result.triplesByEntityId.nodes;
+  return entities.nodes
+    .map(e => {
+      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
 
-    // If there is no latest version just return an empty entity.
-    if (networkTriples.length === 0) {
-      return {
-        id: result.id,
-        name: result.name,
-        description: null,
-        types: [],
-        triples: [],
-      };
-    }
-
-    const triples = fromNetworkTriples(networkTriples);
-    const nameTriples = Entity.nameTriples(triples);
-
-    return {
-      id: result.id,
-      name: result.name,
-      description: Entity.description(triples),
-      nameTripleSpaces: nameTriples.map(t => t.space),
-      types: Entity.types(triples),
-      triples,
-    };
-  });
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Unable to decode entity ${e.id} with error ${error}`);
+          return null;
+        },
+        onRight: entity => {
+          return EntityDto(entity);
+        },
+      });
+    })
+    .filter(e => e !== null);
 }

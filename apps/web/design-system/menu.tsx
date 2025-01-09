@@ -7,6 +7,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
 
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
 interface Props {
   children: React.ReactNode;
   trigger: React.ReactNode;
@@ -20,20 +22,17 @@ interface Props {
   modal?: boolean;
 }
 
-const MotionContent = motion(PopoverContent);
-
-const contentStyles = cva(
-  'z-10 w-[360px] divide-y divide-grey-02 overflow-hidden rounded-lg border border-grey-02 shadow-lg',
-  {
-    variants: {
-      align: {
-        start: 'origin-top-left',
-        center: 'origin-top',
-        end: 'origin-top-right',
-      },
+const contentStyles = cva('z-10 w-[360px] overflow-hidden rounded-lg border border-grey-02 shadow-lg', {
+  variants: {
+    align: {
+      start: 'origin-top-left',
+      center: 'origin-top',
+      end: 'origin-top-right',
     },
-  }
-);
+  },
+});
+
+const MotionContent = motion(PopoverContent);
 
 export function Menu({
   children,
@@ -54,7 +53,6 @@ export function Menu({
       <AnimatePresence>
         {open && (
           <MotionContent
-            forceMount
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -75,18 +73,45 @@ export function Menu({
   );
 }
 
-type MenuItemProps = { active?: boolean } & React.ComponentPropsWithoutRef<'div'>;
+type MenuItemProps = {
+  active?: boolean;
+  href?: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+  className?: string;
+};
 
-export function MenuItem({ className = '', active = false, children, ...rest }: MenuItemProps) {
+export function MenuItem({ className = '', active = false, children, href, ...rest }: MenuItemProps) {
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={cx('group relative flex w-full items-center bg-white px-3 py-2.5 text-button text-text', className)}
+        {...rest}
+      >
+        <div
+          className={cx(
+            'absolute inset-1 z-0 rounded',
+            active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
+          )}
+        />
+        <div className="relative z-10">{children}</div>
+      </Link>
+    );
+  }
+
   return (
-    <div className={cx('group relative text-button text-text', className)} {...rest}>
+    <button
+      className={cx('group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text', className)}
+      {...rest}
+    >
       <div
         className={cx(
           'absolute inset-1 z-0 rounded',
           active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
         )}
       />
-      <div className="relative z-10">{children}</div>
-    </div>
+      <div className="relative z-10 w-full">{children}</div>
+    </button>
   );
 }

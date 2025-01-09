@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 import * as React from 'react';
 
-import { Triple } from '~/core/types';
+import { Relation, Triple } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -15,6 +15,7 @@ interface Props {
   id: string;
   spaceId: string;
   triples: Triple[];
+  relationsOut: Relation[];
   referencedByComponent: React.ReactNode;
 }
 
@@ -23,6 +24,7 @@ export function ProfilePageComponent(props: Props) {
     <>
       <motion.div key="entity-page-entity-editor" layout="position">
         <Editor
+          spaceId={props.spaceId}
           placeholder={
             <motion.p layout="position" className="text-body text-grey-04">
               There is no overview here yet.
@@ -33,7 +35,12 @@ export function ProfilePageComponent(props: Props) {
 
       <Spacer height={40} />
       <motion.div key="entity-page-entity-attributes" layout="position">
-        <ToggleEntityPage id={props.id} spaceId={props.spaceId} triples={props.triples} />
+        <ToggleEntityPage
+          id={props.id}
+          spaceId={props.spaceId}
+          triples={props.triples}
+          relationsOut={props.relationsOut}
+        />
       </motion.div>
       <Spacer height={40} />
       {props.referencedByComponent}

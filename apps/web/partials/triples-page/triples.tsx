@@ -7,7 +7,7 @@ import { PageContainer, PageNumberContainer } from '~/design-system/table/styles
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
 
-import { TableBlockPlaceholder } from '../blocks/table/table-block';
+import { TableBlockLoadingPlaceholder } from '../blocks/table/table-block';
 import { TripleInput } from './triple-input';
 import { TripleTable } from './triple-table';
 
@@ -35,7 +35,7 @@ export function Triples({ spaceId }: Props) {
         {tripleStore.hydrated ? (
           <TripleTable space={spaceId} triples={tripleStore.triples} />
         ) : (
-          <TableBlockPlaceholder />
+          <TableBlockLoadingPlaceholder />
         )}
       </div>
 

@@ -1,42 +1,37 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity as IEntity } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entity } from '~/core/io/dto/entities';
+import { SpaceId } from '~/core/types';
 
+import { EntityDto } from '../dto/entities';
+import { SubstreamEntity } from '../schema';
+import { getVersionFragment, versionFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
-function getFetchEntityQuery(id: string) {
+function getFetchEntityQuery(id: string, spaceId?: SpaceId) {
+  if (spaceId) {
+    return `query {
+      entity(id: ${JSON.stringify(id)}) {
+        id
+        currentVersion {
+          version {
+            ${getVersionFragment(spaceId)}
+          }
+        }
+      }
+    }`;
+  }
+
   return `query {
-    geoEntity(id: ${JSON.stringify(id)}) {
+    entity(id: ${JSON.stringify(id)}) {
       id
-      name
-      triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-        nodes {
-          id
-          attribute {
-            id
-            name
-          }
-          entity {
-            id
-            name
-          }
-          entityValue {
-            id
-            name
-          }
-          numberValue
-          stringValue
-          valueType
-          valueId
-          isProtected
-          space {
-            id
-          }
+      currentVersion {
+        version {
+          ${versionFragment}
         }
       }
     }
@@ -44,26 +39,27 @@ function getFetchEntityQuery(id: string) {
 }
 
 export interface FetchEntityOptions {
+  spaceId?: SpaceId;
   id: string;
   signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
-  geoEntity: SubstreamEntity | null;
+  entity: SubstreamEntity | null;
 }
 
-export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity | null> {
+export async function fetchEntity(options: FetchEntityOptions): Promise<Entity | null> {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchEntityQuery(options.id),
+    query: getFetchEntityQuery(options.id, options.spaceId),
     signal: options.signal,
   });
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* () {
+    const resultOrError = yield* Effect.either(graphqlFetchEffect);
 
     if (Either.isLeft(resultOrError)) {
       const error = resultOrError.left;
@@ -86,14 +82,14 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
           );
 
           return {
-            geoEntity: null,
+            entity: null,
           };
         default:
           console.error(
             `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${endpoint} id: ${options.id}`
           );
           return {
-            geoEntity: null,
+            entity: null,
           };
       }
     }
@@ -102,22 +98,27 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const entity = result.geoEntity;
+  const entity = result.entity;
 
   if (!entity) {
     return null;
   }
 
-  const networkTriples = entity.triplesByEntityId.nodes;
-  const triples = fromNetworkTriples(networkTriples);
-  const nameTriples = Entity.nameTriples(triples);
+  const entityOrError = Schema.decodeEither(SubstreamEntity)(entity);
 
-  return {
-    id: entity.id,
-    name: entity.name,
-    description: Entity.description(triples),
-    nameTripleSpaces: nameTriples.map(t => t.space),
-    types: Entity.types(triples),
-    triples,
-  };
+  const decodedEntity = Either.match(entityOrError, {
+    onLeft: error => {
+      console.error(`Unable to decode entity ${entity.id} with error ${error}`);
+      return null;
+    },
+    onRight: entity => {
+      return entity;
+    },
+  });
+
+  if (decodedEntity === null) {
+    return null;
+  }
+
+  return EntityDto(decodedEntity);
 }

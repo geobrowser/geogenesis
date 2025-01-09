@@ -1,11 +1,11 @@
-import Link from 'next/link';
+import cx from 'classnames';
 
-import { Suspense } from 'react';
+import { NavUtils } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { Search } from '~/design-system/icons/search';
-import { Skeleton } from '~/design-system/skeleton';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { CreateSpaceDropdown } from '../create-space/create-space-dropdown';
 import { NavbarActions } from './navbar-actions';
@@ -17,14 +17,17 @@ interface Props {
 
 export function Navbar({ onSearchClick }: Props) {
   return (
-    <nav className="flex h-11 w-full items-center justify-between gap-1 border-b border-divider px-4 py-1">
+    <nav
+      className={cx(
+        'flex h-11 w-full items-center justify-between gap-1 border-b border-divider px-4 py-1',
+        process.env.NODE_ENV === 'development' && 'sticky top-0 z-100 bg-white'
+      )}
+    >
       <div className="flex items-center gap-8 md:gap-4">
-        <Link href="/spaces">
+        <Link href={NavUtils.toRoot()}>
           <GeoLogoLarge />
         </Link>
-        <Suspense fallback={<SpaceSkeleton />}>
-          <NavbarSpaceMetadata />
-        </Suspense>
+        <NavbarSpaceMetadata />
       </div>
 
       {/* Hide navbar actions until we are on the client. This is because our account state only exists
@@ -47,6 +50,14 @@ export function Navbar({ onSearchClick }: Props) {
           >
             <Search />
           </button>
+          <a
+            className="text-button font-normal text-grey-04 transition-colors duration-200 hover:text-text"
+            href="https://elfin-share-6f1.notion.site/175273e214eb80258d30ee6755415ce2?pvs=105"
+            rel="noreferrer noopener"
+            target="_blank"
+          >
+            Early access
+          </a>
           <div className="flex items-center sm:hidden">
             <NavbarActions />
           </div>
@@ -54,8 +65,4 @@ export function Navbar({ onSearchClick }: Props) {
       </ClientOnly>
     </nav>
   );
-}
-
-function SpaceSkeleton() {
-  return <Skeleton className="h-6 w-40" />;
 }

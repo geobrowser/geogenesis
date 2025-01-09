@@ -38,24 +38,21 @@ export function graphql<T>({ endpoint, query, signal, tag }: GraphqlConfig) {
     },
   });
 
-  return Effect.retryN(
-    Effect.gen(function* (awaited) {
-      const response = yield* awaited(Effect.retryN(graphqlFetchEffect, 3));
-      const json = yield* awaited(
-        Effect.tryPromise({
-          try: () => response.json() as Promise<GraphqlResponse<T>>,
-          catch: () => new JsonParseError(),
-        })
+  return Effect.gen(function* (awaited) {
+    const response = yield* awaited(Effect.retry(graphqlFetchEffect, { times: 3 }));
+    const json = yield* awaited(
+      Effect.tryPromise({
+        try: () => response.json() as Promise<GraphqlResponse<T>>,
+        catch: () => new JsonParseError(),
+      })
+    );
+
+    if (json.errors?.length > 0) {
+      return yield* awaited(
+        Effect.fail(new GraphqlRuntimeError(json.errors.map(error => JSON.stringify(error)).join(', ')))
       );
+    }
 
-      if (json.errors?.length > 0) {
-        return yield* awaited(
-          Effect.fail(new GraphqlRuntimeError(json.errors.map(error => JSON.stringify(error)).join(', ')))
-        );
-      }
-
-      return json.data;
-    }),
-    3
-  );
+    return json.data;
+  });
 }

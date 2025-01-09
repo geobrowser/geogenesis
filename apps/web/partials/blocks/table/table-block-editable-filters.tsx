@@ -1,51 +1,58 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { TripleValueType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
-import { valueTypes } from '~/core/value-types';
+import { Filter } from '~/core/blocks-sdk/table';
+import { useTableBlock } from '~/core/state/table-block-store';
+import { FilterableValueType, valueTypes } from '~/core/value-types';
 
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
 
 import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 
+type RenderableFilter = Filter & { columnName: string };
+
 export function TableBlockEditableFilters() {
-  const { setFilterState, columns, filterState } = useTableBlock();
+  const { setFilterState, columns, filterState, source } = useTableBlock();
 
-  // We treat Name and Space as special filters even though they are not always
-  // columns on the type schema for a table. We allow users to be able to filter
-  // by name and space.
-  const filterableColumns: (TableBlockFilter & { columnName: string })[] = [
-    {
-      columnId: SYSTEM_IDS.NAME,
-      columnName: 'Name',
-      valueType: valueTypes[SYSTEM_IDS.TEXT],
-      value: '',
-      valueName: null,
-    },
-    {
-      columnId: SYSTEM_IDS.SPACE,
-      columnName: 'Space',
-      valueType: valueTypes[SYSTEM_IDS.TEXT],
-      value: '',
-      valueName: null,
-    },
-    ...columns
-      .map(c => {
-        const maybeValueType = Entity.valueTypeId(c.triples);
+  // We treat Name, Typs and Space as special filters even though they are not
+  // always columns on the type schema for a table. We allow users to be able
+  // to filter by name and space.
+  const filterableColumns: RenderableFilter[] =
+    source.type !== 'ENTITY'
+      ? [
+          // @TODO(data blocks): We should add the default filters to the data model
+          // itself instead of manually here.
+          // {
+          //   columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
+          //   columnName: 'Name',
+          //   valueType: valueTypes[SYSTEM_IDS.TEXT],
+          //   value: '',
+          //   valueName: null,
+          // },
+          ...columns
+            .map(c => {
+              return {
+                columnId: c.id,
+                columnName: c.name ?? '',
+                valueType: valueTypes[c.valueType],
+                value: '',
+                valueName: null,
+              };
+            })
+            // Filter out any columns with names and any columns that are not entity or string value types
+            .flatMap(c => (c.columnName !== '' && (c.valueType === 'RELATION' || c.valueType === 'TEXT') ? [c] : [])),
+        ]
+      : [
+          {
+            columnId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+            columnName: 'Relation type',
+            valueType: 'RELATION',
+            value: '',
+            valueName: null,
+          },
+        ];
 
-        return {
-          columnId: c.id,
-          columnName: Entity.name(c.triples) ?? '',
-          valueType: maybeValueType ? valueTypes[maybeValueType] : 'string',
-          value: '',
-          valueName: null,
-        };
-      })
-      // Filter out any columns with names and any columns that are not entity or string value types
-      .flatMap(c => (c.columnName !== '' && (c.valueType === 'entity' || c.valueType === 'string') ? [c] : [])),
-  ];
+  const sortedFilters = sortFilters(filterableColumns);
 
   const onCreateFilter = ({
     columnId,
@@ -55,23 +62,26 @@ export function TableBlockEditableFilters() {
   }: {
     columnId: string;
     value: string;
-    valueType: TripleValueType;
+    valueType: FilterableValueType;
     valueName: string | null;
   }) => {
-    setFilterState([
-      ...filterState,
-      {
-        valueType,
-        columnId,
-        value,
-        valueName,
-      },
-    ]);
+    setFilterState(
+      [
+        ...filterState,
+        {
+          valueType,
+          columnId,
+          value,
+          valueName,
+        },
+      ],
+      source
+    );
   };
 
   return (
     <TableBlockFilterPrompt
-      options={filterableColumns}
+      options={sortedFilters}
       onCreate={onCreateFilter}
       trigger={
         <SmallButton icon={<CreateSmall />} variant="secondary">
@@ -80,4 +90,30 @@ export function TableBlockEditableFilters() {
       }
     />
   );
+}
+
+function sortFilters(filters: RenderableFilter[]): RenderableFilter[] {
+  /* Visible triples includes both real triples and placeholder triples */
+  return filters.sort((renderableA, renderableB) => {
+    const { columnId: attributeIdA, columnName: attributeNameA } = renderableA;
+    const { columnId: attributeIdB, columnName: attributeNameB } = renderableB;
+
+    const isNameA = attributeIdA === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isNameB = attributeIdB === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
+    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
+
+    if (isNameA && !isNameB) return -1;
+    if (!isNameA && isNameB) return 1;
+
+    if (isDescriptionA && !isDescriptionB) return -1;
+    if (!isDescriptionA && isDescriptionB) return 1;
+
+    if (isTypesA && !isTypesB) return -1;
+    if (!isTypesA && isTypesB) return 1;
+
+    return (attributeNameA || '').localeCompare(attributeNameB || '');
+  });
 }

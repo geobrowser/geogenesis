@@ -1,5 +1,7 @@
-import { Props, Tab } from '~/partials/tab/tab';
+import { Tab } from '~/partials/tab/tab';
 
-export default async function Page(props: Props) {
+import type { PageProps } from '../types';
+
+export default async function Page(props: PageProps) {
   return <Tab slug="jobs" {...props} />;
 }

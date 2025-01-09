@@ -1,6 +1,5 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -37,7 +36,7 @@ export function NavbarLinkMenu() {
         align="start"
         trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
       >
-        {urlComponents.map((component, index) => {
+        {urlComponents?.map((component, index) => {
           if (index >= 2) return null; // skip the "/space/" part
           const { path, title, img } = getComponentRoute({
             urlComponents,
@@ -75,7 +74,7 @@ function getComponentRoute({ urlComponents, index, spaceNames, spaceImages }: Ge
 
   switch (index) {
     case 0:
-      return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
+      return { path: '/root', title: 'Root', img: '/spaces.png' };
     case 1:
       return { path: `/space/${component}`, title: spaceNames[component] ?? '', img: spaceImages[component] ?? '' };
     default:

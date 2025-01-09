@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -16,21 +16,30 @@ interface Props {
 }
 
 export async function ProfileEntityServerContainer({ params }: Props) {
-  const entityId = decodeURIComponent(params.entityId);
+  const spaceId = params.id;
+  const entityId = params.entityId;
 
   const [person, profile] = await Promise.all([
-    Subgraph.fetchEntity({ id: entityId }),
+    Subgraph.fetchEntity({ spaceId, id: entityId }),
     fetchOnchainProfileByEntityId(entityId),
   ]);
 
   // @TODO: Real error handling
   if (!person) {
-    return <ProfilePageComponent id={params.entityId} triples={[]} spaceId={params.id} referencedByComponent={null} />;
+    return (
+      <ProfilePageComponent
+        id={params.entityId}
+        triples={[]}
+        spaceId={params.id}
+        relationsOut={[]}
+        referencedByComponent={null}
+      />
+    );
   }
 
   // Redirect from space configuration page to space page. An entity might be a Person _and_ a Space.
   // In that case we want to render on the space front page.
-  if (person?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && profile?.homeSpaceId) {
+  if (person?.types.some(type => type.id === SYSTEM_IDS.SPACE_TYPE) && profile?.homeSpaceId) {
     console.log(`Redirecting from space configuration entity ${person.id} to space page ${profile?.homeSpaceId}`);
 
     // We need to stay in the space that we're currently in
@@ -57,8 +66,9 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       id={params.entityId}
       triples={person.triples}
       spaceId={params.id}
+      relationsOut={person.relationsOut}
       referencedByComponent={
-        /* 
+        /*
           Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
           show any referenced by loading states but do want to stream it in
         */

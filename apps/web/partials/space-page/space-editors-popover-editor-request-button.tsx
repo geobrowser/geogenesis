@@ -1,17 +1,69 @@
 'use client';
 
-import { useInterimSpaceMembershipRequest } from './use-interim-space-membership-request';
+import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
+import { useRequestToBeEditor } from '~/core/hooks/use-request-to-be-editor';
 
-interface Props {
-  spaceId: string;
+import { Pending } from '~/design-system/pending';
+
+type SpaceEditorsPopoverEditorRequestButtonProps = {
+  votingContractAddress: string | null;
+  isMember: boolean;
+  hasRequestedSpaceEditorship: boolean;
+};
+
+export function SpaceEditorsPopoverEditorRequestButton({
+  votingContractAddress,
+  isMember,
+  hasRequestedSpaceEditorship,
+}: SpaceEditorsPopoverEditorRequestButtonProps) {
+  const { requestToBeEditor, status } = useRequestToBeEditor(votingContractAddress);
+
+  const { shouldShowElement } = useOnboardGuard();
+
+  if (!shouldShowElement) {
+    return null;
+  }
+
+  return (
+    <Pending isPending={status === 'pending'} position="end">
+      {!hasRequestedSpaceEditorship ? (
+        <button disabled={status !== 'idle'} onClick={() => requestToBeEditor()}>
+          <RequestButtonText status={status} isMember={isMember} />
+        </button>
+      ) : (
+        <span>
+          <UnderVote />
+        </span>
+      )}
+    </Pending>
+  );
 }
 
-export function SpaceEditorsPopoverEditorRequestButton({ spaceId }: Props) {
-  const { requestMembership } = useInterimSpaceMembershipRequest(spaceId);
+type RequestButtonTextProps = {
+  status: 'error' | 'idle' | 'pending' | 'success';
+  isMember: boolean;
+};
 
-  const onClick = () => {
-    requestMembership?.();
-  };
+const RequestButtonText = ({ status, isMember }: RequestButtonTextProps) => {
+  if (!isMember) return 'Only members can request editorship';
 
-  return <button onClick={onClick}>Request to be an editor</button>;
-}
+  switch (status) {
+    case 'success':
+      return <UnderVote />;
+    case 'pending':
+    case 'idle':
+      return 'Request editorship';
+    case 'error':
+      return 'Error';
+    default:
+      return null;
+  }
+};
+
+const UnderVote = () => (
+  <div className="inline-flex items-center gap-1">
+    <span>Requested</span>
+    <span>·</span>
+    <span className="text-grey-04">Under vote</span>
+  </div>
+);

@@ -1,10 +1,14 @@
-import { version as uuidVersion } from 'uuid';
-import { validate as uuidValidate } from 'uuid';
+import { BASE58_ALLOWED_CHARS } from '@geogenesis/sdk';
+import { validate as uuidValidate, version as uuidVersion } from 'uuid';
+import { getAddress } from 'viem';
 
-import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_PATH } from '~/core/constants';
-import { Entity as IEntity } from '~/core/types';
+import { IPFS_GATEWAY_READ_PATH } from '~/core/constants';
+import { EntityId } from '~/core/io/schema';
 
-import { Entity } from './entity';
+import { Entity } from '../io/dto/entities';
+import { Proposal } from '../io/dto/proposals';
+import { SubstreamVote } from '../io/schema';
+import { Entities } from './entity';
 
 export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
   return elements.flatMap((element, index) =>
@@ -13,51 +17,34 @@ export function intersperse<T>(elements: T[], separator: T | (({ index }: { inde
 }
 
 export const NavUtils = {
+  toRoot: () => '/root',
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => `/space/${spaceId}`,
-  toEntity: (
-    spaceId: string,
-    newEntityId: string,
-    typeId?: string | null,
-    attributes?: Array<[string, string]> | null
-  ) => {
-    if (typeId && attributes && attributes?.length > 0) {
-      return decodeURIComponent(
-        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&attributes=${encodeURI(JSON.stringify(attributes))}`
-      );
-    }
-
-    if (typeId) {
-      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?typeId=${typeId}`);
-    }
-
-    if (attributes && attributes.length > 0) {
-      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?attributes=${encodeURI(JSON.stringify(attributes))}`);
-    }
-
-    return decodeURIComponent(`/space/${spaceId}/${newEntityId}`);
+  toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
+  toEntity: (spaceId: string, newEntityId: string) => {
+    return `/space/${spaceId}/${newEntityId}`;
   },
   toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
-      return decodeURIComponent(`/space/${spaceId}/activity?spaceId=${spaceIdParam}`);
+      return `/space/${spaceId}/activity?spaceId=${spaceIdParam}`;
     }
 
-    return decodeURIComponent(`/space/${spaceId}/activity`);
+    return `/space/${spaceId}/activity`;
   },
   toProfileActivity: (spaceId: string, entityId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
-      return decodeURIComponent(`/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`);
+      return `/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`;
     }
 
-    return decodeURIComponent(`/space/${spaceId}/${entityId}/activity`);
+    return `/space/${spaceId}/${entityId}/activity`;
   },
 };
 
 export function groupBy<T, U extends PropertyKey>(values: T[], projection: (value: T) => U) {
   const result: { [key in PropertyKey]: T[] } = {};
 
-  values.forEach(value => {
+  for (const value of values) {
     const key = projection(value);
 
     if (key in result) {
@@ -65,18 +52,9 @@ export function groupBy<T, U extends PropertyKey>(values: T[], projection: (valu
     } else {
       result[key] = [value];
     }
-  });
+  }
 
   return result;
-}
-
-export function partition<T>(array: T[], predicate: (value: T) => boolean): [T[], T[]] {
-  return array.reduce<[T[], T[]]>(
-    ([pass, fail], item) => {
-      return predicate(item) ? [[...pass, item], fail] : [pass, [...fail, item]];
-    },
-    [[], []]
-  );
 }
 
 export function formatShortAddress(address: string): string {
@@ -90,6 +68,10 @@ export class GeoDate {
    */
   static fromGeoTime(value: number) {
     return new Date(value * 1000);
+  }
+
+  static toGeoTime(value: number) {
+    return Math.floor(value / 1000);
   }
 
   static isValidDate(date: Date): date is Date {
@@ -110,6 +92,10 @@ export class GeoDate {
     hour: string;
     minute: string;
   }): string {
+    if (hour === '') {
+      return new Date(`${year}-${month}-${day}`).toISOString();
+    }
+
     let paddedHour = hour;
     let paddedMinute = minute;
 
@@ -119,6 +105,14 @@ export class GeoDate {
 
     if (Number(hour) < 10 && hour !== '') {
       paddedHour = hour.padStart(2, '0');
+    }
+
+    if (minute === '') {
+      paddedMinute = '00';
+    }
+
+    if (hour === '') {
+      paddedHour = '00';
     }
 
     try {
@@ -178,13 +172,13 @@ export const getOpenGraphImageUrl = (value: string) => {
   return null;
 };
 
-export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
+export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
   const entityName = entity?.name ?? null;
-  const serverAvatarUrl = Entity.avatar(entity?.triples) ?? null;
-  const serverCoverUrl = Entity.cover(entity?.triples);
+  const serverAvatarUrl = Entities.avatar(entity?.relationsOut) ?? null;
+  const serverCoverUrl = Entities.cover(entity?.relationsOut);
   const imageUrl = serverAvatarUrl || serverCoverUrl || '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entity.description(entity?.triples ?? []);
+  const description = Entities.description(entity?.triples ?? []);
 
   return {
     entityName,
@@ -194,12 +188,12 @@ export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
 };
 
 // Get the image hash from an image path
-// e.g., https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH -> HASH
+// e.g., https://gateway.lighthouse.storage/ipfs/HASH
 // e.g., ipfs://HASH -> HASH
 export const getImageHash = (value: string) => {
   // If the value includes a query parameter, it's thhe legacy hard coded IPFS gateway path
-  if (value.includes('?arg=')) {
-    const [, hash] = value.split('?arg=');
+  if (value.startsWith(IPFS_GATEWAY_READ_PATH)) {
+    const [, hash] = value.split(IPFS_GATEWAY_READ_PATH);
     return hash;
   } else if (value.includes('://')) {
     const [, hash] = value.split('://');
@@ -216,7 +210,7 @@ export const getImageHash = (value: string) => {
 export const getImagePath = (value: string) => {
   // Add the IPFS gateway path for images with the ipfs:// protocol
   if (value.startsWith('ipfs://')) {
-    return `${IPFS_GATEWAY_PATH}${getImageHash(value)}`;
+    return `${IPFS_GATEWAY_READ_PATH}${getImageHash(value)}`;
     // The image likely resolves to an image resource at some URL
   } else if (value.startsWith('http')) {
     return value;
@@ -268,23 +262,70 @@ export function slog({
   );
 }
 
-export function getGeoPersonIdFromOnchainId(address: `0x${string}`, onchainId: string) {
-  return `${address}–${onchainId}`;
-}
-
 export const sleep = (delay: number) => new Promise(resolve => setTimeout(resolve, delay));
-
-export function isPermissionlessSpace(spaceId: string) {
-  // @TODO: Ensure we are correctly capitalizing the space id in the substream
-  return !ALL_PUBLIC_SPACES.includes(spaceId);
-}
 
 export function toTitleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
+export function getIsProposalEnded(status: Proposal['status'], endTime: number) {
+  return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
+}
+
+export function getIsProposalExecutable(proposal: Proposal, yesVotesPercentage: number) {
+  return (
+    getIsProposalEnded(proposal.status, proposal.endTime) && yesVotesPercentage > 50 && proposal.status !== 'ACCEPTED'
+  );
+}
+
+export function getYesVotePercentage(votes: SubstreamVote[], votesCount: number) {
+  if (votesCount === 0) {
+    return 0;
+  }
+
+  return Math.floor((votes.filter(v => v.vote === 'ACCEPT').length / votesCount) * 100);
+}
+
+export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) {
+  if (votesCount === 0) {
+    return 0;
+  }
+
+  return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
+}
+
+export function getUserVote(votes: SubstreamVote[], address: string) {
+  return votes.find(v => v.account.id === getAddress(address));
+}
+
+export function getProposalTimeRemaining(endTime: number) {
+  const timeRemaining = endTime - GeoDate.toGeoTime(Date.now());
+  const days = Math.floor(timeRemaining / 86400);
+  const hours = Math.floor((timeRemaining % 86400) / 3600);
+  const minutes = Math.floor((timeRemaining % 3600) / 60);
+  const seconds = Math.floor(timeRemaining % 60);
+
+  return { days, hours, minutes, seconds };
+}
 export const uuidValidateV4 = (uuid: string) => {
   if (!uuid) return false;
 
   return uuidValidate(uuid) && uuidVersion(uuid) === 4;
 };
+
+export const validateEntityId = (maybeEntityId: EntityId | string | null | undefined) => {
+  if (typeof maybeEntityId !== 'string') return false;
+
+  if (!VALID_ENTITY_ID_LENGTHS.includes(maybeEntityId.length)) return false;
+
+  for (const char of maybeEntityId) {
+    const index = BASE58_ALLOWED_CHARS.indexOf(char);
+    if (index === -1) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const VALID_ENTITY_ID_LENGTHS = [21, 22];

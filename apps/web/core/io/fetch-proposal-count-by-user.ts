@@ -6,10 +6,8 @@ import { Environment } from '../environment';
 import { graphql } from './subgraph/graphql';
 
 const getFetchUserProposalCountQuery = (createdBy: string) => {
-  const where = [`createdById: { equalTo: "${createdBy}" }`];
-
   return `query {
-    proposals(filter: {${where}}) {
+    proposals(filter: { createdById: { equalTo: "${createdBy}" } }) {
       totalCount
     }
   }`;
@@ -30,7 +28,7 @@ export async function fetchProposalCountByUser({ userId, signal }: FetchUserProp
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.PUBLIC_NEXT_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchUserProposalCountQuery(userId),
     signal,
   });

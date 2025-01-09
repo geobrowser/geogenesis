@@ -1,4 +1,7 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { atom } from 'jotai';
+
+import { Triple } from '~/core/types';
 
 export const loadingAtom = atom<boolean>(false);
 
@@ -22,21 +25,23 @@ export const entityCountAtom = atom(get => {
 });
 
 export const entityCountByTypeAtom = atom(get => {
-  const actions = get(actionsAtom);
+  const actions = get(triplesAtom);
 
-  const typeActions = actions.filter(action => action.attributeId === 'type');
+  const typeActions = actions.filter(action => action.attributeId === SYSTEM_IDS.TYPES_ATTRIBUTE);
 
   const entitySetByType: Record<string, Set<string>> = {};
 
-  typeActions.forEach(action => {
-    if (action.value.type !== 'entity' || !action.value.name) return;
+  // @TODO disabling for now to remove ENTITY values. We aren't supporting
+  // the import flow yet anyway. Nov 20, 2024.
+  // typeActions.forEach(action => {
+  //   if (action.value.type !== 'ENTITY' || !action.value.name) return;
 
-    if (!Object.hasOwn(entitySetByType, action.value.name)) {
-      entitySetByType[action.value.name] = new Set();
-    }
+  //   if (!Object.hasOwn(entitySetByType, action.value.name)) {
+  //     entitySetByType[action.value.name] = new Set();
+  //   }
 
-    entitySetByType[action.value.name].add(action.entityId);
-  });
+  //   entitySetByType[action.value.name].add(action.entityId);
+  // });
 
   const entityCountByType: Array<{ name: string; count: string }> = [];
 
@@ -47,10 +52,10 @@ export const entityCountByTypeAtom = atom(get => {
   return entityCountByType;
 });
 
-export const actionsAtom = atom<Array<any>>([]);
+export const triplesAtom = atom<Array<Triple>>([]);
 
 export const actionsCountAtom = atom(get => {
-  const actions = get(actionsAtom);
+  const actions = get(triplesAtom);
   return actions.length.toLocaleString('en-US', { style: 'decimal' });
 });
 

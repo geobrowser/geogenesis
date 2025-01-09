@@ -1,55 +1,57 @@
--- 
--- Create Indexes for Speedy Querying
--- 
-
-
-
 CREATE INDEX idx_entity_attribute ON public.triples(entity_id, attribute_id);
-
-CREATE INDEX idx_entity_attribute_value_id ON public.triples(entity_id, attribute_id, value_id);
-
+CREATE INDEX idx_entity_attribute_value_id ON public.triples(entity_id, attribute_id, entity_value_id);
 CREATE INDEX idx_entity_value_id ON public.triples(entity_value_id);
-
 CREATE INDEX idx_triple_space ON public.triples(space_id);
-
-CREATE INDEX idx_accounts_space_id ON public.space_admins(account_id, space_id);
-
 CREATE INDEX idx_space_editors ON public.space_editors(account_id, space_id);
-
-CREATE INDEX idx_space_editor_controllers ON public.space_editor_controllers(account_id, space_id);
+CREATE INDEX idx_space_members ON public.space_members(account_id, space_id);
+CREATE INDEX space_metadata ON public.spaces_metadata(version_id, space_id);
+CREATE INDEX version_spaces_version_id ON public.version_spaces(version_id, space_id);
+CREATE INDEX version_types_version_id ON public.version_types(version_id, type_id);
 
 CREATE INDEX triple_entity_id
     on triples (entity_id);
 
+CREATE INDEX triple_attribute_id
+    on triples (attribute_id);
+
+CREATE INDEX triple_attribute_version_id
+    on triples (attribute_version_id);
+
+CREATE INDEX triple_version_id
+    on triples (version_id);
+
+CREATE INDEX edits_space_id
+    on edits (space_id);
+
+CREATE INDEX edits_created_by_id
+    on edits (created_by_id);
+
+CREATE INDEX proposal_edit_id
+    on proposals (edit_id);
+
+CREATE INDEX versions_id
+    on versions (id);
+
+CREATE INDEX versions_edit_id
+    on versions (edit_id);
+
+CREATE INDEX versions_created_by_id
+    on versions (created_by_id);
+
 CREATE INDEX versions_entity_id
     on versions (entity_id);
 
-CREATE INDEX triple_versions_triple_index
-    on triple_versions (triple_id);
+CREATE INDEX current_versions_entity_id
+    on current_versions (entity_id);
 
-CREATE INDEX triple_versions_version_index
-    on triple_versions (version_id);
+CREATE INDEX current_versions_version_id
+    on current_versions (version_id);
 
-CREATE INDEX proposal_proposed_versions
-    on proposed_versions (proposal_id);
+CREATE INDEX relations_type_of_id
+    on relations (type_of_id);
 
-CREATE INDEX proposal_space_id
-    on proposed_versions (space_id);
+CREATE INDEX relations_to_version_id
+    on relations (to_version_id);
 
-CREATE INDEX proposal_versions 
-    on proposed_versions (proposal_id);
-
-CREATE INDEX onchain_profile_account_id
-    on onchain_profiles (account_id);
-
-CREATE INDEX onchain_profile_space_id
-    on onchain_profiles (home_space_id);
-
-CREATE INDEX profile_entity_id
-    on profiles (entity_id);
-
-CREATE INDEX profile_onchain_profile_id
-    on profiles (onchain_profile_id);
-
-CREATE INDEX proposed_versions_actions
-    on actions (proposed_version_id);
+CREATE INDEX relations_from_version_id
+    on relations (from_version_id);

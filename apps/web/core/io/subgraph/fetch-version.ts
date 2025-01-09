@@ -1,236 +1,100 @@
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
+import { Schema } from '@effect/schema';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, SpaceWithMetadata, Version } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
+import { HistoryVersionDto } from '../dto/versions';
+import { SubstreamVersionWithEdit } from '../schema';
+import { versionFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamVersion, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
 
-const getVersionsQuery = (versionId: string) => `query {
-  version(id: ${JSON.stringify(versionId)}) {
-    id
-    name
-    createdAt
-    createdAtBlock
-
-    createdBy {
-      id
-      onchainProfiles {
-        nodes {
-          homeSpaceId
-          id
-        }
-      }
-      geoProfiles {
-        nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
-        }
-      }
-    }
-
-    space {
-      id
-      metadata {
-        nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
-        }
-      }
-    }
-
-    entity {
-      id
-      name
-    }
-    tripleVersions {
-      nodes {
-        triple {
-          attribute {
-            id
-            name
-          }
-          entity {
-            id
-            name
-          }
-          entityValue {
-            id
-            name
-          }
-          numberValue
-          stringValue
-          valueType
-          valueId
-          space {
-            id
-          }
-        }
-      }
-    }
-  }
-}`;
-
-export interface FetchVersionOptions {
+interface FetchVersionsArgs {
   versionId: string;
   page?: number;
-  signal?: AbortController['signal'];
+  signal?: AbortSignal;
 }
+
+const query = (versionId: string) => {
+  return `query {
+    version(id: "${versionId}") {
+      ${versionFragment}
+      edit {
+        id
+        name
+        createdAt
+        createdById
+      }
+    }
+  }`;
+};
 
 interface NetworkResult {
-  version: SubstreamVersion | null;
+  version: SubstreamVersionWithEdit | null;
 }
 
-export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersionOptions): Promise<Version | null> {
+export async function fetchVersion(args: FetchVersionsArgs) {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getVersionsQuery(versionId),
-    signal,
+    query: query(args.versionId),
+    signal: args.signal,
   });
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const withFallbacks = Effect.gen(function* () {
+    const queryResult = yield* Effect.either(graphqlFetchEffect);
 
-    if (Either.isLeft(resultOrError)) {
-      const error = resultOrError.left;
+    return Either.match(queryResult, {
+      onLeft: error => {
+        switch (error._tag) {
+          case 'AbortError':
+            throw error;
+          case 'GraphqlRuntimeError':
+            console.error(
+              `Encountered runtime graphql error in fetchVersion. queryId: ${queryId} endpoint: ${endpoint} id: ${
+                args.versionId
+              }
 
-      switch (error._tag) {
-        case 'AbortError':
-          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-          // the caller to consume the error channel as an effect. We throw here the typical JS
-          // way so we don't infect more of the codebase with the effect runtime.
-          throw error;
-        case 'GraphqlRuntimeError':
-          console.error(
-            `Encountered runtime graphql error in fetchVersion. queryId: ${queryId} versionId: ${versionId} endpoint: ${endpoint} page: ${page}
-            
-            queryString: ${getVersionsQuery(versionId)}
-            `,
-            error.message
-          );
+                queryString: ${query(args.versionId)}
+                `,
+              error.message
+            );
 
-          return {
-            version: null,
-          };
-
-        default:
-          console.error(
-            `${error._tag}: Unable to fetch fetchVersion. queryId: ${queryId} versionId: ${versionId} endpoint: ${endpoint} page: ${page}`
-          );
-
-          return {
-            version: null,
-          };
-      }
-    }
-
-    return resultOrError.right;
+            return null;
+          default:
+            console.error(
+              `${error._tag}: Unable to fetch version, queryId: ${queryId} endpoint: ${endpoint} id: ${args.versionId}`
+            );
+            return null;
+        }
+      },
+      onRight: result => {
+        return result.version;
+      },
+    });
   });
 
-  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const version = result.version;
+  const networkVersion = await Effect.runPromise(withFallbacks);
 
-  if (!version) {
+  if (!networkVersion) {
     return null;
   }
 
-  // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
-  // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfile = version.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-  const onchainProfile = version.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+  const decoded = Schema.decodeEither(SubstreamVersionWithEdit)(networkVersion);
 
-  const profile: Profile = maybeProfile
-    ? {
-        id: version.createdBy.id,
-        address: version.createdBy.id as `0x${string}`,
-        avatarUrl: Entity.avatar(profileTriples),
-        coverUrl: Entity.cover(profileTriples),
-        name: maybeProfile.name,
-        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-      }
-    : {
-        id: version.createdBy.id,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: version.createdBy.id as `0x${string}`,
-        profileLink: null,
-      };
-
-  const networkTriples = version.tripleVersions.nodes.flatMap(tv => tv.triple);
-
-  const spaceConfig = version.space.metadata.nodes[0] as SubstreamEntity | undefined;
-  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
-
-  const spaceWithMetadata: SpaceWithMetadata = {
-    id: version.space.id,
-    name: spaceConfig?.name ?? null,
-    image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-  };
-
-  return {
-    ...version,
-    createdBy: profile,
-    space: spaceWithMetadata,
-    triples: fromNetworkTriples(networkTriples),
-  };
+  return Either.match(decoded, {
+    onLeft: error => {
+      console.error(
+        `Could not decode version with id ${networkVersion.id} and entityId ${networkVersion.entityId}. ${String(
+          error
+        )}`
+      );
+      return null;
+    },
+    onRight: result => {
+      return HistoryVersionDto(result);
+    },
+  });
 }

@@ -1,14 +1,17 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
 
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { Filter } from '~/core/blocks-sdk/table';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { Entity, Space, TripleValueType } from '~/core/types';
+import { Space } from '~/core/io/dto/spaces';
+import { Source } from '~/core/state/editor/types';
+import { useTableBlock } from '~/core/state/table-block-store';
+import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
@@ -24,11 +27,14 @@ import { TextButton } from '~/design-system/text-button';
 
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
-  options: (TableBlockFilter & { columnName: string })[];
-  onCreate: (filter: { columnId: string; value: string; valueType: TripleValueType; valueName: string | null }) => void;
+  options: (Filter & { columnName: string })[];
+  onCreate: (filter: {
+    columnId: string;
+    value: string;
+    valueType: FilterableValueType;
+    valueName: string | null;
+  }) => void;
 }
-
-const TableBlockFilterPromptContent = motion(Content);
 
 /**
  * We allow users to filter by Name, Space, or any Text or Relation column. We need to support
@@ -106,12 +112,8 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
       };
     case 'onOpenChange':
       return {
+        ...state,
         open: action.payload.open,
-        selectedColumn: SYSTEM_IDS.NAME,
-        value: {
-          type: 'string',
-          value: '',
-        },
       };
     case 'selectColumn':
       // @TODO: The value should be based on the selected column value type
@@ -148,7 +150,7 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
     case 'done':
       return {
         open: false,
-        selectedColumn: SYSTEM_IDS.NAME,
+        selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
         value: {
           type: 'string',
           value: '',
@@ -157,14 +159,33 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
   }
 };
 
-export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const { columnRelationTypes } = useTableBlock();
+function getInitialState(source: Source): PromptState {
+  if (source.type === 'ENTITY') {
+    return {
+      selectedColumn: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+      value: {
+        type: 'entity',
+        entityId: source.value,
+        entityName: source.name,
+      },
+      open: false,
+    };
+  }
 
-  const [state, dispatch] = React.useReducer(reducer, {
-    selectedColumn: SYSTEM_IDS.NAME,
-    value: { type: 'string', value: '' },
+  return {
+    selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
+    value: {
+      type: 'string',
+      value: '',
+    },
     open: false,
-  });
+  };
+}
+
+export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
+  const { columnRelationTypes, source } = useTableBlock();
+
+  const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
 
   const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
 
@@ -172,7 +193,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
     onCreate({
       columnId: state.selectedColumn,
       value: getFilterValue(state.value),
-      valueType: options.find(o => o.columnId === state.selectedColumn)?.valueType ?? 'string',
+      valueType: options.find(o => o.columnId === state.selectedColumn)?.valueType ?? 'TEXT',
       valueName: getFilterValueName(state.value),
     });
     dispatch({ type: 'done' });
@@ -192,15 +213,8 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
       <Portal>
         <AnimatePresence>
           {state.open && (
-            <TableBlockFilterPromptContent
+            <Content
               forceMount={true}
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{
-                duration: 0.1,
-                ease: 'easeInOut',
-              }}
               avoidCollisions={true}
               className="z-10 w-[472px] origin-top-left rounded-lg border border-grey-02 bg-white p-2 shadow-lg"
               sideOffset={8}
@@ -242,14 +256,14 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                   </div>
                   <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
                   <div className="relative flex flex-1">
-                    {state.selectedColumn === SYSTEM_IDS.SPACE ? (
+                    {state.selectedColumn === SYSTEM_IDS.SPACE_FILTER ? (
                       <TableBlockSpaceFilterInput
                         selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectSpaceValue}
                       />
-                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'entity' ? (
+                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'RELATION' ? (
                       <TableBlockEntityFilterInput
-                        typeIdToFilter={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
+                        filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
                         selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectEntityValue}
                       />
@@ -264,7 +278,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                   </div>
                 </div>
               </form>
-            </TableBlockFilterPromptContent>
+            </Content>
           )}
         </AnimatePresence>
       </Portal>
@@ -273,14 +287,13 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
 }
 
 interface TableBlockEntityFilterInputProps {
-  onSelect: (result: Entity) => void;
+  onSelect: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
-  typeIdToFilter?: string[];
+  filterByTypes?: string[];
 }
 
-function TableBlockEntityFilterInput({ onSelect, selectedValue, typeIdToFilter }: TableBlockEntityFilterInputProps) {
-  const autocomplete = useAutocomplete(typeIdToFilter ? { allowedTypes: typeIdToFilter } : undefined);
-  const { spaces } = useSpaces();
+function TableBlockEntityFilterInput({ onSelect, selectedValue, filterByTypes }: TableBlockEntityFilterInputProps) {
+  const autocomplete = useSearch(filterByTypes ? { filterByTypes } : undefined);
 
   return (
     <div className="relative w-full">
@@ -305,7 +318,6 @@ function TableBlockEntityFilterInput({ onSelect, selectedValue, typeIdToFilter }
                       autocomplete.onQueryChange('');
                       onSelect(result);
                     }}
-                    spaces={spaces}
                     alreadySelected={false}
                     result={result}
                   />

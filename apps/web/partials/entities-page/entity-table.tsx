@@ -1,7 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { A, pipe } from '@mobily/ts-belt';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import {
   ColumnDef,
   createColumnHelper,
@@ -15,14 +14,14 @@ import { cx } from 'class-variance-authority';
 
 import { useState } from 'react';
 
-import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useEditable } from '~/core/state/editable-store';
+import { getRelations } from '~/core/database/relations';
+import { getTriples } from '~/core/database/triples';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store/entity-table-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
-import { Cell, Column, Row } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Cell, Row, Schema } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
+import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -38,14 +37,14 @@ import { EntityTableCell } from './entity-table-cell';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedColumns: Column[]) => {
+const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedColumns: Schema[]) => {
   const columnSize = 1200 / columns.length;
 
   return columns.map((column, i) =>
-    columnHelper.accessor(row => row[column.id], {
+    columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
-        const isNameColumn = column.id === SYSTEM_IDS.NAME;
+        const isNameColumn = column.id === SYSTEM_IDS.NAME_ATTRIBUTE;
 
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
@@ -56,11 +55,12 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedC
               unpublishedColumns={unpublishedColumns}
               column={column}
               entityId={column.id}
-              spaceId={Entity.nameTriple(column.triples)?.space}
+              // @TODO: fix later
+              spaceId={''}
             />
           </div>
         ) : (
-          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
+          <Text variant="smallTitle">{isNameColumn ? 'Name' : column.name ?? column.id}</Text>
         );
       },
       size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
@@ -70,41 +70,53 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedC
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, table, cell }) => {
-    const space = table.options.meta!.space;
-    const cellId = `${row.original.id}-${cell.column.id}`;
+    const spaceId = table.options.meta!.space;
+    const cellId = `${row.original.entityId}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
-    const editable = table.options.meta?.editable;
-    const isEditor = table.options.meta?.isEditor;
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { create, update, remove, actions } = useActionsStore();
-
-    // We know that cell is rendered as a React component by react-table
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns, columnRelationTypes } = useEntityTable();
+    const { columns } = useEntityTable();
 
     const cellData = getValue<Cell | undefined>();
-    const isEditMode = isEditor && editable;
-    const isPlaceholderCell = cellData?.triples[0]?.placeholder;
+    const isEditable = table.options.meta?.isEditable;
 
     if (!cellData) return null;
 
     const valueType = columnValueType(cellData.columnId, columns);
 
-    const cellTriples = pipe(
-      actions[space],
-      actions => Triple.fromActions(actions, cellData.triples),
-      A.filter(triple => {
+    const cellTriples = getTriples({
+      mergeWith: cellData.triples,
+      selector: triple => {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;
         const isCurrentValueType = triple.value.type === valueTypes[valueType];
 
         return isRowCell && isColCell && isCurrentValueType;
-      })
-    );
+      },
+    });
 
-    if (isEditMode) {
+    const cellRelations = getRelations({
+      mergeWith: cellData.relations,
+      selector: relation => {
+        const isRowCell = relation.fromEntity.id === cellData.entityId;
+        const isColCell = relation.typeOf.id === cellData.columnId;
+
+        return isRowCell && isColCell;
+      },
+    });
+
+    const renderables = toRenderables({
+      entityId: cellData.entityId,
+      entityName: Entities.name(cellTriples),
+      spaceId,
+      triples: cellTriples,
+      relations: cellRelations,
+      // @TODO: Might need to add placeholders for each column that we're rendering
+      placeholderRenderables: [],
+    });
+
+    if (isEditable) {
       return (
         <EditableEntityTableCell
           // HACK (baiirun): For some reason the table value for the name field is stale
@@ -112,25 +124,22 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           // cell has the correct data, but the value of the name is the value of the last
           // cell in the previous selectedType. For now we can use a key to force the
           // cell to re-mount when the selectedType and name changes.
-          key={Entity.name(cellTriples)}
-          triples={cellTriples}
-          cell={cellData}
-          create={create}
-          update={update}
-          remove={remove}
-          space={space}
-          valueType={valueType}
-          columnName={columnName(cellData.columnId, columns)}
-          columnRelationTypes={columnRelationTypes[cellData.columnId]}
+          key={Entities.name(cellTriples)}
+          renderables={renderables}
+          attributeId={cellData.columnId}
+          entityId={cellData.entityId}
+          spaceId={spaceId}
+          columnRelationTypes={[]}
         />
       );
-    } else if (cellData && !isPlaceholderCell) {
+    } else if (cellData) {
       return (
         <EntityTableCell
-          key={Entity.name(cellData.triples)}
-          cell={cellData}
-          triples={cellTriples}
-          space={space}
+          key={Entities.name(cellTriples)}
+          entityId={cellData.entityId}
+          columnId={cellData.columnId}
+          renderables={renderables}
+          space={spaceId}
           isExpanded={isExpanded}
         />
       );
@@ -142,20 +151,18 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  columns: Column[];
+  columns: Schema[];
   rows: Row[];
 }
 
 export const EntityTable = ({ rows, space, columns }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
-  const { editable } = useEditable();
-  const { isEditor } = useAccessControl(space);
   const { selectedType, unpublishedColumns } = useEntityTable();
-  const isEditMode = isEditor && editable;
+  const isEditable = useUserIsEditing(space);
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(columns, isEditMode, unpublishedColumns),
+    columns: formatColumns(columns, isEditable, unpublishedColumns),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -169,8 +176,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
     meta: {
       expandedCells,
       space,
-      editable,
-      isEditor,
+      isEditable,
     },
   });
 
@@ -192,7 +198,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
             </tr>
           ))}
         </thead>
-        {editable && selectedType && <AddNewColumn space={space} selectedType={selectedType} />}
+        {isEditable && selectedType && <AddNewColumn space={space} selectedType={selectedType} />}
         <tbody>
           {table.getRowModel().rows.length === 0 && (
             <tr>
@@ -206,14 +212,14 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
             return (
               <tr key={entityId ?? index} className="hover:bg-bg">
                 {cells.map(cell => {
-                  const cellId = `${row.original.id}-${cell.column.id}`;
+                  const cellId = `${row.original.entityId}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
-                  const isExpandable = firstTriple && firstTriple.value.type === 'string';
+                  const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
 
                   return (
                     <TableCell
                       key={cellId}
-                      isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
+                      isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE) && isEditable}
                       href={NavUtils.toEntity(space, entityId)}
                       isExpandable={isExpandable}
                       isExpanded={expandedCells[cellId]}

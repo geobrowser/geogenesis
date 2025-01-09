@@ -2,52 +2,25 @@
 
 import * as React from 'react';
 
+import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useEditEvents } from '~/core/events/edit-events';
-import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useEditable } from '~/core/state/editable-store';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Triple } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
-export function EditableHeading({
-  spaceId,
-  entityId,
-  name: serverName,
-  triples: serverTriples,
-}: {
-  spaceId: string;
-  entityId: string;
-  name: string | null;
-  triples: Triple[];
-}) {
-  const { triples: localTriples } = useEntityPageStore();
-  const { editable } = useEditable();
-  const { isEditor } = useAccessControl(spaceId);
-  const { actionsFromSpace, create, update, remove } = useActionsStore(spaceId);
-
-  const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
-
-  const isEditing = editable && isEditor;
-  const nameTriple = Entity.nameTriple(triples);
-
-  const name = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverName : Entity.name(triples) ?? '';
+export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
+  const { name } = useEntityPageStore();
+  const isEditing = useUserIsEditing(spaceId);
 
   const send = useEditEvents({
     context: {
       entityId,
       spaceId,
       entityName: name ?? '',
-    },
-    api: {
-      create,
-      update,
-      remove,
     },
   });
 
@@ -56,7 +29,6 @@ export function EditableHeading({
       type: 'EDIT_ENTITY_NAME',
       payload: {
         name: e.target.value,
-        triple: nameTriple,
       },
     });
   };
@@ -78,7 +50,7 @@ export function EditableHeading({
           <div className="flex items-center justify-between">
             <Truncate maxLines={3} shouldTruncate>
               <Text as="h1" variant="mainPage">
-                {name ?? entityId}
+                {name ?? ZERO_WIDTH_SPACE}
               </Text>
             </Truncate>
           </div>

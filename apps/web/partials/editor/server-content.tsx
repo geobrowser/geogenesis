@@ -1,8 +1,17 @@
+import { Content } from '~/core/state/editor/types';
+
+import { Skeleton } from '~/design-system/skeleton';
+import { Spacer } from '~/design-system/spacer';
+
+import { TableBlockLoadingPlaceholder } from '../blocks/table/table-block';
+
 type ServerContentProps = {
   content: Content[];
 };
 
 export const ServerContent = ({ content }: ServerContentProps) => {
+  if (!content) return null;
+
   return (
     <div className="tiptap ProseMirror !pb-[2rem]">
       {content.map((block, index) => (
@@ -13,57 +22,22 @@ export const ServerContent = ({ content }: ServerContentProps) => {
   );
 };
 
-type Content =
-  | {
-      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem';
-      content: Content[];
-      attrs: {
-        id: string;
-      };
-    }
-  | {
-      type: 'heading';
-      content: Content[];
-      attrs: {
-        id: string;
-        level: 1 | 2 | 3 | 4 | 5 | 6;
-      };
-    }
-  | {
-      type: 'text';
-      text: string;
-      content: Content[];
-      marks: Mark[];
-      attrs: {
-        id: string;
-      };
-    }
-  | {
-      type: 'image';
-      content: Content[];
-      attrs: {
-        id: string;
-        src: string;
-      };
-    };
-
-type Mark = {
-  type: 'bold' | 'italic';
-  text: string;
-};
-
 type BlockProps = {
   block: Content;
 };
 
 const Block = ({ block }: BlockProps) => {
+  if (!block.content) {
+    return null;
+  }
+
   switch (block.type) {
     case 'paragraph': {
       return (
         <div className="react-renderer node-paragraph">
           <div className="whitespace-normal">
             <p>
-              {block.content.map((block: any, index: number) => (
+              {block.content.map((block, index) => (
                 <Block key={index} block={block} />
               ))}
             </p>
@@ -75,7 +49,7 @@ const Block = ({ block }: BlockProps) => {
     case 'bulletList': {
       return (
         <ul>
-          {block.content.map((block: any, index: number) => (
+          {block.content.map((block, index) => (
             <Block key={index} block={block} />
           ))}
         </ul>
@@ -85,7 +59,7 @@ const Block = ({ block }: BlockProps) => {
     case 'orderedList': {
       return (
         <ol>
-          {block.content.map((block: any, index: number) => (
+          {block.content.map((block, index) => (
             <Block key={index} block={block} />
           ))}
         </ol>
@@ -95,7 +69,7 @@ const Block = ({ block }: BlockProps) => {
     case 'listItem': {
       return (
         <li>
-          {block.content.map((block: any, index: number) => (
+          {block.content.map((block, index) => (
             <Block key={index} block={block} />
           ))}
         </li>
@@ -108,7 +82,7 @@ const Block = ({ block }: BlockProps) => {
       return (
         <div className="react-renderer node-heading">
           <Component>
-            {block.content.map((block: any, index: number) => (
+            {block.content.map((block, index) => (
               <Block key={index} block={block} />
             ))}
           </Component>
@@ -131,6 +105,22 @@ const Block = ({ block }: BlockProps) => {
     case 'image': {
       return <img src={block.attrs.src} alt="" />;
     }
+
+    case 'tableNode': {
+      return (
+        <>
+          {/* // The layout here matches what we have for the table block */}
+          <Spacer height={20} />
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-4 w-4" />
+              <Skeleton className="h-5 w-16" />
+            </div>
+            <TableBlockLoadingPlaceholder />
+          </div>
+        </>
+      );
+    }
   }
 };
 
@@ -148,6 +138,8 @@ const getHeading = (level: 1 | 2 | 3 | 4 | 5 | 6) => {
       return 'h5';
     case 6:
       return 'h6';
+    default:
+      return 'p';
   }
 };
 

@@ -4,7 +4,8 @@ import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Column, GeoType, OmitStrict, Row, Space } from '~/core/types';
+import { Space } from '~/core/io/dto/spaces';
+import { GeoType, OmitStrict, Row, Schema } from '~/core/types';
 
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
@@ -17,7 +18,7 @@ interface Props {
   children: React.ReactNode;
   initialSelectedType: GeoType | null;
   initialParams: InitialEntityTableStoreParams;
-  initialColumns: Column[];
+  initialColumns: Schema[];
   initialRows: Row[];
 }
 

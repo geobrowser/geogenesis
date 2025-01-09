@@ -1,19 +1,18 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Tabs from '@radix-ui/react-tabs';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 import { FetchEntitiesOptions } from '~/core/io/subgraph';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 
-import { cloneActionsAtom, cloneSpaceIdAtom, cloneSpaceNameAtom } from './atoms';
+import { cloneOpsAtom, cloneSpaceIdAtom, cloneSpaceNameAtom } from './atoms';
 
 export const Tools = () => {
   return (
@@ -228,21 +227,14 @@ const FindEntities = () => {
 const CloneEntity = () => {
   const [spaceName, setSpaceName] = useAtom(cloneSpaceNameAtom);
   const [spaceId, setSpaceId] = useAtom(cloneSpaceIdAtom);
-  const [actions, setActions] = useAtom(cloneActionsAtom);
-
-  const { addActions } = useActionsStore();
+  const [ops, setOps] = useAtom(cloneOpsAtom);
 
   const handleCloneEntity = async () => {
-    const newActions = await cloneEntity({
-      oldEntityId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+    const newOps = await cloneEntity({
+      oldEntityId: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
       entityName: spaceName,
-      spaceId,
     });
-    setActions(newActions);
-  };
-
-  const handleAddActions = () => {
-    addActions(actions);
+    setOps(newOps);
   };
 
   return (
@@ -259,10 +251,9 @@ const CloneEntity = () => {
       />
       <div className="flex gap-4">
         <Button onClick={handleCloneEntity}>clone entity</Button>
-        {actions.length > 0 && <Button onClick={handleAddActions}>generate actions</Button>}
       </div>
       <div className="flex gap-4">
-        <Block className="aspect-[21/9] w-full overflow-y-scroll">{actions}</Block>
+        <Block className="aspect-[21/9] w-full overflow-y-scroll">{ops}</Block>
       </div>
     </div>
   );

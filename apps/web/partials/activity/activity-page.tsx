@@ -1,17 +1,16 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import Image from 'next/legacy/image';
 
 import { Suspense } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
-import { Action as IAction } from '~/core/types';
-import { Action } from '~/core/utils/action';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
 
 import { ActivityLoading } from './activity-loading';
+import { cachedFetchEntity } from '~/app/space/(entity)/[id]/[entityId]/cached-fetch-entity';
 
 interface Props {
   entityId: string | null;
@@ -37,16 +36,19 @@ async function ActivityList({ searchParams, entityId }: Props) {
     return <p className="pt-1 text-body text-grey-04">There is no information here yet.</p>;
   }
 
-  const id = decodeURIComponent(entityId);
+  const entity = await cachedFetchEntity(entityId);
 
-  // Alternatively we can fetch the on-chain profile from the id and use
-  // the address associated with the on-chain profile. But this works.
-  const address = id.split('–')[0];
+  // Fetch the activity based on the wallets defined on the entity's Wallets triple
+  // Right now we assume it's set as an entity value but it might be a collection at
+  // some point in the future.
+  const address = entity?.relationsOut.find(t => t.typeOf.id === SYSTEM_IDS.ACCOUNTS_ATTRIBUTE)?.toEntity.name;
 
-  const proposals = await fetchProposalsByUser({
-    userId: address,
-    spaceId: searchParams.spaceId,
-  });
+  const proposals = address
+    ? await fetchProposalsByUser({
+        userId: address,
+        spaceId: searchParams.spaceId,
+      })
+    : [];
 
   if (proposals.length === 0) return <p className="pt-1 text-body text-grey-04">There is no information here yet.</p>;
 
@@ -64,11 +66,12 @@ async function ActivityList({ searchParams, entityId }: Props) {
           const spaceImage = space.image ?? PLACEHOLDER_SPACE_IMAGE;
 
           const lastEditedDate = GeoDate.fromGeoTime(p.createdAt);
-          const proposalChangeCount = Action.getChangeCount(
-            p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
-          );
+          // const proposalChangeCount = p.proposedVersions.reduce<AppOp[]>(
+          //   (acc, version) => acc.concat(version.ops),
+          //   []
+          // ).length;
 
-          const proposedEntitiesCount = p.proposedVersions.length;
+          // const proposedEntitiesCount = p.proposedVersions.length;
 
           // e.g. Mar 12, 2023
           const formattedLastEditedDate = new Date(lastEditedDate).toLocaleDateString(undefined, {
@@ -97,7 +100,7 @@ async function ActivityList({ searchParams, entityId }: Props) {
               </div>
 
               <p className="pl-6 text-breadcrumb">
-                {proposalChangeCount} edits on {proposedEntitiesCount} pages in {spaceName}
+                {0} edits on {0} pages in {spaceName}
               </p>
             </div>
           );

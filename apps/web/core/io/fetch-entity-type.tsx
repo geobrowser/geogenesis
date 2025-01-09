@@ -1,21 +1,25 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '../environment';
+import { slog } from '../utils/utils';
+import { SubstreamType, SubstreamVersionTypes } from './schema';
+import { versionTypesFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
 
 function getFetchEntityTypeQuery(id: string) {
   return `query {
-    geoEntity(id: "${id}") {
-      geoEntityTypesByEntityId {
-        nodes {
-          typeId
+    entity(id: "${id}") {
+      id
+      currentVersion {
+        version {
+          ${versionTypesFragment}
         }
       }
     }
-  }
-  `;
+  }`;
 }
 
 interface FetchEntityTypeOptions {
@@ -23,13 +27,13 @@ interface FetchEntityTypeOptions {
 }
 
 interface NetworkResult {
-  geoEntity: { geoEntityTypesByEntityId: { nodes: { typeId: string }[] } } | null;
+  entity: { currentVersion: { version: { versionTypes: { nodes: { type: SubstreamType }[] } } } } | null;
 }
 
 export async function fetchEntityType(options: FetchEntityTypeOptions) {
   const queryId = uuid();
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchEntityTypeQuery(options.id),
   });
 
@@ -49,18 +53,44 @@ export async function fetchEntityType(options: FetchEntityTypeOptions) {
             error.message
           );
 
-          return [];
+          return {
+            entity: null,
+          };
 
         default:
           console.error(`${error._tag}: Unable to fetch entity type, queryId: ${queryId}`);
 
-          return [];
+          return {
+            entity: null,
+          };
       }
     }
 
-    if (!resultOrError.right.geoEntity) return [];
-    return resultOrError.right.geoEntity.geoEntityTypesByEntityId.nodes.map(node => node.typeId);
+    return resultOrError.right;
   });
 
-  return await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+
+  if (!result) {
+    return [];
+  }
+
+  if (!result.entity) {
+    return [];
+  }
+
+  const decodeEntityTypes = Schema.decodeEither(SubstreamVersionTypes)(
+    result.entity.currentVersion.version.versionTypes
+  );
+
+  if (Either.isLeft(decodeEntityTypes)) {
+    slog({
+      message: `Unable to decode entity types for entity ${options.id}`,
+      requestId: queryId,
+      level: 'error',
+    });
+    return [];
+  }
+
+  return decodeEntityTypes.right.nodes.map(node => node.type.id);
 }

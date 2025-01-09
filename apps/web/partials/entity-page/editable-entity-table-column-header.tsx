@@ -1,35 +1,24 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { A, pipe } from '@mobily/ts-belt';
-
+import * as React from 'react';
 import { memo, useState } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { Column } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
-import { valueTypes } from '~/core/value-types';
+import { Schema } from '~/core/types';
+import { toRenderables } from '~/core/utils/to-renderables';
 
-import { Date } from '~/design-system/icons/date';
-import { Image } from '~/design-system/icons/image';
-import { Relation } from '~/design-system/icons/relation';
-import { Text as TextIcon } from '~/design-system/icons/text';
-import { Url } from '~/design-system/icons/url';
-import { Spacer } from '~/design-system/spacer';
-
-import { TripleTypeDropdown } from '../entity-page/triple-type-dropdown';
+import { getRenderableTypeFromValueType, getRenderableTypeSelectorOptions } from './get-renderable-type-options';
+import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
-  column: Column;
+  column: Schema;
   // This spaceId is the spaceId of the attribute, not the current space.
   // We need the attribute spaceId to get the actions for the attribute
   // (since actions are grouped by spaceId) to be able to keep the updated
   // name in sync.
   spaceId?: string;
   entityId: string;
-  unpublishedColumns: Column[];
+  unpublishedColumns: Schema[];
 }
 
 export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({
@@ -38,58 +27,50 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
   unpublishedColumns,
 }: Props) {
-  const { actionsFromSpace, create, update, remove } = useActionsStore(spaceId);
+  // const localTriples = useTriples(
+  //   React.useMemo(() => {
+  //     return {
+  //       selector: t => t.entityId === column.id,
+  //     };
+  //   }, [column.id])
+  // );
 
-  const localTriples = pipe(
-    Triple.fromActions(actionsFromSpace, column.triples),
-    A.filter(t => t.entityId === column.id)
-  );
-
-  const localCellTriples = pipe(
-    Triple.fromActions(actionsFromSpace, []),
-    A.filter(triple => triple.attributeId === column.id)
-  );
+  // const localCellTriples = useTriples(
+  //   React.useMemo(() => {
+  //     return {
+  //       selector: t => t.attributeId === column.id,
+  //     };
+  //   }, [column.id])
+  // );
 
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
-  const [localName, setLocalName] = useState(Entity.name(localTriples) ?? '');
+  const [localName, setLocalName] = useState(column.name ?? '');
 
   const send = useEditEvents({
     context: {
       entityId,
       spaceId: spaceId ?? '',
-      entityName: Entity.name(localTriples) ?? '',
-    },
-    api: {
-      create,
-      update,
-      remove,
+      entityName: column.name ?? '',
     },
   });
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 ? column.triples : localTriples;
-  const nameTriple = Entity.nameTriple(triples);
-  const valueTypeTriple = Entity.valueTypeTriple(triples);
-
-  const valueType = Entity.valueTypeId(triples) ?? SYSTEM_IDS.TEXT;
-
+  const valueType = column.valueType;
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
-
-  const onChangeTripleType = (valueType: keyof typeof valueTypes) => {
-    if (valueTypeTriple) {
-      // Typescript doesn't know that valueTypeTriple is defined for newly created columns.
-      send({
-        type: 'CHANGE_COLUMN_VALUE_TYPE',
-        payload: {
-          valueType,
-          valueTypeTriple,
-          cellTriples: localCellTriples,
-        },
-      });
-    }
-  };
+  const selectorOptions = getRenderableTypeSelectorOptions(
+    toRenderables({
+      triples: [],
+      relations: [],
+      spaceId: spaceId ?? '',
+      entityId,
+      entityName: localName,
+    })[0],
+    () => {},
+    send
+  );
+  const value = getRenderableTypeFromValueType(valueType);
 
   return (
     <div className="relative flex w-full items-center justify-between">
@@ -97,77 +78,11 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
         className="w-full bg-transparent text-smallTitle placeholder:text-grey-02 focus:outline-none"
         onChange={e => setLocalName(e.currentTarget.value)}
         placeholder="Column name..."
-        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: nameTriple, name: e.target.value } })}
+        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { name: e.target.value } })}
         value={localName}
       />
 
-      {isUnpublished && (
-        <TripleTypeDropdown
-          value={valueTypes[valueType]}
-          options={[
-            {
-              label: (
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <TextIcon />
-                  <Spacer width={8} />
-                  Text
-                </div>
-              ),
-              value: 'string',
-              onClick: () => onChangeTripleType(SYSTEM_IDS.TEXT),
-              disabled: false,
-            },
-            {
-              label: (
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <Relation />
-                  <Spacer width={8} />
-                  Relation
-                </div>
-              ),
-              value: 'entity',
-              onClick: () => onChangeTripleType(SYSTEM_IDS.RELATION),
-              disabled: false,
-            },
-            {
-              label: (
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <Image />
-                  <Spacer width={8} />
-                  Image
-                </div>
-              ),
-              value: 'image',
-              onClick: () => onChangeTripleType(SYSTEM_IDS.IMAGE),
-              disabled: false,
-            },
-            {
-              label: (
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <Date />
-                  <Spacer width={8} />
-                  Date
-                </div>
-              ),
-              value: 'date',
-              onClick: () => onChangeTripleType(SYSTEM_IDS.DATE),
-              disabled: false,
-            },
-            {
-              label: (
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <Url />
-                  <Spacer width={8} />
-                  Web URL
-                </div>
-              ),
-              value: 'url',
-              onClick: () => onChangeTripleType(SYSTEM_IDS.WEB_URL),
-              disabled: false,
-            },
-          ]}
-        />
-      )}
+      {isUnpublished && <RenderableTypeDropdown value={value} options={selectorOptions} />}
     </div>
   );
 });

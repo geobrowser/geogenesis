@@ -1,6 +1,6 @@
-import Link from 'next/link';
-
 import * as React from 'react';
+
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { Text } from '../text';
 import { Truncate } from '../truncate';

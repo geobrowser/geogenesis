@@ -1,14 +1,16 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Schema } from '@effect/schema';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity as EntityType, FilterField, FilterState } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { FilterField, FilterState } from '~/core/types';
 
+import { Entity, EntityDto } from '../dto/entities';
+import { SubstreamEntity } from '../schema';
+import { versionFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntitiesQuery(
   query: string | undefined,
@@ -19,17 +21,18 @@ function getFetchEntitiesQuery(
 ) {
   const typeIdsString =
     typeIds && typeIds.length > 0
-      ? `geoEntityTypesByEntityId: { some: { typeId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } }`
+      ? `versionTypes: {
+            some: { type: { entityId: { in: ["${typeIds.join('","')}"] } } }
+          }`
       : // Filter out block entities by default
-        `geoEntityTypesByEntityId: { every: { typeId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.TABLE_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.INDEXED_SPACE}"] } } }`;
+        `versionTypes: { every: { type: { entityId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.DATA_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}"] } } } }`;
 
   const constructedWhere =
     entityOfWhere !== ''
       ? `{ name: { startsWithInsensitive: ${JSON.stringify(query)} }
-        triplesByEntityId: {
+        triples: {
           some: {
             ${entityOfWhere}
-            isStale: { equalTo: false }
           }
         }
         ${typeIdsString}
@@ -37,33 +40,19 @@ function getFetchEntitiesQuery(
       : `{name: {startsWithInsensitive: ${JSON.stringify(query)}} ${typeIdsString} }`;
 
   return `query {
-    geoEntities(filter: ${constructedWhere} first: ${first} offset: ${skip} orderBy: NAME_ASC) {
+    entities(
+      filter: {
+        currentVersion: {
+          version: ${constructedWhere}
+        }
+      }
+      first: ${first} offset: ${skip}
+    ) {
       nodes {
         id
-        name
-        triplesByEntityId(filter: { isStale: { equalTo: false } }) {
-          nodes {
-            id
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-            isProtected
-            space {
-              id
-            }
+        currentVersion {
+          version {
+            ${versionFragment}
           }
         }
       }
@@ -82,12 +71,12 @@ export interface FetchEntitiesOptions {
 }
 
 interface NetworkResult {
-  geoEntities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamEntity[] };
 }
 
-export async function fetchEntities(options: FetchEntitiesOptions): Promise<EntityType[]> {
+export async function fetchEntities(options: FetchEntitiesOptions): Promise<Entity[]> {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const fieldFilters = Object.fromEntries(options.filter.map(clause => [clause.field, clause.value])) as Record<
     FilterField,
@@ -102,7 +91,10 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
     fieldFilters['attribute-id'] && `attribute: { id: {equalTo: ${JSON.stringify(fieldFilters['attribute-id'])}} }`,
 
     // Until we have OR we can't search for name_contains OR value string contains
-    fieldFilters.value && `entityValue: {name: {startsWithInsensitive: ${JSON.stringify(fieldFilters.value)}}}`,
+    fieldFilters.value &&
+      `entityValue: {currentVersion: {version: {name: {startsWithInsensitive: ${JSON.stringify(
+        fieldFilters.value
+      )}}}}}`,
     fieldFilters['linked-to'] && `entityValueId: {equalTo: ${JSON.stringify(fieldFilters['linked-to'])}}`,
   ]
     .filter(Boolean)
@@ -140,7 +132,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
           );
 
           return {
-            geoEntities: { nodes: [] },
+            entities: { nodes: [] },
           };
 
         default:
@@ -148,7 +140,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
             `${error._tag}: Unable to fetch entities, queryId: ${queryId}query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
           );
           return {
-            geoEntities: { nodes: [] },
+            entities: { nodes: [] },
           };
       }
     }
@@ -156,37 +148,25 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
     return resultOrError.right;
   });
 
-  const { geoEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const { entities: unknownEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const sortedResults = sortSearchResultsByRelevance(geoEntities.nodes);
+  const entities = unknownEntities.nodes
+    .map(e => {
+      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
 
-  return sortedResults.map(result => {
-    const networkTriples = result.triplesByEntityId.nodes;
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Unable to decode entity ${e.id} with error ${error}`);
+          return null;
+        },
+        onRight: entity => {
+          return EntityDto(entity);
+        },
+      });
+    })
+    .filter(e => e !== null);
 
-    // If there is no latest version just return an empty entity.
-    if (networkTriples.length === 0) {
-      return {
-        id: result.id,
-        name: result.name,
-        description: null,
-        nameTripleSpaces: [],
-        types: [],
-        triples: [],
-      };
-    }
-
-    const triples = fromNetworkTriples(networkTriples);
-    const nameTriples = Entity.nameTriples(triples);
-
-    return {
-      id: result.id,
-      name: result.name,
-      description: Entity.description(triples),
-      nameTripleSpaces: nameTriples.map(t => t.space),
-      types: Entity.types(triples),
-      triples,
-    };
-  });
+  return sortSearchResultsByRelevance(entities);
 }
 
 const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
@@ -205,6 +185,6 @@ const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
   return a.length - b.length;
 };
 
-function sortSearchResultsByRelevance(startEntities: SubstreamEntity[]) {
+function sortSearchResultsByRelevance(startEntities: Entity[]) {
   return startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
 }

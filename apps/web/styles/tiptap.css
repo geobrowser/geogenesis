@@ -23,6 +23,10 @@
   opacity: 1;
 }
 
+.ProseMirror .paragraph-node a {
+  @apply underline transition-colors duration-100 hover:text-grey-04;
+}
+
 .ProseMirror .tiptap-menu-trigger {
   position: absolute;
   padding-right: 24px;

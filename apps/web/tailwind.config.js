@@ -255,15 +255,17 @@ module.exports = {
         metadata: [
           '1rem',
           {
-            lineHeight: '1.2rem',
+            lineHeight: '1.25rem',
             fontWeight: '400',
+            letterSpacing: '-0.25px',
           },
         ],
         metadataMedium: [
           '1rem',
           {
-            lineHeight: '1.2rem',
+            lineHeight: '1.25rem',
             fontWeight: '500',
+            letterSpacing: '-0.25px',
           },
         ],
         breadcrumb: [
@@ -274,14 +276,14 @@ module.exports = {
           },
         ],
         footnote: [
-          '0.678rem',
+          '0.6875rem',
           {
             lineHeight: '0.8125rem',
             fontWeight: '400',
           },
         ],
         footnoteMedium: [
-          '0.678rem',
+          '0.6875rem',
           {
             lineHeight: '0.8125rem',
             fontWeight: '500',

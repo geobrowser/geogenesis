@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
@@ -8,13 +8,10 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useRef } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useWriteOps } from '~/core/database/write';
+import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { Triple } from '~/core/utils/triple';
 
 import { Divider } from '~/design-system/divider';
 import { Dots } from '~/design-system/dots';
@@ -27,8 +24,8 @@ import { ResultContent, ResultsList } from './results-list';
 interface Props {
   placeholder?: string;
   onDone: (result: { id: string; name: string | null; nameTripleSpace?: string }) => void;
-  itemIds: string[];
-  allowedTypes?: { typeId: string; typeName: string | null }[];
+  alreadySelectedIds: string[];
+  filterByTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
   attributeId?: string;
   wrapperClassName?: string;
@@ -38,9 +35,9 @@ interface Props {
 
 export function EntityTextAutocomplete({
   placeholder,
-  itemIds,
+  alreadySelectedIds,
   onDone,
-  allowedTypes,
+  filterByTypes,
   spaceId,
   attributeId,
   wrapperClassName = '',
@@ -48,73 +45,72 @@ export function EntityTextAutocomplete({
   className = '',
 }: Props) {
   const [, setToast] = useToast();
-  const { create } = useActionsStore();
-  const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
-    allowedTypes: allowedTypes?.map(type => type.typeId),
+  const { upsert } = useWriteOps();
+  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+    filterByTypes: filterByTypes?.map(type => type.typeId),
   });
   const containerRef = useRef<HTMLDivElement>(null);
-  const itemIdsSet = new Set(itemIds);
-  const { spaces } = useSpaces();
+  const itemIdsSet = new Set(alreadySelectedIds);
 
-  const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
-  const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
+  // const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
+  // const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
 
     // Create new entity with name and types
-    create(
-      Triple.withId({
+    upsert(
+      {
         entityId: newEntityId,
-        attributeId: SYSTEM_IDS.NAME,
+        attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
         entityName: query,
         attributeName: 'Name',
-        space: spaceId,
         value: {
-          type: 'string',
-          id: ID.createValueId(),
+          type: 'TEXT',
           value: query,
         },
-      })
+      },
+      spaceId
     );
 
-    if (allowedTypes) {
-      allowedTypes.forEach(type => {
-        create(
-          Triple.withId({
+    if (filterByTypes) {
+      filterByTypes.forEach(type => {
+        upsert(
+          {
             entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
+            attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
             entityName: query,
             attributeName: 'Types',
-            space: spaceId,
             value: {
-              type: 'entity',
-              id: type.typeId,
-              name: type.typeName,
+              type: 'URL',
+              value: GraphUrl.fromEntityId(type.typeId),
             },
-          })
+          },
+          spaceId
         );
       });
     }
 
-    if (relationValueTypesForAttribute) {
-      relationValueTypesForAttribute.forEach(type => {
-        create(
-          Triple.withId({
-            entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
-            entityName: query,
-            attributeName: 'Types',
-            space: spaceId,
-            value: {
-              type: 'entity',
-              id: type.typeId,
-              name: type.typeName,
-            },
-          })
-        );
-      });
-    }
+    // @TODO(relations): Fix – Types are relations and not triples now.
+    // if (relationValueTypesForAttribute) {
+    //   relationValueTypesForAttribute.forEach(type => {
+    //     upsert(
+    //       {
+    //         type: 'SET_TRIPLE',
+    //         entityId: newEntityId,
+    //         attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+    //         entityName: query,
+    //         attributeName: 'Types',
+    //         value: {
+    //           type: 'ENTITY',
+    //           value: type.typeId,
+    //           name: type.typeName,
+    //         },
+    //       },
+    //       spaceId
+    //     );
+    //   });
+    // }
 
     onDone({ id: newEntityId, name: query });
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
@@ -152,8 +148,10 @@ export function EntityTextAutocomplete({
                 >
                   <ResultContent
                     key={result.id}
-                    onClick={() => onDone(result)}
-                    spaces={spaces}
+                    onClick={() => {
+                      onDone(result);
+                      onQueryChange('');
+                    }}
                     alreadySelected={itemIdsSet.has(result.id)}
                     result={result}
                   />

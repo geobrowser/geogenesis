@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { Services } from '../services';
-import { OnchainProfile } from '../types';
+import { Profile } from '../types';
 
 export function useGeoProfile(account?: `0x${string}`): {
-  profile: OnchainProfile | null;
+  profile: Profile | null;
   isLoading: boolean;
   isFetched: boolean;
 } {
@@ -15,18 +15,15 @@ export function useGeoProfile(account?: `0x${string}`): {
     isLoading,
     isFetched,
   } = useQuery({
-    queryKey: ['onchain-profile', account],
+    enabled: account !== undefined,
+    queryKey: ['profile', account],
     queryFn: async () => {
       if (!account) return null;
 
-      return await subgraph.fetchOnchainProfile({
+      return await subgraph.fetchProfile({
         address: account,
       });
     },
-    // Only fetch the profile when the page is loaded. If a user has gone through onboarding,
-    // we optimistically update the cache with their profile, so this query will begin reading
-    // from the cache for the lifetime of the browser tab.
-    staleTime: Infinity,
   });
 
   return {

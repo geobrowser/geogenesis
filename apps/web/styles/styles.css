@@ -1,12 +1,35 @@
 @tailwind base;
 
+@layer base {
+  :root {
+    /* These override the privy modal color defaults */
+    --privy-border-radius-sm: 12px !important;
+    --privy-border-radius-md: 12px !important;
+    --privy-border-radius-mdlg: 12px !important;
+    --privy-border-radius-lg: 12px !important;
+    --privy-border-radius-full: 12px !important;
+    --privy-color-background: #ffffff !important;
+    --privy-color-background-2: #f6f6f6 !important;
+    --privy-color-foreground: #000000 !important;
+    --privy-color-foreground-2: #202020 !important;
+    --privy-color-foreground-3: #b6b6b6 !important;
+    --privy-color-foreground-4: #dbdbdb !important;
+    --privy-color-foreground-accent: 'your-custom-value';
+    --privy-color-accent: #3963fe !important;
+    --privy-color-accent-light: #3963fe !important;
+    --privy-color-accent-dark: 'your-custom-value';
+    --privy-color-success: #2ace9d !important;
+    --privy-color-error: #ff523a !important;
+  }
+}
+
 /* Global styles */
 html {
-  @apply overflow-y-auto overflow-x-hidden;
+  @apply min-h-screen overflow-y-auto overflow-x-clip;
 }
 
 body {
-  @apply bg-white;
+  @apply min-h-screen overflow-x-clip bg-white;
   font-family: var(--font-calibre), sans-serif;
   text-rendering: optimizeLegibility;
 }
@@ -96,6 +119,9 @@ textarea::placeholder {
   .bg-gradient-yellow {
     background: linear-gradient(109deg, #ffcdb0 12.96%, #f9f6a8 87.04%);
   }
+  .bg-gradient-geo {
+    background: linear-gradient(46deg, #bafeff 0%, #e5c4f6 47.02%, #ffcbb4 93.78%, #c7f5fd 160.1%);
+  }
 }
 
 @tailwind utilities;
@@ -132,4 +158,23 @@ textarea::placeholder {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Font utility classes */
+.font-inherit {
+  font-family: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* Radix UI utility classes */
+.elevated-popover > [data-radix-popper-content-wrapper] {
+  z-index: 1001 !important;
+}
+
+/* Radix UI fixes */
+/* see https://github.com/radix-ui/primitives/issues/2908*/
+[data-radix-popper-content-wrapper] {
+  width: var(--radix-popper-anchor-width);
 }

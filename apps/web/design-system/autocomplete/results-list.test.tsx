@@ -1,9 +1,9 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import { Space } from '~/core/io/dto/spaces';
 import { Providers } from '~/core/providers';
-import { Space } from '~/core/types';
 
 import { ResultContent } from './results-list';
 
@@ -21,7 +21,7 @@ const space: Space = {
     description: 'Description-1',
     types: [
       {
-        id: SYSTEM_IDS.SPACE_CONFIGURATION,
+        id: SYSTEM_IDS.SPACE_TYPE,
         name: 'Space Configuration',
       },
     ],

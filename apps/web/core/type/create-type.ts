@@ -1,79 +1,52 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
+import { Relation } from '../database/Relation';
+import { Triple } from '../database/Triple';
+import { upsertRelation, useWriteOps } from '../database/write';
 import { ID } from '../id';
-import { Triple as ITriple } from '../types';
-import { Triple } from '../utils/triple';
+import { GeoType } from '../types';
 
-export function createForeignType(
-  foreignType: ITriple,
+export function createType(
+  entityName: string,
   spaceId: string,
-  spaceConfigId: string | null,
-  create: (triple: ITriple) => void
-) {
-  const newSpaceConfigId = spaceConfigId || ID.createEntityId();
-
-  if (!spaceConfigId) {
-    const spaceConfigNameTriple = Triple.withId({
-      space: spaceId,
-      entityId: newSpaceConfigId,
-      entityName: 'Space Configuration',
-      attributeId: SYSTEM_IDS.NAME,
-      attributeName: 'Name',
-      value: { id: ID.createValueId(), type: 'string', value: 'Space Configuration' },
-    });
-
-    const spaceConfigTypeTriple = Triple.withId({
-      space: spaceId,
-      entityId: newSpaceConfigId,
-      entityName: 'Space Configuration',
-      attributeId: SYSTEM_IDS.TYPES,
-      attributeName: 'Types',
-      value: { id: SYSTEM_IDS.SPACE_CONFIGURATION, type: 'entity', name: 'Space Configuration' },
-    });
-
-    create(spaceConfigNameTriple);
-    create(spaceConfigTypeTriple);
-  }
-
-  const spaceConfigForeignTypeTriple = Triple.withId({
-    space: spaceId,
-    entityId: newSpaceConfigId,
-    entityName: 'Space Configuration',
-    attributeId: SYSTEM_IDS.FOREIGN_TYPES,
-    attributeName: 'Foreign Types',
-    value: { id: foreignType.entityId, type: 'entity', name: foreignType.entityName },
-  });
-
-  create(spaceConfigForeignTypeTriple);
-}
-
-export function createType(entityName: string, spaceId: string, create: (triple: ITriple) => void) {
+  upsert: ReturnType<typeof useWriteOps>['upsert']
+): GeoType {
   const entityId = ID.createEntityId();
 
-  const nameTriple = Triple.withId({
+  const nameTriple = Triple.make({
     space: spaceId,
     entityId,
     entityName,
-    attributeId: SYSTEM_IDS.NAME,
+    attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
     attributeName: 'Name',
-    value: { id: ID.createValueId(), type: 'string', value: entityName },
+    value: { type: 'TEXT', value: entityName },
   });
-  const typeTriple = Triple.withId({
-    space: spaceId,
+
+  upsert(nameTriple, spaceId);
+  upsertRelation({
+    relation: Relation.make({
+      space: spaceId,
+      typeOf: {
+        id: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        name: 'Types',
+      },
+      fromEntity: {
+        id: entityId,
+        name: entityName,
+      },
+      toEntity: {
+        id: SYSTEM_IDS.SCHEMA_TYPE,
+        name: 'Type',
+        renderableType: 'RELATION',
+        value: SYSTEM_IDS.SCHEMA_TYPE,
+      },
+    }),
+    spaceId,
+  });
+
+  return {
     entityId,
     entityName,
-    attributeId: SYSTEM_IDS.TYPES,
-    attributeName: 'Types',
-    value: {
-      id: SYSTEM_IDS.SCHEMA_TYPE,
-      type: 'entity',
-      name: 'Type',
-    },
-  });
-
-  create(nameTriple);
-  create(typeTriple);
-
-  // We return the triple to use at any callsites
-  return typeTriple;
+    space: spaceId,
+  };
 }

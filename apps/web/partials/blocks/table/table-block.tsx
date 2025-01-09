@@ -1,24 +1,23 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
-import Link from 'next/link';
 
 import * as React from 'react';
 
+import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { ID } from '~/core/id';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
@@ -52,114 +51,102 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     blockEntity,
     hasPreviousPage,
     pageNumber,
-    type,
     view,
     placeholder,
+    source,
   } = useTableBlock();
 
   const allColumns = columns.map(column => ({
     id: column.id,
-    name: Entity.name(column.triples),
+    name: column.name,
   }));
 
-  const shownColumnTriples = (blockEntity?.triples ?? []).filter(
-    triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS
-  );
+  const shownColumnRelations = [
+    ...(blockEntity?.relationsOut ?? []).filter(relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS),
+  ];
 
-  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.id) ?? []), 'name'];
-
-  const viewTriple = (blockEntity?.triples ?? []).find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
+  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
    * special handling when creating the graphql string.
    * 1. Name
    * 2. Space
-   * 3. Any entity or string column
+   * 3. Types
+   * 4. Any entity or string column
    *
    * Name and Space are treated specially throughout this code path.
    */
   const filtersWithColumnName = filterState.map(f => {
-    if (f.columnId === SYSTEM_IDS.NAME) {
+    if (f.columnId === SYSTEM_IDS.NAME_ATTRIBUTE) {
       return {
         ...f,
         columnName: 'Name',
       };
     }
 
-    if (f.columnId === SYSTEM_IDS.SPACE) {
+    if (f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE) {
+      return {
+        ...f,
+        columnName: 'Types',
+      };
+    }
+
+    if (f.columnId === SYSTEM_IDS.SPACE_FILTER) {
       return {
         ...f,
         columnName: 'Space',
-        // @TODO: Substreams don't have the correct checksum for space address. This is being fixed.
         value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
+      };
+    }
+
+    if (f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) {
+      return {
+        ...f,
+        columnName: 'Relation type',
+      };
+    }
+
+    if (f.columnId === SYSTEM_IDS.ENTITY_FILTER) {
+      return {
+        ...f,
+        columnName: 'Entity',
       };
     }
 
     return {
       ...f,
-      columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: columns.find(c => c.id === f.columnId)?.name ?? '',
     };
   });
 
-  const typeId = type.entityId;
-  const attributes: Array<[string, string]> =
-    filterState && filterState.length > 0
-      ? // filters can include 'space', which is not an attribute
-        filterState.filter(filter => filter.columnId !== 'space').map(filter => [filter.columnId, filter.value])
-      : [];
+  const filteredTypes: Array<string> = filterState
+    .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
+    .map(filter => filter.value);
 
-  const shownIndexes = columns
-    .map((item, index) => (shownColumnIds.includes(item.id) ? index : null))
-    .filter(item => typeof item === 'number') as Array<number>;
+  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, filteredTypes);
 
   const hasPagination = hasPreviousPage || hasNextPage;
 
   return (
-    <div>
+    <motion.div layout="position" transition={{ duration: 0.15 }}>
       <div className="mb-2 flex h-8 items-center justify-between">
-        <div className="flex grow items-center gap-2">
-          <TableBlockEditableTitle spaceId={spaceId} />
-        </div>
+        <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
-          <AnimatePresence initial={false} mode="wait">
-            {filterState.length > 0 ? (
-              <motion.div
-                className="flex items-center"
-                key="filter-table-with-filters"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.15, bounce: 0.2 }}
-              >
-                <IconButton
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  icon={<FilterTableWithFilters />}
-                  color="grey-04"
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                className="flex items-center"
-                key="filter-table-without-filters"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.15, bounce: 0.2 }}
-              >
-                <IconButton onClick={() => setIsFilterOpen(!isFilterOpen)} icon={<FilterTable />} color="grey-04" />
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <DataBlockViewMenu activeView={view} viewTriple={viewTriple} isLoading={isLoading} />
-          <TableBlockContextMenu
-            allColumns={allColumns}
-            shownColumnTriples={shownColumnTriples}
-            shownIndexes={shownIndexes}
+          <IconButton
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+            color="grey-04"
           />
 
-          {isEditing && (
-            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, attributes)}>
+          <DataBlockViewMenu activeView={view} isLoading={isLoading} />
+          <TableBlockContextMenu
+            allColumns={allColumns}
+            shownColumnRelations={shownColumnRelations}
+            shownColumnIds={shownColumnIds}
+          />
+          {isEditing && source.type !== 'COLLECTION' && (
+            <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
               <Create />
             </Link>
           )}
@@ -183,19 +170,21 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             >
               <TableBlockEditableFilters />
 
-              {filtersWithColumnName.map((f, index) => (
-                <TableBlockFilterPill
-                  key={`${f.columnId}-${f.value}`}
-                  filter={f}
-                  onDelete={() => {
-                    const newFilterState = produce(filterState, draft => {
-                      draft.splice(index, 1);
-                    });
+              {filtersWithColumnName.map((f, index) => {
+                return (
+                  <TableBlockFilterPill
+                    key={`${f.columnId}-${f.value}`}
+                    filter={f}
+                    onDelete={() => {
+                      const newFilterState = produce(filterState, draft => {
+                        draft.splice(index, 1);
+                      });
 
-                    setFilterState(newFilterState);
-                  }}
-                />
-              ))}
+                      setFilterState(newFilterState, source);
+                    }}
+                  />
+                );
+              })}
             </motion.div>
           </motion.div>
         </AnimatePresence>
@@ -203,16 +192,16 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
       <motion.div layout="position" transition={{ duration: 0.15 }}>
         {isLoading ? (
-          <TableBlockPlaceholder />
+          <TableBlockLoadingPlaceholder />
         ) : (
           <TableBlockTable
             space={spaceId}
-            typeId={typeId}
             columns={columns}
             rows={rows}
-            shownIndexes={shownIndexes}
+            shownColumnIds={shownColumnIds}
             placeholder={placeholder}
             view={view}
+            source={source}
           />
         )}
         {hasPagination && (
@@ -223,40 +212,23 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
                 <>
                   <PageNumber number={1} onClick={() => setPage(0)} />
                   {pageNumber > 2 ? (
-                    <>
-                      <Spacer width={16} />
-                      <Text color="grey-03" variant="metadataMedium">
-                        ...
-                      </Text>
-                      <Spacer width={16} />
-                    </>
-                  ) : (
-                    <Spacer width={4} />
-                  )}
+                    <Text color="grey-03" variant="metadataMedium">
+                      ...
+                    </Text>
+                  ) : null}
                 </>
               )}
-              {hasPreviousPage && (
-                <>
-                  <PageNumber number={pageNumber} onClick={() => setPage('previous')} />
-                  <Spacer width={4} />
-                </>
-              )}
+              {hasPreviousPage && <PageNumber number={pageNumber} onClick={() => setPage('previous')} />}
               <PageNumber isActive number={pageNumber + 1} />
-              {hasNextPage && (
-                <>
-                  <Spacer width={4} />
-                  <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />
-                </>
-              )}
-              <Spacer width={32} />
+              {hasNextPage && <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />}
+              <Spacer width={8} />
               <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
-              <Spacer width={12} />
               <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
             </PageNumberContainer>
           </>
         )}
       </motion.div>
-    </div>
+    </motion.div>
   );
 });
 
@@ -268,12 +240,12 @@ type TableBlockPlaceholderProps = {
   rows?: number;
 };
 
-export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }: TableBlockPlaceholderProps) {
+export function TableBlockLoadingPlaceholder({ className = '', columns = 3, rows = 10 }: TableBlockPlaceholderProps) {
   const PLACEHOLDER_COLUMNS = new Array(columns).fill(0);
   const PLACEHOLDER_ROWS = new Array(rows).fill(0);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-grey-02 p-0 shadow-button">
+    <div className="overflow-hidden rounded-lg border border-grey-02 p-0">
       <div className={cx('overflow-x-clip rounded-lg', className)}>
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>
@@ -308,7 +280,7 @@ export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }
 
 export function TableBlockError({ spaceId, blockId }: { spaceId: string; blockId: string }) {
   return (
-    <div className="overflow-hidden rounded border border-red-02 p-0 shadow-button shadow-red-02">
+    <div className="overflow-hidden rounded border border-red-02 p-0">
       <div className="overflow-x-scroll rounded-sm">
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>

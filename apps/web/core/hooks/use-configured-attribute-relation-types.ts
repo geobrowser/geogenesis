@@ -1,42 +1,25 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { pipe } from '@mobily/ts-belt';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 
+import { useTriples } from '../database/triples';
+import { StoredTriple } from '../database/types';
 import { Services } from '../services';
-import { Action as IAction, Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
-import { Triple } from '../utils/triple';
-import { Value } from '../utils/value';
-import { useActionsStore } from './use-actions-store';
+import { Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
+import { Triples } from '../utils/triples';
 
 /**
  * This function takes triples from the server for the relation value types and merges them with any locally
  * created/deleted relation value types before mapping them to the RelationValueType data structure that the UI
  * expects to consume.
  */
-export const mapMergedTriplesToRelationValueTypes = (
-  actions: Array<IAction>,
+const mapMergedTriplesToRelationValueTypes = (
+  triples: Array<StoredTriple>,
   relationTypeTriples: Array<ITriple>
 ): RelationValueTypesByAttributeId => {
   // We need to re-merge local actions with the server triples since we don't re-run RQ in useConfiguredAttributeRelationTypes
   // when actions change.
-  const mergedTriples = Triple.fromActions(actions, relationTypeTriples);
-
-  return pipe(
-    mergedTriples,
-    triples => triples.filter(Value.isRelationValueType),
-    triples =>
-      triples.reduce<RelationValueTypesByAttributeId>((acc, relationType) => {
-        if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
-
-        acc[relationType.entityId].push({
-          typeId: relationType.value.id,
-          typeName: relationType.value.name,
-          spaceIdOfAttribute: relationType.space,
-        });
-
-        return acc;
-      }, {})
-  );
+  const mergedTriples = Triples.merge(triples, relationTypeTriples);
+  return {};
 };
 
 /**
@@ -53,7 +36,7 @@ export function useConfiguredAttributeRelationTypes({
   entityId: string;
 }): RelationValueTypesByAttributeId {
   const { subgraph } = Services.useServices();
-  const { allActions } = useActionsStore();
+  const triples = useTriples();
 
   const {
     data: serverAttributeRelationTypes,
@@ -64,6 +47,8 @@ export function useConfiguredAttributeRelationTypes({
     queryFn: () =>
       // 1. Fetch all the triples for the entity
       // 2. Filter out the triples that are not relation value types
+      // @TODO(relations): The configured value types are relations and not triples. IMO configuration
+      // should happen from a relation entity and not any entity that has that relation type.
       subgraph.fetchTriples({
         query: '',
         skip: 0,
@@ -88,7 +73,7 @@ export function useConfiguredAttributeRelationTypes({
   // We need to merge any local actions for the attribute relation types with the server attribute relation types.
   // Additionally we map to the data structure the UI expects to consume.
   return mapMergedTriplesToRelationValueTypes(
-    allActions,
+    triples,
     // Flatten all the triples for each entity into a single array (there shouldn't be duplicates)
     serverAttributeRelationTypes
   );

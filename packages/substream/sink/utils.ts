@@ -1,21 +1,14 @@
-/**
- * Provides structured logging for Geo.
- * @param requestId - A unique identifier for the request. This should be used across all logs for a single request/workflow.
- * @param message - The message to log.
- * @param level - The log level. Defaults to 'info'.
- */
-export function slog({
-  requestId,
-  message,
-  level,
-}: {
-  requestId: string;
-  message: string;
-  level?: 'log' | 'info' | 'warn' | 'error';
-}) {
-  if (!level) {
-    level = 'info';
+export function partition<T>(array: T[], predicate: (t: T) => boolean) {
+  const trueArray: T[] = [];
+  const falseArray: T[] = [];
+
+  for (const item of array) {
+    if (predicate(item)) {
+      trueArray.push(item);
+    } else {
+      falseArray.push(item);
+    }
   }
 
-  console[level](`${level.toUpperCase()} – ${new Date().toISOString()} – ${message} – requestId: ${requestId}`);
+  return [trueArray, falseArray] as const;
 }

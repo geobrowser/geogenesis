@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
@@ -8,13 +8,10 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useWriteOps } from '~/core/database/write';
+import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { Triple } from '~/core/utils/triple';
 
 import { SquareButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
@@ -50,28 +47,27 @@ const StyledContent = (props: ContentProps) => {
 const MotionContent = motion(StyledContent);
 
 interface Props {
-  entityValueIds: string[];
+  selectedIds: string[];
   onDone: (result: { id: string; name: string | null }) => void;
-  allowedTypes?: { typeId: string; typeName: string | null }[];
+  filterByTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
   attributeId?: string;
 }
 
-export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes, spaceId, attributeId }: Props) {
+export function EntityAutocompleteDialog({ onDone, selectedIds, filterByTypes, spaceId, attributeId }: Props) {
   const [, setToast] = useToast();
-  const { create } = useActionsStore();
-  const autocomplete = useAutocomplete({
-    allowedTypes: allowedTypes?.map(type => type.typeId),
+  const { upsert } = useWriteOps();
+  const autocomplete = useSearch({
+    filterByTypes: filterByTypes?.map(type => type.typeId),
   });
-  const entityItemIdsSet = new Set(entityValueIds);
+  const selectedIdsSet = new Set(selectedIds);
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const { spaces } = useSpaces();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
-  const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
-  const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
+  // const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
+  // const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
 
   React.useEffect(() => {
     const handleQueryChange = (e: MouseEvent) => {
@@ -88,58 +84,58 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
     const newEntityId = ID.createEntityId();
 
     // Create new entity with name and types
-    create(
-      Triple.withId({
+    upsert(
+      {
         entityId: newEntityId,
-        attributeId: SYSTEM_IDS.NAME,
+        attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
         entityName: autocomplete.query,
         attributeName: 'Name',
-        space: spaceId,
         value: {
-          type: 'string',
-          id: ID.createValueId(),
+          type: 'TEXT',
           value: autocomplete.query,
         },
-      })
+      },
+      spaceId
     );
 
-    if (allowedTypes) {
-      allowedTypes.forEach(type => {
-        create(
-          Triple.withId({
+    if (filterByTypes) {
+      filterByTypes.forEach(type => {
+        upsert(
+          {
             entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
+            attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
             entityName: autocomplete.query,
             attributeName: 'Types',
-            space: spaceId,
             value: {
-              type: 'entity',
-              id: type.typeId,
-              name: type.typeName,
+              type: 'URL',
+              value: GraphUrl.fromEntityId(type.typeId),
             },
-          })
+          },
+          spaceId
         );
       });
     }
 
-    if (relationValueTypesForAttribute) {
-      relationValueTypesForAttribute.forEach(type => {
-        create(
-          Triple.withId({
-            entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
-            entityName: autocomplete.query,
-            attributeName: 'Types',
-            space: spaceId,
-            value: {
-              type: 'entity',
-              id: type.typeId,
-              name: type.typeName,
-            },
-          })
-        );
-      });
-    }
+    // @TODO(relations): Fix – Types are relations and not triples now.
+    // if (relationValueTypesForAttribute) {
+    //   relationValueTypesForAttribute.forEach(type => {
+    //     upsert(
+    //       {
+    //         type: 'SET_TRIPLE',
+    //         entityId: newEntityId,
+    //         attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+    //         entityName: autocomplete.query,
+    //         attributeName: 'Types',
+    //         value: {
+    //           type: 'ENTITY',
+    //           value: type.typeId,
+    //           name: type.typeName,
+    //         },
+    //       },
+    //       spaceId
+    //     );
+    //   });
+    // }
 
     onDone({ id: newEntityId, name: autocomplete.query });
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
@@ -207,9 +203,8 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
                       <ResultContent
                         key={result.id}
                         onClick={() => onDone(result)}
-                        alreadySelected={entityItemIdsSet.has(result.id)}
+                        alreadySelected={selectedIdsSet.has(result.id)}
                         result={result}
-                        spaces={spaces}
                       />
                     </motion.div>
                   ))}

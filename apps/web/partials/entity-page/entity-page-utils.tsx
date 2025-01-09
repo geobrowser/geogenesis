@@ -1,10 +1,9 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Triple } from '~/core/types';
+import { RenderableProperty, Triple } from '~/core/types';
 
+/* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> Triples in Schema -> Alphabetical */
 export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: Triple[]) {
-  /* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> Triples in Schema -> Alphabetical */
-
   const schemaAttributeIds = schemaTriples.map(schemaTriple => schemaTriple.attributeId);
 
   /* Visible triples includes both real triples and placeholder triples */
@@ -12,12 +11,12 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
     const { attributeId: attributeIdA, attributeName: attributeNameA } = tripleA;
     const { attributeId: attributeIdB, attributeName: attributeNameB } = tripleB;
 
-    const isNameA = attributeIdA === SYSTEM_IDS.NAME;
-    const isNameB = attributeIdB === SYSTEM_IDS.NAME;
-    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION;
-    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION;
-    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES;
-    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES;
+    const isNameA = attributeIdA === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isNameB = attributeIdB === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
+    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
 
     const aIndex = schemaAttributeIds.indexOf(attributeIdA);
     const bIndex = schemaAttributeIds.indexOf(attributeIdB);
@@ -45,6 +44,36 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
     if (aInSchema && bInSchema) {
       return aIndex - bIndex;
     }
+
+    return (attributeNameA || '').localeCompare(attributeNameB || '');
+  });
+}
+
+export function sortRenderables(renderables: RenderableProperty[]) {
+  /* Visible triples includes both real triples and placeholder triples */
+  return renderables.sort((renderableA, renderableB) => {
+    // Always put an empty, placeholder triple with no attribute id at the bottom
+    // of the list
+    if (renderableA.attributeId === '') return 1;
+
+    const { attributeId: attributeIdA, attributeName: attributeNameA } = renderableA;
+    const { attributeId: attributeIdB, attributeName: attributeNameB } = renderableB;
+
+    const isNameA = attributeIdA === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isNameB = attributeIdB === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
+    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
+
+    if (isNameA && !isNameB) return -1;
+    if (!isNameA && isNameB) return 1;
+
+    if (isDescriptionA && !isDescriptionB) return -1;
+    if (!isDescriptionA && isDescriptionB) return 1;
+
+    if (isTypesA && !isTypesB) return -1;
+    if (!isTypesA && isTypesB) return 1;
 
     return (attributeNameA || '').localeCompare(attributeNameB || '');
   });

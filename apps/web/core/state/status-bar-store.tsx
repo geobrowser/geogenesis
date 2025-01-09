@@ -2,9 +2,12 @@ import * as React from 'react';
 
 import { ReviewState } from '~/core/types';
 
+type Retry = (() => Promise<unknown>) | (() => unknown);
+
 export interface StatusBarState {
   reviewState: ReviewState;
   error: string | null;
+  retry?: Retry;
 }
 
 export type StatusBarActions =
@@ -12,14 +15,14 @@ export type StatusBarActions =
       type: 'SET_REVIEW_STATE';
       payload: ReviewState;
     }
-  | { type: 'ERROR'; payload: string | null };
+  | { type: 'ERROR'; payload: string | null; retry?: Retry };
 
-export const statusBarReducer = (state: StatusBarState, action: StatusBarActions): StatusBarState => {
+export const statusBarReducer = (_: StatusBarState, action: StatusBarActions): StatusBarState => {
   switch (action.type) {
     case 'SET_REVIEW_STATE':
       return { reviewState: action.payload, error: null };
     case 'ERROR':
-      return { reviewState: 'publish-error', error: action.payload };
+      return { reviewState: 'publish-error', error: action.payload, retry: action?.retry };
   }
 };
 

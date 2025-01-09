@@ -1,10 +1,10 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { parse } from 'csv/sync';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
@@ -13,16 +13,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
-import {
-  DateValue,
-  Entity as EntityType,
-  EntityValue,
-  StringValue,
-  Triple as TripleType,
-  UrlValue,
-} from '~/core/types';
-import type { Space } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
+import { Entity } from '~/core/io/dto/entities';
+import { Space } from '~/core/io/dto/spaces';
+import { EntityId } from '~/core/io/schema';
+import { Triple as TripleType } from '~/core/types';
+import type { Value } from '~/core/types';
 import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
 
 import { Accordion } from '~/design-system/accordion';
@@ -37,9 +32,10 @@ import { Text } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { Url } from '~/design-system/icons/url';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Select } from '~/design-system/select';
 
-import { actionsAtom, examplesAtom, headersAtom, loadingAtom, publishAtom, recordsAtom, stepAtom } from './atoms';
+import { examplesAtom, headersAtom, loadingAtom, publishAtom, recordsAtom, stepAtom, triplesAtom } from './atoms';
 
 dayjs.extend(utc);
 
@@ -48,7 +44,7 @@ type GenerateProps = {
   space: Space;
 };
 
-export type SupportedValueType = 'string' | 'date' | 'url' | 'entity';
+export type SupportedValueType = 'TEXT' | 'TIME' | 'URL' | 'ENTITY';
 
 export type UnsupportedValueType = 'number' | 'image';
 
@@ -57,7 +53,7 @@ type EntityAttributesType = Record<string, { index: number; type: SupportedValue
 export const Generate = ({ spaceId }: GenerateProps) => {
   const { isEditor } = useAccessControl(spaceId);
 
-  const [actions, setActions] = useAtom(actionsAtom);
+  const [actions, setActions] = useAtom(triplesAtom);
   const [isLoading, setIsLoading] = useAtom(loadingAtom);
   const [step, setStep] = useAtom(stepAtom);
   const setIsPublishOpen = useSetAtom(publishAtom);
@@ -65,7 +61,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   const pathname = usePathname();
   const spacePath = pathname?.split('/import')[0] ?? '/spaces';
 
-  const [entityType, setEntityType] = useState<EntityType | undefined>(undefined);
+  const [entityType, setEntityType] = useState<Entity | undefined>(undefined);
   const { supportedAttributes, unsupportedAttributes } = useMemo(() => getAttributes(entityType), [entityType]);
 
   const [entityNameIndex, setEntityNameIndex] = useState<number | undefined>(undefined);
@@ -132,7 +128,8 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     const generateActions = async () => {
       const attributes = Object.keys(entityAttributes);
 
-      const relationAttributes = Object.values(entityAttributes).filter(({ type }) => type === 'entity');
+      // @TODO(relations)
+      const relationAttributes = Object.values(entityAttributes).filter(({ type }) => type === 'ENTITY');
       const relatedEntityIdsSet: Set<string> = new Set();
 
       entities.forEach(entity => {
@@ -153,19 +150,18 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         })
       );
 
-      const filteredRelatedEntities: Array<EntityType> = relatedEntities.filter(
-        entity => entity !== null
-      ) as Array<EntityType>;
+      const filteredRelatedEntities: Array<Entity> = relatedEntities.filter(entity => entity !== null);
 
       const relatedEntitiesMap = new Map(filteredRelatedEntities.map(entity => [entity.id, entity.name ?? '']));
 
       if (typeof entityNameIndex === 'number' && typeof entityIdIndex === 'number') {
         entities.forEach(entity => {
-          relatedEntitiesMap.set(entity[entityIdIndex], entity[entityNameIndex]);
+          relatedEntitiesMap.set(EntityId(entity[entityIdIndex]), entity[entityNameIndex]);
         });
       }
 
-      const newActions: Array<any> = [];
+      // @TODO: Use actual type
+      const newTriples: Array<TripleType> = [];
 
       entities.forEach(entity => {
         const newEntityId = typeof entityIdIndex === 'number' ? entity[entityIdIndex] : ID.createEntityId();
@@ -173,42 +169,35 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         if (typeof entityNameIndex !== 'number' || !entityType) return;
 
         // Create new entity + set entity name
-        newActions.push({
-          ...Triple.withId({
-            space: spaceId,
-            entityId: newEntityId,
-            entityName: entity[entityNameIndex],
-            attributeId: 'name',
-            attributeName: 'Name',
-            value: {
-              type: 'string',
-              id: ID.createValueId(),
-              value: entity[entityNameIndex],
-            },
-          }),
-          type: 'createTriple',
+        newTriples.push({
+          space: spaceId,
+          entityId: newEntityId,
+          entityName: entity[entityNameIndex],
+          attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+          attributeName: 'Name',
+          value: {
+            type: 'TEXT',
+            value: entity[entityNameIndex],
+          },
         });
 
         // Create entity type
-        newActions.push({
-          ...Triple.withId({
-            space: spaceId,
-            entityId: newEntityId,
-            entityName: entity[entityNameIndex],
-            attributeId: 'type',
-            attributeName: 'Types',
-            value: {
-              type: 'entity',
-              id: entityType.id,
-              name: entityType.name,
-            },
-          }),
-          type: 'createTriple',
-        });
+        // newTriples.push({
+        //   space: spaceId,
+        //   entityId: newEntityId,
+        //   entityName: entity[entityNameIndex],
+        //   attributeId: 'type',
+        //   attributeName: 'Types',
+        //   value: {
+        //     type: 'ENTITY',
+        //     value: entityType.id,
+        //     name: entityType.name,
+        //   },
+        // });
 
         // Create entity attribute values
         attributes.forEach(attributeId => {
-          if (entityAttributes[attributeId]?.type === 'date') {
+          if (entityAttributes[attributeId]?.type === 'TIME') {
             const date = dayjs.utc(entity[entityAttributes[attributeId].index], 'MM/DD/YYYY');
 
             if (!date.isValid()) {
@@ -223,62 +212,50 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               minute: '0',
             });
 
-            newActions.push({
-              ...Triple.withId({
-                space: spaceId,
-                entityId: newEntityId,
-                entityName: entity[entityNameIndex],
-                attributeId,
-                attributeName: entityAttributes[attributeId]?.name ?? '',
-                value: {
-                  type: 'date',
-                  id: ID.createValueId(),
-                  value: dateValue,
-                } as DateValue,
-              }),
-              type: 'createTriple',
+            newTriples.push({
+              space: spaceId,
+              entityId: newEntityId,
+              entityName: entity[entityNameIndex],
+              attributeId,
+              attributeName: entityAttributes[attributeId]?.name ?? '',
+              value: {
+                type: 'TIME',
+                value: dateValue,
+              },
             });
-          } else if (entityAttributes[attributeId]?.type === 'entity') {
-            const values = entity[entityAttributes[attributeId].index].split(',');
-
-            values.forEach(value => {
-              newActions.push({
-                ...Triple.withId({
-                  space: spaceId,
-                  entityId: newEntityId,
-                  entityName: entity[entityNameIndex],
-                  attributeId,
-                  attributeName: entityAttributes[attributeId]?.name ?? '',
-                  value: {
-                    type: 'entity',
-                    id: value,
-                    name: relatedEntitiesMap.get(value),
-                  } as EntityValue,
-                }),
-                type: 'createTriple',
-              });
-            });
+          } else if (entityAttributes[attributeId]?.type === 'ENTITY') {
+            // const values = entity[entityAttributes[attributeId].index].split(',');
+            // values.forEach(value => {
+            //   newTriples.push({
+            //     space: spaceId,
+            //     entityId: newEntityId,
+            //     entityName: entity[entityNameIndex],
+            //     attributeId,
+            //     attributeName: entityAttributes[attributeId]?.name ?? '',
+            //     value: {
+            //       type: 'ENTITY',
+            //       value: value,
+            //       name: relatedEntitiesMap.get(EntityId(value)) ?? null,
+            //     },
+            //   });
+            // });
           } else {
-            newActions.push({
-              ...Triple.withId({
-                space: spaceId,
-                entityId: newEntityId,
-                entityName: entity[entityNameIndex],
-                attributeId,
-                attributeName: entityAttributes[attributeId]?.name ?? '',
-                value: {
-                  type: entityAttributes[attributeId]?.type ?? 'string',
-                  id: ID.createValueId(),
-                  value: entity[entityAttributes[attributeId].index],
-                } as StringValue | UrlValue,
-              }),
-              type: 'createTriple',
+            newTriples.push({
+              space: spaceId,
+              entityId: newEntityId,
+              entityName: entity[entityNameIndex],
+              attributeId,
+              attributeName: entityAttributes[attributeId]?.name ?? '',
+              value: {
+                type: entityAttributes[attributeId]?.type ?? 'TEXT',
+                value: entity[entityAttributes[attributeId].index],
+              } as Value,
             });
           }
         });
       });
 
-      setActions(newActions);
+      setActions(newTriples);
     };
 
     try {
@@ -348,10 +325,9 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 </>
               ) : (
                 <EntitySearchAutocomplete
-                  spaceId={spaceId}
                   placeholder="Select entity type..."
                   onDone={result => {
-                    setEntityType(result as EntityType);
+                    setEntityType(result as Entity);
                     setStep('step2');
                   }}
                   itemIds={[]}
@@ -455,29 +431,29 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 </div>
               </div>
               {supportedAttributes.map((attribute: TripleType) => (
-                <div key={attribute.value.id}>
+                <div key={attribute.value.value}>
                   <div className="flex items-center justify-between">
                     <div className="text-metadataMedium">
-                      {attribute.value.type === 'entity' ? attribute.value.name : null}
+                      {/* {attribute.value.type === 'ENTITY' ? attribute.value.name : null} */}
                     </div>
                     <div className="text-footnoteMedium">Optional</div>
                   </div>
                   <div className="mt-2 flex items-center gap-1">
                     <Select
-                      value={entityAttributes?.[attribute.value.id]?.type ?? 'string'}
+                      value={entityAttributes?.[attribute.value.value]?.type ?? 'string'}
                       onChange={(value: string) => {
                         const newEntityAttributes = {
                           ...entityAttributes,
                         };
 
                         if (value) {
-                          newEntityAttributes[attribute.value.id] = {
-                            ...newEntityAttributes[attribute.value.id],
+                          newEntityAttributes[attribute.value.value] = {
+                            ...newEntityAttributes[attribute.value.value],
                             type: value as SupportedValueType,
                           };
                         } else {
-                          newEntityAttributes[attribute.value.id] = {
-                            ...newEntityAttributes[attribute.value.id],
+                          newEntityAttributes[attribute.value.value] = {
+                            ...newEntityAttributes[attribute.value.value],
                             type: 'string' as SupportedValueType,
                           };
                         }
@@ -501,20 +477,20 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                       position="popper"
                     />
                     <Select
-                      value={entityAttributes?.[attribute.value.id]?.index?.toString() ?? ''}
+                      value={entityAttributes?.[attribute.value.value]?.index?.toString() ?? ''}
                       onChange={(value: string) => {
                         const newEntityAttributes = {
                           ...entityAttributes,
                         };
 
                         if (value) {
-                          newEntityAttributes[attribute.value.id] = {
-                            ...newEntityAttributes[attribute.value.id],
+                          newEntityAttributes[attribute.value.value] = {
+                            ...newEntityAttributes[attribute.value.value],
                             index: parseInt(value, 10),
-                            name: attribute.value.type === 'entity' ? attribute.value.name ?? '' : '',
+                            // name: attribute.value.type === 'ENTITY' ? attribute.value.name ?? '' : '',
                           };
                         } else {
-                          delete newEntityAttributes[attribute.value.id];
+                          delete newEntityAttributes[attribute.value.value];
                         }
 
                         setEntityAttributes(newEntityAttributes);
@@ -542,29 +518,29 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-8">
                   {unsupportedAttributes.map((attribute: TripleType) => (
-                    <div key={attribute.value.id}>
+                    <div key={attribute.value.value}>
                       <div className="flex items-center justify-between">
                         <div className="text-metadataMedium">
-                          {attribute.value.type === 'entity' && attribute.value.name}
+                          {/* {attribute.value.type === 'ENTITY' && attribute.value.name} */}
                         </div>
                         <div className="text-footnoteMedium">Optional</div>
                       </div>
                       <div className="mt-2 flex items-center gap-1">
                         <Select
-                          value={entityAttributes?.[attribute.value.id]?.type ?? 'string'}
+                          value={entityAttributes?.[attribute.value.value]?.type ?? 'TEXT'}
                           onChange={() => null}
                           options={[
-                            { value: 'string', label: 'Text', render: <Text />, className: `items-center` },
-                            { value: 'date', label: 'Date', render: <Date />, className: `items-center` },
-                            { value: 'url', label: 'Web URL', render: <Url />, className: `items-center` },
+                            { value: 'TEXT', label: 'Text', render: <Text />, className: `items-center` },
+                            { value: 'TIME', label: 'Date', render: <Date />, className: `items-center` },
+                            { value: 'URL', label: 'Web URL', render: <Url />, className: `items-center` },
                             {
-                              value: 'image',
+                              value: 'IMAGE',
                               label: 'Image',
                               render: <Image />,
                               disabled: true,
                               className: `items-center`,
                             },
-                            { value: 'relation', label: 'Relation', render: <Relation />, className: `items-center` },
+                            { value: 'RELATION', label: 'Relation', render: <Relation />, className: `items-center` },
                           ]}
                           className="!flex-[0]"
                           disabled
@@ -610,18 +586,18 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   );
 };
 
-const getAttributes = (entityType: EntityType | undefined) => {
+const getAttributes = (entityType: Entity | undefined) => {
   const supportedAttributes: TripleType[] = [];
   const unsupportedAttributes: TripleType[] = [];
 
   if (entityType) {
     entityType?.triples.forEach((triple: TripleType) => {
       if (triple.attributeName === 'Attributes') {
-        if (triple.value.type === 'entity' && triple.value.name && UNSUPPORTED_ATTRIBUTES.includes(triple.value.name)) {
-          unsupportedAttributes.push(triple);
-        } else {
-          supportedAttributes.push(triple);
-        }
+        // if (triple.value.type === 'ENTITY' && triple.value.name && UNSUPPORTED_ATTRIBUTES.includes(triple.value.name)) {
+        //   unsupportedAttributes.push(triple);
+        // } else {
+        //   supportedAttributes.push(triple);
+        // }
       }
     });
   }

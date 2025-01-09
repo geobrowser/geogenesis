@@ -1,16 +1,16 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
+import { Space } from '~/core/io/dto/spaces';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
-import { Space } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
 
 import { Component } from './component';
@@ -59,7 +59,7 @@ const getData = async ({
 
   // This can be empty if there are no types in the Space
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
-  const defaultTypeId = configEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.DEFAULT_TYPE)?.value.id;
+  const defaultTypeId = configEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.DEFAULT_TYPE)?.value.value;
 
   const initialSelectedType =
     initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
@@ -71,30 +71,22 @@ const getData = async ({
     ...initialParams,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
-    typeIds: typeId ? [typeId] : [],
-    filter: TableBlockSdk.createGraphQLStringFromFilters(
-      [
-        {
-          columnId: SYSTEM_IDS.NAME,
-          value: initialParams.query,
-          valueType: 'string',
-        },
-        {
-          columnId: SYSTEM_IDS.SPACE,
-          value: spaceId,
-          valueType: 'string',
-        },
-      ],
-      typeId
-    ),
+    filter: TableBlockSdk.createGraphQLStringFromFilters([
+      {
+        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        value: initialParams.query,
+        valueType: 'TEXT',
+      },
+      {
+        columnId: SYSTEM_IDS.SPACE_FILTER,
+        value: spaceId,
+        valueType: 'TEXT',
+      },
+    ]),
   };
 
   const serverColumns = await fetchColumns({
-    params: fetchParams,
-    api: {
-      fetchTriples: Subgraph.fetchTriples,
-      fetchEntity: Subgraph.fetchEntity,
-    },
+    typeIds: typeId ? [typeId] : [],
   });
 
   const serverRows = await fetchRows({
@@ -104,7 +96,7 @@ const getData = async ({
     params: fetchParams,
   });
 
-  const { rows: finalRows } = EntityTable.fromColumnsAndRows(serverRows, serverColumns);
+  const finalRows = EntityTable.fromColumnsAndRows(serverRows, serverColumns);
 
   return {
     space,

@@ -1,20 +1,20 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { useAccount } from 'wagmi';
-
-import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
+import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
+import { usePathSegments } from '~/core/hooks/use-path-segments';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
-import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
@@ -22,16 +22,17 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Home } from '~/design-system/icons/home';
 import { Menu } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
-
-import { useCreateProfile } from '../onboarding/create-profile-dialog';
 
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
-  const { showCreateProfile } = useCreateProfile();
 
-  const { address } = useAccount();
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
   const { isLoading, account } = useGeoAccount(address);
+
+  const { shouldShowElement } = useOnboardGuard();
 
   if (!address) {
     return <GeoConnectButton />;
@@ -59,42 +60,31 @@ export function NavbarActions() {
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {!account?.profile && account?.onchainProfile ? (
-          <AvatarMenuItem>
-            <div className="flex items-center gap-2">
-              <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                <Avatar value={address} size={16} />
-              </div>
-              <button onClick={showCreateProfile}>Create profile</button>
-            </div>
-          </AvatarMenuItem>
-        ) : (
+        {/* {account?.onchainProfile?.homeSpaceId && (
           <>
-            {account?.onchainProfile?.homeSpaceId && (
-              <>
-                <AvatarMenuItem>
-                  <div className="flex items-center gap-2">
-                    <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                      <Avatar value={address} avatarUrl={account.profile?.avatarUrl} size={16} />
-                    </div>
-                    <Link
-                      prefetch={false}
-                      href={NavUtils.toSpace(account.onchainProfile.homeSpaceId)}
-                      className="text-button"
-                    >
-                      Personal space
-                    </Link>
-                  </div>
-                </AvatarMenuItem>
-                <AvatarMenuItem>
-                  <Link href="/home" className="flex items-center gap-2 grayscale">
-                    <Home />
-                    <p className="text-button">Personal home</p>
-                  </Link>
-                </AvatarMenuItem>
-              </>
-            )}
+            <AvatarMenuItem>
+              <div className="flex items-center gap-2">
+                <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                  <Avatar value={address} avatarUrl={account.profile?.avatarUrl} size={16} />
+                </div>
+                <Link
+                  prefetch={false}
+                  href={NavUtils.toSpace(account.onchainProfile.homeSpaceId)}
+                  className="text-button"
+                >
+                  Personal space
+                </Link>
+              </div>
+            </AvatarMenuItem>
           </>
+        )} */}
+        {shouldShowElement && (
+          <AvatarMenuItem>
+            <Link href="/home" className="flex items-center gap-2 grayscale">
+              <Home />
+              <p className="text-button">Personal home</p>
+            </Link>
+          </AvatarMenuItem>
         )}
         <AvatarMenuItem>
           <GeoConnectButton />
@@ -152,16 +142,14 @@ const MotionPopoverContent = motion(Popover.Content);
 
 const useSpaceId = () => {
   const params = useParams();
+  const segment = usePathSegments();
+
+  if (segment[0] === 'root') {
+    return SYSTEM_IDS.ROOT_SPACE_ID;
+  }
+
   const spaceId = params?.['id'] as string | undefined;
-
   return spaceId;
-};
-
-const useCanUserEdit = (spaceId: string | null | undefined) => {
-  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
-  const canUserEdit = isEditor || isAdmin || isEditorController;
-
-  return canUserEdit;
 };
 
 function ModeToggle() {
@@ -169,7 +157,7 @@ function ModeToggle() {
   const { editable, setEditable } = useEditable();
 
   const spaceId = useSpaceId();
-  const canUserEdit = useCanUserEdit(spaceId);
+  const canUserEdit = useCanUserEdit(spaceId ?? '');
 
   React.useEffect(() => {
     // If a user doesn't have edit access on the page, make sure we set the toggle

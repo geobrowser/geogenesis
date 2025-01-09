@@ -1,5 +1,3 @@
-'use client';
-
 import { cva } from 'class-variance-authority';
 import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
@@ -19,7 +17,7 @@ const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin
   // of -1px to compensate for this. This results in the correct line heights between both edit and
   // browse modes.
-  'w-full resize-none bg-transparent m-0 p-0 placeholder:text-grey-02 focus:outline-none -mb-[1px]',
+  'm-0 -mb-[1px] w-full resize-none bg-transparent p-0 placeholder:text-grey-02 focus:outline-none',
   {
     variants: {
       variant: {
@@ -129,7 +127,8 @@ interface ImageFieldProps {
 }
 
 export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
-  const { storageClient } = Services.useServices();
+  const { ipfs } = Services.useServices();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputClick = () => {
     // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
@@ -141,7 +140,7 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const imageSrc = await storageClient.uploadFile(file);
+      const imageSrc = await ipfs.uploadFile(file);
       onImageChange(imageSrc);
     }
   };
@@ -176,7 +175,7 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
 }
 
 export function TableImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
-  const { storageClient } = Services.useServices();
+  const { ipfs } = Services.useServices();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputClick = () => {
     // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
@@ -188,7 +187,7 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const imageSrc = await storageClient.uploadFile(file);
+      const imageSrc = await ipfs.uploadFile(file);
       onImageChange(imageSrc);
     }
   };

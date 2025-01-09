@@ -12,110 +12,57 @@ CREATE TABLE public.cursors (
 
 COMMENT ON TABLE public.cursors IS '@name substreamCursor';
 
-CREATE TABLE public.geo_entities (
+CREATE TABLE public.entities (
     id text PRIMARY KEY,
-    name character varying,
-    description character varying,
-    -- latest_version_id text REFERENCES public.versions(id),
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     updated_at integer,
     updated_at_block integer
-    -- is_attribute boolean DEFAULT false,
-    -- attribute_value_type_id text
 );
+
+CREATE TYPE public.space_type as ENUM ('personal', 'public');
 
 CREATE TABLE public.spaces (
     id text PRIMARY KEY,
     created_at_block integer NOT NULL,
     is_root_space boolean NOT NULL,
+    type space_type NOT NULL,
+    dao_address text NOT NULL,
     space_plugin_address text,
     main_voting_plugin_address text,
     member_access_plugin_address text,
-    configuration_id text REFERENCES public.geo_entities(id)
+    personal_space_admin_plugin_address text
 );
 
-CREATE TABLE public.geo_entity_types (
-    id serial PRIMARY KEY,
-    entity_id text NOT NULL REFERENCES public.geo_entities(id),
-    type_id text NOT NULL REFERENCES public.geo_entities(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    CONSTRAINT geo_entity_types_unique_entity_type_pair UNIQUE (entity_id, type_id)
-);
-
-CREATE TABLE public.onchain_profiles (
-    id text PRIMARY KEY,
-    account_id text REFERENCES public.accounts(id) NOT NULL,
-    home_space_id text REFERENCES public.spaces(id) NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
-);
-
-CREATE TABLE public.profiles (
-    id text PRIMARY KEY,
-    entity_id text REFERENCES public.geo_entities(id) NOT NULL,
-    onchain_profile_id text REFERENCES public.onchain_profiles(id) NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
-);
-
--- ALTER TABLE
---     public.geo_entities
--- ADD
---     CONSTRAINT attribute_value_type_id_fk FOREIGN KEY (attribute_value_type_id) REFERENCES public.geo_entities(id);
-CREATE TABLE public.log_entries (
-    id text PRIMARY KEY,
-    created_at_block text NOT NULL,
-    uri text NOT NULL,
-    created_by_id text NOT NULL REFERENCES public.accounts(id),
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    mime_type text,
-    decoded text,
-    json text
-);
-
-CREATE TYPE public.proposal_type as ENUM ('content', 'add_subspace', 'remove_subspace', 'add_editor', 'remove_editor', 'add_member', 'remove_member');
-CREATE TYPE public.proposal_status as ENUM ('proposed', 'approved', 'rejected', 'canceled', 'executed');
+CREATE TYPE public.proposal_type as ENUM ('ADD_EDIT', 'ADD_SUBSPACE', 'REMOVE_SUBSPACE', 'ADD_EDITOR', 'REMOVE_EDITOR', 'ADD_MEMBER', 'REMOVE_MEMBER');
+CREATE TYPE public.proposal_status as ENUM ('proposed', 'accepted', 'rejected', 'canceled', 'executed');
 
 -- Maps to 2 or 3 onchain
-CREATE TYPE public.vote_type as ENUM ('yes', 'no');
+CREATE TYPE public.vote_type as ENUM ('accept', 'reject');
+
+CREATE TABLE public.edits (
+    id text PRIMARY KEY,
+    name text NOT NULL,
+    description text,
+    uri text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at integer NOT NULL,
+    created_by_id text NOT NULL REFERENCES public.accounts(id),
+    space_id text NOT NULL REFERENCES public.spaces(id)
+);
 
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,
     onchain_proposal_id text NOT NULL,
+    plugin_address text NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
-    name text,
-    description text,
-    uri text,
     type proposal_type NOT NULL,
     status proposal_status NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
+    edit_id text REFERENCES public.edits(id),
     start_time integer NOT NULL,
     end_time integer NOT NULL
-);
-
-CREATE TABLE public.proposed_versions (
-    id text PRIMARY KEY,
-    name text,
-    description text,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    created_by_id text NOT NULL REFERENCES public.accounts(id),
-    entity_id text NOT NULL REFERENCES public.geo_entities(id),
-    proposal_id text NOT NULL REFERENCES public.proposals(id),
-    space_id text NOT NULL REFERENCES public.spaces(id)
-);
-
-CREATE TABLE public.space_admins (
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    account_id text NOT NULL REFERENCES public.accounts(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    CONSTRAINT space_admins_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
 CREATE TABLE public.space_editors (
@@ -126,53 +73,20 @@ CREATE TABLE public.space_editors (
     CONSTRAINT space_editors_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
-CREATE TABLE public.space_editors_v2 (
+CREATE TABLE public.space_members (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
-    CONSTRAINT space_editors_v2_unique_account_space_pair UNIQUE (account_id, space_id)
+    CONSTRAINT space_members_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
-CREATE TABLE public.space_editor_controllers (
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    account_id text NOT NULL REFERENCES public.accounts(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    CONSTRAINT space_editor_controllers_unique_account_space_pair UNIQUE (account_id, space_id)
-);
-
-CREATE TABLE public.subspaces (
-    id text PRIMARY KEY,
+CREATE TABLE public.space_subspaces (
+    subspace_id text NOT NULL REFERENCES public.spaces(id),
     parent_space_id text NOT NULL REFERENCES public.spaces(id),
-    child_space_id text NOT NULL REFERENCES public.spaces(id)
-);
-
-CREATE TABLE public.triples (
-    id text PRIMARY KEY,
-    entity_id text NOT NULL REFERENCES public.geo_entities(id),
-    attribute_id text NOT NULL REFERENCES public.geo_entities(id),
-    value_type text NOT NULL CHECK(
-        value_type IN (
-            'number',
-            'string',
-            'entity',
-            'collection',
-            'image',
-            'date',
-            'url'
-        )
-    ),
-    value_id text NOT NULL,
-    number_value text,
-    string_value text,
-    array_value text,
-    entity_value_id text REFERENCES public.geo_entities(id),
-    is_protected boolean NOT NULL,
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    created_at integer NOT NULL,
     created_at_block integer NOT NULL,
-    is_stale boolean NOT NULL
+    created_at integer NOT NULL,
+    CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
 CREATE TABLE public.versions (
@@ -182,14 +96,62 @@ CREATE TABLE public.versions (
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
-    proposed_version_id text NOT NULL REFERENCES public.proposed_versions(id),
-    entity_id text NOT NULL REFERENCES public.geo_entities(id),
-    space_id text NOT NULL REFERENCES public.spaces(id)
+    edit_id text NOT NULL REFERENCES public.edits(id),
+    entity_id text NOT NULL REFERENCES public.entities(id)
 );
 
--- @TODO: Proposed Member
--- @TODO: Proposed Editor
--- @TODO: Proposed Subspace
+-- For now we use a current_versions JOIN table to create the association between
+-- a specific version and an entity. This does add an extra JOIN to the query when
+-- looking up the latest version for an entity, but we alleviate it via indexes
+-- for now. We'll monitor performance and storage constrants over time to see if
+-- it makes more sense to use a different approach.
+-- ALTER TABLE public.entities ADD COLUMN current_version text;
+-- ALTER TABLE entities ADD CONSTRAINT fk_current_version FOREIGN KEY (current_version) REFERENCES public.versions(id);
+CREATE TABLE public.current_versions (
+    PRIMARY KEY (entity_id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    version_id text NOT NULL REFERENCES public.versions(id)
+);
+
+CREATE TABLE public.relations (
+    id text PRIMARY KEY NOT NULL,
+    space_id text REFERENCES public.spaces(id) NOT NULL,
+    type_of_id text REFERENCES public.versions(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
+    to_version_id text REFERENCES public.versions(id) NOT NULL, -- the entity the relation is pointing to
+    index text, -- the fractional index of the relation relative to other relations of the same type
+    from_version_id text REFERENCES public.versions(id) NOT NULL, -- the entity the relation is pointing from
+    entity_id text REFERENCES public.entities(id) NOT NULL -- the entity id of the relation entity itself
+);
+
+CREATE TABLE public.version_types (
+    PRIMARY KEY (version_id, type_id),
+    version_id text NOT NULL REFERENCES public.versions(id),
+    type_id text NOT NULL REFERENCES public.versions(id)
+);
+
+CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'URL', 'CHECKBOX', 'TIME', 'POINT');
+
+CREATE TABLE public.triples (
+    PRIMARY KEY (space_id, entity_id, attribute_id, version_id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    attribute_id text NOT NULL REFERENCES public.entities(id),
+    attribute_version_id text NOT NULL REFERENCES public.versions(id),
+    value_type triple_value_type NOT NULL,
+    number_value text,
+    text_value text,
+    boolean_value boolean,
+    entity_value_id text REFERENCES public.entities(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    version_id text NOT NULL REFERENCES public.versions(id)
+);
+
+CREATE TABLE public.spaces_metadata (
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    version_id text NOT NULL REFERENCES public.versions(id),
+    CONSTRAINT spaces_metadata_unique_id UNIQUE (space_id)
+);
 
 CREATE TABLE public.proposal_votes (
     PRIMARY KEY (onchain_proposal_id, space_id, account_id),
@@ -202,27 +164,59 @@ CREATE TABLE public.proposal_votes (
     created_at_block integer NOT NULL
 );
 
-CREATE TABLE public.actions (
-    id text PRIMARY KEY NOT NULL,
-    action_type text NOT NULL,
-    entity_id text REFERENCES public.geo_entities(id) NOT NULL,
-    attribute_id text REFERENCES public.geo_entities(id) NOT NULL,
-    value_type text,
-    value_id text,
-    number_value text,
-    string_value text,
-    entity_value_id text REFERENCES public.geo_entities(id),
-    array_value text [],
-    proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
-    -- version_id text REFERENCES public.versions(id) NOT NULL,
+CREATE TYPE public.op_type as ENUM ('SET_TRIPLE', 'DELETE_TRIPLE');
+
+CREATE TYPE public.subspace_proposal_type as ENUM ('ADD_SUBSPACE', 'REMOVE_SUBSPACE');
+
+-- @TODO: Some of these fields might break in a version of the protocol where
+-- indexers decide which spaces they index. A space not exist in their DB even
+-- though it exists somewhere in the global graph.
+CREATE TABLE public.proposed_subspaces (
+    id text PRIMARY KEY,
+    subspace text NOT NULL REFERENCES public.spaces(id),
+    parent_space text NOT NULL REFERENCES public.spaces(id),
     created_at integer NOT NULL,
-    created_at_block integer NOT NULL
+    created_at_block integer NOT NULL,
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
+    type subspace_proposal_type NOT NULL
 );
 
-CREATE TABLE public.triple_versions (
-    PRIMARY KEY (triple_id, version_id),
-    triple_id text NOT NULL REFERENCES public.triples(id),
-    version_id text NOT NULL REFERENCES public.versions(id)
+CREATE TYPE public.member_proposal_type as ENUM ('ADD_MEMBER', 'REMOVE_MEMBER');
+
+CREATE TABLE public.proposed_members (
+    id text PRIMARY KEY,
+    account_id text NOT NULL REFERENCES public.accounts(id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
+    type member_proposal_type NOT NULL
+);
+
+CREATE TYPE public.editor_proposal_type as ENUM ('ADD_EDITOR', 'REMOVE_EDITOR');
+
+CREATE TABLE public.proposed_editors (
+    id text PRIMARY KEY,
+    account_id text NOT NULL REFERENCES public.accounts(id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
+    type editor_proposal_type NOT NULL
+);
+
+CREATE TABLE public.geo_blocks (
+    PRIMARY KEY (network, hash),
+    network text NOT NULL,
+    hash text NOT NULL,
+    number text NOT NULL,
+    timestamp text NOT NULL
+);
+
+CREATE TABLE public.version_spaces (
+    PRIMARY KEY (version_id, space_id),
+    version_id text NOT NULL REFERENCES public.versions(id),
+    space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
 --
@@ -232,46 +226,30 @@ ALTER TABLE
     public.accounts DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.actions DISABLE TRIGGER ALL;
+    public.entities DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.geo_entities DISABLE TRIGGER ALL;
+    public.version_spaces DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.geo_entity_types DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.log_entries DISABLE TRIGGER ALL;
+    public.version_types DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.proposals DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.proposed_versions DISABLE TRIGGER ALL;
-
-ALTER TABLE
     public.triples DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.subspaces DISABLE TRIGGER ALL;
+    public.space_subspaces DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.spaces DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.versions DISABLE TRIGGER ALL;
-
 ALTER TABLE
-    public.space_admins DISABLE TRIGGER ALL;
+    public.edits DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.space_editors DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.space_editors_v2 DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.space_editor_controllers DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.triple_versions DISABLE TRIGGER ALL;

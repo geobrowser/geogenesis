@@ -2,11 +2,9 @@ import { Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer, me
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
-import { useMemo } from 'react';
 
+import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { TableBlockProvider } from '~/core/state/table-block-store';
-import { useTypesStore } from '~/core/state/types-store/types-store';
-import { GeoType } from '~/core/types';
 
 import { TableBlock, TableBlockError } from '../blocks/table/table-block';
 
@@ -29,11 +27,8 @@ export const TableNode = Node.create({
 
   addAttributes() {
     return {
-      typeId: {
-        default: null,
-      },
-      typeName: {
-        default: null,
+      relationId: {
+        default: '',
       },
       spaceId: {
         default: '',
@@ -51,33 +46,30 @@ export const TableNode = Node.create({
 });
 
 function TableNodeComponent({ node }: NodeViewRendererProps) {
-  const { spaceId, typeId, id } = node.attrs;
+  const { spaceId } = useEditorInstance();
+  const { id, relationId } = node.attrs;
 
   return (
     <NodeViewWrapper>
       <div contentEditable="false">
-        <TableNodeChildren spaceId={spaceId} entityId={id} typeId={typeId} />
+        <TableNodeChildren spaceId={spaceId} entityId={id} relationId={relationId} />
       </div>
     </NodeViewWrapper>
   );
 }
 
-function TableNodeChildren({ spaceId, entityId, typeId }: { spaceId: string; entityId: string; typeId: string }) {
-  const { types } = useTypesStore();
-
-  const selectedType = useMemo(() => {
-    return types.find(type => type.entityId === typeId);
-  }, [JSON.stringify(types), typeId]);
-
+function TableNodeChildren({
+  spaceId,
+  entityId,
+  relationId,
+}: {
+  spaceId: string;
+  entityId: string;
+  relationId: string;
+}) {
   return (
-    <ErrorBoundary
-      fallback={
-        <>
-          <TableBlockError spaceId={spaceId} blockId={entityId} />
-        </>
-      }
-    >
-      <TableBlockProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
+    <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={entityId} />}>
+      <TableBlockProvider spaceId={spaceId} entityId={entityId} relationId={relationId}>
         <TableBlock spaceId={spaceId} />
       </TableBlockProvider>
     </ErrorBoundary>

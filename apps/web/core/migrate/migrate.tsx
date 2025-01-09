@@ -1,18 +1,13 @@
-import { QueryClient } from '@tanstack/query-core';
-import { useQueryClient } from '@tanstack/react-query';
+import { QueryClient, useQueryClient } from '@tanstack/react-query';
 
 import React, { useTransition } from 'react';
 
-import { useActionsStore } from '../hooks/use-actions-store';
-import { useMergedData } from '../hooks/use-merged-data';
-import { ID } from '../id';
-import { Merged } from '../merged';
+import { useWriteOps } from '../database/write';
+import { createTripleId } from '../id/create-id';
 import {
-  Action,
-  DeleteTripleAction,
-  EditTripleAction,
+  AppOp,
   Triple as ITriple,
-  TripleValueType,
+  ValueType as TripleValueType,
   TripleWithDateValue,
   TripleWithStringValue,
   TripleWithUrlValue,
@@ -41,21 +36,23 @@ export type MigrateAction =
       };
     };
 
+type MigrateOp = AppOp & {
+  space: string;
+};
+
 interface MigrateHubConfig {
   actionsApi: {
-    create: ReturnType<typeof useActionsStore>['create'];
-    update: ReturnType<typeof useActionsStore>['update'];
-    remove: ReturnType<typeof useActionsStore>['remove'];
+    upsert: ReturnType<typeof useWriteOps>['upsert'];
+    remove: ReturnType<typeof useWriteOps>['remove'];
   };
   queryClient: QueryClient;
-  merged: Merged;
 }
 
 export interface IMigrateHub {
-  dispatch: (action: MigrateAction) => Promise<Action[]>;
+  dispatch: (action: MigrateAction) => Promise<MigrateOp[]>;
 }
 
-async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise<Action[]> {
+async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise<MigrateOp[]> {
   switch (action.type) {
     case 'DELETE_ENTITY': {
       const { entityId } = action.payload;
@@ -68,7 +65,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
         queryFn: async () => {
           const triplesReferencingEntity: ITriple[] = [];
 
-          const FIRST = 1000;
+          // const FIRST = 1000;
           let page = 0;
           let isRemainingTriples = false;
 
@@ -76,17 +73,19 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
           // more than 1000 entries we need to paginate until the end. We don't know
           // the number of entries ahead of time with graph-node, unfortunately.
           while (!isRemainingTriples) {
-            const triplesChunk = await config.merged.fetchTriples({
-              query: '',
-              first: FIRST,
-              skip: page * FIRST,
-              filter: [
-                {
-                  field: 'linked-to',
-                  value: entityId,
-                },
-              ],
-            });
+            // @TODO(use merged API)
+            // const triplesChunk = await config.merged.fetchTriples({
+            //   query: '',
+            //   first: FIRST,
+            //   skip: page * FIRST,
+            //   filter: [
+            //     {
+            //       field: 'linked-to',
+            //       value: entityId,
+            //     },
+            //   ],
+            // });
+            const triplesChunk: ITriple[] = [];
 
             // graph-node allows you to page past the last entry. Doing so will return an empty array.
             // We can use this to determine if we have reached the end of the triples. This will result
@@ -107,9 +106,11 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
       });
 
       return triplesReferencingEntity.map(
-        (t): DeleteTripleAction => ({
+        (t): MigrateOp => ({
           ...t,
-          type: 'deleteTriple',
+          type: 'DELETE_TRIPLE',
+          space: t.space,
+          id: createTripleId(t),
         })
       );
     }
@@ -121,7 +122,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
         queryFn: async () => {
           const triplesReferencingEntity: ITriple[] = [];
 
-          const FIRST = 1000;
+          // const FIRST = 1000;
           let page = 0;
           let isRemainingTriples = false;
 
@@ -129,17 +130,19 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
           // more than 1000 entries we need to paginate until the end. We don't know
           // the number of entries ahead of time with graph-node, unfortunately.
           while (!isRemainingTriples) {
-            const triplesChunk = await config.merged.fetchTriples({
-              query: '',
-              first: FIRST,
-              skip: page * FIRST,
-              filter: [
-                {
-                  field: 'attribute-id',
-                  value: attributeId,
-                },
-              ],
-            });
+            // @TODO(use merged API)
+            // const triplesChunk = await config.merged.fetchTriples({
+            //   query: '',
+            //   first: FIRST,
+            //   skip: page * FIRST,
+            //   filter: [
+            //     {
+            //       field: 'attribute-id',
+            //       value: attributeId,
+            //     },
+            //   ],
+            // });
+            const triplesChunk: ITriple[] = [];
 
             // graph-node allows you to page past the last entry. Doing so will return an empty array.
             // We can use this to determine if we have reached the end of the triples. This will result
@@ -172,7 +175,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
        * existing triples with the old type.
        */
       const triplesToDelete: ITriple[] = [];
-      const triplesToUpdate: ITriple[][] = [];
+      const triplesToUpdate: ITriple[] = [];
 
       for (const triple of triplesWithAttribute) {
         const value = triple.value;
@@ -188,9 +191,9 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
           // can migrate to date
           // can migrate to url
           // delete otherwise
-          case 'string': {
+          case 'TEXT': {
             switch (newValueType) {
-              case 'url': {
+              case 'URL': {
                 const maybeMigratedTriple = migrateStringTripleToUrlTriple(
                   // Should be safe to cast here since we've type narrowed with the above
                   // switch statements.
@@ -202,11 +205,11 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
                   break;
                 }
 
-                triplesToUpdate.push([maybeMigratedTriple, triple]);
+                triplesToUpdate.push(maybeMigratedTriple);
                 break;
               }
 
-              case 'date': {
+              case 'TIME': {
                 const maybeMigratedTriple = migrateStringTripleToDateTriple(
                   // Should be safe to cast here since we've type narrowed with the above
                   // switch statements.
@@ -218,7 +221,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
                   break;
                 }
 
-                triplesToUpdate.push([maybeMigratedTriple, triple]);
+                triplesToUpdate.push(maybeMigratedTriple);
                 break;
               }
             }
@@ -229,15 +232,15 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
 
           // can migrate to string
           // delete otherwise
-          case 'date': {
-            if (newValueType === 'string') {
+          case 'TIME': {
+            if (newValueType === 'TEXT') {
               const newTriple = migrateDateTripleToStringTriple(
                 // Should be safe to cast here since we've type narrowed with the above
                 // switch statements.
                 triple as TripleWithDateValue
               );
 
-              triplesToUpdate.push([newTriple, triple]);
+              triplesToUpdate.push(newTriple);
               break;
             }
 
@@ -247,15 +250,15 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
 
           // can migrate to string
           // delete otherwise
-          case 'url': {
-            if (newValueType === 'string') {
+          case 'URL': {
+            if (newValueType === 'TEXT') {
               const newTriple = migrateUrlTripleToStringTriple(
                 // Should be safe to cast here since we've type narrowed with the above
                 // switch statements.
                 triple as TripleWithUrlValue
               );
 
-              triplesToUpdate.push([newTriple, triple]);
+              triplesToUpdate.push(newTriple);
               break;
             }
 
@@ -269,25 +272,19 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
         }
       }
 
-      const deleteActions: DeleteTripleAction[] = triplesToDelete.map(t => ({
+      const deleteActions: MigrateOp[] = triplesToDelete.map(t => ({
         ...t,
-        type: 'deleteTriple',
+        type: 'DELETE_TRIPLE',
+        id: createTripleId(t),
       }));
 
-      const updateActions: EditTripleAction[] = triplesToUpdate.map(([newTriple, oldTriple]) => ({
-        id: ID.createEntityId(),
-        type: 'editTriple',
-        before: {
-          ...oldTriple,
-          type: 'deleteTriple',
-        },
-        after: {
-          ...newTriple,
-          type: 'createTriple',
-        },
+      const upsertActions: MigrateOp[] = triplesToUpdate.map(newTriple => ({
+        ...newTriple,
+        type: 'SET_TRIPLE',
+        id: createTripleId(newTriple),
       }));
 
-      return [...deleteActions, ...updateActions];
+      return [...deleteActions, ...upsertActions];
     }
   }
 }
@@ -299,135 +296,41 @@ function migrateHub(config: MigrateHubConfig): IMigrateHub {
 }
 
 export function useMigrateHub() {
-  const { create, update, remove, addActionsToSpaces } = useActionsStore();
+  const { upsert, remove, upsertMany } = useWriteOps();
   const queryClient = useQueryClient();
-  const merged = useMergedData();
 
   const [, startTransition] = useTransition();
 
   const hub = React.useMemo(() => {
     return migrateHub({
       actionsApi: {
-        create,
-        update,
+        upsert,
         remove,
       },
-      merged,
       queryClient,
     });
-  }, [create, update, remove, queryClient, merged]);
+  }, [remove, queryClient, upsert]);
 
   const dispatch = React.useCallback(
     async (action: MigrateAction) => {
       const actions = await hub.dispatch(action);
-
-      const actionsToBatch = groupBy([...actions], action => {
-        switch (action.type) {
-          case 'createTriple':
-          case 'deleteTriple':
-            return action.space;
-          case 'editTriple':
-            return action.before.space;
-        }
-      });
+      const actionsToBatch = groupBy([...actions], action => action.space);
 
       if (Object.keys(actionsToBatch).length === 0) {
         return;
       }
 
       startTransition(() => {
-        addActionsToSpaces(actionsToBatch);
+        Object.entries(actionsToBatch).forEach(([space, actions]) => {
+          upsertMany(actions, space);
+        });
       });
     },
 
-    [hub, addActionsToSpaces]
+    [hub, upsertMany]
   );
 
   return {
     dispatch,
   };
 }
-
-// @TODO: For now we don't need a library for handling traversing the graph.
-// Eventually we will for more complex garbage-collecting of data in Geo, like
-// cascading deletes after deleting an entity.
-// class Graph {
-//   adjacencyList: Map<number, number[]>;
-//   visited: Set<number>;
-//   private queryClient: MigrateHubConfig['queryClient'];
-//   private merged: MigrateHubConfig['merged'];
-//   private appConfig: MigrateHubConfig['appConfig'];
-
-//   constructor(config: OmitStrict<MigrateHubConfig, 'actionsApi'>) {
-//     this.adjacencyList = new Map();
-//     this.visited = new Set();
-//     this.queryClient = config.queryClient;
-//     this.merged = config.merged;
-//     this.appConfig = config.appConfig;
-//   }
-
-/**
- * We need to recursively delete all downstream triples (edges) for any entity (node)
- * that as a result of being deleting the original node.
- *
- * Deleting an entity should delete all triples (edges) that reference this entity.
- * If the delete triples are the last triple in the entity (node), we should also
- * delete references to that entity.
- */
-// async generateDownstreamReferencesToEntity(entityId: string): Promise<Triple[]> {
-// @TODO: For now we only delete triples one-level deep. Eventually we may want to
-// handle cascading deletes if the triples deleted are the last triples in the entity.
-//
-// In that model we will need to track visited entities to avoid cycles in the graph.
-// const descendants = new Set<Triple>();
-// const visited = new Set<string>();
-
-// const dfs = async (entityId: string) => {
-// visited.add(entityId);
-
-// for (const neighbor of neighbors) {
-// See @TODO above
-// if (visited.has(neighbor.id)) continue;
-
-// See @TODO above
-// if (!visited.has(neighbor.id)) {
-// descendants.add(neighbor);
-
-// See @TODO above
-// dfs(neighbor.entityId);
-// }
-// }
-// };
-
-// See @TODO above
-// await dfs(entityId);
-
-//   const neighbors = await this.fetchNeighbors(entityId);
-
-//   console.log('state', {
-//     neighbors,
-//   });
-
-//   return Array.from(neighbors);
-// }
-
-//   async fetchReferencedByTriples(entityId: string) {
-//     // Fetches edges for the given node at entityId
-//     return await this.queryClient.fetchQuery({
-//       queryKey: ['migrate-triples-referencing-entity', entityId],
-//       queryFn: () =>
-//         this.merged.fetchTriples({
-//           query: '',
-//           first: 1000,
-//           skip: 0,
-//           endpoint: this.appConfig.subgraph,
-//           filter: [
-//             {
-//               field: 'linked-to',
-//               value: entityId,
-//             },
-//           ],
-//         }),
-//     });
-//   }
-// }

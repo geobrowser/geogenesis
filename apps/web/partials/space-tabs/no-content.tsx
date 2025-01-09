@@ -1,5 +1,6 @@
 import { cva } from 'class-variance-authority';
-import Link from 'next/link';
+
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 type NoContentProps = {
   href?: string;

@@ -1,28 +1,31 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+
+import type { ReactNode } from 'react';
 
 import { ID } from '~/core/id';
-import { Subgraph } from '~/core/io';
+import { fetchTabEntityId } from '~/core/io/subgraph/fetch-tab';
 
 import { EmptyTab } from '~/partials/tab/empty-tab';
 
 import DefaultEntityPage from '~/app/space/(entity)/[id]/[entityId]/default-entity-page';
 
-export type Props = {
+type TabProps = {
   params: { id: string };
-  searchParams: {
-    typeId?: string;
-    filters?: string;
-  };
+  slug: string;
+  notice?: ReactNode;
 };
 
-export const Tab = async (props: Props & { slug: string }) => {
-  const { slug, searchParams } = props;
+export const Tab = async (props: TabProps) => {
+  const { slug } = props;
   const spaceId = props.params.id;
-  const pageTypeId = getPageTypeId(slug);
+  const pageTypeEntityId = getPageTypeEntityId(slug);
 
-  if (!spaceId || !pageTypeId) return null;
+  if (!spaceId || !pageTypeEntityId) return null;
 
-  const entityId = await getEntityId(spaceId, pageTypeId);
+  const entityId = await fetchTabEntityId({
+    spaceId,
+    pageTypeEntityId,
+  });
 
   if (!entityId) {
     const newEntityId = ID.createEntityId();
@@ -32,20 +35,9 @@ export const Tab = async (props: Props & { slug: string }) => {
       entityId: newEntityId,
     };
 
-    const newSearchParams = {
-      typeId: SYSTEM_IDS.PAGE_TYPE,
-      filters: encodeURI(JSON.stringify([[SYSTEM_IDS.PAGE_TYPE_TYPE, pageTypeId]])),
-    };
-
     return (
       <EmptyTab spaceId={spaceId}>
-        <DefaultEntityPage
-          params={newParams}
-          searchParams={newSearchParams}
-          showCover={false}
-          showHeading={false}
-          showHeader={false}
-        />
+        <DefaultEntityPage params={newParams} showCover={false} showHeading={false} showHeader={false} />
       </EmptyTab>
     );
   }
@@ -55,44 +47,28 @@ export const Tab = async (props: Props & { slug: string }) => {
     entityId,
   };
 
-  return (
-    <DefaultEntityPage
-      params={params}
-      searchParams={searchParams}
-      showCover={false}
-      showHeading={false}
-      showHeader={false}
-    />
-  );
+  const { notice } = props;
+
+  return <DefaultEntityPage params={params} showCover={false} showHeading={false} showHeader={false} notice={notice} />;
 };
 
-const getPageTypeId = (slug: string): string | null => {
-  return pageTypeIds?.[slug] ?? null;
+const getPageTypeEntityId = (slug: string): string | null => {
+  return pageTypeEntityIds?.[slug] ?? null;
 };
 
-const pageTypeIds: Record<string, string> = {
+const pageTypeEntityIds: Record<string, string> = {
+  about: SYSTEM_IDS.ABOUT_PAGE,
+  education: SYSTEM_IDS.EDUCATION_PAGE,
+  events: SYSTEM_IDS.EVENTS_PAGE,
+  finances: SYSTEM_IDS.FINANCES_PAGE,
+  jobs: SYSTEM_IDS.JOBS_PAGE,
+  ontology: SYSTEM_IDS.ONTOLOGY_PAGE,
+  news: SYSTEM_IDS.NEWS_PAGE,
+  people: SYSTEM_IDS.PEOPLE_PAGE,
   posts: SYSTEM_IDS.POSTS_PAGE,
   products: SYSTEM_IDS.PRODUCTS_PAGE,
-  services: SYSTEM_IDS.SERVICES_PAGE,
-  events: SYSTEM_IDS.EVENTS_PAGE,
-  jobs: SYSTEM_IDS.JOBS_PAGE,
   projects: SYSTEM_IDS.PROJECTS_PAGE,
-  finances: SYSTEM_IDS.FINANCES_PAGE,
+  services: SYSTEM_IDS.SERVICES_PAGE,
   spaces: SYSTEM_IDS.SPACES_PAGE,
-};
-
-const getEntityId = async (spaceId: string, pageTypeId: string) => {
-  const pageTypeTriples = await Subgraph.fetchTriples({
-    space: spaceId,
-    query: '',
-    skip: 0,
-    first: 1000,
-    filter: [{ field: 'attribute-id', value: SYSTEM_IDS.PAGE_TYPE_TYPE }],
-  });
-
-  // @TODO(migration)
-  // migrate to `triple.value.value === pageTypeId` in new data model
-  const entityId = pageTypeTriples.find(triple => triple.value.id === pageTypeId)?.entityId;
-
-  return entityId ?? null;
+  team: SYSTEM_IDS.TEAM_PAGE,
 };

@@ -1,17 +1,30 @@
+import { usePrivy } from '@privy-io/react-auth';
 import { atom, useAtom } from 'jotai';
+import { useSearchParams } from 'next/navigation';
 
-import * as React from 'react';
+import { useCallback, useEffect } from 'react';
 
-import { useAccount } from 'wagmi';
+import { useAccountEffect } from 'wagmi';
 
+import { Environment } from '../environment';
 import { useGeoProfile } from './use-geo-profile';
+import { useSmartAccount } from './use-smart-account';
 
 const isOnboardingVisibleAtom = atom(false);
 
 export function useOnboarding() {
-  const { address } = useAccount();
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
+  const params = useSearchParams();
+  const onboardFlag = params?.get(Environment.variables.onboardFlag);
+
+  const { user, isModalOpen } = usePrivy();
+
   const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
-  const { profile, isFetched } = useGeoProfile(address);
+  const { profile, isFetched, isLoading } = useGeoProfile(address);
+
+  const validOnboardCode = onboardFlag && onboardFlag === Environment.variables.onboardCode;
+  const shouldOnboard = isFetched && !isLoading && !profile?.profileLink && user && validOnboardCode;
 
   // Set the onboarding to visible the first time we fetch the
   // profile for the user. Any subsequent changes to the visibility
@@ -20,26 +33,30 @@ export function useOnboarding() {
   //
   // Whenever the user reloads Geo they will be prompted to go through
   // onboarding again if they don't have a profile.
-  React.useEffect(() => {
-    if (address && isFetched && !profile) {
+  useEffect(() => {
+    if (isModalOpen) {
+      setIsOnboardingVisible(false);
+    } else if (shouldOnboard) {
       setIsOnboardingVisible(true);
+    } else {
+      setIsOnboardingVisible(false);
     }
-  }, [isFetched, profile, address, setIsOnboardingVisible]);
+  }, [isModalOpen, setIsOnboardingVisible, shouldOnboard]);
 
-  useAccount({
+  useAccountEffect({
     onDisconnect: () => setIsOnboardingVisible(false),
-    onConnect({ address }) {
+    onConnect(data) {
+      const { address } = data;
+
       if (address && isFetched && !profile) {
         setIsOnboardingVisible(true);
       }
     },
   });
 
-  const hideOnboarding = React.useCallback(() => {
+  const hideOnboarding = useCallback(() => {
     setIsOnboardingVisible(false);
   }, [setIsOnboardingVisible]);
 
-  // Disabling onboarding until full launch as we are currently doing migrations
-  // and some other work affecting user onboarding.
-  return { isOnboardingVisible: false, hideOnboarding };
+  return { isOnboardingVisible, hideOnboarding };
 }

@@ -6,16 +6,17 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useTriples } from '~/core/database/triples';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
-import { Action } from '~/core/utils/action';
 
-import { Button } from '~/design-system/button';
+import { SmallButton } from '~/design-system/button';
+import { Divider } from '~/design-system/divider';
 import { Close } from '~/design-system/icons/close';
+import { RetrySmall } from '~/design-system/icons/retry-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { Warning } from '~/design-system/icons/warning';
 import { Spinner } from '~/design-system/spinner';
@@ -25,32 +26,37 @@ export const FlowBar = () => {
   const [toast] = useToast();
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
-  const { allActions, allSpacesWithActions } = useActionsStore();
 
-  const allUnpublishedSquashedActions = Action.prepareActionsForPublishing(allActions);
-  const actionsCount = allUnpublishedSquashedActions.length;
+  const triples = useTriples(
+    React.useMemo(() => ({ selector: t => t.hasBeenPublished === false, includeDeleted: true }), [])
+  );
+
+  // @TODO: We can use Change.fromLocal to aggregate the "real" counts.
+  const opsCount = triples.length;
 
   const entitiesCount = pipe(
-    allUnpublishedSquashedActions,
-    A.groupBy(action => {
-      if (action.type === 'deleteTriple' || action.type === 'createTriple') return action.entityId;
-      return action.after.entityId;
-    }),
+    triples,
+    A.groupBy(t => t.entityId),
     D.keys,
     A.length
   );
 
-  const spacesCount = allSpacesWithActions.length;
+  const spacesCount = pipe(
+    triples,
+    A.groupBy(t => t.space),
+    D.keys,
+    keys => new Set(keys).size
+  );
 
   // Don't show the flow bar if there are no actions, if the user is not in edit mode, if there is a toast,
   // or if the status bar is rendering in place.
-  const hideFlowbar = actionsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
+  const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
 
   return (
     <AnimatePresence>
-      <div className="relative z-[1000]">
+      <div className="z-[1000] w-[355px]">
         {!hideFlowbar && (
-          <div className="pointer-events-none fixed bottom-0 left-0 right-0 flex w-full justify-center p-4">
+          <div className="pointer-events-none fixed bottom-0 left-0 right-0 m-5 flex w-full justify-center text-button">
             <motion.div
               variants={flowVariants}
               initial="hidden"
@@ -58,18 +64,27 @@ export const FlowBar = () => {
               exit="hidden"
               transition={transition}
               custom={!isReviewOpen}
-              className="pointer-events-auto inline-flex items-center gap-4 rounded-lg bg-white p-2 pl-3 shadow-card"
+              className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg"
             >
-              <div className="inline-flex items-center font-medium">
-                <span>{pluralize('edit', actionsCount, true)}</span>
-                <hr className="mx-2 inline-block h-4 w-px border-none bg-grey-03" />
-                <span>
-                  {pluralize('entity', entitiesCount, true)} in {pluralize('space', spacesCount, true)}
-                </span>
+              <div className="inline-flex h-full items-center justify-center">
+                <p className="inline-flex items-center px-3">
+                  <span>{pluralize('edit', opsCount, true)}</span>
+                </p>
+                <Divider type="vertical" className="inline-block h-4 w-px" />
+                <p className="inline-flex items-center px-3">
+                  <span>{pluralize('entity', entitiesCount, true)}</span>
+                </p>
+                <Divider type="vertical" className="inline-block h-4 w-px" />
+                <p className="inline-flex items-center px-3">
+                  <span>{pluralize('space', spacesCount, true)}</span>
+                </p>
               </div>
-              <Button onClick={() => setIsReviewOpen(true)} variant="primary">
-                Review {pluralize('edit', actionsCount, false)}
-              </Button>
+              <button
+                onClick={() => setIsReviewOpen(true)}
+                className="h-full border-l border-divider px-4 text-ctaPrimary hover:bg-ctaTertiary focus:bg-ctaTertiary"
+              >
+                Review edits
+              </button>
             </motion.div>
           </div>
         )}
@@ -113,36 +128,42 @@ const StatusBar = () => {
                   >
                     {message[state.reviewState]}
                   </motion.span>
-                  <motion.button
-                    initial={{ opacity: 0, filter: 'blur(2px)' }}
-                    animate={{ opacity: 1, filter: 'blur(0px)' }}
-                    exit={{ opacity: 0, filter: 'blur(2px)' }}
-                    transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
-                    className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
-                    onClick={onCopyError}
-                  >
-                    <AnimatePresence mode="popLayout">
-                      {isCopied ? (
-                        <motion.div
-                          key="status-bar-error"
-                          initial={{ scale: 0.95, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.95, opacity: 0 }}
-                        >
-                          <TickSmall />
-                        </motion.div>
-                      ) : (
-                        <motion.div
-                          key="status-bar-error"
-                          initial={{ scale: 0.95, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.95, opacity: 0 }}
-                        >
-                          Copy error
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.button>
+                  {state?.retry ? (
+                    <SmallButton onClick={state.retry} variant="tertiary" icon={<RetrySmall />} className="-my-4">
+                      Retry
+                    </SmallButton>
+                  ) : (
+                    <motion.button
+                      initial={{ opacity: 0, filter: 'blur(2px)' }}
+                      animate={{ opacity: 1, filter: 'blur(0px)' }}
+                      exit={{ opacity: 0, filter: 'blur(2px)' }}
+                      transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
+                      className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
+                      onClick={onCopyError}
+                    >
+                      <AnimatePresence mode="popLayout">
+                        {isCopied ? (
+                          <motion.div
+                            key="status-bar-error"
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                          >
+                            <TickSmall />
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            key="status-bar-error"
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                          >
+                            Copy error
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.button>
+                  )}
                   <button onClick={() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' })}>
                     <Close />
                   </button>

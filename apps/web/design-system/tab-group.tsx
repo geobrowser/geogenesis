@@ -3,13 +3,14 @@
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import React from 'react';
 
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useEditable } from '~/core/state/editable-store';
+
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface TabGroupProps {
   tabs: Array<{ href: string; label: string; badge?: string; disabled?: boolean; hidden?: boolean }>;
@@ -18,7 +19,12 @@ interface TabGroupProps {
 
 export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   return (
-    <div className={cx('flex items-center gap-6 border-b border-grey-02 pb-2', className)}>
+    <div
+      className={cx(
+        'flex max-w-full items-center gap-6 overflow-x-auto overflow-y-clip border-b border-grey-02 pb-2',
+        className
+      )}
+    >
       {tabs.map(t => (
         <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
       ))}
@@ -51,10 +57,9 @@ const tabStyles = cva('relative inline-flex items-center gap-1.5 text-quoteMediu
 });
 
 function Tab({ href, label, badge, disabled, hidden }: TabProps) {
-  const decodedHref = decodeURIComponent(href);
   const isHydrated = useHydrated();
   const path = usePathname();
-  const active = decodeURIComponent(path ?? '') === decodedHref;
+  const active = path === href;
   const { editable } = useEditable();
 
   if (!editable && hidden) {

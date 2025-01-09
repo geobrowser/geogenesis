@@ -1,17 +1,12 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { Services } from '~/core/services';
-import { useDiff } from '~/core/state/diff-store';
-import { Action as IAction } from '~/core/types';
-import { Action } from '~/core/utils/action';
+import { fetchCompletedProposals } from '~/core/io/subgraph/fetch-completed-proposals';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -20,8 +15,8 @@ import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
 // import { CsvImport } from '~/design-system/icons/csv-import';
-import { Menu } from '~/design-system/menu';
-import { Text } from '~/design-system/text';
+import { Menu, MenuItem } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { HistoryEmpty } from '../history/history-empty';
 import { HistoryItem } from '../history/history-item';
@@ -30,6 +25,7 @@ import { HistoryPanel } from '../history/history-panel';
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement;
+  addSubspaceComponent: React.ReactElement;
   typeNames: string[];
   entityId: string;
 }
@@ -39,14 +35,12 @@ export function SpacePageMetadataHeader({
   membersComponent,
   typeNames,
   entityId,
+  addSubspaceComponent,
 }: SpacePageMetadataHeaderProps) {
   const isEditing = useUserIsEditing(spaceId);
   const [open, onOpenChange] = React.useState(false);
 
-  // @TODO pathname might already include `/entities` or `/import`, resulting in a broken behavior in the context menu
-  const pathname = usePathname();
-
-  const { subgraph } = Services.useServices();
+  // const { subgraph } = Services.useServices();
 
   const {
     data: proposals,
@@ -54,12 +48,12 @@ export function SpacePageMetadataHeader({
     isFetchingNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
+    enabled: open,
+    initialPageParam: 0,
     queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
+    queryFn: ({ pageParam = 0 }) => fetchCompletedProposals({ spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
-
-  const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
   const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
 
@@ -109,18 +103,11 @@ export function SpacePageMetadataHeader({
           {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>
-              {group.map((p, index) => (
+              {group.map(p => (
                 <HistoryItem
                   key={p.id}
-                  onClick={() => {
-                    setCompareMode('proposals');
-                    setPreviousProposal(group[index + 1]?.id ?? '');
-                    setSelectedProposal(p.id);
-                    setIsCompareOpen(true);
-                  }}
-                  changeCount={Action.getChangeCount(
-                    p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
-                  )}
+                  spaceId={spaceId}
+                  proposalId={p.id}
                   createdAt={p.createdAt}
                   createdBy={p.createdBy}
                   name={p.name}
@@ -145,33 +132,20 @@ export function SpacePageMetadataHeader({
           onOpenChange={onOpenChange}
           align="end"
           trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
-          className="max-w-[7rem] whitespace-nowrap"
+          className="max-w-[9rem] whitespace-nowrap"
         >
-          <button
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
-            onClick={onCopyId}
-          >
-            <Text variant="button" className="hover:!text-text">
-              Copy ID
-            </Text>
-          </button>
-          <Link
-            href={`${pathname}/entities`}
-            onClick={() => onOpenChange(false)}
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
-          >
-            <Text variant="button" className="hover:!text-text">
-              View data
-            </Text>
-          </Link>
+          <MenuItem onClick={onCopyId}>
+            <p className="text-button">Copy ID</p>
+          </MenuItem>
+
+          {isEditing && addSubspaceComponent}
+
           {/* <Link
             href={`${pathname}/import`}
             onClick={() => onOpenChange(false)}
-            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2 hover:bg-bg"
           >
-            <Text variant="button" className="hover:!text-text">
-              CSV import
-            </Text>
+              <p className="text-button">CSV import</p>
           </Link> */}
         </Menu>
       </div>

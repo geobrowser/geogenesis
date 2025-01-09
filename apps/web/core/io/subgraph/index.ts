@@ -1,10 +1,14 @@
 export type { ISubgraph } from './subgraph-interface';
 
 export { fetchTriples } from './fetch-triples';
-
 export type { FetchTriplesOptions } from './fetch-triples';
+
 export { fetchEntities } from './fetch-entities';
 export type { FetchEntitiesOptions } from './fetch-entities';
+export { fetchResult } from './fetch-result';
+export type { FetchResultOptions } from './fetch-result';
+export { fetchResults } from './fetch-results';
+export type { FetchResultsOptions } from './fetch-results';
 export { fetchEntity } from './fetch-entity';
 export type { FetchEntityOptions } from './fetch-entity';
 
@@ -20,15 +24,7 @@ export type { FetchProposalsOptions } from './fetch-proposals';
 export { fetchProposal } from './fetch-proposal';
 export type { FetchProposalOptions } from './fetch-proposal';
 
-export { fetchProposedVersions } from './fetch-proposed-versions';
-export type { FetchProposedVersionsOptions } from './fetch-proposed-versions';
-export { fetchProposedVersion } from './fetch-proposed-version';
-export type { FetchProposedVersionOptions } from './fetch-proposed-version';
-
 export { fetchTableRowEntities } from './fetch-table-row-entities';
 export type { FetchTableRowEntitiesOptions } from './fetch-table-row-entities';
-
-export { fetchOnchainProfile } from './fetch-on-chain-profile';
-export type { FetchOnchainProfileOptions } from './fetch-on-chain-profile';
 
 export * as Errors from './errors';

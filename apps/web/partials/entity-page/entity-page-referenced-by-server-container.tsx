@@ -1,7 +1,7 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 
 import { EntityPageReferencedBy } from './entity-page-referenced-by';
 import { ReferencedByEntity } from './types';
@@ -21,7 +21,7 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
   const spacesForEntities = new Set(
     related
       .map(r => {
-        return Entity.nameTriple(r.triples)?.space ?? null;
+        return Entities.nameTriple(r.triples)?.space ?? null;
       })
       .flatMap(s => (s ? [s] : []))
   );
@@ -29,7 +29,7 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
   const spaces = await fetchSpacesById([...spacesForEntities.values()]);
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
-    const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
+    const spaceId = Entities.nameTriple(e.triples)?.space ?? '';
     const space = spaces.find(s => s.id === spaceId);
     const spaceName = space?.spaceConfig?.name ?? null;
     const spaceImage = space?.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE;

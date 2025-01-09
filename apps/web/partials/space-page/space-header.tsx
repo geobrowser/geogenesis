@@ -2,7 +2,6 @@
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
-import Link from 'next/link';
 
 import * as React from 'react';
 
@@ -10,14 +9,12 @@ import { PLACEHOLDER_SPACE_IMAGE, ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
-import { useDiff } from '~/core/state/diff-store';
-import { Action as IAction } from '~/core/types';
-import { Action } from '~/core/utils/action';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Create } from '~/design-system/icons/create';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { HistoryEmpty } from '../history/history-empty';
@@ -43,9 +40,8 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
     queryKey: [`space-proposals-for-space-${spaceId}`],
     queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
+    initialPageParam: 0,
   });
-
-  const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
   const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
 
@@ -86,18 +82,11 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
           {proposals?.pages?.length === 0 && <HistoryEmpty />}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>
-              {group.map((p, index) => (
+              {group.map(p => (
                 <HistoryItem
                   key={p.id}
-                  onClick={() => {
-                    setCompareMode('proposals');
-                    setPreviousProposal(group[index + 1]?.id ?? '');
-                    setSelectedProposal(p.id);
-                    setIsCompareOpen(true);
-                  }}
-                  changeCount={Action.getChangeCount(
-                    p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
-                  )}
+                  spaceId={spaceId}
+                  proposalId={p.id}
                   createdAt={p.createdAt}
                   createdBy={p.createdBy}
                   name={p.name}

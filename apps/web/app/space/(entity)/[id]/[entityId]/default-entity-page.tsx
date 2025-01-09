@@ -1,15 +1,16 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
-import { EditorProvider } from '~/core/state/editor-store';
+import { fetchBlocks } from '~/core/io/fetch-blocks';
+import { EntityId } from '~/core/io/schema';
+import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { MoveEntityProvider } from '~/core/state/move-entity-store';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
+import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -20,125 +21,109 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
 
 interface Props {
   params: { id: string; entityId: string };
-  searchParams: {
-    typeId?: string;
-    attributes?: string;
-  };
   showCover?: boolean;
   showHeading?: boolean;
   showHeader?: boolean;
+  notice?: React.ReactNode;
 }
-
-const EMPTY_ARRAY_AS_ENCODED_URI = '%5B%5D';
 
 export default async function DefaultEntityPage({
   params,
-  searchParams,
   showCover = true,
   showHeading = true,
   showHeader = true,
+  notice = null,
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
-  const decodedId = decodeURIComponent(params.entityId);
-  const props = await getData(params.id, decodedId);
+  const props = await getData(params.id, params.entityId);
 
-  const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
-  const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
-  const types = Entity.types(props.triples);
-
-  const typeId = searchParams.typeId ?? null;
-
-  const encodedAttributes = searchParams.attributes ?? EMPTY_ARRAY_AS_ENCODED_URI;
-  const attributes = JSON.parse(decodeURI(encodedAttributes));
+  const avatarUrl = Entities.avatar(props.relationsOut) ?? props.serverAvatarUrl;
+  const coverUrl = Entities.cover(props.relationsOut) ?? props.serverCoverUrl;
 
   return (
-    <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
+    <EntityStoreProvider
+      id={props.id}
+      spaceId={props.spaceId}
+      initialSpaces={props.spaces}
+      initialTriples={props.triples}
+      initialRelations={props.relationsOut}
+    >
       <EditorProvider
         id={props.id}
         spaceId={props.spaceId}
-        initialBlockIdsTriple={props.blockIdsTriple}
-        initialBlockTriples={props.blockTriples}
+        initialBlocks={props.blocks}
+        initialBlockRelations={props.blockRelations}
       >
-        <MoveEntityProvider>
-          {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
-          <EntityPageContentContainer>
-            {showHeading && (
-              <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
-            )}
-            {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />}
-            {showSpacer && <Spacer height={40} />}
-            <Editor shouldHandleOwnSpacing />
-            <ToggleEntityPage {...props} typeId={typeId} attributes={attributes} />
-            <Spacer height={40} />
-            {/*
+        {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
+        <EntityPageContentContainer>
+          {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
+          {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
+          {notice}
+          {(showSpacer || !!notice) && <Spacer height={40} />}
+          <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
+          <ToggleEntityPage {...props} />
+          <Spacer height={40} />
+          {/*
               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
               show any referenced by loading states but do want to stream it in
             */}
-            <React.Suspense fallback={<div />}>
-              <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
-            </React.Suspense>
-          </EntityPageContentContainer>
-          <MoveEntityReview />
-        </MoveEntityProvider>
+          <React.Suspense fallback={<div />}>
+            <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
+          </React.Suspense>
+        </EntityPageContentContainer>
       </EditorProvider>
     </EntityStoreProvider>
   );
 }
 
 const getData = async (spaceId: string, entityId: string) => {
-  const entity = await Subgraph.fetchEntity({ id: entityId });
+  const entity = await Subgraph.fetchEntity({ spaceId, id: entityId });
   const nameTripleSpace = entity?.nameTripleSpaces?.[0];
+  const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && nameTripleSpace) {
-    // But don't redirect for space configuration templates in the root space
-    if (spaceId !== SYSTEM_IDS.ROOT_SPACE || entityId === SYSTEM_IDS.ROOT_SPACE_CONFIGURATION) {
-      console.log(`Redirecting from space configuration entity ${entity.id} to space page ${nameTripleSpace}`);
-      return redirect(NavUtils.toSpace(nameTripleSpace));
-    }
+  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_TYPE) && nameTripleSpace) {
+    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
+
+    return redirect(NavUtils.toSpace(spaceId));
   }
 
-  // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
-  // the space for the entity we are rendering, so we need to redirect to the correct space.
-  if (nameTripleSpace) {
-    if (spaceId !== nameTripleSpace) {
-      console.log(
-        `Redirecting from incorrect space ${spaceId} to correct space ${nameTripleSpace} for entity ${entityId}`
-      );
-      return redirect(NavUtils.toEntity(nameTripleSpace, entityId));
-    }
+  // Redirect from an invalid space to a valid one
+  if (entity && !spaces.includes(spaceId)) {
+    const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
+
+    console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
+
+    return redirect(NavUtils.toEntity(newSpaceId, entityId));
   }
 
-  const serverAvatarUrl = Entity.avatar(entity?.triples);
-  const serverCoverUrl = Entity.cover(entity?.triples);
+  const serverAvatarUrl = Entities.avatar(entity?.relationsOut);
+  const serverCoverUrl = Entities.cover(entity?.relationsOut);
 
-  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+  const blockIds = entity?.relationsOut
+    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    ?.map(r => r.toEntity.id);
 
-  const blockTriples = (
-    await Promise.all(
-      blockIds.map(blockId => {
-        return Subgraph.fetchEntity({ id: blockId });
-      })
-    )
-  ).flatMap(entity => entity?.triples ?? []);
+  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
 
   return {
     triples: entity?.triples ?? [],
     id: entityId,
     name: entity?.name ?? null,
-    description: Entity.description(entity?.triples ?? []),
+    description: Entities.description(entity?.triples ?? []),
     spaceId,
+    spaces,
     serverAvatarUrl,
     serverCoverUrl,
+    relationsOut: entity?.relationsOut ?? [],
+    types: entity?.types ?? [],
 
     // For entity page editor
-    blockIdsTriple,
-    blockTriples,
+    blockRelations: entity?.relationsOut ?? [],
+    blocks,
   };
 };

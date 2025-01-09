@@ -2,8 +2,8 @@ import { Editor, Range } from '@tiptap/core';
 
 import * as React from 'react';
 
-import { Environment } from '~/core/environment';
-import { Publish, Storage } from '~/core/io';
+import { IpfsClient } from '~/core/io/ipfs-client';
+import { getImagePath } from '~/core/utils/utils';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
@@ -16,24 +16,19 @@ import { EditorText } from '~/design-system/icons/editor-text';
 export interface CommandSuggestionItem {
   title: string;
   icon: React.ReactElement;
-  command: (props: { editor: Editor; range: Range; props?: any }) => void;
+  command: (props: { editor: Editor; range: Range }) => void;
 }
 
 export const tableCommandItem: CommandSuggestionItem = {
   icon: <EditorTable />,
   title: 'Data',
-  command: ({ editor, range, props }) => {
+  command: ({ editor, range }) => {
     editor
       .chain()
       .focus()
-      .deleteRange(range)
+      .deleteRange({ from: range.from, to: range.to })
       .insertContent({
         type: 'tableNode',
-        attrs: {
-          spaceId: props.spaceId,
-          typeId: props.selectedType.entityId,
-          typeName: props.selectedType.entityName,
-        },
       })
       .createParagraphNear()
       .blur()
@@ -45,16 +40,13 @@ export const tableCommandItem: CommandSuggestionItem = {
 export const textCommandItem: CommandSuggestionItem = {
   icon: <EditorText />,
   title: 'Text',
-  command: ({ editor, range, props }) => {
+  command: ({ editor, range }) => {
     editor
       .chain()
       .focus()
       .deleteRange(range)
       .insertContent({
         type: 'paragraph',
-        attrs: {
-          spaceId: props.spaceId,
-        },
       })
       .createParagraphNear()
       .blur()
@@ -111,11 +103,9 @@ export const commandItems: CommandSuggestionItem[] = [
       input.onchange = async (e: any) => {
         if (!e?.target?.files?.[0]) return;
         const file = e.target.files[0];
+        const ipfsUri = await IpfsClient.uploadFile(file);
+        const src = getImagePath(ipfsUri);
 
-        // It doesn't really matter which configuration we use here since all IPFS
-        // nodes are essentially production.
-        const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-        const src = await Publish.uploadFile(new Storage.StorageClient(config.ipfs), file);
         editor.chain().focus().deleteRange(range).setImage({ src }).run();
       };
       input.click();

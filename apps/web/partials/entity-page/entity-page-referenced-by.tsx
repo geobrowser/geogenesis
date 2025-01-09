@@ -1,18 +1,16 @@
 'use client';
 
 import Image from 'next/legacy/image';
-import Link from 'next/link';
 
 import * as React from 'react';
 
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { OmitStrict } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';

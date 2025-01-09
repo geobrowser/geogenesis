@@ -1,7 +1,8 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Entity, Space, Triple } from '../types';
-import { ISubgraph, fetchEntities, fetchEntity, fetchTriples } from './subgraph';
+import { Triple } from '../types';
+import { Space } from './dto/spaces';
+import { fetchTriples } from './subgraph';
 
 export async function fetchSpaceTypeTriples(spaceId: string): Promise<Triple[]> {
   const triples = await fetchTriples({
@@ -10,7 +11,7 @@ export async function fetchSpaceTypeTriples(spaceId: string): Promise<Triple[]> 
     skip: 0,
     first: 1000,
     filter: [
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+      { field: 'attribute-id', value: SYSTEM_IDS.TYPES_ATTRIBUTE },
       {
         field: 'linked-to',
         value: SYSTEM_IDS.SCHEMA_TYPE,
@@ -33,7 +34,7 @@ export async function fetchForeignTypeTriples(space: Space): Promise<Triple[]> {
     ],
   });
 
-  const foreignTypesIds = foreignTypesFromSpaceConfig.map(triple => triple.value.id);
+  const foreignTypesIds = foreignTypesFromSpaceConfig.map(triple => triple.value.value);
 
   const foreignTypes = await Promise.all(
     foreignTypesIds.map(entityId =>
@@ -43,7 +44,7 @@ export async function fetchForeignTypeTriples(space: Space): Promise<Triple[]> {
         first: 1000,
         filter: [
           { field: 'entity-id', value: entityId },
-          { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+          { field: 'attribute-id', value: SYSTEM_IDS.TYPES_ATTRIBUTE },
           { field: 'linked-to', value: SYSTEM_IDS.SCHEMA_TYPE },
         ],
       })

@@ -44,6 +44,7 @@ const textStyles = cva('', {
       footnoteMedium: 'text-footnoteMedium',
     },
     color: {
+      current: 'text-current',
       white: 'text-white',
       text: 'text-text',
       ctaPrimary: 'text-ctaPrimary',
@@ -63,7 +64,7 @@ const textStyles = cva('', {
       'red-02': 'text-red-02',
     },
     ellipsize: {
-      true: 'whitespace-pre text-ellipsis overflow-hidden',
+      true: 'overflow-hidden text-ellipsis whitespace-pre',
     },
   },
   defaultVariants: {

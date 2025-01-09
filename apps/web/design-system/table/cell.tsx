@@ -2,11 +2,11 @@
 
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
-import Link from 'next/link';
 
 import * as React from 'react';
 
 import { SquareButton } from '~/design-system/button';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ContractSmall } from '../icons/contract-small';
 import { ExpandSmall } from '../icons/expand-small';
@@ -43,7 +43,7 @@ export function TableCell({
     <td
       className={cx(
         !isShown ? (!isEditingColumns || !isEditMode ? 'hidden' : '!bg-grey-01 !text-grey-03') : null,
-        'min-h-[40px] border border-grey-02 bg-transparent p-[10px] align-top'
+        'min-h-[40px] border-b border-grey-02 bg-transparent p-[10px] align-top'
       )}
       style={{
         maxWidth: width,
@@ -53,7 +53,7 @@ export function TableCell({
       width={width}
     >
       <div className="relative flex h-full w-full items-center justify-between leading-none">
-        {children}
+        <div className="flex items-center gap-2">{children}</div>
         {isHovered && (
           <div className="absolute right-0 top-0 z-10 flex items-center gap-1">
             {isExpandable && (

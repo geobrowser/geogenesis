@@ -1,133 +1,60 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
+import { Proposal, ProposalDto } from '../dto/proposals';
+import { SubstreamProposal } from '../schema';
+import { fetchProfile } from './fetch-profile';
+import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
+import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
 
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
     id
+    type
     onchainProposalId
-    name
+
+    edit {
+      id
+      name
+      createdAt
+      createdAtBlock
+    }
+
+    startTime
+    endTime
+    status
+
+    proposalVotes {
+      totalCount
+      nodes {
+        vote
+        account {
+          id
+        }
+      }
+    }
 
     space {
       id
-      metadata {
-        nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
-        }
-      }
+      ${spaceMetadataFragment}
     }
 
-    createdAtBlock
     createdById
-    createdAt
+    startTime
+    endTime
     status
 
-    createdBy {
-      id
-      onchainProfiles {
-        nodes {
-          id
-          homeSpaceId
-        }
-      }
-      geoProfiles {
-        nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
-        }
-      }
-    }
-
-    proposedVersions {
+    proposalVotes {
+      totalCount
       nodes {
-        id
-        name
-        createdById
-        entity {
+        vote
+        account {
           id
-          name
-        }
-        actions {
-          nodes {
-            id
-            actionType
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-          }
         }
       }
     }
@@ -147,7 +74,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchProposalQuery(options.id),
     signal: options?.signal,
   });
@@ -167,7 +94,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id}
-            
+
             queryString: ${getFetchProposalQuery(options.id)}
             `,
             error.message
@@ -195,48 +122,26 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
-  const maybeProfile = proposal.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-  const onchainProfile = proposal.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+  const [profile, voterProfiles] = await Promise.all([
+    fetchProfile({ address: proposal.createdById }),
+    fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.account.id)),
+  ]);
 
-  const profile: Profile = maybeProfile
-    ? {
-        id: proposal.createdBy.id,
-        address: proposal.createdBy.id as `0x${string}`,
-        avatarUrl: Entity.avatar(profileTriples),
-        coverUrl: Entity.cover(profileTriples),
-        name: maybeProfile.name,
-        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-      }
-    : {
-        id: proposal.createdBy.id,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: proposal.createdBy.id as `0x${string}`,
-        profileLink: null,
-      };
+  const proposalOrError = Schema.decodeEither(SubstreamProposal)(proposal);
 
-  const spaceConfig = proposal.space.metadata.nodes[0] as SubstreamEntity | undefined;
-  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+  const decodedProposal = Either.match(proposalOrError, {
+    onLeft: error => {
+      console.error(`Unable to decode proposal ${proposal.id} with error ${error}`);
+      return null;
+    },
+    onRight: proposal => {
+      return proposal;
+    },
+  });
 
-  const spaceWithMetadata: SpaceWithMetadata = {
-    id: proposal.space.id,
-    name: spaceConfig?.name ?? null,
-    image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-  };
+  if (decodedProposal === null) {
+    return null;
+  }
 
-  return {
-    ...proposal,
-    space: spaceWithMetadata,
-    createdBy: profile,
-    proposedVersions: proposal.proposedVersions.nodes.map(v => {
-      return {
-        ...v,
-        createdBy: profile,
-        space: spaceWithMetadata,
-        actions: fromNetworkActions(v.actions.nodes, proposal.space.id),
-      };
-    }),
-  };
+  return ProposalDto(proposal, profile, voterProfiles);
 }

@@ -1,5 +1,5 @@
+import { Filter } from '~/core/blocks-sdk/table';
 import { useEditable } from '~/core/state/editable-store';
-import { TableBlockFilter } from '~/core/state/table-block-store';
 
 import { IconButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
@@ -20,11 +20,11 @@ export function TableBlockFilterPill({
   filter,
   onDelete,
 }: {
-  filter: TableBlockFilter & { columnName: string };
+  filter: Filter & { columnName: string };
   onDelete: () => void;
 }) {
   const { editable } = useEditable();
-  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
+  const value = filter.valueType === 'RELATION' ? filter.valueName : filter.value;
 
   return (
     <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">

@@ -1,7 +1,7 @@
-import { EntityType } from '~/core/types';
+import { EntityId } from '~/core/io/schema';
 
 interface Props {
-  type: EntityType;
+  type: { id: EntityId; name: string | null };
 }
 
 export function EntityPageTypeChip({ type }: Props) {
