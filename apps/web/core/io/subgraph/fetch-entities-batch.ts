@@ -37,8 +37,6 @@ export async function fetchEntitiesBatch(
 ): Promise<Entity[]> {
   const queryId = v4();
 
-  console.log('filter string', filterString);
-
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
     query: query(entityIds, filterString),

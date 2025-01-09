@@ -22,6 +22,7 @@ function upload(formData: FormData, url: string) {
     });
 
     if (response.status >= 300) {
+      console.log('should never trigger', response.status);
       const text = yield* Effect.tryPromise({
         try: () => response.text(),
         catch: error => new IpfsParseResponseError(`Could not parse IPFS text response with status >= 300: ${error}`),

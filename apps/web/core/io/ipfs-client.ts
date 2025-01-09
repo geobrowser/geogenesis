@@ -9,7 +9,7 @@ export function validateCid(cid: string) {
   }
 
   if (cidContains === undefined || cidContains === '') {
-    throw new IpfsUploadError(`CID ${cid} is not valid `);
+    throw new IpfsUploadError(`CID ${cid} is not valid`);
   }
 
   return true;
@@ -42,12 +42,6 @@ export class IpfsClient {
       body: formData,
     });
 
-    if (response.status >= 300) {
-      const text = await response.text();
-      validateCid(text);
-      return text as `ipfs://${string}`;
-    }
-
     const { hash } = await response.json();
     validateCid(hash);
 
@@ -66,13 +60,6 @@ export class IpfsClient {
       method: 'POST',
       body: formData,
     });
-
-    if (response.status >= 300) {
-      const text = await response.text();
-      validateCid(text);
-
-      return text as `ipfs://${string}`;
-    }
 
     const { hash } = await response.json();
     validateCid(hash);
