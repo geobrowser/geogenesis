@@ -30,6 +30,7 @@ interface Props {
 export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props) {
   const { subgraph } = Services.useServices();
   const isEditing = useUserIsEditing(spaceId);
+  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 
   const {
     data: proposals,
@@ -37,6 +38,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
     isFetchingNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
+    enabled: isHistoryOpen,
     queryKey: [`space-proposals-for-space-${spaceId}`],
     queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
@@ -78,7 +80,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
             <Create />
           </Link>
         )}
-        <HistoryPanel>
+        <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
           {proposals?.pages?.length === 0 && <HistoryEmpty />}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>

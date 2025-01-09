@@ -38,9 +38,8 @@ export function SpacePageMetadataHeader({
   addSubspaceComponent,
 }: SpacePageMetadataHeaderProps) {
   const isEditing = useUserIsEditing(spaceId);
-  const [open, onOpenChange] = React.useState(false);
-
-  // const { subgraph } = Services.useServices();
+  const [isContextMenuOpen, setIsContextMenuOpen] = React.useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 
   const {
     data: proposals,
@@ -48,7 +47,7 @@ export function SpacePageMetadataHeader({
     isFetchingNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
-    enabled: open,
+    enabled: isHistoryOpen,
     initialPageParam: 0,
     queryKey: [`space-proposals-for-space-${spaceId}`],
     queryFn: ({ pageParam = 0 }) => fetchCompletedProposals({ spaceId, page: pageParam }),
@@ -77,7 +76,7 @@ export function SpacePageMetadataHeader({
   const onCopyId = async () => {
     try {
       await navigator.clipboard.writeText(entityId);
-      onOpenChange(false);
+      setIsContextMenuOpen(false);
     } catch (err) {
       console.error('Failed to copy entity ID in: ', entityId);
     }
@@ -99,7 +98,7 @@ export function SpacePageMetadataHeader({
             <Create />
           </Link>
         )}
-        <HistoryPanel>
+        <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
           {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>
@@ -128,10 +127,10 @@ export function SpacePageMetadataHeader({
           )}
         </HistoryPanel>
         <Menu
-          open={open}
-          onOpenChange={onOpenChange}
+          open={isContextMenuOpen}
+          onOpenChange={setIsContextMenuOpen}
           align="end"
-          trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
+          trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
           className="max-w-[9rem] whitespace-nowrap"
         >
           <MenuItem onClick={onCopyId}>
