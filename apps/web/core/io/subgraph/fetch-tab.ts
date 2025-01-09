@@ -10,6 +10,7 @@ import { graphql } from './graphql';
 function getFetchTabEntityIdQuery(spaceId: string, pageTypeEntityId: string) {
   return `query {
     entities(
+      orderBy: CREATED_AT_BLOCK_ASC,
       filter: {
         currentVersion: {
           version: {
