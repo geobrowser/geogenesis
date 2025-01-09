@@ -7,7 +7,7 @@ import { diffWords } from 'diff';
 
 import * as React from 'react';
 
-import { EntityChange, RelationChange } from '~/core/utils/change/types';
+import { EntityChange, RelationChange, RenderableChange } from '~/core/utils/change/types';
 import { GeoDate, groupBy } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -22,13 +22,26 @@ type ChangedEntityProps = {
   // setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
+const getIsNewRelation = (changes: RenderableChange[]) => {
+  return (
+    changes.some(change => change.before === null && change.attribute.id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE) &&
+    changes.some(change => change.before === null && change.attribute.id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+  );
+};
+
 export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagingComponent }: ChangedEntityProps) => {
-  if (change.changes.length === 0) {
-    return (
-      <h2 className="text-center text-mediumTitle" key={change.id}>
-        There are no changes between the two versions
-      </h2>
-    );
+  const { changes } = change;
+
+  const isEmpty = changes.length === 0;
+
+  if (isEmpty) {
+    return null;
+  }
+
+  const isNewRelation = getIsNewRelation(changes);
+
+  if (isNewRelation) {
+    return null;
   }
 
   return (
@@ -54,7 +67,7 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
         <ChangedAttribute
           renderAttributeStagingComponent={renderAttributeStagingComponent}
           key={`${change.id}-${change.id}`}
-          changes={change.changes}
+          changes={changes}
         />
       </div>
     </div>
