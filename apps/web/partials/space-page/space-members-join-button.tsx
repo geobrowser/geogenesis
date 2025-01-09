@@ -1,5 +1,6 @@
 'use client';
 
+import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 
 import { Pending } from '~/design-system/pending';
@@ -15,6 +16,12 @@ export function SpaceMembersJoinButton({
   hasRequestedSpaceMembership,
 }: SpaceMembersJoinButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember(votingPluginAddress);
+
+  const { shouldShowElement } = useOnboardGuard();
+
+  if (!shouldShowElement) {
+    return null;
+  }
 
   return (
     <Pending
