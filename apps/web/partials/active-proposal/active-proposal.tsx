@@ -38,13 +38,13 @@ export function ActiveProposal({ proposalId, spaceId, connectedAddress }: Props)
   return (
     <ActiveProposalSlideUp proposalId={proposalId} spaceId={spaceId}>
       <React.Suspense fallback="Loading...">
-        <ReviewActiveProposal connectedAddress={connectedAddress} proposalId={proposalId} spaceId={spaceId} />
+        <ReviewProposal connectedAddress={connectedAddress} proposalId={proposalId} spaceId={spaceId} />
       </React.Suspense>
     </ActiveProposalSlideUp>
   );
 }
 
-async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: Props) {
+async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) {
   if (!proposalId) {
     return null;
   }

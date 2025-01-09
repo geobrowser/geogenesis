@@ -18,7 +18,7 @@ const query = (createdAt: number, entityId: string, spaceId: string) => {
   return `query {
     versions(filter: {
         entityId: { equalTo: "${entityId}"}
-        createdAt: {lessThanOrEqualTo: ${createdAt}}
+        createdAt: {lessThan: ${createdAt}}
         edit: { spaceId: { equalTo: "${spaceId}" } proposals: { some: { status: { equalTo: ACCEPTED } } } }
       }
     ) {

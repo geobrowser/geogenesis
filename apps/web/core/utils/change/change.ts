@@ -119,7 +119,6 @@ export async function fromEndedProposal(proposal: Proposal): Promise<EntityChang
     )
   );
 
-  // 4. Aggregate changes between the two sets of versions
   return aggregateChanges({
     spaceId: proposal.space.id,
     beforeEntities: previousVersions.filter(e => e !== null),
@@ -157,6 +156,7 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
     const afterRelationsForEntity = afterRelationsByEntityId[entity.id] ?? {};
     const beforeRelationsForEntity = beforeRelationsByEntityId[entity.id] ?? {};
 
+    // @TODO: This doesn't account for situations where data is deleted from before
     for (const afterTriple of Object.values(afterTriplesForEntity)) {
       const beforeTriple: Triple | null = beforeTriplesForEntity[afterTriple.attributeId] ?? null;
       const beforeValue = beforeTriple ? beforeTriple.value : null;
@@ -174,6 +174,7 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
       });
     }
 
+    // @TODO: This doesn't account for situations where data is deleted from before
     for (const relations of Object.values(afterRelationsForEntity)) {
       for (const relation of relations) {
         const beforeRelationsForAttributeId = beforeRelationsForEntity[relation.typeOf.id] ?? null;
@@ -216,7 +217,7 @@ function isRealChange(
   after: TripleChangeValue | RelationChangeValue
 ) {
   // The before and after values are the same
-  if (before?.value === after.value) {
+  if (before?.value === after.value || before?.valueName === after.valueName) {
     return false;
   }
 
@@ -276,6 +277,7 @@ function getBeforeRelationChange(relation: Relation, remoteRelations: Relation[]
     return null;
   }
 
+  // @TODO: An update relation can't really ever happen due to the way relations work
   if (relation.toEntity.value !== maybeRemoteRelationWithSameId.toEntity.value) {
     return {
       value: maybeRemoteRelationWithSameId.toEntity.value,
@@ -310,6 +312,7 @@ function getAfterRelationChange(relation: Relation, remoteRelations: Relation[] 
     };
   }
 
+  // @TODO: An update relation can't really ever happen due to the way relations work
   if (relation.toEntity.value !== maybeRemoteRelationWithSameId.toEntity.value) {
     return {
       value: relation.toEntity.value,
