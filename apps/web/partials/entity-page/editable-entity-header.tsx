@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useEditEvents } from '~/core/events/edit-events';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -49,7 +50,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
           <div className="flex items-center justify-between">
             <Truncate maxLines={3} shouldTruncate>
               <Text as="h1" variant="mainPage">
-                {name ?? entityId}
+                {name ?? ZERO_WIDTH_SPACE}
               </Text>
             </Truncate>
           </div>

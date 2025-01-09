@@ -19,7 +19,12 @@ interface TabGroupProps {
 
 export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   return (
-    <div className={cx('flex items-center gap-6 border-b border-grey-02 pb-2', className)}>
+    <div
+      className={cx(
+        'flex max-w-full items-center gap-6 overflow-x-auto overflow-y-clip border-b border-grey-02 pb-2',
+        className
+      )}
+    >
       {tabs.map(t => (
         <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
       ))}
