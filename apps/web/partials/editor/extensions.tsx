@@ -12,6 +12,7 @@ import Text from '@tiptap/extension-text';
 
 import { ConfiguredCommandExtension } from './command-extension';
 import { HeadingNode } from './heading-node';
+import { ImageNode } from './image-node';
 import { ParagraphNode } from './paragraph-node';
 import { TableNode } from './table-node';
 import { TrailingNode } from './trailing-node';
@@ -67,7 +68,7 @@ export const tiptapExtensions = [
   BulletList,
   ListItem,
   TableNode,
-  Image,
+  ImageNode,
   Placeholder.configure({
     placeholder: ({ node }) => {
       const isHeading = node.type.name === 'heading';
