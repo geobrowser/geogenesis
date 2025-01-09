@@ -8,7 +8,7 @@ import { Ops } from '~/core/utils/ops';
 type Options = {
   oldEntityId: string;
   entityId?: string;
-  entityName?: string;
+  entityName?: string | null;
 };
 
 export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
@@ -16,14 +16,14 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
     throw new Error(`Must specify entity to clone.`);
   }
 
-  const { oldEntityId, entityId = null, entityName = null } = options;
+  const { oldEntityId, entityId = null, entityName } = options;
 
   const oldEntity = await Subgraph.fetchEntity({ id: oldEntityId });
 
   if (!oldEntity) return [];
 
   const newEntityId = entityId ?? ID.createEntityId();
-  const newEntityName = entityName ?? oldEntity.name ?? '';
+  const newEntityName = entityName;
   const newOps: Array<Op> = [];
 
   const triplesToClone = oldEntity.triples.filter(triple => !SKIPPED_ATTRIBUTES.includes(triple.attributeId));
@@ -32,16 +32,18 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
 
   const blocksToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS);
 
-  newOps.push(
-    Ops.create({
-      entity: newEntityId,
-      attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
-      value: {
-        type: 'TEXT',
-        value: newEntityName,
-      },
-    })
-  );
+  if (newEntityName) {
+    newOps.push(
+      Ops.create({
+        entity: newEntityId,
+        attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
+        value: {
+          type: 'TEXT',
+          value: newEntityName,
+        },
+      })
+    );
+  }
 
   triplesToClone.forEach(triple => {
     newOps.push(
