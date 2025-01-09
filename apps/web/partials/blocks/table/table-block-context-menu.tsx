@@ -1,16 +1,18 @@
 'use client';
 
-import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useWriteOps } from '~/core/database/write';
+import { StoreRelation } from '~/core/database/types';
+import { DB } from '~/core/database/write';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { EntityId } from '~/core/io/schema';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -198,17 +200,11 @@ type Column = {
 
 type TableBlockContextMenuProps = {
   allColumns: Array<Column>;
-  shownColumnRelations: Array<Relation>;
-  shownColumnIds: Array<string>;
 };
 
-export function TableBlockContextMenu({
-  allColumns,
-  shownColumnRelations,
-  shownColumnIds,
-}: TableBlockContextMenuProps) {
+export function TableBlockContextMenu({ allColumns }: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { spaceId, entityId, name } = useTableBlock();
+  const { spaceId, entityId } = useTableBlock();
   const [isEditingDataSource, setIsEditingDataSource] = React.useState(false);
   const [isEditingColumns, setIsEditingColumns] = useAtom(editingColumnsAtom);
 
@@ -338,19 +334,7 @@ export function TableBlockContextMenu({
                 // do not show name column
                 if (index === 0) return null;
 
-                const shownColumnRelation = shownColumnRelations.find(r => r.toEntity.id === column.id) ?? null;
-
-                return (
-                  <ToggleColumn
-                    key={column.id}
-                    column={column}
-                    shownColumnIds={shownColumnIds}
-                    shownColumnRelation={shownColumnRelation}
-                    space={spaceId}
-                    entityId={entityId}
-                    entityName={name ?? null}
-                  />
-                );
+                return <ToggleColumn key={column.id} column={column} />;
               })}
             </>
           )}
@@ -362,51 +346,47 @@ export function TableBlockContextMenu({
 
 type ToggleColumnProps = {
   column: Column;
-  shownColumnIds: Array<string>;
-  shownColumnRelation: Relation | null;
-  space: string;
-  entityId: string;
-  entityName: string | null;
 };
 
-const ToggleColumn = ({
-  column,
-  shownColumnIds,
-  shownColumnRelation,
-  space,
-  entityId,
-  entityName,
-}: ToggleColumnProps) => {
-  const { upsert } = useWriteOps();
+const ToggleColumn = ({ column }: ToggleColumnProps) => {
+  const { spaceId, relationId, shownColumnIds, shownColumnRelations } = useTableBlock();
+
+  const shownColumnRelation = shownColumnRelations.find(relation => relation.toEntity.id === column.id);
 
   const { id } = column;
   const isShown = shownColumnIds.includes(column.id);
 
   const onToggleColumn = React.useCallback(async () => {
-    const attributeId = SYSTEM_IDS.SHOWN_COLUMNS;
-    const attributeName = 'Shown Columns';
-
     if (!isShown) {
-      upsert(
-        {
-          entityId,
-          entityName,
-          attributeId,
-          attributeName,
-          value: {
-            type: 'URL',
-            value: GraphUrl.fromEntityId(id),
-          },
+      const newRelation: StoreRelation = {
+        space: spaceId,
+        index: INITIAL_RELATION_INDEX_VALUE,
+        typeOf: {
+          id: EntityId(SYSTEM_IDS.SHOWN_COLUMNS),
+          name: 'Shown Columns',
         },
-        space
-      );
+        fromEntity: {
+          id: EntityId(relationId),
+          name: '',
+        },
+        toEntity: {
+          id: EntityId(id),
+          name: column.name,
+          renderableType: 'RELATION',
+          value: EntityId(id),
+        },
+      };
+
+      DB.upsertRelation({
+        relation: newRelation,
+        spaceId,
+      });
     } else {
       if (shownColumnRelation) {
-        // @TODO(relations): remove all triples
-        // remove(shownColumnRelation, space);
+        DB.removeRelation({ relationId: shownColumnRelation.id, spaceId });
       }
     }
-  }, [upsert, entityId, entityName, id, isShown, shownColumnRelation, space]);
+  }, [column.name, id, isShown, relationId, shownColumnRelation, spaceId]);
 
   return (
     <MenuItem>

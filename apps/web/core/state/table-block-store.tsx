@@ -63,6 +63,12 @@ export function useTableBlock() {
 
   const viewRelation = blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
+  const shownColumnRelations = blockRelation.relationsOut.filter(
+    relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS
+  );
+
+  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
+
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
     id: React.useMemo(() => EntityId(entityId), [entityId]),
@@ -315,7 +321,6 @@ export function useTableBlock() {
   const placeholder = getPlaceholder(blockEntity, view);
 
   return {
-    blockEntity,
     relationId,
     source,
     setSource,
@@ -342,6 +347,8 @@ export function useTableBlock() {
     setName,
     view,
     viewRelation,
+    shownColumnRelations,
+    shownColumnIds,
     placeholder,
     collectionItems,
   };
