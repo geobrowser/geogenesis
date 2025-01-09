@@ -193,9 +193,11 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
       }
     }
 
+    const nonBlockRelationChanges = relationChanges.filter(c => c.attribute.id !== SYSTEM_IDS.BLOCKS);
+
     // Filter out any "dead" changes where the values are the exact same
     // in the before and after.
-    const realChanges = [...tripleChanges, ...relationChanges].filter(c => isRealChange(c.before, c.after));
+    const realChanges = [...tripleChanges, ...nonBlockRelationChanges].filter(c => isRealChange(c.before, c.after));
 
     // @TODO: map block diffs into a renderable format
     const blockChanges = relationChanges.filter(c => c.attribute.id === SYSTEM_IDS.BLOCKS);
