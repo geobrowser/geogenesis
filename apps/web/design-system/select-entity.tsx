@@ -27,6 +27,7 @@ import { InfoSmall } from './icons/info-small';
 import { RightArrowLong } from './icons/right-arrow-long';
 import { Search } from './icons/search';
 import { ResizableContainer } from './resizable-container';
+import { Spacer } from './spacer';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
@@ -224,11 +225,24 @@ export const SelectEntity = ({
                                     className="relative z-10 flex w-full flex-col rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
                                   >
                                     <div className="truncate text-button text-text">{result.name}</div>
+                                    {result.types.length > 0 && (
+                                      <>
+                                        <Spacer height={4} />
+                                        <div className="flex items-center gap-1.5">
+                                          {result.types.map(type => (
+                                            <Tag key={type.id}>{type.name}</Tag>
+                                          ))}
+                                        </div>
+                                        <Spacer height={4} />
+                                      </>
+                                    )}
+
                                     {isShowingIds && (
                                       <div className="mb-2 mt-1 text-footnoteMedium text-grey-04">
                                         Entity ID &mdash; {result.id}
                                       </div>
                                     )}
+
                                     <div className="mt-1 text-footnoteMedium text-grey-04">Any space</div>
                                   </button>
                                 </div>
