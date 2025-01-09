@@ -3,7 +3,6 @@ import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
 import { Filter } from '../blocks-sdk/table';
-import { Entity } from '../io/dto/entities';
 import { fetchColumns } from '../io/fetch-columns';
 import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
@@ -18,7 +17,8 @@ const queryKeys = {
     ['blocks', 'data', 'query', 'rows', options] as const,
   localRows: (entityIds: string[]) => ['blocks', 'data', 'query', 'rows', 'merging', entityIds] as const,
   columns: (typeIds: string[]) => ['blocks', 'data', 'query', 'columns', 'merging', typeIds] as const,
-  remoteCollectionItems: (entityIds: string[]) => ['blocks', 'data', 'collection', 'merging', entityIds] as const,
+  remoteCollectionItems: (entityIds: string[], filterString?: string) =>
+    ['blocks', 'data', 'collection', 'merging', entityIds, filterString] as const,
   remoteEntities: (entityIds: string[]) => ['blocks', 'data', 'entity', 'merging', entityIds] as const,
 };
 
@@ -120,16 +120,17 @@ export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
   return dedupeWith([...cachedColumns, ...localAttributesForSelectedType], (a, b) => a.id === b.id);
 }
 
-/**
- * Few things we need to support
- * 1. Just fetch remote entities
- * 2. Merge remote entities with local entities
- * 3. Filter them with a selector (either manual one or one derived from FilterState)
- */
-async function mergeCollectionRowEntitiesAsync(entityIds: string[]): Promise<Entity[]> {
+type CollectionItemArgs = {
+  entityIds: string[];
+  filterString?: string;
+};
+
+export async function mergeCollectionItemEntitiesAsync(args: CollectionItemArgs) {
+  const { entityIds, filterString } = args;
+
   const cachedRemoteEntities = await queryClient.fetchQuery({
-    queryKey: queryKeys.remoteCollectionItems(entityIds),
-    queryFn: ({ signal }) => fetchEntitiesBatch(entityIds, signal),
+    queryKey: queryKeys.remoteCollectionItems(entityIds, filterString),
+    queryFn: ({ signal }) => fetchEntitiesBatch(entityIds, filterString, signal),
     staleTime: Duration.toMillis(Duration.seconds(20)),
   });
 
@@ -151,11 +152,6 @@ async function mergeCollectionRowEntitiesAsync(entityIds: string[]): Promise<Ent
   return [...localOnlyEntities, ...merged];
 }
 
-export async function mergeCollectionItemEntitiesAsync(entityIds: string[]) {
-  // @TODO(data-block): filters, pagination
-  return await mergeCollectionRowEntitiesAsync(entityIds);
-}
-
 function filterValue(value: Value, valueToFilter: string) {
   switch (value.type) {
     case 'TEXT':
@@ -167,7 +163,7 @@ function filterValue(value: Value, valueToFilter: string) {
   }
 }
 
-export async function mergeEntitySourceTypeEntities(entityId: string, filterState: Filter[]) {
+export async function mergeEntitySourceTypeEntities(entityId: string, filterString: string, filterState: Filter[]) {
   const entity = await mergeEntityAsync(EntityId(entityId));
   const maybeRelationType = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE)?.value;
 
@@ -179,7 +175,7 @@ export async function mergeEntitySourceTypeEntities(entityId: string, filterStat
 
   const cachedRemoteEntities = await queryClient.fetchQuery({
     queryKey: queryKeys.remoteEntities(entityIdsToFetch),
-    queryFn: ({ signal }) => fetchEntitiesBatch(entityIdsToFetch, signal),
+    queryFn: ({ signal }) => fetchEntitiesBatch(entityIdsToFetch, filterString, signal),
     staleTime: Duration.toMillis(Duration.seconds(20)),
   });
 
