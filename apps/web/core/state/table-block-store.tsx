@@ -23,7 +23,7 @@ import { StoredRelation } from '../database/types';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { Relation, Schema } from '../types';
+import { Relation, Schema, Triple } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
@@ -33,7 +33,6 @@ import { Source } from './editor/types';
 export const PAGE_SIZE = 9;
 
 interface RowQueryArgs {
-  columns?: Schema[];
   pageNumber: number;
   entityId: string;
   filterState?: Awaited<ReturnType<typeof createFiltersFromFilterString>>;
@@ -44,7 +43,7 @@ interface RowQueryArgs {
 const queryKeys = {
   collectionItemEntities: (collectionItemIds: EntityId[]) =>
     ['blocks', 'data', 'collection-items', collectionItemIds] as const,
-  filterState: (filterString: string | null) => ['blocks', 'data', 'filter-state', filterString] as const,
+  filterState: (filterTriple: Triple | undefined) => ['blocks', 'data', 'filter-state', filterTriple] as const,
   columns: (filterState: Awaited<ReturnType<typeof createFiltersFromFilterString>> | null) =>
     ['blocks', 'data', 'columns', filterState] as const,
   rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
@@ -61,45 +60,42 @@ export function useTableBlock() {
     id: React.useMemo(() => EntityId(relationId), [relationId]),
   });
 
-  const viewRelation = blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
-
-  const shownColumnRelations = blockRelation.relationsOut.filter(
-    relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS
-  );
-
-  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
-
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
     id: React.useMemo(() => EntityId(entityId), [entityId]),
   });
 
+  const viewRelation = React.useMemo(
+    () => blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE),
+    [blockRelation.relationsOut]
+  );
+
+  const shownColumnRelations = React.useMemo(
+    () => blockRelation.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS),
+    [blockRelation.relationsOut]
+  );
+
+  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
+
   const filterTriple = React.useMemo(() => {
-    return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
+    return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
   }, [blockEntity?.triples]);
-
-  const filterString = React.useMemo(() => {
-    const stringValue = Values.stringValue(filterTriple ?? undefined);
-
-    if (stringValue && stringValue !== '') {
-      return stringValue;
-    }
-
-    return null;
-  }, [filterTriple]);
 
   /**
    * The filter state is derived from the filter string and the source. The source
    * might include a list of spaceIds to include in the filter. The filter string
    * only includes _data_ filters, but not _where_ to query from.
    */
-  const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
+  const {
+    data: filterState,
+    isLoading: isLoadingFilterState,
+    isFetched: isFilterStateFetched,
+  } = useQuery({
     placeholderData: keepPreviousData,
-    initialData: [],
-    enabled: filterString !== null,
-    queryKey: queryKeys.filterState(filterString),
+    queryKey: queryKeys.filterState(filterTriple),
     queryFn: async () => {
-      return await createFiltersFromFilterString(filterString);
+      const filterStringFromTriple = Values.stringValue(filterTriple);
+      return await createFiltersFromFilterString(filterStringFromTriple);
     },
   });
 
@@ -127,7 +123,7 @@ export function useTableBlock() {
     }, [blockEntity.relationsOut, source])
   );
 
-  const collectionItemIds = collectionItems?.map(c => c.toEntity.id) ?? [];
+  const collectionItemIds = React.useMemo(() => collectionItems?.map(c => c.toEntity.id) ?? [], [collectionItems]);
 
   const { data: collectionItemEntities } = useQuery({
     placeholderData: keepPreviousData,
@@ -144,7 +140,12 @@ export function useTableBlock() {
 
   // We need the entities before we can fetch the columns since we need to know the
   // types of the entities when rendering a collection source.
-  const { data: columns, isLoading: isLoadingColumns } = useQuery({
+  const {
+    data: columns,
+    isLoading: isLoadingColumns,
+    isFetched: isColumnsFetched,
+  } = useQuery({
+    enabled: filterState !== undefined,
     placeholderData: keepPreviousData,
     queryKey: queryKeys.columns(filterState ?? null),
     queryFn: async () => {
@@ -153,12 +154,15 @@ export function useTableBlock() {
     },
   });
 
-  const { data: tableEntities, isLoading: isLoadingEntities } = useQuery({
-    enabled: columns !== undefined && filterState !== undefined,
+  const {
+    data: tableEntities,
+    isLoading: isLoadingEntities,
+    isFetched: isEntitiesFetched,
+  } = useQuery({
+    enabled: filterState !== undefined,
     placeholderData: keepPreviousData,
     // @TODO: Should re-run when the relations for the entity source changes
     queryKey: queryKeys.rows({
-      columns,
       pageNumber,
       collectionItems,
       entityId,
@@ -166,7 +170,7 @@ export function useTableBlock() {
       filterState,
     }),
     queryFn: async () => {
-      if (!columns || !filterState) return [];
+      if (!filterState) return [];
 
       const filterString = createGraphQLStringFromFilters(filterState);
 
@@ -199,17 +203,6 @@ export function useTableBlock() {
     if (!tableEntities || !columns) return [];
     return EntityTable.fromColumnsAndRows(tableEntities, columns, collectionItemEntities);
   }, [tableEntities, columns, collectionItemEntities]);
-
-  const { data: columnRelationTypes } = useQuery({
-    placeholderData: keepPreviousData,
-    enabled: columns !== undefined,
-    queryKey: queryKeys.relationTypes(columns),
-    queryFn: async () => {
-      if (!columns) return {};
-      // @TODO(database)
-      return {} as Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>;
-    },
-  });
 
   const setPage = React.useCallback(
     (page: number | 'next' | 'previous') => {
@@ -329,7 +322,7 @@ export function useTableBlock() {
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
     columns: columns ?? [],
 
-    columnRelationTypes: columnRelationTypes ?? {},
+    columnRelationTypes: {},
 
     filterState: filterState ?? [],
     setFilterState,
@@ -342,7 +335,19 @@ export function useTableBlock() {
     entityId,
     spaceId,
 
-    isLoading: isLoadingColumns || isLoadingEntities || isLoadingFilterState,
+    // We combine fetching state into loading state due to the transition from
+    // the server representation of our editor to the client representation. We
+    // don't want to transition from a loading state on the server to an empty
+    // state then back into a loading state. By adding the isFetched state we
+    // will stay in a placeholder state until we've fetched our queries at least
+    // one time.
+    isLoading:
+      isLoadingColumns ||
+      isLoadingEntities ||
+      isLoadingFilterState ||
+      !isFilterStateFetched ||
+      !isColumnsFetched ||
+      !isEntitiesFetched,
 
     name: blockEntity.name,
     setName,

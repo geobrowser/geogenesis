@@ -26,7 +26,7 @@ export function EntityPageReferencedBy({ referencedByEntities }: ReferencedByEnt
   if (referencedByEntities.length === 0) return null;
 
   return (
-    <div>
+    <div className="px-4">
       <Text as="h2" variant="mediumTitle">
         Referenced by
       </Text>

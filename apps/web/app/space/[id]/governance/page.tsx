@@ -8,9 +8,6 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { graphql } from '~/core/io/subgraph/graphql';
 
-import { SmallButton } from '~/design-system/button';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 import { GovernanceProposalsListInfiniteScroll } from '~/partials/governance/governance-proposals-list-infinite-scroll';
@@ -54,9 +51,9 @@ export default async function GovernancePage({ params, searchParams }: Props) {
             </div>
           </GovernanceMetadataBox>
         </div>
-        <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
+        {/* <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
           All Proposals
-        </SmallButton>
+        </SmallButton> */}
         <React.Suspense fallback="Loading initial...">
           <GovernanceProposalsList page={0} spaceId={params.id} />
         </React.Suspense>
@@ -96,6 +93,12 @@ async function getProposalsCount({ id }: Props['params']) {
         filter: {
           spaceId: { equalToInsensitive: "${id}" }
           status: { equalTo: PROPOSED }
+          endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
+          or: [
+            { type: { equalTo: ADD_EDIT } }
+            { type: { equalTo: ADD_SUBSPACE } }
+            { type: { equalTo: REMOVE_SUBSPACE } }
+          ]
         }
       ) {
         totalCount
@@ -105,6 +108,11 @@ async function getProposalsCount({ id }: Props['params']) {
         filter: {
           spaceId: { equalToInsensitive: "${id}" }
           status: { equalTo: ACCEPTED }
+          or: [
+            { type: { equalTo: ADD_EDIT } }
+            { type: { equalTo: ADD_SUBSPACE } }
+            { type: { equalTo: REMOVE_SUBSPACE } }
+          ]
         }
       ) {
         totalCount
@@ -113,7 +121,13 @@ async function getProposalsCount({ id }: Props['params']) {
       rejectedProposals: proposals(
         filter: {
           spaceId: { equalToInsensitive: "${id}" }
-          status: { equalTo: REJECTED }
+          status: { in: [REJECTED, PROPOSED] }
+          endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
+          or: [
+            { type: { equalTo: ADD_EDIT } }
+            { type: { equalTo: ADD_SUBSPACE } }
+            { type: { equalTo: REMOVE_SUBSPACE } }
+          ]
         }
       ) {
         totalCount

@@ -37,7 +37,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   let data = initialData;
 
   const { data: remoteData } = useQuery({
-    enabled: !initialData,
+    enabled: !initialData && id !== '',
     placeholderData: keepPreviousData,
     queryKey: ['useEntity', spaceId, id, initialData],
     initialData,

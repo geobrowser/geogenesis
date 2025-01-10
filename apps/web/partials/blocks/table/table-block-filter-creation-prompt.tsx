@@ -263,7 +263,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                       />
                     ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'RELATION' ? (
                       <TableBlockEntityFilterInput
-                        filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
+                        // filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
                         selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectEntityValue}
                       />

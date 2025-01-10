@@ -7,14 +7,19 @@ import { slog } from '~/core/utils/utils';
 import { IpfsService } from '../ipfs-service';
 
 export async function POST(request: Request) {
+  console.log('starting route.upload-file', Environment.getConfig().ipfs);
   const formData = await request.formData();
   const file = formData.get('file') as File;
 
   if (!file) {
+    console.error('no file provided');
     return new Response('No file provided', { status: 400 });
   }
 
+  console.log('uploading file to ipfs gateway', Environment.getConfig().ipfs);
+
   const requestId = uuid();
+  console.log('uploading file to ipfs gateway', Environment.getConfig().ipfs);
   const ipfs = new IpfsService(Environment.getConfig().ipfs);
   const effect = Effect.retry(ipfs.uploadFile(file), Schedule.exponential('100 millis').pipe(Schedule.jittered));
 
@@ -33,7 +38,12 @@ export async function POST(request: Request) {
       requestId,
     });
 
-    throw error;
+    return Response.json(
+      {
+        error: error,
+      },
+      { status: 400 }
+    );
   }
 
   return Response.json({ hash: result.right }, { status: 200 });

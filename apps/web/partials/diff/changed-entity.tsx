@@ -274,7 +274,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
       case 'TEXT': {
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
-            <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+            <div className="flex-1 border border-grey-02 p-4">
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
                 {changes.map(c => {
@@ -292,7 +292,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                 })}
               </div>
             </div>
-            <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
+            <div className="group relative flex-1 border border-grey-02 p-4">
               {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
@@ -317,7 +317,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
       case 'CHECKBOX': {
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
-            <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+            <div className="flex-1 border border-grey-02 p-4">
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
                 {changes.map((c, index) => {
@@ -329,7 +329,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                 })}
               </div>
             </div>
-            <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
+            <div className="group relative flex-1 border border-grey-02 p-4">
               {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
@@ -348,7 +348,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
       case 'RELATION': {
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
-            <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
+            <div className="flex-1 border border-grey-02 p-4">
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="flex flex-wrap gap-2">
                 {changes.map(c => {
@@ -356,7 +356,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                 })}
               </div>
             </div>
-            <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+            <div className="group relative flex-1 border border-grey-02 p-4">
               {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="flex flex-wrap gap-2">
@@ -376,7 +376,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
       // case 'IMAGE': {
       //   return (
       //     <div key={attributeId} className="-mt-px flex gap-8">
-      //       <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+      //       <div className="flex-1 border border-grey-02 p-4">
       //         <div className="text-bodySemibold capitalize">{name}</div>
       //         <div>
       //           {typeof before !== 'object' && (
@@ -386,7 +386,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
       //           )}
       //         </div>
       //       </div>
-      //       <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+      //       <div className="group relative flex-1 border border-grey-02 p-4">
       //         <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
       //           <SquareButton
       //             onClick={handleDeleteActions}
@@ -410,7 +410,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
       case 'TIME': {
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
-            <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+            <div className="flex-1 border border-grey-02 p-4">
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
                 {changes.map(c => {
@@ -419,7 +419,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                 })}
               </div>
             </div>
-            <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+            <div className="flex-1 border border-grey-02 p-4">
               {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
@@ -435,7 +435,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
       case 'URL': {
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
-            <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+            <div className="flex-1 border border-grey-02 p-4">
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="truncate text-ctaPrimary no-underline">
                 {changes.map(c => {
@@ -453,7 +453,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                 })}
               </div>
             </div>
-            <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+            <div className="group relative flex-1 border border-grey-02 p-4">
               {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="truncate text-ctaPrimary no-underline">

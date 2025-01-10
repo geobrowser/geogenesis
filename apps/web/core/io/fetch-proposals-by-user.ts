@@ -1,10 +1,11 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '../environment';
 import { ProposalWithoutVoters, ProposalWithoutVotersDto } from './dto/proposals';
-import { type SubstreamProposal } from './schema';
+import { SubstreamProposal } from './schema';
 import { fetchProfilesByAddresses } from './subgraph/fetch-profiles-by-ids';
 import { spaceMetadataFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
@@ -18,32 +19,32 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
     .join(' ');
 
   return `query {
-    proposals(first: 5, filter: {${filter}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
+    proposals(first: 5, filter: {${filter}}, orderBy: EDIT_BY_EDIT_ID__CREATED_AT_DESC, offset: ${skip}) {
       nodes {
         id
-        name
-        type
         space {
           id
           ${spaceMetadataFragment}
         }
-        createdAtBlock
+        edit {
+          id
+          name
+          createdAt
+          createdAtBlock
+        }
+        type
+        onchainProposalId
         createdById
-        createdAt
+
+        startTime
+        endTime
         status
 
-        createdBy {
-          id
-        }
-
-        proposedVersions {
+        proposalVotes {
+          totalCount
           nodes {
-            id
-            createdById
-            entity {
-              id
-              name
-            }
+            vote
+            accountId
           }
         }
       }
@@ -118,7 +119,22 @@ export async function fetchProposalsByUser({
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposals = result.proposals.nodes;
+  const proposals = result.proposals.nodes
+    .map(p => {
+      const decoded = Schema.decodeEither(SubstreamProposal)(p);
+
+      return Either.match(decoded, {
+        onLeft: error => {
+          console.error(`Unable to decode proposal ${p.id} with error ${error}`);
+          return null;
+        },
+        onRight: proposal => {
+          return proposal;
+        },
+      });
+    })
+    .filter(p => p !== null);
+
   const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdById));
 
   return proposals.map(p => {

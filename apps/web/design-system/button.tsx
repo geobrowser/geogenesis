@@ -39,9 +39,9 @@ const buttonClassNames = (className = '') =>
             'border-transparent bg-white !text-grey-04 shadow-none hover:border-text hover:bg-bg hover:!text-text hover:shadow-button focus:border-text focus:shadow-inner-text',
           transparent:
             'border-text bg-transparent !text-text shadow-none hover:border-text hover:!text-text focus:border-text focus:shadow-inner-text',
-          success: 'border-white bg-green text-white shadow-none',
-          error: 'border-white bg-red-01 text-white shadow-none',
-          done: 'border-green bg-green text-text',
+          success: 'border-white bg-green text-white shadow-none transition-colors duration-150 hover:bg-opacity-80',
+          error: 'border-white bg-red-01 text-white shadow-none transition-colors duration-150 hover:bg-opacity-80',
+          done: 'border-green bg-green text-text transition-colors duration-150 hover:bg-opacity-80',
           // using a variant for disabled to overwrite the background/text styles
           disabled: 'border-transparent bg-divider text-grey-03 hover:bg-divider',
         },

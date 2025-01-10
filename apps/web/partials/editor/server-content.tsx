@@ -1,7 +1,6 @@
 import { Content } from '~/core/state/editor/types';
 
 import { Skeleton } from '~/design-system/skeleton';
-import { Spacer } from '~/design-system/spacer';
 
 import { TableBlockLoadingPlaceholder } from '../blocks/table/table-block';
 
@@ -10,7 +9,10 @@ type ServerContentProps = {
 };
 
 export const ServerContent = ({ content }: ServerContentProps) => {
-  if (!content) return null;
+  if (!content) {
+    console.error('Content is undefined');
+    return null;
+  }
 
   return (
     <div className="tiptap ProseMirror !pb-[2rem]">
@@ -27,9 +29,9 @@ type BlockProps = {
 };
 
 const Block = ({ block }: BlockProps) => {
-  if (!block.content) {
-    return null;
-  }
+  // if (!block.content) {
+  //   return null;
+  // }
 
   switch (block.type) {
     case 'paragraph': {
@@ -109,8 +111,6 @@ const Block = ({ block }: BlockProps) => {
     case 'tableNode': {
       return (
         <>
-          {/* // The layout here matches what we have for the table block */}
-          <Spacer height={20} />
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Skeleton className="h-4 w-4" />

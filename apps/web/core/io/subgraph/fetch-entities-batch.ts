@@ -81,8 +81,8 @@ export async function fetchEntitiesBatch(
       const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
 
       return Either.match(decodedSpace, {
-        onLeft: error => {
-          console.error(`Unable to decode collection item entity ${e.id} with error ${error}`);
+        onLeft: () => {
+          // console.error(`Unable to decode collection item entity ${e.id} with error ${error}`);
           return null;
         },
         onRight: substreamEntity => {

@@ -1,11 +1,16 @@
 'use client';
 
+import cx from 'classnames';
+
+import { useState } from 'react';
+
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/schema';
 
 import { SmallButton } from '~/design-system/button';
+import { Pending } from '~/design-system/pending';
 
 import { Execute } from '~/partials/active-proposal/execute';
 
@@ -29,12 +34,29 @@ export function AcceptOrRejectEditor({
   onchainProposalId,
   votingContractAddress,
 }: Props) {
-  const { vote } = useVote({
+  const { vote, status: voteStatus } = useVote({
     address: votingContractAddress,
     onchainProposalId,
   });
 
+  const [hasApproved, setHasApproved] = useState<boolean>(false);
+  const [hasRejected, setHasRejected] = useState<boolean>(false);
+
+  const hasVoted = voteStatus === 'success';
+  const isPendingApproval = hasApproved && voteStatus === 'pending';
+  const isPendingRejection = hasRejected && voteStatus === 'pending';
+
   const smartAccount = useSmartAccount();
+
+  const onApprove = () => {
+    setHasApproved(true);
+    vote('ACCEPT');
+  };
+
+  const onReject = () => {
+    setHasRejected(true);
+    vote('REJECT');
+  };
 
   if (isProposalExecutable) {
     return (
@@ -44,8 +66,8 @@ export function AcceptOrRejectEditor({
     );
   }
 
-  if (userVote) {
-    if (userVote.vote === 'ACCEPT') {
+  if (userVote || hasVoted) {
+    if (userVote?.vote === 'ACCEPT' || hasApproved) {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
     }
 
@@ -62,13 +84,15 @@ export function AcceptOrRejectEditor({
 
   if (!isProposalEnded && smartAccount) {
     return (
-      <div className="flex items-center gap-2">
-        <SmallButton variant="secondary" onClick={() => vote('REJECT')}>
-          Reject
-        </SmallButton>
-        <SmallButton variant="secondary" onClick={() => vote('ACCEPT')}>
-          Approve
-        </SmallButton>
+      <div className="relative">
+        <div className="flex items-center gap-2">
+          <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus !== 'idle'}>
+            <Pending isPending={isPendingRejection}>Reject</Pending>
+          </SmallButton>
+          <SmallButton variant="secondary" onClick={onApprove} disabled={voteStatus !== 'idle'}>
+            <Pending isPending={isPendingApproval}>Approve</Pending>
+          </SmallButton>
+        </div>
       </div>
     );
   }

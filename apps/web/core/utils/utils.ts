@@ -268,6 +268,25 @@ export function toTitleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
+export function getProposalName(proposal: { name: string; type: Proposal['type']; space: Proposal['space'] }) {
+  switch (proposal.type) {
+    case 'ADD_EDIT':
+      return proposal.name;
+    case 'ADD_EDITOR':
+      return `Add editor to ${proposal.space.name}`;
+    case 'REMOVE_EDITOR':
+      return `Remove editor from ${proposal.space.name}`;
+    case 'ADD_MEMBER':
+      return `Add member to ${proposal.space.name}`;
+    case 'REMOVE_MEMBER':
+      return `Remove member from ${proposal.space.name}`;
+    case 'ADD_SUBSPACE':
+      return `Add subspace to ${proposal.space.name}`;
+    case 'REMOVE_SUBSPACE':
+      return `Remove subspace from ${proposal.space.name}`;
+  }
+}
+
 export function getIsProposalEnded(status: Proposal['status'], endTime: number) {
   return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
 }
