@@ -10,6 +10,7 @@ import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/schema';
 
 import { SmallButton } from '~/design-system/button';
+import { Pending } from '~/design-system/pending';
 
 import { Execute } from '~/partials/active-proposal/execute';
 
@@ -33,23 +34,28 @@ export function AcceptOrRejectEditor({
   onchainProposalId,
   votingContractAddress,
 }: Props) {
-  const [hasVoted, setHasVoted] = useState<boolean>(false);
-
-  const { vote } = useVote({
+  const { vote, status: voteStatus } = useVote({
     address: votingContractAddress,
     onchainProposalId,
   });
 
+  const [hasApproved, setHasApproved] = useState<boolean>(false);
+  const [hasRejected, setHasRejected] = useState<boolean>(false);
+
+  const hasVoted = voteStatus === 'success';
+  const isPendingApproval = hasApproved && voteStatus === 'pending';
+  const isPendingRejection = hasRejected && voteStatus === 'pending';
+
   const smartAccount = useSmartAccount();
 
   const onAccept = () => {
+    setHasApproved(true);
     vote('ACCEPT');
-    setHasVoted(true);
   };
 
   const onReject = () => {
+    setHasRejected(true);
     vote('REJECT');
-    setHasVoted(true);
   };
 
   if (isProposalExecutable) {
@@ -80,11 +86,11 @@ export function AcceptOrRejectEditor({
     return (
       <div className="relative">
         <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
-          <SmallButton variant="secondary" onClick={onReject}>
-            Reject
+          <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus !== 'idle'}>
+            <Pending isPending={isPendingRejection}>Reject</Pending>
           </SmallButton>
-          <SmallButton variant="secondary" onClick={onAccept}>
-            Approve
+          <SmallButton variant="secondary" onClick={onAccept} disabled={voteStatus !== 'idle'}>
+            <Pending isPending={isPendingApproval}>Approve</Pending>
           </SmallButton>
         </div>
         {hasVoted && (
