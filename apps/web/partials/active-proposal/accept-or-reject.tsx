@@ -1,7 +1,5 @@
 'use client';
 
-import cx from 'classnames';
-
 import * as React from 'react';
 import { useState } from 'react';
 
@@ -49,7 +47,7 @@ export function AcceptOrReject({
 
   const smartAccount = useSmartAccount();
 
-  const onAccept = () => {
+  const onApprove = () => {
     setHasApproved(true);
     vote('ACCEPT');
   };
@@ -67,8 +65,8 @@ export function AcceptOrReject({
     );
   }
 
-  if (userVote) {
-    if (userVote.vote === 'ACCEPT') {
+  if (userVote || hasVoted) {
+    if (userVote?.vote === 'ACCEPT' || hasApproved) {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
     }
 
@@ -86,20 +84,15 @@ export function AcceptOrReject({
   if (!isProposalEnded && smartAccount) {
     return (
       <div className="relative">
-        <div className={cx('inline-flex items-center gap-4', hasVoted && 'invisible')}>
+        <div className="inline-flex items-center gap-4">
           <Button onClick={onReject} variant="error" disabled={voteStatus !== 'idle'}>
             <Pending isPending={isPendingRejection}>Reject</Pending>
           </Button>
           <span>or</span>
-          <Button onClick={onAccept} variant="success" disabled={voteStatus !== 'idle'}>
+          <Button onClick={onApprove} variant="success" disabled={voteStatus !== 'idle'}>
             <Pending isPending={isPendingApproval}>Approve</Pending>
           </Button>
         </div>
-        {hasVoted && (
-          <div className="absolute inset-0 flex h-full w-full items-center justify-center">
-            <div className="text-smallButton">Vote registered</div>
-          </div>
-        )}
       </div>
     );
   }

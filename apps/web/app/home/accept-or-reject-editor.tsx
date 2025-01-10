@@ -48,7 +48,7 @@ export function AcceptOrRejectEditor({
 
   const smartAccount = useSmartAccount();
 
-  const onAccept = () => {
+  const onApprove = () => {
     setHasApproved(true);
     vote('ACCEPT');
   };
@@ -66,8 +66,8 @@ export function AcceptOrRejectEditor({
     );
   }
 
-  if (userVote) {
-    if (userVote.vote === 'ACCEPT') {
+  if (userVote || hasVoted) {
+    if (userVote?.vote === 'ACCEPT' || hasApproved) {
       return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
     }
 
@@ -85,19 +85,14 @@ export function AcceptOrRejectEditor({
   if (!isProposalEnded && smartAccount) {
     return (
       <div className="relative">
-        <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
+        <div className="flex items-center gap-2">
           <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus !== 'idle'}>
             <Pending isPending={isPendingRejection}>Reject</Pending>
           </SmallButton>
-          <SmallButton variant="secondary" onClick={onAccept} disabled={voteStatus !== 'idle'}>
+          <SmallButton variant="secondary" onClick={onApprove} disabled={voteStatus !== 'idle'}>
             <Pending isPending={isPendingApproval}>Approve</Pending>
           </SmallButton>
         </div>
-        {hasVoted && (
-          <div className="absolute inset-0 flex h-full w-full items-center justify-center">
-            <div className="text-smallButton">Vote registered</div>
-          </div>
-        )}
       </div>
     );
   }
