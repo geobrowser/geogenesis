@@ -92,10 +92,10 @@ export function useTableBlock() {
     isFetched: isFilterStateFetched,
   } = useQuery({
     placeholderData: keepPreviousData,
-    enabled: filterTriple !== undefined,
     queryKey: queryKeys.filterState(filterTriple),
     queryFn: async () => {
-      const filterStringFromTriple = Values.stringValue(filterTriple ?? undefined);
+      if (!filterTriple) return [];
+      const filterStringFromTriple = Values.stringValue(filterTriple);
       return await createFiltersFromFilterString(filterStringFromTriple);
     },
   });
