@@ -10,6 +10,7 @@ import { Version } from '~/core/io/dto/versions';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { fetchVersion } from '~/core/io/subgraph/fetch-version';
+import { fetchVersionsBatch } from '~/core/io/subgraph/fetch-versions-batch';
 import { queryClient } from '~/core/query-client';
 import type { Relation, Triple } from '~/core/types';
 
@@ -95,9 +96,9 @@ export async function fromActiveProposal(proposal: Proposal): Promise<EntityChan
   const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId });
 
   // Version entity ids are mapped to the version.id
-  const currentVersionsForEntityIds = await Promise.all(
-    versionsByEditId.map(v => fetchVersion({ versionId: v.versionId }))
-  );
+  const currentVersionsForEntityIds = await fetchVersionsBatch({
+    versionIds: versionsByEditId.map(v => v.versionId),
+  });
 
   return aggregateChanges({
     spaceId: proposal.space.id,
@@ -109,15 +110,9 @@ export async function fromActiveProposal(proposal: Proposal): Promise<EntityChan
 export async function fromEndedProposal(proposal: Proposal): Promise<EntityChange[]> {
   const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId });
 
-  const previousVersions = await Promise.all(
-    versionsByEditId.map(v =>
-      fetchPreviousVersionByCreatedAt({
-        createdAt: proposal.createdAt,
-        entityId: v.id,
-        spaceId: proposal.space.id,
-      })
-    )
-  );
+  const previousVersions = await fetchVersionsBatch({
+    versionIds: versionsByEditId.map(v => v.versionId),
+  });
 
   return aggregateChanges({
     spaceId: proposal.space.id,
