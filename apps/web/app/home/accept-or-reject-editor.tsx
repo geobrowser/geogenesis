@@ -1,5 +1,9 @@
 'use client';
 
+import cx from 'classnames';
+
+import { useState } from 'react';
+
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
@@ -29,12 +33,24 @@ export function AcceptOrRejectEditor({
   onchainProposalId,
   votingContractAddress,
 }: Props) {
+  const [hasVoted, setHasVoted] = useState<boolean>(false);
+
   const { vote } = useVote({
     address: votingContractAddress,
     onchainProposalId,
   });
 
   const smartAccount = useSmartAccount();
+
+  const onAccept = () => {
+    vote('ACCEPT');
+    setHasVoted(true);
+  };
+
+  const onReject = () => {
+    vote('REJECT');
+    setHasVoted(true);
+  };
 
   if (isProposalExecutable) {
     return (
@@ -62,13 +78,20 @@ export function AcceptOrRejectEditor({
 
   if (!isProposalEnded && smartAccount) {
     return (
-      <div className="flex items-center gap-2">
-        <SmallButton variant="secondary" onClick={() => vote('REJECT')}>
-          Reject
-        </SmallButton>
-        <SmallButton variant="secondary" onClick={() => vote('ACCEPT')}>
-          Approve
-        </SmallButton>
+      <div className="relative">
+        <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
+          <SmallButton variant="secondary" onClick={onReject}>
+            Reject
+          </SmallButton>
+          <SmallButton variant="secondary" onClick={onAccept}>
+            Approve
+          </SmallButton>
+        </div>
+        {hasVoted && (
+          <div className="absolute inset-0 flex h-full w-full items-center justify-center">
+            <div className="text-smallButton">Vote registered</div>
+          </div>
+        )}
       </div>
     );
   }
