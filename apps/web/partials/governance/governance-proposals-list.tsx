@@ -112,7 +112,10 @@ const SubstreamActiveProposal = Schema.extend(
 type SubstreamActiveProposal = Schema.Schema.Type<typeof SubstreamActiveProposal>;
 
 interface NetworkResult {
-  proposals: {
+  activeProposals: {
+    nodes: SubstreamActiveProposal[];
+  };
+  completedProposals: {
     nodes: SubstreamActiveProposal[];
   };
 }
@@ -164,13 +167,15 @@ const getFetchActiveProposalsQuery = (
   first: number,
   skip: number,
   connectedAddress: string | undefined
-) => `query {
-  proposals(
+) => `
+  activeProposals: proposals(
     first: ${first}
     offset: ${skip}
-    orderBy: EDIT_BY_EDIT_ID__CREATED_AT_DESC
+    orderBy: END_TIME_DESC
     filter: {
       spaceId: { equalTo: "${spaceId}" }
+      status: { equalTo: PROPOSED }
+      endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
       or: [
         { type: { equalTo: ADD_EDIT } }
         { type: { equalTo: ADD_SUBSPACE } }
@@ -215,7 +220,73 @@ const getFetchActiveProposalsQuery = (
       }
     }
   }
-}`;
+`;
+
+const getFetchCompletedProposalsQuery = (
+  spaceId: string,
+  first: number,
+  skip: number,
+  connectedAddress: string | undefined
+) => `
+  completedProposals: proposals(
+    first: ${first}
+    offset: ${skip}
+    orderBy: END_TIME_DESC
+    filter: {
+      spaceId: { equalTo: "${spaceId}" }
+      status: { in: [ACCEPTED, REJECTED] }
+      or: [
+        { type: { equalTo: ADD_EDIT } }
+        { type: { equalTo: ADD_SUBSPACE } }
+        { type: { equalTo: REMOVE_SUBSPACE } }
+      ]
+    }
+  ) {
+    nodes {
+      id
+      edit {
+        id
+        name
+        createdAt
+        createdAtBlock
+      }
+      type
+      onchainProposalId
+
+      createdById
+
+      startTime
+      endTime
+      status
+
+      proposalVotes {
+        totalCount
+        nodes {
+          vote
+          accountId
+        }
+      }
+
+      userVotes: proposalVotes(
+        filter: {
+          accountId: { equalTo: "${connectedAddress ?? ''}" }
+        }
+      ) {
+        nodes {
+          vote
+          accountId
+        }
+      }
+    }
+  }
+`;
+
+const allProposalsQuery = (spaceId: string, first: number, skip: number, connectedAddress: string | undefined) => `
+  query {
+    ${getFetchActiveProposalsQuery(spaceId, first, skip, connectedAddress)}
+    ${getFetchCompletedProposalsQuery(spaceId, first, skip, connectedAddress)}
+  }
+`;
 
 async function fetchActiveProposals({
   spaceId,
@@ -232,7 +303,7 @@ async function fetchActiveProposals({
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
-    query: getFetchActiveProposalsQuery(spaceId, first, offset, connectedAddress),
+    query: allProposalsQuery(spaceId, first, offset, connectedAddress),
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -256,14 +327,20 @@ async function fetchActiveProposals({
             error.message
           );
           return {
-            proposals: {
+            activeProposals: {
+              nodes: [],
+            },
+            completedProposals: {
               nodes: [],
             },
           };
         default:
           console.error(`${error._tag}: Unable to fetch proposals, spaceId: ${spaceId} page: ${page}`);
           return {
-            proposals: {
+            activeProposals: {
+              nodes: [],
+            },
+            completedProposals: {
               nodes: [],
             },
           };
@@ -274,7 +351,7 @@ async function fetchActiveProposals({
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposals = result.proposals.nodes;
+  const proposals = [...result.activeProposals.nodes, ...result.completedProposals.nodes];
   const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdById));
 
   return proposals.map(p => {
