@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { fetchVersion } from '../io/subgraph/fetch-version';
+import { fetchHistoryVersion } from '../io/subgraph/fetch-history-version';
 import { Change } from '../utils/change';
 
 interface VersionChangesArgs {
@@ -14,8 +14,8 @@ export const useVersionChanges = (args: VersionChangesArgs) => {
     queryKey: ['version-changes', args],
     queryFn: async () => {
       const [beforeVersion, afterVersion] = await Promise.all([
-        fetchVersion({ versionId: args.beforeVersionId }),
-        fetchVersion({ versionId: args.afterVersionId }),
+        fetchHistoryVersion({ versionId: args.beforeVersionId }),
+        fetchHistoryVersion({ versionId: args.afterVersionId }),
       ]);
 
       if (afterVersion === null) {
