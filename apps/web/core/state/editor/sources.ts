@@ -166,7 +166,7 @@ export function makeRelationForSourceType(
     toEntity: {
       id: EntityId(sourceTypeId),
       renderableType: 'RELATION',
-      name: null,
+      name: getSourceTypeName(sourceTypeId),
       value: EntityId(sourceTypeId),
     },
     fromEntity: {
@@ -174,4 +174,23 @@ export function makeRelationForSourceType(
       name: null,
     },
   };
+}
+
+function getSourceTypeName(
+  sourceType:
+    | typeof SYSTEM_IDS.COLLECTION_DATA_SOURCE
+    | typeof SYSTEM_IDS.QUERY_DATA_SOURCE
+    | typeof SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE
+    | string
+) {
+  switch (sourceType) {
+    case SYSTEM_IDS.COLLECTION_DATA_SOURCE:
+      return 'Collection';
+    case SYSTEM_IDS.QUERY_DATA_SOURCE:
+      return 'Spaces';
+    case SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE:
+      return 'All of Geo';
+    default:
+      return null;
+  }
 }

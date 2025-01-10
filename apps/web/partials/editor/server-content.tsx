@@ -1,7 +1,6 @@
 import { Content } from '~/core/state/editor/types';
 
 import { Skeleton } from '~/design-system/skeleton';
-import { Spacer } from '~/design-system/spacer';
 
 import { TableBlockLoadingPlaceholder } from '../blocks/table/table-block';
 
@@ -112,8 +111,6 @@ const Block = ({ block }: BlockProps) => {
     case 'tableNode': {
       return (
         <>
-          {/* // The layout here matches what we have for the table block */}
-          <Spacer height={20} />
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Skeleton className="h-4 w-4" />
