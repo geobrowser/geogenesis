@@ -5,7 +5,7 @@ import { Suspense } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
-import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
+import { getImagePath, getProposalName } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -65,22 +65,17 @@ async function ActivityList({ searchParams, entityId }: Props) {
           const spaceName = space.name ?? space.id;
           const spaceImage = space.image ?? PLACEHOLDER_SPACE_IMAGE;
 
-          const lastEditedDate = GeoDate.fromGeoTime(p.createdAt);
-          // const proposalChangeCount = p.proposedVersions.reduce<AppOp[]>(
-          //   (acc, version) => acc.concat(version.ops),
-          //   []
-          // ).length;
-
-          // const proposedEntitiesCount = p.proposedVersions.length;
-
           // e.g. Mar 12, 2023
-          const formattedLastEditedDate = new Date(lastEditedDate).toLocaleDateString(undefined, {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          });
+          const formattedLastEditedDate =
+            p.createdAt === 0
+              ? ''
+              : new Date(p.createdAt * 1000).toLocaleDateString(undefined, {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                });
 
-          const proposalName = p.name ? p.name : `${formatShortAddress(p.createdBy.id)} – ${formattedLastEditedDate}`;
+          const proposalName = getProposalName({ ...p, name: p.name ?? p.id });
 
           return (
             <div key={p.id} className="flex flex-col gap-2 py-3">
@@ -99,9 +94,7 @@ async function ActivityList({ searchParams, entityId }: Props) {
                 <p className="text-breadcrumb tabular-nums text-grey-04">{formattedLastEditedDate}</p>
               </div>
 
-              <p className="pl-6 text-breadcrumb">
-                {0} edits on {0} pages in {spaceName}
-              </p>
+              <p className="pl-6 text-breadcrumb">{spaceName}</p>
             </div>
           );
         })

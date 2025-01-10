@@ -11,6 +11,7 @@ import { fetchProfile } from '~/core/io/subgraph';
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { Profile } from '~/core/types';
+import { getProposalName } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -46,7 +47,17 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
             className="flex w-full flex-col gap-4 py-6"
           >
             <div className="flex flex-col gap-2">
-              <h3 className="text-smallTitle">{getProposalName(p)}</h3>
+              <h3 className="text-smallTitle">
+                {getProposalName({
+                  ...p,
+                  name: p.name ?? p.id,
+                  space: {
+                    id: spaceId,
+                    name: '',
+                    image: '',
+                  },
+                })}
+              </h3>
               <div className="flex items-center gap-2 text-breadcrumb text-grey-04">
                 <div className="relative h-3 w-3 overflow-hidden rounded-full">
                   <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.address} />
@@ -85,19 +96,6 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
       })}
     </div>
   );
-}
-
-function getProposalName(proposal: ActiveProposal) {
-  switch (proposal.type) {
-    case 'ADD_EDIT':
-      return proposal.name;
-    case 'ADD_SUBSPACE':
-      return `Add subspace`;
-    case 'REMOVE_SUBSPACE':
-      return `Remove subspace`;
-    default:
-      return '';
-  }
 }
 
 export interface FetchActiveProposalsOptions {
