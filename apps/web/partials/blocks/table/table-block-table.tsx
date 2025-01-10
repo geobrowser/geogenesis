@@ -19,6 +19,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { Filter } from '~/core/blocks-sdk/table';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
 import { DB } from '~/core/database/write';
@@ -433,14 +434,12 @@ export const TableBlockTable = React.memo(
                 <div key={index}>
                   <Link href={href} className="group inline-flex items-center gap-6 pr-6">
                     <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
-                      {image && (
-                        <Image
-                          src={getImagePath(image)}
-                          className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-                          alt=""
-                          fill
-                        />
-                      )}
+                      <Image
+                        src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
+                        className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+                        alt=""
+                        fill
+                      />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -470,14 +469,12 @@ export const TableBlockTable = React.memo(
               return (
                 <Link key={index} href={href} className="group flex flex-col gap-3">
                   <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
-                    {image && (
-                      <Image
-                        src={getImagePath(image)}
-                        className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-                        alt=""
-                        fill
-                      />
-                    )}
+                    <Image
+                      src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
+                      className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+                      alt=""
+                      fill
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     {verified && (
