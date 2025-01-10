@@ -61,24 +61,25 @@ export function useTableBlock() {
     id: React.useMemo(() => EntityId(relationId), [relationId]),
   });
 
-  const viewRelation = blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
-
-  const shownColumnRelations = blockRelation.relationsOut.filter(
-    relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS
-  );
-
-  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
-
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
     id: React.useMemo(() => EntityId(entityId), [entityId]),
   });
 
-  const filterTriple = React.useMemo(() => {
-    return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
-  }, [blockEntity?.triples]);
+  const viewRelation = React.useMemo(
+    () => blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE),
+    [blockRelation.relationsOut]
+  );
+
+  const shownColumnRelations = React.useMemo(
+    () => blockRelation.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS),
+    [blockRelation.relationsOut]
+  );
+
+  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
 
   const filterString = React.useMemo(() => {
+    const filterTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
     const stringValue = Values.stringValue(filterTriple ?? undefined);
 
     if (stringValue && stringValue !== '') {
@@ -86,7 +87,7 @@ export function useTableBlock() {
     }
 
     return null;
-  }, [filterTriple]);
+  }, [blockEntity?.triples]);
 
   /**
    * The filter state is derived from the filter string and the source. The source
@@ -127,7 +128,7 @@ export function useTableBlock() {
     }, [blockEntity.relationsOut, source])
   );
 
-  const collectionItemIds = collectionItems?.map(c => c.toEntity.id) ?? [];
+  const collectionItemIds = React.useMemo(() => collectionItems?.map(c => c.toEntity.id) ?? [], [collectionItems]);
 
   const { data: collectionItemEntities } = useQuery({
     placeholderData: keepPreviousData,
