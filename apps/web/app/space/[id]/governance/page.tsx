@@ -8,9 +8,6 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { graphql } from '~/core/io/subgraph/graphql';
 
-import { SmallButton } from '~/design-system/button';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 import { GovernanceProposalsListInfiniteScroll } from '~/partials/governance/governance-proposals-list-infinite-scroll';

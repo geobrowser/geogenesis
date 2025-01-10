@@ -18,6 +18,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceStatusChip } from './governance-status-chip';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   spaceId: string;
@@ -26,9 +27,10 @@ interface Props {
 
 export async function GovernanceProposalsList({ spaceId, page }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
-  const [proposals, profile] = await Promise.all([
+  const [proposals, profile, space] = await Promise.all([
     fetchProposals({ spaceId, first: 5, page, connectedAddress }),
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
+    cachedFetchSpace(spaceId),
   ]);
 
   const userVotesByProposalId = proposals.reduce((acc, p) => {
@@ -53,8 +55,8 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
                   name: p.name ?? p.id,
                   space: {
                     id: spaceId,
-                    name: '',
-                    image: '',
+                    name: space?.spaceConfig?.name ?? '',
+                    image: space?.spaceConfig?.image ?? '',
                   },
                 })}
               </h3>
