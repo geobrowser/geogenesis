@@ -4,12 +4,10 @@ import { dedupeWith } from 'effect/Array';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { EntityDto } from '~/core/io/dto/entities';
-import { SubstreamEntity, SubstreamVersion } from '~/core/io/schema';
+import { SubstreamVersionTypes } from '~/core/io/schema';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
-import { versionFragment } from '~/core/io/subgraph/fragments';
+import { versionTypesFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { Entities } from '~/core/utils/entity';
 
 import { EntityPageReferencedBy } from './entity-page-referenced-by';
 import { ReferencedByEntity } from './types';
@@ -24,29 +22,40 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
   const backlinks = await fetchBacklinks(entityId);
 
   const referencedSpaces = dedupeWith(
-    backlinks.flatMap(e => e.spaces),
+    backlinks.flatMap(e => e.currentVersion.version.versionSpaces.nodes),
     (a, z) => a === z
   );
-  const spaces = await fetchSpacesById(referencedSpaces);
+  const spaces = await fetchSpacesById(referencedSpaces.map(s => s.spaceId));
 
-  const referencedByEntities: ReferencedByEntity[] = backlinks.map(e => {
-    const spaceId = Entities.nameTriple(e.triples)?.space ?? '';
+  const referencedByEntities: ReferencedByEntity[] = backlinks
+    .map(e => {
+      const firstSpaceId = e.currentVersion.version.versionSpaces.nodes[0]?.spaceId;
 
-    const space = spaces.find(s => s.id === spaceId);
-    const spaceName = space?.spaceConfig?.name ?? null;
-    const spaceImage = space?.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE;
+      if (!firstSpaceId) {
+        return null;
+      }
 
-    return {
-      id: e.id,
-      name: e.name,
-      types: e.types,
-      space: {
-        id: spaceId,
-        name: spaceName,
-        image: spaceImage,
-      },
-    };
-  });
+      const space = spaces.find(s => s.id === firstSpaceId);
+      const spaceName = space?.spaceConfig?.name ?? null;
+      const spaceImage = space?.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE;
+
+      return {
+        id: e.id,
+        name: e.currentVersion.version.name,
+        types: e.currentVersion.version.versionTypes.nodes.map(t => {
+          return {
+            id: t.type.entityId,
+            name: t.type.name,
+          };
+        }),
+        space: {
+          id: firstSpaceId,
+          name: spaceName,
+          image: spaceImage,
+        },
+      } satisfies ReferencedByEntity;
+    })
+    .filter(e => e !== null);
 
   return <EntityPageReferencedBy referencedByEntities={referencedByEntities} name={name} />;
 }
@@ -64,18 +73,21 @@ const query = (entityId: string) => {
         }
       }
     }
+    orderBy: UPDATED_AT_BLOCK_DESC
   )  {
       nodes {
         id
         currentVersion {
           version {
-          id
-          entityId
-          name
-          description
-          versionSpaces {
-            nodes {
-              spaceId
+            id
+            entityId
+            name
+            description
+            ${versionTypesFragment}
+            versionSpaces {
+              nodes {
+                spaceId
+              }
             }
           }
         }
@@ -85,15 +97,24 @@ const query = (entityId: string) => {
 };
 
 interface NetworkResult {
-  entities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamBacklink[] };
 }
 
 const SubstreamBacklink = Schema.Struct({
-  id: SubstreamEntity.pick('id'),
+  id: Schema.String,
   currentVersion: Schema.Struct({
-    id: SubstreamVersion.pick('id'),
-    name: SubstreamVersion.pick('name'),
-    versionSpaces: SubstreamVersion.pick('versionSpaces'),
+    version: Schema.Struct({
+      id: Schema.String,
+      name: Schema.NullOr(Schema.String),
+      versionTypes: SubstreamVersionTypes,
+      versionSpaces: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.Struct({
+            spaceId: Schema.String,
+          })
+        ),
+      }),
+    }),
   }),
 });
 
@@ -152,22 +173,10 @@ async function fetchBacklinks(entityId: string) {
           console.error(`Unable to decode entity ${e.id} with error ${error}`);
           return null;
         },
-        onRight: entity => {
-          return EntityDto(entity);
+        onRight: backlink => {
+          return backlink;
         },
       });
     })
     .filter(e => e !== null);
-}
-
-function BacklinkDto(backlink: SubstreamBacklink) {
-  return {
-    id: backlink.id,
-    name: backlink.currentVersion.name,
-    space: {
-      id: backlink.currentVersion.versionSpaces.nodes[0].spaceId,
-      name: backlink.currentVersion.versionSpaces.nodes[0].space.name,
-      image: backlink.currentVersion.versionSpaces.nodes[0].space.image,
-    },
-  };
 }
