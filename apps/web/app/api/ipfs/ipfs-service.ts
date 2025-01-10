@@ -21,16 +21,6 @@ function upload(formData: FormData, url: string) {
       catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
     });
 
-    if (response.status >= 300) {
-      console.log('should never trigger', response.status);
-      const text = yield* Effect.tryPromise({
-        try: () => response.text(),
-        catch: error => new IpfsParseResponseError(`Could not parse IPFS text response with status >= 300: ${error}`),
-      });
-      console.log(text);
-      return `ipfs://${text}` as const;
-    }
-
     const { Hash } = yield* Effect.tryPromise({
       try: () => response.json(),
       catch: error => new IpfsParseResponseError(`Could not parse IPFS JSON response: ${error}`),
@@ -73,6 +63,7 @@ export class IpfsService {
       const formData = new FormData();
       formData.append('file', file);
 
+      console.log('uploading file to ipfs', url);
       const hash = yield* upload(formData, url);
 
       const endTime = Date.now() - startTime;
