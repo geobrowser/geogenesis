@@ -43,7 +43,7 @@ export function WebUrlField({ variant = 'body', isEditing = false, ...props }: P
   }, [props.value]);
 
   // @TODO render a separate component so we don't use this hook for regular urls
-  const entity = useEntity({ id: EntityId(props.value.split('graph://')[1]) });
+  const entity = useEntity({ id: EntityId(props.value.split('graph://')[1] ?? '') });
 
   if (props.value.startsWith('graph://')) {
     return <LinkableChip href={`./${entity.id}`}>{entity.name}</LinkableChip>;
