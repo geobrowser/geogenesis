@@ -96,6 +96,12 @@ async function getProposalsCount({ id }: Props['params']) {
         filter: {
           spaceId: { equalToInsensitive: "${id}" }
           status: { equalTo: PROPOSED }
+          endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
+          or: [
+            { type: { equalTo: ADD_EDIT } }
+            { type: { equalTo: ADD_SUBSPACE } }
+            { type: { equalTo: REMOVE_SUBSPACE } }
+          ]
         }
       ) {
         totalCount
@@ -105,6 +111,11 @@ async function getProposalsCount({ id }: Props['params']) {
         filter: {
           spaceId: { equalToInsensitive: "${id}" }
           status: { equalTo: ACCEPTED }
+          or: [
+            { type: { equalTo: ADD_EDIT } }
+            { type: { equalTo: ADD_SUBSPACE } }
+            { type: { equalTo: REMOVE_SUBSPACE } }
+          ]
         }
       ) {
         totalCount
@@ -113,7 +124,13 @@ async function getProposalsCount({ id }: Props['params']) {
       rejectedProposals: proposals(
         filter: {
           spaceId: { equalToInsensitive: "${id}" }
-          status: { equalTo: REJECTED }
+          status: { in: [REJECTED, PROPOSED] }
+          endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
+          or: [
+            { type: { equalTo: ADD_EDIT } }
+            { type: { equalTo: ADD_SUBSPACE } }
+            { type: { equalTo: REMOVE_SUBSPACE } }
+          ]
         }
       ) {
         totalCount
