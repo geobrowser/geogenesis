@@ -13,6 +13,7 @@ import {
   getIsProposalEnded,
   getIsProposalExecutable,
   getNoVotePercentage,
+  getProposalName,
   getProposalTimeRemaining,
   getUserVote,
   getYesVotePercentage,
@@ -225,23 +226,6 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
   );
 }
 
-function getProposalName(proposal: Proposal): string {
-  switch (proposal.type) {
-    case 'ADD_EDIT':
-      return proposal.name ?? `Add edit to ${proposal.space.name}`;
-    case 'ADD_EDITOR':
-      return `Add editor to ${proposal.space.name}`;
-    case 'REMOVE_EDITOR':
-      return `Remove editor from ${proposal.space.name}`;
-    case 'ADD_SUBSPACE':
-      return `Add subspace to ${proposal.space.name}`;
-    case 'REMOVE_SUBSPACE':
-      return `Remove subspace from ${proposal.space.name}`;
-  }
-
-  throw new Error(`Unknown proposal type: ${proposal.type}`);
-}
-
 async function PendingContentProposal({ proposal, user }: PendingMembershipProposalProps) {
   const space = await cachedFetchSpace(proposal.space.id);
 
@@ -262,8 +246,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
   const isProposalExecutable = getIsProposalExecutable(proposal, yesVotesPercentage);
   const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
-
-  const proposalName = getProposalName(proposal);
+  const proposalName = getProposalName({ ...proposal, name: proposal.name ?? proposal.id });
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
