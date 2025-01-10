@@ -7,12 +7,16 @@ import { slog } from '~/core/utils/utils';
 import { IpfsService } from '../ipfs-service';
 
 export async function POST(request: Request) {
+  console.log('starting route.upload-file', Environment.getConfig().ipfs);
   const formData = await request.formData();
   const file = formData.get('file') as File;
 
   if (!file) {
+    console.error('no file provided');
     return new Response('No file provided', { status: 400 });
   }
+
+  console.log('uploading file to ipfs gateway', Environment.getConfig().ipfs);
 
   const requestId = uuid();
   console.log('uploading file to ipfs gateway', Environment.getConfig().ipfs);
