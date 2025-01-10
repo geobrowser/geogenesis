@@ -94,7 +94,6 @@ export function useTableBlock() {
     placeholderData: keepPreviousData,
     queryKey: queryKeys.filterState(filterTriple),
     queryFn: async () => {
-      if (!filterTriple) return [];
       const filterStringFromTriple = Values.stringValue(filterTriple);
       return await createFiltersFromFilterString(filterStringFromTriple);
     },
