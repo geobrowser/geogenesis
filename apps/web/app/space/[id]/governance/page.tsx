@@ -54,9 +54,9 @@ export default async function GovernancePage({ params, searchParams }: Props) {
             </div>
           </GovernanceMetadataBox>
         </div>
-        <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
+        {/* <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
           All Proposals
-        </SmallButton>
+        </SmallButton> */}
         <React.Suspense fallback="Loading initial...">
           <GovernanceProposalsList page={0} spaceId={params.id} />
         </React.Suspense>
