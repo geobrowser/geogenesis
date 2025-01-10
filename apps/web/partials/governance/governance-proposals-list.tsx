@@ -27,7 +27,7 @@ interface Props {
 export async function GovernanceProposalsList({ spaceId, page }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
   const [proposals, profile] = await Promise.all([
-    fetchActiveProposals({ spaceId, first: 5, page, connectedAddress }),
+    fetchProposals({ spaceId, first: 5, page, connectedAddress }),
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
   ]);
 
@@ -288,7 +288,7 @@ const allProposalsQuery = (spaceId: string, first: number, skip: number, connect
   }
 `;
 
-async function fetchActiveProposals({
+async function fetchProposals({
   spaceId,
   connectedAddress,
   first = 5,
