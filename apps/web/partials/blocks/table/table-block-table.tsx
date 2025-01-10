@@ -90,7 +90,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns, columnRelationTypes } = useTableBlock();
+    const { columns } = useTableBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditable = table.options.meta?.isEditable;
@@ -175,7 +175,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           attributeId={cellData.columnId}
           entityId={cellData.entityId}
           spaceId={spaceId}
-          columnRelationTypes={columnRelationTypes[cellData.columnId]}
+          columnRelationTypes={[]}
         />
       );
     }
