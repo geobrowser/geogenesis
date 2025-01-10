@@ -49,12 +49,7 @@ export const DataBlockSourceMenu = ({
               {source.type === 'COLLECTION' && <Check />}
             </button>
           </MenuItem>
-          <MenuItem active={source.type === 'ENTITY'}>
-            <button onClick={() => setView('entity')} className="flex w-full items-center justify-between gap-2">
-              <span className="text-button text-text">Entity</span>
-              {source.type === 'ENTITY' && <Check />}
-            </button>
-          </MenuItem>
+
           <MenuItem active={source.type === 'SPACES'}>
             <button onClick={() => setView('spaces')} className="flex w-full items-center justify-between gap-2">
               <div>
@@ -81,6 +76,12 @@ export const DataBlockSourceMenu = ({
                 )}
               </div>
               <ChevronRight />
+            </button>
+          </MenuItem>
+          <MenuItem active={source.type === 'ENTITY'}>
+            <button onClick={() => setView('entity')} className="flex w-full items-center justify-between gap-2">
+              <span className="text-button text-text">Single entity</span>
+              {source.type === 'ENTITY' && <Check />}
             </button>
           </MenuItem>
           <MenuItem active={source.type === 'GEO'}>
