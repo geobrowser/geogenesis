@@ -9,7 +9,7 @@ export function validateCid(cid: string) {
   }
 
   if (cidContains === undefined || cidContains === '') {
-    throw new IpfsUploadError(`CID ${cid} is not valid `);
+    throw new IpfsUploadError(`CID ${cid} is not valid`);
   }
 
   return true;
@@ -29,24 +29,18 @@ export class IpfsClient {
    *                  the API from a route handler. If calling from the client it's
    *                  okay to call the route handler using a relative URL.
    */
-  static async upload(binary: Uint8Array, baseUrl?: string): Promise<`ipfs://${string}`> {
+  static async upload(binary: Uint8Array): Promise<`ipfs://${string}`> {
     const blob = new Blob([binary], { type: 'application/octet-stream' });
     const formData = new FormData();
     formData.append('file', blob);
 
-    const url = baseUrl ? `${baseUrl}/api/ipfs/upload` : '/api/ipfs/upload';
+    const url = '/api/ipfs/upload';
     console.log(`Posting to url`, url);
 
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
     });
-
-    if (response.status >= 300) {
-      const text = await response.text();
-      validateCid(text);
-      return text as `ipfs://${string}`;
-    }
 
     const { hash } = await response.json();
     validateCid(hash);
@@ -66,13 +60,6 @@ export class IpfsClient {
       method: 'POST',
       body: formData,
     });
-
-    if (response.status >= 300) {
-      const text = await response.text();
-      validateCid(text);
-
-      return text as `ipfs://${string}`;
-    }
 
     const { hash } = await response.json();
     validateCid(hash);

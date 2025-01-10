@@ -1,12 +1,16 @@
 'use client';
 
 import { MemberAccessAbi } from '@geogenesis/sdk/abis';
+import cx from 'classnames';
 import { Effect, Either } from 'effect';
 import { encodeFunctionData } from 'viem';
+
+import { useState } from 'react';
 
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 
 import { SmallButton } from '~/design-system/button';
+import { Pending } from '~/design-system/pending';
 
 function useApproveOrReject(membershipContractAddress: string | null) {
   const tx = useSmartAccountTransaction({
@@ -36,40 +40,67 @@ interface Props {
 }
 
 export function AcceptOrRejectMember(props: Props) {
+  const [isPendingApproval, setIsPendingApproval] = useState<boolean>(false);
+  const [isPendingRejection, setIsPendingRejection] = useState<boolean>(false);
+  const [hasVoted, setHasVoted] = useState<boolean>(false);
+
   const approveOrReject = useApproveOrReject(props.membershipContractAddress);
 
   const onApprove = async () => {
-    const hash = await approveOrReject(
-      encodeFunctionData({
-        abi: MemberAccessAbi,
-        functionName: 'approve',
-        args: [BigInt(props.onchainProposalId)],
-      })
-    );
-
-    console.log('transaction successful', hash);
+    try {
+      setIsPendingApproval(true);
+      const hash = await approveOrReject(
+        encodeFunctionData({
+          abi: MemberAccessAbi,
+          functionName: 'approve',
+          args: [BigInt(props.onchainProposalId)],
+        })
+      );
+      console.log('transaction successful', hash);
+      setHasVoted(true);
+      setIsPendingApproval(false);
+    } catch (error) {
+      console.error(error);
+      setHasVoted(false);
+      setIsPendingApproval(false);
+    }
   };
 
   const onReject = async () => {
-    const hash = await approveOrReject(
-      encodeFunctionData({
-        abi: MemberAccessAbi,
-        functionName: 'reject',
-        args: [BigInt(props.onchainProposalId)],
-      })
-    );
-
-    console.log('transaction successful', hash);
+    try {
+      setIsPendingRejection(true);
+      const hash = await approveOrReject(
+        encodeFunctionData({
+          abi: MemberAccessAbi,
+          functionName: 'reject',
+          args: [BigInt(props.onchainProposalId)],
+        })
+      );
+      console.log('transaction successful', hash);
+      setHasVoted(true);
+      setIsPendingRejection(false);
+    } catch (error) {
+      console.error(error);
+      setHasVoted(false);
+      setIsPendingRejection(false);
+    }
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <SmallButton variant="secondary" onClick={onReject}>
-        Reject
-      </SmallButton>
-      <SmallButton variant="secondary" onClick={onApprove}>
-        Approve
-      </SmallButton>
+    <div className="relative">
+      <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
+        <SmallButton variant="secondary" onClick={onReject}>
+          <Pending isPending={isPendingRejection}>Reject</Pending>
+        </SmallButton>
+        <SmallButton variant="secondary" onClick={onApprove}>
+          <Pending isPending={isPendingApproval}>Approve</Pending>
+        </SmallButton>
+      </div>
+      {hasVoted && (
+        <div className="absolute inset-0 flex h-full w-full items-center justify-center">
+          <div className="text-smallButton">Vote registered</div>
+        </div>
+      )}
     </div>
   );
 }

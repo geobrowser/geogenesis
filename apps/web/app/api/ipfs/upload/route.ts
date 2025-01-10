@@ -40,5 +40,5 @@ export async function POST(request: Request) {
     throw error;
   }
 
-  return Response.json({ hash: result.right });
+  return Response.json({ hash: result.right }, { status: 200 });
 }

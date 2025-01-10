@@ -37,8 +37,6 @@ export async function fetchEntitiesBatch(
 ): Promise<Entity[]> {
   const queryId = v4();
 
-  console.log('filter string', filterString);
-
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
     query: query(entityIds, filterString),
@@ -83,8 +81,8 @@ export async function fetchEntitiesBatch(
       const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
 
       return Either.match(decodedSpace, {
-        onLeft: error => {
-          console.error(`Unable to decode collection item entity ${e.id} with error ${error}`);
+        onLeft: () => {
+          // console.error(`Unable to decode collection item entity ${e.id} with error ${error}`);
           return null;
         },
         onRight: substreamEntity => {

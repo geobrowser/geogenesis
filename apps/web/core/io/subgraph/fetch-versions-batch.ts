@@ -3,25 +3,33 @@ import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { VersionDto } from '~/core/io/dto/versions';
-import { SubstreamVersion } from '~/core/io/schema';
-import { versionFragment } from '~/core/io/subgraph/fragments';
-import { graphql } from '~/core/io/subgraph/graphql';
+
+import { HistoryVersionDto } from '../dto/versions';
+import { SubstreamVersionWithEdit } from '../schema';
+import { versionFragment } from './fragments';
+import { graphql } from './graphql';
 
 interface FetchVersionsArgs {
-  editId: string;
+  versionIds: string[];
+  page?: number;
+  signal?: AbortSignal;
 }
 
-const query = (editId: string) => {
+const query = (versionIds: string[]) => {
   return `query {
-    versions(filter: { editId: {equalTo: ${JSON.stringify(editId)}}} first: 50) {
-      nodes {
+    versions(filter: { id: { in: ${JSON.stringify(versionIds)} } } first: 50) {
+    nodes {
         ${versionFragment}
         edit {
           id
           name
           createdAt
           createdById
+          proposals {
+            nodes {
+              id
+            }
+          }
         }
       }
     }
@@ -29,16 +37,17 @@ const query = (editId: string) => {
 };
 
 interface NetworkResult {
-  versions: { nodes: SubstreamVersion[] };
+  versions: { nodes: SubstreamVersionWithEdit[] };
 }
 
-export async function fetchVersionsByEditId(args: FetchVersionsArgs) {
+export async function fetchVersionsBatch(args: FetchVersionsArgs) {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: query(args.editId),
+    query: query(args.versionIds),
+    signal: args.signal,
   });
 
   const withFallbacks = Effect.gen(function* () {
@@ -52,10 +61,10 @@ export async function fetchVersionsByEditId(args: FetchVersionsArgs) {
           case 'GraphqlRuntimeError':
             console.error(
               `Encountered runtime graphql error in fetchVersions. queryId: ${queryId} endpoint: ${endpoint} id: ${
-                args.editId
+                args.versionIds
               }
 
-                queryString: ${query(args.editId)}
+                queryString: ${query(args.versionIds)}
                 `,
               error.message
             );
@@ -63,7 +72,7 @@ export async function fetchVersionsByEditId(args: FetchVersionsArgs) {
             return [];
           default:
             console.error(
-              `${error._tag}: Unable to fetch versions, queryId: ${queryId} endpoint: ${endpoint} id: ${args.editId}`
+              `${error._tag}: Unable to fetch version, queryId: ${queryId} endpoint: ${endpoint} id: ${args.versionIds}`
             );
             return [];
         }
@@ -76,21 +85,23 @@ export async function fetchVersionsByEditId(args: FetchVersionsArgs) {
 
   const networkVersions = await Effect.runPromise(withFallbacks);
 
-  const versions = networkVersions
-    .map(v => {
-      const decoded = Schema.decodeEither(SubstreamVersion)(v);
+  return networkVersions
+    .map(networkVersion => {
+      const decoded = Schema.decodeEither(SubstreamVersionWithEdit)(networkVersion);
 
       return Either.match(decoded, {
         onLeft: error => {
-          console.error(`Could not decode version with id ${v.id} and entityId ${v.entityId}. ${String(error)}`);
+          console.error(
+            `Could not decode version with id ${networkVersion.id} and entityId ${networkVersion.entityId}. ${String(
+              error
+            )}`
+          );
           return null;
         },
         onRight: result => {
-          return VersionDto(result);
+          return HistoryVersionDto(result);
         },
       });
     })
-    .filter(d => d !== null);
-
-  return versions;
+    .filter(v => v !== null);
 }
