@@ -10,7 +10,10 @@ type ServerContentProps = {
 };
 
 export const ServerContent = ({ content }: ServerContentProps) => {
-  if (!content) return null;
+  if (!content) {
+    console.error('Content is undefined');
+    return null;
+  }
 
   return (
     <div className="tiptap ProseMirror !pb-[2rem]">
@@ -27,9 +30,9 @@ type BlockProps = {
 };
 
 const Block = ({ block }: BlockProps) => {
-  if (!block.content) {
-    return null;
-  }
+  // if (!block.content) {
+  //   return null;
+  // }
 
   switch (block.type) {
     case 'paragraph': {
