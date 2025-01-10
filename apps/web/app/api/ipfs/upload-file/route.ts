@@ -33,7 +33,12 @@ export async function POST(request: Request) {
       requestId,
     });
 
-    throw error;
+    return Response.json(
+      {
+        error: error,
+      },
+      { status: 400 }
+    );
   }
 
   return Response.json({ hash: result.right }, { status: 200 });
