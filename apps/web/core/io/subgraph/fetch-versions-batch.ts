@@ -25,6 +25,11 @@ const query = (versionIds: string[]) => {
           name
           createdAt
           createdById
+          proposals {
+            nodes {
+              id
+            }
+          }
         }
       }
     }
