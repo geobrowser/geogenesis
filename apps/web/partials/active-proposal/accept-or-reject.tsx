@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
@@ -14,6 +15,7 @@ import { Pending } from '~/design-system/pending';
 import { Execute } from './execute';
 
 interface Props {
+  spaceId: string;
   isProposalEnded: boolean;
   // If the proposal is executable that means it's done and the
   // acceptance threshold has passed.
@@ -26,6 +28,7 @@ interface Props {
 }
 
 export function AcceptOrReject({
+  spaceId,
   isProposalEnded,
   isProposalExecutable,
   status,
@@ -33,6 +36,7 @@ export function AcceptOrReject({
   onchainProposalId,
   votingContractAddress,
 }: Props) {
+  const { isEditor } = useAccessControl(spaceId);
   const { vote, status: voteStatus } = useVote({
     address: votingContractAddress,
     onchainProposalId,
@@ -81,7 +85,7 @@ export function AcceptOrReject({
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
   }
 
-  if (!isProposalEnded && smartAccount) {
+  if (!isProposalEnded && smartAccount && isEditor) {
     return (
       <div className="relative">
         <div className="inline-flex items-center gap-4">
@@ -97,5 +101,6 @@ export function AcceptOrReject({
     );
   }
 
-  return null;
+  // Janky placeholder for button height
+  return <div className="h-9 w-1" />;
 }

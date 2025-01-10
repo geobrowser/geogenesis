@@ -76,6 +76,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
         </div>
 
         <AcceptOrReject
+          spaceId={spaceId}
           onchainProposalId={proposal.onchainProposalId}
           isProposalEnded={isProposalEnded}
           isProposalExecutable={isProposalExecutable}
