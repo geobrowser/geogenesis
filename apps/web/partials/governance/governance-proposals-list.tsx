@@ -234,7 +234,7 @@ const getFetchCompletedProposalsQuery = (
     orderBy: END_TIME_DESC
     filter: {
       spaceId: { equalTo: "${spaceId}" }
-      status: { equalTo: ACCEPTED }
+      status: { in: [ACCEPTED, REJECTED] }
       or: [
         { type: { equalTo: ADD_EDIT } }
         { type: { equalTo: ADD_SUBSPACE } }
