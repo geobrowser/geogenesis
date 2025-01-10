@@ -90,7 +90,7 @@ export function AcceptOrReject({
           </Button>
           <span>or</span>
           <Button onClick={onApprove} variant="success" disabled={voteStatus !== 'idle'}>
-            <Pending isPending={isPendingApproval}>Approve</Pending>
+            <Pending isPending={isPendingApproval}>Accept</Pending>
           </Button>
         </div>
       </div>
