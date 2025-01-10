@@ -63,7 +63,6 @@ export class IpfsService {
       const formData = new FormData();
       formData.append('file', file);
 
-      console.log('uploading file to ipfs', url);
       const hash = yield* upload(formData, url);
 
       const endTime = Date.now() - startTime;
