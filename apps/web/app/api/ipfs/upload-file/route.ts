@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   }
 
   const requestId = uuid();
+  console.log('uploading file to ipfs gateway', Environment.getConfig().ipfs);
   const ipfs = new IpfsService(Environment.getConfig().ipfs);
   const effect = Effect.retry(ipfs.uploadFile(file), Schedule.exponential('100 millis').pipe(Schedule.jittered));
 
