@@ -44,6 +44,7 @@ export const Editor = React.memo(function Editor({
     editorProps: {
       transformPastedHTML: html => removeIdAttributes(html),
     },
+    immediatelyRender: false,
   });
 
   useInterceptEditorLinks(spaceId);
