@@ -18,7 +18,7 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
     .join(' ');
 
   return `query {
-    proposals(first: 5, filter: {${filter}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
+    proposals(first: 5, filter: {${filter}}, orderBy: EDIT_BY_EDIT_ID__CREATED_AT_DESC, offset: ${skip}) {
       nodes {
         id
         name
