@@ -2,9 +2,11 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { RenderableProperty } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
+import { getImagePath } from '~/core/utils/utils';
 
 import { LinkableChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
+import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CellContent } from '~/design-system/table/cell-content';
 
@@ -39,6 +41,10 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
               {name ?? value}
             </LinkableChip>
           );
+        }
+
+        if (renderable.type === 'IMAGE') {
+          return <ImageZoom key={`image-`} imageSrc={getImagePath(renderable.value)} />;
         }
 
         if (renderable.type === 'URL') {

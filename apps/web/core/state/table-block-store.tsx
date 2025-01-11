@@ -23,7 +23,7 @@ import { StoredRelation } from '../database/types';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { Relation, Schema, Triple } from '../types';
+import { Relation, Schema, Triple, ValueTypeId } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
@@ -60,22 +60,27 @@ export function useTableBlock() {
     id: React.useMemo(() => EntityId(relationId), [relationId]),
   });
 
+  const viewRelation = blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
+
+  const shownColumnRelations = blockRelation.relationsOut.filter(
+    relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS
+  );
+
+  const shownColumnSchemas: Schema[] = [
+    ...(shownColumnRelations.map(item => ({
+      id: item.toEntity.id,
+      name: item.toEntity.name,
+      // @TODO: use the real value type
+      valueType: SYSTEM_IDS.TEXT as ValueTypeId,
+    })) ?? []),
+  ];
+
+  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
+
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
     id: React.useMemo(() => EntityId(entityId), [entityId]),
   });
-
-  const viewRelation = React.useMemo(
-    () => blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE),
-    [blockRelation.relationsOut]
-  );
-
-  const shownColumnRelations = React.useMemo(
-    () => blockRelation.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS),
-    [blockRelation.relationsOut]
-  );
-
-  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
 
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
@@ -150,7 +155,7 @@ export function useTableBlock() {
     queryKey: queryKeys.columns(filterState ?? null),
     queryFn: async () => {
       const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
-      return await mergeColumns(typesInFilter);
+      return await mergeColumns(typesInFilter, shownColumnSchemas);
     },
   });
 

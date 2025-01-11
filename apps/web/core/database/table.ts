@@ -100,7 +100,7 @@ export async function mergeTableEntities({ options, filterState }: MergeTableEnt
   return await mergeTableRowEntitiesAsync(options, filterState);
 }
 
-export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
+export async function mergeColumns(typeIds: string[], shownColumnSchemas: Schema[]): Promise<Schema[]> {
   const cachedColumns = await queryClient.fetchQuery({
     queryKey: queryKeys.columns(typeIds),
     queryFn: () => fetchColumns({ typeIds: typeIds }),
@@ -117,7 +117,10 @@ export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
     };
   });
 
-  return dedupeWith([...cachedColumns, ...localAttributesForSelectedType], (a, b) => a.id === b.id);
+  return dedupeWith(
+    [...cachedColumns, ...localAttributesForSelectedType, ...shownColumnSchemas],
+    (a, b) => a.id === b.id
+  );
 }
 
 type CollectionItemArgs = {

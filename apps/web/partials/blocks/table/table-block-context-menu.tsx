@@ -25,6 +25,7 @@ import { EyeHide } from '~/design-system/icons/eye-hide';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { SelectEntity } from '~/design-system/select-entity';
 
 import { DataBlockSourceMenu } from '~/partials/blocks/table/data-block-source-menu';
 
@@ -336,6 +337,7 @@ export function TableBlockContextMenu({ allColumns }: TableBlockContextMenuProps
 
                 return <ToggleColumn key={column.id} column={column} />;
               })}
+              <SelectColumn />
             </>
           )}
         </Dropdown.Content>
@@ -397,6 +399,48 @@ const ToggleColumn = ({ column }: ToggleColumnProps) => {
         <span>{column.name}</span>
         {isShown ? <Eye /> : <EyeHide />}
       </button>
+    </MenuItem>
+  );
+};
+
+const SelectColumn = () => {
+  const { spaceId, relationId } = useTableBlock();
+
+  return (
+    <MenuItem className="!px-0">
+      <SelectEntity
+        spaceId={spaceId}
+        width="full"
+        placeholder="Other columns..."
+        onDone={result => {
+          const newRelation: StoreRelation = {
+            space: spaceId,
+            index: INITIAL_RELATION_INDEX_VALUE,
+            typeOf: {
+              id: EntityId(SYSTEM_IDS.SHOWN_COLUMNS),
+              name: 'Shown Columns',
+            },
+            fromEntity: {
+              id: EntityId(relationId),
+              name: '',
+            },
+            toEntity: {
+              id: EntityId(result.id),
+              name: result.name,
+              renderableType: 'RELATION',
+              value: EntityId(result.id),
+            },
+          };
+
+          DB.upsertRelation({
+            relation: newRelation,
+            spaceId,
+          });
+        }}
+        containerClassName="-my-1"
+        popoverClassName="mt-2"
+        withSearchIcon
+      />
     </MenuItem>
   );
 };
