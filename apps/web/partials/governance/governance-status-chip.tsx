@@ -9,11 +9,10 @@ import { CheckSuccess } from './check-success';
 interface Props {
   status: ProposalStatus;
   endTime: number; // UNIX timestamp
-  yesVotesCount: number;
-  noVotesCount: number;
+  yesPercentage: number;
 }
 
-export function GovernanceStatusChip({ status, endTime, yesVotesCount, noVotesCount }: Props) {
+export function GovernanceStatusChip({ status, endTime, yesPercentage }: Props) {
   switch (status) {
     case 'ACCEPTED': {
       return (
@@ -29,7 +28,7 @@ export function GovernanceStatusChip({ status, endTime, yesVotesCount, noVotesCo
     case 'PROPOSED': {
       const { hours, minutes, seconds } = getProposalTimeRemaining(endTime);
       const isAwaitingExecution = seconds <= 0;
-      const isRejected = isAwaitingExecution && yesVotesCount >= noVotesCount;
+      const isRejected = isAwaitingExecution && yesPercentage <= 50;
 
       let statusText = `${hours}h ${minutes}m remaining`;
 
