@@ -47,7 +47,6 @@ export const generateOpsForSpaceType = async ({
   // Add space type-specific ops
   switch (type) {
     case 'personal': {
-      // @TODO clone person template
       const personOps = await cloneEntity({
         oldEntityId: SYSTEM_IDS.PERSON_TEMPLATE,
         entityId: newEntityId,
@@ -81,11 +80,13 @@ export const generateOpsForSpaceType = async ({
       break;
     }
     case 'nonprofit': {
-      // @TODO nonprofit person template
+      // @TODO nonprofit template
 
       break;
     }
     case 'academic-field':
+      // @TODO academic field template
+
       ops.push(
         Relation.make({
           fromId: newEntityId,
@@ -105,6 +106,8 @@ export const generateOpsForSpaceType = async ({
       break;
     }
     case 'government-org':
+      // @TODO government org template
+
       ops.push(
         Relation.make({
           fromId: newEntityId,
@@ -124,6 +127,8 @@ export const generateOpsForSpaceType = async ({
       break;
     }
     case 'interest-group':
+      // @TODO interest group template
+
       ops.push(
         Relation.make({
           fromId: newEntityId,
