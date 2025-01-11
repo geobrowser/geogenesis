@@ -58,15 +58,22 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
 
   const tabEntities = await fetchTabs({ spaceId });
 
-  const hasPostsPage = getHasPage(tabEntities, SYSTEM_IDS.POSTS_PAGE);
-  // const hasProductsPage = getHasPage(tabEntities, SYSTEM_IDS.PRODUCTS_PAGE);
-  // const hasServicesPage = getHasPage(tabEntities, SYSTEM_IDS.SERVICES_PAGE);
-  const hasNewsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
+  const hasAboutPage = getHasPage(tabEntities, SYSTEM_IDS.ABOUT_PAGE);
+  const hasActivitiesPage = getHasPage(tabEntities, SYSTEM_IDS.ACTIVITIES_PAGE);
+  const hasCulturePage = getHasPage(tabEntities, SYSTEM_IDS.CULTURE_PAGE);
+  const hasEducationPage = getHasPage(tabEntities, SYSTEM_IDS.EDUCATION_PAGE);
   const hasEventsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
-  const hasProjectsPage = getHasPage(tabEntities, SYSTEM_IDS.PROJECTS_PAGE);
-  const hasPeoplePage = getHasPage(tabEntities, SYSTEM_IDS.PEOPLE_PAGE);
-  const hasJobsPage = getHasPage(tabEntities, SYSTEM_IDS.JOBS_PAGE);
   const hasFinancesPage = getHasPage(tabEntities, SYSTEM_IDS.FINANCES_PAGE);
+  const hasGovernmentPage = getHasPage(tabEntities, SYSTEM_IDS.GOVERNMENT_PAGE);
+  const hasJobsPage = getHasPage(tabEntities, SYSTEM_IDS.JOBS_PAGE);
+  const hasNewsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
+  const hasOntologyPage = getHasPage(tabEntities, SYSTEM_IDS.ONTOLOGY_PAGE);
+  const hasPeoplePage = getHasPage(tabEntities, SYSTEM_IDS.PEOPLE_PAGE);
+  const hasPersonalPage = getHasPage(tabEntities, SYSTEM_IDS.PERSONAL_PAGE);
+  const hasPlacesPage = getHasPage(tabEntities, SYSTEM_IDS.PLACES_PAGE);
+  const hasPostsPage = getHasPage(tabEntities, SYSTEM_IDS.POSTS_PAGE);
+  const hasProfessionalPage = getHasPage(tabEntities, SYSTEM_IDS.PROFESSIONAL_PAGE);
+  const hasProjectsPage = getHasPage(tabEntities, SYSTEM_IDS.PROJECTS_PAGE);
 
   if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE) || typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
     const roleTriples = await Subgraph.fetchTriples({
@@ -81,6 +88,31 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       teamCount = roleTriples.length;
     }
   }
+
+  const PERSON_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Professional',
+      href: `${NavUtils.toSpace(params.id)}/professional`,
+      priority: 1 as const,
+      hidden: !hasProfessionalPage,
+    },
+    {
+      label: 'Personal',
+      href: `${NavUtils.toSpace(params.id)}/personal`,
+      priority: 1 as const,
+      hidden: !hasPersonalPage,
+    },
+    {
+      label: 'Activity',
+      href: `${NavUtils.toSpace(params.id)}/activity`,
+      priority: 3 as const,
+    },
+  ];
 
   const INDUSTRY_TABS = [
     {
@@ -119,6 +151,18 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       hidden: !hasJobsPage,
     },
     {
+      label: 'Ontology',
+      href: `${NavUtils.toSpace(params.id)}/about`,
+      priority: 1 as const,
+      hidden: !hasOntologyPage,
+    },
+    {
+      label: 'About',
+      href: `${NavUtils.toSpace(params.id)}/about`,
+      priority: 1 as const,
+      hidden: !hasAboutPage,
+    },
+    {
       label: 'Activity',
       href: `${NavUtils.toSpace(params.id)}/activity`,
       priority: 3 as const,
@@ -137,24 +181,17 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       priority: 1 as const,
       hidden: !hasPostsPage,
     },
-    // be sure to also restore actions in `generate-ops-for-company.ts`
-    // {
-    //   label: 'Products',
-    //   href: `${NavUtils.toSpace(params.id)}/products`,
-    //   priority: 1 as const,
-    //   hidden: !hasProductsPage,
-    // },
-    // {
-    //   label: 'Services',
-    //   href: `${NavUtils.toSpace(params.id)}/services`,
-    //   priority: 1 as const,
-    //   hidden: !hasServicesPage,
-    // },
     {
       label: 'Events',
       href: `${NavUtils.toSpace(params.id)}/events`,
       priority: 1 as const,
       hidden: !hasEventsPage,
+    },
+    {
+      label: 'Team',
+      href: `${NavUtils.toSpace(params.id)}/team`,
+      priority: 1 as const,
+      badge: <>{teamCount.toString()}</>,
     },
     {
       label: 'Jobs',
@@ -163,10 +200,211 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       hidden: !hasJobsPage,
     },
     {
-      label: 'Team',
-      href: `${NavUtils.toSpace(params.id)}/team`,
+      label: 'About',
+      href: `${NavUtils.toSpace(params.id)}/about`,
       priority: 1 as const,
-      badge: <>{teamCount.toString()}</>,
+      hidden: !hasAboutPage,
+    },
+    {
+      label: 'Activity',
+      href: `${NavUtils.toSpace(params.id)}/activity`,
+      priority: 3 as const,
+    },
+  ];
+
+  const PROTOCOL_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'News',
+      href: `${NavUtils.toSpace(params.id)}/news`,
+      priority: 1 as const,
+      hidden: !hasNewsPage,
+    },
+    {
+      label: 'Events',
+      href: `${NavUtils.toSpace(params.id)}/events`,
+      priority: 1 as const,
+      hidden: !hasEventsPage,
+    },
+    {
+      label: 'Education',
+      href: `${NavUtils.toSpace(params.id)}/education`,
+      priority: 1 as const,
+      hidden: !hasEducationPage,
+    },
+    {
+      label: 'Projects',
+      href: `${NavUtils.toSpace(params.id)}/projects`,
+      priority: 1 as const,
+      hidden: !hasProjectsPage,
+    },
+    {
+      label: 'People',
+      href: `${NavUtils.toSpace(params.id)}/people`,
+      priority: 1 as const,
+      hidden: !hasPeoplePage,
+    },
+    {
+      label: 'Jobs',
+      href: `${NavUtils.toSpace(params.id)}/jobs`,
+      priority: 1 as const,
+      hidden: !hasJobsPage,
+    },
+    {
+      label: 'Ontology',
+      href: `${NavUtils.toSpace(params.id)}/ontology`,
+      priority: 1 as const,
+      hidden: !hasOntologyPage,
+    },
+    {
+      label: 'About',
+      href: `${NavUtils.toSpace(params.id)}/about`,
+      priority: 1 as const,
+      hidden: !hasAboutPage,
+    },
+    {
+      label: 'Activity',
+      href: `${NavUtils.toSpace(params.id)}/activity`,
+      priority: 3 as const,
+    },
+  ];
+
+  const DAO_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'News',
+      href: `${NavUtils.toSpace(params.id)}/news`,
+      priority: 1 as const,
+      hidden: !hasNewsPage,
+    },
+    {
+      label: 'Events',
+      href: `${NavUtils.toSpace(params.id)}/events`,
+      priority: 1 as const,
+      hidden: !hasEventsPage,
+    },
+    {
+      label: 'Education',
+      href: `${NavUtils.toSpace(params.id)}/education`,
+      priority: 1 as const,
+      hidden: !hasEducationPage,
+    },
+    {
+      label: 'Projects',
+      href: `${NavUtils.toSpace(params.id)}/projects`,
+      priority: 1 as const,
+      hidden: !hasProjectsPage,
+    },
+    {
+      label: 'People',
+      href: `${NavUtils.toSpace(params.id)}/people`,
+      priority: 1 as const,
+      hidden: !hasPeoplePage,
+    },
+    {
+      label: 'Jobs',
+      href: `${NavUtils.toSpace(params.id)}/jobs`,
+      priority: 1 as const,
+      hidden: !hasJobsPage,
+    },
+    {
+      label: 'Ontology',
+      href: `${NavUtils.toSpace(params.id)}/ontology`,
+      priority: 1 as const,
+      hidden: !hasOntologyPage,
+    },
+    {
+      label: 'About',
+      href: `${NavUtils.toSpace(params.id)}/about`,
+      priority: 1 as const,
+      hidden: !hasAboutPage,
+    },
+    {
+      label: 'Activity',
+      href: `${NavUtils.toSpace(params.id)}/activity`,
+      priority: 3 as const,
+    },
+  ];
+
+  const REGION_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'News',
+      href: `${NavUtils.toSpace(params.id)}/news`,
+      priority: 1 as const,
+      hidden: !hasNewsPage,
+    },
+    {
+      label: 'Events',
+      href: `${NavUtils.toSpace(params.id)}/events`,
+      priority: 1 as const,
+      hidden: !hasEventsPage,
+    },
+    {
+      label: 'Places',
+      href: `${NavUtils.toSpace(params.id)}/places`,
+      priority: 1 as const,
+      hidden: !hasPlacesPage,
+    },
+    {
+      label: 'Culture',
+      href: `${NavUtils.toSpace(params.id)}/culture`,
+      priority: 1 as const,
+      hidden: !hasCulturePage,
+    },
+    {
+      label: 'Activities',
+      href: `${NavUtils.toSpace(params.id)}/activities`,
+      priority: 1 as const,
+      hidden: !hasActivitiesPage,
+    },
+    {
+      label: 'Projects',
+      href: `${NavUtils.toSpace(params.id)}/projects`,
+      priority: 1 as const,
+      hidden: !hasProjectsPage,
+    },
+    {
+      label: 'People',
+      href: `${NavUtils.toSpace(params.id)}/people`,
+      priority: 1 as const,
+      hidden: !hasPeoplePage,
+    },
+    {
+      label: 'Jobs',
+      href: `${NavUtils.toSpace(params.id)}/jobs`,
+      priority: 1 as const,
+      hidden: !hasJobsPage,
+    },
+    {
+      label: 'Government',
+      href: `${NavUtils.toSpace(params.id)}/government`,
+      priority: 1 as const,
+      hidden: !hasGovernmentPage,
+    },
+    {
+      label: 'Ontology',
+      href: `${NavUtils.toSpace(params.id)}/about`,
+      priority: 1 as const,
+      hidden: !hasOntologyPage,
+    },
+    {
+      label: 'About',
+      href: `${NavUtils.toSpace(params.id)}/about`,
+      priority: 1 as const,
+      hidden: !hasAboutPage,
     },
     {
       label: 'Activity',
@@ -204,30 +442,6 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       href: `${NavUtils.toSpace(params.id)}/finances`,
       priority: 1 as const,
       hidden: !hasFinancesPage,
-    },
-  ];
-
-  const PERSON_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-    {
-      label: 'Posts',
-      href: `${NavUtils.toSpace(params.id)}/posts`,
-      priority: 1 as const,
-      hidden: !hasPostsPage,
-    },
-    {
-      label: 'Spaces',
-      href: `${NavUtils.toSpace(params.id)}/spaces`,
-      priority: 1 as const,
-    },
-    {
-      label: 'Activity',
-      href: `${NavUtils.toSpace(params.id)}/activity`,
-      priority: 3 as const,
     },
   ];
 
@@ -272,6 +486,10 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   // Order of how we add the tabs matters. We want to
   // show "content-based" tabs first, then "space-based" tabs.
 
+  if (typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
+    tabs.push(...PERSON_TABS);
+  }
+
   if (typeIds.includes(SYSTEM_IDS.INDUSTRY_TYPE)) {
     tabs.push(...INDUSTRY_TABS);
   }
@@ -280,13 +498,21 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     tabs.push(...COMPANY_TABS);
   }
 
-  if (typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
-    tabs.push(...NONPROFIT_TABS);
+  if (typeIds.includes(SYSTEM_IDS.PROTOCOL_TYPE)) {
+    tabs.push(...PROTOCOL_TABS);
   }
 
-  if (typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
-    tabs.push(...PERSON_TABS);
+  if (typeIds.includes(SYSTEM_IDS.DAO_TYPE)) {
+    tabs.push(...DAO_TABS);
   }
+
+  if (typeIds.includes(SYSTEM_IDS.REGION_TYPE)) {
+    tabs.push(...REGION_TABS);
+  }
+
+  // if (typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
+  //   tabs.push(...NONPROFIT_TABS);
+  // }
 
   if (typeIds.includes(SYSTEM_IDS.SPACE_TYPE)) {
     tabs.push(...ALL_SPACES_TABS);

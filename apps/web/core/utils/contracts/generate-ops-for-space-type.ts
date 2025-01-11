@@ -2,10 +2,7 @@ import { Account, CONTENT_IDS, Image, Op, Relation, SYSTEM_IDS } from '@geogenes
 
 import { ID } from '~/core/id';
 import type { SpaceType } from '~/core/types';
-import { generateOpsForCompany } from '~/core/utils/contracts/generate-ops-for-company';
-import { generateOpsForIndustry } from '~/core/utils/contracts/generate-ops-for-industry';
-import { generateOpsForNonprofit } from '~/core/utils/contracts/generate-ops-for-nonprofit';
-import { generateOpsForPerson } from '~/core/utils/contracts/generate-ops-for-person';
+import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Ops } from '~/core/utils/ops';
 
 type DeployArgs = {
@@ -50,12 +47,19 @@ export const generateOpsForSpaceType = async ({
   // Add space type-specific ops
   switch (type) {
     case 'personal': {
-      const personOps = await generateOpsForPerson(newEntityId, spaceName);
+      // @TODO clone person template
+      const personOps = await cloneEntity({
+        oldEntityId: SYSTEM_IDS.PERSON_TEMPLATE,
+        entityId: newEntityId,
+        entityName: spaceName,
+      });
+
       ops.push(...personOps);
 
       const { accountId, ops: accountOps } = Account.make(initialEditorAddress);
 
       ops.push(...accountOps);
+
       ops.push(
         Relation.make({
           fromId: newEntityId,
@@ -67,13 +71,18 @@ export const generateOpsForSpaceType = async ({
       break;
     }
     case 'company': {
-      const companyOps = await generateOpsForCompany(newEntityId, spaceName);
+      const companyOps = await cloneEntity({
+        oldEntityId: SYSTEM_IDS.COMPANY_TEMPLATE,
+        entityId: newEntityId,
+        entityName: spaceName,
+      });
+
       ops.push(...companyOps);
       break;
     }
     case 'nonprofit': {
-      const nonprofitOps = await generateOpsForNonprofit(newEntityId, spaceName);
-      ops.push(...nonprofitOps);
+      // @TODO nonprofit person template
+
       break;
     }
     case 'academic-field':
@@ -85,15 +94,16 @@ export const generateOpsForSpaceType = async ({
         })
       );
       break;
-    case 'dao':
-      ops.push(
-        Relation.make({
-          fromId: newEntityId,
-          toId: SYSTEM_IDS.DAO_TYPE,
-          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-        })
-      );
+    case 'dao': {
+      const daoOps = await cloneEntity({
+        oldEntityId: SYSTEM_IDS.DAO_TEMPLATE,
+        entityId: newEntityId,
+        entityName: spaceName,
+      });
+
+      ops.push(...daoOps);
       break;
+    }
     case 'government-org':
       ops.push(
         Relation.make({
@@ -104,7 +114,12 @@ export const generateOpsForSpaceType = async ({
       );
       break;
     case 'industry': {
-      const industryOps = await generateOpsForIndustry(newEntityId, spaceName);
+      const industryOps = await cloneEntity({
+        oldEntityId: SYSTEM_IDS.INDUSTRY_TEMPLATE,
+        entityId: newEntityId,
+        entityName: spaceName,
+      });
+
       ops.push(...industryOps);
       break;
     }
@@ -117,24 +132,27 @@ export const generateOpsForSpaceType = async ({
         })
       );
       break;
-    case 'protocol':
-      ops.push(
-        Relation.make({
-          fromId: newEntityId,
-          toId: SYSTEM_IDS.PROTOCOL_TYPE,
-          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-        })
-      );
+    case 'protocol': {
+      const protocolOps = await cloneEntity({
+        oldEntityId: SYSTEM_IDS.PROTOCOL_TEMPLATE,
+        entityId: newEntityId,
+        entityName: spaceName,
+      });
+
+      ops.push(...protocolOps);
+
       break;
-    case 'region':
-      ops.push(
-        Relation.make({
-          fromId: newEntityId,
-          toId: SYSTEM_IDS.REGION_TYPE,
-          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-        })
-      );
+    }
+    case 'region': {
+      const regionOps = await cloneEntity({
+        oldEntityId: SYSTEM_IDS.REGION_TEMPLATE,
+        entityId: newEntityId,
+        entityName: spaceName,
+      });
+
+      ops.push(...regionOps);
       break;
+    }
     default:
       break;
   }
