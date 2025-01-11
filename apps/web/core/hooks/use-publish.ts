@@ -12,7 +12,7 @@ import { getRelations } from '../database/relations';
 import { getTriples } from '../database/triples';
 import { StoredTriple } from '../database/types';
 import { useWriteOps } from '../database/write';
-import { IpfsUploadError, TransactionWriteFailedError } from '../errors';
+import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';
 import { useStatusBar } from '../state/status-bar-store';

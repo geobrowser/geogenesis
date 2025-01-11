@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useEditorStore } from '~/core/state/editor/editor-store';
+import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
 import { NavUtils } from '~/core/utils/utils';
 
