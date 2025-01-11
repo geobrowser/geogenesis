@@ -89,7 +89,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
               <GovernanceStatusChip
                 endTime={p.endTime}
                 status={p.status}
-                yesPercentage={getYesVotePercentage(p.proposalVotes.votes)}
+                yesPercentage={getYesVotePercentage(p.proposalVotes.votes, p.proposalVotes.totalCount)}
               />
             </div>
           </Link>
