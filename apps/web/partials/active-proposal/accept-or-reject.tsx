@@ -61,7 +61,7 @@ export function AcceptOrReject({
     vote('REJECT');
   };
 
-  if (isProposalExecutable) {
+  if (isProposalExecutable && smartAccount) {
     return (
       <Execute contractAddress={votingContractAddress} onchainProposalId={onchainProposalId}>
         Execute

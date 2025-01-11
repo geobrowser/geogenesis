@@ -11,7 +11,7 @@ import { fetchProfile } from '~/core/io/subgraph';
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { Profile } from '~/core/types';
-import { getProposalName } from '~/core/utils/utils';
+import { getProposalName, getYesVotePercentage } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -89,8 +89,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
               <GovernanceStatusChip
                 endTime={p.endTime}
                 status={p.status}
-                yesVotesCount={p.proposalVotes.totalCount}
-                noVotesCount={p.proposalVotes.totalCount}
+                yesPercentage={getYesVotePercentage(p.proposalVotes.votes)}
               />
             </div>
           </Link>
@@ -114,6 +113,9 @@ const SubstreamActiveProposal = Schema.extend(
 type SubstreamActiveProposal = Schema.Schema.Type<typeof SubstreamActiveProposal>;
 
 interface NetworkResult {
+  executableProposals: {
+    nodes: SubstreamActiveProposal[];
+  };
   activeProposals: {
     nodes: SubstreamActiveProposal[];
   };
@@ -236,7 +238,66 @@ const getFetchCompletedProposalsQuery = (
     orderBy: END_TIME_DESC
     filter: {
       spaceId: { equalTo: "${spaceId}" }
-      status: { in: [ACCEPTED, REJECTED, PROPOSED] }
+      status: { in: [ACCEPTED, REJECTED] }
+      or: [
+        { type: { equalTo: ADD_EDIT } }
+        { type: { equalTo: ADD_SUBSPACE } }
+        { type: { equalTo: REMOVE_SUBSPACE } }
+      ]
+    }
+  ) {
+    nodes {
+      id
+      edit {
+        id
+        name
+        createdAt
+        createdAtBlock
+      }
+      type
+      onchainProposalId
+
+      createdById
+
+      startTime
+      endTime
+      status
+
+      proposalVotes {
+        totalCount
+        nodes {
+          vote
+          accountId
+        }
+      }
+
+      userVotes: proposalVotes(
+        filter: {
+          accountId: { equalTo: "${connectedAddress ?? ''}" }
+        }
+      ) {
+        nodes {
+          vote
+          accountId
+        }
+      }
+    }
+  }
+`;
+
+const getFetchMaybeExecutableProposalsQuery = (
+  spaceId: string,
+  first: number,
+  skip: number,
+  connectedAddress: string | undefined
+) => `
+  executableProposals: proposals(
+    first: ${first}
+    offset: ${skip}
+    orderBy: END_TIME_DESC
+    filter: {
+      spaceId: { equalTo: "${spaceId}" }
+      status: { equalTo: PROPOSED }
       endTime: { lessThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
       or: [
         { type: { equalTo: ADD_EDIT } }
@@ -286,6 +347,7 @@ const getFetchCompletedProposalsQuery = (
 
 const allProposalsQuery = (spaceId: string, first: number, skip: number, connectedAddress: string | undefined) => `
   query {
+    ${getFetchMaybeExecutableProposalsQuery(spaceId, first, skip, connectedAddress)}
     ${getFetchActiveProposalsQuery(spaceId, first, skip, connectedAddress)}
     ${getFetchCompletedProposalsQuery(spaceId, first, skip, connectedAddress)}
   }
@@ -330,6 +392,9 @@ async function fetchProposals({
             error.message
           );
           return {
+            executableProposals: {
+              nodes: [],
+            },
             activeProposals: {
               nodes: [],
             },
@@ -340,6 +405,9 @@ async function fetchProposals({
         default:
           console.error(`${error._tag}: Unable to fetch proposals, spaceId: ${spaceId} page: ${page}`);
           return {
+            executableProposals: {
+              nodes: [],
+            },
             activeProposals: {
               nodes: [],
             },
@@ -354,7 +422,16 @@ async function fetchProposals({
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposals = [...result.activeProposals.nodes, ...result.completedProposals.nodes];
+  const proposals = [
+    ...result.executableProposals.nodes.filter(p => {
+      const votes = p.proposalVotes.nodes;
+      const votesFor = votes.filter(v => v.vote === 'ACCEPT');
+      const yesPercentage = Math.floor((votesFor.length / votes.length) * 100);
+      return yesPercentage > 50;
+    }),
+    ...result.activeProposals.nodes,
+    ...result.completedProposals.nodes,
+  ];
   const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdById));
 
   return proposals.map(p => {

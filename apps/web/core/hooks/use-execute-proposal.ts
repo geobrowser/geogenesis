@@ -15,20 +15,22 @@ export function useExecuteProposal({ address, onchainProposalId }: Args) {
     address,
   });
 
-  const { mutate, status } = useMutation({
+  const { mutate, status, error } = useMutation({
     mutationFn: async () => {
-      const txEffect = await tx(
-        encodeFunctionData({
-          abi: MainVotingAbi,
-          functionName: 'execute',
-          args: [BigInt(onchainProposalId)],
-        })
-      );
+      const calldata = encodeFunctionData({
+        abi: MainVotingAbi,
+        functionName: 'execute',
+        args: [BigInt(onchainProposalId)],
+      });
+
+      const txEffect = tx(calldata);
 
       const hash = await Effect.runPromise(txEffect);
       console.log('Execute successful!', hash);
     },
   });
+
+  console.log('error', error);
 
   return {
     execute: mutate,
