@@ -20,6 +20,8 @@ function getBlockPositions() {
 
 const POSITIONS = getBlockPositions();
 
+// @TODO add new space templates to bootstrap
+
 // const NONPROFIT: Template[] = [
 //   {
 //     id: SYSTEM_IDS.NONPROFIT_OVERVIEW_PAGE_TEMPLATE,
