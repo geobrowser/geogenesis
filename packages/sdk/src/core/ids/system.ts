@@ -6,6 +6,7 @@ export const NAME_ATTRIBUTE = 'LuBWqZAu6pz54eiJS5mLv8';
 export const DESCRIPTION_ATTRIBUTE = 'LA1DqP5v6QAdsgLPXGF3YA';
 export const COVER_ATTRIBUTE = '7YHk6qYkNDaAtNb8GwmysF';
 export const TYPES_ATTRIBUTE = 'Jfmby78N4BCseZinBmdVov';
+export const TABS_ATTRIBUTE = 'AasCPmGHxVcsswE9PzmNT4';
 export const BLOCKS = 'QYbjCM6NT9xmh2hFGsqpQX';
 
 /** Value types */
@@ -163,30 +164,14 @@ export const PAGE_TYPE_ATTRIBUTE = 'DD9FKRZ3XezaKEGUszMB3r';
   These define the entity id to copy when creating an entity from
   a template.
   */
-export const INDUSTRY_ABOUT_PAGE_TEMPLATE = 'P6tM8upNJ83frWtMtmHXve';
-export const INDUSTRY_EVENTS_PAGE_TEMPLATE = 'NVZnC2af2v3ptuNqjMC9Mu';
-export const INDUSTRY_JOBS_PAGE_TEMPLATE = 'RNtMm9U2zmevNCQTHHwbgb';
-export const INDUSTRY_NEWS_PAGE_TEMPLATE = '2GXJSWAqkw5B8JtvWZ9hnX';
-export const INDUSTRY_ONTOLOGY_PAGE_TEMPLATE = 'AkJKSSB2AbQKXAWjqYV9Qh';
-export const INDUSTRY_OVERVIEW_PAGE_TEMPLATE = 'Tgm2ubmm9VjAZFZACJLTZC';
-export const INDUSTRY_PEOPLE_PAGE_TEMPLATE = 'JMbQ5nH8wWLxRki6eQYLTB';
-export const INDUSTRY_PROJECTS_PAGE_TEMPLATE = 'WQLU4rAJLwBBSHcLN4uHad';
-export const COMPANY_EVENTS_PAGE_TEMPLATE = '4CTRE9hBWqb7CjiaxQx47C';
-export const COMPANY_JOBS_PAGE_TEMPLATE = 'DSANGC24exwsRWXrfikKb7';
-export const COMPANY_OVERVIEW_PAGE_TEMPLATE = 'QZwChwTixtbLDv3HSX5E6n';
-export const COMPANY_POSTS_PAGE_TEMPLATE = 'AHLknvNrbs7CBao2i58mo5';
-export const COMPANY_PRODUCTS_PAGE_TEMPLATE = '7Dp2MBb1tjMk6igDaYTZtb';
-export const COMPANY_SERVICES_PAGE_TEMPLATE = 'NRLUry4uMctKx6yiC2GP9F';
-export const COMPANY_TEAM_PAGE_TEMPLATE = 'B59SUroy7uy9yCHF9AD9mP';
-export const PERSON_OVERVIEW_PAGE_TEMPLATE = 'EJuFuEz17wdVCk9ctEAkW7';
-export const PERSON_POSTS_PAGE_TEMPLATE = '98wgvodwzidmVA4ryVzGX6';
-export const NONPROFIT_FINANCES_PAGE_TEMPLATE = 'G3PRyzNzRNWn4m7S4sESQG';
-export const NONPROFIT_ID_NUMBER_ATTRIBUTE = 'Qv1R7wDaem6uBTE5TYQihB';
-export const NONPROFIT_OVERVIEW_PAGE_TEMPLATE = 'HEuj9VYAF5z1KQ8x37Uzze';
-export const NONPROFIT_POSTS_PAGE_TEMPLATE = 'G8iePrDZk2SkqL9QEW6nCR';
-export const NONPROFIT_PROJECTS_PAGE_TEMPLATE = 'JkJDTY4f3Xc6APZKna5kGh';
-export const NONPROFIT_SERVICE_TYPE = 'GZao3GpaUjMrX14VB2LoNR';
-export const NONPROFIT_TEAM_PAGE_TEMPLATE = 'K51CbDqxW35osbjPo5ZF77';
+export const INDUSTRY_TEMPLATE = 'Tgm2ubmm9VjAZFZACJLTZC';
+export const COMPANY_TEMPLATE = 'QZwChwTixtbLDv3HSX5E6n';
+export const PROTOCOL_TEMPLATE = 'UKKzBPkwY51qcVB9QTLNB6';
+export const DAO_TEMPLATE = 'Gfj89RHeFexx36V5kN6LhB';
+export const REGION_TEMPLATE = 'RL8uWpewpYdcmJ3rjoudjT';
+export const NONPROFIT_TEMPLATE = 'HEuj9VYAF5z1KQ8x37Uzze';
+export const PERSON_TEMPLATE = 'EJuFuEz17wdVCk9ctEAkW7';
+
 export const ONTOLOGY_PAGE_TEMPLATE = 'JjEDWDpLYS7tYBKi4vCdwc';
 export const EDUCATION_PAGE_TEMPLATE = 'RHuzjGkGothjuwGN6TLXDx';
 export const ABOUT_PAGE_TEMPLATE = '78qghJm6whF5proE9G93pX';
@@ -196,15 +181,21 @@ export const ABOUT_PAGE_TEMPLATE = '78qghJm6whF5proE9G93pX';
  * from a template.
  */
 export const ABOUT_PAGE = 'Xn4sgn16Peoe64NSoARRv4';
+export const ACTIVITIES_PAGE = 'zfgeDtfzvmt9xbWVJj9DE';
+export const CULTURE_PAGE = 'EJuJfWHqXnorH4zbLgawC';
 export const EDUCATION_PAGE = 'Qh8AQ8hQhXiaAbe8HkgAJV';
 export const EVENTS_PAGE = 'K97FaTqrx54jdiM93vZ1Fc';
 export const FINANCES_PAGE = 'R6FDYEK9CCdEQuxjuRjA2U';
+export const GOVERNMENT_PAGE = 'AyQpCWpt4p58B4CFu6GYPJ';
 export const JOBS_PAGE = 'PJzxY3isAL3hGx1bRkYdPf';
 export const NEWS_PAGE = 'Ss6NVRoX8HKaEyFTEYNdUv';
 export const ONTOLOGY_PAGE = 'Ee2Es1b9PkfnR7nsbY2ubE';
 export const PEOPLE_PAGE = '5PatoErephYf1ZJ8U6rNz8';
+export const PERSONAL_PAGE = 'NPiVay5xbawmNJu7E1FLD';
+export const PLACES_PAGE = 'VAuhjqTMdZ2UR4Hj1TekTh';
 export const POSTS_PAGE = 'E3jboNrTeuopjKgJ45ykBd';
 export const PRODUCTS_PAGE = 'Cnf53HgY8T7Fwcq8choaRn';
+export const PROFESSIONAL_PAGE = 'RTdzv7qaBfjrSKbEnvCdaT';
 export const PROJECTS_PAGE = '3scJVFciFuhmaXe852pT3F';
 export const SERVICES_PAGE = '2V8pajmGDJt8egodkJeoPC';
 export const SPACES_PAGE = 'JAPV1HvzUBXH1advi47FWN';

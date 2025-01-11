@@ -231,7 +231,7 @@ const CloneEntity = () => {
 
   const handleCloneEntity = async () => {
     const newOps = await cloneEntity({
-      oldEntityId: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
+      oldEntityId: SYSTEM_IDS.COMPANY_TEMPLATE,
       entityName: spaceName,
     });
     setOps(newOps);

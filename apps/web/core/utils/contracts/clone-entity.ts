@@ -30,6 +30,8 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
 
   const relationsToClone = oldEntity.relationsOut.filter(relation => !SKIPPED_ATTRIBUTES.includes(relation.typeOf.id));
 
+  const tabsToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.TABS_ATTRIBUTE);
+
   const blocksToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS);
 
   if (newEntityName) {
@@ -69,29 +71,31 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
     );
   });
 
-  const blockOps = await cloneBlocks(blocksToClone, newEntityId);
+  const tabOps = await cloneEntities(tabsToClone, newEntityId);
+  newOps.push(...tabOps);
 
+  const blockOps = await cloneEntities(blocksToClone, newEntityId);
   newOps.push(...blockOps);
 
   return newOps;
 };
 
-const cloneBlocks = async (blocksToClone: Array<RelationType>, newEntityId: string) => {
+const cloneEntities = async (entitiesToClone: Array<RelationType>, newEntityId: string) => {
   const allOps = await Promise.all(
-    blocksToClone.map(async block => {
+    entitiesToClone.map(async entity => {
       const newBlockId = ID.createEntityId();
 
       const relationshipOp = Relation.make({
         fromId: newEntityId,
         toId: newBlockId,
-        relationTypeId: block.typeOf.id,
-        position: block.index,
+        relationTypeId: entity.typeOf.id,
+        position: entity.index,
       });
 
       const newBlockOps = await cloneEntity({
-        oldEntityId: block.toEntity.id,
+        oldEntityId: entity.toEntity.id,
         entityId: newBlockId,
-        entityName: block.toEntity.name ?? '',
+        entityName: entity.toEntity.name ?? '',
       });
 
       return [relationshipOp, ...newBlockOps];
@@ -101,4 +105,10 @@ const cloneBlocks = async (blocksToClone: Array<RelationType>, newEntityId: stri
   return allOps.flat();
 };
 
-const SKIPPED_ATTRIBUTES = [SYSTEM_IDS.NAME_ATTRIBUTE, CONTENT_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.BLOCKS];
+const SKIPPED_ATTRIBUTES = [
+  SYSTEM_IDS.NAME_ATTRIBUTE,
+  SYSTEM_IDS.DESCRIPTION_ATTRIBUTE,
+  CONTENT_IDS.AVATAR_ATTRIBUTE,
+  SYSTEM_IDS.TABS_ATTRIBUTE,
+  SYSTEM_IDS.BLOCKS,
+];
