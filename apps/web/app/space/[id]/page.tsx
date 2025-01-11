@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { redirect } from 'next/navigation';
+import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
@@ -8,6 +9,7 @@ import type { Metadata } from 'next';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
+import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
@@ -80,13 +82,15 @@ export default async function SpacePage({ params }: Props) {
       <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
-      {/*
-        Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
-        show any referenced by loading states but do want to stream it in
-      */}
-      <React.Suspense fallback={<div />}>
-        <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={spaceId} />
-      </React.Suspense>
+      <ErrorBoundary fallback={<EmptyErrorComponent />}>
+        {/*
+          Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
+          show any referenced by loading states but do want to stream it in
+        */}
+        <React.Suspense fallback={<div />}>
+          <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={spaceId} />
+        </React.Suspense>
+      </ErrorBoundary>
     </>
   );
 }

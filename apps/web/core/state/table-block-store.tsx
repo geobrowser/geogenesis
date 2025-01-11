@@ -23,10 +23,9 @@ import { StoredRelation } from '../database/types';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { Relation, Schema, Triple } from '../types';
+import { Relation, Schema } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
-import { Values } from '../utils/value';
 import { getSource, removeSourceType, upsertSourceType } from './editor/sources';
 import { Source } from './editor/types';
 
@@ -43,7 +42,7 @@ interface RowQueryArgs {
 const queryKeys = {
   collectionItemEntities: (collectionItemIds: EntityId[]) =>
     ['blocks', 'data', 'collection-items', collectionItemIds] as const,
-  filterState: (filterTriple: Triple | undefined) => ['blocks', 'data', 'filter-state', filterTriple] as const,
+  filterState: (filterString: string | null) => ['blocks', 'data', 'filter-state', filterString] as const,
   columns: (filterState: Awaited<ReturnType<typeof createFiltersFromFilterString>> | null) =>
     ['blocks', 'data', 'columns', filterState] as const,
   rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
@@ -81,6 +80,17 @@ export function useTableBlock() {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
   }, [blockEntity?.triples]);
 
+  const filterString = React.useMemo(() => {
+    if (!filterTriple) return null;
+
+    if (filterTriple.value.type === 'TEXT') {
+      if (filterTriple.value.value === '') return null;
+      return filterTriple.value.value;
+    }
+
+    return null;
+  }, [filterTriple]);
+
   /**
    * The filter state is derived from the filter string and the source. The source
    * might include a list of spaceIds to include in the filter. The filter string
@@ -92,10 +102,9 @@ export function useTableBlock() {
     isFetched: isFilterStateFetched,
   } = useQuery({
     placeholderData: keepPreviousData,
-    queryKey: queryKeys.filterState(filterTriple),
+    queryKey: queryKeys.filterState(filterString),
     queryFn: async () => {
-      const filterStringFromTriple = Values.stringValue(filterTriple);
-      return await createFiltersFromFilterString(filterStringFromTriple);
+      return await createFiltersFromFilterString(filterString);
     },
   });
 

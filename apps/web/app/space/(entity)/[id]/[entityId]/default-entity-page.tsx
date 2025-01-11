@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { redirect } from 'next/navigation';
+import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
@@ -12,6 +13,7 @@ import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
+import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
 
 import { Editor } from '~/partials/editor/editor';
@@ -67,13 +69,16 @@ export default async function DefaultEntityPage({
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
           <ToggleEntityPage {...props} />
           <Spacer height={40} />
-          {/*
+
+          <ErrorBoundary fallback={<EmptyErrorComponent />}>
+            {/*
               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
               show any referenced by loading states but do want to stream it in
             */}
-          <React.Suspense fallback={<div />}>
-            <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
-          </React.Suspense>
+            <React.Suspense fallback={<div />}>
+              <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
+            </React.Suspense>
+          </ErrorBoundary>
         </EntityPageContentContainer>
       </EditorProvider>
     </EntityStoreProvider>

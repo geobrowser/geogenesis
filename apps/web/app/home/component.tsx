@@ -5,7 +5,6 @@ import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { Proposal } from '~/core/io/dto/proposals';
 import { fetchProfile } from '~/core/io/subgraph';
 import {
   NavUtils,

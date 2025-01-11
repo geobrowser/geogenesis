@@ -12,11 +12,10 @@ import { getImageHash, getImagePath } from '~/core/utils/utils';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
-import { useRelations } from '../../database/relations';
 import { getTriples } from '../../database/triples';
 import { DB } from '../../database/write';
 import { ID } from '../../id';
-import { EntityId, TypeId } from '../../io/schema';
+import { EntityId } from '../../io/schema';
 import { Relation, RenderableEntityType } from '../../types';
 import { Values } from '../../utils/value';
 import { getRelationForBlockType } from './block-types';
@@ -25,58 +24,8 @@ import { useEditorInstance } from './editor-provider';
 import * as Parser from './parser';
 import * as TextEntity from './text-entity';
 import { Content } from './types';
+import { RelationWithBlock, useBlocks } from './use-blocks';
 import { getNodeId } from './utils';
-
-/**
- * Blocks are defined via relations with relation type of {@link SYSTEM_IDS.BLOCKS}.
- * These relations point to entities which are renderable by the content editor. The
- * currently renderable block types are:
- * 1) Text
- * 2) Data
- * 3) Image
- *
- * @TODO:
- * - Move all data block view properties to live on the relation instead of the data
- *   entity. i.e., view, placeholder, filter
- * - Move shown columns to live on the filter string. This is defined by the filter
- *   spec for data entities.
- * - Flatten collection items to point at the data block directly instead of an
- *   intermediate collection entity
- */
-
-interface RelationWithBlock {
-  relationId: EntityId;
-  typeOfId: TypeId;
-  index: string;
-  block: {
-    id: EntityId;
-    type: RenderableEntityType;
-    value: string;
-  };
-}
-
-function relationToRelationWithBlock(r: Relation): RelationWithBlock {
-  return {
-    typeOfId: TypeId(r.typeOf.id),
-    index: r.index,
-    block: {
-      id: r.toEntity.id,
-      type: r.toEntity.renderableType,
-      value: r.toEntity.value,
-    },
-    relationId: r.id,
-  };
-}
-
-function sortByIndex(a: RelationWithBlock, z: RelationWithBlock) {
-  if (a.index < z.index) {
-    return -1;
-  }
-  if (a.index > z.index) {
-    return 1;
-  }
-  return 0;
-}
 
 interface UpsertBlocksRelationsArgs {
   nextBlocks: { id: string; type: Content['type'] }[];
@@ -187,16 +136,7 @@ const makeBlocksRelations = async ({
 export function useEditorStore() {
   const { id: entityId, spaceId, initialBlockRelations, initialBlocks } = useEditorInstance();
 
-  const relations = useRelations(
-    React.useMemo(() => {
-      return {
-        mergeWith: initialBlockRelations,
-        selector: r => r.fromEntity.id === entityId && r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS),
-      };
-    }, [initialBlockRelations, entityId])
-  );
-
-  const blockRelations = relations.map(relationToRelationWithBlock).sort(sortByIndex);
+  const blockRelations = useBlocks(entityId, initialBlockRelations);
 
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
@@ -210,14 +150,14 @@ export function useEditorStore() {
   const editorJson = React.useMemo(() => {
     const json = {
       type: 'doc',
-      content: blockIds.map(blockId => {
+      content: blockRelations.map(block => {
         const markdownTriplesForBlockId = getTriples({
           mergeWith: initialBlocks.flatMap(b => b.triples),
-          selector: triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT,
+          selector: triple => triple.entityId === block.block.id && triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT,
         });
 
         const markdownTripleForBlockId = markdownTriplesForBlockId[0];
-        const relationForBlockId = blockRelations.find(r => r.block.id === blockId);
+        const relationForBlockId = blockRelations.find(r => r.block.id === block.block.id);
 
         const toEntity = relationForBlockId?.block;
 
@@ -225,9 +165,10 @@ export function useEditorStore() {
           return {
             type: 'image',
             attrs: {
-              spaceId,
-              id: blockId,
+              id: block.block.id,
               src: getImagePath(toEntity.value),
+              relationId: block.relationId,
+              spaceId,
               alt: '',
               title: '',
             },
@@ -235,13 +176,11 @@ export function useEditorStore() {
         }
 
         if (toEntity?.type === 'DATA') {
-          const relationId = relations.find(r => r.toEntity.id === blockId)?.id;
-
           return {
             type: 'tableNode',
             attrs: {
-              id: blockId,
-              relationId,
+              id: block.block.id,
+              relationId: block.relationId,
               spaceId,
             },
           };
@@ -258,7 +197,9 @@ export function useEditorStore() {
         return {
           ...nodeData,
           attrs: {
-            id: blockId,
+            id: block.block.id,
+            relationId: block.relationId,
+            spaceId,
           },
         };
       }),
@@ -277,7 +218,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockIds, blockRelations, initialBlocks, relations, spaceId]);
+  }, [blockRelations, initialBlocks, spaceId]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
@@ -430,7 +371,6 @@ export function useEditorStore() {
     upsertEditorState,
     editorJson,
     blockIds,
-    relations,
     blockRelations,
   };
 }
