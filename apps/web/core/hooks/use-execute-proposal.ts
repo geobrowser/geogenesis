@@ -15,7 +15,7 @@ export function useExecuteProposal({ address, onchainProposalId }: Args) {
     address,
   });
 
-  const { mutate, status, error } = useMutation({
+  const { mutate, status } = useMutation({
     mutationFn: async () => {
       const calldata = encodeFunctionData({
         abi: MainVotingAbi,
@@ -29,8 +29,6 @@ export function useExecuteProposal({ address, onchainProposalId }: Args) {
       console.log('Execute successful!', hash);
     },
   });
-
-  console.log('error', error);
 
   return {
     execute: mutate,
