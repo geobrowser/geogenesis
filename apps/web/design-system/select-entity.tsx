@@ -37,7 +37,9 @@ type SelectEntityProps = {
   allowedTypes?: RelationValueType[];
   placeholder?: string;
   containerClassName?: string;
+  searchClassName?: string;
   inputClassName?: string;
+  popoverClassName?: string;
   variant?: 'floating' | 'fixed';
   width?: 'clamped' | 'full';
   withSearchIcon?: boolean;
@@ -91,7 +93,9 @@ export const SelectEntity = ({
   width = 'clamped',
   variant = 'fixed',
   containerClassName = '',
+  searchClassName = '',
   inputClassName = '',
+  popoverClassName = '',
   withSearchIcon = false,
 }: SelectEntityProps) => {
   const [isVerified, setIsVerified] = useState<boolean>(false);
@@ -158,7 +162,7 @@ export const SelectEntity = ({
       })}
     >
       {withSearchIcon && (
-        <div className="absolute bottom-0 left-3 top-0 z-10 flex items-center">
+        <div className={cx('absolute bottom-0 left-3 top-0 z-10 flex items-center', searchClassName)}>
           <Search />
         </div>
       )}
@@ -182,12 +186,12 @@ export const SelectEntity = ({
               className="w-[var(--radix-popper-anchor-width)]"
               forceMount
             >
-              <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
+              <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full', popoverClassName)}>
                 <div
                   className={cx(
                     '-ml-px overflow-hidden rounded-md border border-divider bg-white',
-                    width === 'clamped' ? 'w-[400px]' : '-mr-px',
-                    withSearchIcon && 'rounded-t-none'
+                    width === 'clamped' ? 'w-[400px]' : '-mr-px'
+                    // withSearchIcon && 'rounded-t-none'
                   )}
                 >
                   {!result ? (
