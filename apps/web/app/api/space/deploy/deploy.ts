@@ -111,7 +111,7 @@ export function deploySpace(args: DeployArgs) {
         votingSettings: {
           votingMode: VotingMode.EarlyExecution,
           supportThreshold: pctToRatio(50),
-          duration: BigInt(60 * 60 * 4), // 4 hours
+          duration: BigInt(60 * 60 * 24), // 4 hours
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 4), // 4 hours
         initialEditors: [getChecksumAddress(initialEditorAddress)],
