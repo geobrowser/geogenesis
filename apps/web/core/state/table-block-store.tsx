@@ -141,6 +141,7 @@ export function useTableBlock() {
     queryFn: async () => {
       const entities = await mergeCollectionItemEntitiesAsync({
         entityIds: collectionItemIds,
+        filterState: [],
       });
 
       return entities;
@@ -201,6 +202,7 @@ export function useTableBlock() {
         return mergeCollectionItemEntitiesAsync({
           entityIds: collectionItems.map(c => c.toEntity.id),
           filterString,
+          filterState,
         });
       }
 

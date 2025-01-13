@@ -1,17 +1,12 @@
 import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
-import { exit } from 'process';
-import type * as S from 'zapatos/schema';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
-import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
-import { CurrentVersions, Proposals, SpaceMetadata, Versions } from '~/sink/db';
-import type { BlockEvent, DeleteTripleOp, SetTripleOp, SinkEditProposal } from '~/sink/types';
-import { partition } from '~/sink/utils';
+import { CurrentVersions, Proposals, SpaceMetadata } from '~/sink/db';
+import type { BlockEvent, SinkEditProposal } from '~/sink/types';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
-import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { aggregateRelations } from '~/sink/write-edits/relations/aggregate-relations';
-import { aggregateSpacesFromRelations, writeEdits } from '~/sink/write-edits/write-edits';
+import { aggregateSpacesFromRelations } from '~/sink/write-edits/write-edits';
 
 export class ProposalDoesNotExistError extends Error {
   readonly _tag = 'ProposalDoesNotExistError';

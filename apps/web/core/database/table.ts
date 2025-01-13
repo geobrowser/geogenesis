@@ -3,13 +3,14 @@ import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
 import { Filter } from '../blocks-sdk/table';
+import { Entity } from '../io/dto/entities';
 import { fetchColumns } from '../io/fetch-columns';
 import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
 import { Schema, Value } from '../types';
-import { EntityWithSchema, getEntities_experimental, mergeEntity, mergeEntityAsync } from './entities';
+import { getEntities_experimental, mergeEntity, mergeEntityAsync } from './entities';
 import { getRelations } from './relations';
 
 const queryKeys = {
@@ -40,7 +41,7 @@ export interface MergeTableEntitiesArgs {
 async function mergeTableRowEntitiesAsync(
   options: Parameters<typeof fetchTableRowEntities>[0],
   filterState: Filter[]
-): Promise<EntityWithSchema[]> {
+): Promise<Entity[]> {
   const cachedEntities = await queryClient.fetchQuery({
     queryKey: queryKeys.remoteRows(options),
     queryFn: ({ signal }) => fetchTableRowEntities({ ...options, signal }),
@@ -50,37 +51,8 @@ async function mergeTableRowEntitiesAsync(
   const alreadyMergedEntitiesIds = new Set(remoteMergedEntities.map(e => e.id));
 
   const localEntities = await getEntities_experimental();
-  const filteredLocalEntities = Object.values(localEntities)
-    .filter(entity => {
-      for (const filter of filterState) {
-        if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
-          const maybeTripleSpace = entity.triples.find(
-            t => t.attributeId === SYSTEM_IDS.SPACE_FILTER && t.space === filter.value
-          );
-
-          const maybeRelationSpace = entity.relationsOut.find(r => r.space === filter.value);
-          return maybeTripleSpace || maybeRelationSpace;
-        }
-
-        if (filter.valueType === 'RELATION') {
-          return entity.relationsOut.some(r => r.typeOf.id === filter.columnId && r.toEntity.id === filter.value);
-        }
-
-        return entity.triples.some(triple => {
-          if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
-            // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
-            // attached to a triple in the data model. Once we represents entities across multiple spaces
-            // this filter likely won't make sense anymore.
-            // @TODO: We now store the entitySpaces on the entity itself
-            return triple.space.includes(filter.value);
-          }
-
-          return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
-        });
-      }
-    })
+  const localOnlyEntitiesIds = Object.values(localEntities)
     .map(e => e.id)
-
     // Filter out entities we've already merged so we don't fetch them again
     .filter(id => !alreadyMergedEntitiesIds.has(id));
 
@@ -89,11 +61,11 @@ async function mergeTableRowEntitiesAsync(
   // all the data needed to merge it with the local state, filter and render it.
   // @TODO(performance): Batch instead of fetching an unknown number of them at once.
   const localMergedEntities = await queryClient.fetchQuery({
-    queryKey: queryKeys.localRows(filteredLocalEntities),
-    queryFn: () => Promise.all(filteredLocalEntities.map(id => mergeEntityAsync(EntityId(id)))),
+    queryKey: queryKeys.localRows(localOnlyEntitiesIds),
+    queryFn: () => Promise.all(localOnlyEntitiesIds.map(id => mergeEntityAsync(EntityId(id)))),
   });
 
-  return [...localMergedEntities, ...remoteMergedEntities];
+  return [...filterLocalEntities(localMergedEntities, filterState), ...remoteMergedEntities];
 }
 
 export async function mergeTableEntities({ options, filterState }: MergeTableEntitiesArgs) {
@@ -123,6 +95,7 @@ export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
 type CollectionItemArgs = {
   entityIds: string[];
   filterString?: string;
+  filterState: Filter[];
 };
 
 export async function mergeCollectionItemEntitiesAsync(args: CollectionItemArgs) {
@@ -149,7 +122,8 @@ export async function mergeCollectionItemEntitiesAsync(args: CollectionItemArgs)
     })
     .filter(e => e !== null);
 
-  return [...localOnlyEntities, ...merged];
+  const filteredLocal = filterLocalEntities(localOnlyEntities, args.filterState);
+  return [...filteredLocal, ...merged];
 }
 
 function filterValue(value: Value, valueToFilter: string) {
@@ -184,4 +158,35 @@ export async function mergeEntitySourceTypeEntities(entityId: string, filterStri
   const localEntities = await getEntities_experimental();
   const relevantLocalEntities = Object.values(localEntities).filter(e => entityIdsToFetch.includes(e.id));
   return dedupeWith([...relevantLocalEntities, ...mergedRemoteEntities], (a, b) => a.id === b.id);
+}
+
+function filterLocalEntities(entities: Entity[], filterState: Filter[]) {
+  // Needs to return if _all_ are true, not just if one is true
+  return entities.filter(entity => {
+    return filterState.every(filter => {
+      if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
+        const maybeTripleSpace = entity.triples.find(
+          t => t.attributeId === SYSTEM_IDS.SPACE_FILTER && t.space === filter.value
+        );
+        const maybeRelationSpace = entity.relationsOut.find(r => r.space === filter.value);
+        return maybeTripleSpace || maybeRelationSpace;
+      }
+
+      if (filter.valueType === 'RELATION') {
+        return entity.relationsOut.some(r => r.typeOf.id === filter.columnId && r.toEntity.id === filter.value);
+      }
+
+      return entity.triples.some(triple => {
+        if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
+          // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
+          // attached to a triple in the data model. Once we represents entities across multiple spaces
+          // this filter likely won't make sense anymore.
+          // @TODO: We now store the entitySpaces on the entity itself
+          return triple.space.includes(filter.value);
+        }
+
+        return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
+      });
+    });
+  });
 }
