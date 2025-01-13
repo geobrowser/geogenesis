@@ -40,7 +40,7 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
         </p>
         {isEditor ? (
           <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            {connectedAddress ? 'Leave as editor' : 'Sign in to join'}
+            {connectedAddress ? '' : 'Sign in to join'}
           </button>
         ) : (
           <div className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
