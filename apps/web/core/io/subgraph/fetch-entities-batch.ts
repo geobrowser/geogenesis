@@ -10,9 +10,17 @@ import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
 const query = (entityIds: string[], filterString?: string) => {
+  const filter = filterString
+    ? `currentVersion: {
+        version: {
+          ${filterString}
+        }
+      }`
+    : '';
+
   return `query {
     entities(
-      filter: { id: { in: ${JSON.stringify(entityIds)} } ${filterString ?? ''} }
+      filter: { id: { in: ${JSON.stringify(entityIds)} } ${filter} }
     ) {
       nodes {
         id

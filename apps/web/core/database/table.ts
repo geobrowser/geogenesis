@@ -18,8 +18,8 @@ const queryKeys = {
     ['blocks', 'data', 'query', 'rows', options] as const,
   localRows: (entityIds: string[]) => ['blocks', 'data', 'query', 'rows', 'merging', entityIds] as const,
   columns: (typeIds: string[]) => ['blocks', 'data', 'query', 'columns', 'merging', typeIds] as const,
-  remoteCollectionItems: (entityIds: string[], filterString?: string) =>
-    ['blocks', 'data', 'collection', 'merging', entityIds, filterString] as const,
+  remoteCollectionItems: (entityIds: string[], filterState: Filter[], filterString?: string) =>
+    ['blocks', 'data', 'collection', 'merging', entityIds, filterState, filterString] as const,
   remoteEntities: (entityIds: string[]) => ['blocks', 'data', 'entity', 'merging', entityIds] as const,
 };
 
@@ -51,7 +51,7 @@ async function mergeTableRowEntitiesAsync(
   const alreadyMergedEntitiesIds = new Set(remoteMergedEntities.map(e => e.id));
 
   const localEntities = await getEntities_experimental();
-  const localOnlyEntitiesIds = Object.values(localEntities)
+  const localOnlyEntitiesIds = filterLocalEntities(Object.values(localEntities), filterState)
     .map(e => e.id)
     // Filter out entities we've already merged so we don't fetch them again
     .filter(id => !alreadyMergedEntitiesIds.has(id));
@@ -65,7 +65,7 @@ async function mergeTableRowEntitiesAsync(
     queryFn: () => Promise.all(localOnlyEntitiesIds.map(id => mergeEntityAsync(EntityId(id)))),
   });
 
-  return [...filterLocalEntities(localMergedEntities, filterState), ...remoteMergedEntities];
+  return [...localMergedEntities, ...remoteMergedEntities];
 }
 
 export async function mergeTableEntities({ options, filterState }: MergeTableEntitiesArgs) {
@@ -99,10 +99,11 @@ type CollectionItemArgs = {
 };
 
 export async function mergeCollectionItemEntitiesAsync(args: CollectionItemArgs) {
-  const { entityIds, filterString } = args;
+  const { entityIds, filterString, filterState } = args;
+  console.log('filter string', filterString);
 
   const cachedRemoteEntities = await queryClient.fetchQuery({
-    queryKey: queryKeys.remoteCollectionItems(entityIds, filterString),
+    queryKey: queryKeys.remoteCollectionItems(entityIds, filterState, filterString),
     queryFn: ({ signal }) => fetchEntitiesBatch(entityIds, filterString, signal),
     staleTime: Duration.toMillis(Duration.seconds(20)),
   });
@@ -122,7 +123,9 @@ export async function mergeCollectionItemEntitiesAsync(args: CollectionItemArgs)
     })
     .filter(e => e !== null);
 
-  const filteredLocal = filterLocalEntities(localOnlyEntities, args.filterState);
+  const filteredLocal = filterLocalEntities(localOnlyEntities, filterState);
+
+  console.log('collection data', { filteredLocal, merged, localOnlyEntityIds });
   return [...filteredLocal, ...merged];
 }
 
