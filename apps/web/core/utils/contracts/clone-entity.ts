@@ -27,11 +27,8 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
   const newOps: Array<Op> = [];
 
   const triplesToClone = oldEntity.triples.filter(triple => !SKIPPED_ATTRIBUTES.includes(triple.attributeId));
-
   const relationsToClone = oldEntity.relationsOut.filter(relation => !SKIPPED_ATTRIBUTES.includes(relation.typeOf.id));
-
   const tabsToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.TABS_ATTRIBUTE);
-
   const blocksToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS);
 
   if (newEntityName) {
@@ -71,34 +68,34 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
     );
   });
 
-  const tabOps = await cloneEntities(tabsToClone, newEntityId);
+  const tabOps = await cloneRelatedEntities(tabsToClone, newEntityId);
   newOps.push(...tabOps);
 
-  const blockOps = await cloneEntities(blocksToClone, newEntityId);
+  const blockOps = await cloneRelatedEntities(blocksToClone, newEntityId);
   newOps.push(...blockOps);
 
   return newOps;
 };
 
-const cloneEntities = async (entitiesToClone: Array<RelationType>, newEntityId: string) => {
+const cloneRelatedEntities = async (relatedEntitiesToClone: Array<RelationType>, newEntityId: string) => {
   const allOps = await Promise.all(
-    entitiesToClone.map(async entity => {
-      const newBlockId = ID.createEntityId();
+    relatedEntitiesToClone.map(async relation => {
+      const newRelatedEntityId = ID.createEntityId();
 
       const relationshipOp = Relation.make({
         fromId: newEntityId,
-        toId: newBlockId,
-        relationTypeId: entity.typeOf.id,
-        position: entity.index,
+        toId: newRelatedEntityId,
+        relationTypeId: relation.typeOf.id,
+        position: relation.index,
       });
 
-      const newBlockOps = await cloneEntity({
-        oldEntityId: entity.toEntity.id,
-        entityId: newBlockId,
-        entityName: entity.toEntity.name ?? '',
+      const newRelatedEntityOps = await cloneEntity({
+        oldEntityId: relation.toEntity.id,
+        entityId: newRelatedEntityId,
+        entityName: relation.toEntity.name ?? '',
       });
 
-      return [relationshipOp, ...newBlockOps];
+      return [relationshipOp, ...newRelatedEntityOps];
     })
   );
 
