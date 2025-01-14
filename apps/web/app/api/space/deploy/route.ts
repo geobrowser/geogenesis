@@ -54,7 +54,6 @@ export async function GET(request: Request) {
       spaceName,
       spaceAvatarUri,
       spaceCoverUri,
-      baseUrl: `${protocol}//${baseUrl}`,
       type,
       governanceType: governanceType ?? undefined,
     }),

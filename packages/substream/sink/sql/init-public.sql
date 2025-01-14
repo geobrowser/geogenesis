@@ -54,6 +54,8 @@ CREATE TABLE public.edits (
 
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,
+    name text NOT NULL,
+    created_at integer NOT NULL,
     onchain_proposal_id text NOT NULL,
     plugin_address text NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
