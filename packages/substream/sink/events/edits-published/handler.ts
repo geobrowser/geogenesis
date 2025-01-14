@@ -4,6 +4,7 @@ import { dedupeWith } from 'effect/ReadonlyArray';
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import { CurrentVersions, Proposals, SpaceMetadata } from '~/sink/db';
 import type { BlockEvent, SinkEditProposal } from '~/sink/types';
+import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { aggregateRelations } from '~/sink/write-edits/relations/aggregate-relations';
 import { aggregateSpacesFromRelations } from '~/sink/write-edits/write-edits';
@@ -63,21 +64,20 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       Effect.forEach(
         ipfsProposals,
         proposal =>
-          Effect.tryPromise({
-            try: () => Proposals.setAcceptedById(proposal.proposalId),
-            catch: error => {
-              return new ProposalDoesNotExistError(String(error));
-            },
-          }),
+          retryEffect(
+            Effect.tryPromise({
+              try: () => Proposals.setAcceptedById(proposal.proposalId),
+              catch: error => {
+                return new ProposalDoesNotExistError(String(error));
+              },
+            })
+          ),
         {
           concurrency: 50,
         }
       )
     );
 
-    // Our `writeEdit` processing relies on reading the most previous valid version in order
-    // to merge relations correctly. We shouldn't update the most current valid version of
-    // an entity until after the writeEdits processing is finished.
     yield* _(
       Effect.tryPromise({
         try: () =>
@@ -91,11 +91,10 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
           ),
         catch: error =>
           new CouldNotWriteCurrentVersionsError(`Failed to insert current versions. ${(error as Error).message}`),
-      })
+      }),
+      retryEffect
     );
 
-    // Do we only care about the relations in this edit? I think we care about all of them
-    // because the version of the space entity may have changed.
     const relations = yield* _(
       aggregateRelations({
         relationOpsByEditId,
