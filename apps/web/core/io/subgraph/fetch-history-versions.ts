@@ -20,7 +20,7 @@ const PAGE_SIZE = 5;
 
 const query = (entityId: string, page = 0) => {
   return `query {
-    versions(filter: { entityId: {equalTo: ${JSON.stringify(entityId)}}}) {
+    versions(filter: { entityId: {equalTo: ${JSON.stringify(entityId)}}} orderBy: CREATED_AT_DESC) {
       nodes {
         ${versionFragment}
         edit {
