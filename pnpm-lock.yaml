@@ -85,7 +85,7 @@ importers:
       '@typescript-eslint/eslint-plugin': ^6.0.0
       '@typescript-eslint/parser': ^6.0.0
       '@vercel/analytics': ^0.1.6
-      '@vercel/og': ^0.5.4
+      '@vercel/og': ^0.6.4
       '@vitejs/plugin-react': ^2.1.0
       '@vitest/ui': ^0.25.6
       autoprefixer: ^10.4.13
@@ -190,7 +190,7 @@ importers:
       '@tiptap/react': 2.10.4_fkvplxr63itombzpek3fnczszu
       '@tiptap/suggestion': 2.4.0_yviab3heeqx4xnwfwxpcrnob24
       '@vercel/analytics': 0.1.6_react@18.2.0
-      '@vercel/og': 0.5.4
+      '@vercel/og': 0.6.4
       boring-avatars: 1.10.1
       class-variance-authority: 0.7.0
       classnames: 2.3.2
@@ -1267,7 +1267,7 @@ packages:
       eth-json-rpc-filters: 6.0.1
       eventemitter3: 5.0.1
       keccak: 3.0.4
-      preact: 10.25.3
+      preact: 10.25.4
       sha.js: 2.4.11
     transitivePeerDependencies:
       - supports-color
@@ -4669,8 +4669,8 @@ packages:
     resolution: {integrity: sha512-42aWfPrimMfDKDi4YegyS7x+/0tlzaqwPQCULLanv3DMIlu96KTJR0fM5isWX2UViOqlGnX6YFgqWepcX+XMNg==}
     dev: false
 
-  /@resvg/resvg-wasm/2.4.1:
-    resolution: {integrity: sha512-yi6R0HyHtsoWTRA06Col4WoDs7SvlXU3DLMNP2bdAgs7HK18dTEVl1weXgxRzi8gwLteGUbIg29zulxIB3GSdg==}
+  /@resvg/resvg-wasm/2.4.0:
+    resolution: {integrity: sha512-C7c51Nn4yTxXFKvgh2txJFNweaVcfUPQxwEUFw4aWsCmfiBDJsTSwviIF8EcwjQ6k8bPyMWCl1vw4BdxE569Cg==}
     engines: {node: '>= 10'}
     dev: false
 
@@ -4919,6 +4919,7 @@ packages:
   /@shuding/opentype.js/1.4.0-beta.0:
     resolution: {integrity: sha512-3NgmNyH3l/Hv6EvsWJbsvpcpUba6R8IREQ83nH83cyakCw7uM1arZKNfHwv1Wz6jgqrF/j4x5ELvR6PnK9nTcA==}
     engines: {node: '>= 8.0.0'}
+    hasBin: true
     dependencies:
       fflate: 0.7.4
       string.prototype.codepointat: 0.2.1
@@ -6340,12 +6341,12 @@ packages:
       react: 18.2.0
     dev: false
 
-  /@vercel/og/0.5.4:
-    resolution: {integrity: sha512-o4Zjgw66HPtfGFYG4CFcKfnCcK6qCY+3FC6g22Z1SdAN5jN8XjbHCh3hRVHH5IGBQp8mxH941EcH53KimAm+wg==}
+  /@vercel/og/0.6.4:
+    resolution: {integrity: sha512-+IB8fYbVHEAtLfhCXSRS61Q/OfBJTaPCXhvGvXTBIUfs9lqZMDesZ2UnvKYbnEYHSMgCzBaj5BOq66iePl8mjw==}
     engines: {node: '>=16'}
     dependencies:
-      '@resvg/resvg-wasm': 2.4.1
-      satori: 0.7.2
+      '@resvg/resvg-wasm': 2.4.0
+      satori: 0.12.0
       yoga-wasm-web: 0.3.3
     dev: false
 
@@ -8148,6 +8149,11 @@ packages:
     engines: {node: '>=4'}
     dev: false
 
+  /css-gradient-parser/0.0.16:
+    resolution: {integrity: sha512-3O5QdqgFRUbXvK1x5INf1YkBz1UKSWqrd63vWsum8MNHDBYD5urm3QtxZbKU259OrEXNM26lP/MPY3d1IGkBgA==}
+    engines: {node: '>=16'}
+    dev: false
+
   /css-to-react-native/3.2.0:
     resolution: {integrity: sha512-e8RKaLXMOFii+02mOlqwjbD00KSEKqblnpO9e++1aXS1fPQOpS1YoqdVHBqPjHNoxeF2mimzVqawm2KCbEdtHQ==}
     dependencies:
@@ -8615,8 +8621,8 @@ packages:
       minimalistic-crypto-utils: 1.0.1
     dev: false
 
-  /emoji-regex/10.2.1:
-    resolution: {integrity: sha512-97g6QgOk8zlDRdgq1WxwgTMgEWGVAQvB5Fdpgc1MkNy56la5SKP9GsMXKDOdqwn90/41a8yPwIGk1Y6WVbeMQA==}
+  /emoji-regex/10.4.0:
+    resolution: {integrity: sha512-EC+0oUMY1Rqm4O6LLrgjtYDvcVYTy7chDnM4Q7030tP4Kwj3u/pR6gP9ygnp2CJMK5Gq+9Q2oqmrFJAz01DXjw==}
     dev: false
 
   /emoji-regex/8.0.0:
@@ -12772,8 +12778,8 @@ packages:
     resolution: {integrity: sha512-jRYbDDgMpIb5LHq3hkI0bbl+l/TQ9UnkdQ0ww+lp+4MMOdqaUYdFc5qeyP+IV8FAd/2Em7drVPeKdQxsiWCf/A==}
     dev: false
 
-  /preact/10.25.3:
-    resolution: {integrity: sha512-dzQmIFtM970z+fP9ziQ3yG4e3ULIbwZzJ734vaMVUTaKQ2+Ru1Ou/gjshOYVHCcd1rpAelC6ngjvjDXph98unQ==}
+  /preact/10.25.4:
+    resolution: {integrity: sha512-jLdZDb+Q+odkHJ+MpW/9U5cODzqnB+fy2EiHSZES7ldV5LK7yjlVzTp7R8Xy6W6y75kfK8iWYtFVH7lvjwrCMA==}
     dev: false
 
   /prebuild-install/7.1.1:
@@ -13660,15 +13666,17 @@ packages:
   /safer-buffer/2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
-  /satori/0.7.2:
-    resolution: {integrity: sha512-Eltg0/i3OEbBLaveCnYi2j+p0J9Bb5rmDMXddq4Zy0/NYHbpTkPIlPYGgb+DKamhmvXhiGvWGiFdqHVjJCaCpA==}
+  /satori/0.12.0:
+    resolution: {integrity: sha512-e0e+qQyeFwEszujN7SpWpRtZgww7Nh8lSO3bUn2spHZ5JpqEl3zJ3P14/JlWruxEwdgREs35ZnavrPrWaRVFDg==}
     engines: {node: '>=16'}
     dependencies:
       '@shuding/opentype.js': 1.4.0-beta.0
       css-background-parser: 0.1.0
       css-box-shadow: 1.0.0-3
+      css-gradient-parser: 0.0.16
       css-to-react-native: 3.2.0
-      emoji-regex: 10.2.1
+      emoji-regex: 10.4.0
+      escape-html: 1.0.3
       linebreak: 1.1.0
       parse-css-color: 0.2.1
       postcss-value-parser: 4.2.0
