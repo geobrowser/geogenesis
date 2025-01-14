@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, getChecksumAddress } from '@geogenesis/sdk';
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
