@@ -17,7 +17,20 @@ interface Props {
   searchParams: { proposalId?: string };
 }
 
-const votingPeriod = '4h';
+const INITIAL_PUBLIC_SPACES = [
+  '25omwWh6HYgeRQKCaSpVpa', // Geo root
+  'DqiHGrgbniQ9RXRbcQArQ2', // Industries
+  'SgjATMbm41LX6naizMqBVd', // Crypto
+  'BDuZwkjCg3nPWMDshoYtpS', // Crypto News
+  '9WjyZnACdQorhyZWXvjsYB', // software
+];
+
+const getVotingPeriod = (spaceId: string) => {
+  // We don't currently track voting settings in the indexer, so we
+  // hardcode which initial spaces had the 4h voting duration.
+  if (INITIAL_PUBLIC_SPACES.includes(spaceId)) return '4h';
+  return '24h';
+};
 const passThreshold = '50%';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +45,7 @@ export default async function GovernancePage({ params, searchParams }: Props) {
         <div className="flex items-center gap-5">
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Voting period</h2>
-            <p className="text-mediumTitle">{votingPeriod}</p>
+            <p className="text-mediumTitle">{getVotingPeriod(params.id)}</p>
           </GovernanceMetadataBox>
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Pass threshold</h2>
