@@ -1,5 +1,6 @@
 import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
+import type * as Schema from 'zapatos/schema';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import { CurrentVersions, Proposals, SpaceMetadata, Versions } from '~/sink/db';
@@ -196,11 +197,16 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       })
     );
 
+    const allNonstaleVersions = [...nonstaleVersions, ...newVersions].reduce((acc, v) => {
+      acc.set(v.entity_id.toString(), v);
+      return acc;
+    }, new Map<string, Schema.versions.Insertable>());
+
     yield* _(
       Effect.tryPromise({
         try: () =>
           CurrentVersions.upsert(
-            nonstaleVersions.map(v => {
+            [...allNonstaleVersions.values()].map(v => {
               return {
                 entity_id: v.entity_id,
                 version_id: v.id,
@@ -217,33 +223,10 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       retryEffect
     );
 
-    // Update the current version using any new versions created in this handler
-    yield* _(
-      Effect.tryPromise({
-        try: () =>
-          CurrentVersions.upsert(
-            newIdsForStaleCurrentVersions.map(v => {
-              return {
-                entity_id: v.newVersion.entity_id,
-                version_id: v.newVersion.id,
-              };
-            })
-          ),
-        catch: error => {
-          console.error(`Failed to insert current versions. ${(error as Error).message}`);
-          return new CouldNotWriteCurrentVersionsError(
-            `Failed to insert current versions. ${(error as Error).message}`
-          );
-        },
-      }),
-      retryEffect
-    );
-
-    // @TODO: Should this use the potentially merged version?
     const relations = yield* _(
       aggregateRelations({
         relationOpsByEditId,
-        versions: nonstaleVersions,
+        versions: [...allNonstaleVersions.values()],
         edits,
         editType: 'DEFAULT',
       })
