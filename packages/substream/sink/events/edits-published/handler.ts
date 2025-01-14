@@ -68,6 +68,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
             Effect.tryPromise({
               try: () => Proposals.setAcceptedById(proposal.proposalId),
               catch: error => {
+                console.error('Could not set proposal to accepted for proposal id', proposal.proposalId);
                 return new ProposalDoesNotExistError(String(error));
               },
             })
@@ -89,8 +90,12 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
               };
             })
           ),
-        catch: error =>
-          new CouldNotWriteCurrentVersionsError(`Failed to insert current versions. ${(error as Error).message}`),
+        catch: error => {
+          console.error(`Failed to insert current versions. ${(error as Error).message}`);
+          return new CouldNotWriteCurrentVersionsError(
+            `Failed to insert current versions. ${(error as Error).message}`
+          );
+        },
       }),
       retryEffect
     );
