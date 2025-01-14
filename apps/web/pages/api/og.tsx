@@ -1,7 +1,7 @@
 import { ImageResponse } from '@vercel/og';
 import type { NextRequest } from 'next/server';
 
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { DEFAULT_OPENGRAPH_IMAGE, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
 
 export default async function handler(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -36,7 +36,7 @@ export default async function handler(request: NextRequest) {
     );
   }
 
-  const image = `https://api.thegraph.com/ipfs/api/v0/cat?arg=${hash}`;
+  const image = `${IPFS_GATEWAY_READ_PATH}${hash}`;
 
   return new ImageResponse(
     (
