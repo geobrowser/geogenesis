@@ -49,7 +49,7 @@ export class Versions {
   static selectOne(where: S.versions.Whereable) {
     return db
       .selectOne('versions', where, {
-        columns: ['id', 'entity_id'],
+        columns: ['id', 'entity_id', 'created_at_block'],
       })
       .run(pool);
   }
