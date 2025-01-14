@@ -155,7 +155,7 @@ export function writeEdits(args: PopulateContentArgs) {
 
     const versionSpacesUnique = dedupeWith(
       versionSpaces,
-      (a, z) => a.space_id.toString() !== z.space_id.toString() && a.version_id.toString() !== z.version_id.toString()
+      (a, z) => a.space_id.toString() === z.space_id.toString() && a.version_id.toString() === z.version_id.toString()
     );
 
     yield* _(
