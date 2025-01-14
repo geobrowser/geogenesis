@@ -110,7 +110,6 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
      * are created with the entire state of the entity _at the time the version is
      * created_.
      */
-
     const handleStaleCurrentVersions = Effect.forEach(
       nonstaleVersions,
       version =>
@@ -123,10 +122,6 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
 
           // Can do a JOIN on current version instead of querying again
           const currentVersion = await Versions.selectOne({ id: maybeCurrentVersion.version_id });
-
-          if (currentVersion?.entity_id === '5FkVvS4mTz6Ge7wHkAUMRk') {
-            console.log('current version', currentVersion, version);
-          }
 
           if (!currentVersion) {
             return null;
