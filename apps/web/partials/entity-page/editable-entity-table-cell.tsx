@@ -22,7 +22,7 @@ interface Props {
   attributeId: string;
   spaceId: string;
   renderables: RenderableProperty[];
-  columnRelationTypes?: { typeId: string; typeName: string | null }[];
+  filterSearchByTypes?: string[];
 }
 
 export const EditableEntityTableCell = memo(function EditableEntityTableCell({
@@ -30,7 +30,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   entityId,
   attributeId,
   renderables,
-  columnRelationTypes,
+  filterSearchByTypes,
 }: Props) {
   const entityName = Entities.nameFromRenderable(renderables) ?? '';
 
@@ -43,12 +43,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   });
 
   const isNameCell = attributeId === SYSTEM_IDS.NAME_ATTRIBUTE;
-
-  const allowedTypes = columnRelationTypes
-    ? columnRelationTypes.length > 0
-      ? columnRelationTypes
-      : undefined
-    : undefined;
 
   if (isNameCell) {
     // This should exist as there should be a placeholder that exists if no
@@ -97,7 +91,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               <div key={`${r.entityId}-${r.attributeId}-${r.value}`} data-testid="select-entity" className="w-full">
                 <SelectEntity
                   spaceId={spaceId}
-                  // allowedTypes={allowedTypes}
+                  allowedTypes={filterSearchByTypes}
                   onDone={result => {
                     send({
                       type: 'UPSERT_RELATION',
@@ -142,7 +136,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           <div className="mt-1">
             <SelectEntityAsPopover
               trigger={<SquareButton icon={<Create />} />}
-              // allowedTypes={allowedTypes}
+              allowedTypes={filterSearchByTypes}
               onDone={result => {
                 send({
                   type: 'UPSERT_RELATION',

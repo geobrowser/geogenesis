@@ -23,6 +23,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
 import { DB } from '~/core/database/write';
+import { PropertyId } from '~/core/hooks/use-property-value-types';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
@@ -96,7 +97,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns } = useTableBlock();
+    const { columns, columnsSchema } = useTableBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditable = table.options.meta?.isEditable;
@@ -119,6 +120,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // cause the cells to also re-render even when they don't need to?
     const valueType = columnValueType(cellData.columnId, columns);
     const attributeName = columnName(cellData.columnId, columns);
+    const maybeColumnSchema = columnsSchema.get(PropertyId(cellData.columnId));
+    const filterableRelationType = maybeColumnSchema?.relationValueTypeId;
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const cellTriples = useTriples(
@@ -181,7 +184,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           attributeId={cellData.columnId}
           entityId={cellData.entityId}
           spaceId={spaceId}
-          columnRelationTypes={[]}
+          filterSearchByTypes={filterableRelationType ? [filterableRelationType] : undefined}
         />
       );
     }

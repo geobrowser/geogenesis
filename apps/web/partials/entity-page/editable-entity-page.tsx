@@ -214,11 +214,7 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
   const propertyValueType = propertyValueTypes.get(typeOfId);
-  const filterByTypes = propertyValueType
-    ? propertyValueType.relationValueTypeId
-      ? [propertyValueType.relationValueTypeId]
-      : undefined
-    : undefined;
+  const filterByTypes = propertyValueType?.relationValueTypeId;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -289,7 +285,7 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
                 spaceId={spaceId}
-                allowedTypes={filterByTypes}
+                allowedTypes={filterByTypes ? [filterByTypes] : undefined}
                 onDone={result => {
                   send({
                     type: 'UPSERT_RELATION',
@@ -332,7 +328,7 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
         <div className="mt-1">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
-            allowedTypes={filterByTypes}
+            allowedTypes={filterByTypes ? [filterByTypes] : undefined}
             onDone={result => {
               send({
                 type: 'UPSERT_RELATION',
