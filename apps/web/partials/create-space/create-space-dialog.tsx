@@ -1,5 +1,6 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Dialog from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -18,10 +19,12 @@ import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
+import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
@@ -31,6 +34,7 @@ import { Animation } from '~/partials/onboarding/dialog';
 const spaceTypeAtom = atom<SpaceType | null>(null);
 const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
 const nameAtom = atom<string>('');
+const entityIdAtom = atom<string>('');
 const imageAtom = atom<string>('');
 const spaceIdAtom = atom<string>('');
 
@@ -48,6 +52,7 @@ export function CreateSpaceDialog() {
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const [name, setName] = useAtom(nameAtom);
+  const [entityId] = useAtom(entityIdAtom);
   const [image, setImage] = useAtom(imageAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
@@ -67,6 +72,7 @@ export function CreateSpaceDialog() {
         spaceName: name,
         spaceImage: image,
         governanceType: governanceType ?? undefined,
+        entityId,
       });
 
       if (!spaceId) {
@@ -300,14 +306,14 @@ const spaceTypeOptions: { image: string; label: string; value: SpaceType; govern
   { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao', governance: 'PERSONAL' },
   {
     image: '/images/onboarding/gov-org.png',
-    label: 'Governmental org',
+    label: 'Government org',
     value: 'government-org',
     governance: 'PERSONAL',
   },
   { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry', governance: 'PERSONAL' },
   {
     image: '/images/onboarding/interest-group.png',
-    label: 'Interest group',
+    label: 'Interest',
     value: 'interest-group',
     governance: 'PERSONAL',
   },
@@ -371,12 +377,37 @@ type StepEnterProfileProps = {
   address: string;
 };
 
+const allowedTypesBySpaceType: Record<SpaceType, string[]> = {
+  default: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE],
+  company: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.COMPANY_TYPE],
+  nonprofit: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.NONPROFIT_TYPE],
+  personal: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.PERSON_TYPE],
+  'academic-field': [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.ACADEMIC_FIELD_TYPE],
+  region: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.REGION_TYPE],
+  industry: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.INDUSTRY_TYPE],
+  protocol: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.PROTOCOL_TYPE],
+  dao: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.DAO_TYPE],
+  'government-org': [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.GOVERNMENT_ORG_TYPE],
+  'interest-group': [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.INTEREST_GROUP_TYPE],
+};
+
+const getRelationValueTypes = (allowedTypes: string[]) => {
+  return allowedTypes.map(allowedType => ({
+    typeId: allowedType,
+    typeName: '',
+    spaceIdOfAttribute: SYSTEM_IDS.ROOT_SPACE_ID,
+  }));
+};
+
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const { ipfs } = Services.useServices();
   const [name, setName] = useAtom(nameAtom);
+  const [, setEntityId] = useAtom(entityIdAtom);
   const spaceType = useAtomValue(spaceTypeAtom);
   const isCompany = spaceType === 'company';
   const [image, setImage] = useAtom(imageAtom);
+
+  const allowedTypes = spaceType ? getRelationValueTypes(allowedTypesBySpaceType[spaceType]) : [];
 
   const validName = name.length > 0;
 
@@ -469,14 +500,40 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
         </div>
       </StepContents>
       <div className={cx('flex w-full flex-col items-center justify-center gap-3', !isCompany && 'pt-[26px]')}>
-        <div className="inline-block">
-          <input
-            placeholder="Space name..."
-            className="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
-            value={name}
-            onChange={({ currentTarget: { value } }) => setName(value)}
-            autoFocus
-          />
+        <div className="relative z-100 inline-block">
+          <div className={cx(name && 'invisible')}>
+            <SelectEntity
+              allowedTypes={allowedTypes}
+              onDone={entity => {
+                setName(entity.name ?? '');
+                setEntityId(entity.id);
+              }}
+              onCreateEntity={entity => {
+                setName(entity.name ?? '');
+                setEntityId('');
+              }}
+              spaceId={SYSTEM_IDS.ROOT_SPACE_ID}
+              width="full"
+              variant="fixed"
+              placeholder="Space name..."
+              inputClassName="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
+              selectSpace={false}
+            />
+          </div>
+          {name && (
+            <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-1">
+              <div className="text-bodySemibold">Space for</div>
+              <SmallButton
+                onClick={() => {
+                  setName('');
+                  setEntityId('');
+                }}
+              >
+                <span>{name}</span>
+                <CloseSmall />
+              </SmallButton>
+            </div>
+          )}
         </div>
       </div>
       <div className="absolute inset-x-4 bottom-4 flex">

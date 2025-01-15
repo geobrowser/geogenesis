@@ -43,7 +43,17 @@ export function SpaceDto(space: SubstreamSpace): Space {
 }
 
 export function SpaceMetadataDto(spaceId: string, metadata: SubstreamVersion | undefined | null): SpaceConfigEntity {
-  const entity = metadata ? VersionDto(metadata) : null;
+  const maybeEntity = metadata ? VersionDto(metadata) : null;
+
+  let entity = null;
+
+  if (maybeEntity) {
+    entity = {
+      ...maybeEntity,
+      triples: maybeEntity.triples.filter(triple => triple.space === spaceId),
+      relationsOut: maybeEntity.relationsOut.filter(relation => relation.space === spaceId),
+    };
+  }
 
   const spaceConfigWithImage: SpaceConfigEntity = entity
     ? {

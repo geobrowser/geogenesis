@@ -22,6 +22,7 @@ export async function GET(request: Request) {
   const spaceAvatarUri = url.searchParams.get('spaceAvatarUri');
   const spaceCoverUri = url.searchParams.get('spaceCoverUri');
   const type = url.searchParams.get('type') as SpaceType | null;
+  const entityId = (url.searchParams.get('entityId') as string | null) ?? undefined;
   const governanceType = url.searchParams.get('governanceType') as SpaceGovernanceType | null;
 
   if (initialEditorAddress === null || spaceName === null || type === null) {
@@ -57,6 +58,7 @@ export async function GET(request: Request) {
       baseUrl: `${protocol}//${baseUrl}`,
       type,
       governanceType: governanceType ?? undefined,
+      entityId,
     }),
     {
       schedule: Schedule.exponential(Duration.millis(100)).pipe(

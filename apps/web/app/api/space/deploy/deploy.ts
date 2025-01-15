@@ -67,6 +67,7 @@ interface DeployArgs {
   spaceCoverUri: string | null;
   initialEditorAddress: string;
   baseUrl: string;
+  entityId?: string;
 }
 
 export function deploySpace(args: DeployArgs) {

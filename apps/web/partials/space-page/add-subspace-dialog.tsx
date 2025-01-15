@@ -13,7 +13,7 @@ import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useRemoveSubspace } from '~/core/hooks/use-remove-subspace';
 import { Subspace, SubspaceDto } from '~/core/io/dto/subspaces';
 import { SubstreamSubspace } from '~/core/io/schema';
-import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
+import { getSpaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SpaceGovernanceType } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -54,7 +54,7 @@ interface ContentProps {
   spaceId: string;
 }
 
-const subspacesQuery = (name: string, notIn: string[]) => `
+const subspacesQuery = (name: string, notIn: string[], spaceId: string) => `
   {
     spaces(
       filter: { spacesMetadatum: {version: {name: {includesInsensitive: "${name}"}}} id: {notIn: ${JSON.stringify(
@@ -71,7 +71,7 @@ const subspacesQuery = (name: string, notIn: string[]) => `
         spaceEditors {
           totalCount
         }
-        ${spaceMetadataFragment}
+        ${getSpaceMetadataFragment(spaceId)}
       }
     }
   }
@@ -99,7 +99,7 @@ function useSubspacesQuery({
     queryKey: ['subspaces-by-name', debouncedQuery],
     queryFn: async ({ signal }) => {
       const queryEffect = graphql<NetworkResult>({
-        query: subspacesQuery(query, [...subspaceIds, ...inflightSubspaceIds, spaceId]),
+        query: subspacesQuery(query, [...subspaceIds, ...inflightSubspaceIds, spaceId], spaceId),
         endpoint: Environment.getConfig().api,
         signal,
       });
@@ -117,9 +117,9 @@ function useSubspacesQuery({
             throw error;
           case 'GraphqlRuntimeError':
             console.error(
-              `Encountered runtime graphql error in subspaces-by-name. 
-  
-              queryString: ${subspacesQuery(query, [...subspaceIds, ...inflightSubspaceIds, spaceId])}
+              `Encountered runtime graphql error in subspaces-by-name.
+
+              queryString: ${subspacesQuery(query, [...subspaceIds, ...inflightSubspaceIds, spaceId], spaceId)}
               `,
               error.message
             );
