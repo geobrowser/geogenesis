@@ -18,13 +18,13 @@ type TabProps = {
 export const Tab = async (props: TabProps) => {
   const { slug } = props;
   const spaceId = props.params.id;
-  const pageTypeEntityId = getPageTypeEntityId(slug);
+  const pageType = getPageTypeFromSlug(slug);
 
-  if (!spaceId || !pageTypeEntityId) return null;
+  if (!spaceId || !pageType) return null;
 
   const entityId = await fetchTabEntityId({
     spaceId,
-    pageTypeEntityId,
+    pageTypeEntityId: pageType.id,
   });
 
   if (!entityId) {
@@ -36,7 +36,7 @@ export const Tab = async (props: TabProps) => {
     };
 
     return (
-      <EmptyTab spaceId={spaceId}>
+      <EmptyTab entityId={newEntityId} spaceId={spaceId} pageType={pageType}>
         <DefaultEntityPage params={newParams} showCover={false} showHeading={false} showHeader={false} />
       </EmptyTab>
     );
@@ -52,29 +52,29 @@ export const Tab = async (props: TabProps) => {
   return <DefaultEntityPage params={params} showCover={false} showHeading={false} showHeader={false} notice={notice} />;
 };
 
-const getPageTypeEntityId = (slug: string): string | null => {
-  return pageTypeEntityIds?.[slug] ?? null;
+const getPageTypeFromSlug = (slug: string): { name: string; id: string } | null => {
+  return pageTypes?.[slug] ?? null;
 };
 
-const pageTypeEntityIds: Record<string, string> = {
-  about: SYSTEM_IDS.ABOUT_PAGE,
-  activities: SYSTEM_IDS.ACTIVITIES_PAGE,
-  culture: SYSTEM_IDS.CULTURE_PAGE,
-  education: SYSTEM_IDS.EDUCATION_PAGE,
-  events: SYSTEM_IDS.EVENTS_PAGE,
-  finances: SYSTEM_IDS.FINANCES_PAGE,
-  government: SYSTEM_IDS.GOVERNMENT_PAGE,
-  jobs: SYSTEM_IDS.JOBS_PAGE,
-  news: SYSTEM_IDS.NEWS_PAGE,
-  ontology: SYSTEM_IDS.ONTOLOGY_PAGE,
-  people: SYSTEM_IDS.PEOPLE_PAGE,
-  personal: SYSTEM_IDS.PERSONAL_PAGE,
-  places: SYSTEM_IDS.PLACES_PAGE,
-  posts: SYSTEM_IDS.POSTS_PAGE,
-  products: SYSTEM_IDS.PRODUCTS_PAGE,
-  professional: SYSTEM_IDS.PROFESSIONAL_PAGE,
-  projects: SYSTEM_IDS.PROJECTS_PAGE,
-  services: SYSTEM_IDS.SERVICES_PAGE,
-  spaces: SYSTEM_IDS.SPACES_PAGE,
-  team: SYSTEM_IDS.TEAM_PAGE,
+const pageTypes: Record<string, { name: string; id: string }> = {
+  about: { name: 'About', id: SYSTEM_IDS.ABOUT_PAGE },
+  activities: { name: 'Activities', id: SYSTEM_IDS.ACTIVITIES_PAGE },
+  culture: { name: 'Culture', id: SYSTEM_IDS.CULTURE_PAGE },
+  education: { name: 'Education', id: SYSTEM_IDS.EDUCATION_PAGE },
+  events: { name: 'Events', id: SYSTEM_IDS.EVENTS_PAGE },
+  finances: { name: 'Finances', id: SYSTEM_IDS.FINANCES_PAGE },
+  government: { name: 'Government', id: SYSTEM_IDS.GOVERNMENT_PAGE },
+  jobs: { name: 'Jobs', id: SYSTEM_IDS.JOBS_PAGE },
+  news: { name: 'News', id: SYSTEM_IDS.NEWS_PAGE },
+  ontology: { name: 'Ontology', id: SYSTEM_IDS.ONTOLOGY_PAGE },
+  people: { name: 'People', id: SYSTEM_IDS.PEOPLE_PAGE },
+  personal: { name: 'Personal', id: SYSTEM_IDS.PERSONAL_PAGE },
+  places: { name: 'Places', id: SYSTEM_IDS.PLACES_PAGE },
+  posts: { name: 'Posts', id: SYSTEM_IDS.POSTS_PAGE },
+  products: { name: 'Products', id: SYSTEM_IDS.PRODUCTS_PAGE },
+  professional: { name: 'Professional', id: SYSTEM_IDS.PROFESSIONAL_PAGE },
+  projects: { name: 'Projects', id: SYSTEM_IDS.PROJECTS_PAGE },
+  services: { name: 'Services', id: SYSTEM_IDS.SERVICES_PAGE },
+  spaces: { name: 'spaces', id: SYSTEM_IDS.SPACES_PAGE },
+  team: { name: 'Team', id: SYSTEM_IDS.TEAM_PAGE },
 };
