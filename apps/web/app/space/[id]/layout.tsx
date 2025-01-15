@@ -388,38 +388,6 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     },
   ];
 
-  const NONPROFIT_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-    {
-      label: 'Posts',
-      href: `${NavUtils.toSpace(params.id)}/posts`,
-      priority: 1 as const,
-      hidden: !hasPostsPage,
-    },
-    {
-      label: 'Projects',
-      href: `${NavUtils.toSpace(params.id)}/projects`,
-      priority: 1 as const,
-      hidden: !hasProjectsPage,
-    },
-    {
-      label: 'Team',
-      href: `${NavUtils.toSpace(params.id)}/team`,
-      priority: 1 as const,
-      badge: <>{teamCount.toString()}</>,
-    },
-    {
-      label: 'Finances',
-      href: `${NavUtils.toSpace(params.id)}/finances`,
-      priority: 1 as const,
-      hidden: !hasFinancesPage,
-    },
-  ];
-
   const ALL_SPACES_TABS = [
     {
       label: 'Overview',

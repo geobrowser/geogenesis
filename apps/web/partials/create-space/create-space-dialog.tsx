@@ -391,14 +391,6 @@ const allowedTypesBySpaceType: Record<SpaceType, string[]> = {
   'interest-group': [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.INTEREST_GROUP_TYPE],
 };
 
-const getRelationValueTypes = (allowedTypes: string[]) => {
-  return allowedTypes.map(allowedType => ({
-    typeId: allowedType,
-    typeName: '',
-    spaceIdOfAttribute: SYSTEM_IDS.ROOT_SPACE_ID,
-  }));
-};
-
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const { ipfs } = Services.useServices();
   const [name, setName] = useAtom(nameAtom);
@@ -407,8 +399,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const isCompany = spaceType === 'company';
   const [image, setImage] = useAtom(imageAtom);
 
-  const allowedTypes = spaceType ? getRelationValueTypes(allowedTypesBySpaceType[spaceType]) : [];
-
+  const allowedTypes = spaceType ? allowedTypesBySpaceType[spaceType] : [];
   const validName = name.length > 0;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
