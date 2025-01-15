@@ -47,7 +47,7 @@ export const generateOpsForSpaceType = async ({
   // Add space type-specific ops
   switch (type) {
     case 'personal': {
-      const personOps = await cloneEntity({
+      const [personOps] = await cloneEntity({
         oldEntityId: SYSTEM_IDS.PERSON_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
@@ -70,7 +70,7 @@ export const generateOpsForSpaceType = async ({
       break;
     }
     case 'company': {
-      const companyOps = await cloneEntity({
+      const [companyOps] = await cloneEntity({
         oldEntityId: SYSTEM_IDS.COMPANY_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
@@ -96,7 +96,7 @@ export const generateOpsForSpaceType = async ({
       );
       break;
     case 'dao': {
-      const daoOps = await cloneEntity({
+      const [daoOps] = await cloneEntity({
         oldEntityId: SYSTEM_IDS.DAO_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
@@ -117,7 +117,7 @@ export const generateOpsForSpaceType = async ({
       );
       break;
     case 'industry': {
-      const industryOps = await cloneEntity({
+      const [industryOps] = await cloneEntity({
         oldEntityId: SYSTEM_IDS.INDUSTRY_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
@@ -138,7 +138,7 @@ export const generateOpsForSpaceType = async ({
       );
       break;
     case 'protocol': {
-      const protocolOps = await cloneEntity({
+      const [protocolOps] = await cloneEntity({
         oldEntityId: SYSTEM_IDS.PROTOCOL_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
@@ -149,7 +149,7 @@ export const generateOpsForSpaceType = async ({
       break;
     }
     case 'region': {
-      const regionOps = await cloneEntity({
+      const [regionOps] = await cloneEntity({
         oldEntityId: SYSTEM_IDS.REGION_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,

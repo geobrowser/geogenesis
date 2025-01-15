@@ -152,7 +152,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     },
     {
       label: 'Ontology',
-      href: `${NavUtils.toSpace(params.id)}/about`,
+      href: `${NavUtils.toSpace(params.id)}/ontology`,
       priority: 1 as const,
       hidden: !hasOntologyPage,
     },

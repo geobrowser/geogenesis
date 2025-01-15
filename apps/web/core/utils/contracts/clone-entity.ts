@@ -11,27 +11,33 @@ type Options = {
   entityName?: string | null;
 };
 
-export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
+export const cloneEntity = async (
+  options: Options,
+  previouslySeenEntityIds?: Set<string>
+): Promise<[Array<Op>, Set<string>]> => {
   if (!options.oldEntityId) {
     throw new Error(`Must specify entity to clone.`);
   }
 
   const { oldEntityId, entityId = null, entityName } = options;
 
-  const oldEntity = await Subgraph.fetchEntity({ id: oldEntityId });
+  const oldEntity = await Subgraph.fetchEntity({ id: oldEntityId, spaceId: SYSTEM_IDS.ROOT_SPACE_ID });
 
-  if (!oldEntity) return [];
+  if (!oldEntity) return [[], previouslySeenEntityIds ?? new Set()];
+
+  const allSeenEntityIds: Set<string> = new Set();
+
+  if (previouslySeenEntityIds) {
+    previouslySeenEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
+  }
 
   const newEntityId = entityId ?? ID.createEntityId();
   const newEntityName = entityName;
   const newOps: Array<Op> = [];
 
   const triplesToClone = oldEntity.triples.filter(triple => !SKIPPED_ATTRIBUTES.includes(triple.attributeId));
-
   const relationsToClone = oldEntity.relationsOut.filter(relation => !SKIPPED_ATTRIBUTES.includes(relation.typeOf.id));
-
   const tabsToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.TABS_ATTRIBUTE);
-
   const blocksToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS);
 
   if (newEntityName) {
@@ -71,38 +77,58 @@ export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
     );
   });
 
-  const tabOps = await cloneEntities(tabsToClone, newEntityId);
+  const [tabOps, newlySeenTabEntityIds] = await cloneRelatedEntities(tabsToClone, newEntityId, allSeenEntityIds);
   newOps.push(...tabOps);
+  newlySeenTabEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
 
-  const blockOps = await cloneEntities(blocksToClone, newEntityId);
+  const [blockOps, newlySeenBlockEntityIds] = await cloneRelatedEntities(blocksToClone, newEntityId, allSeenEntityIds);
   newOps.push(...blockOps);
+  newlySeenBlockEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
 
-  return newOps;
+  return [newOps, allSeenEntityIds] as const;
 };
 
-const cloneEntities = async (entitiesToClone: Array<RelationType>, newEntityId: string) => {
+const cloneRelatedEntities = async (
+  relatedEntitiesToClone: Array<RelationType>,
+  newEntityId: string,
+  previouslySeenEntityIds: Set<string>
+) => {
+  const allSeenEntityIds: Set<string> = new Set();
+
+  if (previouslySeenEntityIds) {
+    previouslySeenEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
+  }
+
   const allOps = await Promise.all(
-    entitiesToClone.map(async entity => {
-      const newBlockId = ID.createEntityId();
+    relatedEntitiesToClone.map(async relation => {
+      if (allSeenEntityIds.has(relation.id)) return [];
+
+      allSeenEntityIds.add(relation.id);
+
+      const newRelatedEntityId = ID.createEntityId();
 
       const relationshipOp = Relation.make({
         fromId: newEntityId,
-        toId: newBlockId,
-        relationTypeId: entity.typeOf.id,
-        position: entity.index,
+        toId: newRelatedEntityId,
+        relationTypeId: relation.typeOf.id,
+        position: relation.index,
       });
 
-      const newBlockOps = await cloneEntity({
-        oldEntityId: entity.toEntity.id,
-        entityId: newBlockId,
-        entityName: entity.toEntity.name ?? '',
-      });
+      const [newRelatedEntityOps, newlySeenEntityIds] = await cloneEntity(
+        {
+          oldEntityId: relation.toEntity.id,
+          entityId: newRelatedEntityId,
+          entityName: relation.toEntity.name ?? '',
+        },
+        allSeenEntityIds
+      );
+      newlySeenEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
 
-      return [relationshipOp, ...newBlockOps];
+      return [relationshipOp, ...newRelatedEntityOps];
     })
   );
 
-  return allOps.flat();
+  return [allOps.flat(), allSeenEntityIds] as const;
 };
 
 const SKIPPED_ATTRIBUTES = [
