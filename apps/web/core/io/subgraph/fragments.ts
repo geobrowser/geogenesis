@@ -22,6 +22,7 @@ export const imageValueTypeTripleFragment = `
  *  }
  * `
  */
+
 export const versionTypesFragment = `
   versionTypes {
     nodes {
@@ -190,6 +191,86 @@ export const spaceMetadataFragment = `
   }
 `;
 
+export const getSpaceMetadataFragment = (spaceId?: string) => {
+  if (spaceId) {
+    return `
+      spacesMetadatum {
+        version {
+          id
+          entityId
+          name
+          description
+          versionSpaces {
+            nodes {
+              spaceId
+            }
+          }
+          ${versionTypesFragment}
+          relationsByFromVersionId(filter: {spaceId: {equalTo: "${spaceId}"}}) {
+            nodes {
+              ${relationFragment}
+            }
+          }
+          triples(filter: {spaceId: {equalTo: "${spaceId}"}}) {
+            nodes {
+              ${tripleFragment}
+            }
+          }
+        }
+      }
+    `;
+  }
+
+  return `
+    spacesMetadatum {
+      version {
+        id
+        entityId
+        name
+        description
+        versionSpaces {
+          nodes {
+            spaceId
+          }
+        }
+        ${versionTypesFragment}
+        relationsByFromVersionId {
+          nodes {
+            ${relationFragment}
+          }
+        }
+        triples {
+          nodes {
+            ${tripleFragment}
+          }
+        }
+      }
+    }
+  `;
+};
+
+export const badSpaceFragment = `
+  id
+  type
+  isRootSpace
+  ${spacePluginsFragment}
+
+  spaceEditors {
+    nodes {
+      accountId
+    }
+  }
+
+  spaceMembers {
+    nodes {
+      accountId
+    }
+  }
+
+  createdAtBlock
+  ${spaceMetadataFragment}
+`;
+
 export const spaceFragment = `
   id
   type
@@ -211,6 +292,54 @@ export const spaceFragment = `
   createdAtBlock
   ${spaceMetadataFragment}
 `;
+
+export const getSpaceFragment = (spaceId: string) => {
+  if (spaceId) {
+    return `
+      id
+      type
+      isRootSpace
+      ${spacePluginsFragment}
+
+      spaceEditors {
+        nodes {
+          accountId
+        }
+      }
+
+      spaceMembers {
+        nodes {
+          accountId
+        }
+      }
+
+      createdAtBlock
+      ${getSpaceMetadataFragment(spaceId)}
+    `;
+  }
+
+  return `
+    id
+    type
+    isRootSpace
+    ${spacePluginsFragment}
+
+    spaceEditors {
+      nodes {
+        accountId
+      }
+    }
+
+    spaceMembers {
+      nodes {
+        accountId
+      }
+    }
+
+    createdAtBlock
+    ${spaceMetadataFragment}
+  `;
+};
 
 export const resultEntityFragment = `
   id

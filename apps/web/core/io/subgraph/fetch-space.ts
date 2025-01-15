@@ -7,12 +7,12 @@ import { Environment } from '~/core/environment';
 
 import { Space, SpaceDto } from '../dto/spaces';
 import { SubstreamSpace } from '../schema';
-import { spaceFragment } from './fragments';
+import { getSpaceFragment } from './fragments';
 import { graphql } from './graphql';
 
 const getFetchSpaceQuery = (id: string) => `query {
   space(id: "${id}") {
-    ${spaceFragment}
+    ${getSpaceFragment(id)}
   }
 }`;
 

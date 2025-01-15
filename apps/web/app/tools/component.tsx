@@ -230,7 +230,7 @@ const CloneEntity = () => {
   const [ops, setOps] = useAtom(cloneOpsAtom);
 
   const handleCloneEntity = async () => {
-    const newOps = await cloneEntity({
+    const [newOps] = await cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_TEMPLATE,
       entityName: spaceName,
     });

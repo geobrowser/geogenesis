@@ -1,3 +1,5 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+
 import { RelationDto } from '~/core/io/dto/relations';
 import { TripleDto } from '~/core/io/dto/triples';
 import { Relation, Triple } from '~/core/types';
@@ -21,15 +23,18 @@ export function EntityDto(substreamEntity: SubstreamEntity): Entity {
   const networkTriples = entity.triples.nodes;
   const triples = networkTriples.map(TripleDto);
   const nameTriples = Entities.nameTriples(triples);
-  const entityTypes = entity.versionTypes.nodes.map(t => {
-    return {
-      id: t.type.entityId,
-      name: t.type.name,
-    };
-  });
 
   const networkRelations = entity.relationsByFromVersionId.nodes;
   const relationsOut = networkRelations.map(RelationDto);
+
+  const entityTypes = relationsOut
+    .filter(relation => relation.typeOf.id === SYSTEM_IDS.TYPES_ATTRIBUTE)
+    .map(relation => {
+      return {
+        id: relation.toEntity.id,
+        name: relation.toEntity.name,
+      };
+    });
 
   return {
     id: substreamEntity.id,

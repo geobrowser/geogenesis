@@ -6,7 +6,7 @@ import { GeoDate } from '~/core/utils/utils';
 
 import { Subspace, SubspaceDto } from '../dto/subspaces';
 import { SubstreamSubspace } from '../schema';
-import { spaceMetadataFragment } from './fragments';
+import { getSpaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 const inflightSubspacesForSpaceIdQuery = (spaceId: string, endTime: number) =>
@@ -31,7 +31,7 @@ const inflightSubspacesForSpaceIdQuery = (spaceId: string, endTime: number) =>
                 spaceMembers {
                   totalCount
                 }
-                ${spaceMetadataFragment}
+                ${getSpaceMetadataFragment(spaceId)}
               }
             }
           }
@@ -71,7 +71,7 @@ export async function fetchInFlightSubspaceProposalsForSpaceId(spaceId: string) 
         throw error;
       case 'GraphqlRuntimeError':
         console.error(
-          `Encountered runtime graphql error in subspaces-by-name. 
+          `Encountered runtime graphql error in subspaces-by-name.
 
           queryString: ${inflightSubspacesForSpaceIdQuery(spaceId, Date.now())}
           `,

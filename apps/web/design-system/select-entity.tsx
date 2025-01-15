@@ -40,6 +40,8 @@ type SelectEntityProps = {
   variant?: 'floating' | 'fixed';
   width?: 'clamped' | 'full';
   withSearchIcon?: boolean;
+  /** When `withSelectSpace` is true, the <SelectEntity> component allows you to optionally pick a `spaceId` and whether or not that space has been verified. When false, the  <SelectEntity> component only selects the `entityId`. */
+  withSelectSpace?: boolean;
 };
 
 const inputStyles = cva('', {
@@ -92,6 +94,7 @@ export const SelectEntity = ({
   containerClassName = '',
   inputClassName = '',
   withSearchIcon = false,
+  withSelectSpace = true,
 }: SelectEntityProps) => {
   const [isVerified, setIsVerified] = useState<boolean>(false);
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
@@ -118,20 +121,26 @@ export const SelectEntity = ({
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
 
-    // Create new entity with name and types
-    upsert(
-      {
-        entityId: newEntityId,
-        attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
-        entityName: query,
-        attributeName: 'Name',
-        value: {
-          type: 'TEXT',
-          value: query,
+    // @NOTE The only place we're currently not using `withSelectSpace` for now is for the space
+    // creation flow, which doesn't create new entities. So we don't want to upsert a name triple of
+    // an unused entity if "Create new" is selected in that flow. This check should probably be
+    // moved to a separate prop.
+    if (withSelectSpace) {
+      // Create new entity with name and types
+      upsert(
+        {
+          entityId: newEntityId,
+          attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+          entityName: query,
+          attributeName: 'Name',
+          value: {
+            type: 'TEXT',
+            value: query,
+          },
         },
-      },
-      spaceId
-    );
+        spaceId
+      );
+    }
 
     // This component is used in many different use-cases across the system, so we
     // need to be able to pass in a callback. onCreateEntity is used to enable to
@@ -141,10 +150,14 @@ export const SelectEntity = ({
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
       onCreateEntity({ id: newEntityId, name: query });
+      if (!withSelectSpace) {
+        onQueryChange('');
+      }
     }
-
     onDone({ id: newEntityId, name: query });
-    setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
+    if (withSelectSpace) {
+      setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
+    }
   };
 
   return (
@@ -178,7 +191,7 @@ export const SelectEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
-              className="w-[var(--radix-popper-anchor-width)]"
+              className="z-[9999] w-[var(--radix-popper-anchor-width)]"
               forceMount
             >
               <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
@@ -191,7 +204,7 @@ export const SelectEntity = ({
                 >
                   {!result ? (
                     <ResizableContainer>
-                      <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">
+                      <div className="flex max-h-[180px] flex-col overflow-y-auto overflow-x-clip bg-white">
                         {!results?.length && isLoading && (
                           <div className="w-full border-b border-divider bg-white px-3 py-2">
                             <div className="truncate text-button text-text">Loading...</div>
@@ -208,16 +221,24 @@ export const SelectEntity = ({
                                 <div className="p-1">
                                   <button
                                     onClick={() => {
-                                      setResult(null);
-                                      onDone({
-                                        id: result.id,
-                                        name: result.name,
-                                      });
-                                      onQueryChange('');
+                                      if (withSelectSpace) {
+                                        setResult(null);
+                                        onDone({
+                                          id: result.id,
+                                          name: result.name,
+                                        });
+                                        onQueryChange('');
+                                      } else {
+                                        onDone({
+                                          id: result.id,
+                                          name: result.name,
+                                        });
+                                        onQueryChange('');
+                                      }
                                     }}
                                     className="relative z-10 flex w-full flex-col rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
                                   >
-                                    <div className="truncate text-button text-text">{result.name}</div>
+                                    <div className="max-w-full truncate text-button text-text">{result.name}</div>
                                     {result.types.length > 0 && (
                                       <>
                                         <Spacer height={4} />
@@ -226,7 +247,7 @@ export const SelectEntity = ({
                                             <Tag key={type.id}>{type.name}</Tag>
                                           ))}
                                         </div>
-                                        <Spacer height={4} />
+                                        {withSelectSpace && <Spacer height={4} />}
                                       </>
                                     )}
 
@@ -236,39 +257,64 @@ export const SelectEntity = ({
                                       </div>
                                     )}
 
-                                    <div className="mt-1 text-footnoteMedium text-grey-04">Any space</div>
-                                  </button>
-                                </div>
-                                <div className="-mt-2 p-1">
-                                  <button
-                                    onClick={() => setResult(result)}
-                                    className="relative z-0 flex w-full items-center justify-between rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01"
-                                  >
-                                    <div className="flex items-center gap-1">
-                                      <div className="inline-flex gap-0">
-                                        {(result.spaces ?? []).slice(0, 3).map(space => (
-                                          <div
-                                            key={space.spaceId}
-                                            className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                                          >
-                                            <img
-                                              src={getImagePath(space.image)}
-                                              alt=""
-                                              className="h-full w-full object-cover"
-                                            />
+                                    <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
+                                      {!withSelectSpace ? (
+                                        <>
+                                          <div className="inline-flex gap-0">
+                                            {(result.spaces ?? []).slice(0, 3).map(space => (
+                                              <div
+                                                key={space.spaceId}
+                                                className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                                              >
+                                                <img
+                                                  src={getImagePath(space.image)}
+                                                  alt=""
+                                                  className="h-full w-full object-cover"
+                                                />
+                                              </div>
+                                            ))}
                                           </div>
-                                        ))}
-                                      </div>
-                                      <div className="text-[0.75rem] font-medium text-grey-04">
-                                        {(result.spaces ?? []).length}{' '}
-                                        {pluralize('space', (result.spaces ?? []).length)}
-                                      </div>
-                                    </div>
-                                    <div className="size-[12px] *:size-[12px]">
-                                      <RightArrowLong color="grey-04" />
+                                          {(result.spaces ?? []).length}{' '}
+                                          {pluralize('space', (result.spaces ?? []).length)}
+                                        </>
+                                      ) : (
+                                        <span>Any space</span>
+                                      )}
                                     </div>
                                   </button>
                                 </div>
+                                {withSelectSpace && (
+                                  <div className="-mt-2 p-1">
+                                    <button
+                                      onClick={() => setResult(result)}
+                                      className="relative z-0 flex w-full items-center justify-between rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01"
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        <div className="inline-flex gap-0">
+                                          {(result.spaces ?? []).slice(0, 3).map(space => (
+                                            <div
+                                              key={space.spaceId}
+                                              className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                                            >
+                                              <img
+                                                src={getImagePath(space.image)}
+                                                alt=""
+                                                className="h-full w-full object-cover"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <div className="text-[0.75rem] font-medium text-grey-04">
+                                          {(result.spaces ?? []).length}{' '}
+                                          {pluralize('space', (result.spaces ?? []).length)}
+                                        </div>
+                                      </div>
+                                      <div className="size-[12px] *:size-[12px]">
+                                        <RightArrowLong color="grey-04" />
+                                      </div>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -318,7 +364,7 @@ export const SelectEntity = ({
                           <Toggle checked={isVerified} />
                         </button>
                       </div>
-                      <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">
+                      <div className="flex max-h-[180px] flex-col overflow-y-auto overflow-x-clip bg-white">
                         {(result.spaces ?? []).map((space, index) => (
                           <button
                             key={index}

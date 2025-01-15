@@ -152,7 +152,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     },
     {
       label: 'Ontology',
-      href: `${NavUtils.toSpace(params.id)}/about`,
+      href: `${NavUtils.toSpace(params.id)}/ontology`,
       priority: 1 as const,
       hidden: !hasOntologyPage,
     },
@@ -161,11 +161,6 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       href: `${NavUtils.toSpace(params.id)}/about`,
       priority: 1 as const,
       hidden: !hasAboutPage,
-    },
-    {
-      label: 'Activity',
-      href: `${NavUtils.toSpace(params.id)}/activity`,
-      priority: 3 as const,
     },
   ];
 
@@ -204,11 +199,6 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       href: `${NavUtils.toSpace(params.id)}/about`,
       priority: 1 as const,
       hidden: !hasAboutPage,
-    },
-    {
-      label: 'Activity',
-      href: `${NavUtils.toSpace(params.id)}/activity`,
-      priority: 3 as const,
     },
   ];
 
@@ -266,11 +256,6 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       priority: 1 as const,
       hidden: !hasAboutPage,
     },
-    {
-      label: 'Activity',
-      href: `${NavUtils.toSpace(params.id)}/activity`,
-      priority: 3 as const,
-    },
   ];
 
   const DAO_TABS = [
@@ -326,11 +311,6 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       href: `${NavUtils.toSpace(params.id)}/about`,
       priority: 1 as const,
       hidden: !hasAboutPage,
-    },
-    {
-      label: 'Activity',
-      href: `${NavUtils.toSpace(params.id)}/activity`,
-      priority: 3 as const,
     },
   ];
 
@@ -405,11 +385,6 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       href: `${NavUtils.toSpace(params.id)}/about`,
       priority: 1 as const,
       hidden: !hasAboutPage,
-    },
-    {
-      label: 'Activity',
-      href: `${NavUtils.toSpace(params.id)}/activity`,
-      priority: 3 as const,
     },
   ];
 
