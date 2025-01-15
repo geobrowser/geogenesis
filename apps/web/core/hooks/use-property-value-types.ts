@@ -53,7 +53,6 @@ export function usePropertyValueTypes(propertyIds: string[]): UsePropertyValueTy
         };
       });
 
-      console.log('schema', schema);
       return new Map<PropertyId, PropertySchema>(schema.map(s => [PropertyId(s.id), s]));
     },
   });
