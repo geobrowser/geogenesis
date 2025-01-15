@@ -103,7 +103,7 @@ export const getVersionFragment = (spaceId?: SpaceId) => {
           spaceId
         }
       }
-      ${getVersionTypesFragment(spaceId)}
+      ${versionTypesFragment}
       relationsByFromVersionId(filter: {spaceId: {equalTo: "${spaceId}"}}) {
         nodes {
           ${relationFragment}
