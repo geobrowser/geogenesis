@@ -2,15 +2,14 @@
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Image } from '@geogenesis/sdk';
-import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import * as React from 'react';
 
+import { createTypesForEntity } from '~/core/database/create-types-for-entity';
 import { DB } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
 import { usePropertyValueTypes } from '~/core/hooks/use-property-value-types';
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { EntityId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import {
   PropertySchema,
@@ -371,39 +370,6 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
       )}
     </div>
   );
-}
-
-type CreateTypesForEntityArgs = {
-  entityId: string;
-  entityName: string | null;
-  spaceId: string;
-  typeId: string;
-  typeName: string | null;
-};
-
-function createTypesForEntity(args: CreateTypesForEntityArgs) {
-  const { entityId, entityName, spaceId, typeId, typeName } = args;
-  DB.upsertRelation({
-    spaceId,
-    relation: {
-      space: spaceId,
-      index: INITIAL_RELATION_INDEX_VALUE,
-      fromEntity: {
-        id: EntityId(entityId),
-        name: entityName,
-      },
-      typeOf: {
-        id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
-        name: 'Types',
-      },
-      toEntity: {
-        id: EntityId(typeId),
-        name: typeName,
-        renderableType: 'RELATION',
-        value: typeId,
-      },
-    },
-  });
 }
 
 type TriplesGroupProps = {
