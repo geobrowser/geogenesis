@@ -31,7 +31,7 @@ const inflightSubspacesForSpaceIdQuery = (spaceId: string, endTime: number) =>
                 spaceMembers {
                   totalCount
                 }
-                ${getSpaceMetadataFragment(spaceId)}
+                ${getSpaceMetadataFragment()}
               }
             }
           }

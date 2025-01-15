@@ -21,9 +21,10 @@ import {
 } from '../database/table';
 import { StoredRelation } from '../database/types';
 import { useWriteOps } from '../database/write';
+import { usePropertyValueTypes } from '../hooks/use-property-value-types';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { Relation, Schema } from '../types';
+import { PropertySchema, Relation } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
 import { getSource, removeSourceType, upsertSourceType } from './editor/sources';
@@ -46,7 +47,7 @@ const queryKeys = {
   columns: (filterState: Awaited<ReturnType<typeof createFiltersFromFilterString>> | null) =>
     ['blocks', 'data', 'columns', filterState] as const,
   rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
-  relationTypes: (columns?: Schema[]) => ['blocks', 'data', 'relation-types', columns],
+  columnsSchema: (columns?: PropertySchema[]) => ['blocks', 'data', 'columns-schema', columns],
 };
 
 export function useTableBlock() {
@@ -215,6 +216,8 @@ export function useTableBlock() {
     return EntityTable.fromColumnsAndRows(tableEntities, columns, collectionItemEntities);
   }, [tableEntities, columns, collectionItemEntities]);
 
+  const { propertyValueTypes: columnsSchema } = usePropertyValueTypes(columns ? columns.map(c => c.id) : []);
+
   const setPage = React.useCallback(
     (page: number | 'next' | 'previous') => {
       switch (page) {
@@ -364,6 +367,7 @@ export function useTableBlock() {
     setName,
     view,
     viewRelation,
+    columnsSchema,
     shownColumnRelations,
     shownColumnIds,
     placeholder,

@@ -9,7 +9,7 @@ import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
-import { Schema, Value } from '../types';
+import { PropertySchema, Value } from '../types';
 import { getEntities_experimental, mergeEntity, mergeEntityAsync } from './entities';
 import { getRelations } from './relations';
 
@@ -72,7 +72,7 @@ export async function mergeTableEntities({ options, filterState }: MergeTableEnt
   return await mergeTableRowEntitiesAsync(options, filterState);
 }
 
-export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
+export async function mergeColumns(typeIds: string[]): Promise<PropertySchema[]> {
   const cachedColumns = await queryClient.fetchQuery({
     queryKey: queryKeys.columns(typeIds),
     queryFn: () => fetchColumns({ typeIds: typeIds }),
@@ -80,7 +80,7 @@ export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
 
   const localAttributesForSelectedType = getRelations({
     selector: r => r.typeOf.id === SYSTEM_IDS.PROPERTIES && typeIds.includes(r.fromEntity.id),
-  }).map((r): Schema => {
+  }).map((r): PropertySchema => {
     return {
       id: r.toEntity.id,
       name: r.toEntity.name,
@@ -100,7 +100,6 @@ type CollectionItemArgs = {
 
 export async function mergeCollectionItemEntitiesAsync(args: CollectionItemArgs) {
   const { entityIds, filterString, filterState } = args;
-  console.log('filter string', filterString);
 
   const cachedRemoteEntities = await queryClient.fetchQuery({
     queryKey: queryKeys.remoteCollectionItems(entityIds, filterState, filterString),
@@ -125,7 +124,6 @@ export async function mergeCollectionItemEntitiesAsync(args: CollectionItemArgs)
 
   const filteredLocal = filterLocalEntities(localOnlyEntities, filterState);
 
-  console.log('collection data', { filteredLocal, merged, localOnlyEntityIds });
   return [...filteredLocal, ...merged];
 }
 

@@ -15,13 +15,13 @@ import { fetchEntity } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
 import { store } from '../state/jotai-store';
-import { Relation, Schema, SpaceId, Triple, ValueTypeId } from '../types';
+import { PropertySchema, Relation, SpaceId, Triple, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
 import { getTriples, useTriples } from './triples';
 import { localOpsAtom, localRelationsAtom } from './write';
 
-export type EntityWithSchema = Entity & { schema: Schema[] };
+export type EntityWithSchema = Entity & { schema: PropertySchema[] };
 
 type UseEntityOptions = {
   spaceId?: SpaceId;
@@ -200,7 +200,7 @@ export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> 
  *
  * We expect that attributes are only defined via relations, not triples.
  */
-export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]> {
+export async function getSchemaFromTypeIds(typesIds: string[]): Promise<PropertySchema[]> {
   const schemaEntities = await Promise.all(
     typesIds.map(typeId => {
       // These are all cached in a network cache if they've been fetched before.
@@ -208,7 +208,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
     })
   );
 
-  const schemaWithoutValueType = schemaEntities.flatMap((e): Schema[] => {
+  const schemaWithoutValueType = schemaEntities.flatMap((e): PropertySchema[] => {
     const attributeRelations = e.relationsOut.filter(t => t.typeOf.id === SYSTEM_IDS.PROPERTIES);
 
     if (attributeRelations.length === 0) {
@@ -231,10 +231,25 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
       valueTypeId,
     };
   });
-  const schema = schemaWithoutValueType.map((s): Schema => {
+
+  const relationValueTypes = attributes.map(a => {
+    const relationValueType = a.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE)
+      ?.toEntity;
+
+    return {
+      attributeId: a.id,
+      relationValueTypeId: relationValueType?.id,
+      relationValueTypeName: relationValueType?.name,
+    };
+  });
+
+  const schema = schemaWithoutValueType.map((s): PropertySchema => {
+    const relationValueType = relationValueTypes.find(t => t.attributeId === s.id) ?? null;
     return {
       ...s,
       valueType: (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SYSTEM_IDS.TEXT) as ValueTypeId,
+      relationValueTypeId: relationValueType?.relationValueTypeId,
+      relationValueTypeName: relationValueType?.relationValueTypeName,
     };
   });
 

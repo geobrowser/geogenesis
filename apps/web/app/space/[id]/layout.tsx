@@ -63,7 +63,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   const hasCulturePage = getHasPage(tabEntities, SYSTEM_IDS.CULTURE_PAGE);
   const hasEducationPage = getHasPage(tabEntities, SYSTEM_IDS.EDUCATION_PAGE);
   const hasEventsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
-  const hasFinancesPage = getHasPage(tabEntities, SYSTEM_IDS.FINANCES_PAGE);
+  // const hasFinancesPage = getHasPage(tabEntities, SYSTEM_IDS.FINANCES_PAGE);
   const hasGovernmentPage = getHasPage(tabEntities, SYSTEM_IDS.GOVERNMENT_PAGE);
   const hasJobsPage = getHasPage(tabEntities, SYSTEM_IDS.JOBS_PAGE);
   const hasNewsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
@@ -385,38 +385,6 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       href: `${NavUtils.toSpace(params.id)}/about`,
       priority: 1 as const,
       hidden: !hasAboutPage,
-    },
-  ];
-
-  const NONPROFIT_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-    {
-      label: 'Posts',
-      href: `${NavUtils.toSpace(params.id)}/posts`,
-      priority: 1 as const,
-      hidden: !hasPostsPage,
-    },
-    {
-      label: 'Projects',
-      href: `${NavUtils.toSpace(params.id)}/projects`,
-      priority: 1 as const,
-      hidden: !hasProjectsPage,
-    },
-    {
-      label: 'Team',
-      href: `${NavUtils.toSpace(params.id)}/team`,
-      priority: 1 as const,
-      badge: <>{teamCount.toString()}</>,
-    },
-    {
-      label: 'Finances',
-      href: `${NavUtils.toSpace(params.id)}/finances`,
-      priority: 1 as const,
-      hidden: !hasFinancesPage,
     },
   ];
 

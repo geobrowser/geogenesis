@@ -23,6 +23,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
 import { DB } from '~/core/database/write';
+import { PropertyId } from '~/core/hooks/use-property-value-types';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
@@ -31,7 +32,7 @@ import { upsertCollectionItemRelation, upsertVerifiedSourceOnCollectionItem } fr
 import { upsertSourceSpaceOnCollectionItem } from '~/core/state/editor/data-entity';
 import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
-import { Cell, Row, Schema } from '~/core/types';
+import { Cell, PropertySchema, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -53,7 +54,12 @@ import { editingColumnsAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedColumns: Schema[], spaceId: SpaceId) => {
+const formatColumns = (
+  columns: PropertySchema[] = [],
+  isEditMode: boolean,
+  unpublishedColumns: PropertySchema[],
+  spaceId: SpaceId
+) => {
   const columnSize = 784 / columns.length;
 
   return columns.map((column, i) =>
@@ -91,7 +97,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns } = useTableBlock();
+    const { columns, columnsSchema } = useTableBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditable = table.options.meta?.isEditable;
@@ -114,6 +120,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // cause the cells to also re-render even when they don't need to?
     const valueType = columnValueType(cellData.columnId, columns);
     const attributeName = columnName(cellData.columnId, columns);
+    const maybeColumnSchema = columnsSchema.get(PropertyId(cellData.columnId));
+    const filterableRelationType = maybeColumnSchema?.relationValueTypeId;
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const cellTriples = useTriples(
@@ -176,7 +184,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           attributeId={cellData.columnId}
           entityId={cellData.entityId}
           spaceId={spaceId}
-          columnRelationTypes={[]}
+          filterSearchByTypes={filterableRelationType ? [filterableRelationType] : undefined}
         />
       );
     }
@@ -195,7 +203,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  columns: Schema[];
+  columns: PropertySchema[];
   rows: Row[];
   shownColumnIds: string[];
   view: DataBlockView;

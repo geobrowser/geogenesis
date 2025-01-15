@@ -1,7 +1,6 @@
 'use client';
 
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
-import { useMutation } from '@tanstack/react-query';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -16,7 +15,6 @@ import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { Services } from '~/core/services';
 import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
-import { Values } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';

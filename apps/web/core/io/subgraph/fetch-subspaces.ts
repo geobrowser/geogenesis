@@ -27,7 +27,7 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
           totalCount
         }
 
-        ${getSpaceMetadataFragment(spaceId)}
+        ${getSpaceMetadataFragment()}
       }
     }
   }
@@ -43,6 +43,7 @@ interface NetworkResult {
         spaceEditors: { totalCount: number };
         spaceMembers: { totalCount: number };
         spacesMetadatum: {
+          spaceId: string;
           version: SubstreamVersion;
         };
       };

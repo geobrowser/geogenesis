@@ -19,7 +19,7 @@ import { getTriples } from '~/core/database/triples';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store/entity-table-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
-import { Cell, Row, Schema } from '~/core/types';
+import { Cell, PropertySchema, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils } from '~/core/utils/utils';
@@ -37,7 +37,7 @@ import { EntityTableCell } from './entity-table-cell';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedColumns: Schema[]) => {
+const formatColumns = (columns: PropertySchema[] = [], isEditMode: boolean, unpublishedColumns: PropertySchema[]) => {
   const columnSize = 1200 / columns.length;
 
   return columns.map((column, i) =>
@@ -129,7 +129,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           attributeId={cellData.columnId}
           entityId={cellData.entityId}
           spaceId={spaceId}
-          columnRelationTypes={[]}
         />
       );
     } else if (cellData) {
@@ -151,7 +150,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  columns: Schema[];
+  columns: PropertySchema[];
   rows: Row[];
 }
 

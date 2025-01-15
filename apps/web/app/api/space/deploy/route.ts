@@ -14,8 +14,6 @@ export const maxDuration = 300;
 export async function GET(request: Request) {
   const requestId = uuid();
   const url = new URL(request.url);
-  const baseUrl = url.host;
-  const protocol = url.protocol;
 
   const initialEditorAddress = url.searchParams.get('initialEditorAddress');
   const spaceName = url.searchParams.get('spaceName');

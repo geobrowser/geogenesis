@@ -53,6 +53,7 @@ export type EditEvent =
         toEntityId: string;
         toEntityName: string | null;
         fromEntityId: string;
+        fromEntityName: string | null;
         typeOfId: string;
         typeOfName: string | null;
 
