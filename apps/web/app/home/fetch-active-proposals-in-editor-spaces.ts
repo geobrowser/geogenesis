@@ -56,6 +56,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
   const substreamQuery = `query {
     proposals(
       first: 10
+      orderBy: END_TIME_DESC
       filter: {
         ${proposalTypeFilter ?? ''}
         status: { equalTo: PROPOSED }
