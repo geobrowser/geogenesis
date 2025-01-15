@@ -41,8 +41,8 @@ type SelectEntityProps = {
   variant?: 'floating' | 'fixed';
   width?: 'clamped' | 'full';
   withSearchIcon?: boolean;
-  /** When `selectSpace` is true, the <SelectEntity> component allows you to optionally pick a `spaceId` and whether or not that space has been verified. When false, the  <SelectEntity> component only selects the `entityId`. */
-  selectSpace?: boolean;
+  /** When `withSelectSpace` is true, the <SelectEntity> component allows you to optionally pick a `spaceId` and whether or not that space has been verified. When false, the  <SelectEntity> component only selects the `entityId`. */
+  withSelectSpace?: boolean;
 };
 
 const inputStyles = cva('', {
@@ -95,7 +95,7 @@ export const SelectEntity = ({
   containerClassName = '',
   inputClassName = '',
   withSearchIcon = false,
-  selectSpace = true,
+  withSelectSpace = true,
 }: SelectEntityProps) => {
   const [isVerified, setIsVerified] = useState<boolean>(false);
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
@@ -122,11 +122,11 @@ export const SelectEntity = ({
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
 
-    // @NOTE The only place we're currently not using `selectSpace` for now is for the space
+    // @NOTE The only place we're currently not using `withSelectSpace` for now is for the space
     // creation flow, which doesn't create new entities. So we don't want to upsert a name triple of
     // an unused entity if "Create new" is selected in that flow. This check should probably be
     // moved to a separate prop.
-    if (selectSpace) {
+    if (withSelectSpace) {
       // Create new entity with name and types
       upsert(
         {
@@ -151,12 +151,12 @@ export const SelectEntity = ({
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
       onCreateEntity({ id: newEntityId, name: query });
-      if (!selectSpace) {
+      if (!withSelectSpace) {
         onQueryChange('');
       }
     }
     onDone({ id: newEntityId, name: query });
-    if (selectSpace) {
+    if (withSelectSpace) {
       setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
     }
   };
@@ -222,7 +222,7 @@ export const SelectEntity = ({
                                 <div className="p-1">
                                   <button
                                     onClick={() => {
-                                      if (selectSpace) {
+                                      if (withSelectSpace) {
                                         setResult(null);
                                         onDone({
                                           id: result.id,
@@ -248,7 +248,7 @@ export const SelectEntity = ({
                                             <Tag key={type.id}>{type.name}</Tag>
                                           ))}
                                         </div>
-                                        {selectSpace && <Spacer height={4} />}
+                                        {withSelectSpace && <Spacer height={4} />}
                                       </>
                                     )}
 
@@ -259,7 +259,7 @@ export const SelectEntity = ({
                                     )}
 
                                     <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
-                                      {!selectSpace ? (
+                                      {!withSelectSpace ? (
                                         <>
                                           <div className="inline-flex gap-0">
                                             {(result.spaces ?? []).slice(0, 3).map(space => (
@@ -284,7 +284,7 @@ export const SelectEntity = ({
                                     </div>
                                   </button>
                                 </div>
-                                {selectSpace && (
+                                {withSelectSpace && (
                                   <div className="-mt-2 p-1">
                                     <button
                                       onClick={() => setResult(result)}
