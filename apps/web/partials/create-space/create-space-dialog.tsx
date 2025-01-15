@@ -517,7 +517,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
               variant="fixed"
               placeholder="Space name..."
               inputClassName="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
-              selectSpace={false}
+              withSelectSpace={false}
             />
           </div>
           {name && (
