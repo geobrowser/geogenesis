@@ -2,6 +2,7 @@
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Image } from '@geogenesis/sdk';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import * as React from 'react';
 
@@ -9,6 +10,7 @@ import { DB } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
 import { usePropertyValueTypes } from '~/core/hooks/use-property-value-types';
 import { useRenderables } from '~/core/hooks/use-renderables';
+import { EntityId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import {
   PropertySchema,
@@ -214,7 +216,7 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
   const propertyValueType = propertyValueTypes.get(typeOfId);
-  const filterByTypes = propertyValueType?.relationValueTypeId;
+  const filterByType = propertyValueType?.relationValueTypeId;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -285,7 +287,18 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
                 spaceId={spaceId}
-                allowedTypes={filterByTypes ? [filterByTypes] : undefined}
+                allowedTypes={filterByType ? [filterByType] : undefined}
+                onCreateEntity={result => {
+                  if (propertyValueType?.relationValueTypeId) {
+                    createTypesForEntity({
+                      entityId: result.id,
+                      entityName: result.name,
+                      spaceId,
+                      typeId: propertyValueType.relationValueTypeId,
+                      typeName: propertyValueType.relationValueTypeName ?? null,
+                    });
+                  }
+                }}
                 onDone={result => {
                   send({
                     type: 'UPSERT_RELATION',
@@ -328,7 +341,18 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
         <div className="mt-1">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
-            allowedTypes={filterByTypes ? [filterByTypes] : undefined}
+            allowedTypes={filterByType ? [filterByType] : undefined}
+            onCreateEntity={result => {
+              if (propertyValueType?.relationValueTypeId) {
+                createTypesForEntity({
+                  entityId: result.id,
+                  entityName: result.name,
+                  spaceId,
+                  typeId: propertyValueType.relationValueTypeId,
+                  typeName: propertyValueType.relationValueTypeName ?? null,
+                });
+              }
+            }}
             onDone={result => {
               send({
                 type: 'UPSERT_RELATION',
@@ -347,6 +371,39 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
       )}
     </div>
   );
+}
+
+type CreateTypesForEntityArgs = {
+  entityId: string;
+  entityName: string | null;
+  spaceId: string;
+  typeId: string;
+  typeName: string | null;
+};
+
+function createTypesForEntity(args: CreateTypesForEntityArgs) {
+  const { entityId, entityName, spaceId, typeId, typeName } = args;
+  DB.upsertRelation({
+    spaceId,
+    relation: {
+      space: spaceId,
+      index: INITIAL_RELATION_INDEX_VALUE,
+      fromEntity: {
+        id: EntityId(entityId),
+        name: entityName,
+      },
+      typeOf: {
+        id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
+        name: 'Types',
+      },
+      toEntity: {
+        id: EntityId(typeId),
+        name: typeName,
+        renderableType: 'RELATION',
+        value: typeId,
+      },
+    },
+  });
 }
 
 type TriplesGroupProps = {

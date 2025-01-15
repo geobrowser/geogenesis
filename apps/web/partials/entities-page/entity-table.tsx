@@ -129,7 +129,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           attributeId={cellData.columnId}
           entityId={cellData.entityId}
           spaceId={spaceId}
-          columnRelationTypes={[]}
         />
       );
     } else if (cellData) {
