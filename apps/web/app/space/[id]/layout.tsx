@@ -63,7 +63,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   const hasCulturePage = getHasPage(tabEntities, SYSTEM_IDS.CULTURE_PAGE);
   const hasEducationPage = getHasPage(tabEntities, SYSTEM_IDS.EDUCATION_PAGE);
   const hasEventsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
-  const hasFinancesPage = getHasPage(tabEntities, SYSTEM_IDS.FINANCES_PAGE);
+  // const hasFinancesPage = getHasPage(tabEntities, SYSTEM_IDS.FINANCES_PAGE);
   const hasGovernmentPage = getHasPage(tabEntities, SYSTEM_IDS.GOVERNMENT_PAGE);
   const hasJobsPage = getHasPage(tabEntities, SYSTEM_IDS.JOBS_PAGE);
   const hasNewsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
