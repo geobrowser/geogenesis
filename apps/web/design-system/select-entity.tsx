@@ -41,6 +41,7 @@ type SelectEntityProps = {
   variant?: 'floating' | 'fixed';
   width?: 'clamped' | 'full';
   withSearchIcon?: boolean;
+  /** When `selectSpace` is true, the <SelectEntity> component allows you to optionally pick a `spaceId` and whether or not that space has been verified. When false, the  <SelectEntity> component only selects the `entityId`. */
   selectSpace?: boolean;
 };
 
@@ -121,6 +122,10 @@ export const SelectEntity = ({
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
 
+    // @NOTE The only place we're currently not using `selectSpace` for now is for the space
+    // creation flow, which doesn't create new entities. So we don't want to upsert a name triple of
+    // an unused entity if "Create new" is selected in that flow. This check should probably be
+    // moved to a separate prop.
     if (selectSpace) {
       // Create new entity with name and types
       upsert(
