@@ -56,6 +56,8 @@ function mapEditorshipProposalsToSchema(
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
       plugin_address: p.pluginAddress,
+      name: p.name,
+      created_at: Number(p.startTime),
       type: p.type,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
@@ -110,6 +112,8 @@ function mapMembershipProposalsToSchema(
     const proposalToWrite: S.proposals.Insertable = {
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
+      created_at: Number(p.startTime),
+      name: p.name,
       plugin_address: p.pluginAddress,
       type: p.type,
       created_by_id: p.creator,
@@ -163,6 +167,8 @@ function mapSubspaceProposalsToSchema(
     const proposalToWrite: S.proposals.Insertable = {
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
+      created_at: Number(p.startTime),
+      name: p.name,
       plugin_address: p.pluginAddress,
       type: p.type,
       created_by_id: p.creator,
@@ -226,6 +232,8 @@ function mapEditProposalToSchema(
     proposalsToWrite.push({
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
+      created_at: Number(p.startTime),
+      name: p.name,
       plugin_address: p.pluginAddress,
       type: 'ADD_EDIT',
       created_by_id: p.creator,

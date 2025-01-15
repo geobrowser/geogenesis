@@ -1,12 +1,16 @@
 import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
+import type * as Schema from 'zapatos/schema';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
-import { CurrentVersions, Proposals, SpaceMetadata } from '~/sink/db';
-import type { BlockEvent, SinkEditProposal } from '~/sink/types';
+import { CurrentVersions, Proposals, SpaceMetadata, Versions } from '~/sink/db';
+import type { BlockEvent, DeleteTripleOp, SetTripleOp, SinkEditProposal } from '~/sink/types';
+import { createVersionId } from '~/sink/utils/id';
+import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
+import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { aggregateRelations } from '~/sink/write-edits/relations/aggregate-relations';
-import { aggregateSpacesFromRelations } from '~/sink/write-edits/write-edits';
+import { aggregateSpacesFromRelations, writeEdits } from '~/sink/write-edits/write-edits';
 
 export class ProposalDoesNotExistError extends Error {
   readonly _tag = 'ProposalDoesNotExistError';
@@ -30,7 +34,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
     yield* _(Effect.logInfo('Handling approved edits'));
 
     const {
-      schemaEditProposals: { versions, relationOpsByEditId, edits },
+      schemaEditProposals: { versions, relationOpsByEditId, tripleOpsByVersionId, edits },
     } = mapIpfsProposalToSchemaProposalByType(ipfsProposals, block);
 
     const nonstaleVersions = yield* _(
@@ -63,43 +67,166 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       Effect.forEach(
         ipfsProposals,
         proposal =>
-          Effect.tryPromise({
-            try: () => Proposals.setAcceptedById(proposal.proposalId),
-            catch: error => {
-              return new ProposalDoesNotExistError(String(error));
-            },
-          }),
+          retryEffect(
+            Effect.tryPromise({
+              try: () => Proposals.setAcceptedById(proposal.proposalId),
+              catch: error => {
+                console.error('Could not set proposal to accepted for proposal id', proposal.proposalId);
+                return new ProposalDoesNotExistError(String(error));
+              },
+            })
+          ),
         {
           concurrency: 50,
         }
       )
     );
+    /**
+     * If multiple proposals are created at different times, there's no guarantee that
+     * they will be executed in the same order they were created except in cases of
+     * early execution being triggered by the contract.
+     *
+     * This can result in states where a proposal that was created before another is
+     * executed last. This would result in the first proposal's versions being the
+     * current versions even though they aren't the most recently created, accepted
+     * version.
+     */
 
-    // Our `writeEdit` processing relies on reading the most previous valid version in order
-    // to merge relations correctly. We shouldn't update the most current valid version of
-    // an entity until after the writeEdits processing is finished.
+    // Currently we don't solve for above ordering issue.
+
+    /**
+     * Before writing new current versions we should check to see if the active current
+     * version should be applied to the new version. This can happen if the new version
+     * was created before the current version was created, but not executed until after
+     * the current version was executed. When this happens neither of the versions
+     * have data from each other.
+     *
+     * If we encounter versions where the current version is not the new version and
+     * the current version block > new version block then we should run writeEdits
+     * again on the new version and set the result as the current version.
+     *
+     * We should only replace the versions where the above condition applies. We
+     * can just set the current version as normal for versions where it doesn't apply.
+     * This behavior is necessary due to the way the versioning model works. Versions
+     * are created with the entire state of the entity _at the time the version is
+     * created_.
+     */
+    const handleStaleCurrentVersions = Effect.forEach(
+      nonstaleVersions,
+      version =>
+        Effect.promise(async () => {
+          const maybeCurrentVersion = await CurrentVersions.selectOne({ entity_id: version.entity_id });
+
+          if (!maybeCurrentVersion) {
+            return null;
+          }
+
+          // Can do a JOIN on current version instead of querying again
+          const currentVersion = await Versions.selectOne({ id: maybeCurrentVersion.version_id });
+
+          if (!currentVersion) {
+            return null;
+          }
+
+          // Query the DB representation since the mapped version doesn't have the
+          // real created at block
+          const editVersion = await Versions.selectOne({ id: version.id });
+
+          if (!editVersion) {
+            return null;
+          }
+
+          if (currentVersion.created_at_block > editVersion.created_at_block) {
+            const newVersionId = createVersionId({
+              entityId: version.id.toString(),
+              proposalId: version.edit_id.toString(),
+            });
+            const newVersion = {
+              // We create a new version derived from the old version. This new version
+              // will go through the writeEdits processing to create a new version with
+              // data from the current version and the new version.
+              newVersion: {
+                ...version,
+                created_at_block: editVersion.created_at_block,
+                id: newVersionId,
+              },
+              versionIdFromEdit: version.id.toString(),
+              editId: version.edit_id.toString(),
+            };
+
+            return newVersion;
+          }
+
+          return null;
+        }),
+      {
+        concurrency: 25,
+      }
+    );
+
+    const newIdsForStaleCurrentVersions = (yield* _(handleStaleCurrentVersions)).filter(v => v !== null);
+
+    const tripleOpsForNewVersions = newIdsForStaleCurrentVersions.reduce((acc, nv) => {
+      const ops = tripleOpsByVersionId.get(nv.versionIdFromEdit);
+
+      if (ops) {
+        acc.set(nv.newVersion.id, ops);
+      }
+
+      return acc;
+    }, new Map<string, (SetTripleOp | DeleteTripleOp)[]>());
+
+    const newVersions = newIdsForStaleCurrentVersions.map(v => v.newVersion);
+
+    const opsByNewVersions = yield* _(
+      mergeOpsWithPreviousVersions({
+        edits: edits,
+        tripleOpsByVersionId: tripleOpsForNewVersions,
+        versions: newVersions,
+      })
+    );
+
+    yield* _(
+      writeEdits({
+        versions: newVersions,
+        block,
+        editType: 'DEFAULT',
+        edits,
+        tripleOpsByVersionId: opsByNewVersions,
+        relationOpsByEditId,
+      })
+    );
+
+    const allNonstaleVersions = [...nonstaleVersions, ...newVersions].reduce((acc, v) => {
+      acc.set(v.entity_id.toString(), v);
+      return acc;
+    }, new Map<string, Schema.versions.Insertable>());
+
     yield* _(
       Effect.tryPromise({
         try: () =>
           CurrentVersions.upsert(
-            nonstaleVersions.map(v => {
+            [...allNonstaleVersions.values()].map(v => {
               return {
                 entity_id: v.entity_id,
                 version_id: v.id,
               };
             })
           ),
-        catch: error =>
-          new CouldNotWriteCurrentVersionsError(`Failed to insert current versions. ${(error as Error).message}`),
-      })
+        catch: error => {
+          console.error(`Failed to insert current versions. ${(error as Error).message}`);
+          return new CouldNotWriteCurrentVersionsError(
+            `Failed to insert current versions. ${(error as Error).message}`
+          );
+        },
+      }),
+      retryEffect
     );
 
-    // Do we only care about the relations in this edit? I think we care about all of them
-    // because the version of the space entity may have changed.
     const relations = yield* _(
       aggregateRelations({
         relationOpsByEditId,
-        versions: nonstaleVersions,
+        versions: [...allNonstaleVersions.values()],
         edits,
         editType: 'DEFAULT',
       })

@@ -9,7 +9,7 @@ export class CurrentVersions {
   }
 
   static async selectOne(where: S.current_versions.Whereable) {
-    return db.selectOne('current_versions', where).run(pool);
+    return db.selectOne('current_versions', where, { columns: ['entity_id', 'version_id'] }).run(pool);
   }
 
   static async select(where: S.current_versions.Whereable) {

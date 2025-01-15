@@ -14,7 +14,7 @@ import { graphql } from './graphql';
 const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
   proposals(first: ${first}, filter: {spaceId: {equalTo: ${JSON.stringify(
     spaceId
-  )}}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
+  )}}}, orderBy: END_TIME_DESC, offset: ${skip}) {
     nodes {
       id
       type
