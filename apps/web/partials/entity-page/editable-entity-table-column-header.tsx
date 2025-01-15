@@ -4,21 +4,21 @@ import * as React from 'react';
 import { memo, useState } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { PropertySchema } from '~/core/types';
+import { Schema } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 
 import { getRenderableTypeFromValueType, getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
-  column: PropertySchema;
+  column: Schema;
   // This spaceId is the spaceId of the attribute, not the current space.
   // We need the attribute spaceId to get the actions for the attribute
   // (since actions are grouped by spaceId) to be able to keep the updated
   // name in sync.
   spaceId?: string;
   entityId: string;
-  unpublishedColumns: PropertySchema[];
+  unpublishedColumns: Schema[];
 }
 
 export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({

@@ -9,7 +9,7 @@ import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
-import { PropertySchema, Value } from '../types';
+import { Schema, Value } from '../types';
 import { getEntities_experimental, mergeEntity, mergeEntityAsync } from './entities';
 import { getRelations } from './relations';
 
@@ -72,7 +72,7 @@ export async function mergeTableEntities({ options, filterState }: MergeTableEnt
   return await mergeTableRowEntitiesAsync(options, filterState);
 }
 
-export async function mergeColumns(typeIds: string[]): Promise<PropertySchema[]> {
+export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
   const cachedColumns = await queryClient.fetchQuery({
     queryKey: queryKeys.columns(typeIds),
     queryFn: () => fetchColumns({ typeIds: typeIds }),
@@ -80,7 +80,7 @@ export async function mergeColumns(typeIds: string[]): Promise<PropertySchema[]>
 
   const localAttributesForSelectedType = getRelations({
     selector: r => r.typeOf.id === SYSTEM_IDS.PROPERTIES && typeIds.includes(r.fromEntity.id),
-  }).map((r): PropertySchema => {
+  }).map((r): Schema => {
     return {
       id: r.toEntity.id,
       name: r.toEntity.name,

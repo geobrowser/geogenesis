@@ -2,15 +2,11 @@ import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import type { GraphUri } from '@geogenesis/sdk';
 
 import { Entity } from '~/core/io/dto/entities';
-import { Cell, PropertySchema, Row } from '~/core/types';
+import { Cell, Row, Schema } from '~/core/types';
 
 import { Entities } from '../entity';
 
-export function fromColumnsAndRows(
-  entities: Entity[],
-  columns: PropertySchema[],
-  collectionItemEntities?: Entity[]
-): Row[] {
+export function fromColumnsAndRows(entities: Entity[], columns: Schema[], collectionItemEntities?: Entity[]): Row[] {
   return entities.map(({ name, triples, id, relationsOut, description }) => {
     const newColumns = columns.reduce(
       (acc, column) => {

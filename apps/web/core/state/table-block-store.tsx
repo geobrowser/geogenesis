@@ -23,7 +23,7 @@ import { StoredRelation } from '../database/types';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { PropertySchema, Relation } from '../types';
+import { Relation, Schema } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
 import { getSource, removeSourceType, upsertSourceType } from './editor/sources';
@@ -46,7 +46,7 @@ const queryKeys = {
   columns: (filterState: Awaited<ReturnType<typeof createFiltersFromFilterString>> | null) =>
     ['blocks', 'data', 'columns', filterState] as const,
   rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
-  relationTypes: (columns?: PropertySchema[]) => ['blocks', 'data', 'relation-types', columns],
+  relationTypes: (columns?: Schema[]) => ['blocks', 'data', 'relation-types', columns],
 };
 
 export function useTableBlock() {

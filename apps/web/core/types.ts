@@ -155,12 +155,10 @@ export type GeoType = {
 
 // A column in the table _is_ an Entity. It's a reference to a specific Attribute entity.
 // In this use case we don't really care about description, types, etc.
-export interface PropertySchema {
+export interface Schema {
   id: EntityId;
   name: string | null;
   valueType: ValueTypeId;
-  relationValueTypeId?: EntityId;
-  relationValueTypeName?: string | null;
 }
 
 export type Relation = {

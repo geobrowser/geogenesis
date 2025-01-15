@@ -1,8 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { PropertySchema, RenderableProperty, ValueTypeId } from '~/core/types';
+import { RenderableProperty, Schema, ValueTypeId } from '~/core/types';
 
-export function columnName(columnId: string, columns: PropertySchema[]): string {
+export function columnName(columnId: string, columns: Schema[]): string {
   const column = columns.find(c => c.id === columnId);
 
   if (!column) {
@@ -12,7 +12,7 @@ export function columnName(columnId: string, columns: PropertySchema[]): string 
   return column.name ?? '';
 }
 
-export function columnValueType(columnId: string, columns: PropertySchema[]): ValueTypeId {
+export function columnValueType(columnId: string, columns: Schema[]): ValueTypeId {
   const column = columns.find(c => c.id === columnId);
 
   if (!column) {
