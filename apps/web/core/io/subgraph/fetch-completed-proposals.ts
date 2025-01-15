@@ -8,7 +8,7 @@ import { Environment } from '~/core/environment';
 import { ProposalWithoutVoters, ProposalWithoutVotersDto } from '../dto/proposals';
 import { SubstreamProposal } from '../schema';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { spaceMetadataFragment } from './fragments';
+import { getSpaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
@@ -22,7 +22,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
 
       space {
         id
-        ${spaceMetadataFragment}
+        ${getSpaceMetadataFragment(spaceId)}
       }
 
       edit {

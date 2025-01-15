@@ -11,6 +11,7 @@ type DeployArgs = {
   spaceAvatarUri: string | null;
   spaceCoverUri: string | null;
   initialEditorAddress: string;
+  entityId?: string;
 };
 
 export const generateOpsForSpaceType = async ({
@@ -19,9 +20,10 @@ export const generateOpsForSpaceType = async ({
   spaceAvatarUri,
   spaceCoverUri,
   initialEditorAddress,
+  entityId,
 }: DeployArgs) => {
   const ops: Op[] = [];
-  const newEntityId = ID.createEntityId();
+  const newEntityId = entityId ?? ID.createEntityId();
 
   // Add name for all space types
   ops.push(

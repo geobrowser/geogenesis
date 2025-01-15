@@ -24,6 +24,7 @@ type DeployArgs = {
   spaceName: string;
   spaceImage?: string;
   governanceType?: SpaceGovernanceType;
+  entityId?: string;
 };
 
 export function useDeploySpace() {
@@ -42,10 +43,10 @@ export function useDeploySpace() {
           return null;
         }
 
-        const { spaceName, type, governanceType } = args;
+        const { spaceName, type, governanceType, entityId } = args;
 
         const url = new URL(
-          `/api/space/deploy?spaceName=${spaceName}&type=${type}&initialEditorAddress=${initialEditorAddress}`,
+          `/api/space/deploy?spaceName=${spaceName}&type=${type}&initialEditorAddress=${initialEditorAddress}&entityId=${entityId}`,
           window.location.href
         );
 
