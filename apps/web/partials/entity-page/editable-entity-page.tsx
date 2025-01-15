@@ -5,7 +5,6 @@ import { Image } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
-import { createTypesForEntity } from '~/core/database/create-types-for-entity';
 import { DB } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
 import { usePropertyValueTypes } from '~/core/hooks/use-property-value-types';
@@ -237,6 +236,7 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
                     type: 'UPSERT_RELATION',
                     payload: {
                       fromEntityId: createRelationOp.relation.fromEntity,
+                      fromEntityName: name,
                       toEntityId: createRelationOp.relation.toEntity,
                       toEntityName: null,
                       typeOfId: createRelationOp.relation.type,
@@ -262,6 +262,7 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
                     type: 'UPSERT_RELATION',
                     payload: {
                       fromEntityId: id,
+                      fromEntityName: name,
                       toEntityId: imageId,
                       toEntityName: null,
                       typeOfId: r.attributeId,
@@ -289,12 +290,16 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
                 allowedTypes={filterByType ? [filterByType] : undefined}
                 onCreateEntity={result => {
                   if (propertyValueType?.relationValueTypeId) {
-                    createTypesForEntity({
-                      entityId: result.id,
-                      entityName: result.name,
-                      spaceId,
-                      typeId: propertyValueType.relationValueTypeId,
-                      typeName: propertyValueType.relationValueTypeName ?? null,
+                    send({
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: result.id,
+                        fromEntityName: result.name,
+                        toEntityId: propertyValueType.relationValueTypeId,
+                        toEntityName: propertyValueType.relationValueTypeName ?? null,
+                        typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+                        typeOfName: 'Types',
+                      },
                     });
                   }
                 }}
@@ -303,6 +308,7 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
                     type: 'UPSERT_RELATION',
                     payload: {
                       fromEntityId: id,
+                      fromEntityName: name,
                       toEntityId: result.id,
                       toEntityName: result.name,
                       typeOfId: r.attributeId,
@@ -343,12 +349,16 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
             allowedTypes={filterByType ? [filterByType] : undefined}
             onCreateEntity={result => {
               if (propertyValueType?.relationValueTypeId) {
-                createTypesForEntity({
-                  entityId: result.id,
-                  entityName: result.name,
-                  spaceId,
-                  typeId: propertyValueType.relationValueTypeId,
-                  typeName: propertyValueType.relationValueTypeName ?? null,
+                send({
+                  type: 'UPSERT_RELATION',
+                  payload: {
+                    fromEntityId: result.id,
+                    fromEntityName: result.name,
+                    toEntityId: propertyValueType.relationValueTypeId,
+                    toEntityName: propertyValueType.relationValueTypeName ?? null,
+                    typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+                    typeOfName: 'Types',
+                  },
                 });
               }
             }}
@@ -357,6 +367,7 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
                 type: 'UPSERT_RELATION',
                 payload: {
                   fromEntityId: id,
+                  fromEntityName: name,
                   toEntityId: result.id,
                   toEntityName: result.name,
                   typeOfId: typeOfId,
