@@ -31,7 +31,7 @@ import { upsertCollectionItemRelation, upsertVerifiedSourceOnCollectionItem } fr
 import { upsertSourceSpaceOnCollectionItem } from '~/core/state/editor/data-entity';
 import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
-import { Cell, Row, Schema } from '~/core/types';
+import { Cell, PropertySchema, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -53,7 +53,12 @@ import { editingColumnsAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedColumns: Schema[], spaceId: SpaceId) => {
+const formatColumns = (
+  columns: PropertySchema[] = [],
+  isEditMode: boolean,
+  unpublishedColumns: PropertySchema[],
+  spaceId: SpaceId
+) => {
   const columnSize = 784 / columns.length;
 
   return columns.map((column, i) =>
@@ -195,7 +200,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  columns: Schema[];
+  columns: PropertySchema[];
   rows: Row[];
   shownColumnIds: string[];
   view: DataBlockView;
