@@ -238,8 +238,8 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
 
     return {
       attributeId: a.id,
-      valueTypeId: relationValueType?.id,
-      valueTypeName: relationValueType?.name,
+      relationValueTypeId: relationValueType?.id,
+      relationValueTypeName: relationValueType?.name,
     };
   });
 
@@ -248,8 +248,8 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
     return {
       ...s,
       valueType: (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SYSTEM_IDS.TEXT) as ValueTypeId,
-      relationValueTypeId: relationValueType?.valueTypeId,
-      relationValueTypeName: relationValueType?.valueTypeName,
+      relationValueTypeId: relationValueType?.relationValueTypeId,
+      relationValueTypeName: relationValueType?.relationValueTypeName,
     };
   });
 

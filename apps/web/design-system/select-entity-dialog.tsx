@@ -2,15 +2,13 @@ import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
-import { RelationValueType } from '~/core/types';
-
 import { SelectEntity } from './select-entity';
 
 interface Props {
   trigger: React.ReactNode;
   spaceId: string;
   onDone: (result: { id: string; name: string | null; space?: string }) => void;
-  allowedTypes?: RelationValueType[];
+  allowedTypes?: string[];
 }
 
 export function SelectEntityAsPopover({ trigger, onDone, spaceId, allowedTypes }: Props) {

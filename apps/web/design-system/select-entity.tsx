@@ -14,7 +14,6 @@ import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId } from '~/core/io/schema';
-import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
@@ -34,7 +33,7 @@ type SelectEntityProps = {
   onDone: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
   onCreateEntity?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
   spaceId: string;
-  allowedTypes?: RelationValueType[];
+  allowedTypes?: string[];
   placeholder?: string;
   containerClassName?: string;
   inputClassName?: string;
@@ -100,7 +99,7 @@ export const SelectEntity = ({
   const [result, setResult] = useState<SearchResult | null>(null);
 
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
-    filterByTypes: allowedTypes?.map(type => type.typeId),
+    filterByTypes: allowedTypes,
   });
 
   if (query === '' && result !== null) {

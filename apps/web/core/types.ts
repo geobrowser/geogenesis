@@ -159,6 +159,9 @@ export interface PropertySchema {
   id: EntityId;
   name: string | null;
   valueType: ValueTypeId;
+  relationValueTypeId?: EntityId;
+  relationValueTypeName?: string | null;
+  homeSpace?: string;
 }
 
 export type Relation = {

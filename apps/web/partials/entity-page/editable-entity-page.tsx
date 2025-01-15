@@ -7,9 +7,16 @@ import * as React from 'react';
 
 import { DB } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
+import { usePropertyValueTypes } from '~/core/hooks/use-property-value-types';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Relation, RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
+import {
+  PropertySchema,
+  Relation,
+  RelationRenderableProperty,
+  RenderableProperty,
+  TripleRenderableProperty,
+} from '~/core/types';
 import { Triple as ITriple } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -51,6 +58,8 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     },
   });
 
+  const { propertyValueTypes } = usePropertyValueTypes(Object.keys(renderablesGroupedByAttributeId));
+
   return (
     <>
       <div className="rounded-lg border border-grey-02 shadow-button">
@@ -90,9 +99,17 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                   }}
                 />
                 {renderableType === 'RELATION' || renderableType === 'IMAGE' ? (
-                  <RelationsGroup key={attributeId} relations={renderables as RelationRenderableProperty[]} />
+                  <RelationsGroup
+                    key={attributeId}
+                    relations={renderables as RelationRenderableProperty[]}
+                    propertyValueTypes={propertyValueTypes}
+                  />
                 ) : (
-                  <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
+                  <TriplesGroup
+                    key={attributeId}
+                    triples={renderables as TripleRenderableProperty[]}
+                    propertyValueTypes={propertyValueTypes}
+                  />
                 )}
 
                 <div className="absolute right-0 top-6 flex items-center gap-1">
@@ -176,7 +193,12 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
   );
 }
 
-function RelationsGroup({ relations }: { relations: RelationRenderableProperty[] }) {
+type RelationsGroupProps = {
+  relations: RelationRenderableProperty[];
+  propertyValueTypes: Map<string, PropertySchema>;
+};
+
+function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
 
   const send = useEditEvents({
@@ -191,6 +213,12 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
   const typeOfId = relations[0].attributeId;
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
+  const propertyValueType = propertyValueTypes.get(typeOfId);
+  const filterByTypes = propertyValueType
+    ? propertyValueType.relationValueTypeId
+      ? [propertyValueType.relationValueTypeId]
+      : undefined
+    : undefined;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -261,6 +289,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
                 spaceId={spaceId}
+                allowedTypes={filterByTypes}
                 onDone={result => {
                   send({
                     type: 'UPSERT_RELATION',
@@ -303,6 +332,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
         <div className="mt-1">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
+            allowedTypes={filterByTypes}
             onDone={result => {
               send({
                 type: 'UPSERT_RELATION',
@@ -323,7 +353,12 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
   );
 }
 
-function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
+type TriplesGroupProps = {
+  triples: TripleRenderableProperty[];
+  propertyValueTypes: Map<string, PropertySchema>;
+};
+
+function TriplesGroup({ triples }: TriplesGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
 
   const send = useEditEvents({

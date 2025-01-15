@@ -100,7 +100,6 @@ type CollectionItemArgs = {
 
 export async function mergeCollectionItemEntitiesAsync(args: CollectionItemArgs) {
   const { entityIds, filterString, filterState } = args;
-  console.log('filter string', filterString);
 
   const cachedRemoteEntities = await queryClient.fetchQuery({
     queryKey: queryKeys.remoteCollectionItems(entityIds, filterState, filterString),
@@ -125,7 +124,6 @@ export async function mergeCollectionItemEntitiesAsync(args: CollectionItemArgs)
 
   const filteredLocal = filterLocalEntities(localOnlyEntities, filterState);
 
-  console.log('collection data', { filteredLocal, merged, localOnlyEntityIds });
   return [...filteredLocal, ...merged];
 }
 
