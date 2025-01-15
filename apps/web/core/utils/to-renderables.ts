@@ -1,10 +1,10 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import {
+  PropertySchema,
   Relation,
   RelationRenderableProperty,
   RenderableProperty,
-  Schema,
   Triple,
   TripleRenderableProperty,
 } from '../types';
@@ -16,7 +16,7 @@ interface ToRenderablesArgs {
   triples: Triple[];
   relations: Relation[];
   spaceId: string;
-  schema?: Schema[];
+  schema?: PropertySchema[];
   placeholderRenderables?: RenderableProperty[];
 }
 
