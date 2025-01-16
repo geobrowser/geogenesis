@@ -427,7 +427,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               <div className="text-body">
                 {changes.map(c => {
                   const { before, after } = c;
-                  return before && <DateTimeDiff mode="after" before={before.value} after={after?.value ?? null} />;
+                  return after && <DateTimeDiff mode="after" before={before?.value ?? null} after={after.value} />;
                 })}
               </div>
             </div>
@@ -496,6 +496,7 @@ type DateTimeType = {
   year: string;
   hour: string;
   minute: string;
+  meridiem: 'am' | 'pm';
 };
 
 export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
@@ -557,7 +558,7 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
             timeClassNames
           )}
         >
-          {Number(renderedDateTime.hour) < 12 ? 'am' : 'pm'}
+          {renderedDateTime.meridiem}
         </p>
       </div>
     </div>
