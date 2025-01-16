@@ -131,16 +131,28 @@ export class GeoDate {
     year: string;
     hour: string;
     minute: string;
+    meridiem: 'am' | 'pm';
   } {
     const date = new Date(dateString);
     const isDate = GeoDate.isValidDate(date);
     const day = isDate ? date.getUTCDate().toString() : '';
     const month = isDate ? (date.getUTCMonth() + 1).toString() : '';
     const year = isDate ? date.getUTCFullYear().toString() : '';
-    const hour = isDate ? date.getUTCHours().toString() : '';
+    let hour = isDate ? date.getUTCHours().toString() : '';
     const minute = isDate ? date.getUTCMinutes().toString() : '';
+    let meridiem = isDate && hour !== '' ? (Number(hour) < 12 ? 'am' : 'pm') : 'am';
 
-    return { day, month, year, hour, minute };
+    if (hour !== '' && Number(hour) > 12) {
+      const hourAsNumber = Number(hour);
+      hour = (hourAsNumber - 12).toString();
+    }
+
+    if (hour !== '' && Number(hour) === 0) {
+      hour = '12';
+      meridiem = 'am';
+    }
+
+    return { day, month, year, hour, minute, meridiem: meridiem as 'am' | 'pm' };
   }
 
   static isLeapYear(year: number): boolean {
