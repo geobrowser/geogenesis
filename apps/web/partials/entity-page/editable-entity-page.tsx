@@ -43,11 +43,12 @@ interface Props {
   id: string;
   spaceId: string;
   relationsOut: Relation[];
+  isRelationPage: boolean;
 }
 
-export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Props) {
+export function EditableEntityPage({ id, spaceId, triples: serverTriples, isRelationPage }: Props) {
   const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
-    useRenderables(serverTriples, spaceId);
+    useRenderables(serverTriples, spaceId, isRelationPage);
   const { name } = useEntityPageStore();
 
   const send = useEditEvents({

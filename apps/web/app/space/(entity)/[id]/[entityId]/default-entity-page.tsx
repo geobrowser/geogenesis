@@ -22,6 +22,7 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
+import { Relationship, RelationshipHeader } from '~/partials/entity-page/relationship';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 interface Props {
@@ -30,6 +31,7 @@ interface Props {
   showHeading?: boolean;
   showHeader?: boolean;
   notice?: React.ReactNode;
+  isRelationPage: boolean;
 }
 
 export default async function DefaultEntityPage({
@@ -62,7 +64,11 @@ export default async function DefaultEntityPage({
       >
         {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
         <EntityPageContentContainer>
-          {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
+          {showHeading && !props.isRelationPage ? (
+            <EditableHeading spaceId={props.spaceId} entityId={props.id} />
+          ) : (
+            <RelationshipHeader relationship={props.relationship} />
+          )}
           {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
           {notice}
           {(showSpacer || !!notice) && <Spacer height={40} />}
@@ -115,6 +121,35 @@ const getData = async (spaceId: string, entityId: string) => {
 
   const blocks = blockIds ? await fetchBlocks(blockIds) : [];
 
+  const isRelationPage =
+    entity?.triples.some(triple => triple.attributeId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) ?? false;
+
+  let relationship: Relationship = null;
+
+  if (isRelationPage) {
+    const fromTriple = entity?.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+    const toTriple = entity?.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+    const relationTypeTriple = entity?.triples.find(
+      triple => triple.attributeId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE
+    );
+
+    if (fromTriple && toTriple && relationTypeTriple) {
+      const [fromEntity, toEntity, relationTypeEntity] = await Promise.all([
+        await Subgraph.fetchEntity({ id: EntityId(fromTriple.value.value.split('graph://')[1] ?? '') }),
+        await Subgraph.fetchEntity({ id: EntityId(toTriple.value.value.split('graph://')[1] ?? '') }),
+        await Subgraph.fetchEntity({ id: EntityId(relationTypeTriple.value.value.split('graph://')[1] ?? '') }),
+      ]);
+
+      if (fromEntity && toEntity && relationTypeEntity) {
+        relationship = {
+          from: { name: fromEntity.name ?? 'From', id: fromEntity.id },
+          to: { name: toEntity.name ?? 'To', id: toEntity.id },
+          relationType: { name: relationTypeEntity.name ?? 'Relation Type', id: relationTypeEntity.id },
+        };
+      }
+    }
+  }
+
   return {
     triples: entity?.triples ?? [],
     id: entityId,
@@ -130,5 +165,9 @@ const getData = async (spaceId: string, entityId: string) => {
     // For entity page editor
     blockRelations: entity?.relationsOut ?? [],
     blocks,
+
+    // For relation pages
+    isRelationPage,
+    relationship,
   };
 };

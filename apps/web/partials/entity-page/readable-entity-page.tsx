@@ -17,10 +17,11 @@ interface Props {
   relations: Relation[];
   id: string;
   spaceId: string;
+  isRelationPage: boolean;
 }
 
-export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Props) {
-  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId);
+export function ReadableEntityPage({ triples: serverTriples, id, spaceId, isRelationPage }: Props) {
+  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId, isRelationPage);
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
