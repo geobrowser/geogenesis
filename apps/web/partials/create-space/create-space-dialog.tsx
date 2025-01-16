@@ -52,7 +52,7 @@ export function CreateSpaceDialog() {
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const [name, setName] = useAtom(nameAtom);
-  const [entityId] = useAtom(entityIdAtom);
+  const [entityId, setEntityId] = useAtom(entityIdAtom);
   const [image, setImage] = useAtom(imageAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
@@ -110,6 +110,7 @@ export function CreateSpaceDialog() {
         onClick={() => {
           setName('');
           setImage('');
+          setEntityId('');
           setGovernanceType(null);
           setStep('select-type');
         }}
