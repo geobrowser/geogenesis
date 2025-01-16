@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect, Record } from 'effect';
 
 import { mergeEntity } from '~/core/database/entities';
@@ -37,8 +37,6 @@ export async function fromLocal(spaceId?: string) {
   ]);
   const entityIdsToFetch = [...entityIds.values()];
 
-  console.log('entityIdsToFetch', entityIdsToFetch);
-
   const collectEntities = Effect.gen(function* () {
     const maybeRemoteEntitiesEffect = Effect.promise(() => fetchEntitiesBatchCached(entityIdsToFetch));
 
@@ -72,16 +70,11 @@ export async function fromLocal(spaceId?: string) {
 
   const { remoteEntities, localEntities } = await Effect.runPromise(collectEntities);
 
-  try {
-    return aggregateChanges({
-      spaceId,
-      beforeEntities: remoteEntities,
-      afterEntities: localEntities,
-    });
-  } catch (e) {
-    console.error('e', e);
-    return [];
-  }
+  return aggregateChanges({
+    spaceId,
+    beforeEntities: remoteEntities,
+    afterEntities: localEntities,
+  });
 }
 
 interface FromVersionsArgs {
@@ -239,7 +232,6 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
     }
 
     const nonBlockRelationChanges = relationChanges.filter(c => c.attribute.id !== SYSTEM_IDS.BLOCKS);
-    console.log('triple changes', tripleChanges);
 
     // Filter out any "dead" changes where the values are the exact same
     // in the before and after.
@@ -277,10 +269,41 @@ function isRealChange(
 type TripleByAttributeMap = Record<string, Triple>;
 type EntityByAttributeMapMap = Record<string, TripleByAttributeMap>;
 
+const RELATION_TRIPLES = [
+  SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+  SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+  SYSTEM_IDS.RELATION_INDEX,
+  SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+];
+
+function shouldFilterTriple(triple: Triple) {
+  // Filter out any triples for relation entities. This is to prevent
+  // the diffs from being noisy with metadata about the relation.
+  if (RELATION_TRIPLES.includes(triple.attributeId)) {
+    return true;
+  }
+
+  if (
+    triple.attributeId === SYSTEM_IDS.TYPES_ATTRIBUTE &&
+    triple.value.type === 'URL' &&
+    triple.value.value === GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function groupTriplesByEntityIdAndAttributeId(triples: Triple[]) {
   return triples.reduce<EntityByAttributeMapMap>((acc, triple) => {
     const entityId = triple.entityId;
     const attributeId = triple.attributeId;
+
+    // Filter out any triples for relation entities. This is to prevent
+    // the diffs from being noisy with metadata about the relation.
+    if (shouldFilterTriple(triple)) {
+      return acc;
+    }
 
     if (!acc[entityId]) {
       acc[entityId] = {};
