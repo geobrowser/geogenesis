@@ -20,7 +20,7 @@ type DeployArgs = {
     | 'protocol'
     | 'dao'
     | 'government-org'
-    | 'interest-group';
+    | 'interest';
   spaceName: string;
   spaceImage?: string;
   governanceType?: SpaceGovernanceType;
@@ -63,7 +63,7 @@ export function useDeploySpace() {
           args.type === 'protocol' ||
           args.type === 'dao' ||
           args.type === 'government-org' ||
-          args.type === 'interest-group'
+          args.type === 'interest'
         ) {
           if (args.spaceImage && args.spaceImage !== '') {
             url.searchParams.set('spaceCoverUri', args.spaceImage);

@@ -128,17 +128,16 @@ export const generateOpsForSpaceType = async ({
       ops.push(...industryOps);
       break;
     }
-    case 'interest-group':
-      // @TODO interest group template
+    case 'interest': {
+      const [interestOps] = await cloneEntity({
+        oldEntityId: SYSTEM_IDS.INTEREST_TEMPLATE,
+        entityId: newEntityId,
+        entityName: spaceName,
+      });
 
-      ops.push(
-        Relation.make({
-          fromId: newEntityId,
-          toId: SYSTEM_IDS.INTEREST_GROUP_TYPE,
-          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-        })
-      );
+      ops.push(...interestOps);
       break;
+    }
     case 'protocol': {
       const [protocolOps] = await cloneEntity({
         oldEntityId: SYSTEM_IDS.PROTOCOL_TEMPLATE,
