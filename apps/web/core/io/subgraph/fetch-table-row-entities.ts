@@ -53,8 +53,6 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
     signal: options?.signal,
   });
 
-  console.log('query', getFetchTableRowsQuery(options.filter, options.first, options.skip));
-
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 

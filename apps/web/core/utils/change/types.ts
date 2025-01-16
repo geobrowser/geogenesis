@@ -48,7 +48,7 @@ type BaseRelationChange = {
   type: BaseRelationRenderableProperty['type'];
   attribute: Attribute;
   before: RelationChangeValue | null;
-  after: RelationChangeValue;
+  after: RelationChangeValue | null;
 };
 
 type ImageRelationChange = {
@@ -62,7 +62,7 @@ type NativeTripleChange = {
   type: NativeRenderableProperty['type'];
   attribute: Attribute;
   before: TripleChangeValue | null;
-  after: TripleChangeValue;
+  after: TripleChangeValue | null;
 };
 
 export type EntityChange = {

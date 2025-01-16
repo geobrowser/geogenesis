@@ -52,6 +52,7 @@ type UpsertRelationArgs = {
 type DeleteRelationArgs = {
   type: 'DELETE_RELATION';
   relationId: EntityId;
+  fromEntityId: EntityId;
   spaceId: string;
 };
 
@@ -109,7 +110,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
         name: null,
       },
       fromEntity: {
-        id: EntityId(args.relationId),
+        id: EntityId(args.fromEntityId),
         name: null,
       },
       toEntity: {
@@ -133,12 +134,13 @@ async function deleteRelation(relationId: string, spaceId: string) {
 }
 
 export async function removeEntity(entityId: string, spaceId: string) {
-  const { triples, relationsOut } = await mergeEntityAsync(EntityId(entityId));
+  const { triples, relationsOut, id } = await mergeEntityAsync(EntityId(entityId));
   removeMany(triples, spaceId);
 
   for (const relation of relationsOut) {
     removeRelation({
       relationId: relation.id,
+      fromEntityId: id,
       spaceId,
     });
   }

@@ -273,7 +273,11 @@ export function useTableBlock() {
       // For `spaces` we need to update the filter string by setting the new
       // filter state
       // @TODO: This should handle setting the source based on what user selected
-      removeSourceType({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
+      removeSourceType({
+        relations: blockEntity.relationsOut,
+        spaceId: SpaceId(spaceId),
+        entityId: EntityId(entityId),
+      });
       upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 
       if (newSource.type === 'ENTITY') {

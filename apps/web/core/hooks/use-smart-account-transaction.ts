@@ -17,12 +17,13 @@ export function useSmartAccountTransaction({ address }: Args) {
       }
 
       const hash = yield* Effect.tryPromise({
-        try: () =>
-          smartAccount.sendTransaction({
+        try: async () => {
+          return await smartAccount.sendTransaction({
             to: address as `0x${string}`,
             value: 0n,
             data: calldata,
-          }),
+          });
+        },
         catch: error => new TransactionWriteFailedError(String(error)),
       });
 

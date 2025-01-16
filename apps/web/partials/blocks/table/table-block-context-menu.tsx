@@ -383,7 +383,7 @@ const ToggleColumn = ({ column }: ToggleColumnProps) => {
       });
     } else {
       if (shownColumnRelation) {
-        DB.removeRelation({ relationId: shownColumnRelation.id, spaceId });
+        DB.removeRelation({ relationId: shownColumnRelation.id, fromEntityId: EntityId(relationId), spaceId });
       }
     }
   }, [column.name, id, isShown, relationId, shownColumnRelation, spaceId]);

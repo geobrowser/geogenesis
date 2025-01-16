@@ -332,6 +332,7 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
                   type: 'DELETE_RELATION',
                   payload: {
                     relationId: r.relationId,
+                    fromEntityId: id,
                   },
                 });
               }}
