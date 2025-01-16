@@ -2,7 +2,10 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { RenderableProperty, Triple } from '~/core/types';
 
-/* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> Triples in Schema -> Alphabetical */
+/* Entity page sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> Triples in Schema -> Alphabetical */
+
+/* Relation page sort order goes Relation Type -> Relation From -> Relation To -> Name -> Description -> Types -> Placeholders (Empty or modified) -> Triples in Schema -> Alphabetical -> Relation Index */
+
 export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: Triple[]) {
   const schemaAttributeIds = schemaTriples.map(schemaTriple => schemaTriple.attributeId);
 
@@ -49,7 +52,7 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
   });
 }
 
-export function sortRenderables(renderables: RenderableProperty[]) {
+export function sortRenderables(renderables: RenderableProperty[], isRelationPage: boolean) {
   /* Visible triples includes both real triples and placeholder triples */
   return renderables.sort((renderableA, renderableB) => {
     // Always put an empty, placeholder triple with no attribute id at the bottom
@@ -65,6 +68,31 @@ export function sortRenderables(renderables: RenderableProperty[]) {
     const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
     const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
     const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
+
+    if (isRelationPage) {
+      const isRelationTypeA = attributeIdA === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE;
+      const isRelationTypeB = attributeIdB === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE;
+
+      const isRelationFromA = attributeIdA === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE;
+      const isRelationFromB = attributeIdB === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE;
+
+      const isRelationToA = attributeIdA === SYSTEM_IDS.RELATION_TO_ATTRIBUTE;
+      const isRelationToB = attributeIdB === SYSTEM_IDS.RELATION_TO_ATTRIBUTE;
+
+      const isRelationIndexA = attributeIdA === SYSTEM_IDS.RELATION_INDEX;
+      const isRelationIndexB = attributeIdB === SYSTEM_IDS.RELATION_INDEX;
+
+      if (isRelationTypeA && !isRelationTypeB) return -1;
+      if (!isRelationTypeA && isRelationTypeB) return 1;
+
+      if (isRelationFromA && !isRelationFromB) return -1;
+      if (!isRelationFromA && isRelationFromB) return 1;
+
+      if (isRelationToA && !isRelationToB) return -1;
+      if (!isRelationToA && isRelationToB) return 1;
+
+      if (isRelationIndexA && !isRelationIndexB) return 1;
+    }
 
     if (isNameA && !isNameB) return -1;
     if (!isNameA && isNameB) return 1;

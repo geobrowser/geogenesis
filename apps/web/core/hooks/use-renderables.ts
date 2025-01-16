@@ -23,7 +23,7 @@ import { useUserIsEditing } from './use-user-is-editing';
  *
  * Schemas are derived from the entity's types and are also a form of placeholders.
  */
-export function useRenderables(serverTriples: Triple[], spaceId: string) {
+export function useRenderables(serverTriples: Triple[], spaceId: string, isRelationPage?: boolean) {
   const isEditing = useUserIsEditing(spaceId);
   const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
     usePlaceholderRenderables();
@@ -50,25 +50,23 @@ export function useRenderables(serverTriples: Triple[], spaceId: string) {
   }, [localTriples, serverTriples, triplesFromSpace]);
 
   const renderables = React.useMemo(() => {
-    return (
-      toRenderables({
-        entityId: id,
-        entityName: name,
-        spaceId,
-        triples,
-        relations,
-        // We don't show placeholder renderables in browse mode
-        schema: isEditing ? schema : undefined,
-        placeholderRenderables: isEditing ? placeholderRenderables : undefined,
-      })
-        // We don't show blocks in the properties section
-        .filter(r => r.attributeId !== SYSTEM_IDS.BLOCKS)
-    );
-  }, [id, name, spaceId, triples, relations, isEditing, schema, placeholderRenderables]);
+    const SKIPPED_PROPERTIES = !isRelationPage ? [SYSTEM_IDS.BLOCKS] : [SYSTEM_IDS.BLOCKS, SYSTEM_IDS.TYPES_ATTRIBUTE];
+
+    return toRenderables({
+      entityId: id,
+      entityName: name,
+      spaceId,
+      triples,
+      relations,
+      // We don't show placeholder renderables in browse mode
+      schema: isEditing ? schema : undefined,
+      placeholderRenderables: isEditing ? placeholderRenderables : undefined,
+    }).filter(r => !SKIPPED_PROPERTIES.includes(r.attributeId));
+  }, [isRelationPage, id, name, spaceId, triples, relations, isEditing, schema, placeholderRenderables]);
 
   const renderablesGroupedByAttributeId = pipe(
     renderables,
-    renderables => sortRenderables(renderables),
+    renderables => sortRenderables(renderables, !!isRelationPage),
     sortedRenderables => groupBy(sortedRenderables, r => r.attributeId)
   );
 

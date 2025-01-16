@@ -37,7 +37,13 @@ export const Tab = async (props: TabProps) => {
 
     return (
       <EmptyTab entityId={newEntityId} spaceId={spaceId} pageType={pageType}>
-        <DefaultEntityPage params={newParams} showCover={false} showHeading={false} showHeader={false} />
+        <DefaultEntityPage
+          params={newParams}
+          showCover={false}
+          showHeading={false}
+          showHeader={false}
+          isRelationPage={false}
+        />
       </EmptyTab>
     );
   }
@@ -49,7 +55,16 @@ export const Tab = async (props: TabProps) => {
 
   const { notice } = props;
 
-  return <DefaultEntityPage params={params} showCover={false} showHeading={false} showHeader={false} notice={notice} />;
+  return (
+    <DefaultEntityPage
+      params={params}
+      showCover={false}
+      showHeading={false}
+      showHeader={false}
+      notice={notice}
+      isRelationPage={false}
+    />
+  );
 };
 
 const getPageTypeFromSlug = (slug: string): { name: string; id: string } | null => {
