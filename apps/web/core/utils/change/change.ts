@@ -10,8 +10,6 @@ import { Version } from '~/core/io/dto/versions';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
-import { fetchVersion } from '~/core/io/subgraph/fetch-version';
-import { fetchVersionsBatch } from '~/core/io/subgraph/fetch-versions-batch';
 import { queryClient } from '~/core/query-client';
 import type { Relation, Triple } from '~/core/types';
 
