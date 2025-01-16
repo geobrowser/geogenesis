@@ -47,9 +47,10 @@ type Proposal = {
 
 const ReviewChanges = () => {
   const { state } = useStatusBar();
-  const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
+  const [activeSpace, setActiveSpace] = useState<string>('');
+  const { setIsReviewOpen } = useDiff();
 
-  const allSpacesWithActions = useTriples(
+  const allSpacesWithTripleChanges = useTriples(
     React.useMemo(() => {
       return {
         selector: t => t.hasBeenPublished === false,
@@ -58,9 +59,24 @@ const ReviewChanges = () => {
     }, [])
   ).map(t => t.space);
 
+  const allSpacesWithRelationChanges = useRelations(
+    React.useMemo(() => {
+      return {
+        selector: r => r.hasBeenPublished === false,
+        includeDeleted: true,
+      };
+    }, [])
+  ).map(r => r.space);
+
   const dedupedSpacesWithActions = React.useMemo(() => {
-    return [...new Set(allSpacesWithActions).values()];
-  }, [allSpacesWithActions]);
+    return [...new Set([...allSpacesWithTripleChanges, ...allSpacesWithRelationChanges]).values()];
+  }, [allSpacesWithTripleChanges, allSpacesWithRelationChanges]);
+
+  React.useEffect(() => {
+    if (activeSpace === '' && dedupedSpacesWithActions[0]) {
+      setActiveSpace(dedupedSpacesWithActions[0]);
+    }
+  }, [dedupedSpacesWithActions, activeSpace]);
 
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', dedupedSpacesWithActions],

@@ -39,7 +39,11 @@ export const AfterRelationDiff = {
       type: 'REMOVE',
     };
   },
-  diffAfter(afterRelation: Relation, beforeRelations: Relation[] | null): RelationChangeValue {
+  diffAfter(afterRelation: Relation, beforeRelations: Relation[] | null): RelationChangeValue | null {
+    if (afterRelation.toEntity.value === '') {
+      return null;
+    }
+
     if (beforeRelations === null) {
       return {
         value: afterRelation.toEntity.value,
