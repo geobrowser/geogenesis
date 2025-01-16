@@ -135,17 +135,23 @@ interface AggregateChangesArgs {
 }
 
 export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: AggregateChangesArgs): EntityChange[] {
-  // Aggregate remote triples into a map of entities -> attributes and attributes -> triples
+  // Aggregate remote data into a map of entities -> attributes and attributes -> triples
   // Each map is 1:1 with each entity only having one attribute per attribute id and one triple per attribute id
   //
   // Additionally, make sure that we're filtering out triples that don't match the current space id.
-  const afterTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(afterEntities.flatMap(e => e.triples));
+  const afterTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
+    afterEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
+  );
   const beforeTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
     beforeEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
   );
 
-  const afterRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(afterEntities.flatMap(e => e.relationsOut));
-  const beforeRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(beforeEntities.flatMap(e => e.relationsOut));
+  const afterRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(
+    afterEntities.flatMap(e => e.relationsOut.filter(r => (spaceId ? r.space === spaceId : true)))
+  );
+  const beforeRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(
+    beforeEntities.flatMap(e => e.relationsOut.filter(r => (spaceId ? r.space === spaceId : true)))
+  );
 
   // This might be a performance bottleneck for large sets of ops, so we'll need
   // to monitor this over time.
