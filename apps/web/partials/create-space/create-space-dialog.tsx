@@ -314,7 +314,7 @@ const spaceTypeOptions: { image: string; label: string; value: SpaceType; govern
   {
     image: '/images/onboarding/interest-group.png',
     label: 'Interest',
-    value: 'interest-group',
+    value: 'interest',
     governance: 'PERSONAL',
   },
   { image: '/images/onboarding/region.png', label: 'Region', value: 'region', governance: 'PERSONAL' },
@@ -388,7 +388,7 @@ const allowedTypesBySpaceType: Record<SpaceType, string[]> = {
   protocol: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.PROTOCOL_TYPE],
   dao: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.DAO_TYPE],
   'government-org': [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.GOVERNMENT_ORG_TYPE],
-  'interest-group': [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.INTEREST_GROUP_TYPE],
+  interest: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.INTEREST_TYPE],
 };
 
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {

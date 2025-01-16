@@ -211,7 +211,7 @@ function getGovernanceTypeForSpaceType(type: SpaceType, governanceType?: SpaceGo
     case 'academic-field':
     case 'dao':
     case 'industry':
-    case 'interest-group':
+    case 'interest':
     case 'region':
     case 'protocol':
       return 'PUBLIC';

@@ -143,7 +143,7 @@ export const COMPANY_TYPE = 'UhpHYoFEzAov9WwqtDwQk4';
 export const DAO_TYPE = 'Hh8hc47TMBvRsD4oqUNxP9';
 export const GOVERNMENT_ORG_TYPE = 'MokrHqV4jZhBfPN3mLPjM8';
 export const INDUSTRY_TYPE = 'YA7mhzaafD2vnjekmcnLER';
-export const INTEREST_GROUP_TYPE = '6VSi54UDKnL34BWHBqdzee';
+export const INTEREST_TYPE = '6VSi54UDKnL34BWHBqdzee';
 export const NONPROFIT_TYPE = 'RemzN69c24othsp2rP7yMX';
 export const POST_TYPE = 'X7KuZJQewaCiCy9QV2vjyv';
 export const PROJECT_TYPE = '9vk7Q3pz7US3s2KePFQrJT';
@@ -164,13 +164,14 @@ export const PAGE_TYPE_ATTRIBUTE = 'DD9FKRZ3XezaKEGUszMB3r';
   These define the entity id to copy when creating an entity from
   a template.
   */
-export const INDUSTRY_TEMPLATE = 'Tgm2ubmm9VjAZFZACJLTZC';
 export const COMPANY_TEMPLATE = 'QZwChwTixtbLDv3HSX5E6n';
-export const PROTOCOL_TEMPLATE = 'UKKzBPkwY51qcVB9QTLNB6';
 export const DAO_TEMPLATE = 'Gfj89RHeFexx36V5kN6LhB';
-export const REGION_TEMPLATE = 'RL8uWpewpYdcmJ3rjoudjT';
+export const INDUSTRY_TEMPLATE = 'Tgm2ubmm9VjAZFZACJLTZC';
+export const INTEREST_TEMPLATE = 'C7XkQKqhRHv28Uuo5m2DZP';
 export const NONPROFIT_TEMPLATE = 'HEuj9VYAF5z1KQ8x37Uzze';
 export const PERSON_TEMPLATE = 'EJuFuEz17wdVCk9ctEAkW7';
+export const PROTOCOL_TEMPLATE = 'UKKzBPkwY51qcVB9QTLNB6';
+export const REGION_TEMPLATE = 'RL8uWpewpYdcmJ3rjoudjT';
 
 export const ONTOLOGY_PAGE_TEMPLATE = 'JjEDWDpLYS7tYBKi4vCdwc';
 export const EDUCATION_PAGE_TEMPLATE = 'RHuzjGkGothjuwGN6TLXDx';

@@ -253,5 +253,5 @@ export type SpaceType =
   | 'protocol'
   | 'dao'
   | 'government-org'
-  | 'interest-group';
+  | 'interest';
 export type SpaceGovernanceType = 'PUBLIC' | 'PERSONAL';
