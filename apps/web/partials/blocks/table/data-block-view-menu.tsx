@@ -115,7 +115,7 @@ const ToggleView = ({ spaceId, activeView, view, viewRelation, relationId, isLoa
   const onToggleView = useCallback(async () => {
     if (!isActive) {
       if (viewRelation) {
-        DB.removeRelation({ relationId: viewRelation.id, spaceId });
+        DB.removeRelation({ relationId: viewRelation.id, spaceId, fromEntityId: EntityId(relationId) });
       }
 
       const newRelation: StoreRelation = {

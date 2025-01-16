@@ -121,6 +121,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                       type: 'DELETE_RELATION',
                       payload: {
                         relationId,
+                        fromEntityId: entityId,
                       },
                     });
                   }}

@@ -23,6 +23,8 @@ export function useExecuteProposal({ address, onchainProposalId }: Args) {
         args: [BigInt(onchainProposalId)],
       });
 
+      console.log('calldata', calldata);
+
       const txEffect = tx(calldata);
 
       const hash = await Effect.runPromise(txEffect);

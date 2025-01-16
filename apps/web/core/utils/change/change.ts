@@ -1,29 +1,20 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect, Record } from 'effect';
 
-import { mergeEntityAsync } from '~/core/database/entities';
+import { mergeEntity } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import { Entity } from '~/core/io/dto/entities';
 import { Proposal } from '~/core/io/dto/proposals';
 import { Version } from '~/core/io/dto/versions';
-import { EntityId } from '~/core/io/schema';
-import { fetchEntity } from '~/core/io/subgraph';
-import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
-import { queryClient } from '~/core/query-client';
+import { fetchEntitiesBatch, fetchEntitiesBatchCached } from '~/core/io/subgraph/fetch-entities-batch';
 import type { Relation, Triple } from '~/core/types';
 
 import { fetchPreviousVersionByCreatedAt } from './fetch-previous-version-by-created-at';
 import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';
-import { getAfterTripleChange, getBeforeTripleChange } from './get-triple-change';
+import { AfterRelationDiff, BeforeRelationDiff } from './get-relation-change';
+import { AfterTripleDiff, BeforeTripleDiff } from './get-triple-change';
 import { EntityChange, RelationChange, RelationChangeValue, TripleChange, TripleChangeValue } from './types';
-
-function getEntityAsync(id: EntityId) {
-  return queryClient.fetchQuery({
-    queryKey: ['entity-for-review', id],
-    queryFn: () => fetchEntity({ id }),
-  });
-}
 
 export async function fromLocal(spaceId?: string) {
   const triples = getTriples({
@@ -33,31 +24,42 @@ export async function fromLocal(spaceId?: string) {
 
   const localRelations = getRelations({ includeDeleted: true });
 
+  // Relations don't alter the `from` entity directly, so in cases where a relation
+  // is modified we also need to query the `from` entity so we can render diffs
+  // from the perspective of the `from` entity.
+  // const fromEntityIds = localRelations.map(r => r.fromEntity.id);
+
   // This includes any relations that have been changed locally
-  const entityIds = new Set([...triples.map(t => t.entityId), ...localRelations.map(r => r.fromEntity.id)]);
+  const entityIds = new Set([
+    ...triples.map(t => t.entityId),
+    ...localRelations.map(r => r.fromEntity.id),
+    // ...fromEntityIds,
+  ]);
   const entityIdsToFetch = [...entityIds.values()];
 
-  const collectEntities = Effect.gen(function* () {
-    const maybeRemoteEntitiesEffect = Effect.forEach(
-      entityIdsToFetch,
-      id => Effect.promise(() => getEntityAsync(EntityId(id))),
-      {
-        concurrency: 50,
-      }
-    );
+  console.log('entityIdsToFetch', entityIdsToFetch);
 
-    const maybeLocalEntitiesEffect = Effect.forEach(
-      entityIdsToFetch,
-      id => Effect.promise(() => mergeEntityAsync(EntityId(id))),
-      {
-        concurrency: 50,
-      }
-    );
+  const collectEntities = Effect.gen(function* () {
+    const maybeRemoteEntitiesEffect = Effect.promise(() => fetchEntitiesBatchCached(entityIdsToFetch));
+
+    const maybeLocalEntitiesEffect = Effect.promise(async () => {
+      const entities = await fetchEntitiesBatchCached(entityIdsToFetch);
+      return entities.map(e =>
+        mergeEntity({
+          id: e.id,
+          mergeWith: e,
+        })
+      );
+    });
+
+    console.log('pre fetch');
 
     const [maybeRemoteEntities, maybeLocalEntities] = yield* Effect.all(
       [maybeRemoteEntitiesEffect, maybeLocalEntitiesEffect],
       { concurrency: 2 }
     );
+
+    console.log('entities', maybeLocalEntities, maybeRemoteEntities);
 
     const remoteEntities = maybeRemoteEntities.filter(e => e !== null);
     const localEntities = maybeLocalEntities.filter(e => e !== null);
@@ -70,11 +72,16 @@ export async function fromLocal(spaceId?: string) {
 
   const { remoteEntities, localEntities } = await Effect.runPromise(collectEntities);
 
-  return aggregateChanges({
-    spaceId,
-    beforeEntities: remoteEntities,
-    afterEntities: localEntities,
-  });
+  try {
+    return aggregateChanges({
+      spaceId,
+      beforeEntities: remoteEntities,
+      afterEntities: localEntities,
+    });
+  } catch (e) {
+    console.error('e', e);
+    return [];
+  }
 }
 
 interface FromVersionsArgs {
@@ -159,12 +166,11 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
     const afterRelationsForEntity = afterRelationsByEntityId[entity.id] ?? {};
     const beforeRelationsForEntity = beforeRelationsByEntityId[entity.id] ?? {};
 
-    // @TODO: This doesn't account for situations where data is deleted from before
     for (const afterTriple of Object.values(afterTriplesForEntity)) {
       const beforeTriple: Triple | null = beforeTriplesForEntity[afterTriple.attributeId] ?? null;
       const beforeValue = beforeTriple ? beforeTriple.value : null;
-      const before = getBeforeTripleChange(afterTriple.value, beforeValue);
-      const after = getAfterTripleChange(afterTriple.value, beforeValue);
+      const before = AfterTripleDiff.diffBefore(afterTriple.value, beforeValue);
+      const after = AfterTripleDiff.diffAfter(afterTriple.value, beforeValue);
 
       tripleChanges.push({
         attribute: {
@@ -177,12 +183,28 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
       });
     }
 
-    // @TODO: This doesn't account for situations where data is deleted from before
+    for (const beforeTriple of Object.values(beforeTriplesForEntity)) {
+      const afterTriple: Triple | null = afterTriplesForEntity[beforeTriple.attributeId] ?? null;
+      const afterValue = afterTriple ? afterTriple.value : null;
+      const before = BeforeTripleDiff.diffBefore(beforeTriple.value, afterValue);
+      const after = BeforeTripleDiff.diffAfter(beforeTriple.value, afterValue);
+
+      tripleChanges.push({
+        attribute: {
+          id: beforeTriple.attributeId,
+          name: beforeTriple.attributeName,
+        },
+        type: beforeTriple.value.type,
+        before,
+        after,
+      });
+    }
+
     for (const relations of Object.values(afterRelationsForEntity)) {
       for (const relation of relations) {
         const beforeRelationsForAttributeId = beforeRelationsForEntity[relation.typeOf.id] ?? null;
-        const before = getBeforeRelationChange(relation, beforeRelationsForAttributeId);
-        const after = getAfterRelationChange(relation, beforeRelationsForAttributeId);
+        const before = AfterRelationDiff.diffBefore(relation, beforeRelationsForAttributeId);
+        const after = AfterRelationDiff.diffAfter(relation, beforeRelationsForAttributeId);
 
         relationChanges.push({
           attribute: {
@@ -197,7 +219,27 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
       }
     }
 
+    for (const relations of Object.values(beforeRelationsForEntity)) {
+      for (const relation of relations) {
+        const afterRelationsForPropertyId = afterRelationsForEntity[relation.typeOf.id] ?? null;
+        const before = BeforeRelationDiff.diffBefore(relation, afterRelationsForPropertyId);
+        const after = BeforeRelationDiff.diffAfter(relation, afterRelationsForPropertyId);
+
+        relationChanges.push({
+          attribute: {
+            id: relation.typeOf.id,
+            name: relation.typeOf.name,
+          },
+          // Filter out the block-related relation types until we render blocks in the diff editor
+          type: relation.toEntity.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
+          before: after as RelationChangeValue | null,
+          after: before as RelationChangeValue,
+        });
+      }
+    }
+
     const nonBlockRelationChanges = relationChanges.filter(c => c.attribute.id !== SYSTEM_IDS.BLOCKS);
+    console.log('triple changes', tripleChanges);
 
     // Filter out any "dead" changes where the values are the exact same
     // in the before and after.
@@ -217,15 +259,15 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
 
 function isRealChange(
   before: TripleChangeValue | RelationChangeValue | null,
-  after: TripleChangeValue | RelationChangeValue
+  after: TripleChangeValue | RelationChangeValue | null
 ) {
   // The before and after values are the same
-  if (before?.value === after.value || before?.valueName === after.valueName) {
+  if (before?.value === after?.value && before?.valueName === after?.valueName) {
     return false;
   }
 
   // We add then remove a triple locally that doesn't exist remotely
-  if (before === null && after.type === 'REMOVE') {
+  if (before === null && after?.type === 'REMOVE') {
     return false;
   }
 
@@ -267,66 +309,4 @@ function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
 
     return acc;
   }, {});
-}
-
-function getBeforeRelationChange(relation: Relation, remoteRelations: Relation[] | null): RelationChangeValue | null {
-  if (remoteRelations === null) {
-    return null;
-  }
-
-  const maybeRemoteRelationWithSameId = remoteRelations.find(r => r.id === relation.id);
-
-  if (!maybeRemoteRelationWithSameId) {
-    return null;
-  }
-
-  // @TODO: An update relation can't really ever happen due to the way relations work
-  if (relation.toEntity.value !== maybeRemoteRelationWithSameId.toEntity.value) {
-    return {
-      value: maybeRemoteRelationWithSameId.toEntity.value,
-      valueName: maybeRemoteRelationWithSameId.toEntity.name,
-      type: 'UPDATE',
-    };
-  }
-
-  return {
-    value: maybeRemoteRelationWithSameId.toEntity.value,
-    valueName: maybeRemoteRelationWithSameId.toEntity.name,
-    type: 'REMOVE',
-  };
-}
-
-function getAfterRelationChange(relation: Relation, remoteRelations: Relation[] | null): RelationChangeValue {
-  if (remoteRelations === null) {
-    return {
-      value: relation.toEntity.value,
-      valueName: relation.toEntity.name,
-      type: 'ADD',
-    };
-  }
-
-  const maybeRemoteRelationWithSameId = remoteRelations.find(r => r.id === relation.id);
-
-  if (!maybeRemoteRelationWithSameId) {
-    return {
-      value: relation.toEntity.value,
-      valueName: relation.toEntity.name,
-      type: 'ADD',
-    };
-  }
-
-  // @TODO: An update relation can't really ever happen due to the way relations work
-  if (relation.toEntity.value !== maybeRemoteRelationWithSameId.toEntity.value) {
-    return {
-      value: relation.toEntity.value,
-      valueName: relation.toEntity.name,
-      type: 'UPDATE',
-    };
-  }
-
-  return {
-    value: relation.toEntity.value,
-    valueName: relation.toEntity.name,
-    type: 'ADD',
-  };
 }

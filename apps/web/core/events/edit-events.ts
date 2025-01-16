@@ -68,6 +68,7 @@ export type EditEvent =
       type: 'DELETE_RELATION';
       payload: {
         relationId: string;
+        fromEntityId: string;
       };
     }
 
@@ -201,12 +202,20 @@ const listener =
         // If we're changing from a relation then we need to delete all of the triples
         // on the relation.
         if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
-          return removeRelation({ relationId: EntityId(renderable.relationId), spaceId: context.spaceId });
+          return removeRelation({
+            relationId: EntityId(renderable.relationId),
+            fromEntityId: EntityId(renderable.entityId),
+            spaceId: context.spaceId,
+          });
         }
 
         if (type === 'RELATION') {
           // Delete the previous triple and create a new relation entity
-          return removeRelation({ relationId: EntityId(renderable.entityId), spaceId: context.spaceId });
+          return removeRelation({
+            relationId: EntityId(renderable.entityId),
+            fromEntityId: EntityId(renderable.entityId),
+            spaceId: context.spaceId,
+          });
         }
 
         // @TODO(relations): Add support for IMAGE
@@ -230,7 +239,11 @@ const listener =
         const { renderable } = event.payload;
 
         if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
-          return removeRelation({ relationId: EntityId(renderable.relationId), spaceId: context.spaceId });
+          return removeRelation({
+            relationId: EntityId(renderable.relationId),
+            fromEntityId: EntityId(renderable.entityId),
+            spaceId: context.spaceId,
+          });
         }
 
         return remove(
@@ -267,8 +280,12 @@ const listener =
       }
 
       case 'DELETE_RELATION': {
-        const { relationId } = event.payload;
-        return removeRelation({ relationId: EntityId(relationId), spaceId: context.spaceId });
+        const { relationId, fromEntityId } = event.payload;
+        return removeRelation({
+          relationId: EntityId(relationId),
+          fromEntityId: EntityId(fromEntityId),
+          spaceId: context.spaceId,
+        });
       }
     }
   };

@@ -7,7 +7,7 @@ import { diffWords } from 'diff';
 
 import * as React from 'react';
 
-import { EntityChange, RelationChange, RenderableChange } from '~/core/utils/change/types';
+import { EntityChange, RenderableChange } from '~/core/utils/change/types';
 import { GeoDate, groupBy } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -361,6 +361,8 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="flex flex-wrap gap-2">
                 {changes.map(c => {
+                  if (c.after === null) return null;
+
                   return (
                     <Chip key={c.after.value} status={c.after.type}>
                       {c.after.valueName ?? c.after.value}
@@ -415,7 +417,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               <div className="text-body">
                 {changes.map(c => {
                   const { before, after } = c;
-                  return before && <DateTimeDiff mode="before" before={before.value} after={after.value} />;
+                  return before && <DateTimeDiff mode="before" before={before.value} after={after?.value ?? null} />;
                 })}
               </div>
             </div>
@@ -425,7 +427,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               <div className="text-body">
                 {changes.map(c => {
                   const { before, after } = c;
-                  return before && <DateTimeDiff mode="after" before={before.value} after={after.value} />;
+                  return before && <DateTimeDiff mode="after" before={before.value} after={after?.value ?? null} />;
                 })}
               </div>
             </div>
@@ -567,7 +569,7 @@ const labelClassNames = `text-footnote text-grey-04`;
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
 type ChipProps = {
-  status?: RelationChange['after']['type'] | 'UNCHANGED';
+  status?: 'ADD' | 'UPDATE' | 'REMOVE' | 'UNCHANGED';
   children: React.ReactNode;
 };
 

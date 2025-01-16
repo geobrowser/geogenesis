@@ -89,7 +89,15 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
  * @param relations - The relations to delete as an array of {@link Relation}
  * @param spaceId - The space id as a {@link SpaceId}
  */
-export function removeSourceType({ relations, spaceId }: { relations: Relation[]; spaceId: SpaceId }) {
+export function removeSourceType({
+  relations,
+  spaceId,
+  entityId,
+}: {
+  relations: Relation[];
+  spaceId: SpaceId;
+  entityId: EntityId;
+}) {
   // Delete the existing source type relation. There should only be one source type
   // relation, but delete many just in case.
   const sourceTypeRelations = relations.filter(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE);
@@ -97,6 +105,7 @@ export function removeSourceType({ relations, spaceId }: { relations: Relation[]
   for (const relation of sourceTypeRelations) {
     DB.removeRelation({
       relationId: relation.id,
+      fromEntityId: entityId,
       spaceId,
     });
   }

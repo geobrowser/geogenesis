@@ -13,16 +13,21 @@ export function useSmartAccountTransaction({ address }: Args) {
   const sendTransaction = (calldata: `0x${string}`) => {
     return Effect.gen(function* () {
       if (!smartAccount || !address) {
+        console.log('nothing', smartAccount, address);
         return null;
       }
 
+      console.log('stuff', smartAccount, address);
+
       const hash = yield* Effect.tryPromise({
-        try: () =>
-          smartAccount.sendTransaction({
+        try: async () => {
+          console.log('sending tx');
+          return await smartAccount.sendTransaction({
             to: address as `0x${string}`,
             value: 0n,
             data: calldata,
-          }),
+          });
+        },
         catch: error => new TransactionWriteFailedError(String(error)),
       });
 
