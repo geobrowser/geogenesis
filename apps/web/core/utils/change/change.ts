@@ -24,16 +24,12 @@ export async function fromLocal(spaceId?: string) {
 
   const localRelations = getRelations({ includeDeleted: true });
 
-  // Relations don't alter the `from` entity directly, so in cases where a relation
-  // is modified we also need to query the `from` entity so we can render diffs
-  // from the perspective of the `from` entity.
-  // const fromEntityIds = localRelations.map(r => r.fromEntity.id);
-
-  // This includes any relations that have been changed locally
   const entityIds = new Set([
     ...triples.map(t => t.entityId),
+    // Relations don't alter the `from` entity directly, so in cases where a relation
+    // is modified we also need to query the `from` entity so we can render diffs
+    // from the perspective of the `from` entity.
     ...localRelations.map(r => r.fromEntity.id),
-    // ...fromEntityIds,
   ]);
   const entityIdsToFetch = [...entityIds.values()];
 
@@ -50,14 +46,10 @@ export async function fromLocal(spaceId?: string) {
       );
     });
 
-    console.log('pre fetch');
-
     const [maybeRemoteEntities, maybeLocalEntities] = yield* Effect.all(
       [maybeRemoteEntitiesEffect, maybeLocalEntitiesEffect],
       { concurrency: 2 }
     );
-
-    console.log('entities', maybeLocalEntities, maybeRemoteEntities);
 
     const remoteEntities = maybeRemoteEntities.filter(e => e !== null);
     const localEntities = maybeLocalEntities.filter(e => e !== null);
