@@ -224,8 +224,8 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
           },
           // Filter out the block-related relation types until we render blocks in the diff editor
           type: relation.toEntity.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
-          before: after as RelationChangeValue | null,
-          after: before as RelationChangeValue,
+          before: after,
+          after: before,
         });
       }
     }

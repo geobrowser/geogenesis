@@ -55,7 +55,7 @@ type ImageRelationChange = {
   type: ImageRelationRenderableProperty['type'];
   attribute: Attribute;
   before: RelationChangeValue | null;
-  after: RelationChangeValue;
+  after: RelationChangeValue | null;
 };
 
 type NativeTripleChange = {
