@@ -106,9 +106,7 @@ type SubstreamValue = Schema.Schema.Type<typeof SubstreamValue>;
 const SpaceGovernanceType = Schema.Union(Schema.Literal('PUBLIC'), Schema.Literal('PERSONAL'));
 type SpaceGovernanceType = Schema.Schema.Type<typeof SpaceGovernanceType>;
 
-const Account = Schema.Struct({
-  id: AddressWithValidation,
-});
+const Account = AddressWithValidation;
 
 const SchemaMembers = Schema.Struct({
   nodes: Schema.Array(Schema.Struct({ accountId: AddressWithValidation })),
@@ -345,7 +343,7 @@ type VoteType = Schema.Schema.Type<typeof VoteType>;
 
 export const SubstreamVote = Schema.Struct({
   vote: VoteType,
-  account: Account,
+  accountId: Account,
 });
 
 export type SubstreamVote = Schema.Schema.Type<typeof SubstreamVote>;
