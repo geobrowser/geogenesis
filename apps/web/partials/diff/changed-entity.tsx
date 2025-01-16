@@ -500,16 +500,8 @@ type DateTimeType = {
 };
 
 export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
-  let beforeDateTime = null;
-  let afterDateTime = null;
-
-  if (before) {
-    beforeDateTime = GeoDate.fromISOStringUTC(before);
-  }
-
-  if (after) {
-    afterDateTime = GeoDate.fromISOStringUTC(after);
-  }
+  const beforeDateTime = before ? GeoDate.fromISOStringUTC(before) : null;
+  const afterDateTime = after ? GeoDate.fromISOStringUTC(after) : null;
 
   const renderedDateTime: DateTimeType = (mode === 'before' ? beforeDateTime : afterDateTime) as DateTimeType;
   const highlightClassName = mode === 'before' ? 'bg-errorTertiary' : 'bg-successTertiary';
@@ -565,9 +557,9 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
   );
 };
 
-const dateFieldClassNames = `w-full bg-transparent text-center text-body tabular-nums`;
+const dateFieldClassNames = `w-full text-center text-body tabular-nums`;
 const labelClassNames = `text-footnote text-grey-04`;
-const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
+const timeClassNames = `w-[21px] tabular-nums p-0 m-0 text-body`;
 
 type ChipProps = {
   status?: 'ADD' | 'UPDATE' | 'REMOVE' | 'UNCHANGED';
