@@ -3,6 +3,8 @@
 import { useMutation } from '@tanstack/react-query';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { EntityId } from '~/core/io/schema';
+import { validateEntityId } from '~/core/utils/utils';
 
 import { SpaceGovernanceType } from '../types';
 
@@ -43,12 +45,16 @@ export function useDeploySpace() {
           return null;
         }
 
-        const { spaceName, type, governanceType, entityId } = args;
+        const { spaceName, type, governanceType } = args;
 
         const url = new URL(
-          `/api/space/deploy?spaceName=${spaceName}&type=${type}&initialEditorAddress=${initialEditorAddress}&entityId=${entityId}`,
+          `/api/space/deploy?spaceName=${spaceName}&type=${type}&initialEditorAddress=${initialEditorAddress}`,
           window.location.href
         );
+
+        if (validateEntityId(args.entityId)) {
+          url.searchParams.set('entityId', args.entityId as EntityId);
+        }
 
         if (args.type === 'personal' || args.type === 'company') {
           if (args.spaceImage && args.spaceImage !== '') {

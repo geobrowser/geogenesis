@@ -1,9 +1,11 @@
 import { Account, CONTENT_IDS, Image, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
+import { EntityId } from '~/core/io/schema';
 import type { SpaceType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Ops } from '~/core/utils/ops';
+import { validateEntityId } from '~/core/utils/utils';
 
 type DeployArgs = {
   type: SpaceType;
@@ -23,7 +25,7 @@ export const generateOpsForSpaceType = async ({
   entityId,
 }: DeployArgs) => {
   const ops: Op[] = [];
-  const newEntityId = entityId ?? ID.createEntityId();
+  const newEntityId = validateEntityId(entityId) ? (entityId as EntityId) : ID.createEntityId();
 
   // Add name for all space types
   ops.push(
