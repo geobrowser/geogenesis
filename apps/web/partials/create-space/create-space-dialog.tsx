@@ -399,9 +399,6 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const isCompany = spaceType === 'company';
   const [image, setImage] = useAtom(imageAtom);
 
-  // @TODO remove console.info for spaceType
-  console.info('spaceType:', spaceType);
-
   const allowedTypes = spaceType ? allowedTypesBySpaceType[spaceType] : [];
   const validName = name.length > 0;
 
