@@ -111,7 +111,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
      * are created with the entire state of the entity _at the time the version is
      * created_.
      */
-    const handleStaleCurrentVersions = Effect.forEach(
+    const findStaleCurrentVersions = Effect.forEach(
       nonstaleVersions,
       version =>
         Effect.promise(async () => {
@@ -141,6 +141,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
               entityId: version.id.toString(),
               proposalId: version.edit_id.toString(),
             });
+
             const newVersion = {
               // We create a new version derived from the old version. This new version
               // will go through the writeEdits processing to create a new version with
@@ -164,9 +165,9 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       }
     );
 
-    const newIdsForStaleCurrentVersions = (yield* _(handleStaleCurrentVersions)).filter(v => v !== null);
+    const freshVersionsForStaleCurrentVersions = (yield* _(findStaleCurrentVersions)).filter(v => v !== null);
 
-    const tripleOpsForNewVersions = newIdsForStaleCurrentVersions.reduce((acc, nv) => {
+    const tripleOpsForNewVersions = freshVersionsForStaleCurrentVersions.reduce((acc, nv) => {
       const ops = tripleOpsByVersionId.get(nv.versionIdFromEdit);
 
       if (ops) {
@@ -176,7 +177,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       return acc;
     }, new Map<string, (SetTripleOp | DeleteTripleOp)[]>());
 
-    const newVersions = newIdsForStaleCurrentVersions.map(v => v.newVersion);
+    const newVersions = freshVersionsForStaleCurrentVersions.map(v => v.newVersion);
 
     const opsByNewVersions = yield* _(
       mergeOpsWithPreviousVersions({
@@ -186,16 +187,18 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       })
     );
 
-    yield* _(
-      writeEdits({
-        versions: newVersions,
-        block,
-        editType: 'DEFAULT',
-        edits,
-        tripleOpsByVersionId: opsByNewVersions,
-        relationOpsByEditId,
-      })
-    );
+    if (newVersions.length > 0) {
+      yield* _(
+        writeEdits({
+          versions: newVersions,
+          block,
+          editType: 'DEFAULT',
+          edits,
+          tripleOpsByVersionId: opsByNewVersions,
+          relationOpsByEditId,
+        })
+      );
+    }
 
     const allNonstaleVersions = [...nonstaleVersions, ...newVersions].reduce((acc, v) => {
       acc.set(v.entity_id.toString(), v);
