@@ -22,15 +22,22 @@ export async function fromLocal(spaceId?: string) {
     includeDeleted: true,
   });
 
-  const localRelations = getRelations({ includeDeleted: true });
+  const localRelations = getRelations({
+    selector: r => (r.hasBeenPublished === false && spaceId ? r.space === spaceId : true),
+    includeDeleted: true,
+  });
+
+  // @TODO Space id filtering isn't working  for local relations for some reason
+  const actualLocal = localRelations.filter(r => (spaceId ? r.space === spaceId : true));
 
   const entityIds = new Set([
     ...triples.map(t => t.entityId),
     // Relations don't alter the `from` entity directly, so in cases where a relation
     // is modified we also need to query the `from` entity so we can render diffs
     // from the perspective of the `from` entity.
-    ...localRelations.map(r => r.fromEntity.id),
+    ...actualLocal.map(r => r.fromEntity.id),
   ]);
+
   const entityIdsToFetch = [...entityIds.values()];
 
   const collectEntities = Effect.gen(function* () {
@@ -217,8 +224,8 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
           },
           // Filter out the block-related relation types until we render blocks in the diff editor
           type: relation.toEntity.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
-          before: after as RelationChangeValue | null,
-          after: before as RelationChangeValue,
+          before: after,
+          after: before,
         });
       }
     }
