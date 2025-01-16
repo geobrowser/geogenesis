@@ -17,5 +17,5 @@ export default async function EntityTemplateStrategy({ params }: Props) {
     return <ProfileEntityServerContainer params={params} />;
   }
 
-  return <DefaultEntityPage params={params} />;
+  return <DefaultEntityPage params={params} isRelationPage={false} />;
 }
