@@ -263,6 +263,8 @@ async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
 export function createGraphQLStringFromFilters(filters: OmitStrict<Filter, 'valueName'>[]): string {
   if (filters.length === 0) return '';
 
+  console.log('filters', filters);
+
   const filtersAsStrings = filters
     .map(filter => {
       // Assume we can only filter by one type at a time for now
@@ -289,6 +291,15 @@ export function createGraphQLStringFromFilters(filters: OmitStrict<Filter, 'valu
       if (filter.valueType === 'TEXT') {
         // value is just the textValue of the triple
         return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, textValue: { equalToInsensitive: "${filter.value}"} } }`;
+      }
+
+      if (filter.valueType === 'RELATION') {
+        return `relationsByFromVersionId: {
+                some: {
+                  typeOf: { entityId: { equalTo: "${filter.columnId}" } }
+                  toVersion: { entityId: { equalTo: "${filter.value}" } }
+                }
+              }`;
       }
 
       // We don't support other value types yet
