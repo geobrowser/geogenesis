@@ -41,9 +41,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
         totalCount
         nodes {
           vote
-          account {
-            id
-          }
+          accountId
         }
       }
     }

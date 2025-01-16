@@ -285,6 +285,14 @@ const getFetchCompletedProposalsQuery = (
   }
 `;
 
+/**
+ * Content proposals have reached quorum when at least one editor has voted, except
+ * in cases where there is only one editor vote, and the vote is from the creator
+ * of the proposal. Quorum requires at least one _additional_ editor vote.
+ *
+ * Content proposals are "passed" when at least one editor has voted and the votes
+ * for the proposal are > 50%.
+ */
 const getFetchMaybeExecutableProposalsQuery = (
   spaceId: string,
   first: number,
@@ -422,13 +430,30 @@ async function fetchProposals({
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposals = [
-    ...result.executableProposals.nodes.filter(p => {
+
+  // Only show executable proposals under the following conditions:
+  // 1. The proposal has reached quorum
+  // 2. The proposal has not been executed
+  // 3. The proposal has enough votes to pass
+  const executableProposals = result.executableProposals.nodes
+    // Votes should be >= 50%
+    .filter(p => {
       const votes = p.proposalVotes.nodes;
       const votesFor = votes.filter(v => v.vote === 'ACCEPT');
       const yesPercentage = Math.floor((votesFor.length / votes.length) * 100);
       return yesPercentage > 50;
-    }),
+    })
+    // Quorum
+    .filter(p => {
+      if (p.proposalVotes.totalCount === 1 && p.createdById === p.proposalVotes.nodes[0].accountId) {
+        return false;
+      }
+
+      return true;
+    });
+
+  const proposals = [
+    ...executableProposals.filter(p => p !== null),
     ...result.activeProposals.nodes,
     ...result.completedProposals.nodes,
   ];

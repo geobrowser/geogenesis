@@ -33,9 +33,7 @@ export const getFetchProposalQuery = (id: string) => `query {
       totalCount
       nodes {
         vote
-        account {
-          id
-        }
+        accountId
       }
     }
 
@@ -48,16 +46,6 @@ export const getFetchProposalQuery = (id: string) => `query {
     startTime
     endTime
     status
-
-    proposalVotes {
-      totalCount
-      nodes {
-        vote
-        account {
-          id
-        }
-      }
-    }
   }
 }`;
 
@@ -124,7 +112,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   const [profile, voterProfiles] = await Promise.all([
     fetchProfile({ address: proposal.createdById }),
-    fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.account.id)),
+    fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.accountId)),
   ]);
 
   const proposalOrError = Schema.decodeEither(SubstreamProposal)(proposal);

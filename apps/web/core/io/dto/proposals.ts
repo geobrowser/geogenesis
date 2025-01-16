@@ -71,13 +71,13 @@ export function ProposalDto(
     proposalVotes: {
       totalCount: proposal.proposalVotes.totalCount,
       nodes: proposal.proposalVotes.nodes.map(v => {
-        const maybeProfile = voterProfiles.find(voter => v.account.id === voter.address);
+        const maybeProfile = voterProfiles.find(voter => v.accountId === voter.address);
 
         const voter = maybeProfile
           ? maybeProfile
           : {
-              id: v.account.id,
-              address: v.account.id as `0x${string}`,
+              id: v.accountId,
+              address: v.accountId as `0x${string}`,
               name: null,
               avatarUrl: null,
               coverUrl: null,

@@ -315,7 +315,7 @@ export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) 
 }
 
 export function getUserVote(votes: SubstreamVote[], address: string) {
-  return votes.find(v => v.account.id === getAddress(address));
+  return votes.find(v => v.accountId === getAddress(address));
 }
 
 export function getProposalTimeRemaining(endTime: number) {

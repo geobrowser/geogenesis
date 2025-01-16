@@ -11,9 +11,7 @@ const getProposedEditorInProposalQuery = (proposalId: string) => `query {
     filter: { proposalId: { equalTo: "${proposalId}" } }
   ) {
     nodes {
-      account {
-        id
-      }
+      accountId 
     }
   }
 }`;
@@ -21,9 +19,7 @@ const getProposedEditorInProposalQuery = (proposalId: string) => `query {
 interface NetworkResult {
   proposedEditors: {
     nodes: {
-      account: {
-        id: string;
-      };
+      accountId: string;
     }[];
   };
 }
@@ -85,6 +81,6 @@ export async function fetchProposedEditorForProposal(proposalId: string): Promis
   }
 
   // There should only be one proposed member in a single proposal
-  const proposedEditorAccount = proposedEditors[0].account;
-  return await fetchProfile({ address: proposedEditorAccount.id });
+  const proposedEditorAccount = proposedEditors[0].accountId;
+  return await fetchProfile({ address: proposedEditorAccount });
 }
