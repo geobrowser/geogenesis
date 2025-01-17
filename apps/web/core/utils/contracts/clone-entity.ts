@@ -9,6 +9,8 @@ type Options = {
   oldEntityId: string;
   entityId?: string;
   entityName?: string | null;
+  parentEntityId?: string | null;
+  parentEntityName?: string | null;
 };
 
 export const cloneEntity = async (
@@ -19,7 +21,7 @@ export const cloneEntity = async (
     throw new Error(`Must specify entity to clone.`);
   }
 
-  const { oldEntityId, entityId = null, entityName } = options;
+  const { oldEntityId, entityId = null, entityName, parentEntityId = null, parentEntityName = null } = options;
 
   const oldEntity = await Subgraph.fetchEntity({ id: oldEntityId, spaceId: SYSTEM_IDS.ROOT_SPACE_ID });
 
@@ -54,16 +56,34 @@ export const cloneEntity = async (
   }
 
   triplesToClone.forEach(triple => {
-    newOps.push(
-      Ops.create({
-        entity: newEntityId,
-        attribute: triple.attributeId,
-        value: {
-          type: triple.value.type,
-          value: triple.value.value,
-        },
-      })
-    );
+    if (triple.value.type === 'TEXT' && hasVariable(triple.value.value)) {
+      const replacedValue = replaceVariables(triple.value.value, {
+        entityId: parentEntityId ?? newEntityId,
+        entityName: parentEntityName ?? newEntityName ?? '${entityName}',
+      });
+
+      newOps.push(
+        Ops.create({
+          entity: newEntityId,
+          attribute: triple.attributeId,
+          value: {
+            type: triple.value.type,
+            value: replacedValue,
+          },
+        })
+      );
+    } else {
+      newOps.push(
+        Ops.create({
+          entity: newEntityId,
+          attribute: triple.attributeId,
+          value: {
+            type: triple.value.type,
+            value: triple.value.value,
+          },
+        })
+      );
+    }
   });
 
   relationsToClone.forEach(relation => {
@@ -77,11 +97,23 @@ export const cloneEntity = async (
     );
   });
 
-  const [tabOps, newlySeenTabEntityIds] = await cloneRelatedEntities(tabsToClone, newEntityId, allSeenEntityIds);
+  const [tabOps, newlySeenTabEntityIds] = await cloneRelatedEntities(
+    tabsToClone,
+    newEntityId,
+    allSeenEntityIds,
+    parentEntityId ?? newEntityId,
+    parentEntityName ?? newEntityName
+  );
   newOps.push(...tabOps);
   newlySeenTabEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
 
-  const [blockOps, newlySeenBlockEntityIds] = await cloneRelatedEntities(blocksToClone, newEntityId, allSeenEntityIds);
+  const [blockOps, newlySeenBlockEntityIds] = await cloneRelatedEntities(
+    blocksToClone,
+    newEntityId,
+    allSeenEntityIds,
+    parentEntityId ?? newEntityId,
+    parentEntityName ?? newEntityName
+  );
   newOps.push(...blockOps);
   newlySeenBlockEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
 
@@ -91,7 +123,9 @@ export const cloneEntity = async (
 const cloneRelatedEntities = async (
   relatedEntitiesToClone: Array<RelationType>,
   newEntityId: string,
-  previouslySeenEntityIds: Set<string>
+  previouslySeenEntityIds: Set<string>,
+  parentEntityId: string | null,
+  parentEntityName: string | null | undefined
 ) => {
   const allSeenEntityIds: Set<string> = new Set();
 
@@ -119,6 +153,8 @@ const cloneRelatedEntities = async (
           oldEntityId: relation.toEntity.id,
           entityId: newRelatedEntityId,
           entityName: relation.toEntity.name ?? '',
+          parentEntityId,
+          parentEntityName,
         },
         allSeenEntityIds
       );
@@ -138,3 +174,24 @@ const SKIPPED_ATTRIBUTES = [
   SYSTEM_IDS.TABS_ATTRIBUTE,
   SYSTEM_IDS.BLOCKS,
 ];
+
+const hasVariable = (value: string) => {
+  const entityIdPattern = /\$\{entityId\}/;
+  const entityNamePattern = /\$\{entityName\}/;
+
+  return entityIdPattern.test(value) || entityNamePattern.test(value);
+};
+
+const replaceVariables = (value: string, variables: { entityId: string; entityName: string }) => {
+  let result = value;
+
+  if (variables.entityId) {
+    result = result.replace(/\$\{entityId\}/g, variables.entityId);
+  }
+
+  if (variables.entityName) {
+    result = result.replace(/\$\{entityName\}/g, variables.entityName);
+  }
+
+  return result;
+};
