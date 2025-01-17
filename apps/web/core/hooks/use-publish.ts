@@ -1,7 +1,7 @@
 import { Op } from '@geogenesis/sdk';
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
-import { Effect, Either } from 'effect';
+import { Duration, Effect, Either, Schedule } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
@@ -269,8 +269,6 @@ function makeProposal(args: MakeProposalArgs) {
     const cid = yield* IpfsEffectClient.upload(proposal);
     onChangePublishState('publishing-contract');
 
-    const [, cidContains] = cid.split('ipfs://');
-
     // yield* check(() => cid.startsWith('ipfs://'), 'CID does not start with ipfs://');
     // yield* check(() => cidContains !== undefined && cidContains !== '', 'CID is not valid');
 
@@ -279,20 +277,30 @@ function makeProposal(args: MakeProposalArgs) {
       cid,
       spacePluginAddress: space.spacePluginAddress,
     });
-    // return;
 
-    return yield* Effect.tryPromise({
-      try: () =>
-        smartAccount.sendTransaction({
+    const execute = Effect.tryPromise({
+      try: async () => {
+        return await smartAccount.sendTransaction({
           to:
             space.type === 'PUBLIC'
               ? (space.mainVotingPluginAddress as `0x${string}`)
               : (space.personalSpaceAdminPluginAddress as `0x${string}`),
           value: 0n,
           data: callData,
-        }),
+        });
+      },
       catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
     });
+
+    return yield* Effect.retry(
+      execute,
+      Schedule.exponential('100 millis').pipe(
+        Schedule.jittered,
+        Schedule.compose(Schedule.elapsed),
+        Schedule.tapInput(() => Effect.succeed(console.log('[PUBLISH][makeProposal] Retrying'))),
+        Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(30)))
+      )
+    );
   });
 
   const publishProgram = Effect.gen(function* () {

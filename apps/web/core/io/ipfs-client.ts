@@ -47,7 +47,7 @@ async function upload(url: string, formData: FormData) {
       Schedule.jittered,
       Schedule.compose(Schedule.elapsed),
       Schedule.tapInput(() => Effect.succeed(console.log('[IPFS][upload] Retrying'))),
-      Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(10)))
+      Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(30)))
     )
   );
   return await Effect.runPromise(retryable);
@@ -71,7 +71,7 @@ export class IpfsClient {
     const blob = new Blob([binary], { type: 'application/octet-stream' });
     const formData = new FormData();
     formData.append('file', blob);
-    console.log(['[IPFS][binary] Uploading binary']);
+    console.log('[IPFS][binary] Uploading binary');
 
     const url = '/api/ipfs/upload';
     return await upload(url, formData);
