@@ -27,6 +27,7 @@ import { RightArrowLong } from './icons/right-arrow-long';
 import { Search } from './icons/search';
 import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
+import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
@@ -248,6 +249,14 @@ export const SelectEntity = ({
                                           ))}
                                         </div>
                                         {withSelectSpace && <Spacer height={4} />}
+                                      </>
+                                    )}
+                                    {result.description && (
+                                      <>
+                                        <Spacer height={4} />
+                                        <Truncate maxLines={3} shouldTruncate variant="footnote">
+                                          <p className="text-footnote text-grey-04">{result.description}</p>
+                                        </Truncate>
                                       </>
                                     )}
 
