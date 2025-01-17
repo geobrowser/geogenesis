@@ -243,9 +243,7 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
     const realChanges = [...tripleChanges, ...nonBlockRelationChanges].filter(c => isRealChange(c.before, c.after));
 
     // @TODO: map block diffs into a renderable format
-    const blockChanges = relationChanges
-      .filter(c => c.attribute.id === SYSTEM_IDS.BLOCKS)
-      .filter(c => isRealChange(c.before, c.after));
+    const blockChanges = relationChanges.filter(c => c.attribute.id === SYSTEM_IDS.BLOCKS);
 
     return {
       id: entity.id,
