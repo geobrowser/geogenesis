@@ -6,14 +6,12 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 
-import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
-import { shouldFilterTriple } from '~/core/utils/change/change';
 
 import { SmallButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
@@ -30,22 +28,11 @@ export const FlowBar = () => {
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
   const triples = useTriples(
-    React.useMemo(
-      () => ({ selector: t => t.hasBeenPublished === false && !shouldFilterTriple(t), includeDeleted: true }),
-      []
-    )
+    React.useMemo(() => ({ selector: t => t.hasBeenPublished === false, includeDeleted: true }), [])
   );
-
-  console.log('triples', triples);
-
-  const relations = useRelations(
-    React.useMemo(() => ({ selector: r => r.hasBeenPublished === false, includeDeleted: true }), [])
-  );
-
-  console.log('relations', relations);
 
   // @TODO: We can use Change.fromLocal to aggregate the "real" counts.
-  const opsCount = triples.length + relations.length;
+  const opsCount = triples.length;
 
   const entitiesCount = pipe(
     triples,
