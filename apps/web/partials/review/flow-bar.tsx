@@ -1,25 +1,56 @@
 'use client';
 
-import { A, D, pipe } from '@mobily/ts-belt';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
 
+import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
+import { Change } from '~/core/utils/change';
 
 import { SmallButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
+import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { Warning } from '~/design-system/icons/warning';
 import { Spinner } from '~/design-system/spinner';
+
+function useTotalEditsCount() {
+  const r = useRelations(
+    React.useMemo(() => ({ selector: t => t.hasBeenPublished === false, includeDeleted: true }), [])
+  );
+
+  const t = useTriples(
+    React.useMemo(() => ({ selector: t => t.hasBeenPublished === false, includeDeleted: true }), [])
+  );
+
+  const { data, isLoading, isFetched } = useQuery({
+    placeholderData: keepPreviousData,
+    queryKey: ['local-changes', 'count', r, t],
+    queryFn: () => Change.fromLocal(),
+  });
+
+  const changedSpaces = React.useMemo(() => {
+    return [...new Set([...r.map(r => r.space), ...t.map(t => t.space)])];
+  }, [r, t]);
+
+  return {
+    entitiesCount: data?.length ?? 0,
+    editsCount: data?.reduce((acc, c) => acc + c.changes.length + c.blockChanges.length, 0) ?? 0,
+    spacesCount: changedSpaces.length,
+    isLoading,
+    isFetched,
+  };
+}
 
 export const FlowBar = () => {
   const { state: statusBarState } = useStatusBar();
@@ -27,30 +58,11 @@ export const FlowBar = () => {
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
-  const triples = useTriples(
-    React.useMemo(() => ({ selector: t => t.hasBeenPublished === false, includeDeleted: true }), [])
-  );
-
-  // @TODO: We can use Change.fromLocal to aggregate the "real" counts.
-  const opsCount = triples.length;
-
-  const entitiesCount = pipe(
-    triples,
-    A.groupBy(t => t.entityId),
-    D.keys,
-    A.length
-  );
-
-  const spacesCount = pipe(
-    triples,
-    A.groupBy(t => t.space),
-    D.keys,
-    keys => new Set(keys).size
-  );
+  const { editsCount, entitiesCount, spacesCount, isLoading } = useTotalEditsCount();
 
   // Don't show the flow bar if there are no actions, if the user is not in edit mode, if there is a toast,
   // or if the status bar is rendering in place.
-  const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
+  const hideFlowbar = editsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
 
   return (
     <AnimatePresence>
@@ -68,7 +80,7 @@ export const FlowBar = () => {
             >
               <div className="inline-flex h-full items-center justify-center">
                 <p className="inline-flex items-center px-3">
-                  <span>{pluralize('edit', opsCount, true)}</span>
+                  {!isLoading ? <span>{pluralize('edit', editsCount, true)}</span> : <Dots />}
                 </p>
                 <Divider type="vertical" className="inline-block h-4 w-px" />
                 <p className="inline-flex items-center px-3">
