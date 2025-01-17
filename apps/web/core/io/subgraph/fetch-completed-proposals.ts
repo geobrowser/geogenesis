@@ -12,7 +12,7 @@ import { getSpaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
-  proposals(first: ${first}, filter: { status: { equalTo: ACCEPTED }, spaceId: {equalTo: ${JSON.stringify(
+  proposals(first: ${first}, filter: { type: { equalTo: ADD_EDIT }, status: { equalTo: ACCEPTED }, spaceId: {equalTo: ${JSON.stringify(
     spaceId
   )}}}, orderBy: END_TIME_DESC, offset: ${skip}) {
     nodes {
