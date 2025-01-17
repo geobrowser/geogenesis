@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Duration, Effect, Schedule } from 'effect';
 
 import { IpfsUploadError } from '~/core/errors';
 
@@ -13,6 +13,44 @@ export function validateCid(cid: string) {
   }
 
   return true;
+}
+
+async function upload(url: string, formData: FormData) {
+  const run = Effect.gen(function* () {
+    console.log(`[IPFS][upload] Writing content to url`, url);
+
+    const response = yield* Effect.tryPromise({
+      try: async () => {
+        return await fetch(url, {
+          method: 'POST',
+          body: formData,
+        });
+      },
+      catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
+    });
+
+    const { hash } = yield* Effect.tryPromise({
+      try: async () => {
+        return await response.json();
+      },
+      catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
+    });
+    validateCid(hash);
+
+    console.log('[IPFS][upload] Hash:', hash);
+    return hash as `ipfs://${string}`; // validated above
+  });
+
+  const retryable = Effect.retry(
+    run,
+    Schedule.exponential('100 millis').pipe(
+      Schedule.jittered,
+      Schedule.compose(Schedule.elapsed),
+      Schedule.tapInput(() => Effect.succeed(console.log('[IPFS][upload] Retrying'))),
+      Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(10)))
+    )
+  );
+  return await Effect.runPromise(retryable);
 }
 
 /**
@@ -33,39 +71,19 @@ export class IpfsClient {
     const blob = new Blob([binary], { type: 'application/octet-stream' });
     const formData = new FormData();
     formData.append('file', blob);
+    console.log(['[IPFS][binary] Uploading binary']);
 
     const url = '/api/ipfs/upload';
-    console.log(`Posting to url`, url);
-
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-    });
-
-    const { hash } = await response.json();
-    validateCid(hash);
-
-    console.log('ipfs hash', hash);
-    return hash;
+    return await upload(url, formData);
   }
 
   static async uploadFile(file: File): Promise<`ipfs://${string}`> {
     const formData = new FormData();
     formData.append('file', file);
+    console.log('[IPFS][file] Uploading file');
 
     const url = `/api/ipfs/upload-file`;
-    console.log(`Posting to url`, url);
-
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-    });
-
-    const { hash } = await response.json();
-    validateCid(hash);
-
-    console.log('ipfs hash', hash);
-    return hash;
+    return await upload(url, formData);
   }
 }
 
