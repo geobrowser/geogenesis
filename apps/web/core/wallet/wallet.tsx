@@ -12,7 +12,7 @@ import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors'
 import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
+import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
 import { Cookie } from '../cookie';
 import { GEOGENESIS } from './geo-chain';
@@ -104,12 +104,14 @@ export function GeoConnectButton() {
   const { wallets } = useWallets();
 
   const setName = useSetAtom(nameAtom);
+  const setEntityId = useSetAtom(entityIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
 
   const resetOnboarding = () => {
     setName('');
+    setEntityId('');
     setAvatar('');
     setSpaceId('');
     setStep('start');
