@@ -329,7 +329,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
               spaceId={SYSTEM_IDS.ROOT_SPACE_ID}
               width="full"
               variant="fixed"
-              placeholder="Space name..."
+              placeholder="Your name..."
               inputClassName="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
               withSelectSpace={false}
             />
