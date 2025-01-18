@@ -1,5 +1,6 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -19,15 +20,18 @@ import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
+import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
+export const entityIdAtom = atomWithStorage<string>('onboardingEntityId', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
@@ -47,6 +51,7 @@ export const OnboardingDialog = () => {
 
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
+  const entityId = useAtomValue(entityIdAtom);
   const { deploy } = useDeploySpace();
   const setSpaceId = useSetAtom(spaceIdAtom);
 
@@ -67,6 +72,7 @@ export const OnboardingDialog = () => {
         spaceImage: avatar,
         spaceName: name,
         type: 'personal',
+        entityId,
       });
 
       if (!spaceId) {
@@ -238,6 +244,8 @@ type StepOnboardingProps = {
 function StepOnboarding({ onNext }: StepOnboardingProps) {
   const { ipfs } = Services.useServices();
   const [name, setName] = useAtom(nameAtom);
+  const [, setEntityId] = useAtom(entityIdAtom);
+
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
   const validName = name.length > 0;
@@ -257,6 +265,8 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
       setAvatar(ipfsUri);
     }
   };
+
+  const allowedTypes = [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.PERSON_TYPE];
 
   return (
     <div className="space-y-4">
@@ -304,14 +314,40 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
         </div>
       </StepContents>
       <div className="flex w-full flex-col items-center justify-center gap-3">
-        <div className="inline-block">
-          <input
-            placeholder="Your name..."
-            className="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
-            value={name}
-            onChange={({ currentTarget: { value } }) => setName(value)}
-            autoFocus
-          />
+        <div className="relative z-100 inline-block">
+          <div className={cx(name && 'invisible')}>
+            <SelectEntity
+              allowedTypes={allowedTypes}
+              onDone={entity => {
+                setName(entity.name ?? '');
+                setEntityId(entity.id);
+              }}
+              onCreateEntity={entity => {
+                setName(entity.name ?? '');
+                setEntityId('');
+              }}
+              spaceId={SYSTEM_IDS.ROOT_SPACE_ID}
+              width="full"
+              variant="fixed"
+              placeholder="Space name..."
+              inputClassName="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
+              withSelectSpace={false}
+            />
+          </div>
+          {name && (
+            <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-1">
+              <div className="text-bodySemibold">Space for</div>
+              <SmallButton
+                onClick={() => {
+                  setName('');
+                  setEntityId('');
+                }}
+              >
+                <span>{name}</span>
+                <CloseSmall />
+              </SmallButton>
+            </div>
+          )}
         </div>
       </div>
       <div className="absolute inset-x-4 bottom-4 flex">
