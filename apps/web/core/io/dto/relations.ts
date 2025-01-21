@@ -15,10 +15,6 @@ export function RelationDtoLive(relation: SubstreamRelationLive) {
   const imageEntityUrlValue =
     toEntityTriples.find(relation => relation.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
 
-  if (imageEntityUrlValue) {
-    console.log('relation', toEntityTypes);
-  }
-
   const renderableType = getRenderableEntityType(toEntityTypes);
 
   return {
