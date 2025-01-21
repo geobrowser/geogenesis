@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useWriteOps } from '~/core/database/write';
+import { removeRelation, useWriteOps } from '~/core/database/write';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 
@@ -20,7 +20,7 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
   const [isMenuOpen, onMenuOpenChange] = React.useState(false);
 
   const isEditing = useUserIsEditing(spaceId);
-  const { triples } = useEntityPageStore();
+  const { triples, relations } = useEntityPageStore();
   const { remove } = useWriteOps();
 
   const onCopyId = async () => {
@@ -34,6 +34,7 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
 
   const onDelete = () => {
     triples.forEach(t => remove(t, t.space));
+    relations.forEach(r => removeRelation({ fromEntityId: r.fromEntity.id, relationId: r.id, spaceId }));
     onMenuOpenChange(false);
   };
 
