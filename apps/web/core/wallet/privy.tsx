@@ -9,7 +9,7 @@ import { GEOGENESIS } from './geo-chain';
 const config: PrivyClientConfig = {
   defaultChain: GEOGENESIS,
   supportedChains: [GEOGENESIS],
-  loginMethods: ['email', 'wallet'],
+  loginMethods: ['email'],
   appearance: {
     showWalletLoginFirst: false,
     logo: '/static/favicon-320x180.png',
