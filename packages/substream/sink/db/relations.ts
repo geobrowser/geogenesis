@@ -50,7 +50,18 @@ export class Relations {
   static async select(relation: S.relations.Whereable) {
     return await db
       .select('relations', relation, {
-        columns: ['id', 'entity_id', 'from_version_id', 'to_version_id', 'type_of_id', 'index', 'space_id'],
+        columns: [
+          'id',
+          'entity_id',
+          'from_version_id',
+          'to_version_id',
+          'type_of_id',
+          'index',
+          'space_id',
+          'type_of_version_id',
+          'from_entity_id',
+          'to_entity_id',
+        ],
         lateral: {
           to_entity: db.selectOne('versions', { id: db.parent('to_version_id') }, { columns: ['entity_id'] }),
           type_of: db.selectOne('versions', { id: db.parent('type_of_id') }, { columns: ['entity_id'] }),

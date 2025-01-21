@@ -6,9 +6,9 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 
-import { Entity, EntityDto } from '../dto/entities';
-import { SubstreamEntity } from '../schema';
-import { versionFragment } from './fragments';
+import { Entity, EntityDtoLive } from '../dto/entities';
+import { SubstreamEntityLive } from '../schema';
+import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
 function getFetchTabsQuery(spaceId: string) {
@@ -23,7 +23,7 @@ function getFetchTabsQuery(spaceId: string) {
             relationsByFromVersionId: {
               some: {
                 typeOf: {
-                  entityId: { equalTo: "${SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE}" }
+                  id: { equalTo: "${SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE}" }
                 }
               }
             }
@@ -36,7 +36,7 @@ function getFetchTabsQuery(spaceId: string) {
         id
         currentVersion {
           version {
-            ${versionFragment}
+            ${getEntityFragment()}
           }
         }
       }
@@ -49,7 +49,7 @@ export interface FetchTabsOptions {
 }
 
 interface NetworkResult {
-  entities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamEntityLive[] };
 }
 
 export async function fetchTabs(options: FetchTabsOptions): Promise<Entity[]> {
@@ -102,7 +102,7 @@ export async function fetchTabs(options: FetchTabsOptions): Promise<Entity[]> {
 
   const entities = unknownEntities.nodes
     .map(e => {
-      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
+      const decodedSpace = Schema.decodeEither(SubstreamEntityLive)(e);
 
       return Either.match(decodedSpace, {
         onLeft: error => {
@@ -110,7 +110,7 @@ export async function fetchTabs(options: FetchTabsOptions): Promise<Entity[]> {
           return null;
         },
         onRight: entity => {
-          return EntityDto(entity);
+          return EntityDtoLive(entity);
         },
       });
     })

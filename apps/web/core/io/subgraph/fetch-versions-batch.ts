@@ -5,8 +5,8 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 
 import { HistoryVersionDto } from '../dto/versions';
-import { SubstreamVersionWithEdit } from '../schema';
-import { versionFragment } from './fragments';
+import { SubstreamVersionHistorical } from '../schema';
+import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
 interface FetchVersionsArgs {
@@ -19,7 +19,7 @@ const query = (versionIds: string[]) => {
   return `query {
     versions(filter: { id: { in: ${JSON.stringify(versionIds)} } } first: 50) {
     nodes {
-        ${versionFragment}
+        ${getEntityFragment()}
         edit {
           id
           name
@@ -37,10 +37,10 @@ const query = (versionIds: string[]) => {
 };
 
 interface NetworkResult {
-  versions: { nodes: SubstreamVersionWithEdit[] };
+  versions: { nodes: SubstreamVersionHistorical[] };
 }
 
-export async function fetchVersionsBatch(args: FetchVersionsArgs) {
+export async function fetchHistoricalVersionsBatch(args: FetchVersionsArgs) {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
@@ -87,7 +87,7 @@ export async function fetchVersionsBatch(args: FetchVersionsArgs) {
 
   return networkVersions
     .map(networkVersion => {
-      const decoded = Schema.decodeEither(SubstreamVersionWithEdit)(networkVersion);
+      const decoded = Schema.decodeEither(SubstreamVersionHistorical)(networkVersion);
 
       return Either.match(decoded, {
         onLeft: error => {

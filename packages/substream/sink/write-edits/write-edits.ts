@@ -209,22 +209,6 @@ export function writeEdits(args: PopulateContentArgs) {
           }),
       })
     );
-
-    // There should only be one space metadata entry per space
-    // It has to be one set as a current version/accepted and not one that hasn't
-    // been accepted yet.
-    const spaceMetadata = yield* _(aggregateSpacesFromRelations(relations));
-    return spaceMetadata;
-
-    // yield* _(
-    //   Effect.tryPromise({
-    //     try: () => SpaceMetadata.upsert(spaceMetadata),
-    //     catch: error =>
-    //       new CouldNotWriteSpaceMetadataError({
-    //         message: `Failed to insert space metadata. ${(error as Error).message}`,
-    //       }),
-    //   })
-    // );
   });
 }
 
@@ -240,14 +224,14 @@ function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Inser
       const fromVersionId = relation.from_version_id.toString();
       const toVersionId = relation.to_version_id.toString();
 
-      if (typeVersionIds.has(relation.type_of_id.toString())) {
+      if (typeVersionIds.has(relation.type_of_version_id.toString())) {
         const alreadyFoundTypes = types.get(fromVersionId) ?? [];
         types.set(fromVersionId, [...alreadyFoundTypes, toVersionId]);
       }
     }
 
     for (const relation of relations) {
-      const versionId = relation.type_of_id.toString();
+      const versionId = relation.type_of_version_id.toString();
       const alreadyFoundTypes = types.get(versionId) ?? [];
       types.set(versionId, [...alreadyFoundTypes, versionId]);
     }
@@ -260,39 +244,6 @@ function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Inser
         };
       });
     });
-  });
-}
-
-export function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) {
-  return Effect.gen(function* (_) {
-    const [typesVersions, spaceConfigsVersions] = yield* _(
-      Effect.all(
-        [
-          Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES_ATTRIBUTE })),
-          Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.SPACE_TYPE })),
-        ],
-        { concurrency: 2 }
-      )
-    );
-
-    const typeVersionIds = new Set(typesVersions.map(v => v.id.toString()));
-    const spaceConfigVersionIds = new Set(spaceConfigsVersions.map(v => v.id.toString()));
-
-    const spaceMetadatas: Schema.spaces_metadata.Insertable[] = [];
-
-    for (const relation of relations) {
-      const fromVersionId = relation.from_version_id.toString();
-      const toVersionId = relation.to_version_id.toString();
-
-      if (typeVersionIds.has(relation.type_of_id.toString()) && spaceConfigVersionIds.has(toVersionId)) {
-        spaceMetadatas.push({
-          space_id: relation.space_id,
-          version_id: fromVersionId,
-        });
-      }
-    }
-
-    return spaceMetadatas;
   });
 }
 

@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { VersionDto } from '~/core/io/dto/versions';
 import { SubstreamVersion } from '~/core/io/schema';
-import { versionFragment } from '~/core/io/subgraph/fragments';
+import { getEntityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 
 interface FetchVersionsArgs {
@@ -23,7 +23,7 @@ const query = (createdAt: number, entityId: string, spaceId: string) => {
       }
     ) {
       nodes {
-        ${versionFragment}
+        ${getEntityFragment({ useHistorical: true, spaceId })}
         edit {
           id
           name

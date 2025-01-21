@@ -97,6 +97,15 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
 
     const deletedRelations = collectDeletedRelationIds(relationOpsByEditId);
 
+    /**
+     * When creating a new version we need to aggregate any new relations and existing
+     * relations for the new version. We also need to delete any relations that are
+     * deleted as part of the edit.
+     *
+     * I think the only remaining thing we need to do is map the relation to the entity
+     * for the from/to/type fields.
+     */
+
     // We process relations by edit id so that we can use either the latest or any version
     // in the specific edit when referencing to, from, and type within a relation. Otherwise
     // we can have relations referencing versions in different edits which doesn't make sense.
@@ -156,8 +165,8 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
             // If the version for the to or type entity is not found, then we know there's not a new
             // version for it in this edit, so we can use the existing version id.
             const type_version_id = r.type_of
-              ? latestVersionForChangedEntities[r.type_of.entity_id] ?? r.type_of_id
-              : r.type_of_id;
+              ? latestVersionForChangedEntities[r.type_of.entity_id] ?? r.type_of_version_id
+              : r.type_of_version_id;
             const to_version_id = r.to_entity
               ? latestVersionForChangedEntities[r.to_entity.entity_id] ?? r.to_version_id
               : r.to_version_id;

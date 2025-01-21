@@ -296,8 +296,8 @@ export function createGraphQLStringFromFilters(filters: OmitStrict<Filter, 'valu
       if (filter.valueType === 'RELATION') {
         return `relationsByFromVersionId: {
                 some: {
-                  typeOf: { entityId: { equalTo: "${filter.columnId}" } }
-                  toVersion: { entityId: { equalTo: "${filter.value}" } }
+                  typeOf: { id: { equalTo: "${filter.columnId}" } }
+                  toEntity: { id: { equalTo: "${filter.value}" } }
                 }
               }`;
       }
