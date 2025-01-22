@@ -3,14 +3,12 @@ import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
-import { Subgraph } from '~/core/io';
-import { Entity } from '~/core/io/dto/entities';
 import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
+import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
-import { fetchTabs } from '~/core/io/subgraph/fetch-tabs';
-import { EditorProvider } from '~/core/state/editor/editor-provider';
+import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entities } from '~/core/utils/entity';
@@ -31,528 +29,38 @@ import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-he
 
 import { cachedFetchSpace } from './cached-fetch-space';
 
-interface Props {
+type LayoutProps = {
   params: { id: string };
   children: React.ReactNode;
-}
+};
 
-interface EntityType {
+type EntityType = {
   id: string;
   name: string | null;
-}
+};
 
-interface TabProps {
+type TabProps = {
   label: string;
   href: string;
   priority: 1 | 2 | 3;
   hidden?: boolean;
-}
-
-async function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Promise<TabProps[]> {
-  const typeIds = types.map(t => t.id);
-  const tabs = [];
-
-  const spaceId = params.id;
-
-  let teamCount = 0;
-
-  const tabEntities = await fetchTabs({ spaceId });
-
-  const hasAboutPage = getHasPage(tabEntities, SYSTEM_IDS.ABOUT_PAGE);
-  const hasActivitiesPage = getHasPage(tabEntities, SYSTEM_IDS.ACTIVITIES_PAGE);
-  const hasCulturePage = getHasPage(tabEntities, SYSTEM_IDS.CULTURE_PAGE);
-  const hasEducationPage = getHasPage(tabEntities, SYSTEM_IDS.EDUCATION_PAGE);
-  const hasEventsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
-  // const hasFinancesPage = getHasPage(tabEntities, SYSTEM_IDS.FINANCES_PAGE);
-  const hasGovernmentPage = getHasPage(tabEntities, SYSTEM_IDS.GOVERNMENT_PAGE);
-  const hasJobsPage = getHasPage(tabEntities, SYSTEM_IDS.JOBS_PAGE);
-  const hasNewsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
-  const hasOntologyPage = getHasPage(tabEntities, SYSTEM_IDS.ONTOLOGY_PAGE);
-  const hasPeoplePage = getHasPage(tabEntities, SYSTEM_IDS.PEOPLE_PAGE);
-  const hasPersonalPage = getHasPage(tabEntities, SYSTEM_IDS.PERSONAL_PAGE);
-  const hasPlacesPage = getHasPage(tabEntities, SYSTEM_IDS.PLACES_PAGE);
-  const hasPostsPage = getHasPage(tabEntities, SYSTEM_IDS.POSTS_PAGE);
-  const hasProfessionalPage = getHasPage(tabEntities, SYSTEM_IDS.PROFESSIONAL_PAGE);
-  const hasProjectsPage = getHasPage(tabEntities, SYSTEM_IDS.PROJECTS_PAGE);
-
-  if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE) || typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
-    const roleTriples = await Subgraph.fetchTriples({
-      space: params.id,
-      query: '',
-      skip: 0,
-      first: 1000,
-      filter: [{ field: 'attribute-id', value: SYSTEM_IDS.ROLE_ATTRIBUTE }],
-    });
-
-    if (roleTriples.length > 0) {
-      teamCount = roleTriples.length;
-    }
-  }
-
-  const PERSON_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-    {
-      label: 'Professional',
-      href: `${NavUtils.toSpace(params.id)}/professional`,
-      priority: 1 as const,
-      hidden: !hasProfessionalPage,
-    },
-    {
-      label: 'Personal',
-      href: `${NavUtils.toSpace(params.id)}/personal`,
-      priority: 1 as const,
-      hidden: !hasPersonalPage,
-    },
-    {
-      label: 'Activity',
-      href: `${NavUtils.toSpace(params.id)}/activity`,
-      priority: 3 as const,
-    },
-  ];
-
-  const INDUSTRY_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-    {
-      label: 'News',
-      href: `${NavUtils.toSpace(params.id)}/news`,
-      priority: 1 as const,
-      hidden: !hasNewsPage,
-    },
-    {
-      label: 'Events',
-      href: `${NavUtils.toSpace(params.id)}/events`,
-      priority: 1 as const,
-      hidden: !hasEventsPage,
-    },
-    {
-      label: 'Projects',
-      href: `${NavUtils.toSpace(params.id)}/projects`,
-      priority: 1 as const,
-      hidden: !hasProjectsPage,
-    },
-    {
-      label: 'People',
-      href: `${NavUtils.toSpace(params.id)}/people`,
-      priority: 1 as const,
-      hidden: !hasPeoplePage,
-    },
-    {
-      label: 'Jobs',
-      href: `${NavUtils.toSpace(params.id)}/jobs`,
-      priority: 1 as const,
-      hidden: !hasJobsPage,
-    },
-    {
-      label: 'Ontology',
-      href: `${NavUtils.toSpace(params.id)}/ontology`,
-      priority: 1 as const,
-      hidden: !hasOntologyPage,
-    },
-    {
-      label: 'About',
-      href: `${NavUtils.toSpace(params.id)}/about`,
-      priority: 1 as const,
-      hidden: !hasAboutPage,
-    },
-  ];
-
-  const COMPANY_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-    {
-      label: 'Posts',
-      href: `${NavUtils.toSpace(params.id)}/posts`,
-      priority: 1 as const,
-      hidden: !hasPostsPage,
-    },
-    {
-      label: 'Events',
-      href: `${NavUtils.toSpace(params.id)}/events`,
-      priority: 1 as const,
-      hidden: !hasEventsPage,
-    },
-    {
-      label: 'Team',
-      href: `${NavUtils.toSpace(params.id)}/team`,
-      priority: 1 as const,
-      badge: <>{teamCount.toString()}</>,
-    },
-    {
-      label: 'Jobs',
-      href: `${NavUtils.toSpace(params.id)}/jobs`,
-      priority: 1 as const,
-      hidden: !hasJobsPage,
-    },
-    {
-      label: 'About',
-      href: `${NavUtils.toSpace(params.id)}/about`,
-      priority: 1 as const,
-      hidden: !hasAboutPage,
-    },
-  ];
-
-  const PROTOCOL_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-    {
-      label: 'News',
-      href: `${NavUtils.toSpace(params.id)}/news`,
-      priority: 1 as const,
-      hidden: !hasNewsPage,
-    },
-    {
-      label: 'Events',
-      href: `${NavUtils.toSpace(params.id)}/events`,
-      priority: 1 as const,
-      hidden: !hasEventsPage,
-    },
-    {
-      label: 'Education',
-      href: `${NavUtils.toSpace(params.id)}/education`,
-      priority: 1 as const,
-      hidden: !hasEducationPage,
-    },
-    {
-      label: 'Projects',
-      href: `${NavUtils.toSpace(params.id)}/projects`,
-      priority: 1 as const,
-      hidden: !hasProjectsPage,
-    },
-    {
-      label: 'People',
-      href: `${NavUtils.toSpace(params.id)}/people`,
-      priority: 1 as const,
-      hidden: !hasPeoplePage,
-    },
-    {
-      label: 'Jobs',
-      href: `${NavUtils.toSpace(params.id)}/jobs`,
-      priority: 1 as const,
-      hidden: !hasJobsPage,
-    },
-    {
-      label: 'Ontology',
-      href: `${NavUtils.toSpace(params.id)}/ontology`,
-      priority: 1 as const,
-      hidden: !hasOntologyPage,
-    },
-    {
-      label: 'About',
-      href: `${NavUtils.toSpace(params.id)}/about`,
-      priority: 1 as const,
-      hidden: !hasAboutPage,
-    },
-  ];
-
-  const DAO_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-    {
-      label: 'News',
-      href: `${NavUtils.toSpace(params.id)}/news`,
-      priority: 1 as const,
-      hidden: !hasNewsPage,
-    },
-    {
-      label: 'Events',
-      href: `${NavUtils.toSpace(params.id)}/events`,
-      priority: 1 as const,
-      hidden: !hasEventsPage,
-    },
-    {
-      label: 'Education',
-      href: `${NavUtils.toSpace(params.id)}/education`,
-      priority: 1 as const,
-      hidden: !hasEducationPage,
-    },
-    {
-      label: 'Projects',
-      href: `${NavUtils.toSpace(params.id)}/projects`,
-      priority: 1 as const,
-      hidden: !hasProjectsPage,
-    },
-    {
-      label: 'People',
-      href: `${NavUtils.toSpace(params.id)}/people`,
-      priority: 1 as const,
-      hidden: !hasPeoplePage,
-    },
-    {
-      label: 'Jobs',
-      href: `${NavUtils.toSpace(params.id)}/jobs`,
-      priority: 1 as const,
-      hidden: !hasJobsPage,
-    },
-    {
-      label: 'Ontology',
-      href: `${NavUtils.toSpace(params.id)}/ontology`,
-      priority: 1 as const,
-      hidden: !hasOntologyPage,
-    },
-    {
-      label: 'About',
-      href: `${NavUtils.toSpace(params.id)}/about`,
-      priority: 1 as const,
-      hidden: !hasAboutPage,
-    },
-  ];
-
-  const REGION_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-    {
-      label: 'News',
-      href: `${NavUtils.toSpace(params.id)}/news`,
-      priority: 1 as const,
-      hidden: !hasNewsPage,
-    },
-    {
-      label: 'Events',
-      href: `${NavUtils.toSpace(params.id)}/events`,
-      priority: 1 as const,
-      hidden: !hasEventsPage,
-    },
-    {
-      label: 'Places',
-      href: `${NavUtils.toSpace(params.id)}/places`,
-      priority: 1 as const,
-      hidden: !hasPlacesPage,
-    },
-    {
-      label: 'Culture',
-      href: `${NavUtils.toSpace(params.id)}/culture`,
-      priority: 1 as const,
-      hidden: !hasCulturePage,
-    },
-    {
-      label: 'Activities',
-      href: `${NavUtils.toSpace(params.id)}/activities`,
-      priority: 1 as const,
-      hidden: !hasActivitiesPage,
-    },
-    {
-      label: 'Projects',
-      href: `${NavUtils.toSpace(params.id)}/projects`,
-      priority: 1 as const,
-      hidden: !hasProjectsPage,
-    },
-    {
-      label: 'People',
-      href: `${NavUtils.toSpace(params.id)}/people`,
-      priority: 1 as const,
-      hidden: !hasPeoplePage,
-    },
-    {
-      label: 'Jobs',
-      href: `${NavUtils.toSpace(params.id)}/jobs`,
-      priority: 1 as const,
-      hidden: !hasJobsPage,
-    },
-    {
-      label: 'Government',
-      href: `${NavUtils.toSpace(params.id)}/government`,
-      priority: 1 as const,
-      hidden: !hasGovernmentPage,
-    },
-    {
-      label: 'Ontology',
-      href: `${NavUtils.toSpace(params.id)}/about`,
-      priority: 1 as const,
-      hidden: !hasOntologyPage,
-    },
-    {
-      label: 'About',
-      href: `${NavUtils.toSpace(params.id)}/about`,
-      priority: 1 as const,
-      hidden: !hasAboutPage,
-    },
-  ];
-
-  const INTEREST_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-    {
-      label: 'News',
-      href: `${NavUtils.toSpace(params.id)}/news`,
-      priority: 1 as const,
-      hidden: !hasNewsPage,
-    },
-    {
-      label: 'Posts',
-      href: `${NavUtils.toSpace(params.id)}/posts`,
-      priority: 1 as const,
-      hidden: !hasPostsPage,
-    },
-    {
-      label: 'Events',
-      href: `${NavUtils.toSpace(params.id)}/events`,
-      priority: 1 as const,
-      hidden: !hasEventsPage,
-    },
-
-    {
-      label: 'Projects',
-      href: `${NavUtils.toSpace(params.id)}/projects`,
-      priority: 1 as const,
-      hidden: !hasProjectsPage,
-    },
-    {
-      label: 'People',
-      href: `${NavUtils.toSpace(params.id)}/people`,
-      priority: 1 as const,
-      hidden: !hasPeoplePage,
-    },
-    {
-      label: 'Jobs',
-      href: `${NavUtils.toSpace(params.id)}/jobs`,
-      priority: 1 as const,
-      hidden: !hasJobsPage,
-    },
-    {
-      label: 'Ontology',
-      href: `${NavUtils.toSpace(params.id)}/about`,
-      priority: 1 as const,
-      hidden: !hasOntologyPage,
-    },
-    {
-      label: 'About',
-      href: `${NavUtils.toSpace(params.id)}/about`,
-      priority: 1 as const,
-      hidden: !hasAboutPage,
-    },
-  ];
-
-  const ALL_SPACES_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-      priority: 1 as const,
-    },
-  ];
-
-  const ROOT_TABS = [
-    {
-      label: 'Education',
-      href: `${NavUtils.toSpace(params.id)}/education`,
-      priority: 2 as const,
-    },
-    {
-      label: 'Ontology',
-      href: `${NavUtils.toSpace(params.id)}/ontology`,
-      priority: 2 as const,
-    },
-    {
-      label: 'About',
-      href: `${NavUtils.toSpace(params.id)}/about`,
-      priority: 2 as const,
-    },
-  ];
-
-  const SOME_SPACES_TABS = [
-    {
-      label: 'Governance',
-      href: `${NavUtils.toSpace(params.id)}/governance`,
-      priority: 2 as const,
-    },
-  ];
-
-  if (typeIds.includes(SYSTEM_IDS.ROOT_SPACE_TYPE)) {
-    tabs.push(...ROOT_TABS);
-  }
-
-  // Order of how we add the tabs matters. We want to
-  // show "content-based" tabs first, then "space-based" tabs.
-
-  if (typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
-    tabs.push(...PERSON_TABS);
-  }
-
-  if (typeIds.includes(SYSTEM_IDS.INDUSTRY_TYPE)) {
-    tabs.push(...INDUSTRY_TABS);
-  }
-
-  if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
-    tabs.push(...COMPANY_TABS);
-  }
-
-  if (typeIds.includes(SYSTEM_IDS.PROTOCOL_TYPE)) {
-    tabs.push(...PROTOCOL_TABS);
-  }
-
-  if (typeIds.includes(SYSTEM_IDS.DAO_TYPE)) {
-    tabs.push(...DAO_TABS);
-  }
-
-  if (typeIds.includes(SYSTEM_IDS.REGION_TYPE)) {
-    tabs.push(...REGION_TABS);
-  }
-
-  if (typeIds.includes(SYSTEM_IDS.INTEREST_TYPE)) {
-    tabs.push(...INTEREST_TABS);
-  }
-
-  // if (typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
-  //   tabs.push(...NONPROFIT_TABS);
-  // }
-
-  if (typeIds.includes(SYSTEM_IDS.SPACE_TYPE)) {
-    tabs.push(...ALL_SPACES_TABS);
-    if (!typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
-      tabs.push(...SOME_SPACES_TABS);
-    }
-  }
-
-  const seen = new Map<string, TabProps>();
-
-  for (const tab of tabs) {
-    if (!seen.has(tab.label)) {
-      seen.set(tab.label, tab);
-    }
-  }
-
-  return [...seen.values()].sort((a, b) => a.priority - b.priority);
-}
-
-const getHasPage = (tabEntities: Entity[], pageTypeId: string) => {
-  return !!tabEntities.find(entity => entity.relationsOut.find(relation => relation.toEntity.id === pageTypeId));
 };
 
-export default async function Layout({ children, params }: Props) {
+export default async function Layout({ children, params }: LayoutProps) {
+  const spaceId = params.id;
+
   const [props, subspaces, inflightSubspaces] = await Promise.all([
-    getData(params.id),
-    fetchSubspacesBySpaceId(params.id),
-    fetchInFlightSubspaceProposalsForSpaceId(params.id),
+    getData(spaceId),
+    fetchSubspacesBySpaceId(spaceId),
+    fetchInFlightSubspaceProposalsForSpaceId(spaceId),
   ]);
   const coverUrl = Entities.cover(props.relationsOut);
 
   const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
-  const tabs = await buildTabsForSpacePage(props.space.spaceConfig?.types ?? [], params);
+  const tabs = await buildTabsForSpacePage(props.tabEntities, props.space.spaceConfig?.types ?? [], params);
 
   return (
-    <TypesStoreServerContainer spaceId={params.id}>
+    <TypesStoreServerContainer spaceId={spaceId}>
       <EntityStoreProvider
         id={props.id}
         spaceId={props.spaceId}
@@ -565,6 +73,7 @@ export default async function Layout({ children, params }: Props) {
           spaceId={props.spaceId}
           initialBlockRelations={props.blockRelations}
           initialBlocks={props.blocks}
+          initialTabs={props.tabs}
         >
           <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
           <EntityPageContentContainer>
@@ -575,7 +84,7 @@ export default async function Layout({ children, params }: Props) {
               entityId={props.id}
               addSubspaceComponent={
                 <AddSubspaceDialog
-                  spaceId={params.id}
+                  spaceId={spaceId}
                   trigger={<MenuItem>Add subspace</MenuItem>}
                   subspaces={subspaces}
                   inflightSubspaces={inflightSubspaces}
@@ -584,13 +93,15 @@ export default async function Layout({ children, params }: Props) {
               }
               membersComponent={
                 <React.Suspense fallback={<MembersSkeleton />}>
-                  <SpaceEditors spaceId={params.id} />
-                  <SpaceMembers spaceId={params.id} />
+                  <SpaceEditors spaceId={spaceId} />
+                  <SpaceMembers spaceId={spaceId} />
                 </React.Suspense>
               }
             />
             <Spacer height={40} />
-            <TabGroup tabs={tabs} />
+            <React.Suspense fallback={null}>
+              <TabGroup tabs={tabs} />
+            </React.Suspense>
             <Spacer height={20} />
             {children}
           </EntityPageContentContainer>
@@ -620,6 +131,32 @@ const getData = async (spaceId: string) => {
   }
 
   const spaces = entity?.spaces ?? [];
+  const tabIds = entity?.relationsOut
+    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.TABS_ATTRIBUTE))
+    ?.map(r => r.toEntity.id);
+
+  const tabEntities = tabIds ? await fetchEntitiesBatch(tabIds) : [];
+
+  const tabBlocks = await Promise.all(
+    tabEntities.map(async entity => {
+      const blockIds = entity?.relationsOut
+        .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+        ?.map(r => r.toEntity.id);
+
+      const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+      return blocks;
+    })
+  );
+
+  const tabs: Tabs = {};
+
+  tabEntities.forEach((entity, index) => {
+    tabs[entity.id as EntityId] = {
+      entity,
+      blocks: tabBlocks[index],
+    };
+  });
+
   const blockIds = entity?.relationsOut
     .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
     ?.map(r => r.toEntity.id);
@@ -635,9 +172,119 @@ const getData = async (spaceId: string) => {
     spaceId,
     spaces,
 
+    tabEntities,
+    tabs,
+
     blockRelations: entity.relationsOut,
     blocks,
 
     space,
   };
 };
+
+function buildTabsForSpacePage(
+  tabEntities: EntityType[],
+  types: EntityType[],
+  params: LayoutProps['params']
+): TabProps[] {
+  const typeIds = types.map(t => t.id);
+  const tabs = [];
+
+  const spaceId = params.id;
+
+  const ALL_SPACES_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(spaceId)}`,
+      priority: 1 as const,
+    },
+  ];
+
+  const DYNAMIC_TABS = getDynamicTabs(spaceId, tabEntities);
+
+  const SOME_SPACES_TABS = [
+    {
+      label: 'Governance',
+      href: `${NavUtils.toSpace(spaceId)}/governance`,
+      priority: 2 as const,
+    },
+  ];
+
+  // Order of how we add the tabs matters. We want to
+  // show "content-based" tabs first, then "space-based" tabs.
+
+  if (typeIds.includes(SYSTEM_IDS.SPACE_TYPE)) {
+    tabs.push(...ALL_SPACES_TABS);
+
+    if (DYNAMIC_TABS.length > 0) {
+      tabs.push(...DYNAMIC_TABS);
+    }
+
+    if (!typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
+      tabs.push(...SOME_SPACES_TABS);
+    }
+  }
+
+  const seen = new Map<string, TabProps>();
+
+  for (const tab of tabs) {
+    if (!seen.has(tab.label)) {
+      seen.set(tab.label, tab);
+    }
+  }
+
+  return [...seen.values()].sort((a, b) => a.priority - b.priority);
+}
+
+const getDynamicTabs = (spaceId: string, tabEntities: EntityType[]) => {
+  const tabs: Array<{ label: string; href: string; priority: 1 | 2 | 3 }> = [];
+
+  tabEntities.forEach(entity => {
+    tabs.push({
+      label: entity.name ?? '',
+      href: `${NavUtils.toSpace(spaceId)}?tabId=${entity.id}`,
+      priority: 1 as const,
+    });
+  });
+
+  tabs.sort((a, b) => {
+    const indexA = dynamicTabSequence.indexOf(getTabSlug(a.label));
+    const indexB = dynamicTabSequence.indexOf(getTabSlug(b.label));
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+
+  return tabs;
+};
+
+const getTabSlug = (label: string) => {
+  return label
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .toLowerCase();
+};
+
+const dynamicTabSequence = [
+  'professional',
+  'personal',
+  'news',
+  'posts',
+  'events',
+  'places',
+  'culture',
+  'activities',
+  'education',
+  'courses',
+  'journals',
+  'papers',
+  'articles',
+  'institutions',
+  'projects',
+  'people',
+  'team',
+  'jobs',
+  'ontology',
+  'about',
+];
