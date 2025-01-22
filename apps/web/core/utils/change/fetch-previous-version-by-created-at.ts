@@ -3,8 +3,8 @@ import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { VersionDto } from '~/core/io/dto/versions';
-import { SubstreamVersion } from '~/core/io/schema';
+import { HistoryVersionDto } from '~/core/io/dto/versions';
+import { SubstreamVersionHistorical } from '~/core/io/schema';
 import { getEntityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 
@@ -29,6 +29,11 @@ const query = (createdAt: number, entityId: string, spaceId: string) => {
           name
           createdAt
           createdById
+          proposals {
+            nodes {
+              id
+            }
+          }
         }
       }
     }
@@ -36,7 +41,7 @@ const query = (createdAt: number, entityId: string, spaceId: string) => {
 };
 
 interface NetworkResult {
-  versions: { nodes: SubstreamVersion[] };
+  versions: { nodes: SubstreamVersionHistorical[] };
 }
 
 export async function fetchPreviousVersionByCreatedAt(args: FetchVersionsArgs) {
@@ -88,7 +93,7 @@ export async function fetchPreviousVersionByCreatedAt(args: FetchVersionsArgs) {
   }
 
   const latestVersion = networkVersions[0];
-  const decoded = Schema.decodeEither(SubstreamVersion)(latestVersion);
+  const decoded = Schema.decodeEither(SubstreamVersionHistorical)(latestVersion);
 
   return Either.match(decoded, {
     onLeft: error => {
@@ -100,7 +105,7 @@ export async function fetchPreviousVersionByCreatedAt(args: FetchVersionsArgs) {
       return null;
     },
     onRight: result => {
-      return VersionDto(result);
+      return HistoryVersionDto(result);
     },
   });
 }
