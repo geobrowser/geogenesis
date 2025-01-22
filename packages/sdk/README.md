@@ -90,12 +90,12 @@ const deleteRelationOp: DeleteRelationOp = Relation.remove('id of relation');
 Once you have a set of ops ready to publish, you'll need to binary encode them into an Edit and upload the Edit to IPFS.
 
 ```ts
-import { EditProposal } from '@geogenesis/sdk/proto.js';
+import { EditProposal } from '@geogenesis/sdk/proto';
 
 const binaryEncodedEdit = EditProposal.make({
   name: 'Edit name',
   ops: ops,
-  author: '0x0000000000000000000000000000000000000000',
+  author: '0x000000000000000000000000000000000000',
 });
 ```
 
