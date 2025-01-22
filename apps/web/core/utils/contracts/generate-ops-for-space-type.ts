@@ -88,17 +88,16 @@ export const generateOpsForSpaceType = async ({
 
       break;
     }
-    case 'academic-field':
-      // @TODO academic field template
+    case 'academic-field': {
+      const [academicFieldOps] = await cloneEntity({
+        oldEntityId: SYSTEM_IDS.ACADEMIC_FIELD_TEMPLATE,
+        entityId: newEntityId,
+        entityName: spaceName,
+      });
 
-      ops.push(
-        Relation.make({
-          fromId: newEntityId,
-          toId: SYSTEM_IDS.ACADEMIC_FIELD_TYPE,
-          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-        })
-      );
+      ops.push(...academicFieldOps);
       break;
+    }
     case 'dao': {
       const [daoOps] = await cloneEntity({
         oldEntityId: SYSTEM_IDS.DAO_TEMPLATE,
