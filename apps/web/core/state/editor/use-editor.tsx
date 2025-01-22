@@ -5,10 +5,11 @@ import { Image } from '@geogenesis/sdk';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { Array } from 'effect';
+import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { getImageHash, getImagePath } from '~/core/utils/utils';
+import { getImageHash, getImagePath, validateEntityId } from '~/core/utils/utils';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
@@ -136,14 +137,38 @@ const makeBlocksRelations = async ({
   }
 };
 
-export function useEditorStore() {
-  const { id: entityId, spaceId, initialBlockRelations, initialBlocks } = useEditorInstance();
+export const useTabId = () => {
+  const searchParams = useSearchParams();
+  const maybeTabId = searchParams?.get('tabId');
 
-  const blockRelations = useBlocks(entityId, initialBlockRelations);
+  if (!validateEntityId(maybeTabId)) return null;
+
+  const tabId = EntityId(maybeTabId as string);
+
+  return tabId;
+};
+
+export function useEditorStore() {
+  const { id: entityId, spaceId, initialBlockRelations, initialBlocks, initialTabs } = useEditorInstance();
+
+  const tabId = useTabId();
+  const activeEntityId = tabId ?? entityId;
+  const isTab = tabId && !!initialTabs && Object.prototype.hasOwnProperty.call(initialTabs, tabId);
+
+  const blockRelations = useBlocks(
+    activeEntityId,
+    isTab ? initialTabs[tabId as EntityId].entity.relationsOut : initialBlockRelations
+  );
 
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
   }, [blockRelations]);
+
+  const initialTriples = React.useMemo(() => {
+    const blocks = isTab ? initialTabs[tabId as EntityId].blocks : initialBlocks;
+
+    return blocks.flatMap(b => b.triples);
+  }, [initialBlocks, initialTabs, isTab, tabId]);
 
   /**
    * Tiptap expects a JSON representation of the editor state, but we store our block state
@@ -155,7 +180,7 @@ export function useEditorStore() {
       type: 'doc',
       content: blockRelations.map(block => {
         const markdownTriplesForBlockId = getTriples({
-          mergeWith: initialBlocks.flatMap(b => b.triples),
+          mergeWith: initialTriples,
           selector: triple => triple.entityId === block.block.id && triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT,
         });
 
@@ -221,7 +246,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockRelations, initialBlocks, spaceId]);
+  }, [blockRelations, initialTriples, spaceId]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
@@ -331,7 +356,7 @@ export function useEditorStore() {
       }
 
       makeBlocksRelations({
-        entityId,
+        entityId: activeEntityId,
         nextBlocks: newBlocks,
         addedBlocks: addedBlocks.map(block => {
           const imageHash = getImageHash(block.attrs?.src ?? '');
@@ -342,7 +367,7 @@ export function useEditorStore() {
         removedBlockIds,
         spaceId,
         blockRelations: blockRelations,
-        entityPageId: entityId,
+        entityPageId: activeEntityId,
       });
 
       /**
@@ -368,7 +393,7 @@ export function useEditorStore() {
         }
       }
     },
-    [spaceId, blockRelations, blockIds, entityId]
+    [blockIds, activeEntityId, spaceId, blockRelations]
   );
 
   return {
