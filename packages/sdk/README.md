@@ -101,6 +101,7 @@ const binaryEncodedEdit = EditProposal.make({
   author: '0x000000000000000000000000000000000000',
 });
 
+// @TODO: API for consumers to write to IPFS via SDK
 // Upload binary to Lighthouse node as binary
 const blob = new Blob([binary], { type: 'application/octet-stream' });
 const formData = new FormData();
@@ -127,15 +128,30 @@ Once you've uploaded the binary encoded Edit to IPFS and have correctly formed `
 
 The calldata used to write the edit onchain depends on the governance structure of the space. Currently The Graph supports two governance modes, one with voting and one without. The API exposes metadata about each space, its governance structure, and what smart contracts exist for it.
 
-- Need space contract info
-- Need to write to chain
+```ts
+import { getCalldataForSpaceGovernanceType } from '@geogenesis/sdk';
+
+// @TODO: API to fetch space + metadata for consumers via SDK
+const space = await fetchSpace('space-id');
+const governanceType = space.governanceType;
+const spacePluginAddress = space.spacePluginAddress;
+const mainVotingAddress = space.mainVotingPluginAddress;
+const personalSpaceAdminPluginAddress = space.personalSpaceAdminPluginAddress;
+
+const calldata = getCalldataForSpaceGovernanceType({
+  cid: cid,
+  spacePluginAddress: spacePluginAddress,
+  governanceType: governanceType,
+});
+
+const txResult = await walletClient.sendTransaction({
+  // We write to a different plugin depending on the governance type
+  to: space.type === 'PUBLIC' ? mainVotingPluginAddress : personalSpaceAdminPluginAddress,
+  value: 0n,
+  data: callData,
+});
+```
 
 ### Deploying a space
 
 ### Smart accounts
-
-# Questions
-
-- Are they writing votes? Other proposals besides content?
-- Do we need to expose APIs for them to integrate with smart accounts?
-- Do we need to expose react hooks?

@@ -6,8 +6,9 @@ import {
   Relation,
   type SetTripleOp,
   Triple,
+  getCalldataForSpaceGovernanceType,
 } from '@geogenesis/sdk';
-import { EditProposal } from '@geogenesis/sdk/proto.js';
+import { EditProposal } from '@geogenesis/sdk/proto';
 
 const setTripleOp: SetTripleOp = Triple.make({
   entityId: 'id of entity',
@@ -37,4 +38,19 @@ const binaryEncodedEdit = EditProposal.make({
   name: 'Edit name',
   ops: ops,
   author: '0x0000000000000000000000000000000000000000',
+});
+
+const governanceType = space.governanceType;
+const spacePluginAddress = space.spacePluginAddress;
+
+const calldata = getCalldataForSpaceGovernanceType({
+  cid: cid,
+  spacePluginAddress: spacePluginAddress,
+  governanceType: governanceType,
+});
+
+const txResult = await wallet.sendTransaction({
+  to: space.type === 'PUBLIC' ? space.mainVotingPluginAddress : space.personalSpaceAdminPluginAddress,
+  value: 0n,
+  data: callData,
 });

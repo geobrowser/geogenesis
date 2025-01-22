@@ -3,9 +3,10 @@ export * from './src/types.js';
 export { createGeoId } from './src/id.js';
 export { BASE58_ALLOWED_CHARS, decodeBase58ToUUID, encodeBase58 } from './src/core/base58.js';
 export {
-  getProcessGeoProposalArguments,
-  getAcceptSubspaceArguments,
   getAcceptEditorArguments,
+  getAcceptSubspaceArguments,
+  getCalldataForSpaceGovernanceType,
+  getProcessGeoProposalArguments,
   getRemoveEditorArguments,
   getRemoveSubspaceArguments,
 } from './src/encodings/index.js';
