@@ -13,6 +13,7 @@ export { Account } from './src/account.js';
 export { TextBlock, DataBlock } from './src/blocks.js';
 export { Image } from './src/image.js';
 export { Position, PositionRange } from './src/position.js';
+export { Triple } from './src/triple.js';
 export { Relation } from './src/relation.js';
 export { GraphUrl } from './src/scheme.js';
 export { SYSTEM_IDS, NETWORK_IDS, CONTENT_IDS } from './src/system-ids.js';

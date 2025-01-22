@@ -2,7 +2,7 @@ import { INITIAL_RELATION_INDEX_VALUE } from '../../constants.js';
 import { createGeoId } from '../id.js';
 import { GraphUrl } from '../scheme.js';
 import { SYSTEM_IDS } from '../system-ids.js';
-import type { CreateRelationOp } from '../types.js';
+import type { CreateRelationOp, DeleteRelationOp } from '../types.js';
 import { Position } from './position.js';
 
 interface CreateRelationArgs {
@@ -88,74 +88,13 @@ export function make(args: CreateRelationArgs): CreateRelationOp {
   };
 }
 
-export function make_OLD(
-  args: CreateRelationArgs
-): readonly [
-  CreateRelationTypeOp,
-  CreateRelationFromOp,
-  CreateRelationToOp,
-  CreateRelationIndexOp,
-  CreateRelationTypeOfOp,
-] {
-  const newEntityId = createGeoId();
-
-  return [
-    {
-      type: 'SET_TRIPLE',
-      triple: {
-        attribute: SYSTEM_IDS.TYPES_ATTRIBUTE,
-        entity: newEntityId,
-        value: {
-          type: 'URL',
-          value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE) as `graph://${typeof SYSTEM_IDS.RELATION_TYPE}`,
-        },
-      },
+export function remove(relationId: string): DeleteRelationOp {
+  return {
+    type: 'DELETE_RELATION',
+    relation: {
+      id: relationId,
     },
-    {
-      type: 'SET_TRIPLE',
-      triple: {
-        attribute: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
-        entity: newEntityId,
-        value: {
-          type: 'URL',
-          value: GraphUrl.fromEntityId(args.fromId),
-        },
-      },
-    },
-    {
-      type: 'SET_TRIPLE',
-      triple: {
-        attribute: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
-        entity: newEntityId,
-        value: {
-          type: 'URL',
-          value: GraphUrl.fromEntityId(args.toId),
-        },
-      },
-    },
-    {
-      type: 'SET_TRIPLE',
-      triple: {
-        attribute: SYSTEM_IDS.RELATION_INDEX,
-        entity: newEntityId,
-        value: {
-          type: 'TEXT',
-          value: args.position ?? INITIAL_RELATION_INDEX_VALUE,
-        },
-      },
-    },
-    {
-      type: 'SET_TRIPLE',
-      triple: {
-        attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
-        entity: newEntityId,
-        value: {
-          type: 'URL',
-          value: GraphUrl.fromEntityId(args.relationTypeId),
-        },
-      },
-    },
-  ] as const;
+  };
 }
 
 interface ReorderRelationArgs {
