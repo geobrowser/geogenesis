@@ -62,10 +62,6 @@ export class Relations {
           'from_entity_id',
           'to_entity_id',
         ],
-        lateral: {
-          to_entity: db.selectOne('versions', { id: db.parent('to_version_id') }, { columns: ['entity_id'] }),
-          type_of: db.selectOne('versions', { id: db.parent('type_of_id') }, { columns: ['entity_id'] }),
-        },
       })
       .run(pool);
   }

@@ -198,7 +198,7 @@ export function writeEdits(args: PopulateContentArgs) {
     // We run this after versions are written so that we can fetch all of the types for the
     // type entity and compare them against the type_of_id version for each relatons to see
     // of the type_of_id is for the type entity.
-    const versionTypes = yield* _(aggregateTypesFromRelationsAndTriples(relations));
+    const versionTypes = aggregateTypesFromRelationsAndTriples(relations);
 
     yield* _(
       Effect.tryPromise({
@@ -213,36 +213,35 @@ export function writeEdits(args: PopulateContentArgs) {
 }
 
 function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Insertable[]) {
-  return Effect.gen(function* (_) {
-    // entity version id -> type version ids
-    const types = new Map<string, string[]>();
-    const typeVersionIds = new Set(
-      (yield* _(Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES_ATTRIBUTE })))).map(v => v.id)
-    );
+  // entity version id -> type version ids
+  const types = new Map<string, string[]>();
 
-    for (const relation of relations) {
-      const fromVersionId = relation.from_version_id.toString();
-      const toVersionId = relation.to_version_id.toString();
-
-      if (typeVersionIds.has(relation.type_of_version_id.toString())) {
-        const alreadyFoundTypes = types.get(fromVersionId) ?? [];
-        types.set(fromVersionId, [...alreadyFoundTypes, toVersionId]);
-      }
+  for (const relation of relations) {
+    if (relation.from_entity_id.toString() === '9xLquTi3MBPsCnfNUJzNWr') {
+      console.log('relation', relation.type_of_id, relation.to_entity_id);
     }
 
-    for (const relation of relations) {
-      const versionId = relation.type_of_version_id.toString();
-      const alreadyFoundTypes = types.get(versionId) ?? [];
-      types.set(versionId, [...alreadyFoundTypes, versionId]);
-    }
+    const fromVersionId = relation.from_version_id.toString();
+    const toVersionId = relation.to_version_id.toString();
 
-    return [...types.entries()].flatMap(([versionId, typeIds]) => {
-      return typeIds.map((typeId): Schema.version_types.Insertable => {
-        return {
-          type_id: typeId,
-          version_id: versionId,
-        };
-      });
+    if (relation.type_of_id.toString() === SYSTEM_IDS.TYPES_ATTRIBUTE) {
+      const alreadyFoundTypes = types.get(fromVersionId) ?? [];
+      types.set(fromVersionId, [...alreadyFoundTypes, toVersionId]);
+    }
+  }
+
+  for (const relation of relations) {
+    const versionId = relation.type_of_version_id.toString();
+    const alreadyFoundTypes = types.get(versionId) ?? [];
+    types.set(versionId, [...alreadyFoundTypes, versionId]);
+  }
+
+  return [...types.entries()].flatMap(([versionId, typeIds]) => {
+    return typeIds.map((typeId): Schema.version_types.Insertable => {
+      return {
+        type_id: typeId,
+        version_id: versionId,
+      };
     });
   });
 }
