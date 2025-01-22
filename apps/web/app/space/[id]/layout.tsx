@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { fetchBlocks } from '~/core/io/fetch-blocks';
-import { fetchTabs } from '~/core/io/fetch-tabs';
 import { EntityId } from '~/core/io/schema';
+import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
@@ -135,7 +135,7 @@ const getData = async (spaceId: string) => {
     .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.TABS_ATTRIBUTE))
     ?.map(r => r.toEntity.id);
 
-  const tabEntities = tabIds ? await fetchTabs(tabIds) : [];
+  const tabEntities = tabIds ? await fetchEntitiesBatch(tabIds) : [];
 
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
@@ -182,11 +182,11 @@ const getData = async (spaceId: string) => {
   };
 };
 
-async function buildTabsForSpacePage(
+function buildTabsForSpacePage(
   tabEntities: EntityType[],
   types: EntityType[],
   params: LayoutProps['params']
-): Promise<TabProps[]> {
+): TabProps[] {
   const typeIds = types.map(t => t.id);
   const tabs = [];
 

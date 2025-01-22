@@ -153,19 +153,19 @@ export function useEditorStore() {
 
   const tabId = useTabId();
   const activeEntityId = tabId ?? entityId;
-  const isTab = tabId && !!initialTabs && Object.prototype.hasOwnProperty.call(initialTabs, tabId);
+  const isTab = React.useMemo(() => tabId && !!initialTabs && Object.hasOwn(initialTabs, tabId), [initialTabs, tabId]);
 
   const blockRelations = useBlocks(
     activeEntityId,
-    isTab ? initialTabs[tabId as EntityId].entity.relationsOut : initialBlockRelations
+    isTab ? initialTabs![tabId as EntityId].entity.relationsOut : initialBlockRelations
   );
 
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
   }, [blockRelations]);
 
-  const initialTriples = React.useMemo(() => {
-    const blocks = isTab ? initialTabs[tabId as EntityId].blocks : initialBlocks;
+  const initialBlockTriples = React.useMemo(() => {
+    const blocks = isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
 
     return blocks.flatMap(b => b.triples);
   }, [initialBlocks, initialTabs, isTab, tabId]);
@@ -180,7 +180,7 @@ export function useEditorStore() {
       type: 'doc',
       content: blockRelations.map(block => {
         const markdownTriplesForBlockId = getTriples({
-          mergeWith: initialTriples,
+          mergeWith: initialBlockTriples,
           selector: triple => triple.entityId === block.block.id && triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT,
         });
 
@@ -246,7 +246,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockRelations, initialTriples, spaceId]);
+  }, [blockRelations, initialBlockTriples, spaceId]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
