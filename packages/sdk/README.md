@@ -15,7 +15,6 @@ npm install @geogenesis/sdk
 Data in The Graph lives both offchain and onchain. This data is written to IPFS, and the resulting content identitifier is then posted onchain before being read by the indexing stack. After the indexer finishes processing the data it's exposed by the API.
 ![CleanShot 2025-01-22 at 10 51 23@2x](https://github.com/user-attachments/assets/f0cee8e0-43f9-4663-a2e7-54de6d962115)
 
-
 ### Spaces
 
 On The Graph, knowledge is organized into spaces. Anyone can create a space for a community, project or individual. Spaces are organized onchain into a set of multiple smart contracts. These smart contracts represent the space itself, its data and its governance process. Depending on which onchain actions you're taking you might be interacting with one or more of these smart contracts.
@@ -89,6 +88,10 @@ const deleteRelationOp: DeleteRelationOp = Relation.remove('id of relation');
 
 Once you have a set of ops ready to publish, you'll need to binary encode them into an Edit and upload the Edit to IPFS.
 
+Currently the indexer only supports reading from the [Lighthouse gateway](https://lighthouse.storage/). You should use the Lighthouse gateway to guarantee data availability for your published data while in early access. To write to Lighthouse you'll need an [API key](https://docs.lighthouse.storage/lighthouse-1/quick-start#create-an-api-key).
+
+Additionally, the indexer expects that IPFS CIDs be prefixed with `ipfs://` so it knows how to process it correctly.
+
 ```ts
 import { EditProposal } from '@geogenesis/sdk/proto';
 
@@ -97,15 +100,31 @@ const binaryEncodedEdit = EditProposal.make({
   ops: ops,
   author: '0x000000000000000000000000000000000000',
 });
+
+// Upload binary to Lighthouse node as binary
+const blob = new Blob([binary], { type: 'application/octet-stream' });
+const formData = new FormData();
+formData.append('file', blob);
+
+const result = await fetch('https://node.lighthouse.storage/api/v0/add, {
+  method: 'POST',
+  body: formData,
+  headers: {
+    Authorization: `Bearer ${process.env.IPFS_KEY}`, // add your API key
+  },
+});
+
+const { Hash } = await result.json()
+
+// The hash should be prefixed with the `ipfs://` scheme so the indexer
+// knows how to process it correctly based on the scheme type.
+const ipfsPrefixedHash = `ipfs://${Hash}`
 ```
 
-- Need space contract info
-- Need smart account
-- Need to encode protobuf
-- Need to write to IPFS
-- Need to write to chain
-
 ### Publishing an edit onchain
+
+- Need space contract info
+- Need to write to chain
 
 ### Deploying a space
 
