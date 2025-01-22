@@ -114,11 +114,11 @@ const result = await fetch('https://node.lighthouse.storage/api/v0/add, {
   },
 });
 
-const { Hash } = await result.json()
+const { Hash } = await result.json();
 
 // The hash should be prefixed with the `ipfs://` scheme so the indexer
 // knows how to process it correctly based on the scheme type.
-const ipfsPrefixedHash = `ipfs://${Hash}`
+const ipfsPrefixedHash = `ipfs://${Hash}`;
 ```
 
 ### Publishing an edit onchain
