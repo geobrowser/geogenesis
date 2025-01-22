@@ -205,7 +205,7 @@ function buildTabsForSpacePage(
   const SOME_SPACES_TABS = [
     {
       label: 'Governance',
-      href: `${NavUtils.toSpace(spaceId)}/governance`,
+      href: `/space/${spaceId}/governance`,
       priority: 2 as const,
     },
   ];
