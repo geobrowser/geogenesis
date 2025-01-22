@@ -56,7 +56,10 @@ export const tiptapExtensions = [
         ]);
 
       return {
-        Enter: handleEnter,
+        // This was intercepting the 'Enter' behavior in `command-list.tsx`
+        // Disabling doesn't seem to make a difference so maybe it was unnecessary?
+        // Enter: handleEnter,
+
         'Mod-Enter': handleEnter,
         'Shift-Enter': handleEnter,
       };
