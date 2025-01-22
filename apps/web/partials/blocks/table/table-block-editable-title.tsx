@@ -15,6 +15,15 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const hasOverflow = source.type === 'SPACES' ? source.value.length > 3 : false;
   const renderedSpaces = source.type === 'SPACES' ? (hasOverflow ? source.value.slice(0, 2) : source.value) : [];
 
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Auto focus newly created data blocks
+  React.useEffect(() => {
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 200);
+  }, []);
+
   return (
     <div className="flex flex-grow items-center gap-2">
       {source.type === 'GEO' && (
@@ -73,6 +82,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
       <div className="relative z-0 w-full text-button text-text">
         {userCanEdit ? (
           <input
+            ref={inputRef}
             onBlur={e => setName(e.currentTarget.value)}
             defaultValue={name ?? undefined}
             placeholder="Enter a name for this table..."
