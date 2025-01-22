@@ -13,8 +13,8 @@ npm install @geogenesis/sdk
 ### Data flow
 
 Data in The Graph lives both offchain and onchain. This data is written to IPFS, and the resulting content identitifier is then posted onchain before being read by the indexing stack. After the indexer finishes processing the data it's exposed by the API.
+![CleanShot 2025-01-22 at 10 51 23@2x](https://github.com/user-attachments/assets/f0cee8e0-43f9-4663-a2e7-54de6d962115)
 
-@TODO diagram
 
 ### Spaces
 
