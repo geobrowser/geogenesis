@@ -27,7 +27,7 @@ The structure of knowledge on The Graph is built on simple primitives that compo
 
 ### Relations
 
-Relations describe the edges of a graph. Relations are themselves entities that include details about the relationship. For example a Company can have Team Members. Each Team Member relation can have an attribute describing when the person joined the team. This is a model that is commonly called a property graph.
+Relations describe the edges within the graph. Relations are themselves entities that include details about the relationship. For example a Company can have Team Members. Each Team Member relation can have an attribute describing when the person joined the team. This is a model that is commonly called a property graph.
 
 ### Entities
 
@@ -122,6 +122,10 @@ const ipfsPrefixedHash = `ipfs://${Hash}`;
 ```
 
 ### Publishing an edit onchain
+
+Once you've uploaded the binary encoded Edit to IPFS and have correctly formed `ipfs://hash`, you can write this to a space.
+
+The calldata used to write the edit onchain depends on the governance structure of the space. Currently The Graph supports two governance modes, one with voting and one without. The API exposes metadata about each space, its governance structure, and what smart contracts exist for it.
 
 - Need space contract info
 - Need to write to chain
