@@ -1,4 +1,4 @@
-# Hypergraph SDK
+# Knowledge Graph SDK
 
 A collection of tools for interacting with the The Graph.
 
