@@ -47,6 +47,16 @@ When writing data, these ops are grouped into a logical set called an "Edit." An
 
 ## Using
 
+### Unique IDs
+
+Entities throughout The Graph are referenced via globally unique identifiers. The SDK exposes APIs for creating these IDs.
+
+```ts
+import { ID } from 'geogenesis/sdk';
+
+const newId = ID.make();
+```
+
 ### Making ops
 
 The SDK exports a set of APIs for creating and deleting triple and relation ops.
@@ -101,7 +111,7 @@ const binaryEncodedEdit = EditProposal.make({
   author: '0x000000000000000000000000000000000000',
 });
 
-// @TODO: API for consumers to write to IPFS via SDK
+// @TODO: API for consumers to write to IPFS via endpoint
 // Upload binary to Lighthouse node as binary
 const blob = new Blob([binary], { type: 'application/octet-stream' });
 const formData = new FormData();
@@ -131,7 +141,7 @@ The calldata used to write the edit onchain depends on the governance structure 
 ```ts
 import { getCalldataForSpaceGovernanceType } from '@geogenesis/sdk';
 
-// @TODO: API to fetch space + metadata for consumers via SDK
+// @TODO: API to fetch space + metadata for consumers via endpoint
 const space = await fetchSpace('space-id');
 const governanceType = space.governanceType;
 const spacePluginAddress = space.spacePluginAddress;

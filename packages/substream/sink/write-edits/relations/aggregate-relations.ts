@@ -1,4 +1,4 @@
-import { createGeoId } from '@geogenesis/sdk';
+import { ID } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
@@ -163,7 +163,7 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
               : r.to_version_id;
 
             return {
-              id: createGeoId(), // Not deterministic
+              id: ID.make(), // Not deterministic
               // We look up the latest version for both the type and to versions
               // using their entity ids so they're updated before writing to the
               // db. The latest version can come from the db or come from the
@@ -197,7 +197,7 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
           }
 
           return {
-            id: createGeoId(), // Not deterministic
+            id: ID.make(), // Not deterministic
             // We look up the latest version for both the type and to versions
             // using their entity ids so they're updated before writing to the
             // db. The latest version can come from the db or come from the
