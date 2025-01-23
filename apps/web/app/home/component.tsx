@@ -91,19 +91,21 @@ function NoActivity() {
 
 function PersonalHomeNavigation() {
   return (
-    <TabGroup
-      tabs={TABS.map(label => {
-        const href = label === 'For You' ? `/home` : `/home/${label.toLowerCase()}`;
-        const disabled = label === 'For You' ? false : true;
+    <React.Suspense fallback={null}>
+      <TabGroup
+        tabs={TABS.map(label => {
+          const href = label === 'For You' ? `/home` : `/home/${label.toLowerCase()}`;
+          const disabled = label === 'For You' ? false : true;
 
-        return {
-          href,
-          label,
-          disabled,
-        };
-      })}
-      className="mt-8"
-    />
+          return {
+            href,
+            label,
+            disabled,
+          };
+        })}
+        className="mt-8"
+      />
+    </React.Suspense>
   );
 }
 

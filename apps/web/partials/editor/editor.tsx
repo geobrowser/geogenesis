@@ -79,8 +79,8 @@ export const Editor = React.memo(function Editor({
             options={{
               image: '/overview.png',
               browse: {
-                title: 'There’s no space overview here yet',
-                description: 'Switch to edit mode to add an overview if you’re an editor of this space!',
+                title: 'There’s no content here yet',
+                description: 'Switch to edit mode to add content if you’re an editor of this space!',
               },
             }}
             isEditing={false}
