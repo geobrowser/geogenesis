@@ -1,4 +1,4 @@
-import { Filter } from '~/core/blocks-sdk/table';
+import { Filter } from '~/core/blocks/data/filters';
 import { useEditable } from '~/core/state/editable-store';
 
 import { IconButton } from '~/design-system/button';

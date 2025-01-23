@@ -2,20 +2,14 @@ import { Schema } from '@effect/schema';
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Either } from 'effect';
 
+import { Filter } from '../blocks/data/filters';
 import { mergeEntityAsync } from '../database/entities';
 import { useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
 import { fetchSpace } from '../io/subgraph';
 import { Source } from '../state/editor/types';
 import { OmitStrict, ValueTypeId } from '../types';
-import { FilterableValueType, valueTypes } from '../value-types';
-
-export type Filter = {
-  columnId: string;
-  valueType: FilterableValueType;
-  value: string;
-  valueName: string | null;
-};
+import { valueTypes } from '../value-types';
 
 /**
  * We support two types of filters, either a filter on a set of entities,

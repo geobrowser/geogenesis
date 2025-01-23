@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { Match } from 'effect';
 
-import { Filter } from '~/core/blocks-sdk/table';
+import { Filter } from '~/core/blocks/data/filters';
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';

@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { Filter } from '../blocks-sdk/table';
+import { Filter } from '../blocks/data/filters';
 import { Entity } from '../io/dto/entities';
 import { fetchColumns } from '../io/fetch-columns';
 import { EntityId } from '../io/schema';

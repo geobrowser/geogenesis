@@ -18,7 +18,7 @@ import Image from 'next/image';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { Filter } from '~/core/blocks-sdk/table';
+import { Filter } from '~/core/blocks/data/filters';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';

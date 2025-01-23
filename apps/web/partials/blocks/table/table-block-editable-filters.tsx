@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Filter } from '~/core/blocks-sdk/table';
+import { Filter } from '~/core/blocks/data/filters';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { FilterableValueType, valueTypes } from '~/core/value-types';
 

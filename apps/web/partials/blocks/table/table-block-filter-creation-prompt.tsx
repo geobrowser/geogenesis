@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
 
-import { Filter } from '~/core/blocks-sdk/table';
+import { Filter } from '~/core/blocks/data/filters';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';

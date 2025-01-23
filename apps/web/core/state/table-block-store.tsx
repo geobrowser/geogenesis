@@ -4,12 +4,12 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import {
-  Filter,
   createFilterStringFromFilters,
   createFiltersFromFilterString,
   createGraphQLStringFromFilters,
   upsertName,
 } from '../blocks-sdk/table';
+import { Filter } from '../blocks/data/filters';
 import { useEntity } from '../database/entities';
 import { useRelations } from '../database/relations';
 import {
