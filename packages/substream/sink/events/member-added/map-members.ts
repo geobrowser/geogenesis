@@ -8,7 +8,7 @@ import type { BlockEvent } from '~/sink/types';
 
 export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logDebug('Mapping editors'));
+    yield* _(Effect.logDebug('[MAP MEMBERS] Started'));
 
     const members: S.space_members.Insertable[] = [];
 
@@ -32,7 +32,7 @@ export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForPersonalPlugin) {
         yield* _(
           Effect.logError(
-            `Matching space for approved member not found for plugin address ${member.mainVotingPluginAddress}`
+            `[MAP MEMBERS] Matching space for approved member not found for plugin address ${member.mainVotingPluginAddress}`
           )
         );
 

@@ -20,10 +20,10 @@ function getFetchTabEntityIdQuery(spaceId: string, pageTypeEntityId: string) {
             relationsByFromVersionId: {
               some: {
                 typeOf: {
-                  entityId: { equalTo: "${SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE}" }
+                  id: { equalTo: "${SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE}" }
                 }
-                toVersion: {
-                  entityId: { equalTo: "${pageTypeEntityId}" }
+                toEntity: {
+                  id: { equalTo: "${pageTypeEntityId}" }
                 }
               }
             }

@@ -5,9 +5,9 @@ import { v4 } from 'uuid';
 import { Environment } from '~/core/environment';
 import { queryClient } from '~/core/query-client';
 
-import { Entity, EntityDto } from '../dto/entities';
-import { SubstreamEntity } from '../schema';
-import { versionFragment } from './fragments';
+import { Entity, EntityDtoLive } from '../dto/entities';
+import { SubstreamEntityLive } from '../schema';
+import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
 export async function fetchEntitiesBatchCached(entityIds: string[], filterString?: string) {
@@ -34,7 +34,7 @@ const query = (entityIds: string[], filterString?: string) => {
         id
         currentVersion {
           version {
-            ${versionFragment}
+            ${getEntityFragment()}
           }
         }
       }
@@ -43,7 +43,7 @@ const query = (entityIds: string[], filterString?: string) => {
 };
 
 interface NetworkResult {
-  entities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamEntityLive[] };
 }
 
 export async function fetchEntitiesBatch(
@@ -94,7 +94,7 @@ export async function fetchEntitiesBatch(
 
   return unknownEntities
     .map(e => {
-      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
+      const decodedSpace = Schema.decodeEither(SubstreamEntityLive)(e);
 
       return Either.match(decodedSpace, {
         onLeft: () => {
@@ -102,7 +102,7 @@ export async function fetchEntitiesBatch(
           return null;
         },
         onRight: substreamEntity => {
-          const entity = EntityDto(substreamEntity);
+          const entity = EntityDtoLive(substreamEntity);
 
           return entity;
         },

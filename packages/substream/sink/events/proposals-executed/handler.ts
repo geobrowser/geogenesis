@@ -10,8 +10,8 @@ class CouldNotWriteExecutedProposalError extends Error {
 
 export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[]) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling proposals executed'));
-    yield* _(Effect.logDebug(`Updating proposal statuses for ${proposalsExecuted.length} proposals`));
+    yield* _(Effect.logInfo('[PROPOSALS EXECUTED] Started'));
+    yield* _(Effect.logDebug(`[PROPOSALS EXECUTED] Writing proposals: ${proposalsExecuted.length}`));
 
     // @TODO: Batch update proposals in one insert instead of iteratively
     yield* _(
@@ -36,6 +36,6 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[]) {
       )
     );
 
-    yield* _(Effect.logInfo('Proposal state updated'));
+    yield* _(Effect.logInfo('[PROPOSALS EXECUTED] Ended'));
   });
 }

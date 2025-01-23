@@ -4,6 +4,7 @@ import Image from 'next/legacy/image';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subspace } from '~/core/io/dto/subspaces';
+import { useTabId } from '~/core/state/editor/use-editor';
 import { getImagePath } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -15,6 +16,10 @@ type SubspacesProps = {
 };
 
 export const Subspaces = ({ subspaces }: SubspacesProps) => {
+  const tabId = useTabId();
+
+  if (tabId) return null;
+
   return (
     <>
       <Slider label="Subspaces">

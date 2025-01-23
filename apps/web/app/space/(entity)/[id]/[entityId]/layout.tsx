@@ -100,18 +100,20 @@ export default async function ProfileLayout({ children, params }: Props) {
             <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
 
             <Spacer height={40} />
-            <TabGroup
-              tabs={TABS.map(label => {
-                const href =
-                  label === 'Overview'
-                    ? `${NavUtils.toEntity(params.id, entityId)}`
-                    : `${NavUtils.toEntity(params.id, entityId)}/${label.toLowerCase()}`;
-                return {
-                  href,
-                  label,
-                };
-              })}
-            />
+            <React.Suspense fallback={null}>
+              <TabGroup
+                tabs={TABS.map(label => {
+                  const href =
+                    label === 'Overview'
+                      ? `${NavUtils.toEntity(params.id, entityId)}`
+                      : `${NavUtils.toEntity(params.id, entityId)}/${label.toLowerCase()}`;
+                  return {
+                    href,
+                    label,
+                  };
+                })}
+              />
+            </React.Suspense>
 
             <Spacer height={20} />
 

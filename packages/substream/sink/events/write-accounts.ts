@@ -7,7 +7,7 @@ import { retryEffect } from '../utils/retry-effect';
 
 export const writeAccounts = (accounts: S.accounts.Insertable[]) =>
   Effect.gen(function* (_) {
-    yield* _(Effect.logDebug('Writing accounts'));
+    yield* _(Effect.logDebug('[WRITE ACCOUNTS] Started'));
 
     const result = yield* _(
       Effect.tryPromise({
@@ -19,6 +19,6 @@ export const writeAccounts = (accounts: S.accounts.Insertable[]) =>
       retryEffect
     );
 
-    yield* _(Effect.logDebug(`Succesfully wrote accounts ${accounts.map(a => a.id).join(', ')}`));
+    yield* _(Effect.logDebug('[WRITE ACCOUNTS] Ended'));
     return result;
   });

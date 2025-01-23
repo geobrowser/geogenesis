@@ -160,7 +160,7 @@ const ReviewChanges = () => {
   );
 
   const isReadyToPublish =
-    proposalName?.length > 3 &&
+    proposalName?.length > 0 &&
     Triples.prepareTriplesForPublishing(triplesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
 
   const { makeProposal } = usePublish();

@@ -22,7 +22,7 @@ interface InitialContentArgs {
 export function createInitialContentForSpaces(args: InitialContentArgs) {
   const { editType, proposals: proposalsFromIpfs, block } = args;
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling creating initial content'));
+    yield* _(Effect.logInfo('[INITIAL PROPOSAL CREATED] Started'));
 
     // If we are importing a space we need to make accounts for any creators
     // that don't already exist on this chain.
@@ -50,7 +50,7 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
       })
     );
 
-    yield* _(Effect.logDebug('Writing edits, proposals, versions for each edit'));
+    yield* _(Effect.logDebug('[INITIAL PROPOSAL CREATED] Writing edits, proposals, versions for each edit'));
 
     // @TODO transactions are pretty slow for actual content writing for now, so
     // we are skipping writing the actual content in a transaction for now.
@@ -71,7 +71,7 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
       })
     );
 
-    yield* _(Effect.logDebug('Writing content for edits'));
+    yield* _(Effect.logDebug('[INITIAL PROPOSAL CREATED] Writing content for edits'));
 
     const opsByNewVersions = yield* _(
       mergeOpsWithPreviousVersions({
@@ -92,6 +92,6 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
       })
     );
 
-    yield* _(Effect.logInfo('Initial content created'));
+    yield* _(Effect.logInfo('[INITIAL PROPOSAL CREATED] Ended'));
   });
 }

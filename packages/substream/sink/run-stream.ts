@@ -64,7 +64,7 @@ import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
 import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
-import { getConfiguredLogLevel, withRequestId } from './logs';
+import { LoggerLive, getConfiguredLogLevel, withRequestId } from './logs';
 import { Telemetry, TelemetryLive } from './telemetry';
 import type { BlockEvent } from './types';
 import { createSink, createStream } from './vendor/sink/src';
@@ -165,7 +165,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           // then we don't want to exit the entire handler though, and
           // continue if possible.
           const result = yield* _(
-            handleMessage(message, registry).pipe(withRequestId(requestId), Logger.withMinimumLogLevel(logLevel)),
+            handleMessage(message, registry).pipe(
+              withRequestId(requestId),
+              Logger.withMinimumLogLevel(logLevel),
+              Effect.provide(LoggerLive)
+            ),
             Effect.either
           );
 
@@ -186,7 +190,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           );
 
           if (hasValidEvent) {
-            yield* _(Effect.logInfo(`Finished processing block ${blockNumber}`));
+            yield* _(
+              Effect.logInfo(`[BLOCK] Ended ${blockNumber}`).pipe(
+                withRequestId(requestId),
+                Logger.withMinimumLogLevel(logLevel),
+                Effect.provide(LoggerLive)
+              )
+            );
           }
         }).pipe(Effect.provideService(Telemetry, TelemetryLive));
       },
@@ -296,7 +306,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       removeMembersProposed.success;
 
     if (hasValidEvent) {
-      yield* _(Effect.logInfo(`Handling new events in block ${blockNumber}`));
+      yield* _(Effect.logInfo(`[BLOCK] Started ${blockNumber}`));
 
       yield* _(
         Effect.fork(

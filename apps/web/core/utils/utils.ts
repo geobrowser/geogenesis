@@ -1,4 +1,5 @@
 import { BASE58_ALLOWED_CHARS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
@@ -20,7 +21,7 @@ export const NavUtils = {
   toRoot: () => '/root',
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
-  toSpace: (spaceId: string) => `/space/${spaceId}`,
+  toSpace: (spaceId: string) => (spaceId === SYSTEM_IDS.ROOT_SPACE_ID ? `/root` : `/space/${spaceId}`),
   toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
   toEntity: (spaceId: string, newEntityId: string) => {
     return `/space/${spaceId}/${newEntityId}`;

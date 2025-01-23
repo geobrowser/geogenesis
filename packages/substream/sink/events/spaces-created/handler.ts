@@ -23,7 +23,7 @@ export function handleSpacesCreated(
 ): Effect.Effect<string[], CouldNotWriteSpacesError> {
   return Effect.gen(function* (_) {
     const spaces = mapSpaces(spacesCreated, block.blockNumber);
-    yield* _(Effect.logInfo('Handling spaces created'));
+    yield* _(Effect.logInfo('[SPACES CREATED] Started'));
 
     const writtenSpaces = yield* _(
       Effect.tryPromise({
@@ -35,15 +35,14 @@ export function handleSpacesCreated(
       retryEffect
     );
 
-    yield* _(Effect.logInfo('Spaces created'));
+    yield* _(Effect.logInfo('[SPACES CREATED] Ended'));
     return writtenSpaces.map(s => s.id);
   });
 }
 
 export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPluginsCreated[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling personal space plugins created'));
-    yield* _(Effect.logDebug('Collecting spaces for personal plugins'));
+    yield* _(Effect.logInfo('[PERSONAL SPACES CREATED] Started'));
 
     const personalPluginsWithSpaceId = personalPluginsCreated.map(p => {
       return {
@@ -52,7 +51,7 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
       };
     });
 
-    yield* _(Effect.logDebug('Updating spaces with personal space plugins'));
+    yield* _(Effect.logDebug('[PERSONAL SPACES CREATED] Updating spaces with personal space plugins'));
     const spaces = mapPersonalToSpaces(personalPluginsWithSpaceId, block.blockNumber);
 
     const writtenGovernancePlugins = yield* _(
@@ -67,15 +66,14 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
       retryEffect
     );
 
-    yield* _(Effect.logInfo('Personal space plugins created'));
+    yield* _(Effect.logInfo('[PERSONAL SPACES CREATED] Ended'));
     return writtenGovernancePlugins.map(p => p.id);
   });
 }
 
 export function handleGovernancePluginCreated(governancePluginsCreated: GovernancePluginsCreated[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling public space plugins created'));
-    yield* _(Effect.logDebug('Collecting spaces for public plugins'));
+    yield* _(Effect.logInfo('[PUBLIC SPACES CREATED] Started'));
 
     const governancePluginsWithSpaceId = governancePluginsCreated.map(g => {
       return {
@@ -84,7 +82,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
       };
     });
 
-    yield* _(Effect.logDebug('Updating spaces with public space plugins'));
+    yield* _(Effect.logDebug('[PUBLIC SPACES CREATED] Updating spaces with governance plugins'));
     const spaces = mapGovernanceToSpaces(governancePluginsWithSpaceId, block.blockNumber);
 
     // @TODO:
@@ -101,6 +99,6 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
       retryEffect
     );
 
-    yield* _(Effect.logInfo('Public space plugins created'));
+    yield* _(Effect.logInfo('[PUBLIC SPACES CREATED] Ended'));
   });
 }

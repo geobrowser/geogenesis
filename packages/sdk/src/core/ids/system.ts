@@ -164,6 +164,7 @@ export const PAGE_TYPE_ATTRIBUTE = 'DD9FKRZ3XezaKEGUszMB3r';
   These define the entity id to copy when creating an entity from
   a template.
   */
+export const ACADEMIC_FIELD_TEMPLATE = 'qKChmTLcV1itqfQeGeYVv';
 export const COMPANY_TEMPLATE = 'QZwChwTixtbLDv3HSX5E6n';
 export const DAO_TEMPLATE = 'Gfj89RHeFexx36V5kN6LhB';
 export const INDUSTRY_TEMPLATE = 'Tgm2ubmm9VjAZFZACJLTZC';
