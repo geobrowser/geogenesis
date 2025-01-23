@@ -5,9 +5,9 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 
-import { Entity, EntityDto } from '../dto/entities';
-import { SubstreamEntity } from '../schema';
-import { versionFragment } from './fragments';
+import { Entity, EntityDtoLive } from '../dto/entities';
+import { SubstreamEntityLive } from '../schema';
+import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
 // this differs from the fetchEntities method in that we pass in a custom graphql string that represents
@@ -25,7 +25,7 @@ function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
         id
         currentVersion {
           version {
-            ${versionFragment}
+            ${getEntityFragment()}
           }
         }
       }
@@ -41,7 +41,7 @@ export interface FetchTableRowEntitiesOptions {
 }
 
 interface NetworkResult {
-  entities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamEntityLive[] };
 }
 
 export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<Entity[]> {
@@ -98,7 +98,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
 
   return entities.nodes
     .map(e => {
-      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
+      const decodedSpace = Schema.decodeEither(SubstreamEntityLive)(e);
 
       return Either.match(decodedSpace, {
         onLeft: error => {
@@ -106,7 +106,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
           return null;
         },
         onRight: entity => {
-          return EntityDto(entity);
+          return EntityDtoLive(entity);
         },
       });
     })

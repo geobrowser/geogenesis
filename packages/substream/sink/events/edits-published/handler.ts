@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
@@ -10,7 +11,7 @@ import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { aggregateRelations } from '~/sink/write-edits/relations/aggregate-relations';
-import { aggregateSpacesFromRelations, writeEdits } from '~/sink/write-edits/write-edits';
+import { writeEdits } from '~/sink/write-edits/write-edits';
 
 export class ProposalDoesNotExistError extends Error {
   readonly _tag = 'ProposalDoesNotExistError';
@@ -31,7 +32,7 @@ export class CouldNotWriteCurrentVersionsError extends Error {
  */
 export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdSpaceIds: string[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling approved edits'));
+    yield* _(Effect.logInfo('[EDITS PUBLISHED] Started'));
 
     const {
       schemaEditProposals: { versions, relationOpsByEditId, tripleOpsByVersionId, edits },
@@ -235,7 +236,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       })
     );
 
-    const spaceMetadatum = yield* _(aggregateSpacesFromRelations(relations));
+    const spaceMetadatum = aggregateSpacesFromRelations(relations);
 
     yield* _(
       Effect.tryPromise({
@@ -247,10 +248,28 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       })
     );
 
-    yield* _(Effect.logInfo('Approved edits created'));
+    yield* _(Effect.logInfo('[EDITS PUBLISHED] Ended'));
   });
 }
 
 class CouldNotWriteSpaceMetadataError extends Data.TaggedError('CouldNotWriteSpaceMetadataError')<{
   message: string;
 }> {}
+
+function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) {
+  const spaceMetadatas: Schema.spaces_metadata.Insertable[] = [];
+
+  for (const relation of relations) {
+    const typeId = relation.type_of_id.toString();
+    const toEntityId = relation.to_entity_id.toString();
+
+    if (typeId === SYSTEM_IDS.TYPES_ATTRIBUTE && toEntityId === SYSTEM_IDS.SPACE_TYPE) {
+      spaceMetadatas.push({
+        space_id: relation.space_id,
+        version_id: relation.from_version_id.toString(),
+      });
+    }
+  }
+
+  return spaceMetadatas;
+}

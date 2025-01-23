@@ -31,7 +31,7 @@ export function mapVotes(
   never
 > {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logDebug('Mapping votes'));
+    yield* _(Effect.logDebug('[MAP VOTES] Mapping votes'));
     const schemaVotes: S.proposal_votes.Insertable[] = [];
 
     for (const vote of votes) {
@@ -44,7 +44,7 @@ export function mapVotes(
       if (!voteType) {
         yield* _(
           Effect.logError(
-            `Vote type is invalid ${vote.voteOption} for vote ${vote.onchainProposalId} in space ${vote.pluginAddress}, skipping indexing the vote.`
+            `[MAP VOTES] Vote type is invalid ${vote.voteOption} for vote ${vote.onchainProposalId} in space ${vote.pluginAddress}, skipping indexing the vote.`
           )
         );
 
@@ -74,7 +74,9 @@ export function mapVotes(
       );
 
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForMemberPlugin) {
-        yield* _(Effect.logError(`Matching space in Proposal not found for plugin address ${vote.pluginAddress}`));
+        yield* _(
+          Effect.logError(`[MAP VOTES] Matching space in Proposal not found for plugin address ${vote.pluginAddress}`)
+        );
 
         continue;
       }
@@ -82,7 +84,7 @@ export function mapVotes(
       if (maybeSpaceIdForVotingPlugin) {
         yield* _(
           Effect.logDebug(
-            `Verifying proposal id for voting plugin with address ${vote.pluginAddress}. id: ${proposalId} onchainProposalId: ${vote.onchainProposalId} pluginAddress: ${vote.pluginAddress}`
+            `[MAP VOTES] Verifying proposal id for voting plugin with address ${vote.pluginAddress}. id: ${proposalId} onchainProposalId: ${vote.onchainProposalId} pluginAddress: ${vote.pluginAddress}`
           )
         );
 
@@ -125,7 +127,9 @@ export function mapVotes(
       }
 
       if (maybeSpaceIdForMemberPlugin) {
-        yield* _(Effect.logDebug(`Verifying proposal id for membership plugin with address ${vote.pluginAddress}`));
+        yield* _(
+          Effect.logDebug(`[MAP VOTES] Verifying proposal id for membership plugin with address ${vote.pluginAddress}`)
+        );
 
         schemaVotes.push({
           vote: voteType,

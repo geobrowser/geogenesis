@@ -155,12 +155,8 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
           .map((r): Schema.relations.Insertable | null => {
             // If the version for the to or type entity is not found, then we know there's not a new
             // version for it in this edit, so we can use the existing version id.
-            const type = r.type_of
-              ? latestVersionForChangedEntities[r.type_of.entity_id] ?? r.type_of_id
-              : r.type_of_id;
-            const to = r.to_entity
-              ? latestVersionForChangedEntities[r.to_entity.entity_id] ?? r.to_version_id
-              : r.to_version_id;
+            const type_version_id = latestVersionForChangedEntities[r.type_of_id] ?? r.type_of_version_id;
+            const to_version_id = latestVersionForChangedEntities[r.to_entity_id] ?? r.to_version_id;
 
             return {
               id: createGeoId(), // Not deterministic
@@ -172,8 +168,13 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
               // If the type_of or to_version aren't changed in this edit then we
               // can fall back to the last version.
               space_id: r.space_id,
-              type_of_id: type,
-              to_version_id: to,
+
+              type_of_id: r.type_of_id,
+              to_entity_id: r.to_entity_id,
+              from_entity_id: r.from_entity_id,
+
+              type_of_version_id: type_version_id,
+              to_version_id: to_version_id,
               from_version_id: v.id,
               index: r.index,
               entity_id: r.entity_id,
@@ -188,11 +189,11 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
 
       const relationsFromEdit = newRelationsForEdit
         .map((r): Schema.relations.Insertable | null => {
-          const type = latestVersionForChangedEntities[r.relation.type];
-          const to = latestVersionForChangedEntities[r.relation.toEntity];
-          const from = latestVersionForChangedEntities[r.relation.fromEntity];
+          const type_version_id = latestVersionForChangedEntities[r.relation.type];
+          const to_version_id = latestVersionForChangedEntities[r.relation.toEntity];
+          const from_version_id = latestVersionForChangedEntities[r.relation.fromEntity];
 
-          if (!type || !to || !from) {
+          if (!type_version_id || !to_version_id || !from_version_id) {
             return null;
           }
 
@@ -206,9 +207,14 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
             // If the type_of or to_version aren't changed in this edit then we
             // can fall back to the last version.
             space_id: r.space,
-            type_of_id: type,
-            to_version_id: to,
-            from_version_id: from,
+
+            type_of_id: r.relation.type,
+            to_entity_id: r.relation.toEntity,
+            from_entity_id: r.relation.fromEntity,
+
+            type_of_version_id: type_version_id,
+            to_version_id: to_version_id,
+            from_version_id: from_version_id,
             index: r.relation.index,
             entity_id: r.relation.id,
           };

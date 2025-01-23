@@ -12,7 +12,7 @@ export class CouldNotWriteSubspacesError extends Error {
 
 export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling subspaces added'));
+    yield* _(Effect.logInfo('[SUBSPACES ADDED] Started'));
 
     const subspaces = yield* _(
       mapSubspaces({
@@ -22,7 +22,7 @@ export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: Blo
       })
     );
 
-    yield* _(Effect.logDebug('Writing subspaces'));
+    yield* _(Effect.logDebug('[SUBSPACES ADDED] Writing subspaces'));
 
     const writtenSubspaces = yield* _(
       Effect.tryPromise({
@@ -36,7 +36,7 @@ export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: Blo
       retryEffect
     );
 
-    yield* _(Effect.logInfo('Subspaces added'));
+    yield* _(Effect.logInfo('[SUBSPACES ADDED] Ended'));
     return writtenSubspaces.map(s => s.subspace_id);
   });
 }

@@ -67,7 +67,7 @@ const query = (entityId: string) => {
         version: {
           relationsByFromVersionId: {
             some: {
-              toVersion: { entityId: { equalTo: "${entityId}" } }
+              toEntity: { id: { equalTo: "${entityId}" } }
             }
           }
         }

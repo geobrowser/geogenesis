@@ -7,9 +7,9 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
 
-import { Entity, EntityDto } from '../dto/entities';
-import { SubstreamEntity } from '../schema';
-import { versionFragment } from './fragments';
+import { Entity, EntityDtoLive } from '../dto/entities';
+import { SubstreamEntityLive } from '../schema';
+import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
 function getFetchEntitiesQuery(
@@ -52,7 +52,7 @@ function getFetchEntitiesQuery(
         id
         currentVersion {
           version {
-            ${versionFragment}
+            ${getEntityFragment()}
           }
         }
       }
@@ -71,7 +71,7 @@ export interface FetchEntitiesOptions {
 }
 
 interface NetworkResult {
-  entities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamEntityLive[] };
 }
 
 export async function fetchEntities(options: FetchEntitiesOptions): Promise<Entity[]> {
@@ -152,7 +152,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
 
   const entities = unknownEntities.nodes
     .map(e => {
-      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
+      const decodedSpace = Schema.decodeEither(SubstreamEntityLive)(e);
 
       return Either.match(decodedSpace, {
         onLeft: error => {
@@ -160,7 +160,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
           return null;
         },
         onRight: entity => {
-          return EntityDto(entity);
+          return EntityDtoLive(entity);
         },
       });
     })

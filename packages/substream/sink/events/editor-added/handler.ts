@@ -15,7 +15,7 @@ export class CouldNotWriteAddedEditorsError extends Error {
 export function handleEditorsAdded(editorsAdded: EditorAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     const schemaEditors = yield* _(mapEditors(editorsAdded, block));
-    yield* _(Effect.logInfo('Handling editors added'));
+    yield* _(Effect.logInfo('[EDITORS ADDED] Started'));
 
     /**
      * Ensure that we create any relations for the role change before we create the
@@ -31,7 +31,7 @@ export function handleEditorsAdded(editorsAdded: EditorAdded[], block: BlockEven
       )
     );
 
-    yield* _(Effect.logDebug('Writing editors'));
+    yield* _(Effect.logDebug('[EDITORS ADDED] Writing editors'));
 
     yield* _(
       Effect.tryPromise({
@@ -43,6 +43,6 @@ export function handleEditorsAdded(editorsAdded: EditorAdded[], block: BlockEven
       retryEffect
     );
 
-    yield* _(Effect.logInfo('Approved editors handled'));
+    yield* _(Effect.logInfo('[EDITORS ADDED] Ended'));
   });
 }
