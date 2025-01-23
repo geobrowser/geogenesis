@@ -1,7 +1,6 @@
 import { Space } from '~/core/io/dto/spaces';
 import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
 import { EntityTableStoreProvider } from '~/core/state/entity-table-store/entity-table-store-provider';
-import { TypesStoreProvider } from '~/core/state/types-store/types-store';
 import { PropertySchema, Row, Triple } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
@@ -15,7 +14,6 @@ interface Props {
   spaceName: string | null;
   spaceImage: string | null;
   initialSelectedType: Triple | null;
-  initialTypes: Triple[];
   initialColumns: PropertySchema[];
   initialRows: Row[];
   initialParams: InitialEntityTableStoreParams;
@@ -27,17 +25,15 @@ export function Component(props: Props) {
       <SpaceHeader spaceId={props.space.id} spaceImage={props.spaceImage} spaceName={props.spaceName} />
       <Spacer height={34} />
       <SpaceNavbar spaceId={props.space.id} />
-      <TypesStoreProvider initialTypes={props.initialTypes} space={props.space}>
-        <EntityTableStoreProvider
-          initialColumns={props.initialColumns}
-          initialRows={props.initialRows}
-          spaceId={props.space.id}
-          initialSelectedType={props.initialSelectedType}
-          initialParams={props.initialParams}
-        >
-          <EntityTableContainer spaceId={props.space.id} spaceName={props.spaceName} />
-        </EntityTableStoreProvider>
-      </TypesStoreProvider>
+      <EntityTableStoreProvider
+        initialColumns={props.initialColumns}
+        initialRows={props.initialRows}
+        spaceId={props.space.id}
+        initialSelectedType={props.initialSelectedType}
+        initialParams={props.initialParams}
+      >
+        <EntityTableContainer spaceId={props.space.id} spaceName={props.spaceName} />
+      </EntityTableStoreProvider>
     </div>
   );
 }

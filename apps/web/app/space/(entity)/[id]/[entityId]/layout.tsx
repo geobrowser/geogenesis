@@ -9,7 +9,6 @@ import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId, TypeId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
@@ -74,54 +73,52 @@ export default async function ProfileLayout({ children, params }: Props) {
   const types = await cachedFetchEntityType(entityId);
 
   if (!types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
-    return <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>;
+    return <>{children}</>;
   }
 
   const profile = await getProfilePage(entityId);
 
   return (
-    <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider
-        id={entityId}
+    <EntityStoreProvider
+      id={entityId}
+      spaceId={params.id}
+      initialSpaces={profile.spaces}
+      initialTriples={profile.triples}
+      initialRelations={profile.relationsOut}
+    >
+      <EditorProvider
+        id={profile.id}
         spaceId={params.id}
-        initialSpaces={profile.spaces}
-        initialTriples={profile.triples}
-        initialRelations={profile.relationsOut}
+        initialBlocks={profile.blocks}
+        initialBlockRelations={profile.blockRelations}
       >
-        <EditorProvider
-          id={profile.id}
-          spaceId={params.id}
-          initialBlocks={profile.blocks}
-          initialBlockRelations={profile.blockRelations}
-        >
-          <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-          <EntityPageContentContainer>
-            <EditableHeading spaceId={params.id} entityId={entityId} />
-            <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
+        <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+        <EntityPageContentContainer>
+          <EditableHeading spaceId={params.id} entityId={entityId} />
+          <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
 
-            <Spacer height={40} />
-            <React.Suspense fallback={null}>
-              <TabGroup
-                tabs={TABS.map(label => {
-                  const href =
-                    label === 'Overview'
-                      ? `${NavUtils.toEntity(params.id, entityId)}`
-                      : `${NavUtils.toEntity(params.id, entityId)}/${label.toLowerCase()}`;
-                  return {
-                    href,
-                    label,
-                  };
-                })}
-              />
-            </React.Suspense>
+          <Spacer height={40} />
+          <React.Suspense fallback={null}>
+            <TabGroup
+              tabs={TABS.map(label => {
+                const href =
+                  label === 'Overview'
+                    ? `${NavUtils.toEntity(params.id, entityId)}`
+                    : `${NavUtils.toEntity(params.id, entityId)}/${label.toLowerCase()}`;
+                return {
+                  href,
+                  label,
+                };
+              })}
+            />
+          </React.Suspense>
 
-            <Spacer height={20} />
+          <Spacer height={20} />
 
-            {children}
-          </EntityPageContentContainer>
-        </EditorProvider>
-      </EntityStoreProvider>
-    </TypesStoreServerContainer>
+          {children}
+        </EntityPageContentContainer>
+      </EditorProvider>
+    </EntityStoreProvider>
   );
 }
 

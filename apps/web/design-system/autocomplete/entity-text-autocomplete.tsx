@@ -1,5 +1,3 @@
-'use client';
-
 import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -27,7 +25,6 @@ interface Props {
   alreadySelectedIds: string[];
   filterByTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
-  attributeId?: string;
   wrapperClassName?: string;
   containerClassName?: string;
   className?: string;
@@ -39,7 +36,6 @@ export function EntityTextAutocomplete({
   onDone,
   filterByTypes,
   spaceId,
-  attributeId,
   wrapperClassName = '',
   containerClassName = '',
   className = '',
@@ -51,9 +47,6 @@ export function EntityTextAutocomplete({
   });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(alreadySelectedIds);
-
-  // const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
-  // const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();

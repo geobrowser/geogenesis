@@ -180,7 +180,6 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
         }}
         filterByTypes={[{ typeId: SYSTEM_IDS.ATTRIBUTE, typeName: 'Attribute' }]}
         alreadySelectedIds={[]}
-        attributeId={renderable.attributeId}
       />
     );
   }

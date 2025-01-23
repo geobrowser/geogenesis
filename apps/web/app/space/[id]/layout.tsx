@@ -10,7 +10,6 @@ import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fet
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -60,54 +59,52 @@ export default async function Layout({ children, params }: LayoutProps) {
   const tabs = await buildTabsForSpacePage(props.tabEntities, props.space.spaceConfig?.types ?? [], params);
 
   return (
-    <TypesStoreServerContainer spaceId={spaceId}>
-      <EntityStoreProvider
+    <EntityStoreProvider
+      id={props.id}
+      spaceId={props.spaceId}
+      initialSpaces={props.spaces}
+      initialTriples={props.triples}
+      initialRelations={props.relationsOut}
+    >
+      <EditorProvider
         id={props.id}
         spaceId={props.spaceId}
-        initialSpaces={props.spaces}
-        initialTriples={props.triples}
-        initialRelations={props.relationsOut}
+        initialBlockRelations={props.blockRelations}
+        initialBlocks={props.blocks}
+        initialTabs={props.tabs}
       >
-        <EditorProvider
-          id={props.id}
-          spaceId={props.spaceId}
-          initialBlockRelations={props.blockRelations}
-          initialBlocks={props.blocks}
-          initialTabs={props.tabs}
-        >
-          <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
-          <EntityPageContentContainer>
-            <EditableHeading spaceId={props.spaceId} entityId={props.id} />
-            <SpacePageMetadataHeader
-              typeNames={typeNames}
-              spaceId={props.spaceId}
-              entityId={props.id}
-              addSubspaceComponent={
-                <AddSubspaceDialog
-                  spaceId={spaceId}
-                  trigger={<MenuItem>Add subspace</MenuItem>}
-                  subspaces={subspaces}
-                  inflightSubspaces={inflightSubspaces}
-                  spaceType={props.space.type}
-                />
-              }
-              membersComponent={
-                <React.Suspense fallback={<MembersSkeleton />}>
-                  <SpaceEditors spaceId={spaceId} />
-                  <SpaceMembers spaceId={spaceId} />
-                </React.Suspense>
-              }
-            />
-            <Spacer height={40} />
-            <React.Suspense fallback={null}>
-              <TabGroup tabs={tabs} />
-            </React.Suspense>
-            <Spacer height={20} />
-            {children}
-          </EntityPageContentContainer>
-        </EditorProvider>
-      </EntityStoreProvider>
-    </TypesStoreServerContainer>
+        <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
+        <EntityPageContentContainer>
+          <EditableHeading spaceId={props.spaceId} entityId={props.id} />
+          <SpacePageMetadataHeader
+            typeNames={typeNames}
+            spaceId={props.spaceId}
+            entityId={props.id}
+            addSubspaceComponent={
+              <AddSubspaceDialog
+                spaceId={spaceId}
+                trigger={<MenuItem>Add subspace</MenuItem>}
+                subspaces={subspaces}
+                inflightSubspaces={inflightSubspaces}
+                spaceType={props.space.type}
+              />
+            }
+            membersComponent={
+              <React.Suspense fallback={<MembersSkeleton />}>
+                <SpaceEditors spaceId={spaceId} />
+                <SpaceMembers spaceId={spaceId} />
+              </React.Suspense>
+            }
+          />
+          <Spacer height={40} />
+          <React.Suspense fallback={null}>
+            <TabGroup tabs={tabs} />
+          </React.Suspense>
+          <Spacer height={20} />
+          {children}
+        </EntityPageContentContainer>
+      </EditorProvider>
+    </EntityStoreProvider>
   );
 }
 

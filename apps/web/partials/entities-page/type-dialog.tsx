@@ -1,15 +1,11 @@
-'use client';
-
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSearch } from '~/core/hooks/use-search';
-import { SearchResult } from '~/core/io/dto/search';
 import { useEditable } from '~/core/state/editable-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
-import { useTypesStore } from '~/core/state/types-store/types-store';
 import { GeoType } from '~/core/types';
 
 import { ResultContent, ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -29,15 +25,12 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
   const autocomplete = useSearch({
     filterByTypes: [SYSTEM_IDS.SCHEMA_TYPE],
   });
-  const { types } = useTypesStore();
   const entityTableStore = useEntityTable();
   const { isEditor } = useAccessControl(spaceId);
   const { editable } = useEditable();
 
   const [entityName, setEntityName] = useState('');
   const [mode, setMode] = useState<TypeDialogMode>('current-space');
-
-  const filteredTypes = types.filter(type => (type.entityName || '').toLowerCase().includes(entityName.toLowerCase()));
 
   const handleSearchChange = (value: string) => {
     if (mode === 'foreign-space') {
@@ -53,20 +46,6 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
     }
   };
 
-  const createForeignType = (typeEntity: SearchResult) => {
-    // @TODO: Fix
-    return;
-    // const foreignTypeTriple = typeEntity.triples.find(
-    //   triple => triple.attributeId === SYSTEM_IDS.TYPES_ATTRIBUTE && triple.value.value === SYSTEM_IDS.SCHEMA_TYPE
-    // );
-
-    // if (!foreignTypeTriple) return;
-
-    // entityTableStore.createForeignType(foreignTypeTriple);
-    // setEntityName('');
-    // handleSelect(foreignTypeTriple);
-  };
-
   const createType = () => {
     if (entityName.length === 0) {
       return;
@@ -76,9 +55,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
     handleSelect(newType);
   };
 
-  const spaceTypeIds = types.map(type => type.entityId);
-
-  const resultCount = mode === 'current-space' ? filteredTypes.length : autocomplete.results.length;
+  const filteredTypes: any[] = [];
 
   const noResultsFound =
     (mode === 'current-space' && filteredTypes.length === 0) ||
@@ -102,10 +79,10 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
             ))
           : autocomplete.results.map(result => (
               <ResultContent
-                key={result.id}
                 onClick={() => {
-                  createForeignType(result);
+                  //
                 }}
+                key={result.id}
                 alreadySelected={filteredTypes.some(type => type.entityId === result.id)}
                 result={result}
               />
@@ -114,7 +91,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
       {noResultsFound && <Spacer height={8} />}
       <div className="flex justify-between border-t border-grey-02 px-2 pb-2 pt-2">
         <Text variant="smallButton" color="grey-04">
-          {resultCount} Types
+          0 Types
         </Text>
         {isEditor && editable && (
           <div className="flex gap-2">
