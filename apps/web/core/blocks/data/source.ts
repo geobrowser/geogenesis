@@ -8,7 +8,33 @@ import { DB } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { Relation } from '~/core/types';
 
-import { Source } from './types';
+type EntitySource = {
+  type: 'RELATIONS';
+  value: string; // EntityId
+  name: string | null;
+};
+
+type CollectionSource = {
+  type: 'COLLECTION';
+  value: string;
+};
+
+type MultipleSources = {
+  type: 'SPACES'; // | 'collections';
+  value: Array<SpaceId>;
+};
+
+type AllOfGeoSource = {
+  type: 'GEO'; // we don't care about the value since we aren't querying based on a specific space or collection
+};
+
+/**
+ * Sources determine the data that is shown in a data block. Depending on the source
+ * type we might be making different queries, aggregating different data, or showing
+ * different UI.
+ *
+ */
+export type Source = CollectionSource | MultipleSources | AllOfGeoSource | EntitySource;
 
 type GetSourceArgs = {
   blockId: EntityId;
@@ -45,7 +71,7 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
 
   if (maybeEntityFilter) {
     return {
-      type: 'ENTITY',
+      type: 'RELATIONS',
       value: maybeEntityFilter.value,
       name: maybeEntityFilter.valueName,
     };

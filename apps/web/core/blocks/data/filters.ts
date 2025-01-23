@@ -5,9 +5,10 @@ import { Either } from 'effect';
 import { mergeEntityAsync } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';
 import { fetchSpace } from '~/core/io/subgraph';
-import { Source } from '~/core/state/editor/types';
 import { OmitStrict, ValueTypeId } from '~/core/types';
 import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
+
+import { Source } from './source';
 
 export type Filter = {
   columnId: string;
@@ -53,7 +54,7 @@ export type FilterString = Schema.Schema.Type<typeof FilterString>;
 export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], source: Source): string {
   let filter: FilterString | null = null;
 
-  if (source.type === 'ENTITY') {
+  if (source.type === 'RELATIONS') {
     filter = {
       where: {
         entity: source.value,

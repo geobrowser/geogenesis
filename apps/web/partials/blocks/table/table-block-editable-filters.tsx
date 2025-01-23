@@ -18,7 +18,7 @@ export function TableBlockEditableFilters() {
   // always columns on the type schema for a table. We allow users to be able
   // to filter by name and space.
   const filterableColumns: RenderableFilter[] =
-    source.type !== 'ENTITY'
+    source.type !== 'RELATIONS'
       ? [
           // @TODO(data blocks): We should add the default filters to the data model
           // itself instead of manually here.

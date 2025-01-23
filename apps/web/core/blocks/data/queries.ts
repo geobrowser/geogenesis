@@ -2,16 +2,17 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { Filter } from '../blocks/data/filters';
-import { Entity } from '../io/dto/entities';
-import { fetchColumns } from '../io/fetch-columns';
-import { EntityId } from '../io/schema';
-import { fetchTableRowEntities } from '../io/subgraph';
-import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
-import { queryClient } from '../query-client';
-import { PropertySchema, Value } from '../types';
-import { getEntities_experimental, mergeEntity, mergeEntityAsync } from './entities';
-import { getRelations } from './relations';
+import { getEntities_experimental, mergeEntity, mergeEntityAsync } from '~/core/database/entities';
+import { getRelations } from '~/core/database/relations';
+import { Entity } from '~/core/io/dto/entities';
+import { fetchColumns } from '~/core/io/fetch-columns';
+import { EntityId } from '~/core/io/schema';
+import { fetchTableRowEntities } from '~/core/io/subgraph';
+import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
+import { queryClient } from '~/core/query-client';
+import { PropertySchema, Value } from '~/core/types';
+
+import { Filter } from './filters';
 
 const queryKeys = {
   remoteRows: (options: Parameters<typeof fetchTableRowEntities>[0]) =>
@@ -98,7 +99,7 @@ type CollectionItemArgs = {
   filterState: Filter[];
 };
 
-export async function mergeCollectionItemEntitiesAsync(args: CollectionItemArgs) {
+export async function mergeEntitiesAsync(args: CollectionItemArgs) {
   const { entityIds, filterString, filterState } = args;
 
   const cachedRemoteEntities = await queryClient.fetchQuery({
@@ -138,7 +139,7 @@ function filterValue(value: Value, valueToFilter: string) {
   }
 }
 
-export async function mergeEntitySourceTypeEntities(entityId: string, filterString: string, filterState: Filter[]) {
+export async function mergeRelationQueryEntities(entityId: string, filterString: string, filterState: Filter[]) {
   const entity = await mergeEntityAsync(EntityId(entityId));
   const maybeRelationType = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE)?.value;
 

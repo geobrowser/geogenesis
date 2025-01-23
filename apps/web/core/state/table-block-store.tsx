@@ -4,16 +4,17 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { Filter, fromGeoFilterState, toGeoFilterState } from '../blocks/data/filters';
+import {
+  MergeTableEntitiesArgs,
+  mergeColumns,
+  mergeEntitiesAsync,
+  mergeRelationQueryEntities,
+  mergeTableEntities,
+} from '../blocks/data/queries';
+import { Source, getSource, removeSourceType, upsertSourceType } from '../blocks/data/source';
 import { queryStringFromFilters } from '../blocks/data/to-query-string';
 import { useEntity } from '../database/entities';
 import { useRelations } from '../database/relations';
-import {
-  MergeTableEntitiesArgs,
-  mergeCollectionItemEntitiesAsync,
-  mergeColumns,
-  mergeEntitySourceTypeEntities,
-  mergeTableEntities,
-} from '../database/table';
 import { StoredRelation } from '../database/types';
 import { useWriteOps } from '../database/write';
 import { usePropertyValueTypes } from '../hooks/use-property-value-types';
@@ -22,8 +23,6 @@ import { EntityId, SpaceId } from '../io/schema';
 import { PropertySchema, Relation } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
-import { getSource, removeSourceType, upsertSourceType } from './editor/sources';
-import { Source } from './editor/types';
 
 export const PAGE_SIZE = 9;
 
@@ -134,7 +133,7 @@ export function useTableBlock() {
     enabled: collectionItems.length > 0,
     queryKey: queryKeys.collectionItemEntities(collectionItemIds),
     queryFn: async () => {
-      const entities = await mergeCollectionItemEntitiesAsync({
+      const entities = await mergeEntitiesAsync({
         entityIds: collectionItemIds,
         filterState: [],
       });
@@ -185,8 +184,8 @@ export function useTableBlock() {
         skip: pageNumber * PAGE_SIZE,
       };
 
-      if (source.type === 'ENTITY') {
-        return await mergeEntitySourceTypeEntities(source.value, filterString, filterState);
+      if (source.type === 'RELATIONS') {
+        return await mergeRelationQueryEntities(source.value, filterString, filterState);
       }
 
       if (source.type === 'SPACES' || source.type === 'GEO') {
@@ -194,7 +193,7 @@ export function useTableBlock() {
       }
 
       if (source.type === 'COLLECTION') {
-        return mergeCollectionItemEntitiesAsync({
+        return mergeEntitiesAsync({
           entityIds: collectionItems.map(c => c.toEntity.id),
           filterString,
           filterState,
@@ -274,7 +273,7 @@ export function useTableBlock() {
       });
       upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 
-      if (newSource.type === 'ENTITY') {
+      if (newSource.type === 'RELATIONS') {
         setFilterState(
           [
             {

@@ -78,10 +78,10 @@ export const DataBlockSourceMenu = ({
               <ChevronRight />
             </button>
           </MenuItem>
-          <MenuItem active={source.type === 'ENTITY'}>
+          <MenuItem active={source.type === 'RELATIONS'}>
             <button onClick={() => setView('entity')} className="flex w-full items-center justify-between gap-2">
               <span className="text-button text-text">Single entity</span>
-              {source.type === 'ENTITY' && <Check />}
+              {source.type === 'RELATIONS' && <Check />}
             </button>
           </MenuItem>
           <MenuItem active={source.type === 'GEO'}>
@@ -120,7 +120,7 @@ const EntityMenu = ({ onBack }: EntityMenuProps) => {
 
   const handleToggleEntity = (entityId: string, entityName: string | null) => {
     setSource({
-      type: 'ENTITY',
+      type: 'RELATIONS',
       value: entityId,
       name: entityName,
     });
@@ -144,7 +144,7 @@ const EntityMenu = ({ onBack }: EntityMenuProps) => {
       </div>
       <div className="max-h-[273px] w-full overflow-y-auto">
         {results.map(entity => {
-          const active = source.type === 'ENTITY' && source.value === entity.id;
+          const active = source.type === 'RELATIONS' && source.value === entity.id;
 
           return (
             <MenuItem

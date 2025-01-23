@@ -6,8 +6,8 @@ import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
+import { MergeTableEntitiesArgs, mergeTableEntities } from '~/core/blocks/data/queries';
 import { queryStringFromFilters } from '~/core/blocks/data/to-query-string';
-import { MergeTableEntitiesArgs, mergeTableEntities } from '~/core/database/table';
 import { useWriteOps } from '~/core/database/write';
 import { createType as insertType } from '~/core/type/create-type';
 import { GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';

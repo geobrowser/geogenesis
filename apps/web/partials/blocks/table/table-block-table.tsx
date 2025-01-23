@@ -18,7 +18,13 @@ import Image from 'next/image';
 import * as React from 'react';
 import { useState } from 'react';
 
+import {
+  upsertCollectionItemRelation,
+  upsertSourceSpaceOnCollectionItem,
+  upsertVerifiedSourceOnCollectionItem,
+} from '~/core/blocks/data/collection';
 import { Filter } from '~/core/blocks/data/filters';
+import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
@@ -28,9 +34,6 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { upsertCollectionItemRelation, upsertVerifiedSourceOnCollectionItem } from '~/core/state/editor/data-entity';
-import { upsertSourceSpaceOnCollectionItem } from '~/core/state/editor/data-entity';
-import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
 import { Cell, PropertySchema, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
