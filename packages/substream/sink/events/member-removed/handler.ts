@@ -14,7 +14,7 @@ export function handleMemberRemoved(membersRemoved: MemberRemoved[]) {
     const telemetry = yield* _(Telemetry);
     const schemaMembers = yield* _(mapRemovedMembers(membersRemoved));
 
-    yield* _(Effect.logInfo('Handling member removed'));
+    yield* _(Effect.logInfo('[MEMBERS REMOVED] Started'));
 
     const writtenRemovedMembers = yield* _(
       Effect.all(
@@ -55,7 +55,9 @@ export function handleMemberRemoved(membersRemoved: MemberRemoved[]) {
 
     yield* _(
       Effect.logInfo(
-        `${writtenRemovedMembers.length - failedDeletions} out of ${writtenRemovedMembers.length} members removed`
+        `[MEMBERS REMOVED] ${writtenRemovedMembers.length - failedDeletions} out of ${
+          writtenRemovedMembers.length
+        } members removed`
       )
     );
   });

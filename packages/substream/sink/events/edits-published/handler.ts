@@ -32,7 +32,7 @@ export class CouldNotWriteCurrentVersionsError extends Error {
  */
 export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdSpaceIds: string[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling approved edits'));
+    yield* _(Effect.logInfo('[EDITS PUBLISHED] Started'));
 
     const {
       schemaEditProposals: { versions, relationOpsByEditId, tripleOpsByVersionId, edits },
@@ -248,7 +248,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       })
     );
 
-    yield* _(Effect.logInfo('Approved edits created'));
+    yield* _(Effect.logInfo('[EDITS PUBLISHED] Ended'));
   });
 }
 

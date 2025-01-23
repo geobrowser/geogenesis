@@ -12,11 +12,11 @@ class CouldNotWriteVotesError extends Error {
 
 export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling votes cast'));
+    yield* _(Effect.logInfo('[VOTES CAST] Started'));
 
     const schemaVotes = yield* _(mapVotes(votesCast, block));
 
-    yield* _(Effect.logDebug('Writing votes'));
+    yield* _(Effect.logDebug('[VOTES CAST] Writing votes'));
 
     yield* _(
       Effect.tryPromise({
@@ -30,6 +30,6 @@ export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
       retryEffect
     );
 
-    yield* _(Effect.logInfo('Votes cast'));
+    yield* _(Effect.logInfo('[VOTES CAST] Ended'));
   });
 }

@@ -11,11 +11,11 @@ export class CouldNotRemoveSubspacesError extends Error {
 
 export function handleSubspacesRemoved(subspacesRemoved: SubspaceRemoved[]) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling subspaces removed'));
+    yield* _(Effect.logInfo('[SUBSPACES REMOVED] Started'));
 
     const subspacesToRemove = yield* _(mapSubspacesToRemove(subspacesRemoved));
 
-    yield* _(Effect.logDebug('Removing subspaces'));
+    yield* _(Effect.logDebug('[SUBSPACES REMOVED] Writing subspaces'));
 
     yield* _(
       Effect.forEach(
@@ -36,6 +36,6 @@ export function handleSubspacesRemoved(subspacesRemoved: SubspaceRemoved[]) {
       retryEffect
     );
 
-    yield* _(Effect.logInfo(`Subspaces removed`));
+    yield* _(Effect.logInfo(`[SUBSPACES REMOVED] Ended`));
   });
 }

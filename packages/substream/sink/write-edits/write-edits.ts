@@ -217,10 +217,6 @@ function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Inser
   const types = new Map<string, string[]>();
 
   for (const relation of relations) {
-    if (relation.from_entity_id.toString() === '9xLquTi3MBPsCnfNUJzNWr') {
-      console.log('relation', relation.type_of_id, relation.to_entity_id);
-    }
-
     const fromVersionId = relation.from_version_id.toString();
     const toVersionId = relation.to_version_id.toString();
 

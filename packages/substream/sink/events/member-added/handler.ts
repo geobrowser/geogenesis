@@ -14,7 +14,7 @@ export class CouldNotWriteAddedMembersError extends Error {
 
 export function handleMemberAdded(membersAdded: MemberAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling member added'));
+    yield* _(Effect.logInfo('[MEMBERS ADDED] Started'));
     const schemaMembers = yield* _(mapMembers(membersAdded, block));
 
     /**
@@ -31,7 +31,7 @@ export function handleMemberAdded(membersAdded: MemberAdded[], block: BlockEvent
       )
     );
 
-    yield* _(Effect.logDebug('Writing members'));
+    yield* _(Effect.logDebug('[MEMBERS ADDED] Writing members'));
 
     yield* _(
       Effect.tryPromise({
@@ -43,6 +43,6 @@ export function handleMemberAdded(membersAdded: MemberAdded[], block: BlockEvent
       retryEffect
     );
 
-    yield* _(Effect.logInfo('Members added'));
+    yield* _(Effect.logInfo('[MEMBERS ADDED] Ended'));
   });
 }

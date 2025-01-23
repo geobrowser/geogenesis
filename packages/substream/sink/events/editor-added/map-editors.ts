@@ -11,14 +11,14 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     const editors: S.space_editors.Insertable[] = [];
 
-    yield* _(Effect.logDebug('Mapping editors'));
+    yield* _(Effect.logDebug('[MAP EDITORS] Started'));
 
     for (const editor of editorAdded) {
       const maybeSpaceIdForVotingPluginEffect = Effect.tryPromise({
         try: () => Spaces.findForVotingPlugin(editor.mainVotingPluginAddress),
         catch: () =>
           new InvalidPluginAddressForDaoError(
-            `Could not find space for main voting plugin address ${editor.mainVotingPluginAddress}`
+            `[MAP EDITORS] Could not find space for main voting plugin address ${editor.mainVotingPluginAddress}`
           ),
       });
 
@@ -26,7 +26,7 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
         try: () => Spaces.findForPersonalPlugin(editor.mainVotingPluginAddress),
         catch: () =>
           new InvalidPluginAddressForDaoError(
-            `Could not find space for main voting plugin address ${editor.mainVotingPluginAddress}`
+            `[MAP EDITORS] Could not find space for main voting plugin address ${editor.mainVotingPluginAddress}`
           ),
       });
 
@@ -37,7 +37,7 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForPersonalPlugin) {
         yield* _(
           Effect.logError(
-            `Matching space for approved editor not found for plugin address ${editor.mainVotingPluginAddress}`
+            `[MAP EDITORS] Matching space for approved editor not found for plugin address ${editor.mainVotingPluginAddress}`
           )
         );
 

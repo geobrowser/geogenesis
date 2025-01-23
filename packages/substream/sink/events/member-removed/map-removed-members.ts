@@ -8,7 +8,7 @@ import { InvalidPluginAddressForDaoError, isInvalidPluginForDao } from '~/sink/e
 
 export function mapRemovedMembers(membersRemoved: MemberRemoved[]) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logDebug('Mapping removed members'));
+    yield* _(Effect.logDebug('[MAP REMOVED MEMBERS] Started'));
     const removedMembers: S.space_members.Whereable[] = [];
 
     for (const member of membersRemoved) {
@@ -17,7 +17,7 @@ export function mapRemovedMembers(membersRemoved: MemberRemoved[]) {
       const maybeSpace = yield* _(Effect.promise(() => Spaces.findForDaoAddress(member.daoAddress)));
 
       if (!maybeSpace) {
-        const message = `Could not find space for removed member ${member.memberAddress} with plugin address ${member.pluginAddress} and dao address ${member.daoAddress}`;
+        const message = `[MAP REMOVED MEMBERS] Could not find space for removed member ${member.memberAddress} with plugin address ${member.pluginAddress} and dao address ${member.daoAddress}`;
 
         yield* _(Effect.logError(message));
         yield* _(Effect.fail(new InvalidPluginAddressForDaoError(message)));
@@ -25,7 +25,7 @@ export function mapRemovedMembers(membersRemoved: MemberRemoved[]) {
       }
 
       if (isInvalidPluginForDao(member.pluginAddress, maybeSpace)) {
-        const message = `Plugin address ${member.pluginAddress} does not match the supplied dao address ${member.daoAddress} when removing member ${member.memberAddress}`;
+        const message = `[MAP REMOVED MEMBERS] Plugin address ${member.pluginAddress} does not match the supplied dao address ${member.daoAddress} when removing member ${member.memberAddress}`;
 
         yield* _(Effect.logError(message));
         yield* _(Effect.fail(new InvalidPluginAddressForDaoError(message)));
