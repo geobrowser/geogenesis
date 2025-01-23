@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { notFound } from 'next/navigation';
 
-import { TableBlockSdk } from '~/core/blocks-sdk';
+import { queryStringFromFilters } from '~/core/blocks/data/to-query-string';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { Space } from '~/core/io/dto/spaces';
@@ -71,7 +71,7 @@ const getData = async ({
     ...initialParams,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
-    filter: TableBlockSdk.createGraphQLStringFromFilters([
+    filter: queryStringFromFilters([
       {
         columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
         value: initialParams.query,
