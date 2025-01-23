@@ -23,7 +23,7 @@ import { Cell, PropertySchema, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils } from '~/core/utils/utils';
-import { valueTypes } from '~/core/value-types';
+import { VALUE_TYPES } from '~/core/value-types';
 
 import { TableCell } from '~/design-system/table/cell';
 import { EmptyTableText } from '~/design-system/table/styles';
@@ -90,7 +90,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       selector: triple => {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;
-        const isCurrentValueType = triple.value.type === valueTypes[valueType];
+        const isCurrentValueType = triple.value.type === VALUE_TYPES[valueType];
 
         return isRowCell && isColCell && isCurrentValueType;
       },

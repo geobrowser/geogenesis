@@ -36,7 +36,7 @@ import { Cell, PropertySchema, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
-import { valueTypes } from '~/core/value-types';
+import { VALUE_TYPES } from '~/core/value-types';
 
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -132,7 +132,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           selector: triple => {
             const isRowCell = triple.entityId === cellData.entityId;
             const isColCell = triple.attributeId === cellData.columnId;
-            const isCurrentValueType = triple.value.type === valueTypes[valueType];
+            const isCurrentValueType = triple.value.type === VALUE_TYPES[valueType];
 
             return isRowCell && isColCell && isCurrentValueType;
           },

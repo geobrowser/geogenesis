@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Filter } from '~/core/blocks/data/filters';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { FilterableValueType, valueTypes } from '~/core/value-types';
+import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
 
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
@@ -34,7 +34,7 @@ export function TableBlockEditableFilters() {
               return {
                 columnId: c.id,
                 columnName: c.name ?? '',
-                valueType: valueTypes[c.valueType],
+                valueType: VALUE_TYPES[c.valueType],
                 value: '',
                 valueName: null,
               };

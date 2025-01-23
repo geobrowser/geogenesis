@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ValueType as TripleValueType, ValueTypeId } from './types';
 
-export const valueTypeIds: Record<TripleValueType, ValueTypeId> = {
+export const VALUE_TYPE_IDS: Record<TripleValueType, ValueTypeId> = {
   TEXT: SYSTEM_IDS.TEXT,
   TIME: SYSTEM_IDS.TIME,
   URL: SYSTEM_IDS.URL,
@@ -12,7 +12,7 @@ export const valueTypeIds: Record<TripleValueType, ValueTypeId> = {
 
 export type FilterableValueType = TripleValueType | 'RELATION' | 'IMAGE';
 
-export const valueTypes: Record<ValueTypeId, FilterableValueType> = {
+export const VALUE_TYPES: Record<ValueTypeId, FilterableValueType> = {
   [SYSTEM_IDS.CHECKBOX]: 'CHECKBOX',
   [SYSTEM_IDS.TIME]: 'TIME',
   [SYSTEM_IDS.IMAGE]: 'IMAGE',
@@ -22,7 +22,7 @@ export const valueTypes: Record<ValueTypeId, FilterableValueType> = {
   [SYSTEM_IDS.URL]: 'URL',
 };
 
-export const valueTypeNames: Record<ValueTypeId, string> = {
+export const VALUE_TYPE_NAMES: Record<ValueTypeId, string> = {
   [SYSTEM_IDS.CHECKBOX]: 'Checkbox',
   [SYSTEM_IDS.TIME]: 'Date',
   [SYSTEM_IDS.IMAGE]: 'Image',

@@ -3,13 +3,8 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import {
-  createFilterStringFromFilters,
-  createFiltersFromFilterString,
-  createGraphQLStringFromFilters,
-  upsertName,
-} from '../blocks-sdk/table';
-import { Filter } from '../blocks/data/filters';
+import { Filter, fromGeoFilterState, toGeoFilterState } from '../blocks/data/filters';
+import { queryStringFromFilters } from '../blocks/data/to-query-string';
 import { useEntity } from '../database/entities';
 import { useRelations } from '../database/relations';
 import {
@@ -35,7 +30,7 @@ export const PAGE_SIZE = 9;
 interface RowQueryArgs {
   pageNumber: number;
   entityId: string;
-  filterState?: Awaited<ReturnType<typeof createFiltersFromFilterString>>;
+  filterState?: Filter[];
   source: Source;
   collectionItems: StoredRelation[];
 }
@@ -44,8 +39,7 @@ const queryKeys = {
   collectionItemEntities: (collectionItemIds: EntityId[]) =>
     ['blocks', 'data', 'collection-items', collectionItemIds] as const,
   filterState: (filterString: string | null) => ['blocks', 'data', 'filter-state', filterString] as const,
-  columns: (filterState: Awaited<ReturnType<typeof createFiltersFromFilterString>> | null) =>
-    ['blocks', 'data', 'columns', filterState] as const,
+  columns: (filterState: Filter[] | null) => ['blocks', 'data', 'columns', filterState] as const,
   rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
   columnsSchema: (columns?: PropertySchema[]) => ['blocks', 'data', 'columns-schema', columns],
 };
@@ -105,7 +99,7 @@ export function useTableBlock() {
     placeholderData: keepPreviousData,
     queryKey: queryKeys.filterState(filterString),
     queryFn: async () => {
-      return await createFiltersFromFilterString(filterString);
+      return await fromGeoFilterState(filterString);
     },
   });
 
@@ -183,7 +177,7 @@ export function useTableBlock() {
     queryFn: async () => {
       if (!filterState) return [];
 
-      const filterString = createGraphQLStringFromFilters(filterState);
+      const filterString = queryStringFromFilters(filterState);
 
       const params: MergeTableEntitiesArgs['options'] = {
         filter: filterString,
@@ -243,7 +237,7 @@ export function useTableBlock() {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString = newState.length === 0 ? '' : createFilterStringFromFilters(newState, source);
+      const newFiltersString = newState.length === 0 ? '' : toGeoFilterState(newState, source);
 
       const entityName = blockEntity.name ?? '';
 
@@ -318,12 +312,16 @@ export function useTableBlock() {
 
   const setName = React.useCallback(
     (newName: string) => {
-      upsertName({
-        newName: newName,
-        spaceId,
-        entityId,
-        api: { upsert },
-      });
+      upsert(
+        {
+          attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+          entityId: entityId,
+          entityName: newName,
+          attributeName: 'Name',
+          value: { type: 'TEXT', value: newName },
+        },
+        spaceId
+      );
     },
     [upsert, entityId, spaceId]
   );

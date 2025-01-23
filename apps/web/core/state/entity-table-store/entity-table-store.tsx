@@ -6,7 +6,7 @@ import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { TableBlockSdk } from '~/core/blocks-sdk';
+import { queryStringFromFilters } from '~/core/blocks/data/to-query-string';
 import { MergeTableEntitiesArgs, mergeTableEntities } from '~/core/database/table';
 import { useWriteOps } from '~/core/database/write';
 import { createType as insertType } from '~/core/type/create-type';
@@ -44,7 +44,7 @@ export function useEntityTable() {
     }
   }, [initialSelectedType, setSelectedType, selectedType]);
 
-  const filterString = TableBlockSdk.createGraphQLStringFromFilters([
+  const filterString = queryStringFromFilters([
     {
       columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
       value: query,
