@@ -50,8 +50,17 @@ CREATE INDEX current_versions_version_id
 CREATE INDEX relations_type_of_id
     on relations (type_of_id);
 
+CREATE INDEX relations_type_of_version_id
+    on relations (type_of_version_id);
+
+CREATE INDEX relations_to_entity_id
+    on relations (to_entity_id);
+
 CREATE INDEX relations_to_version_id
     on relations (to_version_id);
+
+CREATE INDEX relations_from_entity_id
+    on relations (from_entity_id);
 
 CREATE INDEX relations_from_version_id
     on relations (from_version_id);
