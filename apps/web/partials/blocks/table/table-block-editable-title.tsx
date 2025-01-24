@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -10,7 +11,8 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const { spaces } = useSpaces();
   const userCanEdit = useUserIsEditing(spaceId);
 
-  const { name, setName, source } = useTableBlock();
+  const { name, setName } = useTableBlock();
+  const { source } = useSource();
 
   const hasOverflow = source.type === 'SPACES' ? source.value.length > 3 : false;
   const renderedSpaces = source.type === 'SPACES' ? (hasOverflow ? source.value.slice(0, 2) : source.value) : [];

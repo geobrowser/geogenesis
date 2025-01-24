@@ -6,11 +6,11 @@ import * as React from 'react';
 
 import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
+import { useSource } from '~/core/blocks/data/use-source';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Space } from '~/core/io/dto/spaces';
-import { useTableBlock } from '~/core/state/table-block-store';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -183,7 +183,7 @@ function getInitialState(source: Source): PromptState {
 }
 
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const { source } = useTableBlock();
+  const { source } = useSource();
 
   const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
 

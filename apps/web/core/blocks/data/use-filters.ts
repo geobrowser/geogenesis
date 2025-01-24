@@ -77,5 +77,5 @@ export function useFilters() {
     [entityId, spaceId, blockEntity.name]
   );
 
-  return { filterState, isLoading, isFetched, setFilterState };
+  return { filterState: filterState ?? [], isLoading, isFetched, setFilterState };
 }

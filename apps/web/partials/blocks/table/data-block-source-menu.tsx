@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
@@ -28,7 +29,8 @@ export const DataBlockSourceMenu = ({
 }: DataBlockSourceMenuProps) => {
   const [view, setView] = useState<View>('initial');
   const { spaces } = useSpaces();
-  const { source, setSource, blockEntity } = useTableBlock();
+  const { blockEntity } = useTableBlock();
+  const { setSource, source } = useSource();
 
   return (
     <>
@@ -116,7 +118,7 @@ type EntityMenuProps = {
 
 const EntityMenu = ({ onBack }: EntityMenuProps) => {
   const { query, onQueryChange, results } = useSearch();
-  const { setSource, source } = useTableBlock();
+  const { setSource, source } = useSource();
 
   const handleToggleEntity = (entityId: string, entityName: string | null) => {
     setSource({
@@ -181,7 +183,7 @@ type SpacesMenuProps = {
 
 const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
   const { query, setQuery, spaces: queriedSpaces } = useSpacesQuery();
-  const { setSource, source } = useTableBlock();
+  const { setSource, source } = useSource();
 
   const handleToggleSpace = (spaceId: string) => {
     setSource({

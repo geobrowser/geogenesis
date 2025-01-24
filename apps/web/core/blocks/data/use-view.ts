@@ -13,6 +13,10 @@ import { Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 type DataBlockViewDetails = { name: string; id: string; value: DataBlockView };
+type Column = {
+  id: string;
+  name: string | null;
+};
 
 export function useView() {
   const { entityId, spaceId, relationId } = useTableBlockInstance();
@@ -82,12 +86,51 @@ export function useView() {
     [relationId, spaceId, viewRelation, view]
   );
 
+  const setColumn = React.useCallback(
+    (newColumn: Column) => {
+      const isShown = shownColumnIds.includes(newColumn.id);
+      const shownColumnRelation = shownColumnRelations.find(relation => relation.toEntity.id === newColumn.id);
+
+      if (!isShown) {
+        const newRelation: StoreRelation = {
+          space: spaceId,
+          index: INITIAL_RELATION_INDEX_VALUE,
+          typeOf: {
+            id: EntityId(SYSTEM_IDS.SHOWN_COLUMNS),
+            name: 'Shown Columns',
+          },
+          fromEntity: {
+            id: EntityId(relationId),
+            name: '',
+          },
+          toEntity: {
+            id: EntityId(newColumn.id),
+            name: newColumn.name,
+            renderableType: 'RELATION',
+            value: EntityId(newColumn.id),
+          },
+        };
+
+        DB.upsertRelation({
+          relation: newRelation,
+          spaceId,
+        });
+      } else {
+        if (shownColumnRelation) {
+          DB.removeRelation({ relationId: shownColumnRelation.id, fromEntityId: EntityId(relationId), spaceId });
+        }
+      }
+    },
+    [relationId, spaceId, shownColumnRelations, shownColumnIds]
+  );
+
   return {
     view,
     placeholder,
     viewRelation,
     setView,
     shownColumnIds,
+    setColumn,
   };
 }
 

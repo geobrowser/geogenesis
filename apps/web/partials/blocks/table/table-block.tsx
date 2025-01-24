@@ -7,6 +7,9 @@ import produce from 'immer';
 
 import * as React from 'react';
 
+import { useFilters } from '~/core/blocks/data/use-filters';
+import { useSource } from '~/core/blocks/data/use-source';
+import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -40,21 +43,10 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
 
-  const {
-    columns,
-    rows,
-    setPage,
-    filterState,
-    setFilterState,
-    isLoading,
-    hasNextPage,
-    hasPreviousPage,
-    pageNumber,
-    view,
-    shownColumnIds,
-    placeholder,
-    source,
-  } = useTableBlock();
+  const { columns, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useTableBlock();
+  const { filterState, setFilterState } = useFilters();
+  const { shownColumnIds, view, placeholder } = useView();
+  const { source } = useSource();
 
   const allColumns = columns.map(column => ({
     id: column.id,
@@ -190,10 +182,10 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             space={spaceId}
             columns={columns}
             rows={rows}
-            shownColumnIds={shownColumnIds}
             placeholder={placeholder}
             view={view}
             source={source}
+            shownColumnIds={shownColumnIds}
             filterState={filterState}
           />
         )}

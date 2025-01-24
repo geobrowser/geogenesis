@@ -17,7 +17,6 @@ import { useCollection } from '../blocks/data/use-collection';
 import { useFilters } from '../blocks/data/use-filters';
 import { usePagination } from '../blocks/data/use-pagination';
 import { useSource } from '../blocks/data/use-source';
-import { useView } from '../blocks/data/use-view';
 import { useEntity } from '../database/entities';
 import { upsert } from '../database/write';
 import { usePropertyValueTypes } from '../hooks/use-property-value-types';
@@ -63,17 +62,11 @@ export function useTableBlock() {
     id: React.useMemo(() => EntityId(entityId), [entityId]),
   });
 
-  const {
-    filterState,
-    isLoading: isLoadingFilterState,
-    isFetched: isFilterStateFetched,
-    setFilterState,
-  } = useFilters();
+  const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
 
-  const { source, setSource } = useSource();
+  const { source } = useSource();
 
   const { collectionItems } = useCollection();
-  const { view, placeholder, shownColumnIds } = useView();
 
   const {
     data: entities,
@@ -226,15 +219,10 @@ export function useTableBlock() {
 
   return {
     blockEntity,
-    source,
-    setSource,
 
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
     columns: columns ?? [],
     columnRelationTypes: {},
-
-    filterState: filterState ?? [],
-    setFilterState,
 
     pageNumber,
     hasNextPage: rows ? rows?.length > PAGE_SIZE : false,
@@ -260,10 +248,7 @@ export function useTableBlock() {
 
     name: blockEntity.name,
     setName,
-    view,
     columnsSchema,
-    shownColumnIds,
-    placeholder,
   };
 }
 
