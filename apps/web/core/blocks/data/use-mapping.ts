@@ -16,17 +16,16 @@ type Mapping = {
  * a list, or a gallery. The mapping represents slots within the layout
  * where specific data should be rendered.
  *
- * Depending on the data mode (collection, query, or relations) the mapping
- * may or may not have a data selector representing what data should be
- * rendered in the UI slot.
- *
- * @TODO
- * - the mapping for a table view will be different than a list view
- *   or gallery view
- * - also the way the mapping is consumed in a specific type of data
- *   block will be different than how its consumed in other data blocks.
- *   e.g., a entities query will always match attribute id to column id,
- *   but a relations query will match depending on selectors.
+ * Right now Geo Genesis supports Table, List, and Gallery layouts. The mapping
+ * might be consumed differently depending on the view and the query mode:
+ * - Relation query mode supports mapping data to specific UI slots for every
+ *   view type.
+ * - Table views for Entities and Collection query modes also support the mapping,
+ *   but don't provide a data selector. Instead the keys of the mapping are used
+ *   to determine which columns are rendered in the table.
+ * - Lists and galleries for non-Relation query modes use a default value for
+ *   each UI slot defined by code rather than the mapping. e.g., the name field
+ *   of the entity is always rendered in the name slot in the List/Gallery.
  */
 export function useMapping() {
   const mapping = React.useMemo((): Mapping => {
