@@ -43,62 +43,73 @@ const Property = Schema.Union(AttributeFilter);
 
 const FilterString = Schema.Struct({
   where: Schema.Struct({
-    entity: Schema.optional(Schema.String),
+    // entity: Schema.optional(Schema.String),
+    from: Schema.optional(Schema.String),
+    to: Schema.optional(Schema.String),
     spaces: Schema.optional(Schema.Array(Schema.String)),
     AND: Schema.optional(Schema.Array(Property)),
     OR: Schema.optional(Schema.Array(Property)),
   }),
 });
+
 export type FilterString = Schema.Schema.Type<typeof FilterString>;
 
 export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], source: Source): string {
   let filter: FilterString | null = null;
 
-  if (source.type === 'RELATIONS') {
-    filter = {
-      where: {
-        entity: source.value,
-        AND: filters
-          .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER && f.columnId !== SYSTEM_IDS.ENTITY_FILTER)
-          .map(f => {
-            return {
-              attribute: f.columnId,
-              is: f.value,
-            };
-          }),
-      },
-    };
+  console.log('filters', filters);
+
+  switch (source.type) {
+    case 'RELATIONS':
+      filter = {
+        where: {
+          from: source.value,
+          AND: filters
+            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER && f.columnId !== SYSTEM_IDS.ENTITY_FILTER)
+            .map(f => {
+              return {
+                attribute: f.columnId,
+                is: f.value,
+              };
+            }),
+        },
+      };
+      break;
+    case 'SPACES':
+      filter = {
+        where: {
+          spaces: filters.filter(f => f.columnId === SYSTEM_IDS.SPACE_FILTER).map(f => f.value),
+          AND: filters
+            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
+            .map(f => {
+              return {
+                attribute: f.columnId,
+                is: f.value,
+              };
+            }),
+        },
+      };
+      break;
+    case 'COLLECTION':
+    case 'GEO':
+      filter = {
+        where: {
+          AND: filters
+            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
+            .map(f => {
+              return {
+                attribute: f.columnId,
+                is: f.value,
+              };
+            }),
+        },
+      };
+      break;
   }
 
-  if (source.type === 'SPACES') {
-    filter = {
-      where: {
-        spaces: filters.filter(f => f.columnId === SYSTEM_IDS.SPACE_FILTER).map(f => f.value),
-        AND: filters
-          .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
-          .map(f => {
-            return {
-              attribute: f.columnId,
-              is: f.value,
-            };
-          }),
-      },
-    };
-  }
-
-  if (source.type === 'COLLECTION' || source.type === 'GEO') {
-    filter = {
-      where: {
-        AND: filters
-          .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
-          .map(f => {
-            return {
-              attribute: f.columnId,
-              is: f.value,
-            };
-          }),
-      },
-    };
+  if (filter === null) {
+    console.error('[toGeoFilterState] Invalid source type', source.type);
+    throw new Error(`[toGeoFilterState] Invalid source type ${source.type}`);
   }
 
   const maybeEncoded = Schema.encodeUnknownEither(FilterString)(filter);
@@ -129,9 +140,9 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       return null;
     },
     onRight: value => {
-      if (value.where.entity) {
+      if (value.where.from) {
         return {
-          entity: value.where.entity,
+          from: value.where.from,
           AND: value.where.AND ?? [],
         };
       }
@@ -165,7 +176,7 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       )
     : [];
 
-  const unresolvedEntityFilters = filtersFromString.entity ? getResolvedEntity(filtersFromString.entity) : null;
+  const unresolvedEntityFilters = filtersFromString.from ? getResolvedEntity(filtersFromString.from) : null;
 
   const unresolvedAttributeFilters = Promise.all(
     filtersFromString.AND.map(async filter => {

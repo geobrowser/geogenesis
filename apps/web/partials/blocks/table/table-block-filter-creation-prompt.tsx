@@ -165,8 +165,8 @@ function getInitialState(source: Source): PromptState {
       selectedColumn: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
       value: {
         type: 'entity',
-        entityId: source.value,
-        entityName: source.name,
+        entityId: '',
+        entityName: null,
       },
       open: false,
     };

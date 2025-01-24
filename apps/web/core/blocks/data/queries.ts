@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
@@ -10,12 +10,13 @@ import { EntityId } from '~/core/io/schema';
 import { fetchTableRowEntities } from '~/core/io/subgraph';
 import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { queryClient } from '~/core/query-client';
-import { PropertySchema, Value } from '~/core/types';
+import { OmitStrict, PropertySchema, Value } from '~/core/types';
 
 import { Filter } from './filters';
+import { queryStringFromFilters } from './to-query-string';
 
 const queryKeys = {
-  remoteRows: (options: Parameters<typeof fetchTableRowEntities>[0]) =>
+  remoteRows: (options: OmitStrict<Parameters<typeof fetchTableRowEntities>[0], 'filter'>) =>
     ['blocks', 'data', 'query', 'rows', options] as const,
   localRows: (entityIds: string[]) => ['blocks', 'data', 'query', 'rows', 'merging', entityIds] as const,
   columns: (typeIds: string[]) => ['blocks', 'data', 'query', 'columns', 'merging', typeIds] as const,
@@ -29,7 +30,6 @@ export interface MergeTableEntitiesArgs {
   options: {
     first?: number;
     skip?: number;
-    filter: string; // this is a graphql query string
   };
 }
 
@@ -40,12 +40,14 @@ export interface MergeTableEntitiesArgs {
  * 3. Filter them with a selector (either manual one or one derived from FilterState)
  */
 async function mergeTableRowEntitiesAsync(
-  options: Parameters<typeof fetchTableRowEntities>[0],
+  options: OmitStrict<Parameters<typeof fetchTableRowEntities>[0], 'filter'>,
   filterState: Filter[]
 ): Promise<Entity[]> {
+  const filterString = queryStringFromFilters(filterState);
+
   const cachedEntities = await queryClient.fetchQuery({
     queryKey: queryKeys.remoteRows(options),
-    queryFn: ({ signal }) => fetchTableRowEntities({ ...options, signal }),
+    queryFn: ({ signal }) => fetchTableRowEntities({ ...options, filter: filterString, signal }),
   });
 
   const remoteMergedEntities = cachedEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
@@ -95,12 +97,13 @@ export async function mergeColumns(typeIds: string[]): Promise<PropertySchema[]>
 
 type CollectionItemArgs = {
   entityIds: string[];
-  filterString?: string;
   filterState: Filter[];
 };
 
 export async function mergeEntitiesAsync(args: CollectionItemArgs) {
-  const { entityIds, filterString, filterState } = args;
+  const { entityIds, filterState } = args;
+
+  const filterString = queryStringFromFilters(filterState);
 
   const cachedRemoteEntities = await queryClient.fetchQuery({
     queryKey: queryKeys.remoteCollectionItems(entityIds, filterState, filterString),
@@ -139,7 +142,12 @@ function filterValue(value: Value, valueToFilter: string) {
   }
 }
 
-export async function mergeRelationQueryEntities(entityId: string, filterString: string, filterState: Filter[]) {
+type RelationRow = {
+  this: Entity;
+  to: Entity;
+};
+
+export async function mergeRelationQueryEntities(entityId: string, filterState: Filter[]): Promise<RelationRow[]> {
   const entity = await mergeEntityAsync(EntityId(entityId));
   const maybeRelationType = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE)?.value;
 
@@ -147,23 +155,70 @@ export async function mergeRelationQueryEntities(entityId: string, filterString:
     return [];
   }
 
-  const entityIdsToFetch = entity.relationsOut.filter(r => r.typeOf.id === maybeRelationType).map(r => r.toEntity.id);
+  const entityIdsToFetch = entity.relationsOut.filter(r => r.typeOf.id === maybeRelationType).map(r => r.id);
 
-  const cachedRemoteEntities = await queryClient.fetchQuery({
+  const remoteRelationEntities = await queryClient.fetchQuery({
     queryKey: queryKeys.remoteEntities(entityIdsToFetch),
-    queryFn: ({ signal }) => fetchEntitiesBatch(entityIdsToFetch, filterString, signal),
+    queryFn: ({ signal }) => fetchEntitiesBatch(entityIdsToFetch, undefined, signal),
     staleTime: Duration.toMillis(Duration.seconds(20)),
   });
 
-  const mergedRemoteEntities = cachedRemoteEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
+  const relationRows = remoteRelationEntities
+    .map(e => {
+      const maybeTriple = e.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+
+      if (!maybeTriple) {
+        return null;
+      }
+
+      return {
+        this: e.id,
+        to: GraphUrl.toEntityId(maybeTriple.value.value as `graph://${string}`),
+      };
+    })
+    .filter(t => t !== null);
+
+  const toEntityIds = relationRows.map(r => r.to);
+
+  const remoteToEntities = await queryClient.fetchQuery({
+    queryKey: queryKeys.remoteEntities(toEntityIds),
+    queryFn: ({ signal }) => fetchEntitiesBatch(toEntityIds, undefined, signal),
+    staleTime: Duration.toMillis(Duration.seconds(20)),
+  });
+
+  const mergedRemoteEntities = remoteRelationEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
 
   const localEntities = await getEntities_experimental();
-  const relevantLocalEntities = Object.values(localEntities).filter(e => entityIdsToFetch.includes(e.id));
-  return dedupeWith([...relevantLocalEntities, ...mergedRemoteEntities], (a, b) => a.id === b.id);
+  const relevantLocalRelationEntities = Object.values(localEntities).filter(e => entityIdsToFetch.includes(e.id));
+
+  const mergedToEntities = remoteToEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
+  const relevantLocalToEntities = Object.values(localEntities).filter(e => toEntityIds.includes(e.id));
+
+  const localRelationEntities = dedupeWith(
+    [...relevantLocalRelationEntities, ...mergedRemoteEntities],
+    (a, b) => a.id === b.id
+  );
+
+  const localToEntities = dedupeWith([...relevantLocalToEntities, ...mergedToEntities], (a, b) => a.id === b.id);
+
+  return relationRows
+    .map(r => {
+      const localRelationEntity = localRelationEntities.find(e => e.id === r.this);
+      const localToEntity = localToEntities.find(e => e.id === r.to);
+
+      if (!localRelationEntity || !localToEntity) {
+        return null;
+      }
+
+      return {
+        this: localRelationEntity,
+        to: localToEntity,
+      };
+    })
+    .filter(r => r !== null);
 }
 
 function filterLocalEntities(entities: Entity[], filterState: Filter[]) {
-  // Needs to return if _all_ are true, not just if one is true
   return entities.filter(entity => {
     return filterState.every(filter => {
       if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
