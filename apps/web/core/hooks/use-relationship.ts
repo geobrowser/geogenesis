@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { useEntity } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';
@@ -16,16 +16,19 @@ export const useRelationship = (entityId: string, spaceId: string) => {
 
   const isRelation = entity?.triples.some(triple => triple.attributeId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) ?? false;
 
-  const fromTriple = entity?.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
-  const fromEntity = useEntity({ id: EntityId(fromTriple?.value.value.split('graph://')[1] ?? '') });
+  const from =
+    entity?.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE)?.value.value ?? '';
+  const fromEntityId = GraphUrl.isValid(from) ? GraphUrl.toEntityId(from) : '';
+  const fromEntity = useEntity({ id: EntityId(fromEntityId) });
 
-  const toTriple = entity?.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
-  const toEntity = useEntity({ id: EntityId(toTriple?.value.value.split('graph://')[1] ?? '') });
+  const to = entity?.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value ?? '';
+  const toEntityId = GraphUrl.isValid(to) ? GraphUrl.toEntityId(to) : '';
+  const toEntity = useEntity({ id: EntityId(toEntityId) });
 
-  const relationTypeTriple = entity?.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
-  const relationTypeEntity = useEntity({
-    id: EntityId(relationTypeTriple?.value.value.split('graph://')[1] ?? ''),
-  });
+  const relationType =
+    entity?.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE)?.value.value ?? '';
+  const relationTypeEntityId = GraphUrl.isValid(relationType) ? GraphUrl.toEntityId(relationType) : '';
+  const relationTypeEntity = useEntity({ id: EntityId(relationTypeEntityId) });
 
   let relationship: Relationship = null;
 
