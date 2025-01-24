@@ -330,7 +330,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
               width="full"
               variant="fixed"
               placeholder="Your name..."
-              inputClassName="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
+              inputClassName="block px-2 py-1 text-center !text-2xl text-mediumTitle focus:!outline-none"
               withSelectSpace={false}
             />
           </div>
