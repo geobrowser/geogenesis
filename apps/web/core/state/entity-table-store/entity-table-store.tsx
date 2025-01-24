@@ -73,7 +73,6 @@ export function useEntityTable() {
       if (!columns || !selectedType) return [];
 
       const params: MergeTableEntitiesArgs['options'] = {
-        filter: filterString,
         first: DEFAULT_PAGE_SIZE + 1,
         skip: pageNumber * DEFAULT_PAGE_SIZE,
       };

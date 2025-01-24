@@ -3,26 +3,22 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { Filter, fromGeoFilterState, toGeoFilterState } from '../blocks/data/filters';
-import {
-  MergeTableEntitiesArgs,
-  mergeColumns,
-  mergeEntitiesAsync,
-  mergeRelationQueryEntities,
-  mergeTableEntities,
-} from '../blocks/data/queries';
-import { Source, getSource, removeSourceType, upsertSourceType } from '../blocks/data/source';
-import { queryStringFromFilters } from '../blocks/data/to-query-string';
+import { Filter } from '../blocks/data/filters';
+import { MergeTableEntitiesArgs, mergeColumns, mergeEntitiesAsync, mergeTableEntities } from '../blocks/data/queries';
+import { Source } from '../blocks/data/source';
+import { useCollection } from '../blocks/data/use-collection';
+import { useFilters } from '../blocks/data/use-filters';
+import { usePagination } from '../blocks/data/use-pagination';
+import { useRelationsQueryBlock } from '../blocks/data/use-relation-block';
+import { useSource } from '../blocks/data/use-source';
+import { useView } from '../blocks/data/use-view';
 import { useEntity } from '../database/entities';
-import { useRelations } from '../database/relations';
-import { StoredRelation } from '../database/types';
-import { useWriteOps } from '../database/write';
+import { upsert } from '../database/write';
 import { usePropertyValueTypes } from '../hooks/use-property-value-types';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { PropertySchema, Relation } from '../types';
+import { PropertySchema } from '../types';
 import { EntityTable } from '../utils/entity-table';
-import { getImagePath } from '../utils/utils';
 
 export const PAGE_SIZE = 9;
 
@@ -31,13 +27,12 @@ interface RowQueryArgs {
   entityId: string;
   filterState?: Filter[];
   source: Source;
-  collectionItems: StoredRelation[];
+  collectionItems: Entity[];
 }
 
 const queryKeys = {
   collectionItemEntities: (collectionItemIds: EntityId[]) =>
     ['blocks', 'data', 'collection-items', collectionItemIds] as const,
-  filterState: (filterString: string | null) => ['blocks', 'data', 'filter-state', filterString] as const,
   columns: (filterState: Filter[] | null) => ['blocks', 'data', 'columns', filterState] as const,
   rows: (args: RowQueryArgs) => ['blocks', 'data', 'rows', args],
   columnsSchema: (columns?: PropertySchema[]) => ['blocks', 'data', 'columns-schema', columns],
@@ -45,105 +40,32 @@ const queryKeys = {
 
 export function useTableBlock() {
   const { entityId, spaceId, relationId } = useTableBlockInstance();
-  const [pageNumber, setPageNumber] = React.useState(0);
-  const { upsert } = useWriteOps();
-
-  const blockRelation = useEntity({
-    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
-    id: React.useMemo(() => EntityId(relationId), [relationId]),
-  });
+  const { pageNumber, setPage } = usePagination();
 
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
     id: React.useMemo(() => EntityId(entityId), [entityId]),
   });
 
-  const viewRelation = React.useMemo(
-    () => blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE),
-    [blockRelation.relationsOut]
-  );
-
-  const shownColumnRelations = React.useMemo(
-    () => blockRelation.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS),
-    [blockRelation.relationsOut]
-  );
-
-  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
-
-  const filterTriple = React.useMemo(() => {
-    return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
-  }, [blockEntity?.triples]);
-
-  const filterString = React.useMemo(() => {
-    if (!filterTriple) return null;
-
-    if (filterTriple.value.type === 'TEXT') {
-      if (filterTriple.value.value === '') return null;
-      return filterTriple.value.value;
-    }
-
-    return null;
-  }, [filterTriple]);
-
-  /**
-   * The filter state is derived from the filter string and the source. The source
-   * might include a list of spaceIds to include in the filter. The filter string
-   * only includes _data_ filters, but not _where_ to query from.
-   */
   const {
-    data: filterState,
+    filterState,
     isLoading: isLoadingFilterState,
     isFetched: isFilterStateFetched,
-  } = useQuery({
-    placeholderData: keepPreviousData,
-    queryKey: queryKeys.filterState(filterString),
-    queryFn: async () => {
-      return await fromGeoFilterState(filterString);
-    },
-  });
+    setFilterState,
+  } = useFilters();
 
-  const source: Source = React.useMemo(() => {
-    return getSource({
-      blockId: blockEntity.id,
-      dataEntityRelations: blockEntity.relationsOut,
-      currentSpaceId: SpaceId(spaceId),
-      filterState: filterState ?? [],
-    });
-  }, [blockEntity.id, blockEntity.relationsOut, spaceId, filterState]);
+  const { source, setSource } = useSource();
+  /**
+   * @TODO We need to turn this hook into a FSM depending on the view and query mode.
+   * This will help do data processing correctly.
+   *
+   *
+   */
+  const { collectionItems } = useCollection();
+  const { data: relationsQueryData } = useRelationsQueryBlock();
+  const { view, placeholder, shownColumnRelations, shownColumnIds } = useView();
 
-  const collectionItems = useRelations(
-    React.useMemo(() => {
-      return {
-        mergeWith: blockEntity.relationsOut,
-        selector: r => {
-          if (source.type !== 'COLLECTION') return false;
-
-          // Return all local relations pointing to the collection id in the source block
-          // @TODO(data blocks): Merge with any remote collection items
-          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
-        },
-      };
-    }, [blockEntity.relationsOut, source])
-  );
-
-  const collectionItemIds = React.useMemo(() => collectionItems?.map(c => c.toEntity.id) ?? [], [collectionItems]);
-
-  const { data: collectionItemEntities } = useQuery({
-    placeholderData: keepPreviousData,
-    enabled: collectionItems.length > 0,
-    queryKey: queryKeys.collectionItemEntities(collectionItemIds),
-    queryFn: async () => {
-      const entities = await mergeEntitiesAsync({
-        entityIds: collectionItemIds,
-        filterState: [],
-      });
-
-      return entities;
-    },
-  });
-
-  // We need the entities before we can fetch the columns since we need to know the
-  // types of the entities when rendering a collection source.
+  // @TODO: The columns or "layout" should be dependent on the view + mapping
   const {
     data: columns,
     isLoading: isLoadingColumns,
@@ -163,7 +85,7 @@ export function useTableBlock() {
     isLoading: isLoadingEntities,
     isFetched: isEntitiesFetched,
   } = useQuery({
-    enabled: filterState !== undefined,
+    enabled: filterState !== undefined && source.type !== 'RELATIONS',
     placeholderData: keepPreviousData,
     // @TODO: Should re-run when the relations for the entity source changes
     queryKey: queryKeys.rows({
@@ -176,17 +98,43 @@ export function useTableBlock() {
     queryFn: async () => {
       if (!filterState) return [];
 
-      const filterString = queryStringFromFilters(filterState);
-
       const params: MergeTableEntitiesArgs['options'] = {
-        filter: filterString,
         first: PAGE_SIZE + 1,
         skip: pageNumber * PAGE_SIZE,
       };
 
-      if (source.type === 'RELATIONS') {
-        return await mergeRelationQueryEntities(source.value, filterString, filterState);
-      }
+      /**
+       * Data should be returned in the mapped format. Kinda blocked until we
+       * can mock/implement that.
+       *
+       * We could also just return the data for both the `this` and `to` entities
+       * in the row format. There just might be more than one "cell" for a given
+       * attribute id. We'll have to match the entity _and_ the attribute.
+       *
+       * We can't use this entity -> attribute -> value data structure because
+       * the mapping isn't aware of concrete values, only relative shapes.
+       *
+       * We need to somehow store data in a concrete form that can be read using
+       * the relative shape. The `this` entity and `to` entity does this, but
+       * `this` and `to` needs to be mapped into the concrete form.
+       *
+       * Current we have a {@link Row} data structure. This represents a single
+       * row with a Record of column id -> {@link Cell} data. The column id represents
+       * the UI "slot" to render the Cell data into. We can use this same concept
+       * to represent the UI mapping, where instead of column id, it's layout id
+       * or something like that.
+       *
+       * ---------------------------------------------------------------------------
+       *
+       * Each query mode + view maps data to the same layout. It's a data processing
+       * pipeline where we need to do a few steps.
+       * 1. Fetch the data for each query mode. Collections and entities queries fetch
+       *    only the data for a single entity for each row. Relations queries fetch
+       *    data for two entities for each row: The relation entity and the to entity.
+       * 2. Process which fields should exist on a {@link Row} based on the view and
+       *    the query mode. This step reads from the Mapping.
+       * 3. Returns the list of {@link Row} data structures.
+       */
 
       if (source.type === 'SPACES' || source.type === 'GEO') {
         return await mergeTableEntities({ options: params, filterState });
@@ -194,11 +142,14 @@ export function useTableBlock() {
 
       if (source.type === 'COLLECTION') {
         return mergeEntitiesAsync({
-          entityIds: collectionItems.map(c => c.toEntity.id),
-          filterString,
+          entityIds: collectionItems.map(c => c.id),
           filterState,
         });
       }
+
+      // if (source.type === 'RELATIONS') {
+      //   return await mergeRelationQueryEntities(source.value, filterState);
+      // }
 
       return [];
     },
@@ -206,108 +157,10 @@ export function useTableBlock() {
 
   const rows = React.useMemo(() => {
     if (!tableEntities || !columns) return [];
-    return EntityTable.fromColumnsAndRows(tableEntities, columns, collectionItemEntities);
-  }, [tableEntities, columns, collectionItemEntities]);
+    return EntityTable.fromColumnsAndRows(tableEntities, columns, collectionItems);
+  }, [tableEntities, columns, collectionItems]);
 
   const { propertyValueTypes: columnsSchema } = usePropertyValueTypes(columns ? columns.map(c => c.id) : []);
-
-  const setPage = React.useCallback(
-    (page: number | 'next' | 'previous') => {
-      switch (page) {
-        case 'next':
-          setPageNumber(prev => prev + 1);
-          break;
-        case 'previous': {
-          setPageNumber(prev => {
-            if (prev - 1 < 0) return 0;
-            return prev - 1;
-          });
-          break;
-        }
-        default:
-          setPageNumber(page);
-      }
-    },
-    [setPageNumber]
-  );
-
-  const setFilterState = React.useCallback(
-    (filters: Filter[], source: Source) => {
-      const newState = filters.length === 0 ? [] : filters;
-
-      // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString = newState.length === 0 ? '' : toGeoFilterState(newState, source);
-
-      const entityName = blockEntity.name ?? '';
-
-      return upsert(
-        {
-          attributeId: SYSTEM_IDS.FILTER,
-          attributeName: 'Filter',
-          entityId,
-          entityName,
-          value: {
-            type: 'TEXT',
-            value: newFiltersString,
-          },
-        },
-        spaceId
-      );
-    },
-    [upsert, entityId, spaceId, blockEntity.name]
-  );
-
-  const setSource = React.useCallback(
-    (newSource: Source) => {
-      // We have three source types
-      // 1. Collection
-      // 2. Query
-      // For each source type we need to change the source type
-      // For `spaces` we need to update the filter string by setting the new
-      // filter state
-      // @TODO: This should handle setting the source based on what user selected
-      removeSourceType({
-        relations: blockEntity.relationsOut,
-        spaceId: SpaceId(spaceId),
-        entityId: EntityId(entityId),
-      });
-      upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
-
-      if (newSource.type === 'RELATIONS') {
-        setFilterState(
-          [
-            {
-              columnId: SYSTEM_IDS.ENTITY_FILTER,
-              valueType: 'RELATION',
-              value: newSource.value,
-              valueName: newSource.name,
-            },
-          ],
-          newSource
-        );
-      }
-
-      if (newSource.type === 'SPACES') {
-        // We only allow one space filter at a time currently, so remove any existing space filters before
-        // adding the new one.
-        const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER) ?? [];
-
-        setFilterState(
-          [
-            ...filtersWithoutSpaces,
-            { columnId: SYSTEM_IDS.SPACE_FILTER, valueType: 'RELATION', value: newSource.value[0], valueName: null },
-          ],
-          newSource
-        );
-      }
-
-      if (newSource.type === 'GEO') {
-        const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER) ?? [];
-        setFilterState(filtersWithoutSpaces, newSource);
-      }
-    },
-    [entityId, blockEntity.relationsOut, spaceId, setFilterState, filterState]
-  );
 
   const setName = React.useCallback(
     (newName: string) => {
@@ -322,11 +175,8 @@ export function useTableBlock() {
         spaceId
       );
     },
-    [upsert, entityId, spaceId]
+    [entityId, spaceId]
   );
-
-  const view = getView(viewRelation);
-  const placeholder = getPlaceholder(blockEntity, view);
 
   return {
     blockEntity,
@@ -367,7 +217,6 @@ export function useTableBlock() {
     name: blockEntity.name,
     setName,
     view,
-    viewRelation,
     columnsSchema,
     shownColumnRelations,
     shownColumnIds,
@@ -375,68 +224,6 @@ export function useTableBlock() {
     collectionItems,
   };
 }
-
-export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY';
-
-const getView = (viewRelation: Relation | undefined): DataBlockView => {
-  let view: DataBlockView = 'TABLE';
-
-  if (viewRelation) {
-    switch (viewRelation?.toEntity.id) {
-      case SYSTEM_IDS.TABLE_VIEW:
-        view = 'TABLE';
-        break;
-      case SYSTEM_IDS.LIST_VIEW:
-        view = 'LIST';
-        break;
-      case SYSTEM_IDS.GALLERY_VIEW:
-        view = 'GALLERY';
-        break;
-      default:
-        // We default to TABLE above
-        break;
-    }
-  }
-
-  return view;
-};
-
-const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockView) => {
-  let text = DEFAULT_PLACEHOLDERS[view].text;
-  // eslint-disable-next-line prefer-const
-  let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
-
-  if (blockEntity) {
-    const placeholderTextTriple = blockEntity.triples.find(
-      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
-    );
-
-    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
-      text = placeholderTextTriple.value.value;
-    }
-
-    // @TODO(relations): This should be a relation pointing to the image entity
-    // const placeholderImageRelation = // find relation with attributeId SYSTEM_IDS.PLACEHOLDER_IMAGE
-  }
-
-  // @TODO(relations): This should be a relation pointing to the image entity
-  return { text, image };
-};
-
-const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string }> = {
-  TABLE: {
-    text: 'Add an entity',
-    image: '/table.png',
-  },
-  LIST: {
-    text: 'Add a list item',
-    image: '/list.png',
-  },
-  GALLERY: {
-    text: 'Add a gallery card',
-    image: '/gallery.png',
-  },
-};
 
 const TableBlockContext = React.createContext<{ entityId: string; spaceId: string; relationId: string } | undefined>(
   undefined
