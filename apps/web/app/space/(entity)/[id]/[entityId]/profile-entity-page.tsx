@@ -40,7 +40,6 @@ export function ProfilePageComponent(props: Props) {
           spaceId={props.spaceId}
           triples={props.triples}
           relationsOut={props.relationsOut}
-          isRelationPage={false}
         />
       </motion.div>
       <Spacer height={40} />

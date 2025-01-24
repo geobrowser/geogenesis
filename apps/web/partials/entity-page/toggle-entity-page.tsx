@@ -11,7 +11,6 @@ type EntityPageProps = {
   relationsOut: Relation[];
   id: string;
   spaceId: string;
-  isRelationPage: boolean;
 };
 
 export function ToggleEntityPage(props: EntityPageProps) {
