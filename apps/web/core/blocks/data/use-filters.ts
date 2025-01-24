@@ -8,6 +8,7 @@ import { upsert } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
 
 import { Filter, fromGeoFilterState, toGeoFilterState } from './filters';
+import { mergeColumns } from './queries';
 import { Source } from './source';
 import { useDataBlockInstance } from './use-data-block';
 
@@ -51,6 +52,15 @@ export function useFilters() {
     },
   });
 
+  const { data: filterableProperties } = useQuery({
+    enabled: filterState !== undefined,
+    queryKey: ['blocks', 'data', 'filterable-properties', filterState],
+    queryFn: async () => {
+      const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
+      return await mergeColumns(typesInFilter);
+    },
+  });
+
   const setFilterState = React.useCallback(
     (filters: Filter[], source: Source) => {
       const newState = filters.length === 0 ? [] : filters;
@@ -77,5 +87,11 @@ export function useFilters() {
     [entityId, spaceId, blockEntity.name]
   );
 
-  return { filterState: filterState ?? [], isLoading, isFetched, setFilterState };
+  return {
+    filterState: filterState ?? [],
+    filterableProperties: filterableProperties ?? [],
+    isLoading,
+    isFetched,
+    setFilterState,
+  };
 }

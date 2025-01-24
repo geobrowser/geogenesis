@@ -195,6 +195,33 @@ export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> 
   return mergeEntity({ id, mergeWith: cachedEntity });
 }
 
+// Name, description, and types are always required for every entity even
+// if they aren't defined in the schema.
+export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [
+  // Name, description, and types are always required for every entity even
+  // if they aren't defined in the schema.
+  {
+    id: EntityId(SYSTEM_IDS.NAME_ATTRIBUTE),
+    name: 'Name',
+    valueType: SYSTEM_IDS.TEXT,
+  },
+  {
+    id: EntityId(SYSTEM_IDS.DESCRIPTION_ATTRIBUTE),
+    name: 'Description',
+    valueType: SYSTEM_IDS.TEXT,
+  },
+  {
+    id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
+    name: 'Types',
+    valueType: SYSTEM_IDS.RELATION,
+  },
+  {
+    id: EntityId(SYSTEM_IDS.COVER_ATTRIBUTE),
+    name: 'Cover',
+    valueType: SYSTEM_IDS.IMAGE,
+  },
+];
+
 /**
  * Fetch the entities for each type and parse their attributes into a schema.
  *
@@ -259,34 +286,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
   // If the schema exists already in the list then we should dedupe it.
   // Some types might share some elements in their schemas, e.g., Person
   // and Pet both have Avatar as part of their schema.
-  return dedupeWith(
-    [
-      // Name, description, and types are always required for every entity even
-      // if they aren't defined in the schema.
-      {
-        id: EntityId(SYSTEM_IDS.NAME_ATTRIBUTE),
-        name: 'Name',
-        valueType: SYSTEM_IDS.TEXT,
-      },
-      {
-        id: EntityId(SYSTEM_IDS.DESCRIPTION_ATTRIBUTE),
-        name: 'Description',
-        valueType: SYSTEM_IDS.TEXT,
-      },
-      {
-        id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
-        name: 'Types',
-        valueType: SYSTEM_IDS.RELATION,
-      },
-      {
-        id: EntityId(SYSTEM_IDS.COVER_ATTRIBUTE),
-        name: 'Cover',
-        valueType: SYSTEM_IDS.IMAGE,
-      },
-      ...schema,
-    ],
-    (a, b) => a.id === b.id
-  );
+  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...schema], (a, b) => a.id === b.id);
 }
 
 /**

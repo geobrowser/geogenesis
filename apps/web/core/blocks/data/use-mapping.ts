@@ -1,11 +1,20 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUri, GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
+import { Entity } from '~/core/io/dto/entities';
 import { Cell } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 
-type Mapping = {
-  [slotId: string]: Cell;
+/**
+ * A mapping determines which data is rendered into which UI slots
+ * for a given data block.
+ *
+ * Reading the keys of the mapping should map to the property used
+ * for the UI slot. e.g., NAME_ATTRIBUTE -> name data.
+ */
+export type Mapping = {
+  [slotId: string]: Cell | null;
 };
 
 /**
@@ -29,8 +38,11 @@ type Mapping = {
  */
 export function useMapping() {
   const mapping = React.useMemo((): Mapping => {
+    /**
+     * Alright wtf does this mapping look like?
+     */
     return {
-      [SYSTEM_IDS.NAME_ATTRIBUTE]: {
+      ['JkzhbbrXFMfXN7sduMKQRp']: {
         columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
         entityId: '',
         triples: [],
@@ -40,14 +52,78 @@ export function useMapping() {
     };
   }, []);
 
+  // @TODO: Default mapping if one doesn't exist
+
   return {
     mapping,
   };
 }
 
-export function mappingToRows() {
+export function mappingToRows(entities: Entity[], slotIds: string[], collectionItems: Entity[]) {
   /**
    * Take each row, take each mapping, take each "slot" in the mapping
    * and map them into the Row structure.
    */
+  return entities.map(({ name, triples, id, relationsOut, description }) => {
+    const newColumns = slotIds.reduce(
+      (acc, slotId) => {
+        const cellTriples = triples.filter(triple => triple.attributeId === slotId);
+        const cellRelations = relationsOut.filter(t => t.typeOf.id === slotId);
+
+        const cell: Cell = {
+          columnId: slotId,
+          entityId: id,
+          triples: cellTriples,
+          relations: cellRelations,
+          name,
+        };
+
+        const isNameCell = slotId === SYSTEM_IDS.NAME_ATTRIBUTE;
+
+        if (isNameCell) {
+          cell.description = description;
+          cell.image = Entities.cover(relationsOut) || Entities.avatar(relationsOut) || null;
+
+          const collectionEntity = collectionItems?.find(
+            entity =>
+              entity.triples
+                .find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+                ?.value.value.startsWith(`graph://${cell.entityId}`)
+          );
+
+          if (collectionEntity) {
+            const url = collectionEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+              ?.value.value;
+
+            if (url?.startsWith('graph://')) {
+              const spaceId = GraphUrl.toSpaceId(url as GraphUri);
+
+              if (spaceId) {
+                cell.space = spaceId;
+
+                const verifiedSourceTriple = collectionEntity.triples.find(
+                  triple => triple.attributeId === SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE
+                );
+
+                if (verifiedSourceTriple) {
+                  cell.verified = verifiedSourceTriple.value.value === '1';
+                }
+              }
+            }
+          }
+        }
+
+        return {
+          ...acc,
+          [slotId]: cell,
+        };
+      },
+      {} as Record<string, Cell>
+    );
+
+    return {
+      entityId: id,
+      columns: newColumns,
+    };
+  });
 }

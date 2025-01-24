@@ -1,7 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Filter } from '~/core/blocks/data/filters';
-import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
@@ -14,9 +13,8 @@ import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 type RenderableFilter = Filter & { columnName: string };
 
 export function TableBlockEditableFilters() {
-  const { columns } = useDataBlock();
   const { source } = useSource();
-  const { setFilterState, filterState } = useFilters();
+  const { setFilterState, filterState, filterableProperties } = useFilters();
 
   // We treat Name, Typs and Space as special filters even though they are not
   // always columns on the type schema for a table. We allow users to be able
@@ -33,7 +31,7 @@ export function TableBlockEditableFilters() {
           //   value: '',
           //   valueName: null,
           // },
-          ...columns
+          ...filterableProperties
             .map(c => {
               return {
                 columnId: c.id,
