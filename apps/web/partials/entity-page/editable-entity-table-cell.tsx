@@ -221,6 +221,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 key={renderable.attributeId}
                 placeholder="Add a URI"
                 isEditing={true}
+                spaceId={spaceId}
                 value={renderable.value}
               />
             );

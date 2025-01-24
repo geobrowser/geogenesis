@@ -2,17 +2,25 @@ import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
+import { EntityId } from '~/core/io/schema';
+
 import { SelectEntity } from './select-entity';
 
-interface Props {
+type SelectEntityAsPopoverProps = {
   trigger: React.ReactNode;
   spaceId: string;
-  onDone: (result: { id: string; name: string | null; space?: string }) => void;
+  onDone: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
   onCreateEntity?: (result: { id: string; name: string | null; space?: string }) => void;
   allowedTypes?: string[];
-}
+};
 
-export function SelectEntityAsPopover({ trigger, onDone, onCreateEntity, spaceId, allowedTypes }: Props) {
+export function SelectEntityAsPopover({
+  trigger,
+  onDone,
+  onCreateEntity,
+  spaceId,
+  allowedTypes,
+}: SelectEntityAsPopoverProps) {
   return (
     <Popover.Root>
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>

@@ -42,7 +42,15 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
         }
 
         if (renderable.type === 'URL') {
-          return <WebUrlField variant="tableCell" isEditing={false} key={renderable.value} value={renderable.value} />;
+          return (
+            <WebUrlField
+              variant="tableCell"
+              isEditing={false}
+              key={renderable.value}
+              spaceId={space}
+              value={renderable.value}
+            />
+          );
         }
 
         if (renderable.type === 'TIME') {

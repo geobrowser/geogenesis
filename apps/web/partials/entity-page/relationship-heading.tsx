@@ -1,19 +1,15 @@
 'use client';
 
+import type { Relationship } from '~/core/hooks/use-relationship';
+
 import { Relation } from '~/design-system/icons/relation';
 import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
 
-export type Relationship = {
-  from: { name: string; id: string };
-  to: { name: string; id: string };
-  relationType: { name: string; id: string };
-} | null;
-
-type RelationshipHeaderProps = {
+type RelationshipHeadingProps = {
   relationship: Relationship;
 };
 
-export const RelationshipHeader = ({ relationship }: RelationshipHeaderProps) => {
+export const RelationshipHeading = ({ relationship }: RelationshipHeadingProps) => {
   if (!relationship) return null;
 
   return (
