@@ -31,7 +31,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
 import { useTriples } from '~/core/database/triples';
 import { DB } from '~/core/database/write';
-import { PropertyId } from '~/core/hooks/use-property-value-types';
+import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
@@ -53,7 +53,7 @@ import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 
-import { columnName, columnValueType, makePlaceholderFromValueType } from './utils';
+import { makePlaceholderFromValueType } from './utils';
 import { editingColumnsAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
@@ -101,7 +101,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns, columnsSchema } = useDataBlock();
+    const { propertiesSchema } = useDataBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditable = table.options.meta?.isEditable;
@@ -122,10 +122,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     //
     // Q: Is the table-rerendering when there are local changes? Does this
     // cause the cells to also re-render even when they don't need to?
-    const valueType = columnValueType(cellData.columnId, columns);
-    const attributeName = columnName(cellData.columnId, columns);
-    const maybeColumnSchema = columnsSchema.get(PropertyId(cellData.columnId));
-    const filterableRelationType = maybeColumnSchema?.relationValueTypeId;
+    const maybePropertiesSchema = propertiesSchema.get(PropertyId(cellData.columnId));
+    const valueType = maybePropertiesSchema?.valueType ?? SYSTEM_IDS.TEXT;
+    const attributeName = maybePropertiesSchema?.name;
+    const filterableRelationType = maybePropertiesSchema?.relationValueTypeId;
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const cellTriples = useTriples(
@@ -162,7 +162,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const placeholder = makePlaceholderFromValueType({
       attributeId: cellData.columnId,
-      attributeName: attributeName,
+      attributeName: attributeName ?? '',
       entityId: cellData.entityId,
       spaceId,
       valueType,
@@ -207,7 +207,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  columns: PropertySchema[];
+  properties: PropertySchema[];
   rows: Row[];
   shownColumnIds: string[];
   view: DataBlockView;
@@ -218,7 +218,7 @@ interface Props {
 
 // eslint-disable-next-line react/display-name
 export const TableBlockTable = React.memo(
-  ({ rows, space, columns, shownColumnIds, placeholder, view, source, filterState }: Props) => {
+  ({ rows, space, properties, shownColumnIds, placeholder, view, source, filterState }: Props) => {
     const isEditingColumns = useAtomValue(editingColumnsAtom);
 
     const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
@@ -227,7 +227,7 @@ export const TableBlockTable = React.memo(
     const table = useReactTable({
       // @TODO: We can merge local row data here?
       data: rows,
-      columns: formatColumns(columns, isEditable, [], SpaceId(space)),
+      columns: formatColumns(properties, isEditable, [], SpaceId(space)),
       defaultColumn,
       getCoreRowModel: getCoreRowModel(),
       getFilteredRowModel: getFilteredRowModel(),

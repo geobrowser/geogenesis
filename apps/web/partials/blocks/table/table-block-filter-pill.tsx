@@ -20,7 +20,7 @@ export function TableBlockFilterPill({
   filter,
   onDelete,
 }: {
-  filter: Filter & { columnName: string };
+  filter: Filter & { propertyName: string };
   onDelete: () => void;
 }) {
   const { editable } = useEditable();
@@ -31,7 +31,7 @@ export function TableBlockFilterPill({
       {/* @TODO: Use avatar if the filter is not published */}
       <PublishedFilterIconFilled />
       <div className="flex items-center gap-1">
-        <span>{filter.columnName} is</span>
+        <span>{filter.propertyName} is</span>
         <span>·</span>
         <span>{value}</span>
       </div>

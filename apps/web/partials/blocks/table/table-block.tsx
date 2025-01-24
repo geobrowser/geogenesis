@@ -43,14 +43,14 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
 
-  const { columns, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
+  const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { shownColumnIds, view, placeholder } = useView();
   const { source } = useSource();
 
-  const allColumns = columns.map(column => ({
-    id: column.id,
-    name: column.name,
+  const allColumns = properties.map(property => ({
+    id: property.id,
+    name: property.name,
   }));
 
   /**
@@ -63,25 +63,25 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
    *
    * Name and Space are treated specially throughout this code path.
    */
-  const filtersWithColumnName = filterState.map(f => {
+  const filtersWithPropertyName = filterState.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME_ATTRIBUTE) {
       return {
         ...f,
-        columnName: 'Name',
+        propertyName: 'Name',
       };
     }
 
     if (f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE) {
       return {
         ...f,
-        columnName: 'Types',
+        propertyName: 'Types',
       };
     }
 
     if (f.columnId === SYSTEM_IDS.SPACE_FILTER) {
       return {
         ...f,
-        columnName: 'Space',
+        propertyName: 'Space',
         value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
       };
     }
@@ -89,20 +89,20 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     if (f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) {
       return {
         ...f,
-        columnName: 'Relation type',
+        propertyName: 'Relation type',
       };
     }
 
     if (f.columnId === SYSTEM_IDS.ENTITY_FILTER) {
       return {
         ...f,
-        columnName: 'Entity',
+        propertyName: 'Entity',
       };
     }
 
     return {
       ...f,
-      columnName: columns.find(c => c.id === f.columnId)?.name ?? '',
+      propertyName: properties.find(c => c.id === f.columnId)?.name ?? '',
     };
   });
 
@@ -152,7 +152,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             >
               <TableBlockEditableFilters />
 
-              {filtersWithColumnName.map((f, index) => {
+              {filtersWithPropertyName.map((f, index) => {
                 return (
                   <TableBlockFilterPill
                     key={`${f.columnId}-${f.value}`}
@@ -180,7 +180,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
         ) : (
           <TableBlockTable
             space={spaceId}
-            columns={columns}
+            properties={properties}
             rows={rows}
             placeholder={placeholder}
             view={view}

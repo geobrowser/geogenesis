@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { useEntity } from '../../database/entities';
 import { upsert } from '../../database/write';
-import { usePropertyValueTypes } from '../../hooks/use-property-value-types';
+import { useProperties } from '../../hooks/use-properties';
 import { Entity } from '../../io/dto/entities';
 import { EntityId, SpaceId } from '../../io/schema';
 import { PropertySchema } from '../../types';
@@ -15,7 +15,6 @@ import {
   RelationRow,
   mergeEntitiesAsync,
   mergeRelationQueryEntities,
-  mergeSlots,
   mergeTableEntities,
 } from './queries';
 import { Source } from './source';
@@ -65,7 +64,7 @@ export function useDataBlock() {
   const { mapping } = useMapping();
 
   const {
-    data: renderables,
+    data: rows,
     isLoading: isLoadingRenderables,
     isFetched: isRenderablesFetch,
   } = useQuery({
@@ -161,49 +160,22 @@ export function useDataBlock() {
       }
 
       if (!rowData) {
-        return {
-          rows: [],
-          columns: [],
-        };
+        return [];
       }
 
       if (rowData.type === 'RELATIONS') {
-        return {
-          rows: [],
-          columns: [],
-        };
+        return [];
       }
 
-      const columns = await mergeSlots(Object.keys(mapping));
+      const renderedProperties = Object.keys(mapping);
+      const rows = mappingToRows(rowData.data, renderedProperties, collectionItems);
 
-      console.log('columns', columns);
-
-      const rows = mappingToRows(
-        rowData.data,
-        columns.map(c => c.id),
-        collectionItems
-      );
-
-      return {
-        rows,
-        columns,
-      };
+      return rows;
     },
   });
 
-  // filterable columns should be based on the schema and not the mapping (?)
-
-  const rows = React.useMemo(() => {
-    if (!renderables) return [];
-    return renderables.rows;
-  }, [renderables]);
-
-  const columns = React.useMemo(() => {
-    if (!renderables) return [];
-    return renderables.columns;
-  }, [renderables]);
-
-  const { propertyValueTypes: columnsSchema } = usePropertyValueTypes(columns.map(c => c.id));
+  // Use the mapping to get the potential renderable properties.
+  const { properties: propertiesSchema } = useProperties(Object.keys(mapping));
 
   const setName = React.useCallback(
     (newName: string) => {
@@ -222,19 +194,17 @@ export function useDataBlock() {
   );
 
   return {
-    blockEntity,
+    entityId,
+    spaceId,
 
-    rows: renderables?.rows.slice(0, PAGE_SIZE) ?? [],
-    columns: columns ?? [],
-    columnRelationTypes: {},
+    rows: rows?.slice(0, PAGE_SIZE) ?? [],
+    properties: [...propertiesSchema.values()],
+    propertiesSchema,
 
     pageNumber,
     hasNextPage: rows ? rows?.length > PAGE_SIZE : false,
     hasPreviousPage: pageNumber > 0,
     setPage,
-
-    entityId,
-    spaceId,
 
     // We combine fetching state into loading state due to the transition from
     // the server representation of our editor to the client representation. We
@@ -246,7 +216,6 @@ export function useDataBlock() {
 
     name: blockEntity.name,
     setName,
-    columnsSchema,
   };
 }
 

@@ -9,17 +9,17 @@ type PropertyId = string & Brand.Brand<'PropertyId'>;
 export const PropertyId = Brand.nominal<PropertyId>();
 
 type UsePropertyValueTypes = {
-  propertyValueTypes: Map<PropertyId, PropertySchema>;
+  properties: Map<PropertyId, PropertySchema>;
 };
 
 const initialData = new Map();
 
-export function usePropertyValueTypes(propertyIds: string[]): UsePropertyValueTypes {
-  const { data: propertyValueTypes } = useQuery({
+export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
+  const { data: properties } = useQuery({
     placeholderData: keepPreviousData,
     initialData: initialData,
     enabled: propertyIds.length > 0,
-    queryKey: [{ key: 'property-value-types', propertyIds }],
+    queryKey: [{ key: 'properties', propertyIds }],
     queryFn: async ({ queryKey }) => {
       const [{ propertyIds }] = queryKey;
 
@@ -61,6 +61,6 @@ export function usePropertyValueTypes(propertyIds: string[]): UsePropertyValueTy
   });
 
   return {
-    propertyValueTypes: propertyValueTypes ?? initialData,
+    properties: properties ?? initialData,
   };
 }

@@ -38,12 +38,16 @@ export type Mapping = {
  */
 export function useMapping() {
   const mapping = React.useMemo((): Mapping => {
-    /**
-     * Alright wtf does this mapping look like?
-     */
     return {
-      ['JkzhbbrXFMfXN7sduMKQRp']: {
+      [SYSTEM_IDS.NAME_ATTRIBUTE]: {
         columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        entityId: '',
+        triples: [],
+        relations: [],
+        name: '',
+      },
+      ['JkzhbbrXFMfXN7sduMKQRp']: {
+        columnId: 'JkzhbbrXFMfXN7sduMKQRp',
         entityId: '',
         triples: [],
         relations: [],
@@ -65,7 +69,7 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionI
    * and map them into the Row structure.
    */
   return entities.map(({ name, triples, id, relationsOut, description }) => {
-    const newColumns = slotIds.reduce(
+    const newSlots = slotIds.reduce(
       (acc, slotId) => {
         const cellTriples = triples.filter(triple => triple.attributeId === slotId);
         const cellRelations = relationsOut.filter(t => t.typeOf.id === slotId);
@@ -123,7 +127,7 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionI
 
     return {
       entityId: id,
-      columns: newColumns,
+      columns: newSlots,
     };
   });
 }
