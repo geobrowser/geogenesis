@@ -54,8 +54,7 @@ type DataRows =
     };
 
 export function useTableBlock() {
-  const { entityId, spaceId } = useTableBlockInstance();
-  const { pageNumber, setPage } = usePagination();
+  const { entityId, spaceId, pageNumber, setPage } = useTableBlockInstance();
 
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
@@ -252,9 +251,13 @@ export function useTableBlock() {
   };
 }
 
-const TableBlockContext = React.createContext<{ entityId: string; spaceId: string; relationId: string } | undefined>(
-  undefined
-);
+const TableBlockContext = React.createContext<{
+  entityId: string;
+  spaceId: string;
+  relationId: string;
+  pageNumber: number;
+  setPage: (page: number | 'next' | 'previous') => void;
+} | null>(null);
 
 interface Props {
   spaceId: string;
@@ -264,23 +267,27 @@ interface Props {
 }
 
 export function TableBlockProvider({ spaceId, children, entityId, relationId }: Props) {
+  const { pageNumber, setPage } = usePagination();
+
   const store = React.useMemo(() => {
     return {
       spaceId,
       entityId,
       relationId,
+      pageNumber,
+      setPage,
     };
-  }, [spaceId, entityId, relationId]);
+  }, [spaceId, entityId, relationId, pageNumber, setPage]);
 
   return <TableBlockContext.Provider value={store}>{children}</TableBlockContext.Provider>;
 }
 
 export function useTableBlockInstance() {
-  const value = React.useContext(TableBlockContext);
+  const context = React.useContext(TableBlockContext);
 
-  if (!value) {
+  if (context === null) {
     throw new Error(`Missing EntityPageTableBlockStoreProvider`);
   }
 
-  return value;
+  return context;
 }

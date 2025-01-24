@@ -32,10 +32,6 @@ type UseEntityOptions = {
 export function useEntity(options: UseEntityOptions): EntityWithSchema {
   const { spaceId, id, initialData } = options;
 
-  // If the caller passes in a set of data we use that for merging. If not,
-  // we fetch the entity from the server and merge it with the local state.
-  let data = initialData;
-
   const { data: remoteData } = useQuery({
     enabled: !initialData && id !== '',
     placeholderData: keepPreviousData,
@@ -52,9 +48,11 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     },
   });
 
-  if (!initialData) {
-    data = remoteData;
-  }
+  // If the caller passes in a set of data we use that for merging. If not,
+  // we fetch the entity from the server and merge it with the local state.
+  const data = React.useMemo(() => {
+    return initialData ?? remoteData;
+  }, [initialData, remoteData]);
 
   const triples = useTriples(
     React.useMemo(
@@ -96,7 +94,8 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     return readTypes(relations);
   }, [relations]);
 
-  const { data: schema } = useQuery({
+  const { data: remoteSchema } = useQuery({
+    enabled: types.length > 0,
     queryKey: ['entity-schema-for-merging', id, types],
     placeholderData: keepPreviousData,
     queryFn: async () => {
@@ -105,14 +104,18 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     },
   });
 
+  // @TODO merge with local state
+  const schema = React.useMemo(() => {
+    return remoteSchema ?? [];
+  }, [remoteSchema]);
+
   return {
     id,
     name,
     nameTripleSpaces,
     spaces,
     description,
-    // @TODO: Spaces with metadata
-    schema: schema ?? [],
+    schema,
     triples,
     relationsOut: relations,
     types,

@@ -24,7 +24,7 @@ export function useSource() {
       blockId: blockEntity.id,
       dataEntityRelations: blockEntity.relationsOut,
       currentSpaceId: SpaceId(spaceId),
-      filterState: filterState ?? [],
+      filterState,
     });
   }, [blockEntity.id, blockEntity.relationsOut, spaceId, filterState]);
 
