@@ -42,11 +42,11 @@ export const DataNode = Node.create({
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(TableNodeComponent);
+    return ReactNodeViewRenderer(DataNodeComponent);
   },
 });
 
-function TableNodeComponent({ node }: NodeViewRendererProps) {
+function DataNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId } = useEditorInstance();
   const { id } = node.attrs;
 
