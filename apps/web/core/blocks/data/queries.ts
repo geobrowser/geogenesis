@@ -2,12 +2,7 @@ import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import {
-  DEFAULT_ENTITY_SCHEMA,
-  getEntities_experimental,
-  mergeEntity,
-  mergeEntityAsync,
-} from '~/core/database/entities';
+import { getEntities_experimental, mergeEntity, mergeEntityAsync } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
 import { Entity } from '~/core/io/dto/entities';
 import { fetchColumns } from '~/core/io/fetch-columns';
@@ -15,7 +10,7 @@ import { EntityId } from '~/core/io/schema';
 import { fetchTableRowEntities } from '~/core/io/subgraph';
 import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { queryClient } from '~/core/query-client';
-import { OmitStrict, PropertySchema, Value, ValueTypeId } from '~/core/types';
+import { OmitStrict, PropertySchema, Value } from '~/core/types';
 
 import { Filter } from './filters';
 import { queryStringFromFilters } from './to-query-string';
@@ -79,49 +74,6 @@ async function mergeTableRowEntitiesAsync(
 
 export async function mergeTableEntities({ options, filterState }: MergeTableEntitiesArgs) {
   return await mergeTableRowEntitiesAsync(options, filterState);
-}
-
-export async function mergeSlots(slotIds: string[]): Promise<PropertySchema[]> {
-  const attributes = await queryClient.fetchQuery({
-    // Slots are usually attribute ids
-    queryKey: queryKeys.slots(slotIds),
-    queryFn: () => fetchEntitiesBatch(slotIds),
-  });
-
-  const valueTypes = attributes.map(a => {
-    const valueTypeId = a.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE)?.toEntity.id;
-    return {
-      attributeId: a.id,
-      valueTypeId,
-    };
-  });
-
-  const relationValueTypes = attributes.map(a => {
-    const relationValueType = a.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE)
-      ?.toEntity;
-
-    return {
-      attributeId: a.id,
-      relationValueTypeId: relationValueType?.id,
-      relationValueTypeName: relationValueType?.name,
-    };
-  });
-
-  const schema = attributes.map((s): PropertySchema => {
-    const relationValueType = relationValueTypes.find(t => t.attributeId === s.id) ?? null;
-    const valueType = (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SYSTEM_IDS.TEXT) as
-      | ValueTypeId
-      | undefined;
-
-    return {
-      ...s,
-      valueType: valueType ?? SYSTEM_IDS.TEXT,
-      relationValueTypeId: relationValueType?.relationValueTypeId,
-      relationValueTypeName: relationValueType?.relationValueTypeName,
-    };
-  });
-
-  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...schema], (a, b) => a.id === b.id);
 }
 
 export async function mergeColumns(typeIds: string[]): Promise<PropertySchema[]> {
