@@ -25,6 +25,7 @@ import {
 } from '~/core/blocks/data/collection';
 import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { DataBlockView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
@@ -35,7 +36,6 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { useTableBlock } from '~/core/state/table-block-store';
 import { Cell, PropertySchema, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
@@ -101,7 +101,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns, columnsSchema } = useTableBlock();
+    const { columns, columnsSchema } = useDataBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditable = table.options.meta?.isEditable;

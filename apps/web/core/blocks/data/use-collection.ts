@@ -6,13 +6,13 @@ import * as React from 'react';
 import { useEntity } from '~/core/database/entities';
 import { useRelations } from '~/core/database/relations';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { useTableBlockInstance } from '~/core/state/table-block-store';
 
 import { mergeEntitiesAsync } from './queries';
+import { useDataBlockInstance } from './use-data-block';
 import { useSource } from './use-source';
 
 export function useCollection() {
-  const { entityId, spaceId } = useTableBlockInstance();
+  const { entityId, spaceId } = useDataBlockInstance();
   const { source } = useSource();
 
   const blockEntity = useEntity({

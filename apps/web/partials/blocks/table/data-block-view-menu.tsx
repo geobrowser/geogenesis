@@ -7,9 +7,9 @@ import { motion } from 'framer-motion';
 import * as React from 'react';
 import { useCallback } from 'react';
 
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { DataBlockView, useView } from '~/core/blocks/data/use-view';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useTableBlock } from '~/core/state/table-block-store';
 
 import { Check } from '~/design-system/icons/check';
 import { Close } from '~/design-system/icons/close';
@@ -28,7 +28,7 @@ type TableBlockViewMenuProps = {
 
 export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { spaceId } = useTableBlock();
+  const { spaceId } = useDataBlock();
 
   const isEditing = useUserIsEditing(spaceId);
 

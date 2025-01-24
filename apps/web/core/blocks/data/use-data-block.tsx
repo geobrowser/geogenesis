@@ -3,7 +3,14 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { Filter } from '../blocks/data/filters';
+import { useEntity } from '../../database/entities';
+import { upsert } from '../../database/write';
+import { usePropertyValueTypes } from '../../hooks/use-property-value-types';
+import { Entity } from '../../io/dto/entities';
+import { EntityId, SpaceId } from '../../io/schema';
+import { PropertySchema } from '../../types';
+import { EntityTable } from '../../utils/entity-table';
+import { Filter } from './filters';
 import {
   MergeTableEntitiesArgs,
   RelationRow,
@@ -11,19 +18,12 @@ import {
   mergeEntitiesAsync,
   mergeRelationQueryEntities,
   mergeTableEntities,
-} from '../blocks/data/queries';
-import { Source } from '../blocks/data/source';
-import { useCollection } from '../blocks/data/use-collection';
-import { useFilters } from '../blocks/data/use-filters';
-import { usePagination } from '../blocks/data/use-pagination';
-import { useSource } from '../blocks/data/use-source';
-import { useEntity } from '../database/entities';
-import { upsert } from '../database/write';
-import { usePropertyValueTypes } from '../hooks/use-property-value-types';
-import { Entity } from '../io/dto/entities';
-import { EntityId, SpaceId } from '../io/schema';
-import { PropertySchema } from '../types';
-import { EntityTable } from '../utils/entity-table';
+} from './queries';
+import { Source } from './source';
+import { useCollection } from './use-collection';
+import { useFilters } from './use-filters';
+import { usePagination } from './use-pagination';
+import { useSource } from './use-source';
 
 export const PAGE_SIZE = 9;
 
@@ -53,8 +53,8 @@ type DataRows =
       data: RelationRow[];
     };
 
-export function useTableBlock() {
-  const { entityId, spaceId, pageNumber, setPage } = useTableBlockInstance();
+export function useDataBlock() {
+  const { entityId, spaceId, pageNumber, setPage } = useDataBlockInstance();
 
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
@@ -251,7 +251,7 @@ export function useTableBlock() {
   };
 }
 
-const TableBlockContext = React.createContext<{
+const DataBlockContext = React.createContext<{
   entityId: string;
   spaceId: string;
   relationId: string;
@@ -266,7 +266,7 @@ interface Props {
   relationId: string;
 }
 
-export function TableBlockProvider({ spaceId, children, entityId, relationId }: Props) {
+export function DataBlockProvider({ spaceId, children, entityId, relationId }: Props) {
   const { pageNumber, setPage } = usePagination();
 
   const store = React.useMemo(() => {
@@ -279,11 +279,11 @@ export function TableBlockProvider({ spaceId, children, entityId, relationId }: 
     };
   }, [spaceId, entityId, relationId, pageNumber, setPage]);
 
-  return <TableBlockContext.Provider value={store}>{children}</TableBlockContext.Provider>;
+  return <DataBlockContext.Provider value={store}>{children}</DataBlockContext.Provider>;
 }
 
-export function useTableBlockInstance() {
-  const context = React.useContext(TableBlockContext);
+export function useDataBlockInstance() {
+  const context = React.useContext(DataBlockContext);
 
   if (context === null) {
     throw new Error(`Missing EntityPageTableBlockStoreProvider`);

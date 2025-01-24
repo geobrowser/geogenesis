@@ -6,13 +6,13 @@ import * as React from 'react';
 import { useEntity } from '~/core/database/entities';
 import { upsert } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { useTableBlockInstance } from '~/core/state/table-block-store';
 
 import { Filter, fromGeoFilterState, toGeoFilterState } from './filters';
 import { Source } from './source';
+import { useDataBlockInstance } from './use-data-block';
 
 export function useFilters() {
-  const { entityId, spaceId } = useTableBlockInstance();
+  const { entityId, spaceId } = useDataBlockInstance();
 
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),

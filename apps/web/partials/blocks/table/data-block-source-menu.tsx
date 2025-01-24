@@ -1,12 +1,12 @@
 import { useState } from 'react';
 
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { SpaceId } from '~/core/io/schema';
-import { useTableBlock } from '~/core/state/table-block-store';
 import { getImagePath } from '~/core/utils/utils';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
@@ -29,7 +29,7 @@ export const DataBlockSourceMenu = ({
 }: DataBlockSourceMenuProps) => {
   const [view, setView] = useState<View>('initial');
   const { spaces } = useSpaces();
-  const { blockEntity } = useTableBlock();
+  const { blockEntity } = useDataBlock();
   const { setSource, source } = useSource();
 
   return (

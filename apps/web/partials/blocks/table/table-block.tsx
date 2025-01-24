@@ -7,13 +7,13 @@ import produce from 'immer';
 
 import * as React from 'react';
 
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useTableBlock } from '~/core/state/table-block-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
@@ -43,7 +43,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
 
-  const { columns, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useTableBlock();
+  const { columns, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { shownColumnIds, view, placeholder } = useView();
   const { source } = useSource();

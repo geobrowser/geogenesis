@@ -6,9 +6,9 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useView } from '~/core/blocks/data/use-view';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useTableBlock } from '~/core/state/table-block-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -37,7 +37,7 @@ type TableBlockContextMenuProps = {
 
 export function TableBlockContextMenu({ allColumns }: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { spaceId, entityId } = useTableBlock();
+  const { spaceId, entityId } = useDataBlock();
   const [isEditingDataSource, setIsEditingDataSource] = React.useState(false);
   const [isEditingColumns, setIsEditingColumns] = useAtom(editingColumnsAtom);
 

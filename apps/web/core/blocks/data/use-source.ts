@@ -4,13 +4,13 @@ import * as React from 'react';
 
 import { useEntity } from '~/core/database/entities';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { useTableBlockInstance } from '~/core/state/table-block-store';
 
 import { Source, getSource, removeSourceType, upsertSourceType } from './source';
+import { useDataBlockInstance } from './use-data-block';
 import { useFilters } from './use-filters';
 
 export function useSource() {
-  const { entityId, spaceId } = useTableBlockInstance();
+  const { entityId, spaceId } = useDataBlockInstance();
 
   const blockEntity = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),

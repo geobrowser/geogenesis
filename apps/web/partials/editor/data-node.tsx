@@ -3,13 +3,13 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
+import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStore } from '~/core/state/editor/use-editor';
-import { TableBlockProvider } from '~/core/state/table-block-store';
 
 import { TableBlock, TableBlockError } from '../blocks/table/table-block';
 
-export const TableNode = Node.create({
+export const DataNode = Node.create({
   name: 'tableNode',
   group: 'block',
   atom: true,
@@ -56,13 +56,13 @@ function TableNodeComponent({ node }: NodeViewRendererProps) {
   return (
     <NodeViewWrapper>
       <div contentEditable="false">
-        <TableNodeChildren spaceId={spaceId} entityId={id} relationId={relation?.relationId ?? ''} />
+        <DataNodeChildren spaceId={spaceId} entityId={id} relationId={relation?.relationId ?? ''} />
       </div>
     </NodeViewWrapper>
   );
 }
 
-function TableNodeChildren({
+function DataNodeChildren({
   spaceId,
   entityId,
   relationId,
@@ -73,9 +73,9 @@ function TableNodeChildren({
 }) {
   return (
     <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={entityId} />}>
-      <TableBlockProvider spaceId={spaceId} entityId={entityId} relationId={relationId}>
+      <DataBlockProvider spaceId={spaceId} entityId={entityId} relationId={relationId}>
         <TableBlock spaceId={spaceId} />
-      </TableBlockProvider>
+      </DataBlockProvider>
     </ErrorBoundary>
   );
 }

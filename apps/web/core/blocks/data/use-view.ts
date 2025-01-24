@@ -8,9 +8,10 @@ import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
 import { Entity } from '~/core/io/dto/entities';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { useTableBlockInstance } from '~/core/state/table-block-store';
 import { Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
+
+import { useDataBlockInstance } from './use-data-block';
 
 type DataBlockViewDetails = { name: string; id: string; value: DataBlockView };
 type Column = {
@@ -19,7 +20,7 @@ type Column = {
 };
 
 export function useView() {
-  const { entityId, spaceId, relationId } = useTableBlockInstance();
+  const { entityId, spaceId, relationId } = useDataBlockInstance();
 
   const blockRelation = useEntity({
     spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
