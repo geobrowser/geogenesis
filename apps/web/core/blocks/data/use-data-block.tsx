@@ -8,7 +8,7 @@ import { upsert } from '../../database/write';
 import { usePropertyValueTypes } from '../../hooks/use-property-value-types';
 import { Entity } from '../../io/dto/entities';
 import { EntityId, SpaceId } from '../../io/schema';
-import { PropertySchema } from '../../types';
+import { PropertySchema, Row } from '../../types';
 import { EntityTable } from '../../utils/entity-table';
 import { Filter } from './filters';
 import {
@@ -62,16 +62,14 @@ export function useDataBlock() {
   });
 
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
-
   const { source } = useSource();
-
   const { collectionItems } = useCollection();
 
   const {
-    data: entities,
-    isLoading: isLoadingEntities,
+    data: renderables,
+    isLoading: isLoadingRenderables,
     isFetched: isEntitiesFetched,
-  } = useQuery<DataRows>({
+  } = useQuery({
     enabled: filterState !== undefined && source.type !== 'RELATIONS',
     placeholderData: keepPreviousData,
     // @TODO: Should re-run when the relations for the entity source changes
@@ -85,8 +83,8 @@ export function useDataBlock() {
     queryFn: async () => {
       if (!filterState)
         return {
-          type: 'ENTITIES',
-          data: [],
+          rows: [],
+          columns: [],
         };
 
       const params: MergeTableEntitiesArgs['options'] = {
@@ -137,10 +135,13 @@ export function useDataBlock() {
        * This will help do data processing correctly by abstracting logic logically (lol).
        */
 
+      let rowData: DataRows | null = null;
+
+      // @TODO: Effectify this query hook
       if (source.type === 'SPACES' || source.type === 'GEO') {
         const data = await mergeTableEntities({ options: params, filterState });
 
-        return {
+        rowData = {
           type: 'ENTITIES',
           data,
         };
@@ -152,7 +153,7 @@ export function useDataBlock() {
           filterState,
         });
 
-        return {
+        rowData = {
           type: 'COLLECTION',
           data,
         };
@@ -160,45 +161,48 @@ export function useDataBlock() {
 
       if (source.type === 'RELATIONS') {
         const data = await mergeRelationQueryEntities(source.value, filterState);
-        return {
+        rowData = {
           type: 'RELATIONS',
           data,
         };
       }
 
+      if (!rowData) {
+        return {
+          rows: [],
+          columns: [],
+        };
+      }
+
+      if (rowData.type === 'RELATIONS') {
+        return {
+          rows: [],
+          columns: [],
+        };
+      }
+
+      const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
+      const columns = await mergeColumns(typesInFilter);
+      const rows = EntityTable.fromColumnsAndRows(rowData.data, columns, collectionItems);
+
       return {
-        type: 'ENTITIES',
-        data: [],
+        rows,
+        columns,
       };
     },
   });
 
-  // @TODO: This should be renamed to "DataFields" or something. Should also
-  // depend on the mapping rather than selected types.
-  const {
-    data: columns,
-    isLoading: isLoadingColumns,
-    isFetched: isColumnsFetched,
-  } = useQuery({
-    enabled: filterState !== undefined,
-    placeholderData: keepPreviousData,
-    queryKey: queryKeys.columns(filterState ?? null),
-    queryFn: async () => {
-      const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
-      return await mergeColumns(typesInFilter);
-    },
-  });
-
-  // @TODO: This can be unique to the query mode, so each query mode
-  // processes and returns data depending on the query mode. This also
-  // lets us turn the returned data into a FSM.
   const rows = React.useMemo(() => {
-    if (!entities || !columns) return [];
-    if (entities.type === 'RELATIONS') return [];
-    return EntityTable.fromColumnsAndRows(entities.data, columns, collectionItems);
-  }, [entities, columns, collectionItems]);
+    if (!renderables) return [];
+    return renderables.rows;
+  }, [renderables]);
 
-  const { propertyValueTypes: columnsSchema } = usePropertyValueTypes(columns ? columns.map(c => c.id) : []);
+  const columns = React.useMemo(() => {
+    if (!renderables) return [];
+    return renderables.columns;
+  }, [renderables]);
+
+  const { propertyValueTypes: columnsSchema } = usePropertyValueTypes(columns.map(c => c.id));
 
   const setName = React.useCallback(
     (newName: string) => {
@@ -219,7 +223,7 @@ export function useDataBlock() {
   return {
     blockEntity,
 
-    rows: rows?.slice(0, PAGE_SIZE) ?? [],
+    rows: renderables?.rows.slice(0, PAGE_SIZE) ?? [],
     columns: columns ?? [],
     columnRelationTypes: {},
 
@@ -237,13 +241,7 @@ export function useDataBlock() {
     // state then back into a loading state. By adding the isFetched state we
     // will stay in a placeholder state until we've fetched our queries at least
     // one time.
-    isLoading:
-      isLoadingColumns ||
-      isLoadingEntities ||
-      isLoadingFilterState ||
-      !isFilterStateFetched ||
-      !isColumnsFetched ||
-      !isEntitiesFetched,
+    isLoading: isLoadingRenderables || isLoadingFilterState || !isFilterStateFetched || !isEntitiesFetched,
 
     name: blockEntity.name,
     setName,
