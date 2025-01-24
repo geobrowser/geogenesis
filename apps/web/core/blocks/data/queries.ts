@@ -142,7 +142,7 @@ function filterValue(value: Value, valueToFilter: string) {
   }
 }
 
-type RelationRow = {
+export type RelationRow = {
   this: Entity;
   to: Entity;
 };

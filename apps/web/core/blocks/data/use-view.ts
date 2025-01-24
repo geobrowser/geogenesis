@@ -87,7 +87,6 @@ export function useView() {
     placeholder,
     viewRelation,
     setView,
-    shownColumnRelations,
     shownColumnIds,
   };
 }

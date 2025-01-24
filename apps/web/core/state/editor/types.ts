@@ -1,5 +1,3 @@
-import { SpaceId } from '~/core/io/schema';
-
 export type Content =
   | {
       type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem' | 'tableNode';

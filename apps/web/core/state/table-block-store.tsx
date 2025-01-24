@@ -4,12 +4,18 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { Filter } from '../blocks/data/filters';
-import { MergeTableEntitiesArgs, mergeColumns, mergeEntitiesAsync, mergeTableEntities } from '../blocks/data/queries';
+import {
+  MergeTableEntitiesArgs,
+  RelationRow,
+  mergeColumns,
+  mergeEntitiesAsync,
+  mergeRelationQueryEntities,
+  mergeTableEntities,
+} from '../blocks/data/queries';
 import { Source } from '../blocks/data/source';
 import { useCollection } from '../blocks/data/use-collection';
 import { useFilters } from '../blocks/data/use-filters';
 import { usePagination } from '../blocks/data/use-pagination';
-import { useRelationsQueryBlock } from '../blocks/data/use-relation-block';
 import { useSource } from '../blocks/data/use-source';
 import { useView } from '../blocks/data/use-view';
 import { useEntity } from '../database/entities';
@@ -38,8 +44,18 @@ const queryKeys = {
   columnsSchema: (columns?: PropertySchema[]) => ['blocks', 'data', 'columns-schema', columns],
 };
 
+type DataRows =
+  | {
+      type: 'ENTITIES' | 'COLLECTION';
+      data: Entity[];
+    }
+  | {
+      type: 'RELATIONS';
+      data: RelationRow[];
+    };
+
 export function useTableBlock() {
-  const { entityId, spaceId, relationId } = useTableBlockInstance();
+  const { entityId, spaceId } = useTableBlockInstance();
   const { pageNumber, setPage } = usePagination();
 
   const blockEntity = useEntity({
@@ -55,36 +71,15 @@ export function useTableBlock() {
   } = useFilters();
 
   const { source, setSource } = useSource();
-  /**
-   * @TODO We need to turn this hook into a FSM depending on the view and query mode.
-   * This will help do data processing correctly.
-   *
-   *
-   */
+
   const { collectionItems } = useCollection();
-  const { data: relationsQueryData } = useRelationsQueryBlock();
-  const { view, placeholder, shownColumnRelations, shownColumnIds } = useView();
-
-  // @TODO: The columns or "layout" should be dependent on the view + mapping
-  const {
-    data: columns,
-    isLoading: isLoadingColumns,
-    isFetched: isColumnsFetched,
-  } = useQuery({
-    enabled: filterState !== undefined,
-    placeholderData: keepPreviousData,
-    queryKey: queryKeys.columns(filterState ?? null),
-    queryFn: async () => {
-      const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
-      return await mergeColumns(typesInFilter);
-    },
-  });
+  const { view, placeholder, shownColumnIds } = useView();
 
   const {
-    data: tableEntities,
+    data: entities,
     isLoading: isLoadingEntities,
     isFetched: isEntitiesFetched,
-  } = useQuery({
+  } = useQuery<DataRows>({
     enabled: filterState !== undefined && source.type !== 'RELATIONS',
     placeholderData: keepPreviousData,
     // @TODO: Should re-run when the relations for the entity source changes
@@ -96,7 +91,11 @@ export function useTableBlock() {
       filterState,
     }),
     queryFn: async () => {
-      if (!filterState) return [];
+      if (!filterState)
+        return {
+          type: 'ENTITIES',
+          data: [],
+        };
 
       const params: MergeTableEntitiesArgs['options'] = {
         first: PAGE_SIZE + 1,
@@ -134,31 +133,78 @@ export function useTableBlock() {
        * 2. Process which fields should exist on a {@link Row} based on the view and
        *    the query mode. This step reads from the Mapping.
        * 3. Returns the list of {@link Row} data structures.
+       *
+       * @QUESTION Should we combine aggregating all the dependencies needed before mapping
+       * to Row[] into a single function? Then this function gets called depending
+       * on the query mode and view?
+       * 1. Fetch data for query mode
+       * 2. Fetch data about each "field" (e.g., column, name, etc.) in the mapping
+       * 3. Process the data to the layout of the view
+       *
+       * @TODO We need to turn this hook into a FSM depending on the view and query mode.
+       * This will help do data processing correctly by abstracting logic logically (lol).
        */
 
       if (source.type === 'SPACES' || source.type === 'GEO') {
-        return await mergeTableEntities({ options: params, filterState });
+        const data = await mergeTableEntities({ options: params, filterState });
+
+        return {
+          type: 'ENTITIES',
+          data,
+        };
       }
 
       if (source.type === 'COLLECTION') {
-        return mergeEntitiesAsync({
+        const data = await mergeEntitiesAsync({
           entityIds: collectionItems.map(c => c.id),
           filterState,
         });
+
+        return {
+          type: 'COLLECTION',
+          data,
+        };
       }
 
-      // if (source.type === 'RELATIONS') {
-      //   return await mergeRelationQueryEntities(source.value, filterState);
-      // }
+      if (source.type === 'RELATIONS') {
+        const data = await mergeRelationQueryEntities(source.value, filterState);
+        return {
+          type: 'RELATIONS',
+          data,
+        };
+      }
 
-      return [];
+      return {
+        type: 'ENTITIES',
+        data: [],
+      };
     },
   });
 
+  // @TODO: This should be renamed to "DataFields" or something. Should also
+  // depend on the mapping rather than selected types.
+  const {
+    data: columns,
+    isLoading: isLoadingColumns,
+    isFetched: isColumnsFetched,
+  } = useQuery({
+    enabled: filterState !== undefined,
+    placeholderData: keepPreviousData,
+    queryKey: queryKeys.columns(filterState ?? null),
+    queryFn: async () => {
+      const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
+      return await mergeColumns(typesInFilter);
+    },
+  });
+
+  // @TODO: This can be unique to the query mode, so each query mode
+  // processes and returns data depending on the query mode. This also
+  // lets us turn the returned data into a FSM.
   const rows = React.useMemo(() => {
-    if (!tableEntities || !columns) return [];
-    return EntityTable.fromColumnsAndRows(tableEntities, columns, collectionItems);
-  }, [tableEntities, columns, collectionItems]);
+    if (!entities || !columns) return [];
+    if (entities.type === 'RELATIONS') return [];
+    return EntityTable.fromColumnsAndRows(entities.data, columns, collectionItems);
+  }, [entities, columns, collectionItems]);
 
   const { propertyValueTypes: columnsSchema } = usePropertyValueTypes(columns ? columns.map(c => c.id) : []);
 
@@ -180,13 +226,11 @@ export function useTableBlock() {
 
   return {
     blockEntity,
-    relationId,
     source,
     setSource,
 
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
     columns: columns ?? [],
-
     columnRelationTypes: {},
 
     filterState: filterState ?? [],
@@ -218,10 +262,8 @@ export function useTableBlock() {
     setName,
     view,
     columnsSchema,
-    shownColumnRelations,
     shownColumnIds,
     placeholder,
-    collectionItems,
   };
 }
 
