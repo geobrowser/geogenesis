@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { Console, Effect } from 'effect';
 
 import * as React from 'react';
 
@@ -20,9 +21,10 @@ import {
 import { Source } from './source';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
-import { Mapping, mappingToRows, useMapping } from './use-mapping';
+import { mappingToRows } from './use-mapping';
 import { usePagination } from './use-pagination';
 import { useSource } from './use-source';
+import { useView } from './use-view';
 
 export const PAGE_SIZE = 9;
 
@@ -32,7 +34,7 @@ interface RenderablesQueryKey {
   filterState: Filter[];
   source: Source;
   collectionItems: Entity[];
-  mapping: Mapping;
+  shownColumnIds: string[];
 }
 
 const queryKeys = {
@@ -61,14 +63,16 @@ export function useDataBlock() {
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
   const { source } = useSource();
   const { collectionItems } = useCollection();
-  const { mapping } = useMapping();
+  const { shownColumnIds } = useView();
+
+  console.log('source', source);
 
   const {
     data: rows,
     isLoading: isLoadingRenderables,
-    isFetched: isRenderablesFetch,
+    isFetched: isRenderablesFetched,
   } = useQuery({
-    enabled: filterState !== undefined && source.type !== 'RELATIONS',
+    enabled: filterState !== undefined,
     placeholderData: keepPreviousData,
     // @TODO: Should re-run when the relations for the entity source changes
     queryKey: queryKeys.renderables({
@@ -77,105 +81,113 @@ export function useDataBlock() {
       entityId,
       source,
       filterState,
-      mapping,
+      shownColumnIds,
     }),
     queryFn: async () => {
-      // @TODO: Filter state being empty by default means we can end up rendering
-      // the table without filters before processing the filter. Should avoid the
-      // layout jank if possible.
+      const run = Effect.gen(function* () {
+        // @TODO: Filter state being empty by default means we can end up rendering
+        // the table without filters before processing the filter. Should avoid the
+        // layout jank if possible.
 
-      const params: MergeTableEntitiesArgs['options'] = {
-        first: PAGE_SIZE + 1,
-        skip: pageNumber * PAGE_SIZE,
-      };
-
-      /**
-       * Data should be returned in the mapped format. Kinda blocked until we
-       * can mock/implement that.
-       *
-       * We could also just return the data for both the `this` and `to` entities
-       * in the row format. There just might be more than one "cell" for a given
-       * attribute id. We'll have to match the entity _and_ the attribute.
-       *
-       * We can't use this entity -> attribute -> value data structure because
-       * the mapping isn't aware of concrete values, only relative shapes.
-       *
-       * We need to somehow store data in a concrete form that can be read using
-       * the relative shape. The `this` entity and `to` entity does this, but
-       * `this` and `to` needs to be mapped into the concrete form.
-       *
-       * Current we have a {@link Row} data structure. This represents a single
-       * row with a Record of column id -> {@link Cell} data. The column id represents
-       * the UI "slot" to render the Cell data into. We can use this same concept
-       * to represent the UI mapping, where instead of column id, it's layout id
-       * or something like that.
-       *
-       * ---------------------------------------------------------------------------
-       *
-       * Each query mode + view maps data to the same layout. It's a data processing
-       * pipeline where we need to do a few steps.
-       * 1. Fetch the data for each query mode. Collections and entities queries fetch
-       *    only the data for a single entity for each row. Relations queries fetch
-       *    data for two entities for each row: The relation entity and the to entity.
-       * 2. Process which fields should exist on a {@link Row} based on the view and
-       *    the query mode. This step reads from the Mapping.
-       * 3. Returns the list of {@link Row} data structures.
-       *
-       * @QUESTION Should we combine aggregating all the dependencies needed before mapping
-       * to Row[] into a single function? Then this function gets called depending
-       * on the query mode and view?
-       * 1. Fetch data for query mode
-       * 2. Fetch data about each "field" (e.g., column, name, etc.) in the mapping
-       * 3. Process the data to the layout of the view
-       *
-       * @TODO We need to turn this hook into a FSM depending on the view and query mode.
-       * This will help do data processing correctly by abstracting logic logically (lol).
-       */
-
-      let rowData: DataRows | null = null;
-
-      // @TODO: Effectify this query hook
-      if (source.type === 'SPACES' || source.type === 'GEO') {
-        rowData = {
-          type: 'ENTITIES',
-          data: await mergeTableEntities({ options: params, filterState }),
+        const params: MergeTableEntitiesArgs['options'] = {
+          first: PAGE_SIZE + 1,
+          skip: pageNumber * PAGE_SIZE,
         };
-      }
 
-      if (source.type === 'COLLECTION') {
-        rowData = {
-          type: 'COLLECTION',
-          data: await mergeEntitiesAsync({
-            entityIds: collectionItems.map(c => c.id),
-            filterState,
-          }),
-        };
-      }
+        /**
+         * Data should be returned in the mapped format. Kinda blocked until we
+         * can mock/implement that.
+         *
+         * We could also just return the data for both the `this` and `to` entities
+         * in the row format. There just might be more than one "cell" for a given
+         * attribute id. We'll have to match the entity _and_ the attribute.
+         *
+         * We can't use this entity -> attribute -> value data structure because
+         * the mapping isn't aware of concrete values, only relative shapes.
+         *
+         * We need to somehow store data in a concrete form that can be read using
+         * the relative shape. The `this` entity and `to` entity does this, but
+         * `this` and `to` needs to be mapped into the concrete form.
+         *
+         * Current we have a {@link Row} data structure. This represents a single
+         * row with a Record of column id -> {@link Cell} data. The column id represents
+         * the UI "slot" to render the Cell data into. We can use this same concept
+         * to represent the UI mapping, where instead of column id, it's layout id
+         * or something like that.
+         *
+         * ---------------------------------------------------------------------------
+         *
+         * Each query mode + view maps data to the same layout. It's a data processing
+         * pipeline where we need to do a few steps.
+         * 1. Fetch the data for each query mode. Collections and entities queries fetch
+         *    only the data for a single entity for each row. Relations queries fetch
+         *    data for two entities for each row: The relation entity and the to entity.
+         * 2. Fetch Shown columns/properties and check for optional data selector
+         * 2. Process which fields should exist on a {@link Row} based on the shown columns,
+         *    view, the query mode, and selectors.
+         * 3. Return the list of {@link Row} data structures.
+         */
 
-      if (source.type === 'RELATIONS') {
-        rowData = {
-          type: 'RELATIONS',
-          data: await mergeRelationQueryEntities(source.value, filterState),
-        };
-      }
+        let rowData: DataRows | null = null;
 
-      if (!rowData) {
-        return [];
-      }
+        console.log('running query', source);
 
-      if (rowData.type === 'RELATIONS') {
-        return [];
-      }
+        if (source.type === 'SPACES' || source.type === 'GEO') {
+          const data = yield* Effect.promise(() => mergeTableEntities({ options: params, filterState }));
 
-      const renderedProperties = Object.keys(mapping);
-      const rows = mappingToRows(rowData.data, renderedProperties, collectionItems);
+          rowData = {
+            type: 'ENTITIES',
+            data,
+          };
+        }
 
-      return rows;
+        if (source.type === 'COLLECTION') {
+          const data = yield* Effect.promise(() =>
+            mergeEntitiesAsync({
+              entityIds: collectionItems.map(c => c.id),
+              filterState,
+            })
+          );
+
+          rowData = {
+            type: 'COLLECTION',
+            data,
+          };
+        }
+
+        if (source.type === 'RELATIONS') {
+          const data = yield* Effect.promise(() => mergeRelationQueryEntities(source.value, filterState));
+
+          console.log('data', data);
+
+          return mappingToRows(
+            data.map(d => d.this),
+            shownColumnIds,
+            collectionItems
+          );
+        }
+
+        if (!rowData) {
+          return [];
+        }
+
+        // @TODO:
+        // 2. Mapping for Property data is optional and lives on the Properties relation itself
+        return mappingToRows(rowData.data, shownColumnIds, collectionItems);
+      });
+
+      const withError = run.pipe(
+        Effect.tapError(e => {
+          return Console.log('error', e);
+        })
+      );
+
+      return await Effect.runPromise(withError);
     },
   });
 
   // Use the mapping to get the potential renderable properties.
-  const { properties: propertiesSchema } = useProperties(Object.keys(mapping));
+  const { properties: propertiesSchema } = useProperties(shownColumnIds);
 
   const setName = React.useCallback(
     (newName: string) => {
@@ -193,6 +205,7 @@ export function useDataBlock() {
     [entityId, spaceId]
   );
 
+  // @TODO: Returned data type should be a FSM depending on the source.type
   return {
     entityId,
     spaceId,
@@ -212,7 +225,7 @@ export function useDataBlock() {
     // state then back into a loading state. By adding the isFetched state we
     // will stay in a placeholder state until we've fetched our queries at least
     // one time.
-    isLoading: isLoadingRenderables || isLoadingFilterState || !isFilterStateFetched || !isRenderablesFetch,
+    isLoading: isLoadingRenderables || isLoadingFilterState || !isFilterStateFetched || !isRenderablesFetched,
 
     name: blockEntity.name,
     setName,

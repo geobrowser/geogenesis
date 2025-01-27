@@ -14,7 +14,7 @@ import { Entities } from '~/core/utils/entity';
  * for the UI slot. e.g., NAME_ATTRIBUTE -> name data.
  */
 export type Mapping = {
-  [slotId: string]: Cell | null;
+  [slotId: string]: string | null;
 };
 
 /**
@@ -39,20 +39,9 @@ export type Mapping = {
 export function useMapping() {
   const mapping = React.useMemo((): Mapping => {
     return {
-      [SYSTEM_IDS.NAME_ATTRIBUTE]: {
-        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
-        entityId: '',
-        triples: [],
-        relations: [],
-        name: '',
-      },
-      ['JkzhbbrXFMfXN7sduMKQRp']: {
-        columnId: 'JkzhbbrXFMfXN7sduMKQRp',
-        entityId: '',
-        triples: [],
-        relations: [],
-        name: '',
-      },
+      // @TODO: Remove mapping in favor of Shown columns (Properties) and selector triples
+      [SYSTEM_IDS.NAME_ATTRIBUTE]: null,
+      ['JkzhbbrXFMfXN7sduMKQRp']: null,
     };
   }, []);
 
