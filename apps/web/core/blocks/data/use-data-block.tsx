@@ -65,8 +65,6 @@ export function useDataBlock() {
   const { collectionItems } = useCollection();
   const { shownColumnIds } = useView();
 
-  console.log('source', source);
-
   const {
     data: rows,
     isLoading: isLoadingRenderables,
@@ -157,8 +155,6 @@ export function useDataBlock() {
 
         if (source.type === 'RELATIONS') {
           const data = yield* Effect.promise(() => mergeRelationQueryEntities(source.value, filterState));
-
-          console.log('data', data);
 
           return mappingToRows(
             data.map(d => d.this),
