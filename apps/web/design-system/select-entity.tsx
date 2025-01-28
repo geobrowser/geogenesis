@@ -183,6 +183,7 @@ export const SelectEntity = ({
             onChange={({ currentTarget: { value } }) => onQueryChange(value)}
             placeholder={placeholder}
             className={inputStyles({ [variant]: true, withSearchIcon, className: inputClassName })}
+            spellCheck={false}
           />
         </Popover.Anchor>
         {query && (
