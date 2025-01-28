@@ -1,4 +1,4 @@
-import { createGeoId } from '../id.js';
+import { make as makeId } from '../id.js';
 import { Relation } from '../relation.js';
 import { SYSTEM_IDS } from '../system-ids.js';
 import type { CreateRelationOp, Op, SetTripleOp } from '../types.js';
@@ -14,7 +14,7 @@ type MakeImageReturnType = {
  * @returns ops: The SET_TRIPLE ops for an Image entity
  */
 export function make(src: string): MakeImageReturnType {
-  const entityId = createGeoId();
+  const entityId = makeId();
 
   return {
     imageId: entityId,

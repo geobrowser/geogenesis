@@ -11,7 +11,7 @@ import { ContextParams, DaoCreationError, MissingExecPermissionError, Permission
 import { id } from '@ethersproject/hash';
 import { VotingMode, getChecksumAddress } from '@geogenesis/sdk';
 import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
-import { createEditProposal } from '@geogenesis/sdk/proto';
+import { EditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { ethers, providers } from 'ethers';
 import { v4 as uuid } from 'uuid';
@@ -86,7 +86,7 @@ export function deploySpace(args: DeployArgs) {
       catch: e => new GenerateOpsError(`Failed to generate ops: ${String(e)}`),
     });
 
-    const initialContent = createEditProposal({
+    const initialContent = EditProposal.make({
       name: args.spaceName,
       author: initialEditorAddress,
       ops,

@@ -1,4 +1,4 @@
-import { createGeoId } from '@geogenesis/sdk';
+import { ID } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
 import type { SinkEditProposal } from '../types';
@@ -9,7 +9,7 @@ describe('getProposalsForSpaceIds', () => {
     const spacesCreated: string[] = ['0x7eC3D9a27F89f52FAEa2C9cCC8dFBBA1A0c6a239'];
 
     const processedProposal: SinkEditProposal = {
-      proposalId: createGeoId(),
+      proposalId: ID.make(),
       daoAddress: '',
       onchainProposalId: '-1',
       startTime: '0',
@@ -33,7 +33,7 @@ describe('getProposalsForSpaceIds', () => {
     const spacesCreated: string[] = ['0xF4781fA765A5D73DFa457F5d0d495344a787b57F'];
 
     const processedProposal: SinkEditProposal = {
-      proposalId: createGeoId(),
+      proposalId: ID.make(),
       onchainProposalId: '-1',
       daoAddress: '',
       startTime: '0',

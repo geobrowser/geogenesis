@@ -1,4 +1,4 @@
-import { createGeoId } from '../id.js';
+import { make as makeId } from '../id.js';
 import { Relation } from '../relation.js';
 import type { CreateRelationOp, SetTripleOp } from '../types.js';
 import { getChecksumAddress } from './get-checksum-address.js';
@@ -11,7 +11,7 @@ type MakeAccountReturnType = {
 };
 
 export function make(address: string): MakeAccountReturnType {
-  const accountId = createGeoId();
+  const accountId = makeId();
   const checkedAddress = getChecksumAddress(address);
 
   return {
