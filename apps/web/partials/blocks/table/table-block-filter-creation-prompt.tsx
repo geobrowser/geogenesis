@@ -422,7 +422,7 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
           <p className="flex h-9 min-w-28 items-center justify-start rounded bg-divider px-3 text-button">From</p>
           <TableBlockEntityFilterInput
             onSelect={onSetSource}
-            selectedValue={from.type === 'RELATIONS' ? from.name : ''}
+            selectedValue={from.type === 'RELATIONS' ? from.name ?? '' : ''}
           />
         </div>
       </div>
