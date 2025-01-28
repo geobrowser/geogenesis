@@ -71,11 +71,9 @@ importers:
       '@tiptap/react': 2.10.4
       '@tiptap/suggestion': 2.4.0
       '@trivago/prettier-plugin-sort-imports': ^4.2.0
-      '@types/crypto-js': ^4.2.2
       '@types/diff': ^5.0.2
       '@types/mailchimp__mailchimp_marketing': ^3.0.6
       '@types/node': ^17.0.35
-      '@types/papaparse': ^5.3.5
       '@types/pluralize': ^0.0.29
       '@types/react': 19.0.8
       '@types/react-dom': 19.0.3
@@ -93,7 +91,6 @@ importers:
       class-variance-authority: ^0.7.0
       classnames: ^2.3.2
       cmdk: ^0.1.21
-      crypto-js: ^4.2.0
       csv: ^6.3.3
       dayjs: ^1.11.9
       dexie: ^3.2.4
@@ -112,19 +109,14 @@ importers:
       framer-motion: ^10.18.0
       immer: ^9.0.16
       jotai: ^2.5.1
-      jotai-scope: ^0.4.1
-      js-confetti: ^0.11.0
       jsdom: ^20.0.0
       lokijs: ^1.5.12
       next: 15.1.6
-      papaparse: ^5.3.2
       permissionless: 0.1.29
-      pino-pretty: ^10.2.0
       pluralize: ^8.0.0
       postcss: ^8.4.21
       prettier: ^3.0.3
       prettier-plugin-tailwindcss: ^0.5.3
-      raw-body: ^2.5.1
       react: 19.0.0
       react-cookie: ^7.1.4
       react-dom: 19.0.0
@@ -135,7 +127,6 @@ importers:
       sharp: ^0.32.6
       showdown: ^2.1.0
       tailwindcss: ^3.4.3
-      tiny-invariant: ^1.3.3
       tippy.js: ^6.3.7
       typescript: ^5.5.3
       uuid: ^9.0.0
@@ -195,7 +186,6 @@ importers:
       class-variance-authority: 0.7.0
       classnames: 2.3.2
       cmdk: 0.1.21_nd4lcawt6vt3sw3stri3mlaxxu
-      crypto-js: 4.2.0
       csv: 6.3.3
       dayjs: 1.11.9
       dexie: 3.2.4
@@ -206,15 +196,10 @@ importers:
       framer-motion: 10.18.0_upmzqgzhjrquwzo2dphtigtdgi
       immer: 9.0.16
       jotai: 2.5.1_qyvczle3urhj7cqroy5stycgoy
-      jotai-scope: 0.4.1_jotai@2.5.1+react@19.0.0
-      js-confetti: 0.11.0
       lokijs: 1.5.12
       next: 15.1.6_x2ndxvgjcxtxotdkiwx4pnznpe
-      papaparse: 5.3.2
       permissionless: 0.1.29_viem@2.13.8
-      pino-pretty: 10.2.0
       pluralize: 8.0.0
-      raw-body: 2.5.1
       react: 19.0.0
       react-cookie: 7.1.4_react@19.0.0
       react-dom: 19.0.0_react@19.0.0
@@ -224,7 +209,6 @@ importers:
       react-use-measure: 2.1.1_upmzqgzhjrquwzo2dphtigtdgi
       sharp: 0.32.6
       showdown: 2.1.0
-      tiny-invariant: 1.3.3
       tippy.js: 6.3.7
       viem: 2.13.8_typescript@5.5.3
       wagmi: 2.10.0_bhd7pq7vgn3o33wdqbvzzxny5i
@@ -237,11 +221,9 @@ importers:
       '@testing-library/react': 13.4.0_upmzqgzhjrquwzo2dphtigtdgi
       '@testing-library/user-event': 14.4.3_ua4wuun3fnehcjqtqj2e2ldgpe
       '@trivago/prettier-plugin-sort-imports': 4.2.0_prettier@3.0.3
-      '@types/crypto-js': 4.2.2
       '@types/diff': 5.0.2
       '@types/mailchimp__mailchimp_marketing': 3.0.6
       '@types/node': 17.0.45
-      '@types/papaparse': 5.3.5
       '@types/pluralize': 0.0.29
       '@types/react': 19.0.8
       '@types/react-dom': 19.0.3_@types+react@19.0.8
@@ -5725,10 +5707,6 @@ packages:
       '@types/node': 20.14.2
     dev: true
 
-  /@types/crypto-js/4.2.2:
-    resolution: {integrity: sha512-sDOLlVbHhXpAUAL0YHDUUwDZf3iN4Bwi4W6a0W0b+QcAezUbRtH4FVb+9J4h+XFPW7l/gQ9F8qC7P+Ec4k8QVQ==}
-    dev: true
-
   /@types/debug/4.1.12:
     resolution: {integrity: sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ==}
     dependencies:
@@ -5849,10 +5827,6 @@ packages:
   /@types/node/17.0.45:
     resolution: {integrity: sha512-w+tIMs3rq2afQdsPJlODhoUEKzFP1ayaoyl1CcnwtIlsVe7K7bA1NGm4s3PraqTLlXnbIN84zuBlxBWo1u9BLw==}
 
-  /@types/node/18.7.18:
-    resolution: {integrity: sha512-m+6nTEOadJZuTPkKR/SYK3A2d7FZrgElol9UP1Kae90VVU4a6mxnPuLiIW1m4Cq4gZ/nWb9GrdVXJCoCazDAbg==}
-    dev: true
-
   /@types/node/20.12.7:
     resolution: {integrity: sha512-wq0cICSkRLVaf3UGLMGItu/PtdY7oaXaI/RVU+xliKVOtRna3PRY57ZDfztpDL0n11vfymMUnXv8QwYCO7L1wg==}
     dependencies:
@@ -5874,12 +5848,6 @@ packages:
     resolution: {integrity: sha512-FDuKUJQm/ju9fT/SeX/6+gBzoPzlVCzfzmGkwKvRHQVxi4BntVbyIwf6a4Xn62mrvndLiml6z/UBXIdEVjQLXg==}
     dependencies:
       undici-types: 6.19.8
-
-  /@types/papaparse/5.3.5:
-    resolution: {integrity: sha512-R1icl/hrJPFRpuYj9PVG03WBAlghJj4JW9Py5QdR8FFSxaLmZRyu7xYDCCBZIJNfUv3MYaeBbhBoX958mUTAaw==}
-    dependencies:
-      '@types/node': 18.7.18
-    dev: true
 
   /@types/pg/8.10.9:
     resolution: {integrity: sha512-UksbANNE/f8w0wOMxVKKIrLCbEMV+oM1uKejmwXr39olg4xqcfBDbXxObJAt6XxHbDa4XTKOlUEcEltXDX+XLQ==}
@@ -8362,10 +8330,6 @@ packages:
 
   /crypt/0.0.2:
     resolution: {integrity: sha512-mCxBlsHFYh9C+HVpiEacem8FEBnMXgU9gy4zmNC+SXAZNB/1idgp/aulFJ4FgCi7GPEVbfyng092GqL2k2rmow==}
-    dev: false
-
-  /crypto-js/4.2.0:
-    resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
     dev: false
 
   /css-background-parser/0.1.0:
@@ -11939,16 +11903,6 @@ packages:
     resolution: {integrity: sha512-1vUQX+IdDMVPj4k8kOxgUqlcK518yluMuGZwqlr44FS1ppZB/5GWh4rZG89erpOBOJjU/OBsnCVFfapsRz6nEA==}
     dev: false
 
-  /jotai-scope/0.4.1_jotai@2.5.1+react@19.0.0:
-    resolution: {integrity: sha512-HGH3QdSmBo5XHtLrGE1Wc9cvZ9RbHyzOdIq2kS82PxoWPlh+UkJUmINOj9Z4/qIAYcwofnhOwF5H3h5QuM7uqw==}
-    peerDependencies:
-      jotai: '>=2.5.0'
-      react: '>=17.0.0'
-    dependencies:
-      jotai: 2.5.1_qyvczle3urhj7cqroy5stycgoy
-      react: 19.0.0
-    dev: false
-
   /jotai/2.5.1_qyvczle3urhj7cqroy5stycgoy:
     resolution: {integrity: sha512-vanPCCSuHczUXNbVh/iUunuMfrWRL4FdBtAbTRmrfqezJcKb8ybBTg8iivyYuUHapjcDETyJe1E4inlo26bVHA==}
     engines: {node: '>=12.20.0'}
@@ -11968,10 +11922,6 @@ packages:
   /joycon/3.1.1:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
     engines: {node: '>=10'}
-    dev: false
-
-  /js-confetti/0.11.0:
-    resolution: {integrity: sha512-Hc7I3VI4r4H0nq5q/oQK+JJwGoYRYVHK72fGk8E9Ay1dbh+aiZ9yl0yFp1K4oYeq7YFDQAndYChwqLPA3QWQuA==}
     dev: false
 
   /js-cookie/3.0.5:
@@ -13078,10 +13028,6 @@ packages:
 
   /pako/0.2.9:
     resolution: {integrity: sha512-NUcwaKxUxWrZLpDG+z/xZaCgQITkA/Dv4V/T6bw7VON6l1Xz/VnrBqrYjZQ12TamKHzITTfOEIYUj48y2KXImA==}
-    dev: false
-
-  /papaparse/5.3.2:
-    resolution: {integrity: sha512-6dNZu0Ki+gyV0eBsFKJhYr+MdQYAzFUGlBMNj3GNrmHxmz1lfRa24CjFObPXtjcetlOv5Ad299MhIK0znp3afw==}
     dev: false
 
   /parent-module/1.0.1:
@@ -15387,10 +15333,6 @@ packages:
 
   /tiny-inflate/1.0.3:
     resolution: {integrity: sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==}
-    dev: false
-
-  /tiny-invariant/1.3.3:
-    resolution: {integrity: sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==}
     dev: false
 
   /tinybench/2.8.0:
