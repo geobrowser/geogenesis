@@ -47,7 +47,7 @@ export function useSource() {
         setFilterState(
           [
             {
-              columnId: SYSTEM_IDS.ENTITY_FILTER,
+              columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
               valueType: 'RELATION',
               value: newSource.value,
               valueName: newSource.name,

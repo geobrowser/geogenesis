@@ -396,7 +396,7 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
 
   const onSetRelationType = (entity: { id: string; name: string | null }) => {
     setRelationType({
-      columnId: SYSTEM_IDS.ENTITY_FILTER,
+      columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
       value: entity.id,
       valueName: entity.name,
       valueType: 'RELATION',

@@ -46,7 +46,7 @@ export function TableBlockEditableFilters() {
         ]
       : [
           {
-            columnId: SYSTEM_IDS.ENTITY_FILTER,
+            columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
             columnName: 'From',
             valueType: 'RELATION',
             value: '',

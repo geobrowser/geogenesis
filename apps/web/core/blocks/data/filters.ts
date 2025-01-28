@@ -63,7 +63,7 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
         where: {
           from: source.value,
           AND: filters
-            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER && f.columnId !== SYSTEM_IDS.ENTITY_FILTER)
+            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER && f.columnId !== SYSTEM_IDS.RELATION_FROM_ATTRIBUTE)
             .map(f => {
               return {
                 attribute: f.columnId,
@@ -205,7 +205,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 
   if (!entity) {
     return {
-      columnId: SYSTEM_IDS.ENTITY_FILTER,
+      columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
       valueType: 'RELATION',
       value: entityId,
       valueName: null,
@@ -213,7 +213,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
   }
 
   return {
-    columnId: SYSTEM_IDS.ENTITY_FILTER,
+    columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
     valueType: 'RELATION',
     value: entityId,
     valueName: entity.name,

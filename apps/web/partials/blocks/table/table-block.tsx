@@ -93,7 +93,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       };
     }
 
-    if (f.columnId === SYSTEM_IDS.ENTITY_FILTER) {
+    if (f.columnId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE) {
       return {
         ...f,
         propertyName: 'From',
