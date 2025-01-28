@@ -57,8 +57,6 @@ export type FilterString = Schema.Schema.Type<typeof FilterString>;
 export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], source: Source): string {
   let filter: FilterString | null = null;
 
-  console.log('filters', filters);
-
   switch (source.type) {
     case 'RELATIONS':
       filter = {

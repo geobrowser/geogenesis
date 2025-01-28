@@ -4,6 +4,8 @@ import type { HTMLMotionProps } from 'framer-motion';
 
 import * as React from 'react';
 
+import { colors } from './theme/colors';
+
 type ToggleProps = {
   checked: boolean;
 } & HTMLMotionProps<'div'>;
@@ -12,7 +14,10 @@ export const Toggle = ({ checked, className = '', ...rest }: ToggleProps) => {
   return (
     <motion.div
       className={cx('relative inline-flex h-[10px] w-[16px] items-center rounded-full p-[1px]', className)}
-      style={{ justifyContent: checked ? 'flex-end' : 'flex-start', backgroundColor: checked ? '#000000' : '#B6B6B6' }}
+      style={{
+        justifyContent: checked ? 'flex-end' : 'flex-start',
+        backgroundColor: checked ? colors.light.text : '#B6B6B6',
+      }}
       transition={{ type: 'spring', duration: 1, bounce: 0 }}
       layout
       {...rest}

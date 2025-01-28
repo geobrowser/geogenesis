@@ -128,8 +128,6 @@ export function useDataBlock() {
 
         let rowData: DataRows | null = null;
 
-        console.log('running query', source);
-
         if (source.type === 'SPACES' || source.type === 'GEO') {
           const data = yield* Effect.promise(() => mergeTableEntities({ options: params, filterState }));
 

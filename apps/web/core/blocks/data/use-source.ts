@@ -36,7 +36,6 @@ export function useSource() {
       // For each source type we need to change the source type
       // For `spaces` we need to update the filter string by setting the new
       // filter state
-      // @TODO: This should handle setting the source based on what user selected
       removeSourceType({
         relations: blockEntity.relationsOut,
         spaceId: SpaceId(spaceId),
@@ -73,8 +72,7 @@ export function useSource() {
       }
 
       if (newSource.type === 'GEO') {
-        const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER) ?? [];
-        setFilterState(filtersWithoutSpaces, newSource);
+        setFilterState([], newSource);
       }
     },
     [entityId, blockEntity.relationsOut, spaceId, setFilterState, filterState]
