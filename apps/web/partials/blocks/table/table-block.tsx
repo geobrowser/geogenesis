@@ -96,7 +96,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     if (f.columnId === SYSTEM_IDS.ENTITY_FILTER) {
       return {
         ...f,
-        propertyName: 'Entity',
+        propertyName: 'From',
       };
     }
 

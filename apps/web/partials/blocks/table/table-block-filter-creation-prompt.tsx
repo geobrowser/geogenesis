@@ -99,6 +99,9 @@ type PromptAction =
     }
   | {
       type: 'done';
+    }
+  | {
+      type: 'reset';
     };
 
 const reducer = (state: PromptState, action: PromptAction): PromptState => {
@@ -159,6 +162,15 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
           value: '',
         },
       };
+    case 'reset':
+      return {
+        ...state,
+        selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
+        value: {
+          type: 'string',
+          value: '',
+        },
+      };
   }
 };
 
@@ -188,7 +200,7 @@ function getInitialState(source: Source): PromptState {
 interface ToggleQueryModeProps {
   queryMode: 'ENTITIES' | 'RELATIONS';
   setQueryMode: (value: 'ENTITIES' | 'RELATIONS') => void;
-  localSource: Source;
+  localSource: Source | null;
 }
 
 function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryModeProps) {
@@ -198,7 +210,7 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
     const newQueryMode = queryMode === 'RELATIONS' ? 'ENTITIES' : 'RELATIONS';
     setQueryMode(newQueryMode);
 
-    if (newQueryMode === 'RELATIONS' && localSource.type === 'RELATIONS') {
+    if (newQueryMode === 'RELATIONS' && localSource && localSource.type === 'RELATIONS') {
       setSource({
         type: 'RELATIONS',
         name: localSource.name,
@@ -227,14 +239,25 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
   const { source } = useSource();
   const { filterState } = useFilters();
   const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
-  const [newQueryMode, setNewQueryMode] = React.useState<'RELATIONS' | 'ENTITIES'>(
+  const [queryMode, setQueryMode] = React.useState<'RELATIONS' | 'ENTITIES'>(
     source.type === 'RELATIONS' ? 'RELATIONS' : 'ENTITIES'
   );
 
-  const [from, setFrom] = React.useState<Source>(source);
+  const [from, setFrom] = React.useState<Source | null>(source);
   const [relationType, setRelationType] = React.useState<Filter | null>(
     filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) ?? null
   );
+
+  const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
+    if (queryMode === 'RELATIONS') {
+      setFrom(null);
+      setRelationType(null);
+    } else {
+      dispatch({ type: 'reset' });
+    }
+
+    setQueryMode(newQueryMode);
+  };
 
   const onEntitiesDone = () => {
     onCreate({
@@ -247,7 +270,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
   };
 
   const filters =
-    newQueryMode === 'RELATIONS' ? (
+    queryMode === 'RELATIONS' ? (
       <StaticRelationsFilters
         from={from}
         setFrom={setFrom}
@@ -259,7 +282,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
     );
 
   const done =
-    newQueryMode !== 'RELATIONS' ? (
+    queryMode !== 'RELATIONS' ? (
       <AnimatePresence>
         {getFilterValue(state.value) !== '' && (
           <motion.span
@@ -297,7 +320,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
               </div>
               <Divider type="horizontal" className="bg-grey-04" />
               {source.type !== 'COLLECTION' && (
-                <ToggleQueryMode queryMode={newQueryMode} setQueryMode={setNewQueryMode} localSource={from} />
+                <ToggleQueryMode queryMode={queryMode} setQueryMode={onToggleQueryMode} localSource={from} />
               )}
 
               <Spacer height={12} />
@@ -361,7 +384,7 @@ function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
 }
 
 interface StaticRelationsFiltersProps {
-  from: Source;
+  from: Source | null;
   relationType: Filter | null;
   setFrom: (source: Source) => void;
   setRelationType: (relationType: Filter) => void;
@@ -422,7 +445,7 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
           <p className="flex h-9 min-w-28 items-center justify-start rounded bg-divider px-3 text-button">From</p>
           <TableBlockEntityFilterInput
             onSelect={onSetSource}
-            selectedValue={from.type === 'RELATIONS' ? from.name ?? '' : ''}
+            selectedValue={from?.type === 'RELATIONS' ? from?.name ?? '' : ''}
           />
         </div>
       </div>
