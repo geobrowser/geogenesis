@@ -99,7 +99,7 @@ interface NetworkResult {
   };
 }
 
-async function getProposalsCount({ id }: Props['params']) {
+async function getProposalsCount({ id }: Awaited<Props['params']>) {
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
     query: `
@@ -132,7 +132,7 @@ async function getProposalsCount({ id }: Props['params']) {
       ) {
         totalCount
       }
-  
+
       rejectedProposals: proposals(
         filter: {
           spaceId: { equalToInsensitive: "${id}" }

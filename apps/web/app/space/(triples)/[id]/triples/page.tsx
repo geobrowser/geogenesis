@@ -22,7 +22,13 @@ export default async function TriplesPage(props0: Props) {
   return <Component {...props} />;
 }
 
-const getData = async ({ params, searchParams }: Props) => {
+const getData = async ({
+  params,
+  searchParams,
+}: {
+  params: Awaited<Props['params']>;
+  searchParams: Awaited<Props['searchParams']>;
+}) => {
   const spaceId = params.id;
   const space = await cachedFetchSpace(spaceId);
   const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);

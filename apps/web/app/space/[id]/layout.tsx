@@ -48,9 +48,7 @@ type TabProps = {
 export default async function Layout(props0: LayoutProps) {
   const params = await props0.params;
 
-  const {
-    children
-  } = props0;
+  const { children } = props0;
 
   const spaceId = params.id;
 
@@ -188,7 +186,7 @@ const getData = async (spaceId: string) => {
 function buildTabsForSpacePage(
   tabEntities: EntityType[],
   types: EntityType[],
-  params: LayoutProps['params']
+  params: Awaited<LayoutProps['params']>
 ): TabProps[] {
   const typeIds = types.map(t => t.id);
   const tabs = [];
