@@ -1,10 +1,10 @@
-import { createGeoId } from '@geogenesis/sdk';
+import { ID } from '@geogenesis/sdk';
 
 import { EntityId } from '../io/schema';
 import { Triple } from '../types';
 
 export function createEntityId() {
-  return EntityId(createGeoId());
+  return EntityId(ID.make());
 }
 
 /**

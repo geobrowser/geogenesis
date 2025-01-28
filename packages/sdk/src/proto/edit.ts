@@ -1,18 +1,18 @@
-import { createGeoId } from '../id.js';
+import { make as makeId } from '../id.js';
 import type { Op } from '../types.js';
 import { ActionType, Edit, Entity, Op as OpBinary, OpType, Relation, Triple } from './gen/src/proto/ipfs_pb.js';
 
-interface CreateEditProposalArgs {
+interface MakeeEditProposalArgs {
   name: string;
   ops: Op[];
   author: string;
 }
 
-export function createEditProposal({ name, ops, author }: CreateEditProposalArgs): Uint8Array {
+export function make({ name, ops, author }: MakeeEditProposalArgs): Uint8Array {
   return new Edit({
     type: ActionType.ADD_EDIT,
     version: '1.0.0',
-    id: createGeoId(),
+    id: makeId(),
     name,
     ops: opsToBinary(ops),
     authors: [author],

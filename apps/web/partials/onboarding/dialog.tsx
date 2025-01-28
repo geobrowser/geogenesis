@@ -19,13 +19,13 @@ import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
+import { FindEntity } from '~/design-system/find-entity';
 import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
-import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
@@ -159,10 +159,14 @@ const StepHeader = () => {
   const { hideOnboarding } = useOnboarding();
 
   const [step, setStep] = useAtom(stepAtom);
+  const setName = useSetAtom(nameAtom);
+  const setEntityId = useSetAtom(entityIdAtom);
 
   const showBack = step === 'enter-profile';
 
   const handleBack = () => {
+    setName('');
+    setEntityId('');
     switch (step) {
       case 'enter-profile':
         setStep('start');
@@ -244,7 +248,7 @@ type StepOnboardingProps = {
 function StepOnboarding({ onNext }: StepOnboardingProps) {
   const { ipfs } = Services.useServices();
   const [name, setName] = useAtom(nameAtom);
-  const [, setEntityId] = useAtom(entityIdAtom);
+  const [entityId, setEntityId] = useAtom(entityIdAtom);
 
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
@@ -315,8 +319,8 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
       </StepContents>
       <div className="flex w-full flex-col items-center justify-center gap-3">
         <div className="relative z-100 inline-block">
-          <div className={cx(name && 'invisible')}>
-            <SelectEntity
+          <div className={cx(entityId && 'invisible')}>
+            <FindEntity
               allowedTypes={allowedTypes}
               onDone={entity => {
                 setName(entity.name ?? '');
@@ -326,15 +330,10 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
                 setName(entity.name ?? '');
                 setEntityId('');
               }}
-              spaceId={SYSTEM_IDS.ROOT_SPACE_ID}
-              width="full"
-              variant="fixed"
               placeholder="Your name..."
-              inputClassName="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
-              withSelectSpace={false}
             />
           </div>
-          {name && (
+          {entityId && (
             <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-1">
               <div className="text-bodySemibold">Space for</div>
               <SmallButton

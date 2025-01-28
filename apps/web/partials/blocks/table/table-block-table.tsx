@@ -444,7 +444,7 @@ export const TableBlockTable = React.memo(
 
               return (
                 <div key={index}>
-                  <Link href={href} className="group inline-flex items-center gap-6 pr-6">
+                  <Link href={href} className="group flex w-full max-w-full items-center gap-6 pr-6">
                     <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
                       <Image
                         src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
@@ -460,9 +460,13 @@ export const TableBlockTable = React.memo(
                             <CheckCircle />
                           </div>
                         )}
-                        <div className="truncate text-smallTitle font-medium text-text">{name}</div>
+                        <div className="line-clamp-1 text-smallTitle font-medium text-text md:line-clamp-2">{name}</div>
                       </div>
-                      {description && <div className="mt-0.5 text-metadata text-grey-04">{description}</div>}
+                      {description && (
+                        <div className="mt-0.5 line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">
+                          {description}
+                        </div>
+                      )}
                     </div>
                   </Link>
                 </div>

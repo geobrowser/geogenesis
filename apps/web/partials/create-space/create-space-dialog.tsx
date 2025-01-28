@@ -18,13 +18,13 @@ import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
+import { FindEntity } from '~/design-system/find-entity';
 import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
-import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
@@ -191,11 +191,15 @@ const headerText: Record<Step, string> = {
 const StepHeader = () => {
   const spaceType = useAtomValue(spaceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
+  const setName = useSetAtom(nameAtom);
+  const setEntityId = useSetAtom(entityIdAtom);
 
   // @TODO: Governance type
   const showBack = step === 'select-governance' || step === 'enter-profile';
 
   const handleBack = () => {
+    setName('');
+    setEntityId('');
     switch (step) {
       case 'select-governance':
         setStep('select-type');
@@ -301,26 +305,26 @@ const spaceTypeOptions: { image: string; label: string; value: SpaceType; govern
     image: '/images/onboarding/academic-field.png',
     label: 'Academic field',
     value: 'academic-field',
-    governance: 'PERSONAL',
+    governance: 'PUBLIC',
   },
   { image: '/images/onboarding/company.png', label: 'Company', value: 'company', governance: 'PERSONAL' },
-  { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao', governance: 'PERSONAL' },
+  { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao', governance: 'PUBLIC' },
   {
     image: '/images/onboarding/gov-org.png',
     label: 'Government org',
     value: 'government-org',
     governance: 'PERSONAL',
   },
-  { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry', governance: 'PERSONAL' },
+  { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry', governance: 'PUBLIC' },
   {
     image: '/images/onboarding/interest-group.png',
     label: 'Interest',
     value: 'interest',
-    governance: 'PERSONAL',
+    governance: 'PUBLIC',
   },
-  { image: '/images/onboarding/region.png', label: 'Region', value: 'region', governance: 'PERSONAL' },
+  { image: '/images/onboarding/region.png', label: 'Region', value: 'region', governance: 'PUBLIC' },
   { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit', governance: 'PERSONAL' },
-  { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol', governance: 'PERSONAL' },
+  { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol', governance: 'PUBLIC' },
 ];
 
 function SelectGovernanceType() {
@@ -395,7 +399,7 @@ const allowedTypesBySpaceType: Record<SpaceType, string[]> = {
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const { ipfs } = Services.useServices();
   const [name, setName] = useAtom(nameAtom);
-  const [, setEntityId] = useAtom(entityIdAtom);
+  const [entityId, setEntityId] = useAtom(entityIdAtom);
   const spaceType = useAtomValue(spaceTypeAtom);
   const isCompany = spaceType === 'company';
   const [image, setImage] = useAtom(imageAtom);
@@ -492,9 +496,9 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
         </div>
       </StepContents>
       <div className={cx('flex w-full flex-col items-center justify-center gap-3', !isCompany && 'pt-[26px]')}>
-        <div className="relative z-100 inline-block">
-          <div className={cx(name && 'invisible')}>
-            <SelectEntity
+        <div className="relative z-100 w-full">
+          <div className={cx(entityId && 'invisible')}>
+            <FindEntity
               allowedTypes={allowedTypes}
               onDone={entity => {
                 setName(entity.name ?? '');
@@ -504,15 +508,10 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
                 setName(entity.name ?? '');
                 setEntityId('');
               }}
-              spaceId={SYSTEM_IDS.ROOT_SPACE_ID}
-              width="full"
-              variant="fixed"
               placeholder="Space name..."
-              inputClassName="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
-              withSelectSpace={false}
             />
           </div>
-          {name && (
+          {entityId && (
             <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-1">
               <div className="text-bodySemibold">Space for</div>
               <SmallButton
