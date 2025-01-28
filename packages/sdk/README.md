@@ -111,25 +111,17 @@ const binaryEncodedEdit = EditProposal.make({
   author: '0x000000000000000000000000000000000000',
 });
 
-// @TODO: API for consumers to write to IPFS via endpoint
-// Upload binary to Lighthouse node as binary
-const blob = new Blob([binary], { type: 'application/octet-stream' });
+// Upload binary via Geo API
+const blob = new Blob([binaryEncodedEdit], { type: 'application/octet-stream' });
 const formData = new FormData();
 formData.append('file', blob);
 
-const result = await fetch('https://node.lighthouse.storage/api/v0/add, {
+const result = await fetch('https://geobrowser.io/api/ipfs/upload-binary, {
   method: 'POST',
   body: formData,
-  headers: {
-    Authorization: `Bearer ${process.env.IPFS_KEY}`, // add your API key
-  },
 });
 
-const { Hash } = await result.json();
-
-// The hash should be prefixed with the `ipfs://` scheme so the indexer
-// knows how to process it correctly based on the scheme type.
-const ipfsPrefixedHash = `ipfs://${Hash}`;
+const { cid } = await result.json();
 ```
 
 ### Publishing an edit onchain
@@ -138,27 +130,21 @@ Once you've uploaded the binary encoded Edit to IPFS and have correctly formed `
 
 The calldata used to write the edit onchain depends on the governance structure of the space. Currently The Graph supports two governance modes, one with voting and one without. The API exposes metadata about each space, its governance structure, and what smart contracts exist for it.
 
+We expose an API for fetching the appropriate calldata for the correct contract address based for each space.
+
 ```ts
-import { getCalldataForSpaceGovernanceType } from '@geogenesis/sdk';
+// You'll need to know your space id ahead of time
+const spaceId = 'space-id';
 
-// @TODO: API to fetch space + metadata for consumers via endpoint
-const space = await fetchSpace('space-id');
-const governanceType = space.governanceType;
-const spacePluginAddress = space.spacePluginAddress;
-const mainVotingAddress = space.mainVotingPluginAddress;
-const personalSpaceAdminPluginAddress = space.personalSpaceAdminPluginAddress;
+// This returns the correct contract address and calldata depending on the space id
+const result = await fetch(`https://geobrowser.io/api/edit-calldata?spaceId=${spaceId}&cid=${cid}`);
 
-const calldata = getCalldataForSpaceGovernanceType({
-  cid: cid,
-  spacePluginAddress: spacePluginAddress,
-  governanceType: governanceType,
-});
+const { to, data } = await result.json();
 
 const txResult = await walletClient.sendTransaction({
-  // We write to a different plugin depending on the governance type
-  to: space.type === 'PUBLIC' ? mainVotingPluginAddress : personalSpaceAdminPluginAddress,
+  to: to,
   value: 0n,
-  data: callData,
+  data: data,
 });
 ```
 
