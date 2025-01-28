@@ -17,15 +17,17 @@ import { Component } from './component';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
-  params: { id: string };
-  searchParams: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{
     query?: string;
     page?: string;
     typeId?: string;
-  };
+  }>;
 }
 
-export default async function EntitiesPage({ params, searchParams }: Props) {
+export default async function EntitiesPage(props0: Props) {
+  const searchParams = await props0.searchParams;
+  const params = await props0.params;
   const spaceId = params.id;
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
 

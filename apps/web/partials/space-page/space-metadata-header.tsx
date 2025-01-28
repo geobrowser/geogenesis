@@ -24,8 +24,8 @@ import { HistoryPanel } from '../history/history-panel';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
-  membersComponent: React.ReactElement;
-  addSubspaceComponent: React.ReactElement;
+  membersComponent: React.ReactElement<any>;
+  addSubspaceComponent: React.ReactElement<any>;
   typeNames: string[];
   entityId: string;
 }

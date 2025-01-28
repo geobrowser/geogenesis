@@ -16,12 +16,12 @@ type ConnectionChangeArgs =
 export async function onConnectionChange(connectionChange: ConnectionChangeArgs) {
   switch (connectionChange.type) {
     case 'connect':
-      cookies().set(WALLET_ADDRESS, connectionChange.address, {
+      (await cookies()).set(WALLET_ADDRESS, connectionChange.address, {
         maxAge: 1000 * 60 * 60 * 24 * 400,
       });
       break;
     case 'disconnect':
-      cookies().delete(WALLET_ADDRESS);
+      (await cookies()).delete(WALLET_ADDRESS);
       break;
   }
 
