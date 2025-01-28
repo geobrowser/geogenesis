@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { Relation } from '../relation.js';
-import { createEditProposal } from './create-edit-proposal.js';
+import { make } from './edit.js';
 import { ActionType, Edit, OpType, ValueType } from './gen/src/proto/ipfs_pb.js';
 
 describe('create-edit-proposal', () => {
   it('encodes and decodes Edit with SET_TRIPLE ops correctly', () => {
-    const editBinary = createEditProposal({
+    const editBinary = make({
       name: 'test',
       ops: [
         {
@@ -46,7 +46,7 @@ describe('create-edit-proposal', () => {
   });
 
   it('encodes and decodes Edit with DELETE_TRIPLE ops correctly', () => {
-    const editBinary = createEditProposal({
+    const editBinary = make({
       name: 'test',
       ops: [
         {
@@ -78,7 +78,7 @@ describe('create-edit-proposal', () => {
   });
 
   it('encodes and decoded Edit with CREATE_RELATION ops correctly', () => {
-    const editBinary = createEditProposal({
+    const editBinary = make({
       name: 'test',
       ops: [
         Relation.make({
@@ -113,7 +113,7 @@ describe('create-edit-proposal', () => {
   });
 
   it('encodes and decoded Edit with CREATE_RELATION ops correctly', () => {
-    const editBinary = createEditProposal({
+    const editBinary = make({
       name: 'test',
       ops: [
         {

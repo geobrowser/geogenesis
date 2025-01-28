@@ -1,6 +1,6 @@
 import { Op } from '@geogenesis/sdk';
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
-import { createEditProposal } from '@geogenesis/sdk/proto';
+import { EditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 
@@ -248,7 +248,7 @@ interface MakeProposalArgs {
 function makeProposal(args: MakeProposalArgs) {
   const { name, ops, smartAccount, space, onChangePublishState } = args;
 
-  const proposal = createEditProposal({ name, ops, author: smartAccount.account.address });
+  const proposal = EditProposal.make({ name, ops, author: smartAccount.account.address });
 
   const writeTxEffect = Effect.gen(function* () {
     if (ops.length === 0) {
