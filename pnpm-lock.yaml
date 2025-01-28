@@ -43,7 +43,7 @@ importers:
       '@radix-ui/react-tooltip': ^1.1.7
       '@radix-ui/react-use-rect': ^1.1.0
       '@tanstack/react-query': ^5.65.1
-      '@tanstack/react-query-devtools': ^5.25.0
+      '@tanstack/react-query-devtools': ^5.65.1
       '@tanstack/react-table': ^8.5.13
       '@testing-library/dom': ^8.19.1
       '@testing-library/jest-dom': ^5.16.5
@@ -156,7 +156,7 @@ importers:
       '@radix-ui/react-tooltip': 1.1.7_srye472z76ryh7be7tljhb3mci
       '@radix-ui/react-use-rect': 1.1.0_qyvczle3urhj7cqroy5stycgoy
       '@tanstack/react-query': 5.65.1_react@19.0.0
-      '@tanstack/react-query-devtools': 5.45.0_cr7sluuri4bgtbtdhtaufdmwga
+      '@tanstack/react-query-devtools': 5.65.1_cr7sluuri4bgtbtdhtaufdmwga
       '@tanstack/react-table': 8.5.15_upmzqgzhjrquwzo2dphtigtdgi
       '@tiptap/core': 2.10.4_@tiptap+pm@2.10.4
       '@tiptap/extension-bold': 2.11.0_@tiptap+core@2.10.4
@@ -4678,17 +4678,17 @@ packages:
     resolution: {integrity: sha512-Bnnq/1axf00r2grRT6gUyIkZRKzhHs+p4DijrCQ3wMlA3D3TTT71gtaSLtqnzGddj73/7X5JDGyjiSLdjvQN4w==}
     dev: false
 
-  /@tanstack/query-devtools/5.37.1:
-    resolution: {integrity: sha512-XcG4IIHIv0YQKrexTqo2zogQWR1Sz672tX2KsfE9kzB+9zhx44vRKH5si4WDILE1PIWQpStFs/NnrDQrBAUQpg==}
+  /@tanstack/query-devtools/5.65.0:
+    resolution: {integrity: sha512-g5y7zc07U9D3esMdqUfTEVu9kMHoIaVBsD0+M3LPdAdD710RpTcLiNvJY1JkYXqkq9+NV+CQoemVNpQPBXVsJg==}
     dev: false
 
-  /@tanstack/react-query-devtools/5.45.0_cr7sluuri4bgtbtdhtaufdmwga:
-    resolution: {integrity: sha512-bYHKCBQxRYQgQPPt+OdxJxoGag8SyPYxFxUsTHXERPnhD99I8iUV39XGYePyxKv5b3oME4fM1e8AgQ1aPxTQ6w==}
+  /@tanstack/react-query-devtools/5.65.1_cr7sluuri4bgtbtdhtaufdmwga:
+    resolution: {integrity: sha512-PKUBz7+FAP3eI1zoWrP5vxNQXs+elPz3u/3cILGhNZl2dufgbU9OJRpbC+BAptLXTsGxTwkAlrWBIZbD/c7CDw==}
     peerDependencies:
-      '@tanstack/react-query': ^5.45.0
+      '@tanstack/react-query': ^5.65.1
       react: ^18 || ^19
     dependencies:
-      '@tanstack/query-devtools': 5.37.1
+      '@tanstack/query-devtools': 5.65.0
       '@tanstack/react-query': 5.65.1_react@19.0.0
       react: 19.0.0
     dev: false
