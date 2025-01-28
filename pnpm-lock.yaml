@@ -28,8 +28,6 @@ importers:
       '@ethersproject/hash': ^5.7.0
       '@ethersproject/providers': ^5.6.8
       '@geogenesis/sdk': workspace:*
-      '@liveblocks/client': ^1.0.0
-      '@liveblocks/react': ^2.16.2
       '@mobily/ts-belt': ^4.0.0-rc.2
       '@next/bundle-analyzer': 15.1.6
       '@playwright/test': ^1.37.0
@@ -145,8 +143,6 @@ importers:
       '@ethersproject/hash': 5.7.0
       '@ethersproject/providers': 5.7.2
       '@geogenesis/sdk': link:../../packages/sdk
-      '@liveblocks/client': 1.0.0
-      '@liveblocks/react': 2.16.2_react@19.0.0
       '@mobily/ts-belt': 4.0.0-rc.5
       '@privy-io/react-auth': 2.1.0_c2q2g7gpclhzrhmt5lnwtybok4
       '@privy-io/wagmi': 1.0.2_knnkqdmhglntxubimjifxqa6lq
@@ -2627,36 +2623,6 @@ packages:
     resolution: {integrity: sha512-QuTgnG52Poic7uM1AN5yJ09QMe0O28e10XzSvWDz02TJiiKee4stsiownEIadWm8nYzyDAyT+gKzUoZmiWQtsQ==}
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.2.0
-    dev: false
-
-  /@liveblocks/client/1.0.0:
-    resolution: {integrity: sha512-nDjwNqzYdHMjSakrm8f6mk5EEt6SAt5SaaSTRZ5aKVqLZ99FTAWqrIZyAvHap4yMwNGhpfH5FeYzVCzxjvt+NA==}
-    dependencies:
-      '@liveblocks/core': 1.0.0
-    dev: false
-
-  /@liveblocks/client/2.16.2:
-    resolution: {integrity: sha512-EHoNFESZEYw3FatsWUPjMQyUGc7o5439SKG6cwavRm0OxvN2Nl3Eg+kYoRQQ9VgV73RgrEvqjErUbS8Eaxyo3A==}
-    dependencies:
-      '@liveblocks/core': 2.16.2
-    dev: false
-
-  /@liveblocks/core/1.0.0:
-    resolution: {integrity: sha512-Y7shkoOqc629/6dAjqTQkWm65GDCm72NBs1NTM3m6SieBAzK5NJ0pAAeL4Ct1HB85rO1gbl6hbAMwXtJkpWVrA==}
-    dev: false
-
-  /@liveblocks/core/2.16.2:
-    resolution: {integrity: sha512-gtwzGii/w070FE+izaXDsq8dMYISnb5QKb9ulx5wxfTYm9zEfJSlGi2ffWwbsNL7cJ/4fbqOZm2LhFf5e0OAQQ==}
-    dev: false
-
-  /@liveblocks/react/2.16.2_react@19.0.0:
-    resolution: {integrity: sha512-f7MlLTBxAw7ZAsXPBvoAuydc9FFFBWUglVL4IxQVTDHNiTu0AdLm058+3D5EFsuB62uoZQ5i7B7zZmLn9VAvZQ==}
-    peerDependencies:
-      react: ^18 || ^19 || ^19.0.0-rc
-    dependencies:
-      '@liveblocks/client': 2.16.2
-      '@liveblocks/core': 2.16.2
-      react: 19.0.0
     dev: false
 
   /@marsidev/react-turnstile/0.4.1_upmzqgzhjrquwzo2dphtigtdgi:
