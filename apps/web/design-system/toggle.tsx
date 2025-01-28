@@ -12,19 +12,21 @@ type ToggleProps = {
 
 export const Toggle = ({ checked, className = '', ...rest }: ToggleProps) => {
   return (
-    <motion.div
+    <div
       className={cx('relative inline-flex h-[10px] w-[16px] items-center rounded-full p-[1px]', className)}
       style={{
-        justifyContent: checked ? 'flex-end' : 'flex-start',
         backgroundColor: checked ? colors.light.text : '#B6B6B6',
+        justifyContent: checked ? 'flex-end' : 'flex-start',
       }}
-      transition={{ type: 'spring', duration: 1, bounce: 0 }}
-      layout
       {...rest}
     >
-      <div className="h-[8px] w-[8px] rounded-full bg-white" />
+      <motion.div
+        layout
+        transition={{ type: 'spring', duration: 0.2, bounce: 0 }}
+        className="h-[8px] w-[8px] rounded-full bg-white"
+      />
       <Mousecatch />
-    </motion.div>
+    </div>
   );
 };
 
