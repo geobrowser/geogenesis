@@ -35,8 +35,8 @@
     "@radix-ui/react-tabs": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.7",
     "@radix-ui/react-use-rect": "^1.1.0",
-    "@tanstack/react-query": "^5.65.1",
-    "@tanstack/react-query-devtools": "^5.65.1",
+    "@tanstack/react-query": "^5.25.0",
+    "@tanstack/react-query-devtools": "^5.25.0",
     "@tanstack/react-table": "^8.5.13",
     "@tiptap/core": "2.10.4",
     "@tiptap/extension-bold": "^2.10.3",
@@ -140,14 +140,5 @@
     "path": false,
     "stream": false,
     "zlib": false
-  },
-  "pnpm": {
-    "patchedDependencies": {
-      "permissionless@0.1.29": "patches/permissionless@0.1.29.patch"
-    },
-    "overrides": {
-      "@types/react": "19.0.8",
-      "@types/react-dom": "19.0.3"
-    }
   }
 }
