@@ -125,7 +125,6 @@ export function useDataBlock() {
          *    view, the query mode, and selectors.
          * 3. Return the list of {@link Row} data structures.
          */
-
         let rowData: DataRows | null = null;
 
         if (source.type === 'SPACES' || source.type === 'GEO') {
