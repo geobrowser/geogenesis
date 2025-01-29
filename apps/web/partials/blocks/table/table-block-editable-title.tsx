@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useTableBlock } from '~/core/state/table-block-store';
@@ -18,11 +19,13 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   // Auto focus newly created data blocks
-  React.useEffect(() => {
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 200);
-  }, []);
+  useEffectOnce(() => {
+    if (!name) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 200);
+    }
+  });
 
   return (
     <div className="flex flex-grow items-center gap-2">
