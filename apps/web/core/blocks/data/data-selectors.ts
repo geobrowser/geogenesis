@@ -1,12 +1,16 @@
-export interface TripleSegment {
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+
+import { RelationRow } from './queries';
+
+export type TripleSegment = {
   type: 'TRIPLE';
   property: string;
-}
+};
 
-export interface RelationSegment {
+export type RelationSegment = {
   type: 'RELATION';
-  entity: string;
-}
+  property: string;
+};
 
 export type PathSegment = TripleSegment | RelationSegment;
 
@@ -46,7 +50,7 @@ export function parseSelectorIntoLexicon(selector: string): PathSegment[] {
       // Relation
       const match = part.match(/->(\[([^\]]+)\])/);
       if (match) {
-        segments.push({ type: 'RELATION', entity: match[2] });
+        segments.push({ type: 'RELATION', property: match[2] });
       }
     } else if (part.startsWith('.')) {
       // Triple
@@ -60,4 +64,41 @@ export function parseSelectorIntoLexicon(selector: string): PathSegment[] {
   return segments;
 }
 
-export function mapDataSelectorLexiconToData(lexicon: PathSegment[]): { propertyId: string; value: string | null }[] {}
+type Renderable = {
+  propertyId: string;
+  value: string | null;
+};
+
+export function mapDataSelectorLexiconToData(lexicon: PathSegment[], input: RelationRow): Renderable | null {
+  let output: Renderable | null = null;
+  let target = input.this;
+
+  console.log('lexicon', lexicon);
+
+  for (const segment of lexicon) {
+    if (segment.type === 'TRIPLE') {
+      console.log('should hit this');
+      output = {
+        propertyId: segment.property,
+        value: target.triples.find(t => t.attributeId === segment.property)?.value.value ?? null,
+      };
+    }
+
+    if (segment.type === 'RELATION') {
+      if (segment.property === SYSTEM_IDS.RELATION_TO_ATTRIBUTE) {
+        target = input.to;
+      }
+
+      const relation = target.relationsOut.find(r => r.typeOf.id === segment.property);
+
+      if (relation) {
+        output = {
+          propertyId: segment.property,
+          value: relation.toEntity.name ?? null,
+        };
+      }
+    }
+  }
+
+  return output;
+}

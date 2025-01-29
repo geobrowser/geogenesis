@@ -1,8 +1,13 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
-import { parseSelectorIntoLexicon } from './data-selectors';
+import { Triple } from '~/core/database/Triple';
+import { EntityId } from '~/core/io/schema';
 
-describe('data-selectors', () => {
+import { mapDataSelectorLexiconToData, parseSelectorIntoLexicon } from './data-selectors';
+import { RelationRow } from './queries';
+
+describe('parseSelectorIntoLexicon', () => {
   it('.[AttributeId]', () => {
     const result = parseSelectorIntoLexicon('.[NameId]');
 
@@ -19,7 +24,7 @@ describe('data-selectors', () => {
 
     expect(result).toEqual([
       {
-        entity: 'ToId',
+        property: 'ToId',
         type: 'RELATION',
       },
       {
@@ -34,11 +39,11 @@ describe('data-selectors', () => {
 
     expect(result).toEqual([
       {
-        entity: 'ToId',
+        property: 'ToId',
         type: 'RELATION',
       },
       {
-        entity: 'CoverId',
+        property: 'CoverId',
         type: 'RELATION',
       },
     ]);
@@ -49,7 +54,7 @@ describe('data-selectors', () => {
 
     expect(result).toEqual([
       {
-        entity: 'Roles',
+        property: 'Roles',
         type: 'RELATION',
       },
       {
@@ -64,11 +69,11 @@ describe('data-selectors', () => {
 
     expect(result).toEqual([
       {
-        entity: 'Roles',
+        property: 'Roles',
         type: 'RELATION',
       },
       {
-        entity: 'ToId',
+        property: 'ToId',
         type: 'RELATION',
       },
       {
@@ -76,5 +81,51 @@ describe('data-selectors', () => {
         type: 'TRIPLE',
       },
     ]);
+  });
+});
+
+describe.only('mapDataSelectorLexiconToData', () => {
+  it('.[PropertyId]', () => {
+    const input: RelationRow = {
+      this: {
+        id: EntityId('this'),
+        name: 'this',
+        triples: [
+          Triple.make({
+            attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+            attributeName: null,
+            entityId: 'this',
+            entityName: 'this',
+            space: 'space',
+            value: {
+              type: 'TEXT',
+              value: 'value',
+            },
+          }),
+        ],
+        description: null,
+        types: [],
+        nameTripleSpaces: [],
+        relationsOut: [],
+        spaces: [],
+      },
+      to: {
+        id: EntityId('to'),
+        name: 'to',
+        triples: [],
+        description: null,
+        types: [],
+        nameTripleSpaces: [],
+        relationsOut: [],
+        spaces: [],
+      },
+    };
+
+    const lex = parseSelectorIntoLexicon(`.[${SYSTEM_IDS.NAME_ATTRIBUTE}]`);
+    const data = mapDataSelectorLexiconToData(lex, input);
+    expect(data).toEqual({
+      propertyId: SYSTEM_IDS.NAME_ATTRIBUTE,
+      value: 'value',
+    });
   });
 });
