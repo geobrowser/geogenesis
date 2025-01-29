@@ -19,7 +19,7 @@ interface Props {
 }
 
 export async function SpaceEditors({ spaceId }: Props) {
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
   const [isEditor, space] = await Promise.all([
     getIsEditorForSpace(spaceId, connectedAddress),
     cachedFetchSpace(spaceId),

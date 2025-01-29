@@ -27,11 +27,12 @@ import { cachedFetchEntity } from './cached-fetch-entity';
 const TABS = ['Overview', 'Activity'] as const;
 
 interface Props {
-  params: { id: string; entityId: string };
+  params: Promise<{ id: string; entityId: string }>;
   children: React.ReactNode;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   const spaceId = params.id;
   const entityId = params.entityId;
 
@@ -67,7 +68,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ProfileLayout({ children, params }: Props) {
+export default async function ProfileLayout(props: Props) {
+  const params = await props.params;
+
+  const {
+    children
+  } = props;
+
   const entityId = params.entityId;
 
   const types = await cachedFetchEntityType(entityId);

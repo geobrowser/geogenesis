@@ -22,10 +22,11 @@ import { Subspaces } from '~/partials/space-page/subspaces';
 import { cachedFetchSpace } from './cached-fetch-space';
 
 interface Props {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   const spaceId = params.id;
 
   const space = await cachedFetchSpace(spaceId);
@@ -67,7 +68,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function SpacePage({ params }: Props) {
+export default async function SpacePage(props0: Props) {
+  const params = await props0.params;
   const spaceId = params.id;
   const props = await getData(spaceId);
   const entityId = props.id;

@@ -7,12 +7,6 @@ if (!APP_ENV) {
 // Not required, only set in test environments
 const TEST_ENV = process.env.NEXT_PUBLIC_IS_TEST_ENV;
 
-const LIVEBLOCKS_PUBLIC_KEY = process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY;
-
-if (!LIVEBLOCKS_PUBLIC_KEY) {
-  throw new Error('NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY is not set');
-}
-
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
 if (!PRIVY_APP_ID) {
@@ -52,7 +46,6 @@ if (!ONBOARD_CODE) {
 export {
   APP_ENV,
   TEST_ENV,
-  LIVEBLOCKS_PUBLIC_KEY,
   PRIVY_APP_ID,
   RPC_ENDPOINT,
   WALLETCONNECT_PROJECT_ID,

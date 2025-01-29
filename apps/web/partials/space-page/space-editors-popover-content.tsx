@@ -16,7 +16,7 @@ interface Props {
 }
 
 export async function SpaceEditorsContent({ spaceId }: Props) {
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
   const [{ allEditors, totalEditors, votingPluginAddress }, isEditor, isMember, hasRequestedSpaceEditorship] =
     await Promise.all([

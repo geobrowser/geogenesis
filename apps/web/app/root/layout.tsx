@@ -41,5 +41,6 @@ export const metadata: Metadata = {
 export const revalidate = 60; // 1 minute
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <Layout params={{ id: SYSTEM_IDS.ROOT_SPACE_ID }}>{children}</Layout>;
+  const params = new Promise<{ id: string }>(resolve => resolve({ id: SYSTEM_IDS.ROOT_SPACE_ID }));
+  return <Layout params={params}>{children}</Layout>;
 }

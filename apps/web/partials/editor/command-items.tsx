@@ -15,7 +15,7 @@ import { EditorText } from '~/design-system/icons/editor-text';
 
 export interface CommandSuggestionItem {
   title: string;
-  icon: React.ReactElement;
+  icon: React.ReactElement<any>;
   command: (props: { editor: Editor; range: Range }) => void;
 }
 

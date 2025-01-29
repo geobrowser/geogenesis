@@ -26,7 +26,7 @@ interface Props {
 }
 
 export async function GovernanceProposalsList({ spaceId, page }: Props) {
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
   const [proposals, profile, space] = await Promise.all([
     fetchProposals({ spaceId, first: 5, page, connectedAddress }),
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,

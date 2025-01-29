@@ -17,25 +17,6 @@ import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '~/par
 import { Cookie } from '../cookie';
 import { GEOGENESIS } from './geo-chain';
 
-// const LOCAL_CHAIN: Chain = {
-//   id: Number(Environment.options.development.chainId),
-//   name: 'Geo Genesis Dev', // Human-readable name
-//   network: 'ethereum', // Internal network name
-//   nativeCurrency: {
-//     name: 'Ethereum',
-//     symbol: 'ETH',
-//     decimals: 18,
-//   },
-//   rpcUrls: {
-//     default: {
-//       http: [Environment.options.development.rpc],
-//     },
-//     public: {
-//       http: [Environment.options.development.rpc],
-//     },
-//   },
-// };
-
 const realWalletConfig = createConfig({
   chains: [GEOGENESIS],
   // This enables us to use a single injected connector but handle multiple wallet
@@ -119,7 +100,7 @@ export function GeoConnectButton() {
 
   const { login } = useLogin({
     onComplete: async user => {
-      const userWallet = user.wallet;
+      const userWallet = user.user.wallet;
 
       if (userWallet !== undefined) {
         const wallet = wallets.find(wallet => wallet.address === userWallet.address);

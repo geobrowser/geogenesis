@@ -265,7 +265,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
     }
   })();
 
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;

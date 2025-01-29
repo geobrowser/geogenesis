@@ -31,5 +31,5 @@
     "rimraf": "^3.0.2",
     "turbo": "^1.10.6"
   },
-  "packageManager": "pnpm@7.30.5"
+  "packageManager": "pnpm@9.15.4"
 }

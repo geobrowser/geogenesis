@@ -2,7 +2,6 @@
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
-import { motion } from 'framer-motion';
 
 import * as React from 'react';
 import { useCallback } from 'react';
@@ -18,8 +17,6 @@ import { ListView } from '~/design-system/icons/list-view';
 import { TableView } from '~/design-system/icons/table-view';
 import { MenuItem } from '~/design-system/menu';
 import { ColorName } from '~/design-system/theme/colors';
-
-const MotionContent = motion(Dropdown.Content);
 
 type TableBlockViewMenuProps = {
   activeView: DataBlockView;
@@ -44,14 +41,7 @@ export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuP
         {isMenuOpen ? <Close color="grey-04" /> : <ViewIcon view={activeView} color="grey-04" />}
       </Dropdown.Trigger>
       <Dropdown.Portal>
-        <MotionContent
-          initial={{ opacity: 0, scale: 0.95, y: -10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: -10 }}
-          transition={{
-            duration: 0.1,
-            ease: 'easeInOut',
-          }}
+        <Dropdown.Content
           sideOffset={8}
           className="z-100 block !w-[140px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           align="end"
@@ -59,7 +49,7 @@ export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuP
           {DATA_BLOCK_VIEWS.map(view => {
             return <ToggleView key={view.value} activeView={activeView} view={view} isLoading={isLoading} />;
           })}
-        </MotionContent>
+        </Dropdown.Content>
       </Dropdown.Portal>
     </Dropdown.Root>
   );

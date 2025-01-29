@@ -64,6 +64,9 @@ export function markdownToHtml(markdown: string): string {
   html = html.replace(/^##### (.*$)/gim, '<h5>$1</h5>');
   html = html.replace(/^###### (.*$)/gim, '<h6>$1</h6>');
 
+  // Convert list items
+  html = html.replace(/^- (.*$)/gim, '<li>$1</li>');
+
   // Convert paragraphs
   html = html.replace(/^\s*(\n)?(.+)/gim, function (m) {
     // eslint-disable-next-line no-useless-escape
