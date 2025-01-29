@@ -7,10 +7,11 @@ import { Dots } from '~/design-system/dots';
 import { Import } from '~/partials/import/import';
 
 type ImportPageProps = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
-export default async function ImportPage({ params }: ImportPageProps) {
+export default async function ImportPage(props: ImportPageProps) {
+  const params = await props.params;
   const spaceId = params.id;
   const space = await Subgraph.fetchSpace({ id: spaceId });
 

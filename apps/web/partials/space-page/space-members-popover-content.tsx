@@ -16,7 +16,7 @@ interface Props {
 }
 
 export async function SpaceMembersContent({ spaceId, isPublicSpace }: Props) {
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
   // For now we use editors for both editors and members until we have the new membership
   const [{ allMembers, totalMembers, votingPluginAddress }, isEditor, hasRequestedSpaceMembership] = await Promise.all([

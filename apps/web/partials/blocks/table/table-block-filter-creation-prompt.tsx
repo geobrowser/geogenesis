@@ -211,76 +211,70 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
     <Root open={state.open} onOpenChange={onOpenChange}>
       <Trigger>{trigger}</Trigger>
       <Portal>
-        <AnimatePresence>
-          {state.open && (
-            <Content
-              forceMount={true}
-              avoidCollisions={true}
-              className="z-10 w-[472px] origin-top-left rounded-lg border border-grey-02 bg-white p-2 shadow-lg"
-              sideOffset={8}
-              align="start"
-            >
-              <form
-                onSubmit={e => {
-                  e.preventDefault();
-                  onDone();
-                }}
-              >
-                <div className="flex items-center justify-between ">
-                  <span className="text-smallButton">New filter</span>
-                  <AnimatePresence>
-                    {getFilterValue(state.value) !== '' && (
-                      <motion.span
-                        initial={{ scale: 0.95, opacity: 0 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.1 }}
-                      >
-                        <TextButton color="ctaPrimary" onClick={onDone}>
-                          Done
-                        </TextButton>
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </div>
+        <Content
+          forceMount={true}
+          avoidCollisions={true}
+          className="z-10 w-[472px] origin-top-left rounded-lg border border-grey-02 bg-white p-2 shadow-lg"
+          sideOffset={8}
+          align="start"
+        >
+          <form
+            onSubmit={e => {
+              e.preventDefault();
+              onDone();
+            }}
+          >
+            <div className="flex items-center justify-between ">
+              <span className="text-smallButton">New filter</span>
+              <AnimatePresence>
+                {getFilterValue(state.value) !== '' && (
+                  <motion.span
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.1 }}
+                  >
+                    <TextButton color="ctaPrimary" onClick={onDone}>
+                      Done
+                    </TextButton>
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </div>
 
-                <Spacer height={12} />
+            <Spacer height={12} />
 
-                <div className="flex items-center justify-center gap-3">
-                  <div className="flex flex-1">
-                    <Select
-                      options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
-                      value={state.selectedColumn}
-                      onChange={onSelectColumnToFilter}
-                    />
-                  </div>
-                  <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
-                  <div className="relative flex flex-1">
-                    {state.selectedColumn === SYSTEM_IDS.SPACE_FILTER ? (
-                      <TableBlockSpaceFilterInput
-                        selectedValue={getFilterValueName(state.value) ?? ''}
-                        onSelect={onSelectSpaceValue}
-                      />
-                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'RELATION' ? (
-                      <TableBlockEntityFilterInput
-                        // filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
-                        selectedValue={getFilterValueName(state.value) ?? ''}
-                        onSelect={onSelectEntityValue}
-                      />
-                    ) : (
-                      <Input
-                        value={getFilterValue(state.value)}
-                        onChange={e =>
-                          dispatch({ type: 'selectStringValue', payload: { value: e.currentTarget.value } })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-              </form>
-            </Content>
-          )}
-        </AnimatePresence>
+            <div className="flex items-center justify-center gap-3">
+              <div className="flex flex-1">
+                <Select
+                  options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
+                  value={state.selectedColumn}
+                  onChange={onSelectColumnToFilter}
+                />
+              </div>
+              <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
+              <div className="relative flex flex-1">
+                {state.selectedColumn === SYSTEM_IDS.SPACE_FILTER ? (
+                  <TableBlockSpaceFilterInput
+                    selectedValue={getFilterValueName(state.value) ?? ''}
+                    onSelect={onSelectSpaceValue}
+                  />
+                ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'RELATION' ? (
+                  <TableBlockEntityFilterInput
+                    // filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
+                    selectedValue={getFilterValueName(state.value) ?? ''}
+                    onSelect={onSelectEntityValue}
+                  />
+                ) : (
+                  <Input
+                    value={getFilterValue(state.value)}
+                    onChange={e => dispatch({ type: 'selectStringValue', payload: { value: e.currentTarget.value } })}
+                  />
+                )}
+              </div>
+            </div>
+          </form>
+        </Content>
       </Portal>
     </Root>
   );

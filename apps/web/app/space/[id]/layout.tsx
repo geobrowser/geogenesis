@@ -29,7 +29,7 @@ import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-he
 import { cachedFetchSpace } from './cached-fetch-space';
 
 type LayoutProps = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
   children: React.ReactNode;
 };
 
@@ -45,7 +45,11 @@ type TabProps = {
   hidden?: boolean;
 };
 
-export default async function Layout({ children, params }: LayoutProps) {
+export default async function Layout(props0: LayoutProps) {
+  const params = await props0.params;
+
+  const { children } = props0;
+
   const spaceId = params.id;
 
   const [props, subspaces, inflightSubspaces] = await Promise.all([
@@ -182,7 +186,7 @@ const getData = async (spaceId: string) => {
 function buildTabsForSpacePage(
   tabEntities: EntityType[],
   types: EntityType[],
-  params: LayoutProps['params']
+  params: Awaited<LayoutProps['params']>
 ): TabProps[] {
   const typeIds = types.map(t => t.id);
   const tabs = [];

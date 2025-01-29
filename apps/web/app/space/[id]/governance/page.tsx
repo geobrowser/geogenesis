@@ -13,8 +13,8 @@ import { GovernanceProposalsList } from '~/partials/governance/governance-propos
 import { GovernanceProposalsListInfiniteScroll } from '~/partials/governance/governance-proposals-list-infinite-scroll';
 
 interface Props {
-  params: { id: string };
-  searchParams: { proposalId?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ proposalId?: string }>;
 }
 
 const INITIAL_PUBLIC_SPACES = [
@@ -35,8 +35,10 @@ const passThreshold = '50%';
 
 export const dynamic = 'force-dynamic';
 
-export default async function GovernancePage({ params, searchParams }: Props) {
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+export default async function GovernancePage(props: Props) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
+  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
   const { acceptedProposals, rejectedProposals, activeProposals } = await getProposalsCount({ id: params.id });
 
   return (
@@ -97,7 +99,7 @@ interface NetworkResult {
   };
 }
 
-async function getProposalsCount({ id }: Props['params']) {
+async function getProposalsCount({ id }: Awaited<Props['params']>) {
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
     query: `
@@ -130,7 +132,7 @@ async function getProposalsCount({ id }: Props['params']) {
       ) {
         totalCount
       }
-  
+
       rejectedProposals: proposals(
         filter: {
           spaceId: { equalToInsensitive: "${id}" }

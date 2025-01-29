@@ -5,7 +5,8 @@ import { Spaces } from '~/partials/spaces/spaces';
 
 import { cachedFetchSpace } from '../cached-fetch-space';
 
-export default async function SpacesPage({ params }: { params: { id: string } }) {
+export default async function SpacesPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const spaceId = params.id;
   const space = await cachedFetchSpace(spaceId);
 
