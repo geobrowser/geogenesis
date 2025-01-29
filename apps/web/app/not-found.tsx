@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { Providers } from '~/core/providers';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
@@ -10,7 +9,7 @@ import { Text } from '~/design-system/text';
 
 export default function Custom404() {
   return (
-    <Providers>
+    <>
       <div className="relative flex min-h-[75vh] flex-col items-center justify-center">
         <div className="z-10 flex flex-col items-center">
           <img src="/404.svg" alt="Image of a 404 error." />
@@ -43,6 +42,6 @@ export default function Custom404() {
           alt="Background image of a 404 error"
         />
       </div>
-    </Providers>
+    </>
   );
 }
