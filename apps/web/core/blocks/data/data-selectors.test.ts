@@ -124,6 +124,52 @@ describe.only('mapDataSelectorLexiconToData', () => {
     const lex = parseSelectorIntoLexicon(`.[${SYSTEM_IDS.NAME_ATTRIBUTE}]`);
     const data = mapDataSelectorLexiconToData(lex, input);
     expect(data).toEqual({
+      entityId: 'this',
+      propertyId: SYSTEM_IDS.NAME_ATTRIBUTE,
+      value: 'value',
+    });
+  });
+
+  it('->[ToId].[PropertyId]', () => {
+    const input: RelationRow = {
+      this: {
+        id: EntityId('this'),
+        name: 'this',
+        triples: [],
+        description: null,
+        types: [],
+        nameTripleSpaces: [],
+        relationsOut: [],
+        spaces: [],
+      },
+      to: {
+        id: EntityId('to'),
+        name: 'to',
+        triples: [
+          Triple.make({
+            attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+            attributeName: null,
+            entityId: 'to',
+            entityName: 'to',
+            space: 'space',
+            value: {
+              type: 'TEXT',
+              value: 'value',
+            },
+          }),
+        ],
+        description: null,
+        types: [],
+        nameTripleSpaces: [],
+        relationsOut: [],
+        spaces: [],
+      },
+    };
+
+    const lex = parseSelectorIntoLexicon(`->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}].[${SYSTEM_IDS.NAME_ATTRIBUTE}]`);
+    const data = mapDataSelectorLexiconToData(lex, input);
+    expect(data).toEqual({
+      entityId: 'to',
       propertyId: SYSTEM_IDS.NAME_ATTRIBUTE,
       value: 'value',
     });

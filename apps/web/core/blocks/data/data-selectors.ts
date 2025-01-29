@@ -65,20 +65,19 @@ export function parseSelectorIntoLexicon(selector: string): PathSegment[] {
 }
 
 type Renderable = {
+  entityId: string;
   propertyId: string;
   value: string | null;
 };
 
 export function mapDataSelectorLexiconToData(lexicon: PathSegment[], input: RelationRow): Renderable | null {
-  let output: Renderable | null = null;
   let target = input.this;
-
-  console.log('lexicon', lexicon);
+  let output: Renderable | null = null;
 
   for (const segment of lexicon) {
     if (segment.type === 'TRIPLE') {
-      console.log('should hit this');
       output = {
+        entityId: target.id,
         propertyId: segment.property,
         value: target.triples.find(t => t.attributeId === segment.property)?.value.value ?? null,
       };
@@ -93,6 +92,7 @@ export function mapDataSelectorLexiconToData(lexicon: PathSegment[], input: Rela
 
       if (relation) {
         output = {
+          entityId: target.id,
           propertyId: segment.property,
           value: relation.toEntity.name ?? null,
         };
