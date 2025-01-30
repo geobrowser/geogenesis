@@ -1,9 +1,9 @@
 import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { mergeEntityAsync } from '~/core/database/entities';
+import { Entity } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
-
-import { RelationRow } from './queries';
+import { Cell } from '~/core/types';
 
 export type TripleSegment = {
   type: 'TRIPLE';
@@ -67,23 +67,15 @@ export function parseSelectorIntoLexicon(selector: string): PathSegment[] {
   return segments;
 }
 
-type Renderable = {
-  entityId: string;
-  propertyId: string;
-  value: string | null;
-};
-
-export async function mapDataSelectorLexiconDataV2(lexicon: PathSegment[], entityId: string) {
-  let input = await mergeEntityAsync(EntityId(entityId));
-  let output: Renderable | null = null;
+export async function mapDataSelectorLexiconDataV2(
+  lexicon: PathSegment[],
+  startEntityId: string
+): Promise<Entity | null> {
+  let input = await mergeEntityAsync(EntityId(startEntityId));
 
   for (const segment of lexicon) {
     if (segment.type === 'TRIPLE') {
-      output = {
-        entityId: input.id,
-        propertyId: segment.property,
-        value: input.triples.find(t => t.attributeId === segment.property)?.value.value ?? null,
-      };
+      // skip
     }
 
     // @TODO: Need to handle if the entity is an image
@@ -106,14 +98,8 @@ export async function mapDataSelectorLexiconDataV2(lexicon: PathSegment[], entit
       }
 
       input = await mergeEntityAsync(EntityId(relation.toEntity.id));
-
-      output = {
-        entityId: input.id,
-        propertyId: segment.property,
-        value: relation.toEntity.name ?? null,
-      };
     }
   }
 
-  return output;
+  return input;
 }

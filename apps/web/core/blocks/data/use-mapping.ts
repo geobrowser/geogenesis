@@ -3,7 +3,7 @@ import { GraphUri, GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import * as React from 'react';
 
 import { Entity } from '~/core/io/dto/entities';
-import { Cell } from '~/core/types';
+import { Cell, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 /**
@@ -52,7 +52,7 @@ export function useMapping() {
   };
 }
 
-export function mappingToRows(entities: Entity[], slotIds: string[], collectionItems: Entity[]) {
+export function mappingToRows(entities: Entity[], slotIds: string[], collectionItems: Entity[]): Row[] {
   /**
    * Take each row, take each mapping, take each "slot" in the mapping
    * and map them into the Row structure.
@@ -77,11 +77,10 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionI
           cell.description = description;
           cell.image = Entities.cover(relationsOut) || Entities.avatar(relationsOut) || null;
 
-          const collectionEntity = collectionItems?.find(
-            entity =>
-              entity.triples
-                .find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
-                ?.value.value.startsWith(`graph://${cell.entityId}`)
+          const collectionEntity = collectionItems?.find(entity =>
+            entity.triples
+              .find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+              ?.value.value.startsWith(`graph://${cell.entityId}`)
           );
 
           if (collectionEntity) {

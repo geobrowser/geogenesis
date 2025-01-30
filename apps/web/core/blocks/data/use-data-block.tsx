@@ -4,12 +4,13 @@ import { Console, Effect } from 'effect';
 
 import * as React from 'react';
 
-import { useEntity } from '../../database/entities';
+import { mergeEntityAsync, useEntity } from '../../database/entities';
 import { upsert } from '../../database/write';
 import { useProperties } from '../../hooks/use-properties';
 import { Entity } from '../../io/dto/entities';
 import { EntityId, SpaceId } from '../../io/schema';
-import { PropertySchema } from '../../types';
+import { PropertySchema, Row } from '../../types';
+import { mapDataSelectorLexiconDataV2, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter } from './filters';
 import {
   MergeTableEntitiesArgs,
@@ -151,13 +152,37 @@ export function useDataBlock() {
         }
 
         if (source.type === 'RELATIONS') {
-          const data = yield* Effect.promise(() => mergeRelationQueryEntities(source.value, filterState));
+          const sourceEntity = yield* Effect.promise(() => mergeEntityAsync(EntityId(source.value)));
+          const maybeFilter = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
 
-          return mappingToRows(
-            data.map(d => d.this),
-            shownColumnIds,
-            collectionItems
+          if (!maybeFilter) {
+            console.log('no filter');
+            return [];
+          }
+
+          const relations = sourceEntity?.relationsOut.filter(r => r.typeOf.id === maybeFilter.value);
+
+          if (!relations) {
+            console.log('no relations');
+            return [];
+          }
+
+          // @TODO: Each shownColumnId should have a unique lexicon. What do we do if the lexicon
+          // doesn't exist? Use the relation entity by default?
+          const lexicon = parseSelectorIntoLexicon(
+            `->[JkzhbbrXFMfXN7sduMKQRp]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}].[${SYSTEM_IDS.NAME_ATTRIBUTE}]`
+            // `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->.[${SYSTEM_IDS.NAME_ATTRIBUTE}]`
           );
+
+          const data = (yield* Effect.forEach(
+            relations,
+            relation => Effect.promise(() => mapDataSelectorLexiconDataV2(lexicon, relation.id)),
+            {
+              concurrency: 10,
+            }
+          )).filter(c => c !== null);
+
+          return mappingToRows(data, shownColumnIds, collectionItems);
         }
 
         if (!rowData) {
