@@ -6,6 +6,8 @@ import { Entity } from '~/core/io/dto/entities';
 import { Cell, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
+import { PathSegment } from './data-selectors';
+
 /**
  * A mapping determines which data is rendered into which UI slots
  * for a given data block.
@@ -39,9 +41,10 @@ export type Mapping = {
 export function useMapping() {
   const mapping = React.useMemo((): Mapping => {
     return {
-      // @TODO: Remove mapping in favor of Shown columns (Properties) and selector triples
-      [SYSTEM_IDS.NAME_ATTRIBUTE]: null,
-      ['JkzhbbrXFMfXN7sduMKQRp']: null,
+      // This mapping should contain the properties being rendered to the
+      // lexicon DSL for each shown column
+      [SYSTEM_IDS.NAME_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}].[${SYSTEM_IDS.NAME_ATTRIBUTE}]`,
+      ['JkzhbbrXFMfXN7sduMKQRp']: `->[JkzhbbrXFMfXN7sduMKQRp]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}].[${SYSTEM_IDS.NAME_ATTRIBUTE}]`,
     };
   }, []);
 
@@ -64,7 +67,7 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionI
         const cellRelations = relationsOut.filter(t => t.typeOf.id === slotId);
 
         const cell: Cell = {
-          columnId: slotId,
+          slotId: slotId,
           entityId: id,
           triples: cellTriples,
           relations: cellRelations,
@@ -118,4 +121,71 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionI
       columns: newSlots,
     };
   });
+}
+
+export function mappingToCell(
+  entity: Entity,
+  propertyId: string,
+  collectionItems: Entity[],
+  lexicon: PathSegment[]
+): Cell {
+  /**
+   * Take each row, take each mapping, take each "slot" in the mapping
+   * and map them into the Row structure.
+   */
+
+  const finalSegment = lexicon[lexicon.length - 1];
+
+  const { name, id, triples, relationsOut, description } = entity;
+  const cellTriples = triples.filter(triple => triple.attributeId === finalSegment.property);
+  const cellRelations = relationsOut.filter(t => t.typeOf.id === finalSegment.property);
+
+  const cell: Cell = {
+    slotId: propertyId,
+    // The rendered property id is what is used to select the actual rendered _data_. The slotId
+    // is the id of the UI slot where the data is rendered.
+    //
+    // e.g., We might want to render the name of an entity in the Roles slot.
+    renderedPropertyId: finalSegment.property,
+    entityId: id,
+    triples: cellTriples,
+    relations: cellRelations,
+    name,
+  };
+
+  const isNameCell = propertyId === SYSTEM_IDS.NAME_ATTRIBUTE;
+
+  if (isNameCell) {
+    cell.description = description;
+    cell.image = Entities.cover(relationsOut) ?? Entities.avatar(relationsOut) ?? null;
+
+    const collectionEntity = collectionItems?.find(entity =>
+      entity.triples
+        .find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+        ?.value.value.startsWith(`graph://${cell.entityId}`)
+    );
+
+    if (collectionEntity) {
+      const url = collectionEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+        ?.value.value;
+
+      if (url?.startsWith('graph://')) {
+        const spaceId = GraphUrl.toSpaceId(url as GraphUri);
+
+        if (spaceId) {
+          cell.space = spaceId;
+
+          const verifiedSourceTriple = collectionEntity.triples.find(
+            triple => triple.attributeId === SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE
+          );
+
+          if (verifiedSourceTriple) {
+            cell.verified = verifiedSourceTriple.value.value === '1';
+          }
+        }
+      }
+    }
+  }
+
+  return cell;
 }

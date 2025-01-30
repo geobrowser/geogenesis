@@ -9,20 +9,14 @@ import { upsert } from '../../database/write';
 import { useProperties } from '../../hooks/use-properties';
 import { Entity } from '../../io/dto/entities';
 import { EntityId, SpaceId } from '../../io/schema';
-import { PropertySchema, Row } from '../../types';
-import { mapDataSelectorLexiconDataV2, parseSelectorIntoLexicon } from './data-selectors';
+import { Cell, PropertySchema } from '../../types';
+import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter } from './filters';
-import {
-  MergeTableEntitiesArgs,
-  RelationRow,
-  mergeEntitiesAsync,
-  mergeRelationQueryEntities,
-  mergeTableEntities,
-} from './queries';
+import { MergeTableEntitiesArgs, mergeEntitiesAsync, mergeTableEntities } from './queries';
 import { Source } from './source';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
-import { mappingToRows } from './use-mapping';
+import { Mapping, mappingToCell, mappingToRows, useMapping } from './use-mapping';
 import { usePagination } from './use-pagination';
 import { useSource } from './use-source';
 import { useView } from './use-view';
@@ -35,23 +29,13 @@ interface RenderablesQueryKey {
   filterState: Filter[];
   source: Source;
   collectionItems: Entity[];
-  shownColumnIds: string[];
+  mapping: Mapping;
 }
 
 const queryKeys = {
   renderables: (args: RenderablesQueryKey) => ['blocks', 'data', 'renderables', args],
   columnsSchema: (columns?: PropertySchema[]) => ['blocks', 'data', 'columns-schema', columns],
 };
-
-type DataRows =
-  | {
-      type: 'ENTITIES' | 'COLLECTION';
-      data: Entity[];
-    }
-  | {
-      type: 'RELATIONS';
-      data: RelationRow[];
-    };
 
 export function useDataBlock() {
   const { entityId, spaceId, pageNumber, setPage } = useDataBlockInstance();
@@ -65,6 +49,7 @@ export function useDataBlock() {
   const { source } = useSource();
   const { collectionItems } = useCollection();
   const { shownColumnIds } = useView();
+  const { mapping } = useMapping();
 
   const {
     data: rows,
@@ -80,7 +65,7 @@ export function useDataBlock() {
       entityId,
       source,
       filterState,
-      shownColumnIds,
+      mapping,
     }),
     queryFn: async () => {
       const run = Effect.gen(function* () {
@@ -126,15 +111,11 @@ export function useDataBlock() {
          *    view, the query mode, and selectors.
          * 3. Return the list of {@link Row} data structures.
          */
-        let rowData: DataRows | null = null;
 
         if (source.type === 'SPACES' || source.type === 'GEO') {
           const data = yield* Effect.promise(() => mergeTableEntities({ options: params, filterState }));
 
-          rowData = {
-            type: 'ENTITIES',
-            data,
-          };
+          return mappingToRows(data, shownColumnIds, collectionItems);
         }
 
         if (source.type === 'COLLECTION') {
@@ -145,10 +126,7 @@ export function useDataBlock() {
             })
           );
 
-          rowData = {
-            type: 'COLLECTION',
-            data,
-          };
+          return mappingToRows(data, shownColumnIds, collectionItems);
         }
 
         if (source.type === 'RELATIONS') {
@@ -156,42 +134,52 @@ export function useDataBlock() {
           const maybeFilter = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
 
           if (!maybeFilter) {
-            console.log('no filter');
             return [];
           }
 
           const relations = sourceEntity?.relationsOut.filter(r => r.typeOf.id === maybeFilter.value);
 
           if (!relations) {
-            console.log('no relations');
             return [];
           }
 
           // @TODO: Each shownColumnId should have a unique lexicon. What do we do if the lexicon
           // doesn't exist? Use the relation entity by default?
-          const lexicon = parseSelectorIntoLexicon(
-            `->[JkzhbbrXFMfXN7sduMKQRp]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}].[${SYSTEM_IDS.NAME_ATTRIBUTE}]`
-            // `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->.[${SYSTEM_IDS.NAME_ATTRIBUTE}]`
-          );
 
-          const data = (yield* Effect.forEach(
+          const data = yield* Effect.forEach(
             relations,
-            relation => Effect.promise(() => mapDataSelectorLexiconDataV2(lexicon, relation.id)),
+            relation =>
+              Effect.promise(async () => {
+                const cells: Cell[] = [];
+                for (const [propertyId, selector] of Object.entries(mapping)) {
+                  const lexicon = parseSelectorIntoLexicon(selector);
+                  const entity = await mapSelectorLexiconToSourceEntity(lexicon, relation.id);
+
+                  if (entity) {
+                    cells.push(mappingToCell(entity, propertyId, collectionItems, lexicon));
+                  }
+                }
+
+                return {
+                  entityId: relation.id,
+                  columns: cells.reduce(
+                    (acc, cell) => {
+                      acc[cell.slotId] = cell;
+                      return acc;
+                    },
+                    {} as Record<string, Cell>
+                  ),
+                };
+              }),
             {
               concurrency: 10,
             }
-          )).filter(c => c !== null);
+          );
 
-          return mappingToRows(data, shownColumnIds, collectionItems);
+          return data;
         }
 
-        if (!rowData) {
-          return [];
-        }
-
-        // @TODO:
-        // 2. Mapping for Property data is optional and lives on the Properties relation itself
-        return mappingToRows(rowData.data, shownColumnIds, collectionItems);
+        return [];
       });
 
       const withError = run.pipe(

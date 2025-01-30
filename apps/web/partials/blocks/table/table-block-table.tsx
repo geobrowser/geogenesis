@@ -85,7 +85,7 @@ const formatColumns = (
             />
           </div>
         ) : (
-          <Text variant="smallTitle">{isNameColumn ? 'Name' : column.name ?? column.id}</Text>
+          <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
         );
       },
       size: columnSize ? (columnSize < 150 ? 150 : columnSize) : 150,
@@ -122,10 +122,11 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     //
     // Q: Is the table-rerendering when there are local changes? Does this
     // cause the cells to also re-render even when they don't need to?
-    const maybePropertiesSchema = propertiesSchema.get(PropertyId(cellData.columnId));
+    const maybePropertiesSchema = propertiesSchema.get(PropertyId(cellData.slotId));
     const valueType = maybePropertiesSchema?.valueType ?? SYSTEM_IDS.TEXT;
     const attributeName = maybePropertiesSchema?.name;
     const filterableRelationType = maybePropertiesSchema?.relationValueTypeId;
+    const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const cellTriples = useTriples(
@@ -135,13 +136,14 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           mergeWith: cellData.triples,
           selector: triple => {
             const isRowCell = triple.entityId === cellData.entityId;
-            const isColCell = triple.attributeId === cellData.columnId;
+            const isColCell = triple.attributeId === propertyId;
             const isCurrentValueType = triple.value.type === VALUE_TYPES[valueType];
 
-            return isRowCell && isColCell && isCurrentValueType;
+            // For mapped data we don't care about the correct value type
+            return isRowCell && isColCell && (cellData.renderedPropertyId ? true : isCurrentValueType);
           },
         };
-      }, [cellData, valueType])
+      }, [cellData, propertyId, valueType])
     );
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -152,16 +154,16 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           mergeWith: cellData.relations,
           selector: relation => {
             const isRowCell = relation.fromEntity.id === cellData.entityId;
-            const isColCell = relation.typeOf.id === cellData.columnId;
+            const isColCell = relation.typeOf.id === propertyId;
 
             return isRowCell && isColCell;
           },
         };
-      }, [cellData])
+      }, [cellData, propertyId])
     );
 
     const placeholder = makePlaceholderFromValueType({
-      attributeId: cellData.columnId,
+      attributeId: propertyId,
       attributeName: attributeName ?? '',
       entityId: cellData.entityId,
       spaceId,
@@ -185,7 +187,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       return (
         <EditableEntityTableCell
           renderables={renderables}
-          attributeId={cellData.columnId}
+          attributeId={propertyId}
           entityId={cellData.entityId}
           spaceId={spaceId}
           filterSearchByTypes={filterableRelationType ? [filterableRelationType] : undefined}
@@ -196,7 +198,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     return (
       <EntityTableCell
         entityId={cellData.entityId}
-        columnId={cellData.columnId}
+        columnId={propertyId}
         renderables={renderables}
         space={spaceId}
         isExpanded={isExpanded}
@@ -349,8 +351,8 @@ export const TableBlockTable = React.memo(
                         const headerClassNames = isShown
                           ? null
                           : !isEditingColumns || !isEditable
-                          ? 'hidden'
-                          : '!bg-grey-01 !text-grey-03';
+                            ? 'hidden'
+                            : '!bg-grey-01 !text-grey-03';
 
                         return (
                           <th
@@ -395,7 +397,7 @@ export const TableBlockTable = React.memo(
                           const isShown = shownColumnIds.includes(cell.column.id);
 
                           const href = NavUtils.toEntity(
-                            isNameCell ? row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space : space,
+                            isNameCell ? (row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space) : space,
                             entityId
                           );
                           const { verified } = row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE];

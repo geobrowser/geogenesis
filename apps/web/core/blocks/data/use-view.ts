@@ -12,6 +12,7 @@ import { Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { useDataBlockInstance } from './use-data-block';
+import { useMapping } from './use-mapping';
 
 type DataBlockViewDetails = { name: string; id: string; value: DataBlockView };
 type Column = {
@@ -43,9 +44,11 @@ export function useView() {
   );
 
   const shownColumnIds = React.useMemo(() => {
-    // return Object.keys(mapping);
     return [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
   }, [shownColumnRelations]);
+
+  // Should use the shown columns to generate the mapping, for now we hardcode them
+  const { mapping } = useMapping();
 
   const view = React.useMemo(() => getView(viewRelation), [viewRelation]);
   const placeholder = React.useMemo(() => getPlaceholder(blockEntity, view), [blockEntity, view]);
@@ -130,7 +133,7 @@ export function useView() {
     placeholder,
     viewRelation,
     setView,
-    shownColumnIds,
+    shownColumnIds: [...Object.keys(mapping)],
     setColumn,
   };
 }

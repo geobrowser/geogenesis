@@ -1,4 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
@@ -141,82 +141,6 @@ function filterValue(value: Value, valueToFilter: string) {
     default:
       return false;
   }
-}
-
-export type RelationRow = {
-  this: Entity;
-  to: Entity;
-};
-
-export async function mergeRelationQueryEntities(entityId: string, filterState: Filter[]): Promise<RelationRow[]> {
-  const entity = await mergeEntityAsync(EntityId(entityId));
-  const maybeRelationType = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE)?.value;
-
-  if (!maybeRelationType) {
-    return [];
-  }
-
-  const entityIdsToFetch = entity.relationsOut.filter(r => r.typeOf.id === maybeRelationType).map(r => r.id);
-
-  const remoteRelationEntities = await queryClient.fetchQuery({
-    queryKey: queryKeys.remoteEntities(entityIdsToFetch),
-    queryFn: ({ signal }) => fetchEntitiesBatch(entityIdsToFetch, undefined, signal),
-    staleTime: Duration.toMillis(Duration.seconds(20)),
-  });
-
-  const relationRows = remoteRelationEntities
-    .map(e => {
-      const maybeTriple = e.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
-
-      if (!maybeTriple) {
-        return null;
-      }
-
-      return {
-        this: e.id,
-        to: GraphUrl.toEntityId(maybeTriple.value.value as `graph://${string}`),
-      };
-    })
-    .filter(t => t !== null);
-
-  const toEntityIds = relationRows.map(r => r.to);
-
-  const remoteToEntities = await queryClient.fetchQuery({
-    queryKey: queryKeys.remoteEntities(toEntityIds),
-    queryFn: ({ signal }) => fetchEntitiesBatch(toEntityIds, undefined, signal),
-    staleTime: Duration.toMillis(Duration.seconds(20)),
-  });
-
-  const mergedRemoteEntities = remoteRelationEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
-
-  const localEntities = await getEntities_experimental();
-  const relevantLocalRelationEntities = Object.values(localEntities).filter(e => entityIdsToFetch.includes(e.id));
-
-  const mergedToEntities = remoteToEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
-  const relevantLocalToEntities = Object.values(localEntities).filter(e => toEntityIds.includes(e.id));
-
-  const localRelationEntities = dedupeWith(
-    [...relevantLocalRelationEntities, ...mergedRemoteEntities],
-    (a, b) => a.id === b.id
-  );
-
-  const localToEntities = dedupeWith([...relevantLocalToEntities, ...mergedToEntities], (a, b) => a.id === b.id);
-
-  return relationRows
-    .map(r => {
-      const localRelationEntity = localRelationEntities.find(e => e.id === r.this);
-      const localToEntity = localToEntities.find(e => e.id === r.to);
-
-      if (!localRelationEntity || !localToEntity) {
-        return null;
-      }
-
-      return {
-        this: localRelationEntity,
-        to: localToEntity,
-      };
-    })
-    .filter(r => r !== null);
 }
 
 function filterLocalEntities(entities: Entity[], filterState: Filter[]) {

@@ -3,7 +3,6 @@ import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { mergeEntityAsync } from '~/core/database/entities';
 import { Entity } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
-import { Cell } from '~/core/types';
 
 export type TripleSegment = {
   type: 'TRIPLE';
@@ -44,7 +43,11 @@ export type PathSegment = TripleSegment | RelationSegment;
  * 1. Parse the DSL into an application lexicon
  * 2. Map the application lexicon to be able to query for correct data
  */
-export function parseSelectorIntoLexicon(selector: string): PathSegment[] {
+export function parseSelectorIntoLexicon(selector: string | null): PathSegment[] {
+  if (!selector) {
+    return [];
+  }
+
   const segments: PathSegment[] = [];
   const parts = selector.split(/(?=->|\.\[)/);
 
@@ -67,7 +70,7 @@ export function parseSelectorIntoLexicon(selector: string): PathSegment[] {
   return segments;
 }
 
-export async function mapDataSelectorLexiconDataV2(
+export async function mapSelectorLexiconToSourceEntity(
   lexicon: PathSegment[],
   startEntityId: string
 ): Promise<Entity | null> {

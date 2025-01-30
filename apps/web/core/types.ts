@@ -196,7 +196,7 @@ export type Relation = {
 
 export type Cell = {
   name: string | null;
-  columnId: string;
+  slotId: string;
   entityId: string;
   triples: Triple[];
   relations: Relation[];
@@ -204,6 +204,7 @@ export type Cell = {
   image?: string | null;
   space?: string;
   verified?: boolean;
+  renderedPropertyId?: string;
 };
 
 export type Row = {
