@@ -34,8 +34,9 @@ export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
       });
 
       const relationValueTypes = properties.map(a => {
-        const relationValueType = a.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE)
-          ?.toEntity;
+        const relationValueType = a.relationsOut.find(
+          r => r.typeOf.id === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE
+        )?.toEntity;
 
         return {
           attributeId: a.id,
@@ -56,11 +57,41 @@ export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
         };
       });
 
-      return new Map<PropertyId, PropertySchema>(schema.map(s => [PropertyId(s.id), s]));
+      return new Map<PropertyId, PropertySchema>(sortProperties(schema).map(s => [PropertyId(s.id), s]));
     },
   });
 
   return {
     properties: properties ?? initialData,
   };
+}
+
+function sortProperties(renderables: PropertySchema[]) {
+  /* Visible triples includes both real triples and placeholder triples */
+  return renderables.sort((renderableA, renderableB) => {
+    // Always put an empty, placeholder triple with no attribute id at the bottom
+    // of the list
+    if (renderableA.id === '') return 1;
+
+    const { id: attributeIdA, name: attributeNameA } = renderableA;
+    const { id: attributeIdB, name: attributeNameB } = renderableB;
+
+    const isNameA = attributeIdA === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isNameB = attributeIdB === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
+    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
+
+    if (isNameA && !isNameB) return -1;
+    if (!isNameA && isNameB) return 1;
+
+    if (isDescriptionA && !isDescriptionB) return -1;
+    if (!isDescriptionA && isDescriptionB) return 1;
+
+    if (isTypesA && !isTypesB) return -1;
+    if (!isTypesA && isTypesB) return 1;
+
+    return (attributeNameA || '').localeCompare(attributeNameB || '');
+  });
 }
