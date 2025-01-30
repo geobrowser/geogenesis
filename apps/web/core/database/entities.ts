@@ -189,7 +189,6 @@ export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> 
   const cachedEntity = await queryClient.fetchQuery({
     queryKey: ['entity-for-merging', id],
     queryFn: ({ signal }) => fetchEntity({ id, signal }),
-    staleTime: Infinity,
   });
 
   return mergeEntity({ id, mergeWith: cachedEntity });
@@ -263,8 +262,9 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
   });
 
   const relationValueTypes = attributes.map(a => {
-    const relationValueType = a.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE)
-      ?.toEntity;
+    const relationValueType = a.relationsOut.find(
+      r => r.typeOf.id === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE
+    )?.toEntity;
 
     return {
       attributeId: a.id,

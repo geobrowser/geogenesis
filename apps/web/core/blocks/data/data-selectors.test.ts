@@ -1,11 +1,6 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
-import { Triple } from '~/core/database/Triple';
-import { EntityId } from '~/core/io/schema';
-
-import { mapDataSelectorLexiconToData, parseSelectorIntoLexicon } from './data-selectors';
-import { RelationRow } from './queries';
+import { parseSelectorIntoLexicon } from './data-selectors';
 
 describe('parseSelectorIntoLexicon', () => {
   it('.[AttributeId]', () => {
@@ -34,6 +29,7 @@ describe('parseSelectorIntoLexicon', () => {
     ]);
   });
 
+  // @TODO: How do we select this an image?
   it('->[ToId]->[CoverId]', () => {
     const result = parseSelectorIntoLexicon('->[ToId]->[CoverId]');
 
@@ -81,97 +77,5 @@ describe('parseSelectorIntoLexicon', () => {
         type: 'TRIPLE',
       },
     ]);
-  });
-});
-
-describe.only('mapDataSelectorLexiconToData', () => {
-  it('.[PropertyId]', () => {
-    const input: RelationRow = {
-      this: {
-        id: EntityId('this'),
-        name: 'this',
-        triples: [
-          Triple.make({
-            attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
-            attributeName: null,
-            entityId: 'this',
-            entityName: 'this',
-            space: 'space',
-            value: {
-              type: 'TEXT',
-              value: 'value',
-            },
-          }),
-        ],
-        description: null,
-        types: [],
-        nameTripleSpaces: [],
-        relationsOut: [],
-        spaces: [],
-      },
-      to: {
-        id: EntityId('to'),
-        name: 'to',
-        triples: [],
-        description: null,
-        types: [],
-        nameTripleSpaces: [],
-        relationsOut: [],
-        spaces: [],
-      },
-    };
-
-    const lex = parseSelectorIntoLexicon(`.[${SYSTEM_IDS.NAME_ATTRIBUTE}]`);
-    const data = mapDataSelectorLexiconToData(lex, input);
-    expect(data).toEqual({
-      entityId: 'this',
-      propertyId: SYSTEM_IDS.NAME_ATTRIBUTE,
-      value: 'value',
-    });
-  });
-
-  it('->[ToId].[PropertyId]', () => {
-    const input: RelationRow = {
-      this: {
-        id: EntityId('this'),
-        name: 'this',
-        triples: [],
-        description: null,
-        types: [],
-        nameTripleSpaces: [],
-        relationsOut: [],
-        spaces: [],
-      },
-      to: {
-        id: EntityId('to'),
-        name: 'to',
-        triples: [
-          Triple.make({
-            attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
-            attributeName: null,
-            entityId: 'to',
-            entityName: 'to',
-            space: 'space',
-            value: {
-              type: 'TEXT',
-              value: 'value',
-            },
-          }),
-        ],
-        description: null,
-        types: [],
-        nameTripleSpaces: [],
-        relationsOut: [],
-        spaces: [],
-      },
-    };
-
-    const lex = parseSelectorIntoLexicon(`->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}].[${SYSTEM_IDS.NAME_ATTRIBUTE}]`);
-    const data = mapDataSelectorLexiconToData(lex, input);
-    expect(data).toEqual({
-      entityId: 'to',
-      propertyId: SYSTEM_IDS.NAME_ATTRIBUTE,
-      value: 'value',
-    });
   });
 });

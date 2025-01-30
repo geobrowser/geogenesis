@@ -1,4 +1,7 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+
+import { mergeEntityAsync } from '~/core/database/entities';
+import { EntityId } from '~/core/io/schema';
 
 import { RelationRow } from './queries';
 
@@ -70,6 +73,8 @@ type Renderable = {
   value: string | null;
 };
 
+// I don't think the RelationRow is the right input here. I think we need to somehow query
+// using the lexicon to get the data we need starting from a specific entity id
 export function mapDataSelectorLexiconToData(lexicon: PathSegment[], input: RelationRow): Renderable | null {
   let target = input.this;
   let output: Renderable | null = null;
@@ -83,6 +88,10 @@ export function mapDataSelectorLexiconToData(lexicon: PathSegment[], input: Rela
       };
     }
 
+    // @TODO: We might get another Relation in which case we need to query the to's to to
+    // get the value... Might be simpler to just build the data by querying one-by-one
+    // rather than trying to build the data at front. Would make it harder to write tests
+    // unless we mock it somehow.
     if (segment.type === 'RELATION') {
       if (segment.property === SYSTEM_IDS.RELATION_TO_ATTRIBUTE) {
         target = input.to;
@@ -102,3 +111,85 @@ export function mapDataSelectorLexiconToData(lexicon: PathSegment[], input: Rela
 
   return output;
 }
+
+export async function mapDataSelectorLexiconDataV2(lexicon: PathSegment[], entityId: string) {
+  let input = await mergeEntityAsync(EntityId(entityId));
+  let output: Renderable | null = null;
+
+  for (const segment of lexicon) {
+    if (segment.type === 'TRIPLE') {
+      output = {
+        entityId: input.id,
+        propertyId: segment.property,
+        value: input.triples.find(t => t.attributeId === segment.property)?.value.value ?? null,
+      };
+    }
+
+    // @TODO: Need to handle if the entity is an image
+    if (segment.type === 'RELATION') {
+      if (segment.property === SYSTEM_IDS.RELATION_TO_ATTRIBUTE) {
+        const newInputId = input.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value;
+
+        if (!newInputId) {
+          continue;
+        }
+
+        input = await mergeEntityAsync(EntityId(GraphUrl.toEntityId(newInputId as `graph://${string}`)));
+        continue;
+      }
+
+      const relation = input.relationsOut.find(r => r.typeOf.id === segment.property);
+
+      if (!relation) {
+        return null;
+      }
+
+      input = await mergeEntityAsync(EntityId(relation.toEntity.id));
+
+      output = {
+        entityId: input.id,
+        propertyId: segment.property,
+        value: relation.toEntity.name ?? null,
+      };
+    }
+  }
+
+  return output;
+}
+
+// console.log(
+//   'Should be Geo',
+//   await mapDataSelectorLexiconDataV2(
+//     [
+//       {
+//         property: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+//         type: 'RELATION',
+//       },
+//       {
+//         property: SYSTEM_IDS.NAME_ATTRIBUTE,
+//         type: 'TRIPLE',
+//       },
+//     ],
+//     '2J2jBpCfPfG9EeiJ2cgJhC'
+//   )
+// );
+// console.log(
+//   'Should be software engineer',
+//   await mapDataSelectorLexiconDataV2(
+//     [
+//       {
+//         property: 'JkzhbbrXFMfXN7sduMKQRp',
+//         type: 'RELATION',
+//       },
+//       {
+//         property: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+//         type: 'RELATION',
+//       },
+//       {
+//         property: SYSTEM_IDS.NAME_ATTRIBUTE,
+//         type: 'TRIPLE',
+//       },
+//     ],
+//     '2J2jBpCfPfG9EeiJ2cgJhC'
+//   )
+// );
