@@ -182,13 +182,7 @@ export function useDataBlock() {
         return [];
       });
 
-      const withError = run.pipe(
-        Effect.tapError(e => {
-          return Console.log('error', e);
-        })
-      );
-
-      return await Effect.runPromise(withError);
+      return await Effect.runPromise(run);
     },
   });
 
