@@ -13,6 +13,7 @@ import { getImageHash, getImagePath, validateEntityId } from '~/core/utils/utils
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
+import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { getTriples } from '../../database/triples';
 import { DB } from '../../database/write';
 import { ID } from '../../id';
@@ -20,7 +21,6 @@ import { EntityId } from '../../io/schema';
 import { Relation, RenderableEntityType } from '../../types';
 import { Values } from '../../utils/value';
 import { getRelationForBlockType } from './block-types';
-import { makeInitialDataEntityRelations } from './data-entity';
 import { useEditorInstance } from './editor-provider';
 import * as Parser from './parser';
 import * as TextEntity from './text-entity';

@@ -1,19 +1,14 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 
 import * as React from 'react';
 import { useCallback } from 'react';
 
-import { StoreRelation } from '~/core/database/types';
-import { DB } from '~/core/database/write';
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { DataBlockView, useView } from '~/core/blocks/data/use-view';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { EntityId } from '~/core/io/schema';
-import { useTableBlock } from '~/core/state/table-block-store';
-import type { DataBlockView } from '~/core/state/table-block-store';
-import { Relation } from '~/core/types';
 
 import { Check } from '~/design-system/icons/check';
 import { Close } from '~/design-system/icons/close';
@@ -25,13 +20,12 @@ import { ColorName } from '~/design-system/theme/colors';
 
 type TableBlockViewMenuProps = {
   activeView: DataBlockView;
-  viewRelation?: Relation;
   isLoading: boolean;
 };
 
 export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { spaceId, relationId, viewRelation } = useTableBlock();
+  const { spaceId } = useDataBlock();
 
   const isEditing = useUserIsEditing(spaceId);
 
@@ -53,17 +47,7 @@ export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuP
           align="end"
         >
           {DATA_BLOCK_VIEWS.map(view => {
-            return (
-              <ToggleView
-                key={view.value}
-                spaceId={spaceId}
-                activeView={activeView}
-                view={view}
-                viewRelation={viewRelation}
-                relationId={relationId}
-                isLoading={isLoading}
-              />
-            );
+            return <ToggleView key={view.value} activeView={activeView} view={view} isLoading={isLoading} />;
           })}
         </Dropdown.Content>
       </Dropdown.Portal>
@@ -91,48 +75,18 @@ const DATA_BLOCK_VIEWS: Array<DataBlockViewDetails> = [
 ];
 
 type ToggleViewProps = {
-  spaceId: string;
-  relationId: string;
   activeView: DataBlockView;
   view: DataBlockViewDetails;
-  viewRelation?: Relation;
   isLoading: boolean;
 };
 
-const ToggleView = ({ spaceId, activeView, view, viewRelation, relationId, isLoading }: ToggleViewProps) => {
+const ToggleView = ({ activeView, view, isLoading }: ToggleViewProps) => {
   const isActive = !isLoading && activeView === view.value;
+  const { setView } = useView();
 
   const onToggleView = useCallback(async () => {
-    if (!isActive) {
-      if (viewRelation) {
-        DB.removeRelation({ relationId: viewRelation.id, spaceId, fromEntityId: EntityId(relationId) });
-      }
-
-      const newRelation: StoreRelation = {
-        space: spaceId,
-        index: INITIAL_RELATION_INDEX_VALUE,
-        typeOf: {
-          id: EntityId(SYSTEM_IDS.VIEW_ATTRIBUTE),
-          name: 'View',
-        },
-        fromEntity: {
-          id: EntityId(relationId),
-          name: '',
-        },
-        toEntity: {
-          id: EntityId(view.id),
-          name: view.name,
-          renderableType: 'RELATION',
-          value: EntityId(view.id),
-        },
-      };
-
-      DB.upsertRelation({
-        relation: newRelation,
-        spaceId,
-      });
-    }
-  }, [isActive, relationId, spaceId, view.id, view.name, viewRelation]);
+    setView(view);
+  }, [setView, view]);
 
   return (
     <MenuItem active={isActive}>

@@ -27,22 +27,6 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
   unpublishedColumns,
 }: Props) {
-  // const localTriples = useTriples(
-  //   React.useMemo(() => {
-  //     return {
-  //       selector: t => t.entityId === column.id,
-  //     };
-  //   }, [column.id])
-  // );
-
-  // const localCellTriples = useTriples(
-  //   React.useMemo(() => {
-  //     return {
-  //       selector: t => t.attributeId === column.id,
-  //     };
-  //   }, [column.id])
-  // );
-
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
   const [localName, setLocalName] = useState(column.name ?? '');

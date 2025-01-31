@@ -9,7 +9,7 @@ import * as React from 'react';
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
-import { usePropertyValueTypes } from '~/core/hooks/use-property-value-types';
+import { useProperties } from '~/core/hooks/use-properties';
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -67,7 +67,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     },
   });
 
-  const { propertyValueTypes } = usePropertyValueTypes(Object.keys(renderablesGroupedByAttributeId));
+  const { properties } = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
   return (
     <>
@@ -111,14 +111,10 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                   <RelationsGroup
                     key={attributeId}
                     relations={renderables as RelationRenderableProperty[]}
-                    propertyValueTypes={propertyValueTypes}
+                    properties={properties}
                   />
                 ) : (
-                  <TriplesGroup
-                    key={attributeId}
-                    triples={renderables as TripleRenderableProperty[]}
-                    propertyValueTypes={propertyValueTypes}
-                  />
+                  <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
                 )}
 
                 <div className="absolute right-0 top-6 flex items-center gap-1">
@@ -203,10 +199,10 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
 
 type RelationsGroupProps = {
   relations: RelationRenderableProperty[];
-  propertyValueTypes: Map<string, PropertySchema>;
+  properties: Map<string, PropertySchema>;
 };
 
-function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) {
+function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
 
   const send = useEditEvents({
@@ -221,8 +217,8 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
   const typeOfId = relations[0].attributeId;
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
-  const propertyValueType = propertyValueTypes.get(typeOfId);
-  const filterByType = propertyValueType?.relationValueTypeId;
+  const property = properties.get(typeOfId);
+  const filterByType = property?.relationValueTypeId;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -297,14 +293,14 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
                 spaceId={spaceId}
                 allowedTypes={filterByType ? [filterByType] : undefined}
                 onCreateEntity={result => {
-                  if (propertyValueType?.relationValueTypeId) {
+                  if (property?.relationValueTypeId) {
                     send({
                       type: 'UPSERT_RELATION',
                       payload: {
                         fromEntityId: result.id,
                         fromEntityName: result.name,
-                        toEntityId: propertyValueType.relationValueTypeId,
-                        toEntityName: propertyValueType.relationValueTypeName ?? null,
+                        toEntityId: property.relationValueTypeId,
+                        toEntityName: property.relationValueTypeName ?? null,
                         typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
                         typeOfName: 'Types',
                       },
@@ -404,14 +400,14 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
             trigger={<SquareButton icon={<Create />} />}
             allowedTypes={filterByType ? [filterByType] : undefined}
             onCreateEntity={result => {
-              if (propertyValueType?.relationValueTypeId) {
+              if (property?.relationValueTypeId) {
                 send({
                   type: 'UPSERT_RELATION',
                   payload: {
                     fromEntityId: result.id,
                     fromEntityName: result.name,
-                    toEntityId: propertyValueType.relationValueTypeId,
-                    toEntityName: propertyValueType.relationValueTypeName ?? null,
+                    toEntityId: property.relationValueTypeId,
+                    toEntityName: property.relationValueTypeName ?? null,
                     typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
                     typeOfName: 'Types',
                   },
@@ -488,7 +484,6 @@ function RelationsGroup({ relations, propertyValueTypes }: RelationsGroupProps) 
 
 type TriplesGroupProps = {
   triples: TripleRenderableProperty[];
-  propertyValueTypes: Map<string, PropertySchema>;
 };
 
 function TriplesGroup({ triples }: TriplesGroupProps) {

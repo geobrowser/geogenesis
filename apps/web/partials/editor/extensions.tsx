@@ -11,9 +11,9 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Text from '@tiptap/extension-text';
 
 import { ConfiguredCommandExtension } from './command-extension';
+import { DataNode } from './data-node';
 import { HeadingNode } from './heading-node';
 import { ParagraphNode } from './paragraph-node';
-import { TableNode } from './table-node';
 import { TrailingNode } from './trailing-node';
 
 export const tiptapExtensions = [
@@ -69,7 +69,7 @@ export const tiptapExtensions = [
   TrailingNode,
   BulletList,
   ListItem,
-  TableNode,
+  DataNode,
   Image,
   Placeholder.configure({
     placeholder: ({ node }) => {

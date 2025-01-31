@@ -8,7 +8,7 @@ import {
   Triple,
   TripleRenderableProperty,
 } from '../types';
-import { valueTypes } from '../value-types';
+import { VALUE_TYPES } from '../value-types';
 
 interface ToRenderablesArgs {
   entityId: string;
@@ -72,7 +72,7 @@ export function toRenderables({
           };
         default:
           return {
-            type: (valueTypes[s.valueType] as TripleRenderableProperty['type']) ?? 'TEXT',
+            type: (VALUE_TYPES[s.valueType] as TripleRenderableProperty['type']) ?? 'TEXT',
             entityId: entityId,
             entityName: entityName,
             attributeId: s.id,
