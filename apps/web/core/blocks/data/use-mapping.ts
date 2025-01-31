@@ -1,4 +1,4 @@
-import { GraphUri, GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { CONTENT_IDS, GraphUri, GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
@@ -42,14 +42,13 @@ export type Mapping = {
  *   of the entity is always rendered in the name slot in the List/Gallery.
  */
 export function useMapping() {
-  const mapping = React.useMemo((): Mapping => {
-    return {
-      // Should render the to relation as a pill
-      [SYSTEM_IDS.NAME_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
-      // Should render the roles to entities as a pill
-      ['JkzhbbrXFMfXN7sduMKQRp']: `->[JkzhbbrXFMfXN7sduMKQRp]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
-    };
-  }, []);
+  const mapping: Mapping = {
+    // Should render the to relation as a pill
+    [SYSTEM_IDS.NAME_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
+    // Should render the roles to entities as a pill
+    ['JkzhbbrXFMfXN7sduMKQRp']: `->[JkzhbbrXFMfXN7sduMKQRp]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
+    [CONTENT_IDS.AVATAR_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[${CONTENT_IDS.AVATAR_ATTRIBUTE}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
+  };
 
   // @TODO: Default mapping if one doesn't exist
 
@@ -290,9 +289,11 @@ export function mappingToCell(
   //   }
   // }
 
-  console.log('cell renderables', renderables);
-
   cell.renderables = renderables;
+
+  if (propertyId === CONTENT_IDS.AVATAR_ATTRIBUTE) {
+    console.log('cell', cell);
+  }
 
   return cell;
 }
