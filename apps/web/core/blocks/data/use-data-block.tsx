@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Console, Effect } from 'effect';
+import { Effect } from 'effect';
 
 import * as React from 'react';
 
@@ -67,6 +67,7 @@ export function useDataBlock() {
       source,
       filterState,
       mapping,
+      spaceId,
     }),
     queryFn: async () => {
       const run = Effect.gen(function* () {
