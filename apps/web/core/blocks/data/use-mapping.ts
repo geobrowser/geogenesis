@@ -167,7 +167,7 @@ export function mappingToCell(entities: Entity[], propertyId: string, lexicon: P
     // e.g., We might want to render the name of an entity in the Roles slot.
     renderedPropertyId: finalSegment.property,
     renderables: [],
-    cellId: `${propertyId}-${finalSegment.property}`,
+    cellId: entities.find(e => e.id)?.id ?? '',
     name: null,
   };
 
