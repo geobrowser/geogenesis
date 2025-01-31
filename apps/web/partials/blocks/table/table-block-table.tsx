@@ -121,8 +121,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // Q: Is the table-rerendering when there are local changes? Does this
     // cause the cells to also re-render even when they don't need to?
     const maybePropertiesSchema = propertiesSchema.get(PropertyId(cellData.slotId));
-    const valueType = maybePropertiesSchema?.valueType ?? SYSTEM_IDS.TEXT;
-    const attributeName = maybePropertiesSchema?.name;
     const filterableRelationType = maybePropertiesSchema?.relationValueTypeId;
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 

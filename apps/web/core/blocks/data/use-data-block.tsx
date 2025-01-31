@@ -154,7 +154,7 @@ export function useDataBlock() {
                 for (const [propertyId, selector] of Object.entries(mapping)) {
                   const lexicon = parseSelectorIntoLexicon(selector);
                   const entities = await mapSelectorLexiconToSourceEntity(lexicon, relation.id);
-                  cells.push(mappingToCell(entities, propertyId, collectionItems, lexicon, spaceId));
+                  cells.push(mappingToCell(entities, propertyId, lexicon, spaceId));
                 }
 
                 return {
