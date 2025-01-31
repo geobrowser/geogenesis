@@ -310,7 +310,7 @@ const ReviewChanges = () => {
               />
               <div className="absolute -bottom-10 -left-32 -right-32 h-px bg-divider" />
             </div>
-            <div className="relative flex flex-col gap-16 divide-y divide-grey-02 pt-16">
+            <div className="relative flex flex-col gap-16 divide-y divide-divider pt-16">
               {changes.map(change => (
                 <ChangedEntity
                   key={change.id}

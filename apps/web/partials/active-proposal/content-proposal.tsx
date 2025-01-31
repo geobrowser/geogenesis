@@ -15,7 +15,7 @@ export async function ContentProposal({ proposal }: { proposal: Proposal }) {
     : await Change.fromActiveProposal(proposal);
 
   return (
-    <div className="flex flex-col gap-16 divide-y divide-grey-02">
+    <div className="flex flex-col gap-16 divide-y divide-divider">
       {changes.map(change => {
         return <ChangedEntity key={change.id} change={change} />;
       })}
