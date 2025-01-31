@@ -82,7 +82,11 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
           if (renderableType === 'IMAGE') {
             return (
-              <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue ?? '')} />
+              <ImageZoom
+                variant="table-cell"
+                key={`image-${relationId}-${relationValue}`}
+                imageSrc={getImagePath(relationValue ?? '')}
+              />
             );
           }
 
