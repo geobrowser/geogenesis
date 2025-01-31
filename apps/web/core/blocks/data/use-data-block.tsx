@@ -30,6 +30,7 @@ interface RenderablesQueryKey {
   source: Source;
   collectionItems: Entity[];
   mapping: Mapping;
+  spaceId: string;
 }
 
 const queryKeys = {
@@ -153,11 +154,8 @@ export function useDataBlock() {
                 const cells: Cell[] = [];
                 for (const [propertyId, selector] of Object.entries(mapping)) {
                   const lexicon = parseSelectorIntoLexicon(selector);
-                  const entity = await mapSelectorLexiconToSourceEntity(lexicon, relation.id);
-
-                  if (entity) {
-                    cells.push(mappingToCell(entity, propertyId, collectionItems, lexicon));
-                  }
+                  const entities = await mapSelectorLexiconToSourceEntity(lexicon, relation.id);
+                  cells.push(mappingToCell(entities, propertyId, collectionItems, lexicon, spaceId));
                 }
 
                 return {

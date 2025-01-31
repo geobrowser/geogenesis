@@ -26,10 +26,9 @@ import {
 import { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useSource } from '~/core/blocks/data/use-source';
 import { DataBlockView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useRelations } from '~/core/database/relations';
-import { useTriples } from '~/core/database/triples';
 import { DB } from '~/core/database/write';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -37,10 +36,7 @@ import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { Cell, PropertySchema, Row } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
-import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
-import { VALUE_TYPES } from '~/core/value-types';
 
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -53,7 +49,6 @@ import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 
-import { makePlaceholderFromValueType } from './utils';
 import { editingColumnsAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
@@ -103,8 +98,11 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { propertiesSchema } = useDataBlock();
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const { source } = useSource();
+
     const cellData = getValue<Cell | undefined>();
-    const isEditable = table.options.meta?.isEditable;
+    const isEditable = source.type === 'RELATIONS' ? false : table.options.meta?.isEditable;
 
     if (!cellData) return null;
 
@@ -128,67 +126,14 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const filterableRelationType = maybePropertiesSchema?.relationValueTypeId;
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const cellTriples = useTriples(
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      React.useMemo(() => {
-        return {
-          mergeWith: cellData.triples,
-          selector: triple => {
-            const isRowCell = triple.entityId === cellData.entityId;
-            const isColCell = triple.attributeId === propertyId;
-            const isCurrentValueType = triple.value.type === VALUE_TYPES[valueType];
-
-            // For mapped data we don't care about the correct value type
-            return isRowCell && isColCell && (cellData.renderedPropertyId ? true : isCurrentValueType);
-          },
-        };
-      }, [cellData, propertyId, valueType])
-    );
-
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const cellRelations = useRelations(
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      React.useMemo(() => {
-        return {
-          mergeWith: cellData.relations,
-          selector: relation => {
-            const isRowCell = relation.fromEntity.id === cellData.entityId;
-            const isColCell = relation.typeOf.id === propertyId;
-
-            return isRowCell && isColCell;
-          },
-        };
-      }, [cellData, propertyId])
-    );
-
-    const placeholder = makePlaceholderFromValueType({
-      attributeId: propertyId,
-      attributeName: attributeName ?? '',
-      entityId: cellData.entityId,
-      spaceId,
-      valueType,
-    });
-
-    const entityName = Entities.name(cellTriples);
-
-    const renderables = toRenderables({
-      entityId: cellData.entityId,
-      entityName,
-      spaceId,
-      triples: cellTriples,
-      relations: cellRelations,
-      // If the cell is empty in edit mode then we render a placeholder value
-      // until the user enters a real value.
-      placeholderRenderables: isEditable ? [placeholder] : undefined,
-    });
+    const renderables = cellData.renderables;
 
     if (isEditable) {
       return (
         <EditableEntityTableCell
           renderables={renderables}
           attributeId={propertyId}
-          entityId={cellData.entityId}
+          entityId={cellData.cellId}
           spaceId={spaceId}
           filterSearchByTypes={filterableRelationType ? [filterableRelationType] : undefined}
         />
@@ -197,7 +142,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     return (
       <EntityTableCell
-        entityId={cellData.entityId}
+        entityId={cellData.cellId}
         columnId={propertyId}
         renderables={renderables}
         space={spaceId}
@@ -384,16 +329,16 @@ export const TableBlockTable = React.memo(
                   )}
                   {table.getRowModel().rows.map((row, index: number) => {
                     const cells = row.getVisibleCells();
-                    const entityId = cells?.[0]?.getValue<Cell>()?.entityId;
+                    const entityId = cells?.[0]?.getValue<Cell>()?.cellId;
 
                     return (
                       <tr key={entityId ?? index} className="hover:bg-bg">
                         {cells.map(cell => {
                           const cellId = `${row.original.entityId}-${cell.column.id}`;
-                          const firstTriple = cell.getValue<Cell>()?.triples[0];
+                          const firstTriple = cell.getValue<Cell>()?.renderables.find(r => r.type === 'TEXT');
 
                           const isNameCell = Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
-                          const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
+                          const isExpandable = firstTriple && firstTriple.type === 'TEXT';
                           const isShown = shownColumnIds.includes(cell.column.id);
 
                           const href = NavUtils.toEntity(
@@ -441,8 +386,8 @@ export const TableBlockTable = React.memo(
           <div className="flex flex-col gap-4">
             {rows.map((row, index: number) => {
               const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-              const { entityId, name, description, image, verified } = nameCell;
-              const href = NavUtils.toEntity(nameCell?.space ?? space, entityId);
+              const { cellId, name, description, image, verified } = nameCell;
+              const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
 
               return (
                 <div key={index}>
@@ -481,8 +426,8 @@ export const TableBlockTable = React.memo(
           <div className="grid grid-cols-3 gap-x-4 gap-y-10">
             {rows.map((row, index: number) => {
               const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-              const { entityId, name, image, verified } = nameCell;
-              const href = NavUtils.toEntity(nameCell?.space ?? space, entityId);
+              const { cellId, name, image, verified } = nameCell;
+              const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
 
               return (
                 <Link key={index} href={href} className="group flex flex-col gap-3">

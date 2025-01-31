@@ -73,7 +73,7 @@ export function parseSelectorIntoLexicon(selector: string | null): PathSegment[]
 export async function mapSelectorLexiconToSourceEntity(
   lexicon: PathSegment[],
   startEntityId: string
-): Promise<Entity | null> {
+): Promise<Entity[]> {
   let input = await mergeEntityAsync(EntityId(startEntityId));
 
   for (const segment of lexicon) {
@@ -91,18 +91,19 @@ export async function mapSelectorLexiconToSourceEntity(
         }
 
         input = await mergeEntityAsync(EntityId(GraphUrl.toEntityId(newInputId as `graph://${string}`)));
+
         continue;
       }
 
-      const relation = input.relationsOut.find(r => r.typeOf.id === segment.property);
+      const relations = input.relationsOut.filter(r => r.typeOf.id === segment.property);
 
-      if (!relation) {
-        return null;
+      if (relations.length === 0) {
+        return [];
       }
 
-      input = await mergeEntityAsync(EntityId(relation.toEntity.id));
+      return await Promise.all(relations.map(r => mergeEntityAsync(EntityId(r.toEntity.id))));
     }
   }
 
-  return input;
+  return [input];
 }

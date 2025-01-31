@@ -2,9 +2,12 @@ import { GraphUri, GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
+import { getRelations } from '~/core/database/relations';
+import { getTriples } from '~/core/database/triples';
 import { Entity } from '~/core/io/dto/entities';
-import { Cell, Row } from '~/core/types';
+import { Cell, RenderableProperty, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { toRenderables } from '~/core/utils/to-renderables';
 
 import { PathSegment } from './data-selectors';
 
@@ -41,10 +44,10 @@ export type Mapping = {
 export function useMapping() {
   const mapping = React.useMemo((): Mapping => {
     return {
-      // This mapping should contain the properties being rendered to the
-      // lexicon DSL for each shown column
-      [SYSTEM_IDS.NAME_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}].[${SYSTEM_IDS.NAME_ATTRIBUTE}]`,
-      ['JkzhbbrXFMfXN7sduMKQRp']: `->[JkzhbbrXFMfXN7sduMKQRp]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}].[${SYSTEM_IDS.NAME_ATTRIBUTE}]`,
+      // Should render the to relation as a pill
+      [SYSTEM_IDS.NAME_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
+      // Should render the roles to entities as a pill
+      ['JkzhbbrXFMfXN7sduMKQRp']: `->[JkzhbbrXFMfXN7sduMKQRp]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
     };
   }, []);
 
@@ -68,9 +71,10 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionI
 
         const cell: Cell = {
           slotId: slotId,
-          entityId: id,
-          triples: cellTriples,
-          relations: cellRelations,
+          cellId: id,
+          renderables: [],
+          // triples: [],
+          // relations: [],
           name,
         };
 
@@ -83,7 +87,7 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionI
           const collectionEntity = collectionItems?.find(entity =>
             entity.triples
               .find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
-              ?.value.value.startsWith(`graph://${cell.entityId}`)
+              ?.value.value.startsWith(`graph://${cell.cellId}`)
           );
 
           if (collectionEntity) {
@@ -124,10 +128,11 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionI
 }
 
 export function mappingToCell(
-  entity: Entity,
+  entities: Entity[],
   propertyId: string,
   collectionItems: Entity[],
-  lexicon: PathSegment[]
+  lexicon: PathSegment[],
+  spaceId: string
 ): Cell {
   /**
    * Take each row, take each mapping, take each "slot" in the mapping
@@ -136,10 +141,6 @@ export function mappingToCell(
 
   const finalSegment = lexicon[lexicon.length - 1];
 
-  const { name, id, triples, relationsOut, description } = entity;
-  const cellTriples = triples.filter(triple => triple.attributeId === finalSegment.property);
-  const cellRelations = relationsOut.filter(t => t.typeOf.id === finalSegment.property);
-
   const cell: Cell = {
     slotId: propertyId,
     // The rendered property id is what is used to select the actual rendered _data_. The slotId
@@ -147,45 +148,101 @@ export function mappingToCell(
     //
     // e.g., We might want to render the name of an entity in the Roles slot.
     renderedPropertyId: finalSegment.property,
-    entityId: id,
-    triples: cellTriples,
-    relations: cellRelations,
-    name,
+    renderables: [],
+    cellId: '',
+    name: null,
   };
 
-  const isNameCell = propertyId === SYSTEM_IDS.NAME_ATTRIBUTE;
+  const renderables = entities.flatMap((entity): RenderableProperty[] => {
+    const { id, triples, relationsOut } = entity;
+    const cellTriples = triples.filter(triple => triple.attributeId === finalSegment.property);
+    const cellRelations = relationsOut.filter(t => t.typeOf.id === finalSegment.property);
+    const entityName = Entities.name(cellTriples);
 
-  if (isNameCell) {
-    cell.description = description;
-    cell.image = Entities.cover(relationsOut) ?? Entities.avatar(relationsOut) ?? null;
-
-    const collectionEntity = collectionItems?.find(entity =>
-      entity.triples
-        .find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
-        ?.value.value.startsWith(`graph://${cell.entityId}`)
-    );
-
-    if (collectionEntity) {
-      const url = collectionEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
-        ?.value.value;
-
-      if (url?.startsWith('graph://')) {
-        const spaceId = GraphUrl.toSpaceId(url as GraphUri);
-
-        if (spaceId) {
-          cell.space = spaceId;
-
-          const verifiedSourceTriple = collectionEntity.triples.find(
-            triple => triple.attributeId === SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE
-          );
-
-          if (verifiedSourceTriple) {
-            cell.verified = verifiedSourceTriple.value.value === '1';
-          }
-        }
-      }
+    if (finalSegment.property === SYSTEM_IDS.RELATION_TO_ATTRIBUTE) {
+      return [
+        {
+          type: 'RELATION',
+          attributeId: propertyId,
+          attributeName: null,
+          entityId: id,
+          spaceId,
+          value: id,
+          entityName: entity.name,
+          valueName: entity.name,
+          relationId: '',
+        },
+      ];
     }
-  }
+
+    // @TODO: local data
+    const mergedTriples = getTriples({
+      mergeWith: entity.triples,
+      selector: triple => {
+        const isRowCell = triple.entityId === id;
+        const isColCell = triple.attributeId === propertyId;
+
+        // For mapped data we don't care about the correct value type
+        return isRowCell && isColCell;
+      },
+    });
+
+    const mergedRelations = getRelations({
+      mergeWith: entity.relationsOut,
+      selector: relation => {
+        const isRowCell = relation.fromEntity.id === id;
+        const isColCell = relation.typeOf.id === propertyId;
+
+        return isRowCell && isColCell;
+      },
+    });
+
+    return toRenderables({
+      entityId: id,
+      entityName,
+      spaceId,
+      triples: mergedTriples,
+      relations: mergedRelations,
+    });
+  });
+
+  // const isNameCell = propertyId === SYSTEM_IDS.NAME_ATTRIBUTE;
+
+  // if (isNameCell) {
+  //   cell.description = description;
+  //   cell.image = Entities.cover(relationsOut) ?? Entities.avatar(relationsOut) ?? null;
+
+  //   const collectionEntity = collectionItems?.find(entity =>
+  //     entity.triples
+  //       .find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+  //       ?.value.value.startsWith(`graph://${cell.cellId}`)
+  //   );
+
+  //   if (collectionEntity) {
+  //     const url = collectionEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+  //       ?.value.value;
+
+  //     if (url?.startsWith('graph://')) {
+  //       const spaceId = GraphUrl.toSpaceId(url as GraphUri);
+
+  //       if (spaceId) {
+  //         cell.space = spaceId;
+
+  //         const verifiedSourceTriple = collectionEntity.triples.find(
+  //           triple => triple.attributeId === SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE
+  //         );
+
+  //         if (verifiedSourceTriple) {
+  //           cell.verified = verifiedSourceTriple.value.value === '1';
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
+
+  console.log('cell renderables', renderables);
+
+  cell.renderables = renderables;
 
   return cell;
 }

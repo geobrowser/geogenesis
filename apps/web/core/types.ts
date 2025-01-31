@@ -195,11 +195,10 @@ export type Relation = {
 };
 
 export type Cell = {
-  name: string | null;
   slotId: string;
-  entityId: string;
-  triples: Triple[];
-  relations: Relation[];
+  cellId: string;
+  name: string | null;
+  renderables: RenderableProperty[];
   description?: string | null;
   image?: string | null;
   space?: string;
