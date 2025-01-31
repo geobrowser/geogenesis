@@ -58,7 +58,12 @@ export function useMapping() {
   };
 }
 
-export function mappingToRows(entities: Entity[], slotIds: string[], collectionItems: Entity[]): Row[] {
+export function mappingToRows(
+  entities: Entity[],
+  slotIds: string[],
+  collectionItems: Entity[],
+  spaceId: string
+): Row[] {
   /**
    * Take each row, take each mapping, take each "slot" in the mapping
    * and map them into the Row structure.
@@ -73,10 +78,39 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionI
           slotId: slotId,
           cellId: id,
           renderables: [],
-          // triples: [],
-          // relations: [],
           name,
         };
+
+        const mergedTriples = getTriples({
+          mergeWith: cellTriples,
+          selector: triple => {
+            const isRowCell = triple.entityId === id;
+            const isColCell = triple.attributeId === slotId;
+
+            // For mapped data we don't care about the correct value type
+            return isRowCell && isColCell;
+          },
+        });
+
+        const mergedRelations = getRelations({
+          mergeWith: cellRelations,
+          selector: relation => {
+            const isRowCell = relation.fromEntity.id === id;
+            const isColCell = relation.typeOf.id === slotId;
+
+            return isRowCell && isColCell;
+          },
+        });
+
+        cell.renderables = toRenderables({
+          entityId: id,
+          entityName: name,
+          spaceId,
+          triples: mergedTriples,
+          relations: mergedRelations,
+        });
+
+        // @TODO: renderbles + local data
 
         const isNameCell = slotId === SYSTEM_IDS.NAME_ATTRIBUTE;
 
@@ -160,24 +194,40 @@ export function mappingToCell(
     const entityName = Entities.name(cellTriples);
 
     if (finalSegment.property === SYSTEM_IDS.RELATION_TO_ATTRIBUTE) {
-      return [
-        {
-          type: 'RELATION',
-          attributeId: propertyId,
-          attributeName: null,
-          entityId: id,
-          spaceId,
-          value: id,
-          entityName: entity.name,
-          valueName: entity.name,
-          relationId: '',
-        },
-      ];
+      const imageEntityUrlValue =
+        triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
+
+      return entity.types.some(t => t.id === SYSTEM_IDS.IMAGE_TYPE)
+        ? [
+            {
+              type: 'IMAGE',
+              attributeId: propertyId,
+              attributeName: null,
+              entityId: id,
+              spaceId,
+              value: imageEntityUrlValue ?? '',
+              entityName: entity.name,
+              valueName: entity.name,
+              relationId: '',
+            },
+          ]
+        : [
+            {
+              type: 'RELATION',
+              attributeId: propertyId,
+              attributeName: null,
+              entityId: id,
+              spaceId,
+              value: id,
+              entityName: entity.name,
+              valueName: entity.name,
+              relationId: '',
+            },
+          ];
     }
 
-    // @TODO: local data
     const mergedTriples = getTriples({
-      mergeWith: entity.triples,
+      mergeWith: cellTriples,
       selector: triple => {
         const isRowCell = triple.entityId === id;
         const isColCell = triple.attributeId === propertyId;
@@ -188,7 +238,7 @@ export function mappingToCell(
     });
 
     const mergedRelations = getRelations({
-      mergeWith: entity.relationsOut,
+      mergeWith: cellRelations,
       selector: relation => {
         const isRowCell = relation.fromEntity.id === id;
         const isColCell = relation.typeOf.id === propertyId;

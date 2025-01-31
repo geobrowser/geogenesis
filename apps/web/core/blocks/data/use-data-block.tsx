@@ -42,8 +42,8 @@ export function useDataBlock() {
   const { entityId, spaceId, pageNumber, setPage } = useDataBlockInstance();
 
   const blockEntity = useEntity({
-    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
-    id: React.useMemo(() => EntityId(entityId), [entityId]),
+    spaceId: SpaceId(spaceId),
+    id: EntityId(entityId),
   });
 
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
@@ -117,7 +117,7 @@ export function useDataBlock() {
         if (source.type === 'SPACES' || source.type === 'GEO') {
           const data = yield* Effect.promise(() => mergeTableEntities({ options: params, filterState }));
 
-          return mappingToRows(data, shownColumnIds, collectionItems);
+          return mappingToRows(data, shownColumnIds, collectionItems, spaceId);
         }
 
         if (source.type === 'COLLECTION') {
@@ -128,7 +128,7 @@ export function useDataBlock() {
             })
           );
 
-          return mappingToRows(data, shownColumnIds, collectionItems);
+          return mappingToRows(data, shownColumnIds, collectionItems, spaceId);
         }
 
         if (source.type === 'RELATIONS') {
@@ -145,14 +145,12 @@ export function useDataBlock() {
             return [];
           }
 
-          // @TODO: Each shownColumnId should have a unique lexicon. What do we do if the lexicon
-          // doesn't exist? Use the relation entity by default?
-
           const data = yield* Effect.forEach(
             relations,
             relation =>
               Effect.promise(async () => {
                 const cells: Cell[] = [];
+
                 for (const [propertyId, selector] of Object.entries(mapping)) {
                   const lexicon = parseSelectorIntoLexicon(selector);
                   const entities = await mapSelectorLexiconToSourceEntity(lexicon, relation.id);
@@ -161,13 +159,10 @@ export function useDataBlock() {
 
                 return {
                   entityId: relation.id,
-                  columns: cells.reduce(
-                    (acc, cell) => {
-                      acc[cell.slotId] = cell;
-                      return acc;
-                    },
-                    {} as Record<string, Cell>
-                  ),
+                  columns: cells.reduce<Record<string, Cell>>((acc, cell) => {
+                    acc[cell.slotId] = cell;
+                    return acc;
+                  }, {}),
                 };
               }),
             {
@@ -188,21 +183,18 @@ export function useDataBlock() {
   // Use the mapping to get the potential renderable properties.
   const { properties: propertiesSchema } = useProperties(shownColumnIds);
 
-  const setName = React.useCallback(
-    (newName: string) => {
-      upsert(
-        {
-          attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
-          entityId: entityId,
-          entityName: newName,
-          attributeName: 'Name',
-          value: { type: 'TEXT', value: newName },
-        },
-        spaceId
-      );
-    },
-    [entityId, spaceId]
-  );
+  const setName = (newName: string) => {
+    upsert(
+      {
+        attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        entityId: entityId,
+        entityName: newName,
+        attributeName: 'Name',
+        value: { type: 'TEXT', value: newName },
+      },
+      spaceId
+    );
+  };
 
   // @TODO: Returned data type should be a FSM depending on the source.type
   return {
@@ -249,15 +241,13 @@ interface Props {
 export function DataBlockProvider({ spaceId, children, entityId, relationId }: Props) {
   const { pageNumber, setPage } = usePagination();
 
-  const store = React.useMemo(() => {
-    return {
-      spaceId,
-      entityId,
-      relationId,
-      pageNumber,
-      setPage,
-    };
-  }, [spaceId, entityId, relationId, pageNumber, setPage]);
+  const store = {
+    spaceId,
+    entityId,
+    relationId,
+    pageNumber,
+    setPage,
+  };
 
   return <DataBlockContext.Provider value={store}>{children}</DataBlockContext.Provider>;
 }
