@@ -39,7 +39,7 @@ const queryKeys = {
 };
 
 export function useDataBlock() {
-  const { entityId, spaceId, pageNumber, setPage } = useDataBlockInstance();
+  const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
 
   const blockEntity = useEntity({
     spaceId: SpaceId(spaceId),
@@ -199,6 +199,7 @@ export function useDataBlock() {
   return {
     entityId,
     spaceId,
+    relationId,
 
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
     properties: [...propertiesSchema.values()],

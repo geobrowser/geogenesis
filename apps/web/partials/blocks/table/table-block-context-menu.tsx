@@ -19,6 +19,7 @@ import { Copy } from '~/design-system/icons/copy';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
+import { Relation } from '~/design-system/icons/relation';
 import { MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -37,7 +38,7 @@ type TableBlockContextMenuProps = {
 
 export function TableBlockContextMenu({ allColumns }: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { spaceId, entityId } = useDataBlock();
+  const { spaceId, entityId, relationId } = useDataBlock();
   const [isEditingDataSource, setIsEditingDataSource] = React.useState(false);
   const [isEditingColumns, setIsEditingColumns] = useAtom(editingColumnsAtom);
 
@@ -110,6 +111,15 @@ export function TableBlockContextMenu({ allColumns }: TableBlockContextMenuProps
                 >
                   <span>View config</span>
                   <Cog />
+                </Link>
+              </MenuItem>
+              <MenuItem>
+                <Link
+                  href={NavUtils.toEntity(spaceId, relationId)}
+                  className="flex w-full items-center justify-between gap-2"
+                >
+                  <span>View relation</span>
+                  <Relation />
                 </Link>
               </MenuItem>
               <MenuItem>
