@@ -16,7 +16,7 @@ import { MergeTableEntitiesArgs, mergeEntitiesAsync, mergeTableEntities } from '
 import { Source } from './source';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
-import { Mapping, mappingToCell, mappingToRows, useMapping } from './use-mapping';
+import { Mapping, mappingToCell, mappingToRows } from './use-mapping';
 import { usePagination } from './use-pagination';
 import { useSource } from './use-source';
 import { useView } from './use-view';
@@ -49,8 +49,7 @@ export function useDataBlock() {
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
   const { source } = useSource();
   const { collectionItems } = useCollection();
-  const { shownColumnIds } = useView();
-  const { mapping } = useMapping();
+  const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
 
   const {
     data: rows,
@@ -216,7 +215,13 @@ export function useDataBlock() {
     // state then back into a loading state. By adding the isFetched state we
     // will stay in a placeholder state until we've fetched our queries at least
     // one time.
-    isLoading: isLoadingRenderables || isLoadingFilterState || !isFilterStateFetched || !isRenderablesFetched,
+    isLoading:
+      isLoadingRenderables ||
+      isLoadingFilterState ||
+      isViewLoading ||
+      !isFilterStateFetched ||
+      !isRenderablesFetched ||
+      !isViewFetched,
 
     name: blockEntity.name,
     setName,

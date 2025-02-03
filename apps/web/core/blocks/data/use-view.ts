@@ -1,8 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
-import * as React from 'react';
-
 import { useEntity } from '~/core/database/entities';
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
@@ -23,118 +21,116 @@ type Column = {
 export function useView() {
   const { entityId, spaceId, relationId } = useDataBlockInstance();
 
-  const blockRelation = useEntity({
-    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
-    id: React.useMemo(() => EntityId(relationId), [relationId]),
-  });
-
   const blockEntity = useEntity({
-    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
-    id: React.useMemo(() => EntityId(entityId), [entityId]),
+    spaceId: SpaceId(spaceId),
+    id: EntityId(entityId),
   });
 
-  const viewRelation = React.useMemo(
-    () => blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE),
-    [blockRelation.relationsOut]
+  const blockRelation = useEntity({
+    spaceId: SpaceId(spaceId),
+    id: EntityId(relationId),
+  });
+
+  const viewRelation = blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
+
+  const shownColumnRelations = blockRelation.relationsOut.filter(
+    relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS || relation.typeOf.id === SYSTEM_IDS.PROPERTIES
   );
 
-  const shownColumnRelations = React.useMemo(
-    () => blockRelation.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS),
-    [blockRelation.relationsOut]
+  // @TODO: Add shown columns independently of whether they are part of a schema or not
+
+  // @TODO: Use the real shown columns
+  // @TODO: Merge with shownColumnsRelations
+  const { mapping, isLoading, isFetched } = useMapping(
+    blockRelation.id,
+    shownColumnRelations.map(r => r.id)
   );
 
-  const shownColumnIds = React.useMemo(() => {
-    return [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
-  }, [shownColumnRelations]);
+  // const shownColumnIds = [...shownColumnRelations.map(r => r.toEntity.id), SYSTEM_IDS.NAME_ATTRIBUTE];
+  const shownColumnIds = [...(Object.keys(mapping) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
 
-  // Should use the shown columns to generate the mapping, for now we hardcode them
-  const { mapping } = useMapping();
+  const view = getView(viewRelation);
+  const placeholder = getPlaceholder(blockEntity, view);
 
-  const view = React.useMemo(() => getView(viewRelation), [viewRelation]);
-  const placeholder = React.useMemo(() => getPlaceholder(blockEntity, view), [blockEntity, view]);
+  const setView = async (newView: DataBlockViewDetails) => {
+    const isCurrentView = newView.value === view;
 
-  const setView = React.useCallback(
-    async (newView: DataBlockViewDetails) => {
-      const isCurrentView = newView.value === view;
-
-      if (!isCurrentView) {
-        if (viewRelation) {
-          DB.removeRelation({ relationId: viewRelation.id, spaceId, fromEntityId: EntityId(relationId) });
-        }
-
-        const newRelation: StoreRelation = {
-          space: spaceId,
-          index: INITIAL_RELATION_INDEX_VALUE,
-          typeOf: {
-            id: EntityId(SYSTEM_IDS.VIEW_ATTRIBUTE),
-            name: 'View',
-          },
-          fromEntity: {
-            id: EntityId(relationId),
-            name: '',
-          },
-          toEntity: {
-            id: EntityId(newView.id),
-            name: newView.name,
-            renderableType: 'RELATION',
-            value: EntityId(newView.id),
-          },
-        };
-
-        DB.upsertRelation({
-          relation: newRelation,
-          spaceId,
-        });
+    if (!isCurrentView) {
+      if (viewRelation) {
+        DB.removeRelation({ relationId: viewRelation.id, spaceId, fromEntityId: EntityId(relationId) });
       }
-    },
-    [relationId, spaceId, viewRelation, view]
-  );
 
-  const setColumn = React.useCallback(
-    (newColumn: Column) => {
-      const isShown = shownColumnIds.includes(newColumn.id);
-      const shownColumnRelation = shownColumnRelations.find(relation => relation.toEntity.id === newColumn.id);
+      const newRelation: StoreRelation = {
+        space: spaceId,
+        index: INITIAL_RELATION_INDEX_VALUE,
+        typeOf: {
+          id: EntityId(SYSTEM_IDS.VIEW_ATTRIBUTE),
+          name: 'View',
+        },
+        fromEntity: {
+          id: EntityId(relationId),
+          name: '',
+        },
+        toEntity: {
+          id: EntityId(newView.id),
+          name: newView.name,
+          renderableType: 'RELATION',
+          value: EntityId(newView.id),
+        },
+      };
 
-      if (!isShown) {
-        const newRelation: StoreRelation = {
-          space: spaceId,
-          index: INITIAL_RELATION_INDEX_VALUE,
-          typeOf: {
-            id: EntityId(SYSTEM_IDS.SHOWN_COLUMNS),
-            name: 'Shown Columns',
-          },
-          fromEntity: {
-            id: EntityId(relationId),
-            name: '',
-          },
-          toEntity: {
-            id: EntityId(newColumn.id),
-            name: newColumn.name,
-            renderableType: 'RELATION',
-            value: EntityId(newColumn.id),
-          },
-        };
+      DB.upsertRelation({
+        relation: newRelation,
+        spaceId,
+      });
+    }
+  };
 
-        DB.upsertRelation({
-          relation: newRelation,
-          spaceId,
-        });
-      } else {
-        if (shownColumnRelation) {
-          DB.removeRelation({ relationId: shownColumnRelation.id, fromEntityId: EntityId(relationId), spaceId });
-        }
+  const setColumn = (newColumn: Column) => {
+    const isShown = shownColumnIds.includes(newColumn.id);
+    const shownColumnRelation = shownColumnRelations.find(relation => relation.toEntity.id === newColumn.id);
+
+    if (!isShown) {
+      const newRelation: StoreRelation = {
+        space: spaceId,
+        index: INITIAL_RELATION_INDEX_VALUE,
+        typeOf: {
+          id: EntityId(SYSTEM_IDS.PROPERTIES),
+          name: 'Properties',
+        },
+        fromEntity: {
+          id: EntityId(relationId),
+          name: '',
+        },
+        toEntity: {
+          id: EntityId(newColumn.id),
+          name: newColumn.name,
+          renderableType: 'RELATION',
+          value: EntityId(newColumn.id),
+        },
+      };
+
+      DB.upsertRelation({
+        relation: newRelation,
+        spaceId,
+      });
+    } else {
+      if (shownColumnRelation) {
+        DB.removeRelation({ relationId: shownColumnRelation.id, fromEntityId: EntityId(relationId), spaceId });
       }
-    },
-    [relationId, spaceId, shownColumnRelations, shownColumnIds]
-  );
+    }
+  };
 
   return {
+    isLoading,
+    isFetched,
     view,
     placeholder,
     viewRelation,
     setView,
-    shownColumnIds: [...Object.keys(mapping)],
+    shownColumnIds,
     setColumn,
+    mapping,
   };
 }
 

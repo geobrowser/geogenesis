@@ -1,8 +1,10 @@
-import { CONTENT_IDS, GraphUri, GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUri, GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import { Entity } from '~/core/io/dto/entities';
+import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { Cell, RenderableProperty, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
@@ -39,19 +41,63 @@ export type Mapping = {
  *   each UI slot defined by code rather than the mapping. e.g., the name field
  *   of the entity is always rendered in the name slot in the List/Gallery.
  */
-export function useMapping() {
-  const mapping: Mapping = {
-    // Should render the to relation as a pill
-    [SYSTEM_IDS.NAME_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
-    // Should render the roles to entities as a pill
-    ['JkzhbbrXFMfXN7sduMKQRp']: `->[JkzhbbrXFMfXN7sduMKQRp]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
-    [CONTENT_IDS.AVATAR_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[${CONTENT_IDS.AVATAR_ATTRIBUTE}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
-  };
 
-  // @TODO: Default mapping if one doesn't exist
+export function useMapping(
+  blockRelationId: string,
+  shownPropertyRelationEntityIds: string[]
+): {
+  mapping: Mapping;
+  isLoading: boolean;
+  isFetched: boolean;
+} {
+  // const mapping: Mapping = {
+  //   // Should render the to relation as a pill
+  //   [SYSTEM_IDS.NAME_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
+  //   // Should render the roles to entities as a pill
+  //   ['JkzhbbrXFMfXN7sduMKQRp']: `->[JkzhbbrXFMfXN7sduMKQRp]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
+  //   [CONTENT_IDS.AVATAR_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[${CONTENT_IDS.AVATAR_ATTRIBUTE}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
+  //   // [SYSTEM_IDS.COVER_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[${SYSTEM_IDS.COVER_ATTRIBUTE}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
+  //   // [CONTENT_IDS.AVATAR_ATTRIBUTE]: `->.[${SYSTEM_IDS.NAME_ATTRIBUTE}]`,
+  // };
+
+  const {
+    data: shownPropertyEntities,
+    isLoading,
+    isFetched,
+  } = useQuery({
+    enabled: shownPropertyRelationEntityIds.length > 0,
+    placeholderData: keepPreviousData,
+    queryKey: ['block-shown-properties', blockRelationId, shownPropertyRelationEntityIds],
+    queryFn: async () => {
+      return await fetchEntitiesBatch(shownPropertyRelationEntityIds);
+    },
+  });
+
+  const mapping = shownPropertyEntities
+    ? shownPropertyEntities.reduce<Mapping>((acc, entity) => {
+        const key = entity.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value;
+        const selector = entity.triples.find(t => t.attributeId === SYSTEM_IDS.SELECTOR_ATTRIBUTE)?.value.value;
+        const decodedKey = key ? GraphUrl.toEntityId(key as GraphUri) : null;
+
+        if (decodedKey && selector) {
+          acc[decodedKey] = selector;
+        }
+
+        if (decodedKey && !selector) {
+          acc[decodedKey] = null;
+        }
+
+        return acc;
+      }, {})
+    : {
+        // Default mapping if one doesn't exist
+        [SYSTEM_IDS.NAME_ATTRIBUTE]: null,
+      };
 
   return {
-    mapping,
+    isLoading,
+    isFetched,
+    mapping: mapping ?? {},
   };
 }
 
