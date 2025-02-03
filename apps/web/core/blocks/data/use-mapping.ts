@@ -65,10 +65,13 @@ export function useMapping(
     isLoading,
     isFetched,
   } = useQuery({
-    enabled: shownPropertyRelationEntityIds.length > 0,
     placeholderData: keepPreviousData,
     queryKey: ['block-shown-properties', blockRelationId, shownPropertyRelationEntityIds],
     queryFn: async () => {
+      if (shownPropertyRelationEntityIds.length === 0) {
+        return [];
+      }
+
       return await fetchEntitiesBatch(shownPropertyRelationEntityIds);
     },
   });
