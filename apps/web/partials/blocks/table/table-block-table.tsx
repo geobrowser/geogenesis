@@ -102,6 +102,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const { source } = useSource();
 
     const cellData = getValue<Cell | undefined>();
+
+    // Currently relations (rollup) blocks aren't editable.
     const isEditable = source.type === 'RELATIONS' ? false : table.options.meta?.isEditable;
 
     if (!cellData) return null;
