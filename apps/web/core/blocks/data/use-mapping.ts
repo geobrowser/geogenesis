@@ -82,6 +82,11 @@ export function useMapping(
         const selector = entity.triples.find(t => t.attributeId === SYSTEM_IDS.SELECTOR_ATTRIBUTE)?.value.value;
         const decodedKey = key ? GraphUrl.toEntityId(key as GraphUri) : null;
 
+        // @TODO: Handle null selectors
+        if (decodedKey === '399xP4sGWSoepxeEnp3UdR') {
+          return acc;
+        }
+
         if (decodedKey && selector) {
           acc[decodedKey] = selector;
         }

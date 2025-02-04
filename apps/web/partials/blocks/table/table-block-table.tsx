@@ -388,10 +388,34 @@ export const TableBlockTable = React.memo(
               const maybeCoverData = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
               const maybeDescriptionData = row.columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
 
-              // @TODO: Read optionally from avatar and description properties if they exist.
-              // If not, use the entity in the name cell.
               // @TODO: An "everything" else ID that can be used to render any renderable.
-              const { cellId, name, description, image, verified } = nameCell;
+              const { cellId, name, verified } = nameCell;
+              let { description, image } = nameCell;
+
+              const maybeDescription = maybeDescriptionData.renderables.find(
+                r => r.attributeId === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+              )?.value;
+
+              if (maybeDescription) {
+                description = maybeDescription;
+              }
+
+              const maybeAvatarUrl = maybeAvatarData?.renderables.find(
+                r => r.attributeId === CONTENT_IDS.AVATAR_ATTRIBUTE
+              )?.value;
+
+              const maybeCoverUrl = maybeCoverData?.renderables.find(
+                r => r.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE
+              )?.value;
+
+              if (maybeAvatarUrl) {
+                image = maybeAvatarUrl;
+              }
+
+              if (maybeCoverUrl) {
+                image = maybeCoverUrl;
+              }
+
               const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
 
               return (
@@ -433,12 +457,27 @@ export const TableBlockTable = React.memo(
               const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
               const maybeAvatarData = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
               const maybeCoverData = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
-              const maybeDescriptionData = row.columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
 
-              // @TODO: Read optionally from avatar and description properties if they exist.
-              // If not, use the entity in the name cell.
               // @TODO: An "everything" else ID that can be used to render any renderable.
-              const { cellId, name, image, verified } = nameCell;
+              const { cellId, name, verified } = nameCell;
+              let { image } = nameCell;
+
+              const maybeAvatarUrl = maybeAvatarData?.renderables.find(
+                r => r.attributeId === CONTENT_IDS.AVATAR_ATTRIBUTE
+              )?.value;
+
+              const maybeCoverUrl = maybeCoverData?.renderables.find(
+                r => r.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE
+              )?.value;
+
+              if (maybeAvatarUrl) {
+                image = maybeAvatarUrl;
+              }
+
+              if (maybeCoverUrl) {
+                image = maybeCoverUrl;
+              }
+
               const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
 
               return (
