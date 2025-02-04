@@ -106,20 +106,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
-    // @TODO: This is super slow since every single cell needs to be merged
-    // with local triples and relations. We need a nice way to only re-render
-    // cells that have changed _without_ doing computation. in each cell. We
-    // could just store local renderable state changes instead of using the
-    // global state?
-    //
-    // We need some mechanism that can pass through the data for each cell
-    // instead of each cell having to calculate its own data. We do some of
-    // this work already in the table block store when we merge rows, but
-    // right now that isn't reactive because we don't re-run that function
-    // when local data changes. Maybe we should somehow.
-    //
-    // Q: Is the table-rerendering when there are local changes? Does this
-    // cause the cells to also re-render even when they don't need to?
     const maybePropertiesSchema = propertiesSchema.get(PropertyId(cellData.slotId));
     const filterableRelationType = maybePropertiesSchema?.relationValueTypeId;
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
