@@ -82,11 +82,6 @@ export function useMapping(
         const selector = entity.triples.find(t => t.attributeId === SYSTEM_IDS.SELECTOR_ATTRIBUTE)?.value.value;
         const decodedKey = key ? GraphUrl.toEntityId(key as GraphUri) : null;
 
-        // @TODO: Handle null selectors
-        if (decodedKey === '399xP4sGWSoepxeEnp3UdR') {
-          return acc;
-        }
-
         if (decodedKey && selector) {
           acc[decodedKey] = selector;
         }
@@ -211,7 +206,8 @@ export function mappingToRows(
 }
 
 export function mappingToCell(entities: Entity[], propertyId: string, lexicon: PathSegment[], spaceId: string): Cell {
-  const finalSegment = lexicon[lexicon.length - 1];
+  const finalSegment: PathSegment | undefined = lexicon[lexicon.length - 1];
+  const propertyToFilter = finalSegment ? finalSegment.property : propertyId;
 
   const cell: Cell = {
     slotId: propertyId,
@@ -219,7 +215,7 @@ export function mappingToCell(entities: Entity[], propertyId: string, lexicon: P
     // is the id of the UI slot where the data is rendered.
     //
     // e.g., We might want to render the name of an entity in the Roles slot.
-    renderedPropertyId: finalSegment.property,
+    renderedPropertyId: finalSegment?.property,
     renderables: [],
     cellId: entities.find(e => e.id)?.id ?? '',
     name: null,
@@ -227,11 +223,11 @@ export function mappingToCell(entities: Entity[], propertyId: string, lexicon: P
 
   const renderables = entities.flatMap((entity): RenderableProperty[] => {
     const { id, triples, relationsOut } = entity;
-    const cellTriples = triples.filter(triple => triple.attributeId === finalSegment.property);
-    const cellRelations = relationsOut.filter(t => t.typeOf.id === finalSegment.property);
+    const cellTriples = triples.filter(triple => triple.attributeId === propertyToFilter);
+    const cellRelations = relationsOut.filter(t => t.typeOf.id === propertyToFilter);
     const entityName = Entities.name(cellTriples);
 
-    if (finalSegment.property === SYSTEM_IDS.RELATION_TO_ATTRIBUTE) {
+    if (propertyToFilter === SYSTEM_IDS.RELATION_TO_ATTRIBUTE) {
       const imageEntityUrlValue =
         triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
 

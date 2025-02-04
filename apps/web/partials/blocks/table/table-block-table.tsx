@@ -384,15 +384,15 @@ export const TableBlockTable = React.memo(
           <div className="flex flex-col gap-4">
             {rows.map((row, index: number) => {
               const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-              const maybeAvatarData = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
-              const maybeCoverData = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
-              const maybeDescriptionData = row.columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
+              const maybeAvatarData: Cell | undefined = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
+              const maybeCoverData: Cell | undefined = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
+              const maybeDescriptionData: Cell | undefined = row.columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
 
               // @TODO: An "everything" else ID that can be used to render any renderable.
               const { cellId, name, verified } = nameCell;
               let { description, image } = nameCell;
 
-              const maybeDescription = maybeDescriptionData.renderables.find(
+              const maybeDescription = maybeDescriptionData?.renderables.find(
                 r => r.attributeId === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
               )?.value;
 
@@ -454,9 +454,9 @@ export const TableBlockTable = React.memo(
         return (
           <div className="grid grid-cols-3 gap-x-4 gap-y-10">
             {rows.map((row, index: number) => {
-              const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-              const maybeAvatarData = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
-              const maybeCoverData = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
+              const nameCell: Cell | undefined = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
+              const maybeAvatarData: Cell | undefined = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
+              const maybeCoverData: Cell | undefined = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
 
               // @TODO: An "everything" else ID that can be used to render any renderable.
               const { cellId, name, verified } = nameCell;

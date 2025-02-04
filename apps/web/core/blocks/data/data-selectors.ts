@@ -44,7 +44,7 @@ export type PathSegment = TripleSegment | RelationSegment;
  * 2. Map the application lexicon to be able to query for correct data
  */
 export function parseSelectorIntoLexicon(selector: string | null): PathSegment[] {
-  if (!selector) {
+  if (selector === null) {
     return [];
   }
 
