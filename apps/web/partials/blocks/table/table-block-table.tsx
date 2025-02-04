@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { CONTENT_IDS, SYSTEM_IDS } from '@geogenesis/sdk';
 import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import {
   ColumnDef,
@@ -384,6 +384,13 @@ export const TableBlockTable = React.memo(
           <div className="flex flex-col gap-4">
             {rows.map((row, index: number) => {
               const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
+              const maybeAvatarData = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
+              const maybeCoverData = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
+              const maybeDescriptionData = row.columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
+
+              // @TODO: Read optionally from avatar and description properties if they exist.
+              // If not, use the entity in the name cell.
+              // @TODO: An "everything" else ID that can be used to render any renderable.
               const { cellId, name, description, image, verified } = nameCell;
               const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
 
@@ -424,6 +431,13 @@ export const TableBlockTable = React.memo(
           <div className="grid grid-cols-3 gap-x-4 gap-y-10">
             {rows.map((row, index: number) => {
               const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
+              const maybeAvatarData = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
+              const maybeCoverData = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
+              const maybeDescriptionData = row.columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
+
+              // @TODO: Read optionally from avatar and description properties if they exist.
+              // If not, use the entity in the name cell.
+              // @TODO: An "everything" else ID that can be used to render any renderable.
               const { cellId, name, image, verified } = nameCell;
               const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
 
