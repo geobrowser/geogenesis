@@ -70,49 +70,32 @@ export function useDataBlock() {
     }),
     queryFn: async () => {
       const run = Effect.gen(function* () {
-        // @TODO: Filter state being empty by default means we can end up rendering
-        // the table without filters before processing the filter. Should avoid the
-        // layout jank if possible.
-
         const params: MergeTableEntitiesArgs['options'] = {
           first: PAGE_SIZE + 1,
           skip: pageNumber * PAGE_SIZE,
         };
 
         /**
-         * Data should be returned in the mapped format. Kinda blocked until we
-         * can mock/implement that.
+         * Data blocks support several "query" modes which require fetching and aggregating
+         * different data in different ways. In order to simplify rendering we want to map
+         * the data from each of these modes into a unified format. This keeps the complexities
+         * of the query modes out of the UI/rendering code.
          *
-         * We could also just return the data for both the `this` and `to` entities
-         * in the row format. There just might be more than one "cell" for a given
-         * attribute id. We'll have to match the entity _and_ the attribute.
+         * For COLLECTION data blocks we read collection item relations directly from the data
+         * block itself.
          *
-         * We can't use this entity -> attribute -> value data structure because
-         * the mapping isn't aware of concrete values, only relative shapes.
+         * For ENTITIES data blocks, we read from a filter stored on the data block and make a
+         * dynamic query for any entities that match the filter.
          *
-         * We need to somehow store data in a concrete form that can be read using
-         * the relative shape. The `this` entity and `to` entity does this, but
-         * `this` and `to` needs to be mapped into the concrete form.
-         *
-         * Current we have a {@link Row} data structure. This represents a single
-         * row with a Record of column id -> {@link Cell} data. The column id represents
-         * the UI "slot" to render the Cell data into. We can use this same concept
-         * to represent the UI mapping, where instead of column id, it's layout id
-         * or something like that.
-         *
-         * ---------------------------------------------------------------------------
-         *
-         * Each query mode + view maps data to the same layout. It's a data processing
-         * pipeline where we need to do a few steps.
-         * 1. Fetch the data for each query mode. Collections and entities queries fetch
-         *    only the data for a single entity for each row. Relations queries fetch
-         *    data for two entities for each row: The relation entity and the to entity.
-         * 2. Fetch Shown columns/properties and check for optional data selector
-         * 2. Process which fields should exist on a {@link Row} based on the shown columns,
-         *    view, the query mode, and selectors.
-         * 3. Return the list of {@link Row} data structures.
+         * For RELATIONS data blocks, we start from a _specific_ entity and dynamically fetch
+         * specific data from that entity to render in the data block. e.g., I might want to
+         * render the name of the entity, the Spouse relation's to entity avatar, and the
+         * Spouse relation's description. This requires reading data from three different
+         * entities. In order to specify the specific data set, we use a mechanism called
+         * "Selectors." Selectors are a custom DSL for specifying which data to fetch from
+         * an entity. Selectors live on the "Properties" relation pointing from the Blocks
+         * relation pointing to the data block.
          */
-
         if (source.type === 'SPACES' || source.type === 'GEO') {
           const data = yield* Effect.promise(() => mergeTableEntities({ options: params, filterState }));
 

@@ -158,7 +158,6 @@ export const TableBlockTable = React.memo(
     const isEditable = useUserIsEditing(space);
 
     const table = useReactTable({
-      // @TODO: We can merge local row data here?
       data: rows,
       columns: formatColumns(properties, isEditable, [], SpaceId(space)),
       defaultColumn,
