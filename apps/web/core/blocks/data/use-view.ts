@@ -105,6 +105,9 @@ export function useView() {
         }
       } else {
         if (shownColumnRelation) {
+          // @TODO: We should instead just upsert the new selector instead of removing and creating
+          // a new relation. Main issue right now is that the block won't re-render if we use this
+          // approach due to how the mappings are queried.
           DB.removeRelation({ relationId: shownColumnRelation.id, fromEntityId: EntityId(relationId), spaceId });
         }
 
