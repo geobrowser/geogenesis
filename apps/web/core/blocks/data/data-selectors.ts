@@ -124,7 +124,6 @@ export async function mapSelectorLexiconToSourceEntity(
 export function generateSelector(
   property: {
     id: string;
-    name: string | null;
     renderableType: RenderableProperty['type'];
   },
   where: 'TO' | 'FROM' | 'SOURCE'
@@ -169,4 +168,29 @@ export function generateSelector(
   }
 
   return selector;
+}
+
+export function getIsSelected(
+  selectors: string[],
+  where: 'TO' | 'FROM' | 'SOURCE',
+  property: {
+    id: string;
+    name: string | null;
+    renderableType: RenderableProperty['type'];
+  }
+): boolean {
+  return selectors.some(s => {
+    const generatedSelector = generateSelector(property, where);
+
+    // Render the name field of a TO selector to use the name
+    if (where === 'TO' && property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
+      return s === `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+    }
+
+    if (where === 'FROM' && property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
+      return s === `->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]`;
+    }
+
+    return s === generatedSelector;
+  });
 }
