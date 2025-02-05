@@ -237,9 +237,9 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
 
   if (isLoading) {
     return (
-      <MenuItem>
+      <div className="flex items-center justify-center p-3">
         <Dots />
-      </MenuItem>
+      </div>
     );
   }
 
