@@ -48,11 +48,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const { shownColumnIds, view, placeholder } = useView();
   const { source } = useSource();
 
-  const allColumns = properties.map(property => ({
-    id: property.id,
-    name: property.name,
-  }));
-
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
    * special handling when creating the graphql string.
@@ -126,7 +121,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           />
 
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
-          <TableBlockContextMenu allColumns={allColumns} />
+          <TableBlockContextMenu />
           {isEditing && source.type !== 'COLLECTION' && (
             <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
               <Create />

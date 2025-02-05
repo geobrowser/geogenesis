@@ -49,7 +49,7 @@ import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 
-import { editingColumnsAtom } from '~/atoms';
+import { editingPropertiesAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
 
@@ -152,7 +152,7 @@ interface Props {
 // eslint-disable-next-line react/display-name
 export const TableBlockTable = React.memo(
   ({ rows, space, properties, shownColumnIds, placeholder, view, source, filterState }: Props) => {
-    const isEditingColumns = useAtomValue(editingColumnsAtom);
+    const isEditingColumns = useAtomValue(editingPropertiesAtom);
 
     const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
     const isEditable = useUserIsEditing(space);
