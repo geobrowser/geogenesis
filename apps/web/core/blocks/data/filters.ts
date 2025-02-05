@@ -43,9 +43,7 @@ const Property = Schema.Union(AttributeFilter);
 
 const FilterString = Schema.Struct({
   where: Schema.Struct({
-    // entity: Schema.optional(Schema.String),
-    from: Schema.optional(Schema.String),
-    to: Schema.optional(Schema.String),
+    entity: Schema.optional(Schema.String),
     spaces: Schema.optional(Schema.Array(Schema.String)),
     AND: Schema.optional(Schema.Array(Property)),
     OR: Schema.optional(Schema.Array(Property)),
@@ -61,7 +59,7 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
     case 'RELATIONS':
       filter = {
         where: {
-          from: source.value,
+          entity: source.value,
           AND: filters
             .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER && f.columnId !== SYSTEM_IDS.RELATION_FROM_ATTRIBUTE)
             .map(f => {
@@ -138,9 +136,9 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       return null;
     },
     onRight: value => {
-      if (value.where.from) {
+      if (value.where.entity) {
         return {
-          from: value.where.from,
+          from: value.where.entity,
           AND: value.where.AND ?? [],
         };
       }
