@@ -89,23 +89,23 @@ export function useView() {
 
     const newId = selector ? ID.createEntityId() : undefined;
 
-    if (selector && newId) {
-      DB.upsert(
-        {
-          attributeId: SYSTEM_IDS.SELECTOR_ATTRIBUTE,
-          attributeName: 'Selector',
-          entityId: newId,
-          entityName: null,
-          value: {
-            type: 'TEXT',
-            value: selector,
-          },
-        },
-        spaceId
-      );
-    }
-
     if (!isShown) {
+      if (selector && newId) {
+        DB.upsert(
+          {
+            attributeId: SYSTEM_IDS.SELECTOR_ATTRIBUTE,
+            attributeName: 'Selector',
+            entityId: newId,
+            entityName: null,
+            value: {
+              type: 'TEXT',
+              value: selector,
+            },
+          },
+          spaceId
+        );
+      }
+
       const newRelation: StoreRelation = {
         id: newId,
         space: spaceId,
