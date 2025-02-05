@@ -104,8 +104,7 @@ function RelationsPropertySelector() {
       ) : (
         <div className="w-full py-1">
           <MenuItem onClick={() => setSelectedEntities({ type: 'FROM', entityIds: [sourceEntity.id] })}>
-            <div className="space-y-1">
-              <p className="text-button">{sourceEntity.name}</p>
+            <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
                 <div className="relative h-4 w-4 overflow-hidden rounded">
                   <Image
@@ -113,31 +112,32 @@ function RelationsPropertySelector() {
                     layout="fill"
                   />
                 </div>
-                <span className="text-footnoteMedium text-grey-04">0 selected</span>
+                {/* <span className="text-footnoteMedium text-grey-04">0 selected</span> */}
               </div>
+              <p className="text-button">{sourceEntity.name}</p>
             </div>
           </MenuItem>
 
           <MenuItem onClick={() => setSelectedEntities({ type: 'SOURCE', entityIds: relationIds })}>
-            <div className="space-y-1">
-              <p className="text-button">Relation entity</p>
+            <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
                 <div className="flex h-4 w-4 items-center justify-center rounded bg-grey-04">
                   <RelationSmall color="white" />
                 </div>
-                <span className="text-footnoteMedium text-grey-04">0 selected</span>
+                {/* <span className="text-footnoteMedium text-grey-04">0 selected</span> */}
               </div>
+              <p className="text-button">Relation entity</p>
             </div>
           </MenuItem>
           <MenuItem onClick={() => setSelectedEntities({ type: 'TO', entityIds: toIds })}>
-            <div className="space-y-1">
-              <p className="text-button">To</p>
+            <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
                 <div className="flex h-4 w-4 items-center justify-center rounded bg-grey-04">
                   <EntitySmall color="white" />
                 </div>
-                <span className="text-footnoteMedium text-grey-04">0 selected</span>
+                {/* <span className="text-footnoteMedium text-grey-04">0 selected</span> */}
               </div>
+              <p className="text-button">To</p>
             </div>
           </MenuItem>
         </div>
