@@ -1,5 +1,5 @@
 import { CONTENT_IDS, SYSTEM_IDS } from '@geogenesis/sdk';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
 import { pipe } from 'effect';
 import { dedupeWith } from 'effect/Array';
@@ -8,22 +8,23 @@ import Image from 'next/legacy/image';
 
 import * as React from 'react';
 
+import { mergeEntitiesAsync } from '~/core/blocks/data/queries';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { mergeEntityAsync, useEntity } from '~/core/database/entities';
+import { mergeEntityAsync } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
+import { Dots } from '~/design-system/dots';
 import { EntitySmall } from '~/design-system/icons/entity-small';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
-import { Relation } from '~/design-system/icons/relation';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { MenuItem } from '~/design-system/menu';
 
@@ -50,7 +51,7 @@ export function TableBlockEditPropertiesPanel() {
 function RelationsPropertySelector() {
   const { source } = useSource();
   const { filterState } = useFilters();
-  const [selectedEntity, setSelectedEntity] = React.useState<EntityId | null>(null);
+  const [selectedEntities, setSelectedEntities] = React.useState<EntityId[] | null>(null);
   const setIsEditingProperties = useSetAtom(editingPropertiesAtom);
 
   const { data: sourceEntity } = useQuery({
@@ -70,15 +71,15 @@ function RelationsPropertySelector() {
 
   // @TODO: This should be stored as a data structure somewhere
   const filteredPropertyId = filterState.find(r => r.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE)?.value;
-  const relationId = sourceEntity.relationsOut.find(r => r.typeOf.id === filteredPropertyId)?.id;
-  const toId = sourceEntity.relationsOut.find(r => r.typeOf.id === filteredPropertyId)?.toEntity.id;
+  const relationIds = sourceEntity.relationsOut.filter(r => r.typeOf.id === filteredPropertyId).map(r => r.id);
+  const toIds = sourceEntity.relationsOut.filter(r => r.typeOf.id === filteredPropertyId).map(r => r.toEntity.id);
 
   const maybeSourceEntityImage = sourceEntity.relationsOut.find(r => r.typeOf.id === CONTENT_IDS.AVATAR_ATTRIBUTE)
     ?.toEntity.value;
 
   const onBack = () => {
-    if (selectedEntity) {
-      setSelectedEntity(null);
+    if (selectedEntities && selectedEntities.length > 0) {
+      setSelectedEntities(null);
     } else {
       setIsEditingProperties(false);
     }
@@ -92,11 +93,11 @@ function RelationsPropertySelector() {
           <span>Back</span>
         </button>
       </MenuItem>
-      {selectedEntity ? (
-        <PropertySelector entityId={selectedEntity} />
+      {selectedEntities ? (
+        <PropertySelector entityIds={selectedEntities} />
       ) : (
         <div className="w-full py-1">
-          <MenuItem onClick={() => setSelectedEntity(sourceEntity.id)}>
+          <MenuItem onClick={() => setSelectedEntities([sourceEntity.id])}>
             <div className="space-y-1">
               <p className="text-button">{sourceEntity.name}</p>
               <div className="flex items-center gap-1">
@@ -111,7 +112,7 @@ function RelationsPropertySelector() {
             </div>
           </MenuItem>
 
-          <MenuItem onClick={() => (relationId ? setSelectedEntity(relationId) : undefined)}>
+          <MenuItem onClick={() => setSelectedEntities(relationIds)}>
             <div className="space-y-1">
               <p className="text-button">Relation entity</p>
               <div className="flex items-center gap-1">
@@ -122,7 +123,7 @@ function RelationsPropertySelector() {
               </div>
             </div>
           </MenuItem>
-          <MenuItem onClick={() => (toId ? setSelectedEntity(toId) : undefined)}>
+          <MenuItem onClick={() => setSelectedEntities(toIds)}>
             <div className="space-y-1">
               <p className="text-button">To</p>
               <div className="flex items-center gap-1">
@@ -183,31 +184,54 @@ function DefaultPropertySelector() {
  * e.g., if an Entity has a Name, Description, and Spouse, then the
  * user can select Name, Description or Spouse.
  */
-function PropertySelector({ entityId }: { entityId: EntityId }) {
-  const entity = useEntity({
-    id: entityId,
+function PropertySelector({ entityIds }: { entityIds: EntityId[] }) {
+  const { data: availableProperties, isLoading } = useQuery({
+    queryKey: ['rollup-available-properties', entityIds],
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      if (entityIds.length === 0) {
+        return [];
+      }
+
+      const entities = await mergeEntitiesAsync({ entityIds, filterState: [] });
+
+      const availableProperties = entities.flatMap(e => {
+        return pipe(
+          toRenderables({
+            entityId: e.id,
+            entityName: e.name,
+            spaceId: e.spaces[0],
+            triples: e.triples,
+            relations: e.relationsOut,
+          }),
+          sortRenderables,
+          renderables =>
+            renderables
+              .map(t => {
+                return {
+                  id: t.attributeId,
+                  name: t.attributeName,
+                };
+              })
+              .filter(t => t.name !== null)
+        );
+      });
+
+      return dedupeWith(availableProperties, (a, b) => a.id === b.id);
+    },
   });
 
-  const availableProperties = pipe(
-    toRenderables({
-      entityId,
-      entityName: entity.name,
-      spaceId: entity.spaces[0],
-      triples: entity.triples,
-      relations: entity.relationsOut,
-    }),
-    sortRenderables,
-    dedupeWith((a, b) => a.attributeId === b.attributeId),
-    renderables =>
-      renderables
-        .map(t => {
-          return {
-            id: t.attributeId,
-            name: t.attributeName,
-          };
-        })
-        .filter(t => t.name !== null)
-  );
+  if (isLoading) {
+    return (
+      <MenuItem>
+        <Dots />
+      </MenuItem>
+    );
+  }
+
+  if (availableProperties === undefined) {
+    return <MenuItem>No available properties</MenuItem>;
+  }
 
   return (
     <div>
