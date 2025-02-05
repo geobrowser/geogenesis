@@ -199,7 +199,13 @@ export function mappingToRows(
   });
 }
 
-export function mappingToCell(entities: Entity[], propertyId: string, lexicon: PathSegment[], spaceId: string): Cell {
+export function mappingToCell(
+  entities: Entity[],
+  propertyId: string,
+  lexicon: PathSegment[],
+  spaceId: string,
+  relationId: string
+): Cell {
   const finalSegment: PathSegment | undefined = lexicon[lexicon.length - 1];
   const propertyToFilter = finalSegment ? finalSegment.property : propertyId;
 
@@ -239,7 +245,7 @@ export function mappingToCell(entities: Entity[], propertyId: string, lexicon: P
               value: imageEntityUrlValue ?? '',
               entityName: entity.name,
               valueName: entity.name,
-              relationId: '',
+              relationId,
             },
           ]
         : [
@@ -252,7 +258,7 @@ export function mappingToCell(entities: Entity[], propertyId: string, lexicon: P
               value: id,
               entityName: entity.name,
               valueName: entity.name,
-              relationId: '',
+              relationId,
             },
           ];
     }
