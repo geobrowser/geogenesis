@@ -1,14 +1,16 @@
 import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect, Record } from 'effect';
 
-import { mergeEntity } from '~/core/database/entities';
+import { EntityWithSchema, mergeEntity } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
-import { Entity } from '~/core/io/dto/entities';
+import type { Entity } from '~/core/io/dto/entities';
 import { Proposal } from '~/core/io/dto/proposals';
 import { Version } from '~/core/io/dto/versions';
+import { EntityId } from '~/core/io/schema';
 import { fetchEntitiesBatch, fetchEntitiesBatchCached } from '~/core/io/subgraph/fetch-entities-batch';
 import type { Relation, Triple } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 
 import { fetchPreviousVersionByCreatedAt } from './fetch-previous-version-by-created-at';
 import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';
@@ -44,13 +46,37 @@ export async function fromLocal(spaceId?: string) {
     const maybeRemoteEntitiesEffect = Effect.promise(() => fetchEntitiesBatchCached(entityIdsToFetch));
 
     const maybeLocalEntitiesEffect = Effect.promise(async () => {
-      const entities = await fetchEntitiesBatchCached(entityIdsToFetch);
-      return entities.map(e =>
+      const localEntitiesWithRemoteData = await fetchEntitiesBatchCached(entityIdsToFetch);
+
+      const allEntities: Entity[] = [];
+
+      entityIdsToFetch.forEach(entityId => {
+        const localEntityWithRemoteData = localEntitiesWithRemoteData.find(entity => entity.id === entityId);
+
+        if (localEntityWithRemoteData) {
+          allEntities.push(localEntityWithRemoteData);
+        } else {
+          allEntities.push({
+            id: EntityId(entityId),
+            name: null,
+            description: null,
+            nameTripleSpaces: [],
+            spaces: [],
+            types: [],
+            relationsOut: [],
+            triples: [],
+          });
+        }
+      });
+
+      const mergedEntities = allEntities.map(e =>
         mergeEntity({
           id: e.id,
           mergeWith: e,
         })
       );
+
+      return mergedEntities;
     });
 
     const [maybeRemoteEntities, maybeLocalEntities] = yield* Effect.all(
@@ -69,12 +95,37 @@ export async function fromLocal(spaceId?: string) {
 
   const { remoteEntities, localEntities } = await Effect.runPromise(collectEntities);
 
-  return aggregateChanges({
+  const beforeEntities = remoteEntities.filter(entity => getIsRenderedAsEntity(entity));
+  const afterEntities = localEntities.filter(entity => getIsRenderedAsEntity(entity));
+
+  const changes = aggregateChanges({
     spaceId,
-    beforeEntities: remoteEntities,
-    afterEntities: localEntities,
+    beforeEntities,
+    afterEntities,
+    beforeBlocks: [],
+    afterBlocks: [],
   });
+
+  return changes;
 }
+
+const getIsRenderedAsEntity = (entity: Entity | EntityWithSchema) => {
+  if (
+    entity.types.some(type =>
+      [
+        SYSTEM_IDS.TEXT_BLOCK,
+        SYSTEM_IDS.DATA_BLOCK,
+        SYSTEM_IDS.IMAGE_BLOCK,
+        SYSTEM_IDS.IMAGE_TYPE,
+        SYSTEM_IDS.RELATION_TYPE,
+      ].includes(type.id)
+    )
+  ) {
+    return false;
+  } else {
+    return true;
+  }
+};
 
 interface FromVersionsArgs {
   spaceId?: string;
@@ -87,6 +138,8 @@ export function fromVersions({ beforeVersion, afterVersion }: FromVersionsArgs):
     spaceId: undefined,
     afterEntities: [afterVersion],
     beforeEntities: beforeVersion ? [beforeVersion] : [],
+    beforeBlocks: [],
+    afterBlocks: [],
   });
 }
 
@@ -100,6 +153,8 @@ export async function fromActiveProposal(proposal: Proposal): Promise<EntityChan
     spaceId: proposal.space.id,
     beforeEntities: currentVersionsForEntityIds.filter(v => v !== null),
     afterEntities: versionsByEditId,
+    beforeBlocks: [],
+    afterBlocks: [],
   });
 }
 
@@ -125,6 +180,8 @@ export async function fromEndedProposal(proposal: Proposal): Promise<EntityChang
     spaceId: proposal.space.id,
     beforeEntities: previousVersions.filter(e => e !== null),
     afterEntities: versionsByEditId,
+    beforeBlocks: [],
+    afterBlocks: [],
   });
 }
 
@@ -132,9 +189,17 @@ interface AggregateChangesArgs {
   spaceId?: string;
   afterEntities: Entity[];
   beforeEntities: Entity[];
+  afterBlocks: Entity[];
+  beforeBlocks: Entity[];
 }
 
-export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: AggregateChangesArgs): EntityChange[] {
+export function aggregateChanges({
+  spaceId,
+  afterEntities,
+  beforeEntities,
+  afterBlocks,
+  beforeBlocks,
+}: AggregateChangesArgs): EntityChange[] {
   // Aggregate remote data into a map of entities -> attributes and attributes -> triples
   // Each map is 1:1 with each entity only having one attribute per attribute id and one triple per attribute id
   //
@@ -248,6 +313,7 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
     return {
       id: entity.id,
       name: entity.name,
+      avatar: Entities.avatar(entity.relationsOut),
       blockChanges,
       changes: realChanges,
     };

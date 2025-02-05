@@ -3,6 +3,7 @@ import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { mergeEntityAsync } from '~/core/database/entities';
 import { Entity } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
+import { RenderableProperty } from '~/core/types';
 
 export type TripleSegment = {
   type: 'TRIPLE';
@@ -106,4 +107,53 @@ export async function mapSelectorLexiconToSourceEntity(
   }
 
   return [input];
+}
+
+export function generateSelector(
+  property: {
+    id: string;
+    name: string | null;
+    renderableType: RenderableProperty['type'];
+  },
+  where: 'TO' | 'FROM' | 'SOURCE'
+) {
+  let selector: string | null = null;
+
+  // @TODO: Put this logic in `data-selectors` and write tests
+  const tripleRenderableTypes: RenderableProperty['type'][] = ['TEXT', 'URL', 'NUMBER', 'TIME', 'CHECKBOX'];
+
+  if (tripleRenderableTypes.includes(property.renderableType)) {
+    if (where === 'SOURCE') {
+      selector = `.[${property.id}]`;
+    }
+
+    if (where === 'TO') {
+      selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->.[${property.id}]`;
+
+      if (property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
+        selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+      }
+    }
+
+    if (where === 'FROM') {
+      // @TODO
+    }
+  }
+
+  if (property.renderableType === 'RELATION' || property.renderableType === 'IMAGE') {
+    if (where === 'SOURCE') {
+      selector = `->[${property.id}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+    }
+
+    if (where === 'TO') {
+      // ->[Qx8dASiTNsxxP3rJbd4Lzd]->[399xP4sGWSoepxeEnp3UdR]->[Qx8dASiTNsxxP3rJbd4Lzd]
+      selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[${property.id}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+    }
+
+    if (where === 'FROM') {
+      // @TODO
+    }
+  }
+
+  return selector;
 }

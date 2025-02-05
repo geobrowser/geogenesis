@@ -4,6 +4,7 @@ import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { useEntity } from '~/core/database/entities';
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
+import { ID } from '~/core/id';
 import { Entity } from '~/core/io/dto/entities';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { Relation } from '~/core/types';
@@ -37,10 +38,6 @@ export function useView() {
     relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS || relation.typeOf.id === SYSTEM_IDS.PROPERTIES
   );
 
-  // @TODO: Add shown columns independently of whether they are part of a schema or not
-
-  // @TODO: Use the real shown columns
-  // @TODO: Merge with shownColumnsRelations
   const { mapping, isLoading, isFetched } = useMapping(
     blockRelation.id,
     shownColumnRelations.map(r => r.id)
@@ -86,12 +83,31 @@ export function useView() {
     }
   };
 
-  const setColumn = (newColumn: Column) => {
-    const isShown = shownColumnIds.includes(newColumn.id);
+  const toggleProperty = (newColumn: Column, selector?: string) => {
+    const isShown = shownColumnRelations.map(relation => relation.toEntity.id).includes(EntityId(newColumn.id));
     const shownColumnRelation = shownColumnRelations.find(relation => relation.toEntity.id === newColumn.id);
 
+    const newId = selector ? ID.createEntityId() : undefined;
+
     if (!isShown) {
+      if (selector && newId) {
+        DB.upsert(
+          {
+            attributeId: SYSTEM_IDS.SELECTOR_ATTRIBUTE,
+            attributeName: 'Selector',
+            entityId: newId,
+            entityName: null,
+            value: {
+              type: 'TEXT',
+              value: selector,
+            },
+          },
+          spaceId
+        );
+      }
+
       const newRelation: StoreRelation = {
+        id: newId,
         space: spaceId,
         index: INITIAL_RELATION_INDEX_VALUE,
         typeOf: {
@@ -100,7 +116,7 @@ export function useView() {
         },
         fromEntity: {
           id: EntityId(relationId),
-          name: '',
+          name: blockRelation.name,
         },
         toEntity: {
           id: EntityId(newColumn.id),
@@ -109,6 +125,8 @@ export function useView() {
           value: EntityId(newColumn.id),
         },
       };
+
+      console.log('upserting column', { relation: newRelation, spaceId });
 
       DB.upsertRelation({
         relation: newRelation,
@@ -129,7 +147,7 @@ export function useView() {
     viewRelation,
     setView,
     shownColumnIds,
-    setColumn,
+    toggleProperty,
     mapping,
   };
 }

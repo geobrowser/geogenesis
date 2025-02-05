@@ -10,6 +10,7 @@ import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
 
 import { PathSegment } from './data-selectors';
+import { mergeEntitiesAsync } from './queries';
 
 /**
  * A mapping determines which data is rendered into which UI slots
@@ -50,16 +51,6 @@ export function useMapping(
   isLoading: boolean;
   isFetched: boolean;
 } {
-  // const mapping: Mapping = {
-  //   // Should render the to relation as a pill
-  //   [SYSTEM_IDS.NAME_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
-  //   // Should render the roles to entities as a pill
-  //   ['JkzhbbrXFMfXN7sduMKQRp']: `->[JkzhbbrXFMfXN7sduMKQRp]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
-  //   [CONTENT_IDS.AVATAR_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[${CONTENT_IDS.AVATAR_ATTRIBUTE}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
-  //   // [SYSTEM_IDS.COVER_ATTRIBUTE]: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[${SYSTEM_IDS.COVER_ATTRIBUTE}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`,
-  //   // [CONTENT_IDS.AVATAR_ATTRIBUTE]: `->.[${SYSTEM_IDS.NAME_ATTRIBUTE}]`,
-  // };
-
   const {
     data: shownPropertyEntities,
     isLoading,
@@ -72,30 +63,34 @@ export function useMapping(
         return [];
       }
 
-      return await fetchEntitiesBatch(shownPropertyRelationEntityIds);
+      return await mergeEntitiesAsync({ entityIds: shownPropertyRelationEntityIds, filterState: [] });
     },
   });
 
-  const mapping = shownPropertyEntities
-    ? shownPropertyEntities.reduce<Mapping>((acc, entity) => {
-        const key = entity.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value;
-        const selector = entity.triples.find(t => t.attributeId === SYSTEM_IDS.SELECTOR_ATTRIBUTE)?.value.value;
-        const decodedKey = key ? GraphUrl.toEntityId(key as GraphUri) : null;
+  const mapping =
+    shownPropertyEntities && shownPropertyEntities.length > 0
+      ? shownPropertyEntities.reduce<Mapping>((acc, entity) => {
+          const key = entity.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value;
+          const selector = entity.triples.find(t => t.attributeId === SYSTEM_IDS.SELECTOR_ATTRIBUTE)?.value.value;
+          const decodedKey = key ? GraphUrl.toEntityId(key as GraphUri) : null;
 
-        if (decodedKey && selector) {
-          acc[decodedKey] = selector;
-        }
+          if (decodedKey && selector) {
+            acc[decodedKey] = selector;
+          }
 
-        if (decodedKey && !selector) {
-          acc[decodedKey] = null;
-        }
+          if (decodedKey && !selector) {
+            acc[decodedKey] = null;
+          }
 
-        return acc;
-      }, {})
-    : {
-        // Default mapping if one doesn't exist
-        [SYSTEM_IDS.NAME_ATTRIBUTE]: null,
-      };
+          return acc;
+        }, {})
+      : {};
+
+  // Currently require the name attribute to be rendered for every view and every query mode. Rendering
+  // the data block will break otherwise.
+  if (!mapping[SYSTEM_IDS.NAME_ATTRIBUTE]) {
+    mapping[SYSTEM_IDS.NAME_ATTRIBUTE] = null;
+  }
 
   return {
     isLoading,

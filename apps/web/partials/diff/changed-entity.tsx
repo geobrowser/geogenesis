@@ -8,7 +8,7 @@ import { diffWords } from 'diff';
 import * as React from 'react';
 
 import { EntityChange, RenderableChange } from '~/core/utils/change/types';
-import { GeoDate, groupBy } from '~/core/utils/utils';
+import { GeoDate, getImagePath, groupBy } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { Minus } from '~/design-system/icons/minus';
@@ -46,11 +46,25 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
 
   return (
     <div className="relative -top-12 pt-12">
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 top-12 flex justify-center">
+        <div className="h-full w-px bg-divider" />
+      </div>
       <div className="flex flex-col gap-5">
-        <div className="text-mediumTitle">{change.name ?? change.id}</div>
-        <div className="flex gap-8">
-          <div className="flex-1 text-body">Current version</div>
-          <div className="relative flex-1 text-body">
+        <div className="flex items-center gap-4">
+          <div className="relative size-10 overflow-clip rounded bg-grey-01">
+            {change.avatar && (
+              <img
+                src={getImagePath(change.avatar)}
+                className="absolute inset-0 h-full w-full object-cover object-center"
+                alt=""
+              />
+            )}
+          </div>
+          <div className="text-mediumTitle">{change.name ?? change.id}</div>
+        </div>
+        <div className="flex gap-16">
+          <div className="mb-4 flex-1 border-b border-divider pb-4 text-body">Current version</div>
+          <div className="mb-4 flex-1 border-b border-divider pb-4 text-body">
             Proposed edits
             {deleteAllComponent}
           </div>
@@ -96,7 +110,7 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
 //       const AfterComponent = afterMarkdownType;
 
 //       return (
-//         <div key={blockId} className="flex gap-8">
+//         <div key={blockId} className="flex gap-16">
 //           <div className="ProseMirror flex-1 py-4">
 //             <BeforeComponent>
 //               {differences
@@ -124,7 +138,7 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
 //     }
 //     case 'imageBlock': {
 //       return (
-//         <div key={blockId} className="flex gap-8">
+//         <div key={blockId} className="flex gap-16">
 //           <div className="flex-1 py-4">
 //             <div>
 //               {before && (
@@ -151,7 +165,7 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
 //       const differences = diffWords(before ?? '', after ?? '');
 
 //       return (
-//         <div key={blockId} className="flex gap-8">
+//         <div key={blockId} className="flex gap-16">
 //           <div className="flex-1 py-4">
 //             {!isNewTableBlock && (
 //               <>
@@ -225,7 +239,7 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
 //       const isNewTableFilter = before === null;
 
 //       return (
-//         <div key={blockId} className="flex gap-8">
+//         <div key={blockId} className="flex gap-16">
 //           <div className="flex-1 py-4">
 //             {!isNewTableFilter && (
 //               <div className="flex flex-wrap gap-2">
@@ -257,231 +271,251 @@ type ChangedAttributeProps = {
 const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedAttributeProps) => {
   const groupedChanges = groupBy(changes, c => c.attribute.id);
 
-  return Object.entries(groupedChanges).map(([attributeId, changes]) => {
-    // Don't show page blocks
-    if (attributeId === SYSTEM_IDS.BLOCKS) return null;
+  return (
+    <div className="relative">
+      <Corners />
+      {Object.entries(groupedChanges).map(([attributeId, changes]) => {
+        // Don't show page blocks
+        if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
-    if (changes.length === 0) {
-      return <h2 key={attributeId}>This entity has no changes between the two versions.</h2>;
-    }
+        if (changes.length === 0) {
+          return <h2 key={attributeId}>This entity has no changes between the two versions.</h2>;
+        }
 
-    const changeType = changes[0].type;
-    const attributeName = changes[0].attribute.name;
-    const name = attributeName ?? attributeId;
+        const changeType = changes[0].type;
+        const attributeName = changes[0].attribute.name;
+        const name = attributeName ?? attributeId;
 
-    switch (changeType) {
-      case 'NUMBER':
-      case 'TEXT': {
-        return (
-          <div key={attributeId} className="-mt-px flex gap-8">
-            <div className="flex-1 border border-grey-02 p-4">
-              <div className="text-bodySemibold capitalize">{name}</div>
-              <div className="text-body">
-                {changes.map(c => {
-                  const checkedBefore = c.before ? c.before.value : '';
-                  const checkedAfter = c.after ? c.after.value : '';
-                  const differences = diffWords(checkedBefore, checkedAfter);
+        switch (changeType) {
+          case 'NUMBER':
+          case 'TEXT': {
+            return (
+              <div key={attributeId} className="-mt-px flex gap-16">
+                <div className="flex-1 border border-grey-02 p-4">
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="break-all text-body">
+                    {changes.map(c => {
+                      const checkedBefore = c.before ? c.before.value : '';
+                      const checkedAfter = c.after ? c.after.value : '';
+                      const differences = diffWords(checkedBefore, checkedAfter);
 
-                  return differences
-                    .filter(item => !item.added)
-                    .map((difference, index) => (
-                      <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-                        {difference.value}
-                      </span>
-                    ));
-                })}
+                      return differences
+                        .filter(item => !item.added)
+                        .map((difference, index) => (
+                          <span
+                            key={index}
+                            className={cx(difference.removed && 'rounded bg-errorTertiary line-through')}
+                          >
+                            {difference.value}
+                          </span>
+                        ));
+                    })}
+                  </div>
+                </div>
+                <div className="group relative max-w-full flex-1 border border-grey-02 p-4">
+                  {renderAttributeStagingComponent?.(attributeId)}
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="break-all text-body">
+                    {changes.map(c => {
+                      const checkedBefore = c.before ? c.before.value : '';
+                      const checkedAfter = c.after ? c.after.value : '';
+                      const differences = diffWords(checkedBefore, checkedAfter);
+
+                      return differences
+                        .filter(item => !item.removed)
+                        .map((difference, index) => (
+                          <span key={index} className={cx(difference.added && 'rounded bg-successTertiary')}>
+                            {difference.value}
+                          </span>
+                        ));
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="group relative flex-1 border border-grey-02 p-4">
-              {renderAttributeStagingComponent?.(attributeId)}
-              <div className="text-bodySemibold capitalize">{name}</div>
-              <div className="text-body">
-                {changes.map(c => {
-                  const checkedBefore = c.before ? c.before.value : '';
-                  const checkedAfter = c.after ? c.after.value : '';
-                  const differences = diffWords(checkedBefore, checkedAfter);
+            );
+          }
+          case 'CHECKBOX': {
+            return (
+              <div key={attributeId} className="-mt-px flex gap-16">
+                <div className="flex-1 border border-grey-02 p-4">
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="text-body">
+                    {changes.map((c, index) => {
+                      if (!c.before) return null;
 
-                  return differences
-                    .filter(item => !item.removed)
-                    .map((difference, index) => (
-                      <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                        {difference.value}
-                      </span>
-                    ));
-                })}
-              </div>
-            </div>
-          </div>
-        );
-      }
-      case 'CHECKBOX': {
-        return (
-          <div key={attributeId} className="-mt-px flex gap-8">
-            <div className="flex-1 border border-grey-02 p-4">
-              <div className="text-bodySemibold capitalize">{name}</div>
-              <div className="text-body">
-                {changes.map((c, index) => {
-                  if (!c.before) return null;
+                      const checked = getChecked(c.before.value);
 
-                  const checked = getChecked(c.before.value);
+                      return <Checkbox key={index} checked={checked} />;
+                    })}
+                  </div>
+                </div>
+                <div className="group relative flex-1 border border-grey-02 p-4">
+                  {renderAttributeStagingComponent?.(attributeId)}
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="text-body">
+                    {changes.map((c, index) => {
+                      if (!c.after) return null;
 
-                  return <Checkbox key={index} checked={checked} />;
-                })}
-              </div>
-            </div>
-            <div className="group relative flex-1 border border-grey-02 p-4">
-              {renderAttributeStagingComponent?.(attributeId)}
-              <div className="text-bodySemibold capitalize">{name}</div>
-              <div className="text-body">
-                {changes.map((c, index) => {
-                  if (!c.after) return null;
+                      const checked = getChecked(c.after.value);
 
-                  const checked = getChecked(c.after.value);
+                      return <Checkbox key={index} checked={checked} />;
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          case 'RELATION': {
+            return (
+              <div key={attributeId} className="-mt-px flex gap-16">
+                <div className="flex-1 border border-grey-02 p-4">
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {changes.map(c => {
+                      return c.before && <Chip status={c.before.type}>{c.before.valueName ?? c.before.value}</Chip>;
+                    })}
+                  </div>
+                </div>
+                <div className="group relative flex-1 border border-grey-02 p-4">
+                  {renderAttributeStagingComponent?.(attributeId)}
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {changes.map(c => {
+                      if (c.after === null) return null;
 
-                  return <Checkbox key={index} checked={checked} />;
-                })}
+                      return (
+                        <Chip key={c.after.value} status={c.after.type}>
+                          {c.after.valueName ?? c.after.value}
+                        </Chip>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        );
-      }
-      case 'RELATION': {
-        return (
-          <div key={attributeId} className="-mt-px flex gap-8">
-            <div className="flex-1 border border-grey-02 p-4">
-              <div className="text-bodySemibold capitalize">{name}</div>
-              <div className="flex flex-wrap gap-2">
-                {changes.map(c => {
-                  return c.before && <Chip status={c.before.type}>{c.before.valueName ?? c.before.value}</Chip>;
-                })}
-              </div>
-            </div>
-            <div className="group relative flex-1 border border-grey-02 p-4">
-              {renderAttributeStagingComponent?.(attributeId)}
-              <div className="text-bodySemibold capitalize">{name}</div>
-              <div className="flex flex-wrap gap-2">
-                {changes.map(c => {
-                  if (c.after === null) return null;
+            );
+          }
+          case 'IMAGE': {
+            return (
+              <div key={attributeId} className="-mt-px flex gap-16">
+                <div className="flex-1 border border-grey-02 p-4">
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div>
+                    {changes.map(c => {
+                      if (!c.before?.value) return null;
 
-                  return (
-                    <Chip key={c.after.value} status={c.after.type}>
-                      {c.after.valueName ?? c.after.value}
-                    </Chip>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        );
-      }
-      // @TODO(relations): Add image support
-      // case 'IMAGE': {
-      //   return (
-      //     <div key={attributeId} className="-mt-px flex gap-8">
-      //       <div className="flex-1 border border-grey-02 p-4">
-      //         <div className="text-bodySemibold capitalize">{name}</div>
-      //         <div>
-      //           {typeof before !== 'object' && (
-      //             <span className="inline-block rounded-lg bg-errorTertiary p-1">
-      //               <img src={getImagePath(before)} className="rounded-lg" />
-      //             </span>
-      //           )}
-      //         </div>
-      //       </div>
-      //       <div className="group relative flex-1 border border-grey-02 p-4">
-      //         <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-      //           <SquareButton
-      //             onClick={handleDeleteActions}
-      //             icon={<Trash />}
-      //             className="opacity-0 group-hover:opacity-100"
-      //           />
-      //           <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
-      //         </div>
-      //         <div className="text-bodySemibold capitalize">{name}</div>
-      //         <div>
-      //           {typeof after !== 'object' && (
-      //             <span className="inline-block rounded-lg bg-successTertiary p-1">
-      //               <img src={getImagePath(after)} className="rounded-lg" />
-      //             </span>
-      //           )}
-      //         </div>
-      //       </div>
-      //     </div>
-      //   );
-      // }
-      case 'TIME': {
-        return (
-          <div key={attributeId} className="-mt-px flex gap-8">
-            <div className="flex-1 border border-grey-02 p-4">
-              <div className="text-bodySemibold capitalize">{name}</div>
-              <div className="text-body">
-                {changes.map(c => {
-                  const { before, after } = c;
-                  return before && <DateTimeDiff mode="before" before={before.value} after={after?.value ?? null} />;
-                })}
-              </div>
-            </div>
-            <div className="flex-1 border border-grey-02 p-4">
-              {renderAttributeStagingComponent?.(attributeId)}
-              <div className="text-bodySemibold capitalize">{name}</div>
-              <div className="text-body">
-                {changes.map(c => {
-                  const { before, after } = c;
-                  return after && <DateTimeDiff mode="after" before={before?.value ?? null} after={after.value} />;
-                })}
-              </div>
-            </div>
-          </div>
-        );
-      }
-      case 'URL': {
-        return (
-          <div key={attributeId} className="-mt-px flex gap-8">
-            <div className="flex-1 border border-grey-02 p-4">
-              <div className="text-bodySemibold capitalize">{name}</div>
-              <div className="truncate text-ctaPrimary no-underline">
-                {changes.map(c => {
-                  const checkedBefore = c.before ? c.before.value : '';
-                  const checkedAfter = c.after ? c.after.value : '';
-                  const differences = diffWords(checkedBefore, checkedAfter);
+                      return (
+                        <span key={c.before.value} className="inline-block rounded-lg bg-errorTertiary p-1">
+                          <img src={getImagePath(c.before.value)} className="h-24 w-auto rounded-lg" />
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="group relative flex-1 border border-grey-02 p-4">
+                  {/* <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+                    <SquareButton
+                      onClick={handleDeleteActions}
+                      icon={<Trash />}
+                      className="opacity-0 group-hover:opacity-100"
+                    />
+                    <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
+                  </div> */}
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div>
+                    {changes.map(c => {
+                      if (!c.after?.value) return null;
 
-                  return differences
-                    .filter(item => !item.added)
-                    .map((difference, index) => (
-                      <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-                        {difference.value}
-                      </span>
-                    ));
-                })}
+                      return (
+                        <span key={c.after.value} className="inline-block rounded-lg bg-successTertiary p-1">
+                          <img src={getImagePath(c.after.value)} className="h-24 w-auto rounded-lg" />
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="group relative flex-1 border border-grey-02 p-4">
-              {renderAttributeStagingComponent?.(attributeId)}
-              <div className="text-bodySemibold capitalize">{name}</div>
-              <div className="truncate text-ctaPrimary no-underline">
-                {changes.map(c => {
-                  const checkedBefore = c.before ? c.before.value : '';
-                  const checkedAfter = c.after ? c.after.value : '';
-                  const differences = diffWords(checkedBefore, checkedAfter);
+            );
+          }
+          case 'TIME': {
+            return (
+              <div key={attributeId} className="-mt-px flex gap-16">
+                <div className="flex-1 border border-grey-02 p-4">
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="text-body">
+                    {changes.map(c => {
+                      const { before, after } = c;
+                      return (
+                        before && <DateTimeDiff mode="before" before={before.value} after={after?.value ?? null} />
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex-1 border border-grey-02 p-4">
+                  {renderAttributeStagingComponent?.(attributeId)}
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="text-body">
+                    {changes.map(c => {
+                      const { before, after } = c;
+                      return after && <DateTimeDiff mode="after" before={before?.value ?? null} after={after.value} />;
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          case 'URL': {
+            return (
+              <div key={attributeId} className="-mt-px flex gap-16">
+                <div className="flex-1 border border-grey-02 p-4">
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="truncate text-ctaPrimary no-underline">
+                    {changes.map(c => {
+                      const checkedBefore = c.before ? c.before.value : '';
+                      const checkedAfter = c.after ? c.after.value : '';
+                      const differences = diffWords(checkedBefore, checkedAfter);
 
-                  return differences
-                    .filter(item => !item.removed)
-                    .map((difference, index) => (
-                      <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                        {difference.value}
-                      </span>
-                    ));
-                })}
+                      return differences
+                        .filter(item => !item.added)
+                        .map((difference, index) => (
+                          <span
+                            key={index}
+                            className={cx(difference.removed && 'rounded bg-errorTertiary line-through')}
+                          >
+                            {difference.value}
+                          </span>
+                        ));
+                    })}
+                  </div>
+                </div>
+                <div className="group relative flex-1 border border-grey-02 p-4">
+                  {renderAttributeStagingComponent?.(attributeId)}
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="truncate text-ctaPrimary no-underline">
+                    {changes.map(c => {
+                      const checkedBefore = c.before ? c.before.value : '';
+                      const checkedAfter = c.after ? c.after.value : '';
+                      const differences = diffWords(checkedBefore, checkedAfter);
+
+                      return differences
+                        .filter(item => !item.removed)
+                        .map((difference, index) => (
+                          <span key={index} className={cx(difference.added && 'rounded bg-successTertiary')}>
+                            {difference.value}
+                          </span>
+                        ));
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        );
-      }
-      default: {
-        return null;
-      }
-    }
-  });
+            );
+          }
+          default: {
+            return null;
+          }
+        }
+      })}
+    </div>
+  );
 };
 
 type DateTimeProps = {
@@ -504,7 +538,7 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
   const afterDateTime = after ? GeoDate.fromISOStringUTC(after) : null;
 
   const renderedDateTime: DateTimeType = (mode === 'before' ? beforeDateTime : afterDateTime) as DateTimeType;
-  const highlightClassName = mode === 'before' ? 'bg-errorTertiary' : 'bg-successTertiary';
+  const highlightClassName = mode === 'before' ? 'rounded bg-errorTertiary' : 'bg-successTertiary rounded';
 
   return (
     <div className="flex items-start gap-4">
@@ -698,3 +732,46 @@ export const Chip = ({ status = 'UNCHANGED', children }: ChipProps) => {
 
 //   return filtersWithColumnName;
 // };
+
+const Corners = () => {
+  return (
+    <>
+      <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex gap-16">
+        <div className="relative flex-1">
+          <div className="absolute left-0 top-0 inline-block bg-white">
+            <div className="size-4 rounded-tl-lg border-l border-t border-grey-02 bg-white" />
+          </div>
+          <div className="absolute right-0 top-0 inline-block bg-white">
+            <div className="size-4 rounded-tr-lg border-r border-t border-grey-02 bg-white" />
+          </div>
+        </div>
+        <div className="relative flex-1">
+          <div className="absolute left-0 top-0 inline-block bg-white">
+            <div className="size-4 rounded-tl-lg border-l border-t border-grey-02 bg-white" />
+          </div>
+          <div className="absolute right-0 top-0 inline-block bg-white">
+            <div className="size-4 rounded-tr-lg border-r border-t border-grey-02 bg-white" />
+          </div>
+        </div>
+      </div>
+      <div className="pointer-events-none absolute bottom-4 left-0 right-0 z-10 flex gap-16">
+        <div className="relative flex-1">
+          <div className="absolute left-0 top-0 inline-block bg-white">
+            <div className="size-4 rounded-bl-lg border-b border-l border-grey-02 bg-white" />
+          </div>
+          <div className="absolute right-0 top-0 inline-block bg-white">
+            <div className="size-4 rounded-br-lg border-b border-r border-grey-02 bg-white" />
+          </div>
+        </div>
+        <div className="relative flex-1">
+          <div className="absolute left-0 top-0 inline-block bg-white">
+            <div className="size-4 rounded-bl-lg border-b border-l border-grey-02 bg-white" />
+          </div>
+          <div className="absolute right-0 top-0 inline-block bg-white">
+            <div className="size-4 rounded-br-lg border-b border-r border-grey-02 bg-white" />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
