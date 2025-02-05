@@ -68,6 +68,7 @@ type NativeTripleChange = {
 export type EntityChange = {
   id: EntityId;
   name: string | null;
+  avatar: string | null;
   blockChanges: RenderableChange[];
   changes: RenderableChange[];
 };

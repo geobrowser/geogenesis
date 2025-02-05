@@ -30,7 +30,7 @@ export const SlideUp = ({ isOpen, setIsOpen, children }: SlideUpProps) => {
           animate="visible"
           exit="hidden"
           transition={transition}
-          className={cx('fixed inset-0 z-100 h-full w-full bg-grey-02', !isOpen && 'pointer-events-none')}
+          className={cx('fixed inset-0 z-100 h-full w-full bg-white', !isOpen && 'pointer-events-none')}
         >
           {children}
         </motion.div>

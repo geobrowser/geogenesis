@@ -11,7 +11,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const { spaces } = useSpaces();
   const userCanEdit = useUserIsEditing(spaceId);
 
-  const { name, setName } = useDataBlock();
+  const { name, setName, isLoading } = useDataBlock();
   const { source } = useSource();
 
   const hasOverflow = source.type === 'SPACES' ? source.value.length > 3 : false;
@@ -21,10 +21,12 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
 
   // Auto focus newly created data blocks
   React.useEffect(() => {
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 200);
-  }, []);
+    if (!isLoading && !name) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 200);
+    }
+  }, [name, isLoading]);
 
   return (
     <div className="flex flex-grow items-center gap-2">

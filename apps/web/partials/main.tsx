@@ -11,8 +11,8 @@ type MainProps = {
 };
 
 export const Main = ({ children }: MainProps) => {
-  const { isReviewOpen, isCompareOpen } = useDiff();
-  const isHidden = isReviewOpen || isCompareOpen;
+  const { isReviewOpen } = useDiff();
+  const isHidden = isReviewOpen;
 
   return (
     <motion.main
