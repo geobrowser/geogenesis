@@ -8,6 +8,7 @@ import Image from 'next/legacy/image';
 
 import * as React from 'react';
 
+import { generateSelector } from '~/core/blocks/data/data-selectors';
 import { mergeEntitiesAsync } from '~/core/blocks/data/queries';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -16,6 +17,7 @@ import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { mergeEntityAsync } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';
+import { RenderableProperty } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -51,7 +53,11 @@ export function TableBlockEditPropertiesPanel() {
 function RelationsPropertySelector() {
   const { source } = useSource();
   const { filterState } = useFilters();
-  const [selectedEntities, setSelectedEntities] = React.useState<EntityId[] | null>(null);
+
+  const [selectedEntities, setSelectedEntities] = React.useState<{
+    type: 'TO' | 'FROM' | 'SOURCE';
+    entityIds: EntityId[];
+  } | null>(null);
   const setIsEditingProperties = useSetAtom(editingPropertiesAtom);
 
   const { data: sourceEntity } = useQuery({
@@ -78,7 +84,7 @@ function RelationsPropertySelector() {
     ?.toEntity.value;
 
   const onBack = () => {
-    if (selectedEntities && selectedEntities.length > 0) {
+    if (selectedEntities && selectedEntities.entityIds.length > 0) {
       setSelectedEntities(null);
     } else {
       setIsEditingProperties(false);
@@ -94,10 +100,10 @@ function RelationsPropertySelector() {
         </button>
       </MenuItem>
       {selectedEntities ? (
-        <PropertySelector entityIds={selectedEntities} />
+        <PropertySelector where={selectedEntities.type} entityIds={selectedEntities.entityIds} />
       ) : (
         <div className="w-full py-1">
-          <MenuItem onClick={() => setSelectedEntities([sourceEntity.id])}>
+          <MenuItem onClick={() => setSelectedEntities({ type: 'FROM', entityIds: [sourceEntity.id] })}>
             <div className="space-y-1">
               <p className="text-button">{sourceEntity.name}</p>
               <div className="flex items-center gap-1">
@@ -112,7 +118,7 @@ function RelationsPropertySelector() {
             </div>
           </MenuItem>
 
-          <MenuItem onClick={() => setSelectedEntities(relationIds)}>
+          <MenuItem onClick={() => setSelectedEntities({ type: 'SOURCE', entityIds: relationIds })}>
             <div className="space-y-1">
               <p className="text-button">Relation entity</p>
               <div className="flex items-center gap-1">
@@ -123,7 +129,7 @@ function RelationsPropertySelector() {
               </div>
             </div>
           </MenuItem>
-          <MenuItem onClick={() => setSelectedEntities(toIds)}>
+          <MenuItem onClick={() => setSelectedEntities({ type: 'TO', entityIds: toIds })}>
             <div className="space-y-1">
               <p className="text-button">To</p>
               <div className="flex items-center gap-1">
@@ -176,6 +182,11 @@ function DefaultPropertySelector() {
   );
 }
 
+type PropertySelectorProps = {
+  entityIds: EntityId[];
+  where: 'TO' | 'FROM' | 'SOURCE';
+};
+
 /**
  * Select which properties a user wants to render for the data block.
  * The properties are determined based on which properties exist
@@ -184,7 +195,9 @@ function DefaultPropertySelector() {
  * e.g., if an Entity has a Name, Description, and Spouse, then the
  * user can select Name, Description or Spouse.
  */
-function PropertySelector({ entityIds }: { entityIds: EntityId[] }) {
+function PropertySelector({ entityIds, where }: PropertySelectorProps) {
+  const { toggleProperty: setProperty, mapping } = useView();
+
   const { data: availableProperties, isLoading } = useQuery({
     queryKey: ['rollup-available-properties', entityIds],
     placeholderData: keepPreviousData,
@@ -211,6 +224,7 @@ function PropertySelector({ entityIds }: { entityIds: EntityId[] }) {
                 return {
                   id: t.attributeId,
                   name: t.attributeName,
+                  renderableType: t.type,
                 };
               })
               .filter(t => t.name !== null)
@@ -233,14 +247,35 @@ function PropertySelector({ entityIds }: { entityIds: EntityId[] }) {
     return <MenuItem>No available properties</MenuItem>;
   }
 
+  // @TODO: Can use setColumn? Can set selector on it at that point?
+  const onSelectProperty = (property: {
+    id: string;
+    name: string | null;
+    renderableType: RenderableProperty['type'];
+  }) => {
+    const selector = generateSelector(property, where);
+
+    setProperty(
+      {
+        id: property.id,
+        name: property.name,
+      },
+      selector ?? undefined
+    );
+  };
+
+  const selectors = [...Object.values(mapping)].filter(s => s !== null);
+
   return (
     <div>
       {availableProperties.map(p => {
+        const isSelected = getIsSelected(selectors, where, p);
+
         return (
-          <MenuItem key={p.id}>
+          <MenuItem key={p.id} onClick={() => onSelectProperty(p)}>
             <div className="flex items-center justify-between">
               <span className="text-button text-grey-04">{p.name}</span>
-              <Checkbox checked={false} />
+              <Checkbox checked={isSelected} />
             </div>
           </MenuItem>
         );
@@ -249,12 +284,33 @@ function PropertySelector({ entityIds }: { entityIds: EntityId[] }) {
   );
 }
 
+function getIsSelected(
+  selectors: string[],
+  where: 'TO' | 'FROM' | 'SOURCE',
+  property: {
+    id: string;
+    name: string | null;
+    renderableType: RenderableProperty['type'];
+  }
+): boolean {
+  return selectors.some(s => {
+    const generatedSelector = generateSelector(property, where);
+
+    // Render the name field of a TO selector to use the name
+    if (where === 'TO' && property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
+      return s === `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+    }
+
+    return s === generatedSelector;
+  });
+}
+
 type ToggleColumnProps = {
   column: Column;
 };
 
 function ToggleColumn({ column }: ToggleColumnProps) {
-  const { setColumn, shownColumnIds } = useView();
+  const { toggleProperty: setColumn, shownColumnIds } = useView();
   const isShown = shownColumnIds.includes(column.id);
 
   const onToggleColumn = async () => {

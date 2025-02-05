@@ -50,49 +50,23 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
 
   // If the caller passes in a set of data we use that for merging. If not,
   // we fetch the entity from the server and merge it with the local state.
-  const data = React.useMemo(() => {
-    return initialData ?? remoteData;
-  }, [initialData, remoteData]);
+  const data = initialData ?? remoteData;
 
-  const triples = useTriples(
-    React.useMemo(
-      () => ({
-        mergeWith: data?.triples,
-        selector: spaceId ? t => t.entityId === id && t.space === spaceId : t => t.entityId === id,
-      }),
-      [data?.triples, id, spaceId]
-    )
-  );
+  const triples = useTriples({
+    mergeWith: data?.triples,
+    selector: spaceId ? t => t.entityId === id && t.space === spaceId : t => t.entityId === id,
+  });
 
-  const relations = useRelations(
-    React.useMemo(
-      () => ({
-        mergeWith: data?.relations,
-        selector: spaceId ? r => r.fromEntity.id === id && r.space === spaceId : r => r.fromEntity.id === id,
-      }),
-      [data?.relations, id, spaceId]
-    )
-  );
+  const relations = useRelations({
+    mergeWith: data?.relations,
+    selector: spaceId ? r => r.fromEntity.id === id && r.space === spaceId : r => r.fromEntity.id === id,
+  });
 
-  const name = React.useMemo(() => {
-    return Entities.name(triples);
-  }, [triples]);
-
-  const nameTripleSpaces = React.useMemo(() => {
-    return triples.filter(t => t.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE).map(t => t.space);
-  }, [triples]);
-
-  const spaces = React.useMemo(() => {
-    return data?.spaces ?? [];
-  }, [data?.spaces]);
-
-  const description = React.useMemo(() => {
-    return Entities.description(triples);
-  }, [triples]);
-
-  const types = React.useMemo(() => {
-    return readTypes(relations);
-  }, [relations]);
+  const name = Entities.name(triples);
+  const nameTripleSpaces = triples.filter(t => t.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE).map(t => t.space);
+  const spaces = data?.spaces ?? [];
+  const description = Entities.description(triples);
+  const types = readTypes(relations);
 
   const { data: remoteSchema } = useQuery({
     enabled: types.length > 0,
@@ -105,9 +79,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   });
 
   // @TODO merge with local state
-  const schema = React.useMemo(() => {
-    return remoteSchema ?? [];
-  }, [remoteSchema]);
+  const schema = remoteSchema ?? [];
 
   return {
     id,

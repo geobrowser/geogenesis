@@ -395,12 +395,12 @@ export const TableBlockTable = React.memo(
                 r => r.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE
               )?.value;
 
-              if (maybeAvatarUrl) {
-                image = maybeAvatarUrl;
-              }
-
               if (maybeCoverUrl) {
                 image = maybeCoverUrl;
+              }
+
+              if (maybeAvatarUrl) {
+                image = maybeAvatarUrl;
               }
 
               const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
