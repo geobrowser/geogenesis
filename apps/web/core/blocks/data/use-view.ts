@@ -89,8 +89,25 @@ export function useView() {
 
     const newId = selector ? ID.createEntityId() : undefined;
 
-    if (!isShown) {
-      if (selector && newId) {
+    const existingMapping = mapping[newColumn.id];
+
+    // We run a separate branch of logic for RELATIONS queries where a selector may get passed through.
+    //
+    // If the selector is already active, when toggling the property it removes the shown property.
+    // If the selector is not active, is deletes any existing shown property for the property id and
+    // creates a new one with the new selector.
+    //
+    // Yes this looks janky
+    if (selector && newId) {
+      if (selector === existingMapping) {
+        if (shownColumnRelation) {
+          DB.removeRelation({ relationId: shownColumnRelation.id, fromEntityId: EntityId(relationId), spaceId });
+        }
+      } else {
+        if (shownColumnRelation) {
+          DB.removeRelation({ relationId: shownColumnRelation.id, fromEntityId: EntityId(relationId), spaceId });
+        }
+
         DB.upsert(
           {
             attributeId: SYSTEM_IDS.SELECTOR_ATTRIBUTE,
@@ -104,8 +121,37 @@ export function useView() {
           },
           spaceId
         );
+
+        const newRelation: StoreRelation = {
+          id: newId,
+          space: spaceId,
+          index: INITIAL_RELATION_INDEX_VALUE,
+          typeOf: {
+            id: EntityId(SYSTEM_IDS.PROPERTIES),
+            name: 'Properties',
+          },
+          fromEntity: {
+            id: EntityId(relationId),
+            name: blockRelation.name,
+          },
+          toEntity: {
+            id: EntityId(newColumn.id),
+            name: newColumn.name,
+            renderableType: 'RELATION',
+            value: EntityId(newColumn.id),
+          },
+        };
+
+        DB.upsertRelation({
+          relation: newRelation,
+          spaceId,
+        });
       }
 
+      return;
+    }
+
+    if (!isShown) {
       const newRelation: StoreRelation = {
         id: newId,
         space: spaceId,
