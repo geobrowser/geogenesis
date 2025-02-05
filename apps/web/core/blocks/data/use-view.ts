@@ -126,8 +126,6 @@ export function useView() {
         },
       };
 
-      console.log('upserting column', { relation: newRelation, spaceId });
-
       DB.upsertRelation({
         relation: newRelation,
         spaceId,

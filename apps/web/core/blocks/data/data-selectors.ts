@@ -96,6 +96,18 @@ export async function mapSelectorLexiconToSourceEntity(
         continue;
       }
 
+      if (segment.property === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE) {
+        const newInputId = input.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE)?.value.value;
+
+        if (!newInputId) {
+          continue;
+        }
+
+        input = await mergeEntityAsync(EntityId(GraphUrl.toEntityId(newInputId as `graph://${string}`)));
+
+        continue;
+      }
+
       const relations = input.relationsOut.filter(r => r.typeOf.id === segment.property);
 
       if (relations.length === 0) {
@@ -118,8 +130,6 @@ export function generateSelector(
   where: 'TO' | 'FROM' | 'SOURCE'
 ) {
   let selector: string | null = null;
-
-  // @TODO: Put this logic in `data-selectors` and write tests
   const tripleRenderableTypes: RenderableProperty['type'][] = ['TEXT', 'URL', 'NUMBER', 'TIME', 'CHECKBOX'];
 
   if (tripleRenderableTypes.includes(property.renderableType)) {
@@ -136,7 +146,11 @@ export function generateSelector(
     }
 
     if (where === 'FROM') {
-      // @TODO
+      selector = `->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]->.[${property.id}]`;
+
+      if (property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
+        selector = `->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]`;
+      }
     }
   }
 
@@ -146,12 +160,11 @@ export function generateSelector(
     }
 
     if (where === 'TO') {
-      // ->[Qx8dASiTNsxxP3rJbd4Lzd]->[399xP4sGWSoepxeEnp3UdR]->[Qx8dASiTNsxxP3rJbd4Lzd]
       selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[${property.id}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
     }
 
     if (where === 'FROM') {
-      // @TODO
+      selector = `->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]->[${property.id}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
     }
   }
 

@@ -4,7 +4,6 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import { Entity } from '~/core/io/dto/entities';
-import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { Cell, RenderableProperty, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
@@ -222,7 +221,10 @@ export function mappingToCell(entities: Entity[], propertyId: string, lexicon: P
     const cellRelations = relationsOut.filter(t => t.typeOf.id === propertyToFilter);
     const entityName = Entities.name(cellTriples);
 
-    if (propertyToFilter === SYSTEM_IDS.RELATION_TO_ATTRIBUTE) {
+    if (
+      propertyToFilter === SYSTEM_IDS.RELATION_TO_ATTRIBUTE ||
+      propertyToFilter === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE
+    ) {
       const imageEntityUrlValue =
         triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
 

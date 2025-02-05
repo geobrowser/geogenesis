@@ -301,6 +301,10 @@ function getIsSelected(
       return s === `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
     }
 
+    if (where === 'FROM' && property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
+      return s === `->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]`;
+    }
+
     return s === generatedSelector;
   });
 }
