@@ -247,7 +247,6 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
     return <MenuItem>No available properties</MenuItem>;
   }
 
-  // @TODO: Can use setColumn? Can set selector on it at that point?
   const onSelectProperty = (property: {
     id: string;
     name: string | null;
