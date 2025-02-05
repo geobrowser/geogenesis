@@ -1,10 +1,11 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { RenderableProperty } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
-import { LinkableChip } from '~/design-system/chip';
+import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
+import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CellContent } from '~/design-system/table/cell-content';
 
@@ -31,13 +32,27 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
   return (
     <div className="flex flex-wrap gap-2">
       {renderables.map(renderable => {
+        if (renderable.type === 'IMAGE') {
+          const value = renderable.value;
+          return <ImageZoom key={value} variant="table-cell" imageSrc={getImagePath(value)} />;
+        }
+
         if (renderable.type === 'RELATION') {
           const value = renderable.value;
           const name = renderable.valueName;
+          const relationId = renderable.relationId;
+          const relationValue = renderable.value;
+          const spaceId = renderable.spaceId;
+
           return (
-            <LinkableChip key={value} href={NavUtils.toEntity(space, value)}>
+            <LinkableRelationChip
+              key={value}
+              isEditing={false}
+              entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
+              relationHref={NavUtils.toEntity(spaceId, relationId)}
+            >
               {name ?? value}
-            </LinkableChip>
+            </LinkableRelationChip>
           );
         }
 

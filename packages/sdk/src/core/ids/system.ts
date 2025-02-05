@@ -44,6 +44,8 @@ export const ALL_OF_GEO_DATA_SOURCE = 'XqDkiYjqEufsbjqegxkqZU';
 export const COLLECTION_DATA_SOURCE = '3J6223VX6MkwTftWdzDfo4';
 export const QUERY_DATA_SOURCE = '8HkP7HCufp2HcCFajuJFcq';
 
+export const SELECTOR_ATTRIBUTE = '7zvaXnZVY9z5oCoYqciroz';
+
 /**
  * Defines the filters applied to a data block. It applies whether
  * the data block is a COLLECTION or a QUERY.

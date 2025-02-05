@@ -4,22 +4,31 @@ import type { HTMLMotionProps } from 'framer-motion';
 
 import * as React from 'react';
 
+import { colors } from './theme/colors';
+
 type ToggleProps = {
   checked: boolean;
 } & HTMLMotionProps<'div'>;
 
 export const Toggle = ({ checked, className = '', ...rest }: ToggleProps) => {
   return (
-    <motion.div
+    <div
       className={cx('relative inline-flex h-[10px] w-[16px] items-center rounded-full p-[1px]', className)}
-      style={{ justifyContent: checked ? 'flex-end' : 'flex-start', backgroundColor: checked ? '#000000' : '#B6B6B6' }}
-      transition={{ type: 'spring', duration: 1, bounce: 0 }}
-      layout
+      style={{
+        // @ts-expect-error idk
+        backgroundColor: checked ? colors.light.text : colors.light['grey-03'],
+        // @ts-expect-error idk
+        justifyContent: checked ? 'flex-end' : 'flex-start',
+      }}
       {...rest}
     >
-      <div className="h-[8px] w-[8px] rounded-full bg-white" />
+      <motion.div
+        layout
+        transition={{ type: 'spring', duration: 0.2, bounce: 0 }}
+        className="h-[8px] w-[8px] rounded-full bg-white"
+      />
       <Mousecatch />
-    </motion.div>
+    </div>
   );
 };
 

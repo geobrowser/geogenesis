@@ -52,7 +52,7 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
   });
 }
 
-export function sortRenderables(renderables: RenderableProperty[], isRelationPage: boolean) {
+export function sortRenderables(renderables: RenderableProperty[], isRelationPage?: boolean) {
   /* Visible triples includes both real triples and placeholder triples */
   return renderables.sort((renderableA, renderableB) => {
     // Always put an empty, placeholder triple with no attribute id at the bottom

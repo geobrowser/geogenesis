@@ -11,7 +11,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ContractSmall } from '../icons/contract-small';
 import { ExpandSmall } from '../icons/expand-small';
 import { RightArrowLongSmall } from '../icons/right-arrow-long-small';
-import { editingColumnsAtom } from '~/atoms';
+import { editingPropertiesAtom } from '~/atoms';
 
 interface Props {
   href?: string;
@@ -36,7 +36,7 @@ export function TableCell({
   isShown,
   isEditMode,
 }: Props) {
-  const isEditingColumns = useAtomValue(editingColumnsAtom);
+  const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [isHovered, setIsHovered] = React.useState(false);
 
   return (
