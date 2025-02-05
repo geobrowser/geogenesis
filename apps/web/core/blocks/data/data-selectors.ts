@@ -129,6 +129,10 @@ export function generateSelector(
 
     if (where === 'TO') {
       selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->.[${property.id}]`;
+
+      if (property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
+        selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+      }
     }
 
     if (where === 'FROM') {
@@ -144,10 +148,6 @@ export function generateSelector(
     if (where === 'TO') {
       // ->[Qx8dASiTNsxxP3rJbd4Lzd]->[399xP4sGWSoepxeEnp3UdR]->[Qx8dASiTNsxxP3rJbd4Lzd]
       selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[${property.id}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
-
-      if (property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
-        selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
-      }
     }
 
     if (where === 'FROM') {
