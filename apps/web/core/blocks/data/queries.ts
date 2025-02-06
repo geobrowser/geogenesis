@@ -16,8 +16,8 @@ import { Filter } from './filters';
 import { queryStringFromFilters } from './to-query-string';
 
 const queryKeys = {
-  remoteRows: (options: OmitStrict<Parameters<typeof fetchTableRowEntities>[0], 'filter'>) =>
-    ['blocks', 'data', 'query', 'rows', options] as const,
+  remoteRows: (options: OmitStrict<Parameters<typeof fetchTableRowEntities>[0], 'filter'>, filterString: string) =>
+    ['blocks', 'data', 'query', 'rows', options, filterString] as const,
   localRows: (entityIds: string[]) => ['blocks', 'data', 'query', 'rows', 'merging', entityIds] as const,
   columns: (typeIds: string[]) => ['blocks', 'data', 'query', 'columns', 'merging', typeIds] as const,
   slots: (slotIds: string[]) => ['blocks', 'data', 'query', 'slots', 'merging', slotIds] as const,
@@ -47,7 +47,7 @@ async function mergeTableRowEntitiesAsync(
   const filterString = queryStringFromFilters(filterState);
 
   const cachedEntities = await queryClient.fetchQuery({
-    queryKey: queryKeys.remoteRows(options),
+    queryKey: queryKeys.remoteRows(options, filterString),
     queryFn: ({ signal }) => fetchTableRowEntities({ ...options, filter: filterString, signal }),
   });
 
