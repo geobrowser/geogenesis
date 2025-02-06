@@ -40,7 +40,6 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
-import { DateField } from '~/design-system/editable-fields/date-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -380,8 +379,6 @@ export const TableBlockTable = React.memo(
               const maybeCoverData: Cell | undefined = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
               const maybeDescriptionData: Cell | undefined = row.columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
 
-              console.log('row.columns', row.columns);
-
               // @TODO: An "everything" else ID that can be used to render any renderable.
               const { cellId, name, verified } = nameCell;
               let { description, image } = nameCell;
@@ -424,7 +421,7 @@ export const TableBlockTable = React.memo(
 
               return (
                 <div key={index}>
-                  <Link href={href} className="group flex w-full max-w-full items-center gap-6 pr-6">
+                  <Link href={href} className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
                     <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
                       <Image
                         src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
@@ -451,7 +448,7 @@ export const TableBlockTable = React.memo(
                       {otherPropertyData.map(p => {
                         return (
                           <>
-                            <Spacer height={8} />
+                            <Spacer height={12} />
                             <PropertyField
                               key={p.slotId}
                               renderables={p.renderables}
@@ -556,12 +553,16 @@ function PropertyField(props: { renderables: RenderableProperty[]; spaceId: stri
             return <Checkbox key={`checkbox-${renderable.attributeId}-${renderable.value}`} checked={checked} />;
           }
           case 'TIME': {
+            const time = new Date(renderable.value).toLocaleDateString(undefined, {
+              day: '2-digit',
+              month: 'long',
+              year: 'numeric',
+            });
+
             return (
-              <DateField
-                key={`time-${renderable.attributeId}-${renderable.value}`}
-                isEditing={false}
-                value={renderable.value}
-              />
+              <Text variant="breadcrumb" color="text" key={`time-${renderable.attributeId}-${renderable.value}`}>
+                {time}
+              </Text>
             );
           }
           case 'URL': {
