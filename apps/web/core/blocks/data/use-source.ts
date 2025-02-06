@@ -1,7 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import * as React from 'react';
-
 import { useEntity } from '~/core/database/entities';
 import { upsert } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
