@@ -5,6 +5,7 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
+import Image from 'next/image';
 
 import * as React from 'react';
 
@@ -147,7 +148,13 @@ const ChangedBlock = ({ index, blockChange }: ChangedBlockProps) => {
             <div>
               {before && (
                 <span className="inline-block w-full rounded-lg bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="w-full rounded-lg" />
+                  <Image
+                    src={getImagePath(before)}
+                    className="!h-auto !w-full !rounded-lg"
+                    width={560}
+                    height={560}
+                    alt=""
+                  />
                 </span>
               )}
             </div>
@@ -156,7 +163,13 @@ const ChangedBlock = ({ index, blockChange }: ChangedBlockProps) => {
             <div>
               {after && (
                 <span className="inline-block w-full rounded-lg bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="w-full rounded-lg" />
+                  <Image
+                    src={getImagePath(after)}
+                    className="!h-auto !w-full !rounded-lg"
+                    width={560}
+                    height={560}
+                    alt=""
+                  />
                 </span>
               )}
             </div>
