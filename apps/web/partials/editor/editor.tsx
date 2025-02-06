@@ -2,7 +2,6 @@
 
 import { GraphUrl } from '@geogenesis/sdk';
 import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
-import { Hash } from 'effect';
 import { LayoutGroup } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
