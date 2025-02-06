@@ -225,6 +225,7 @@ export function useEditorStore() {
         return {
           ...nodeData,
           attrs: {
+            ...nodeData.attrs,
             id: block.block.id,
             relationId: block.relationId,
             spaceId,
