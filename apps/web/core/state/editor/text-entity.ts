@@ -22,11 +22,7 @@ export function getTextEntityOps(node: JSONContent): [UpsertNameOp, UpsertMarkdo
   const blockEntityId = getNodeId(node);
   const nodeHTML = getTextNodeHtml(node);
   const entityName = getNodeName(node);
-  let markdown = Parser.htmlToMarkdown(nodeHTML);
-
-  if (node.type === 'bulletList') {
-    markdown = markdown.startsWith('- ') ? markdown : `- ${markdown}`;
-  }
+  const markdown = Parser.htmlToMarkdown(nodeHTML);
 
   return [
     {
