@@ -44,27 +44,27 @@ export const tiptapExtensions = [
   ParagraphNode,
   HeadingNode,
   ConfiguredCommandExtension,
-  HardBreak.extend({
-    addKeyboardShortcuts() {
-      // Make hard breaks behave like normal paragraphs
-      const handleEnter = () =>
-        this.editor.commands.first(({ commands }) => [
-          () => commands.newlineInCode(),
-          () => commands.createParagraphNear(),
-          () => commands.liftEmptyBlock(),
-          () => commands.splitBlock(),
-        ]);
+  // HardBreak.extend({
+  //   addKeyboardShortcuts() {
+  //     // Make hard breaks behave like normal paragraphs
+  //     const handleEnter = () =>
+  //       this.editor.commands.first(({ commands }) => [
+  //         () => commands.newlineInCode(),
+  //         () => commands.createParagraphNear(),
+  //         () => commands.liftEmptyBlock(),
+  //         () => commands.splitBlock(),
+  //       ]);
 
-      return {
-        // This was intercepting the 'Enter' behavior in `command-list.tsx`
-        // Disabling doesn't seem to make a difference so maybe it was unnecessary?
-        // Enter: handleEnter,
+  //     return {
+  //       // This was intercepting the 'Enter' behavior in `command-list.tsx`
+  //       // Disabling doesn't seem to make a difference so maybe it was unnecessary?
+  //       // Enter: handleEnter,
 
-        'Mod-Enter': handleEnter,
-        'Shift-Enter': handleEnter,
-      };
-    },
-  }),
+  //       'Mod-Enter': handleEnter,
+  //       'Shift-Enter': handleEnter,
+  //     };
+  //   },
+  // }),
   Gapcursor,
   TrailingNode,
   BulletList,
