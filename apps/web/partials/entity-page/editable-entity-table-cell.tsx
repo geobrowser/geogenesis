@@ -10,7 +10,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { SquareButton } from '~/design-system/button';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, PageStringField, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
@@ -189,24 +189,16 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             );
           case 'TEXT':
             return (
-              <PageStringField
+              <TableStringField
                 key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
-                variant="body"
                 placeholder="Add value..."
-                aria-label="text-field"
                 value={renderable.value}
-                onChange={e => {
+                onBlur={e =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: {
-                      renderable,
-                      value: {
-                        type: 'TEXT',
-                        value: e.target.value,
-                      },
-                    },
-                  });
-                }}
+                    payload: { renderable, value: { type: 'TEXT', value: e.currentTarget.value } },
+                  })
+                }
               />
             );
           case 'CHECKBOX':
