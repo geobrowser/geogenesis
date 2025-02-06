@@ -14,6 +14,7 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { queryClient } from '~/core/query-client';
 import { Services } from '~/core/services';
 import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
 
@@ -78,6 +79,9 @@ export const OnboardingDialog = () => {
       if (!spaceId) {
         throw new Error(`Creating space failed`);
       }
+
+      // Forces the profile to be refetched
+      await queryClient.invalidateQueries({ queryKey: ['profile', address] });
 
       // We use the space id to navigate to the space once
       // it's done deploying.
