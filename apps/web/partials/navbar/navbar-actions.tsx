@@ -8,7 +8,7 @@ import { useParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { useGeoAccount } from '~/core/hooks/use-geo-account';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { usePathSegments } from '~/core/hooks/use-path-segments';
@@ -31,7 +31,7 @@ export function NavbarActions() {
 
   const smartAccount = useSmartAccount();
   const address = smartAccount?.account.address;
-  const { isLoading, account } = useGeoAccount(address);
+  const { isLoading, profile } = useGeoProfile(address);
 
   const { shouldShowElement } = useOnboardGuard();
 
@@ -55,23 +55,23 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={account?.profile?.avatarUrl} size={28} />
+            <Avatar value={address} avatarUrl={profile?.avatarUrl} size={28} />
           </div>
         }
         open={open}
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {account?.profile.profileLink && (
+        {profile.profileLink && (
           <>
             <AvatarMenuItem>
               <div className="flex items-center gap-2">
                 <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                  <Avatar value={address} avatarUrl={account.profile?.avatarUrl} size={16} />
+                  <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
                 </div>
                 <Link
                   prefetch={false}
-                  href={NavUtils.toSpace(account.profile.profileLink.split('/')[2])}
+                  href={NavUtils.toSpace(profile.profileLink.split('/')[2])}
                   className="text-button"
                 >
                   Personal space
