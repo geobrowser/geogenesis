@@ -42,8 +42,11 @@ export function useSource() {
     upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 
     if (newSource.type === 'RELATIONS') {
+      const maybeExistingRelationType = filterState.filter(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+
       setFilterState(
         [
+          ...maybeExistingRelationType,
           {
             columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
             valueType: 'RELATION',
