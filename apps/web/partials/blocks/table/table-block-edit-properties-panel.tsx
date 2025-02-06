@@ -167,13 +167,11 @@ function DefaultPropertySelector() {
   }
 
   if (isLoading) {
-    if (isLoading) {
-      return (
-        <div className="flex items-center justify-center p-3">
-          <Dots />
-        </div>
-      );
-    }
+    return (
+      <div className="flex items-center justify-center p-3">
+        <Dots />
+      </div>
+    );
   }
 
   return (
