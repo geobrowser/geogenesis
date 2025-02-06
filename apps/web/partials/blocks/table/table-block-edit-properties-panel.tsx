@@ -10,12 +10,11 @@ import * as React from 'react';
 
 import { generateSelector, getIsSelected } from '~/core/blocks/data/data-selectors';
 import { mergeEntitiesAsync } from '~/core/blocks/data/queries';
-import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { mergeEntityAsync } from '~/core/database/entities';
+import { getSchemaFromTypeIds, mergeEntityAsync } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';
 import { RenderableProperty } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
@@ -147,18 +146,32 @@ function RelationsPropertySelector() {
 }
 
 function DefaultPropertySelector() {
-  const { properties } = useDataBlock();
+  const { filterState } = useFilters();
   const { source } = useSource();
-
-  const allColumns = properties.map(property => ({
-    id: property.id,
-    name: property.name,
-  }));
 
   const setIsEditingProperties = useSetAtom(editingPropertiesAtom);
 
+  const { data: availableColumns, isLoading } = useQuery({
+    queryKey: ['available-columns', filterState],
+    queryFn: async () => {
+      const schema = await getSchemaFromTypeIds(
+        filterState.filter(f => f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE).map(f => f.value)
+      );
+
+      return schema;
+    },
+  });
+
   if (source.type === 'RELATIONS') {
     return null;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-3">
+        <Dots />
+      </div>
+    );
   }
 
   return (
@@ -172,7 +185,7 @@ function DefaultPropertySelector() {
           <span>Back</span>
         </button>
       </MenuItem>
-      {allColumns.map((column: Column, index: number) => {
+      {availableColumns?.map((column: Column, index: number) => {
         // do not show name column
         if (index === 0) return null;
 

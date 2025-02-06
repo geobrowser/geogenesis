@@ -35,13 +35,17 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { Cell, PropertySchema, Row } from '~/core/types';
+import { Cell, PropertySchema, RenderableProperty, Row } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
+import { Checkbox, getChecked } from '~/design-system/checkbox';
+import { LinkableRelationChip } from '~/design-system/chip';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
+import { Spacer } from '~/design-system/spacer';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
@@ -405,9 +409,19 @@ export const TableBlockTable = React.memo(
 
               const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
 
+              const otherPropertyData = Object.values(row.columns).filter(
+                c =>
+                  c.slotId !== SYSTEM_IDS.NAME_ATTRIBUTE &&
+                  c.slotId !== CONTENT_IDS.AVATAR_ATTRIBUTE &&
+                  c.slotId !== SYSTEM_IDS.COVER_ATTRIBUTE &&
+                  c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+              );
+
+              console.log('otherPropertyData', otherPropertyData);
+
               return (
                 <div key={index}>
-                  <Link href={href} className="group flex w-full max-w-full items-center gap-6 pr-6">
+                  <Link href={href} className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
                     <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
                       <Image
                         src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
@@ -430,6 +444,20 @@ export const TableBlockTable = React.memo(
                           {description}
                         </div>
                       )}
+
+                      {otherPropertyData.map(p => {
+                        return (
+                          <>
+                            <Spacer height={12} />
+                            <PropertyField
+                              key={p.slotId}
+                              renderables={p.renderables}
+                              spaceId={space}
+                              entityId={cellId}
+                            />
+                          </>
+                        );
+                      })}
                     </div>
                   </Link>
                 </div>
@@ -467,6 +495,14 @@ export const TableBlockTable = React.memo(
 
               const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
 
+              const otherPropertyData = Object.values(row.columns).filter(
+                c =>
+                  c.slotId !== SYSTEM_IDS.NAME_ATTRIBUTE &&
+                  c.slotId !== CONTENT_IDS.AVATAR_ATTRIBUTE &&
+                  c.slotId !== SYSTEM_IDS.COVER_ATTRIBUTE &&
+                  c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+              );
+
               return (
                 <Link key={index} href={href} className="group flex flex-col gap-3">
                   <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
@@ -485,6 +521,11 @@ export const TableBlockTable = React.memo(
                     )}
                     <div className="truncate text-smallTitle font-medium text-text">{name}</div>
                   </div>
+                  {otherPropertyData.map(p => {
+                    return (
+                      <PropertyField key={p.slotId} renderables={p.renderables} spaceId={space} entityId={cellId} />
+                    );
+                  })}
                 </Link>
               );
             })}
@@ -493,3 +534,58 @@ export const TableBlockTable = React.memo(
     }
   }
 );
+
+function PropertyField(props: { renderables: RenderableProperty[]; spaceId: string; entityId: string }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {props.renderables.map(renderable => {
+        console.log('renderable', renderable);
+        switch (renderable.type) {
+          case 'TEXT':
+          case 'NUMBER':
+            return (
+              <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
+                {renderable.value}
+              </Text>
+            );
+          case 'CHECKBOX': {
+            const checked = getChecked(renderable.value);
+            return <Checkbox key={`checkbox-${renderable.attributeId}-${renderable.value}`} checked={checked} />;
+          }
+          case 'TIME': {
+            const time = new Date(renderable.value).toLocaleDateString(undefined, {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            });
+
+            return (
+              <Text variant="breadcrumb" color="text" key={`time-${renderable.attributeId}-${renderable.value}`}>
+                {time}
+              </Text>
+            );
+          }
+          case 'URL': {
+            return (
+              <WebUrlField
+                key={`uri-${renderable.attributeId}-${renderable.value}`}
+                isEditing={false}
+                spaceId={props.spaceId}
+                value={renderable.value}
+              />
+            );
+          }
+          case 'IMAGE':
+            // We don't support rendering images in list or gallery views except the main image
+            return null;
+          case 'RELATION':
+            return (
+              <LinkableRelationChip isEditing={false} entityHref={''} relationHref="">
+                {renderable.valueName ?? renderable.value}
+              </LinkableRelationChip>
+            );
+        }
+      })}
+    </div>
+  );
+}
