@@ -15,10 +15,11 @@ class CouldNotWriteEditorsError extends Error {
 
 export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEditorsAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling initial editors for new public spaces'));
+    yield* _(Effect.logInfo('[INITIAL EDITORS] Started for new public spaces'));
+
     yield* _(
       Effect.logDebug(
-        `Accounts ${editorsAdded
+        `[INITIAL EDITORS] Accounts ${editorsAdded
           .map(e => e.addresses)
           .join(', ')} being added as initial editors to space with plugin ${editorsAdded.map(e => e.pluginAddress)}`
       )
@@ -58,16 +59,16 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
       retryEffect
     );
 
-    yield* _(Effect.logInfo('Initial editors and members created'));
+    yield* _(Effect.logInfo('[INITIAL EDITORS] Ended for new public spaces'));
   });
 }
 
 export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEditorsAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling initial editors for new personal spaces'));
+    yield* _(Effect.logInfo('[INITIAL EDITORS] Started for new personal spaces'));
     yield* _(
       Effect.logDebug(
-        `Accounts ${editorsAdded
+        `[INITIAL EDITORS] Accounts ${editorsAdded
           .map(e => e.addresses)
           .join(', ')} being added as initial editors to space with plugin ${editorsAdded.map(e => e.pluginAddress)}`
       )
@@ -100,7 +101,7 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
         .filter(e => e.space_id !== undefined)
     );
 
-    yield* _(Effect.logDebug('Writing initial editors and members'));
+    yield* _(Effect.logDebug('[INITIAL EDITORS] Writing initial editors and members'));
 
     // @TODO: Transaction
     yield* _(
@@ -115,6 +116,6 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
       retryEffect
     );
 
-    yield* _(Effect.logInfo('Initial editors and members created'));
+    yield* _(Effect.logInfo('[INITIAL EDITORS] Ended for new personal spaces'));
   });
 }

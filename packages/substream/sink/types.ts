@@ -3,7 +3,6 @@ import type {
   ChainAddMemberProposal,
   ChainAddSubspaceProposal,
   ChainEditProposal,
-  ChainProposal,
   ChainRemoveEditorProposal,
   ChainRemoveMemberProposal,
   ChainRemoveSubspaceProposal,

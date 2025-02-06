@@ -10,7 +10,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { SquareButton } from '~/design-system/button';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, PageStringField, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
@@ -22,7 +22,7 @@ interface Props {
   attributeId: string;
   spaceId: string;
   renderables: RenderableProperty[];
-  columnRelationTypes?: { typeId: string; typeName: string | null }[];
+  filterSearchByTypes?: string[];
 }
 
 export const EditableEntityTableCell = memo(function EditableEntityTableCell({
@@ -30,7 +30,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   entityId,
   attributeId,
   renderables,
-  columnRelationTypes,
+  filterSearchByTypes,
 }: Props) {
   const entityName = Entities.nameFromRenderable(renderables) ?? '';
 
@@ -43,12 +43,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   });
 
   const isNameCell = attributeId === SYSTEM_IDS.NAME_ATTRIBUTE;
-
-  const allowedTypes = columnRelationTypes
-    ? columnRelationTypes.length > 0
-      ? columnRelationTypes
-      : undefined
-    : undefined;
 
   if (isNameCell) {
     // This should exist as there should be a placeholder that exists if no
@@ -88,7 +82,11 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
           if (renderableType === 'IMAGE') {
             return (
-              <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue ?? '')} />
+              <ImageZoom
+                variant="table-cell"
+                key={`image-${relationId}-${relationValue}`}
+                imageSrc={getImagePath(relationValue ?? '')}
+              />
             );
           }
 
@@ -97,12 +95,13 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               <div key={`${r.entityId}-${r.attributeId}-${r.value}`} data-testid="select-entity" className="w-full">
                 <SelectEntity
                   spaceId={spaceId}
-                  // allowedTypes={allowedTypes}
+                  allowedTypes={filterSearchByTypes}
                   onDone={result => {
                     send({
                       type: 'UPSERT_RELATION',
                       payload: {
                         fromEntityId: entityId,
+                        fromEntityName: entityName,
                         toEntityId: result.id,
                         toEntityName: result.name,
                         typeOfId: r.attributeId,
@@ -126,6 +125,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                       type: 'DELETE_RELATION',
                       payload: {
                         relationId,
+                        fromEntityId: entityId,
                       },
                     });
                   }}
@@ -142,12 +142,13 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           <div className="mt-1">
             <SelectEntityAsPopover
               trigger={<SquareButton icon={<Create />} />}
-              // allowedTypes={allowedTypes}
+              allowedTypes={filterSearchByTypes}
               onDone={result => {
                 send({
                   type: 'UPSERT_RELATION',
                   payload: {
                     fromEntityId: entityId,
+                    fromEntityName: entityName,
                     toEntityId: result.id,
                     toEntityName: result.name,
                     typeOfId: typeOfId,
@@ -188,24 +189,16 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             );
           case 'TEXT':
             return (
-              <PageStringField
+              <TableStringField
                 key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
-                variant="body"
                 placeholder="Add value..."
-                aria-label="text-field"
                 value={renderable.value}
-                onChange={e => {
+                onBlur={e =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: {
-                      renderable,
-                      value: {
-                        type: 'TEXT',
-                        value: e.target.value,
-                      },
-                    },
-                  });
-                }}
+                    payload: { renderable, value: { type: 'TEXT', value: e.currentTarget.value } },
+                  })
+                }
               />
             );
           case 'CHECKBOX':
@@ -224,6 +217,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 key={renderable.attributeId}
                 placeholder="Add a URI"
                 isEditing={true}
+                spaceId={spaceId}
                 value={renderable.value}
               />
             );

@@ -1,5 +1,5 @@
 import { Relation } from '@geogenesis/sdk';
-import { ActionType, Import, ImportEdit, OpType, ValueType, createEditProposal } from '@geogenesis/sdk/proto';
+import { ActionType, EditProposal, Import, ImportEdit, OpType, ValueType } from '@geogenesis/sdk/proto';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -8,7 +8,7 @@ import { Decoder } from './decoder';
 describe('decoder', () => {
   describe('decodeIpfsMetadata', () => {
     it('decodes an IPFS metadata for an EDIT', () => {
-      const edit = createEditProposal({
+      const edit = EditProposal.make({
         name: 'Test edit',
         author: '0x1234',
         ops: [],
@@ -50,7 +50,7 @@ describe('decoder', () => {
 
   describe('decodeEdit', () => {
     it('decodes an IPFS metadata for an EDIT', () => {
-      const edit = createEditProposal({
+      const edit = EditProposal.make({
         name: 'Test edit',
         author: '0x1234',
         ops: [],
@@ -71,7 +71,7 @@ describe('decoder', () => {
     });
 
     it('decodes an EDIT with SET_TRIPLE ops', () => {
-      const edit = createEditProposal({
+      const edit = EditProposal.make({
         name: 'Test edit',
         author: '0x1234',
         ops: [
@@ -113,7 +113,7 @@ describe('decoder', () => {
     });
 
     it('decodes an EDIT with DELETE_TRIPLE ops', () => {
-      const edit = createEditProposal({
+      const edit = EditProposal.make({
         name: 'Test edit',
         author: '0x1234',
         ops: [
@@ -147,7 +147,7 @@ describe('decoder', () => {
     });
 
     it('decodes an EDIT with CREATE_RELATION ops', () => {
-      const edit = createEditProposal({
+      const edit = EditProposal.make({
         name: 'Test edit',
         author: '0x1234',
         ops: [
@@ -184,7 +184,7 @@ describe('decoder', () => {
     });
 
     it('decodes an EDIT with DELETE_RELATION ops', () => {
-      const edit = createEditProposal({
+      const edit = EditProposal.make({
         name: 'Test edit',
         author: '0x1234',
         ops: [

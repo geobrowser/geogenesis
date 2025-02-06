@@ -8,7 +8,7 @@ import { SpaceGovernanceType } from '~/core/types';
 
 import { Subspace, SubspaceDto } from '../dto/subspaces';
 import { SubstreamSubspace, SubstreamVersion } from '../schema';
-import { spaceMetadataFragment } from './fragments';
+import { getSpaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 const getFetchSpacesQuery = (spaceId: string) => `query {
@@ -27,7 +27,7 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
           totalCount
         }
 
-        ${spaceMetadataFragment}
+        ${getSpaceMetadataFragment()}
       }
     }
   }
@@ -43,6 +43,7 @@ interface NetworkResult {
         spaceEditors: { totalCount: number };
         spaceMembers: { totalCount: number };
         spacesMetadatum: {
+          spaceId: string;
           version: SubstreamVersion;
         };
       };

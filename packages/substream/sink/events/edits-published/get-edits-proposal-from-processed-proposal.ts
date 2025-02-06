@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, getChecksumAddress } from '@geogenesis/sdk';
+import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
@@ -9,7 +9,7 @@ import { Decoder } from '~/sink/proto';
 
 function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logDebug('Fetching edit proposal from IPFS'));
+    yield* _(Effect.logDebug(`[FETCH EDIT PROPOSALS] Verifying plugin address ${processedProposal.pluginAddress}`));
 
     const maybeSpaceIdForSpacePlugin = yield* _(
       Effect.promise(() => Spaces.findForSpacePlugin(processedProposal.pluginAddress))
@@ -23,11 +23,7 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
       return null;
     }
 
-    yield* _(
-      Effect.logDebug(`Fetching IPFS content for processed proposal
-      contentUri:    ${processedProposal.contentUri}
-      pluginAddress: ${processedProposal.pluginAddress}`)
-    );
+    yield* _(Effect.logDebug(`[FETCH EDIT PROPOSALS] Fetching IPFS content ${processedProposal.contentUri}`));
 
     const fetchIpfsContentEffect = getFetchIpfsContentEffect(processedProposal.contentUri);
     const maybeIpfsContent = yield* _(Effect.either(fetchIpfsContentEffect));
@@ -37,31 +33,45 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
 
       switch (error._tag) {
         case 'UnableToParseBase64Error':
-          yield* _(Effect.logError(`Unable to parse base64 string ${processedProposal.contentUri}. ${String(error)}`));
+          yield* _(
+            Effect.logError(
+              `[FETCH EDIT PROPOSALS] Unable to parse base64 string ${processedProposal.contentUri}. ${String(error)}`
+            )
+          );
           break;
         case 'FailedFetchingIpfsContentError':
           yield* _(
-            Effect.logError(`Failed fetching IPFS content from uri ${processedProposal.contentUri}. ${String(error)}`)
+            Effect.logError(
+              `[FETCH EDIT PROPOSALS] Failed fetching IPFS content from uri ${processedProposal.contentUri}. ${String(
+                error
+              )}`
+            )
           );
           break;
         case 'UnableToParseJsonError':
           yield* _(
             Effect.logError(
-              `Unable to parse JSON when reading content from uri ${processedProposal.contentUri}. ${String(error)}`
+              `[FETCH EDIT PROPOSALS] Unable to parse JSON when reading content from uri ${
+                processedProposal.contentUri
+              }. ${String(error)}`
             )
           );
           break;
         case 'TimeoutException':
           yield* _(
             Effect.logError(
-              `Timed out when fetching IPFS content for uri ${processedProposal.contentUri}. ${String(error)}`
+              `[FETCH EDIT PROPOSALS] Timed out when fetching IPFS content for uri ${
+                processedProposal.contentUri
+              }. ${String(error)}`
             )
           );
           break;
         default:
           yield* _(
             Effect.logError(
-              `Unknown error when fetching IPFS content for uri ${processedProposal.contentUri}. ${String(error)}`
+              `[FETCH EDIT PROPOSALS] Unknown error when fetching IPFS content for uri ${
+                processedProposal.contentUri
+              }. ${String(error)}`
             )
           );
           break;
@@ -75,7 +85,7 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
     if (!ipfsContent) {
       yield* _(
         Effect.logError(
-          `Failed to fetch IPFS content for proposal in dao ${processedProposal.daoAddress} with content hash ${processedProposal.contentUri}`
+          `[FETCH EDIT PROPOSALS] Failed to fetch IPFS content for proposal in dao ${processedProposal.daoAddress} with content hash ${processedProposal.contentUri}`
         )
       );
 
@@ -86,7 +96,7 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
 
     if (!validIpfsMetadata) {
       // @TODO: Effectify error handling
-      yield* _(Effect.logError(`Failed to parse IPFS metadata ${validIpfsMetadata}`));
+      yield* _(Effect.logError(`[FETCH EDIT PROPOSALS] Failed to parse IPFS metadata ${validIpfsMetadata}`));
       return null;
     }
 
@@ -97,7 +107,7 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
         if (!parsedContent) {
           yield* _(
             Effect.logError(
-              `Failed to parse edit content for proposal in dao ${processedProposal.daoAddress} with content hash ${processedProposal.contentUri} metadata: ${validIpfsMetadata}`
+              `[FETCH EDIT PROPOSALS] Failed to parse edit content for proposal in dao ${processedProposal.daoAddress} with content hash ${processedProposal.contentUri} metadata: ${validIpfsMetadata}`
             )
           );
           return null;
@@ -163,7 +173,7 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
         if (!importResult) {
           yield* _(
             Effect.logError(
-              `Failed to parse import content for proposal in dao ${processedProposal.daoAddress} with content hash ${processedProposal.contentUri} metadata: ${validIpfsMetadata}`
+              `[FETCH EDIT PROPOSALS] Failed to parse import content for proposal in dao ${processedProposal.daoAddress} with content hash ${processedProposal.contentUri} metadata: ${validIpfsMetadata}`
             )
           );
           return null;
@@ -248,7 +258,7 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
 
 export function getEditsProposalsFromIpfsUri(proposalsProcessed: ChainEditPublished[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Gathering IPFS content for accepted proposals'));
+    yield* _(Effect.logInfo('[FETCH EDIT PROPOSALS] Start'));
 
     const maybeProposalsFromIpfs = yield* _(
       Effect.forEach(proposalsProcessed, proposal => fetchEditProposalFromIpfs(proposal, block), {

@@ -54,6 +54,8 @@ CREATE TABLE public.edits (
 
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,
+    name text NOT NULL,
+    created_at integer NOT NULL,
     onchain_proposal_id text NOT NULL,
     plugin_address text NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
@@ -116,7 +118,10 @@ CREATE TABLE public.current_versions (
 CREATE TABLE public.relations (
     id text PRIMARY KEY NOT NULL,
     space_id text REFERENCES public.spaces(id) NOT NULL,
-    type_of_id text REFERENCES public.versions(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
+    type_of_id text REFERENCES public.entities(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
+    to_entity_id text REFERENCES public.entities(id) NOT NULL, -- the entity the relation is pointing to
+    from_entity_id text REFERENCES public.entities(id) NOT NULL, -- the entity the relation is pointing from
+    type_of_version_id text REFERENCES public.versions(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
     to_version_id text REFERENCES public.versions(id) NOT NULL, -- the entity the relation is pointing to
     index text, -- the fractional index of the relation relative to other relations of the same type
     from_version_id text REFERENCES public.versions(id) NOT NULL, -- the entity the relation is pointing from

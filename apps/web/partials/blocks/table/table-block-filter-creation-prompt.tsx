@@ -4,18 +4,20 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
 
-import { Filter } from '~/core/blocks-sdk/table';
+import { Filter } from '~/core/blocks/data/filters';
+import { Source } from '~/core/blocks/data/source';
+import { useFilters } from '~/core/blocks/data/use-filters';
+import { useSource } from '~/core/blocks/data/use-source';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Space } from '~/core/io/dto/spaces';
-import { Source } from '~/core/state/editor/types';
-import { useTableBlock } from '~/core/state/table-block-store';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
+import { Divider } from '~/design-system/divider';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
@@ -24,6 +26,7 @@ import { Spacer } from '~/design-system/spacer';
 import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { TextButton } from '~/design-system/text-button';
+import { Toggle } from '~/design-system/toggle';
 
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
@@ -96,6 +99,9 @@ type PromptAction =
     }
   | {
       type: 'done';
+    }
+  | {
+      type: 'reset';
     };
 
 const reducer = (state: PromptState, action: PromptAction): PromptState => {
@@ -156,17 +162,26 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
           value: '',
         },
       };
+    case 'reset':
+      return {
+        ...state,
+        selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
+        value: {
+          type: 'string',
+          value: '',
+        },
+      };
   }
 };
 
 function getInitialState(source: Source): PromptState {
-  if (source.type === 'ENTITY') {
+  if (source.type === 'RELATIONS') {
     return {
       selectedColumn: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
       value: {
         type: 'entity',
-        entityId: source.value,
-        entityName: source.name,
+        entityId: '',
+        entityName: null,
       },
       open: false,
     };
@@ -182,14 +197,69 @@ function getInitialState(source: Source): PromptState {
   };
 }
 
+interface ToggleQueryModeProps {
+  queryMode: 'ENTITIES' | 'RELATIONS';
+  setQueryMode: (value: 'ENTITIES' | 'RELATIONS') => void;
+  localSource: Source | null;
+}
+
+function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryModeProps) {
+  const { setSource } = useSource();
+
+  const onToggleQueryMode = () => {
+    const newQueryMode = queryMode === 'RELATIONS' ? 'ENTITIES' : 'RELATIONS';
+    setQueryMode(newQueryMode);
+
+    if (newQueryMode === 'RELATIONS' && localSource && localSource.type === 'RELATIONS') {
+      setSource({
+        type: 'RELATIONS',
+        name: localSource.name,
+        value: localSource.value,
+      });
+      return;
+    }
+
+    setSource({
+      type: 'GEO',
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-1 px-2 pt-2">
+      <p>Entities</p>
+      <button onClick={onToggleQueryMode}>
+        <Toggle checked={queryMode === 'RELATIONS'} />
+      </button>
+      <p>Relations</p>
+    </div>
+  );
+}
+
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const { columnRelationTypes, source } = useTableBlock();
-
+  const { source } = useSource();
+  const { filterState } = useFilters();
   const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
+  const [queryMode, setQueryMode] = React.useState<'RELATIONS' | 'ENTITIES'>(
+    source.type === 'RELATIONS' ? 'RELATIONS' : 'ENTITIES'
+  );
 
-  const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
+  const [from, setFrom] = React.useState<Source | null>(source);
+  const [relationType, setRelationType] = React.useState<Filter | null>(
+    filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) ?? null
+  );
 
-  const onDone = () => {
+  const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
+    if (queryMode === 'RELATIONS') {
+      setFrom(null);
+      setRelationType(null);
+    } else {
+      dispatch({ type: 'reset' });
+    }
+
+    setQueryMode(newQueryMode);
+  };
+
+  const onEntitiesDone = () => {
     onCreate({
       columnId: state.selectedColumn,
       value: getFilterValue(state.value),
@@ -199,13 +269,37 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
     dispatch({ type: 'done' });
   };
 
-  const onSelectColumnToFilter = (columnId: string) => dispatch({ type: 'selectColumn', payload: { columnId } });
+  const filters =
+    queryMode === 'RELATIONS' ? (
+      <StaticRelationsFilters
+        from={from}
+        setFrom={setFrom}
+        relationType={relationType}
+        setRelationType={setRelationType}
+      />
+    ) : (
+      <DynamicFilters options={options} state={state} dispatch={dispatch} />
+    );
 
-  const onSelectEntityValue = (entity: { id: string; name: string | null }) =>
-    dispatch({ type: 'selectEntityValue', payload: { id: entity.id, name: entity.name } });
+  const done =
+    queryMode !== 'RELATIONS' ? (
+      <AnimatePresence>
+        {getFilterValue(state.value) !== '' && (
+          <motion.span
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.1 }}
+          >
+            <TextButton color="ctaPrimary" onClick={onEntitiesDone}>
+              Done
+            </TextButton>
+          </motion.span>
+        )}
+      </AnimatePresence>
+    ) : null;
 
-  const onSelectSpaceValue = (space: { id: string; name: string | null }) =>
-    dispatch({ type: 'selectSpaceValue', payload: { id: space.id, name: space.name } });
+  const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
 
   return (
     <Root open={state.open} onOpenChange={onOpenChange}>
@@ -216,73 +310,146 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
             <Content
               forceMount={true}
               avoidCollisions={true}
-              className="z-10 w-[472px] origin-top-left rounded-lg border border-grey-02 bg-white p-2 shadow-lg"
+              className="z-10 w-[472px] origin-top-left rounded-lg border border-grey-02 bg-white py-2 shadow-lg"
               sideOffset={8}
               align="start"
             >
-              <form
-                onSubmit={e => {
-                  e.preventDefault();
-                  onDone();
-                }}
-              >
-                <div className="flex items-center justify-between ">
-                  <span className="text-smallButton">New filter</span>
-                  <AnimatePresence>
-                    {getFilterValue(state.value) !== '' && (
-                      <motion.span
-                        initial={{ scale: 0.95, opacity: 0 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.1 }}
-                      >
-                        <TextButton color="ctaPrimary" onClick={onDone}>
-                          Done
-                        </TextButton>
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </div>
+              <div className="flex items-center justify-between px-2 pb-2 text-smallButton text-grey-04">
+                <p>New filter</p>
+                {done}
+              </div>
+              <Divider type="horizontal" className="bg-grey-04" />
+              {source.type !== 'COLLECTION' && (
+                <ToggleQueryMode queryMode={queryMode} setQueryMode={onToggleQueryMode} localSource={from} />
+              )}
 
-                <Spacer height={12} />
-
-                <div className="flex items-center justify-center gap-3">
-                  <div className="flex flex-1">
-                    <Select
-                      options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
-                      value={state.selectedColumn}
-                      onChange={onSelectColumnToFilter}
-                    />
-                  </div>
-                  <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
-                  <div className="relative flex flex-1">
-                    {state.selectedColumn === SYSTEM_IDS.SPACE_FILTER ? (
-                      <TableBlockSpaceFilterInput
-                        selectedValue={getFilterValueName(state.value) ?? ''}
-                        onSelect={onSelectSpaceValue}
-                      />
-                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'RELATION' ? (
-                      <TableBlockEntityFilterInput
-                        // filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
-                        selectedValue={getFilterValueName(state.value) ?? ''}
-                        onSelect={onSelectEntityValue}
-                      />
-                    ) : (
-                      <Input
-                        value={getFilterValue(state.value)}
-                        onChange={e =>
-                          dispatch({ type: 'selectStringValue', payload: { value: e.currentTarget.value } })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-              </form>
+              <Spacer height={12} />
+              {filters}
             </Content>
           )}
         </AnimatePresence>
       </Portal>
     </Root>
+  );
+}
+
+interface DynamicFiltersProps {
+  options: TableBlockFilterPromptProps['options'];
+  state: PromptState;
+  dispatch: React.Dispatch<PromptAction>;
+}
+
+function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
+  const onSelectColumnToFilter = (columnId: string) => dispatch({ type: 'selectColumn', payload: { columnId } });
+
+  const onSelectEntityValue = (entity: { id: string; name: string | null }) =>
+    dispatch({ type: 'selectEntityValue', payload: { id: entity.id, name: entity.name } });
+
+  const onSelectSpaceValue = (space: { id: string; name: string | null }) =>
+    dispatch({ type: 'selectSpaceValue', payload: { id: space.id, name: space.name } });
+
+  return (
+    <div className="flex items-center justify-center gap-3 px-2">
+      <>
+        <div className="flex flex-1">
+          <Select
+            options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
+            value={state.selectedColumn}
+            onChange={onSelectColumnToFilter}
+          />
+        </div>
+        <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
+        <div className="relative flex flex-1">
+          {state.selectedColumn === SYSTEM_IDS.SPACE_FILTER ? (
+            <TableBlockSpaceFilterInput
+              selectedValue={getFilterValueName(state.value) ?? ''}
+              onSelect={onSelectSpaceValue}
+            />
+          ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'RELATION' ? (
+            <TableBlockEntityFilterInput
+              // filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
+              selectedValue={getFilterValueName(state.value) ?? ''}
+              onSelect={onSelectEntityValue}
+            />
+          ) : (
+            <Input
+              value={getFilterValue(state.value)}
+              onChange={e => dispatch({ type: 'selectStringValue', payload: { value: e.currentTarget.value } })}
+            />
+          )}
+        </div>
+      </>
+    </div>
+  );
+}
+
+interface StaticRelationsFiltersProps {
+  from: Source | null;
+  relationType: Filter | null;
+  setFrom: (source: Source) => void;
+  setRelationType: (relationType: Filter) => void;
+}
+
+function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }: StaticRelationsFiltersProps) {
+  const { setSource, source } = useSource();
+  const { setFilterState, filterState } = useFilters();
+
+  const onSetRelationType = (entity: { id: string; name: string | null }) => {
+    setRelationType({
+      columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+      value: entity.id,
+      valueName: entity.name,
+      valueType: 'RELATION',
+    });
+
+    const withoutRelationType = filterState.filter(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+
+    setFilterState(
+      [
+        ...withoutRelationType,
+        {
+          columnId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+          value: entity.id,
+          valueName: entity.name,
+          valueType: 'RELATION',
+        },
+      ],
+      source
+    );
+  };
+
+  const onSetSource = (entity: { id: string; name: string | null }) => {
+    setFrom({
+      type: 'RELATIONS',
+      name: entity.name,
+      value: entity.id,
+    });
+
+    setSource({
+      type: 'RELATIONS',
+      name: entity.name,
+      value: entity.id,
+    });
+  };
+
+  return (
+    <>
+      <div className="space-y-2 px-2">
+        <div className="flex items-center justify-center gap-2">
+          <p className="flex h-9 min-w-28 items-center justify-start rounded bg-divider px-3 text-button">
+            Relation type
+          </p>
+          <TableBlockEntityFilterInput onSelect={onSetRelationType} selectedValue={relationType?.valueName ?? ''} />
+        </div>
+        <div className="flex items-center justify-center gap-2">
+          <p className="flex h-9 min-w-28 items-center justify-start rounded bg-divider px-3 text-button">From</p>
+          <TableBlockEntityFilterInput
+            onSelect={onSetSource}
+            selectedValue={from?.type === 'RELATIONS' ? from?.name ?? '' : ''}
+          />
+        </div>
+      </div>
+    </>
   );
 }
 

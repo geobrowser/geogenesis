@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { redirect } from 'next/navigation';
+import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
@@ -8,6 +9,7 @@ import type { Metadata } from 'next';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
+import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
@@ -20,10 +22,11 @@ import { Subspaces } from '~/partials/space-page/subspaces';
 import { cachedFetchSpace } from './cached-fetch-space';
 
 interface Props {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   const spaceId = params.id;
 
   const space = await cachedFetchSpace(spaceId);
@@ -65,7 +68,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function SpacePage({ params }: Props) {
+export default async function SpacePage(props0: Props) {
+  const params = await props0.params;
   const spaceId = params.id;
   const props = await getData(spaceId);
   const entityId = props.id;
@@ -77,16 +81,20 @@ export default async function SpacePage({ params }: Props) {
       <React.Suspense fallback={<SubspacesSkeleton />}>
         <SubspacesContainer spaceId={params.id} />
       </React.Suspense>
-      <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
+      <React.Suspense fallback={null}>
+        <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
+      </React.Suspense>
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
-      {/*
-        Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
-        show any referenced by loading states but do want to stream it in
-      */}
-      <React.Suspense fallback={<div />}>
-        <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={spaceId} />
-      </React.Suspense>
+      <ErrorBoundary fallback={<EmptyErrorComponent />}>
+        {/*
+          Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
+          show any referenced by loading states but do want to stream it in
+        */}
+        <React.Suspense fallback={<div />}>
+          <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={spaceId} />
+        </React.Suspense>
+      </ErrorBoundary>
     </>
   );
 }

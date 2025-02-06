@@ -22,13 +22,7 @@ export function getTextEntityOps(node: JSONContent): [UpsertNameOp, UpsertMarkdo
   const blockEntityId = getNodeId(node);
   const nodeHTML = getTextNodeHtml(node);
   const entityName = getNodeName(node);
-  let markdown = Parser.htmlToMarkdown(nodeHTML);
-
-  if (node.type === 'bulletList') {
-    // @TODO: Do we need this with our custom parser? Previously only
-    // needed this when we were using Showdown's list behavior
-    markdown = markdown.replaceAll('\n<!-- -->\n', '');
-  }
+  const markdown = Parser.htmlToMarkdown(nodeHTML);
 
   return [
     {

@@ -8,13 +8,13 @@ import { Environment } from '~/core/environment';
 import { ProposalWithoutVoters, ProposalWithoutVotersDto } from '../dto/proposals';
 import { SubstreamProposal } from '../schema';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { spaceMetadataFragment } from './fragments';
+import { getSpaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
   proposals(first: ${first}, filter: {spaceId: {equalTo: ${JSON.stringify(
     spaceId
-  )}}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
+  )}}}, orderBy: END_TIME_DESC, offset: ${skip}) {
     nodes {
       id
       type
@@ -22,7 +22,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
 
       space {
         id
-        ${spaceMetadataFragment}
+        ${getSpaceMetadataFragment(spaceId)}
       }
 
       edit {

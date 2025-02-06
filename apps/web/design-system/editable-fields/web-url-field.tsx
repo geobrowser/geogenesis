@@ -1,5 +1,6 @@
 'use client';
 
+import { GraphUrl } from '@geogenesis/sdk';
 import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
@@ -27,26 +28,24 @@ const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 fo
 interface Props {
   isEditing?: boolean;
   placeholder?: string;
+  spaceId: string;
   value: string;
   onBlur?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   variant?: 'body' | 'tableCell';
 }
 
-export function WebUrlField({ variant = 'body', isEditing = false, ...props }: Props) {
+export function WebUrlField({ variant = 'body', isEditing = false, spaceId, value, ...props }: Props) {
   // We use the local value and onBlur to improve performance when WebUrlField is rendered
   // in a large table. Our Actions model means that every keystroke triggers a re-render
   // of all fields deriving data from the ActionStore.
-  const [localValue, setLocalValue] = React.useState(props.value);
+  const [localValue, setLocalValue] = React.useState(value);
 
   React.useEffect(() => {
-    setLocalValue(props.value);
-  }, [props.value]);
+    setLocalValue(value);
+  }, [value]);
 
-  // @TODO render a separate component so we don't use this hook for regular urls
-  const entity = useEntity({ id: EntityId(props.value.split('graph://')[1] ?? '') });
-
-  if (props.value.startsWith('graph://')) {
-    return <LinkableChip href={`./${entity.id}`}>{entity.name}</LinkableChip>;
+  if (value.startsWith('graph://')) {
+    return <GraphUrlField currentSpaceId={spaceId} value={value as `graph://${string}`} />;
   }
 
   return isEditing ? (
@@ -57,13 +56,25 @@ export function WebUrlField({ variant = 'body', isEditing = false, ...props }: P
       onChange={e => setLocalValue(e.currentTarget.value)}
     />
   ) : (
-    <a
-      href={props.value}
-      target="_blank"
-      rel="noreferrer"
-      className={webUrlFieldStyles({ variant, editable: isEditing })}
-    >
-      {props.value}
+    <a href={value} target="_blank" rel="noreferrer" className={webUrlFieldStyles({ variant, editable: isEditing })}>
+      {value}
     </a>
   );
 }
+
+type GraphUrlFieldProps = {
+  currentSpaceId: string;
+  value: `graph://${string}`;
+};
+
+const GraphUrlField = ({ currentSpaceId, value }: GraphUrlFieldProps) => {
+  const entityId = GraphUrl.toEntityId(value);
+  const spaceId = GraphUrl.toSpaceId(value) ?? currentSpaceId;
+
+  const entity = useEntity({ id: EntityId(entityId) });
+
+  const entityName = entity.name || value;
+  const href = `/space/${spaceId}/${entityId}`;
+
+  return <LinkableChip href={href}>{entityName}</LinkableChip>;
+};

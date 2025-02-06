@@ -3,9 +3,9 @@ import { Effect, Either } from 'effect';
 import { v4 } from 'uuid';
 
 import { Environment } from '../environment';
-import { Entity, EntityDto } from './dto/entities';
-import { SubstreamEntity } from './schema';
-import { versionFragment } from './subgraph/fragments';
+import { Entity, EntityDtoLive } from './dto/entities';
+import { SubstreamEntityLive } from './schema';
+import { getEntityFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
 
 const query = (ids: string[]) => {
@@ -17,7 +17,7 @@ const query = (ids: string[]) => {
         id
         currentVersion {
           version {
-            ${versionFragment}
+            ${getEntityFragment()}
           }
         }
       }
@@ -26,7 +26,7 @@ const query = (ids: string[]) => {
 };
 
 interface NetworkResult {
-  entities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamEntityLive[] };
 }
 
 export async function fetchBlocks(ids: string[]): Promise<Entity[]> {
@@ -79,7 +79,7 @@ export async function fetchBlocks(ids: string[]): Promise<Entity[]> {
 
   return unknownEntities.nodes
     .map(e => {
-      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
+      const decodedSpace = Schema.decodeEither(SubstreamEntityLive)(e);
 
       return Either.match(decodedSpace, {
         onLeft: error => {
@@ -87,7 +87,7 @@ export async function fetchBlocks(ids: string[]): Promise<Entity[]> {
           return null;
         },
         onRight: entity => {
-          return EntityDto(entity);
+          return EntityDtoLive(entity);
         },
       });
     })

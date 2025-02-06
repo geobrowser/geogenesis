@@ -12,29 +12,10 @@ import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors'
 import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
+import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
 import { Cookie } from '../cookie';
 import { GEOGENESIS } from './geo-chain';
-
-// const LOCAL_CHAIN: Chain = {
-//   id: Number(Environment.options.development.chainId),
-//   name: 'Geo Genesis Dev', // Human-readable name
-//   network: 'ethereum', // Internal network name
-//   nativeCurrency: {
-//     name: 'Ethereum',
-//     symbol: 'ETH',
-//     decimals: 18,
-//   },
-//   rpcUrls: {
-//     default: {
-//       http: [Environment.options.development.rpc],
-//     },
-//     public: {
-//       http: [Environment.options.development.rpc],
-//     },
-//   },
-// };
 
 const realWalletConfig = createConfig({
   chains: [GEOGENESIS],
@@ -104,12 +85,14 @@ export function GeoConnectButton() {
   const { wallets } = useWallets();
 
   const setName = useSetAtom(nameAtom);
+  const setEntityId = useSetAtom(entityIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
 
   const resetOnboarding = () => {
     setName('');
+    setEntityId('');
     setAvatar('');
     setSpaceId('');
     setStep('start');
@@ -117,7 +100,7 @@ export function GeoConnectButton() {
 
   const { login } = useLogin({
     onComplete: async user => {
-      const userWallet = user.wallet;
+      const userWallet = user.user.wallet;
 
       if (userWallet !== undefined) {
         const wallet = wallets.find(wallet => wallet.address === userWallet.address);

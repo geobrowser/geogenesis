@@ -56,6 +56,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
   const substreamQuery = `query {
     proposals(
       first: 10
+      orderBy: END_TIME_DESC
       filter: {
         ${proposalTypeFilter ?? ''}
         status: { equalTo: PROPOSED }
@@ -87,16 +88,6 @@ export async function getActiveProposalsForSpacesWhereEditor(
         endTime
         status
 
-        proposalVotes {
-          totalCount
-          nodes {
-            vote
-            account {
-              id
-            }
-          }
-        }
-
         space {
           id
           ${spaceMetadataFragment}
@@ -111,9 +102,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
           totalCount
           nodes {
             vote
-            account {
-              id
-            }
+            accountId
           }
         }
       }

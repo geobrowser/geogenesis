@@ -5,7 +5,7 @@ import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
-const toastAtom = atom<React.ReactElement | null>(null);
+const toastAtom = atom<React.ReactElement<any> | null>(null);
 
 export function useToast() {
   const [toast, setToast] = useAtom(toastAtom);

@@ -1,22 +1,101 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
+
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+
+import { StoreRelation } from '~/core/database/types';
+import { DB } from '~/core/database/write';
+import { EntityId } from '~/core/io/schema';
 
 import { SmallButton } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';
 
 type EmptyTabProps = {
+  entityId: string;
   spaceId: string;
+  pageType: { name: string; id: string } | null;
   children: ReactNode;
 };
 
-export const EmptyTab = ({ children }: EmptyTabProps) => {
+export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProps) => {
   const [hasCreatedEntity, setHasCreatedEntity] = useState<boolean>(false);
 
   const handleCreateEntity = () => {
+    if (pageType) {
+      const newEntityId = entityId;
+
+      DB.upsert(
+        {
+          entityId: newEntityId,
+          attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+          entityName: null,
+          attributeName: 'Name',
+          value: {
+            type: 'TEXT',
+            value: '',
+          },
+        },
+        spaceId
+      );
+
+      const pageRelation: StoreRelation = {
+        space: spaceId,
+        index: INITIAL_RELATION_INDEX_VALUE,
+        typeOf: {
+          id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
+          name: 'Types',
+        },
+        fromEntity: {
+          id: EntityId(newEntityId),
+          name: null,
+        },
+        toEntity: {
+          id: EntityId(SYSTEM_IDS.PAGE_TYPE),
+          name: 'Page',
+          renderableType: 'RELATION',
+          value: EntityId(SYSTEM_IDS.PAGE_TYPE),
+        },
+      };
+
+      DB.upsertRelation({
+        relation: pageRelation,
+        spaceId,
+      });
+
+      const pageTypeRelation: StoreRelation = {
+        space: spaceId,
+        index: INITIAL_RELATION_INDEX_VALUE,
+        typeOf: {
+          id: EntityId(SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE),
+          name: 'Page Type',
+        },
+        fromEntity: {
+          id: EntityId(newEntityId),
+          name: null,
+        },
+        toEntity: {
+          id: EntityId(pageType.id),
+          name: pageType.name,
+          renderableType: 'RELATION',
+          value: EntityId(pageType.id),
+        },
+      };
+
+      DB.upsertRelation({
+        relation: pageTypeRelation,
+        spaceId,
+      });
+    }
+
     setHasCreatedEntity(true);
   };
+
+  if (!pageType) {
+    return null;
+  }
 
   if (!hasCreatedEntity) {
     return (

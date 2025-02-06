@@ -1,15 +1,27 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 import { Image } from '@geogenesis/sdk';
+import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import * as React from 'react';
 
+import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
+import { useProperties } from '~/core/hooks/use-properties';
+import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
+import { ID } from '~/core/id';
+import { EntityId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Relation, RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
+import {
+  PropertySchema,
+  Relation,
+  RelationRenderableProperty,
+  RenderableProperty,
+  TripleRenderableProperty,
+} from '~/core/types';
 import { Triple as ITriple } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -39,17 +51,23 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Props) {
+  const entityId = id;
+
+  const [isRelationPage] = useRelationship(entityId, spaceId);
+
   const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
-    useRenderables(serverTriples, spaceId);
+    useRenderables(serverTriples, spaceId, isRelationPage);
   const { name } = useEntityPageStore();
 
   const send = useEditEvents({
     context: {
-      entityId: id,
+      entityId,
       spaceId,
       entityName: name ?? '',
     },
   });
+
+  const { properties } = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
   return (
     <>
@@ -90,7 +108,11 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                   }}
                 />
                 {renderableType === 'RELATION' || renderableType === 'IMAGE' ? (
-                  <RelationsGroup key={attributeId} relations={renderables as RelationRenderableProperty[]} />
+                  <RelationsGroup
+                    key={attributeId}
+                    relations={renderables as RelationRenderableProperty[]}
+                    properties={properties}
+                  />
                 ) : (
                   <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
                 )}
@@ -162,7 +184,6 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
         }}
         filterByTypes={[{ typeId: SYSTEM_IDS.ATTRIBUTE, typeName: 'Attribute' }]}
         alreadySelectedIds={[]}
-        attributeId={renderable.attributeId}
       />
     );
   }
@@ -176,7 +197,12 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
   );
 }
 
-function RelationsGroup({ relations }: { relations: RelationRenderableProperty[] }) {
+type RelationsGroupProps = {
+  relations: RelationRenderableProperty[];
+  properties: Map<string, PropertySchema>;
+};
+
+function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
 
   const send = useEditEvents({
@@ -191,6 +217,8 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
   const typeOfId = relations[0].attributeId;
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
+  const property = properties.get(typeOfId);
+  const filterByType = property?.relationValueTypeId;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -212,6 +240,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
                     type: 'UPSERT_RELATION',
                     payload: {
                       fromEntityId: createRelationOp.relation.fromEntity,
+                      fromEntityName: name,
                       toEntityId: createRelationOp.relation.toEntity,
                       toEntityName: null,
                       typeOfId: createRelationOp.relation.type,
@@ -237,6 +266,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
                     type: 'UPSERT_RELATION',
                     payload: {
                       fromEntityId: id,
+                      fromEntityName: name,
                       toEntityId: imageId,
                       toEntityName: null,
                       typeOfId: r.attributeId,
@@ -261,17 +291,81 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
                 spaceId={spaceId}
+                allowedTypes={filterByType ? [filterByType] : undefined}
+                onCreateEntity={result => {
+                  if (property?.relationValueTypeId) {
+                    send({
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: result.id,
+                        fromEntityName: result.name,
+                        toEntityId: property.relationValueTypeId,
+                        toEntityName: property.relationValueTypeName ?? null,
+                        typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+                        typeOfName: 'Types',
+                      },
+                    });
+                  }
+                }}
                 onDone={result => {
-                  send({
-                    type: 'UPSERT_RELATION',
-                    payload: {
-                      fromEntityId: id,
-                      toEntityId: result.id,
-                      toEntityName: result.name,
-                      typeOfId: r.attributeId,
-                      typeOfName: r.attributeName,
+                  const newRelationId = ID.createEntityId();
+
+                  const newRelation: StoreRelation = {
+                    id: newRelationId,
+                    space: spaceId,
+                    index: INITIAL_RELATION_INDEX_VALUE,
+                    typeOf: {
+                      id: EntityId(r.attributeId),
+                      name: r.attributeName,
                     },
+                    fromEntity: {
+                      id: EntityId(id),
+                      name: name,
+                    },
+                    toEntity: {
+                      id: EntityId(result.id),
+                      name: result.name,
+                      renderableType: 'RELATION',
+                      value: EntityId(result.id),
+                    },
+                  };
+
+                  DB.upsertRelation({
+                    relation: newRelation,
+                    spaceId,
                   });
+
+                  if (result.space) {
+                    DB.upsert(
+                      {
+                        attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+                        attributeName: 'To Entity',
+                        entityId: newRelationId,
+                        entityName: null,
+                        value: {
+                          type: 'URL',
+                          value: GraphUrl.fromEntityId(result.id, { spaceId: result.space }),
+                        },
+                      },
+                      spaceId
+                    );
+
+                    if (result.verified) {
+                      DB.upsert(
+                        {
+                          attributeId: SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE,
+                          attributeName: 'Verified Source',
+                          entityId: newRelationId,
+                          entityName: null,
+                          value: {
+                            type: 'CHECKBOX',
+                            value: '1',
+                          },
+                        },
+                        spaceId
+                      );
+                    }
+                  }
                 }}
                 variant="fixed"
               />
@@ -288,6 +382,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
                   type: 'DELETE_RELATION',
                   payload: {
                     relationId: r.relationId,
+                    fromEntityId: id,
                   },
                 });
               }}
@@ -303,17 +398,81 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
         <div className="mt-1">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
+            allowedTypes={filterByType ? [filterByType] : undefined}
+            onCreateEntity={result => {
+              if (property?.relationValueTypeId) {
+                send({
+                  type: 'UPSERT_RELATION',
+                  payload: {
+                    fromEntityId: result.id,
+                    fromEntityName: result.name,
+                    toEntityId: property.relationValueTypeId,
+                    toEntityName: property.relationValueTypeName ?? null,
+                    typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+                    typeOfName: 'Types',
+                  },
+                });
+              }
+            }}
             onDone={result => {
-              send({
-                type: 'UPSERT_RELATION',
-                payload: {
-                  fromEntityId: id,
-                  toEntityId: result.id,
-                  toEntityName: result.name,
-                  typeOfId: typeOfId,
-                  typeOfName: typeOfName,
+              const newRelationId = ID.createEntityId();
+
+              const newRelation: StoreRelation = {
+                id: newRelationId,
+                space: spaceId,
+                index: INITIAL_RELATION_INDEX_VALUE,
+                typeOf: {
+                  id: EntityId(typeOfId),
+                  name: typeOfName,
                 },
+                fromEntity: {
+                  id: EntityId(id),
+                  name: name,
+                },
+                toEntity: {
+                  id: EntityId(result.id),
+                  name: result.name,
+                  renderableType: 'RELATION',
+                  value: EntityId(result.id),
+                },
+              };
+
+              DB.upsertRelation({
+                relation: newRelation,
+                spaceId,
               });
+
+              if (result.space) {
+                DB.upsert(
+                  {
+                    attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+                    attributeName: 'To Entity',
+                    entityId: newRelationId,
+                    entityName: null,
+                    value: {
+                      type: 'URL',
+                      value: GraphUrl.fromEntityId(result.id, { spaceId: result.space }),
+                    },
+                  },
+                  spaceId
+                );
+
+                if (result.verified) {
+                  DB.upsert(
+                    {
+                      attributeId: SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE,
+                      attributeName: 'Verified Source',
+                      entityId: newRelationId,
+                      entityName: null,
+                      value: {
+                        type: 'CHECKBOX',
+                        value: '1',
+                      },
+                    },
+                    spaceId
+                  );
+                }
+              }
             }}
             spaceId={spaceId}
           />
@@ -323,7 +482,11 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
   );
 }
 
-function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
+type TriplesGroupProps = {
+  triples: TripleRenderableProperty[];
+};
+
+function TriplesGroup({ triples }: TriplesGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
 
   const send = useEditEvents({
@@ -427,6 +590,7 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
             return (
               <WebUrlField
                 key={renderable.attributeId}
+                spaceId={spaceId}
                 placeholder="Add a URI"
                 isEditing={true}
                 onBlur={event =>

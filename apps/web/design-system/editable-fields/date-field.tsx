@@ -78,6 +78,7 @@ export function DateField(props: DateFieldProps) {
     year: initialYear,
     hour: initialHour,
     minute: initialMinute,
+    meridiem: initialMeridiem,
   } = GeoDate.fromISOStringUTC(props.value);
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
@@ -199,7 +200,7 @@ export function DateField(props: DateFieldProps) {
     return true;
   });
 
-  const [meridiem, setMeridiem] = React.useState<'am' | 'pm'>(Number(initialHour) < 12 ? 'am' : 'pm');
+  const [meridiem, setMeridiem] = React.useState<'am' | 'pm'>(initialMeridiem);
 
   const onToggleMeridiem = () => {
     const newMeridiem = meridiem === 'am' ? 'pm' : 'am';

@@ -15,13 +15,13 @@ import { fetchEntity } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
 import { store } from '../state/jotai-store';
-import { Relation, Schema, SpaceId, Triple, ValueTypeId } from '../types';
+import { PropertySchema, Relation, SpaceId, Triple, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
 import { getTriples, useTriples } from './triples';
 import { localOpsAtom, localRelationsAtom } from './write';
 
-export type EntityWithSchema = Entity & { schema: Schema[] };
+export type EntityWithSchema = Entity & { schema: PropertySchema[] };
 
 type UseEntityOptions = {
   spaceId?: SpaceId;
@@ -31,10 +31,6 @@ type UseEntityOptions = {
 
 export function useEntity(options: UseEntityOptions): EntityWithSchema {
   const { spaceId, id, initialData } = options;
-
-  // If the caller passes in a set of data we use that for merging. If not,
-  // we fetch the entity from the server and merge it with the local state.
-  let data = initialData;
 
   const { data: remoteData } = useQuery({
     enabled: !initialData && id !== '',
@@ -52,51 +48,28 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     },
   });
 
-  if (!initialData) {
-    data = remoteData;
-  }
+  // If the caller passes in a set of data we use that for merging. If not,
+  // we fetch the entity from the server and merge it with the local state.
+  const data = initialData ?? remoteData;
 
-  const triples = useTriples(
-    React.useMemo(
-      () => ({
-        mergeWith: data?.triples,
-        selector: spaceId ? t => t.entityId === id && t.space === spaceId : t => t.entityId === id,
-      }),
-      [data?.triples, id, spaceId]
-    )
-  );
+  const triples = useTriples({
+    mergeWith: data?.triples,
+    selector: spaceId ? t => t.entityId === id && t.space === spaceId : t => t.entityId === id,
+  });
 
-  const relations = useRelations(
-    React.useMemo(
-      () => ({
-        mergeWith: data?.relations,
-        selector: spaceId ? r => r.fromEntity.id === id && r.space === spaceId : r => r.fromEntity.id === id,
-      }),
-      [data?.relations, id, spaceId]
-    )
-  );
+  const relations = useRelations({
+    mergeWith: data?.relations,
+    selector: spaceId ? r => r.fromEntity.id === id && r.space === spaceId : r => r.fromEntity.id === id,
+  });
 
-  const name = React.useMemo(() => {
-    return Entities.name(triples);
-  }, [triples]);
+  const name = Entities.name(triples);
+  const nameTripleSpaces = triples.filter(t => t.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE).map(t => t.space);
+  const spaces = data?.spaces ?? [];
+  const description = Entities.description(triples);
+  const types = readTypes(relations);
 
-  const nameTripleSpaces = React.useMemo(() => {
-    return triples.filter(t => t.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE).map(t => t.space);
-  }, [triples]);
-
-  const spaces = React.useMemo(() => {
-    return data?.spaces ?? [];
-  }, [data?.spaces]);
-
-  const description = React.useMemo(() => {
-    return Entities.description(triples);
-  }, [triples]);
-
-  const types = React.useMemo(() => {
-    return readTypes(relations);
-  }, [relations]);
-
-  const { data: schema } = useQuery({
+  const { data: remoteSchema } = useQuery({
+    enabled: types.length > 0,
     queryKey: ['entity-schema-for-merging', id, types],
     placeholderData: keepPreviousData,
     queryFn: async () => {
@@ -105,14 +78,16 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     },
   });
 
+  // @TODO merge with local state
+  const schema = remoteSchema ?? [];
+
   return {
     id,
     name,
     nameTripleSpaces,
     spaces,
     description,
-    // @TODO: Spaces with metadata
-    schema: schema ?? [],
+    schema,
     triples,
     relationsOut: relations,
     types,
@@ -186,11 +161,37 @@ export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> 
   const cachedEntity = await queryClient.fetchQuery({
     queryKey: ['entity-for-merging', id],
     queryFn: ({ signal }) => fetchEntity({ id, signal }),
-    staleTime: Infinity,
   });
 
   return mergeEntity({ id, mergeWith: cachedEntity });
 }
+
+// Name, description, and types are always required for every entity even
+// if they aren't defined in the schema.
+export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [
+  // Name, description, and types are always required for every entity even
+  // if they aren't defined in the schema.
+  {
+    id: EntityId(SYSTEM_IDS.NAME_ATTRIBUTE),
+    name: 'Name',
+    valueType: SYSTEM_IDS.TEXT,
+  },
+  {
+    id: EntityId(SYSTEM_IDS.DESCRIPTION_ATTRIBUTE),
+    name: 'Description',
+    valueType: SYSTEM_IDS.TEXT,
+  },
+  {
+    id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
+    name: 'Types',
+    valueType: SYSTEM_IDS.RELATION,
+  },
+  {
+    id: EntityId(SYSTEM_IDS.COVER_ATTRIBUTE),
+    name: 'Cover',
+    valueType: SYSTEM_IDS.IMAGE,
+  },
+];
 
 /**
  * Fetch the entities for each type and parse their attributes into a schema.
@@ -200,7 +201,7 @@ export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> 
  *
  * We expect that attributes are only defined via relations, not triples.
  */
-export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]> {
+export async function getSchemaFromTypeIds(typesIds: string[]): Promise<PropertySchema[]> {
   const schemaEntities = await Promise.all(
     typesIds.map(typeId => {
       // These are all cached in a network cache if they've been fetched before.
@@ -208,7 +209,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
     })
   );
 
-  const schemaWithoutValueType = schemaEntities.flatMap((e): Schema[] => {
+  const schemaWithoutValueType = schemaEntities.flatMap((e): PropertySchema[] => {
     const attributeRelations = e.relationsOut.filter(t => t.typeOf.id === SYSTEM_IDS.PROPERTIES);
 
     if (attributeRelations.length === 0) {
@@ -231,44 +232,33 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
       valueTypeId,
     };
   });
-  const schema = schemaWithoutValueType.map((s): Schema => {
+
+  const relationValueTypes = attributes.map(a => {
+    const relationValueType = a.relationsOut.find(
+      r => r.typeOf.id === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE
+    )?.toEntity;
+
+    return {
+      attributeId: a.id,
+      relationValueTypeId: relationValueType?.id,
+      relationValueTypeName: relationValueType?.name,
+    };
+  });
+
+  const schema = schemaWithoutValueType.map((s): PropertySchema => {
+    const relationValueType = relationValueTypes.find(t => t.attributeId === s.id) ?? null;
     return {
       ...s,
       valueType: (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SYSTEM_IDS.TEXT) as ValueTypeId,
+      relationValueTypeId: relationValueType?.relationValueTypeId,
+      relationValueTypeName: relationValueType?.relationValueTypeName,
     };
   });
 
   // If the schema exists already in the list then we should dedupe it.
   // Some types might share some elements in their schemas, e.g., Person
   // and Pet both have Avatar as part of their schema.
-  return dedupeWith(
-    [
-      // Name, description, and types are always required for every entity even
-      // if they aren't defined in the schema.
-      {
-        id: EntityId(SYSTEM_IDS.NAME_ATTRIBUTE),
-        name: 'Name',
-        valueType: SYSTEM_IDS.TEXT,
-      },
-      {
-        id: EntityId(SYSTEM_IDS.DESCRIPTION_ATTRIBUTE),
-        name: 'Description',
-        valueType: SYSTEM_IDS.TEXT,
-      },
-      {
-        id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
-        name: 'Types',
-        valueType: SYSTEM_IDS.RELATION,
-      },
-      {
-        id: EntityId(SYSTEM_IDS.COVER_ATTRIBUTE),
-        name: 'Cover',
-        valueType: SYSTEM_IDS.IMAGE,
-      },
-      ...schema,
-    ],
-    (a, b) => a.id === b.id
-  );
+  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...schema], (a, b) => a.id === b.id);
 }
 
 /**

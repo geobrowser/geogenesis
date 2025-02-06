@@ -48,26 +48,27 @@ type BaseRelationChange = {
   type: BaseRelationRenderableProperty['type'];
   attribute: Attribute;
   before: RelationChangeValue | null;
-  after: RelationChangeValue;
+  after: RelationChangeValue | null;
 };
 
 type ImageRelationChange = {
   type: ImageRelationRenderableProperty['type'];
   attribute: Attribute;
   before: RelationChangeValue | null;
-  after: RelationChangeValue;
+  after: RelationChangeValue | null;
 };
 
 type NativeTripleChange = {
   type: NativeRenderableProperty['type'];
   attribute: Attribute;
   before: TripleChangeValue | null;
-  after: TripleChangeValue;
+  after: TripleChangeValue | null;
 };
 
 export type EntityChange = {
   id: EntityId;
   name: string | null;
-  blockChanges: RenderableChange[];
+  avatar: string | null;
+  blockChanges: BlockChange[];
   changes: RenderableChange[];
 };

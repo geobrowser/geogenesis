@@ -10,10 +10,6 @@ type DiffState = {
   setActiveSpace: (value: string) => void;
   isReadyToPublish: boolean;
   setIsReadyToPublish: (value: boolean) => void;
-  isCompareOpen: boolean;
-  setIsCompareOpen: (value: boolean) => void;
-  compareMode: CompareMode;
-  setCompareMode: (value: CompareMode) => void;
   selectedVersion: string;
   setSelectedVersion: (value: string) => void;
   previousVersion: string;
@@ -24,8 +20,6 @@ type DiffState = {
   setPreviousProposal: (value: string) => void;
 };
 
-type CompareMode = 'versions' | 'proposals';
-
 const initialDiffState = {
   isReviewOpen: false,
   setIsReviewOpen: (value: boolean) => null,
@@ -33,10 +27,6 @@ const initialDiffState = {
   setActiveSpace: (value: string) => null,
   isReadyToPublish: false,
   setIsReadyToPublish: (value: boolean) => null,
-  isCompareOpen: false,
-  setIsCompareOpen: (value: boolean) => null,
-  compareMode: 'versions' as CompareMode,
-  setCompareMode: (value: CompareMode) => null,
   selectedVersion: '',
   setSelectedVersion: (value: string) => null,
   previousVersion: '',
@@ -57,8 +47,6 @@ export const DiffProvider = ({ children }: DiffProviderProps) => {
   const [isReviewOpen, setIsReviewOpen] = useState<boolean>(false);
   const [activeSpace, setActiveSpace] = useState<string>('');
   const [isReadyToPublish, setIsReadyToPublish] = useState<boolean>(false);
-  const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
-  const [compareMode, setCompareMode] = useState<CompareMode>('versions');
   const [selectedVersion, setSelectedVersion] = useState<string>('');
   const [previousVersion, setPreviousVersion] = useState<string>('');
   const [selectedProposal, setSelectedProposal] = useState<string>('');
@@ -73,10 +61,6 @@ export const DiffProvider = ({ children }: DiffProviderProps) => {
         setActiveSpace,
         isReadyToPublish,
         setIsReadyToPublish,
-        isCompareOpen,
-        setIsCompareOpen,
-        compareMode,
-        setCompareMode,
         selectedVersion,
         setSelectedVersion,
         previousVersion,

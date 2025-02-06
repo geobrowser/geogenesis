@@ -4,21 +4,21 @@ import * as React from 'react';
 import { memo, useState } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { Schema } from '~/core/types';
+import { PropertySchema } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 
 import { getRenderableTypeFromValueType, getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
-  column: Schema;
+  column: PropertySchema;
   // This spaceId is the spaceId of the attribute, not the current space.
   // We need the attribute spaceId to get the actions for the attribute
   // (since actions are grouped by spaceId) to be able to keep the updated
   // name in sync.
   spaceId?: string;
   entityId: string;
-  unpublishedColumns: Schema[];
+  unpublishedColumns: PropertySchema[];
 }
 
 export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({
@@ -27,22 +27,6 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
   unpublishedColumns,
 }: Props) {
-  // const localTriples = useTriples(
-  //   React.useMemo(() => {
-  //     return {
-  //       selector: t => t.entityId === column.id,
-  //     };
-  //   }, [column.id])
-  // );
-
-  // const localCellTriples = useTriples(
-  //   React.useMemo(() => {
-  //     return {
-  //       selector: t => t.attributeId === column.id,
-  //     };
-  //   }, [column.id])
-  // );
-
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
   const [localName, setLocalName] = useState(column.name ?? '');

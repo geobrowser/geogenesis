@@ -1,7 +1,5 @@
 'use client';
 
-import cx from 'classnames';
-
 import { useState } from 'react';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';

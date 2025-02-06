@@ -1,14 +1,14 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import {
+  PropertySchema,
   Relation,
   RelationRenderableProperty,
   RenderableProperty,
-  Schema,
   Triple,
   TripleRenderableProperty,
 } from '../types';
-import { valueTypes } from '../value-types';
+import { VALUE_TYPES } from '../value-types';
 
 interface ToRenderablesArgs {
   entityId: string;
@@ -16,7 +16,7 @@ interface ToRenderablesArgs {
   triples: Triple[];
   relations: Relation[];
   spaceId: string;
-  schema?: Schema[];
+  schema?: PropertySchema[];
   placeholderRenderables?: RenderableProperty[];
 }
 
@@ -72,7 +72,7 @@ export function toRenderables({
           };
         default:
           return {
-            type: (valueTypes[s.valueType] as TripleRenderableProperty['type']) ?? 'TEXT',
+            type: (VALUE_TYPES[s.valueType] as TripleRenderableProperty['type']) ?? 'TEXT',
             entityId: entityId,
             entityName: entityName,
             attributeId: s.id,

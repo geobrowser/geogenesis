@@ -1,4 +1,4 @@
-import { createGeoId } from '../../id.js';
+import { make as makeId } from '../../id.js';
 import { Relation } from '../../relation.js';
 import { SYSTEM_IDS } from '../../system-ids.js';
 import type { Op } from '../../types.js';
@@ -6,7 +6,7 @@ import type { Op } from '../../types.js';
 type TextBlockArgs = { fromId: string; text: string; position?: string };
 
 export function make({ fromId, text, position }: TextBlockArgs): Op[] {
-  const newBlockId = createGeoId();
+  const newBlockId = makeId();
 
   const textBlockType = Relation.make({
     fromId: newBlockId,

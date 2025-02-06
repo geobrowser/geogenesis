@@ -34,8 +34,10 @@ class CouldNotWriteCreatedProposalsError extends Error {
 
 export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.logInfo('Handling proposals created'));
-    yield* _(Effect.logDebug(`Gathering IPFS content for ${proposalsCreated.length} proposals`));
+    yield* _(Effect.logInfo('[EDIT PROPOSALS CREATED] Started'));
+    yield* _(
+      Effect.logDebug(`[EDIT PROPOSALS CREATED] Gathering IPFS content for ${proposalsCreated.length} proposals`)
+    );
 
     const maybeProposals = yield* _(
       Effect.forEach(proposalsCreated, proposal => getProposalFromIpfs(proposal), {
@@ -61,7 +63,9 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
     // process the proposals below, particularly for editor and member requests.
     // yield* _(writeAccounts([...schemaMembershipProposals.accounts, ...schemaEditorshipProposals.accounts]));
 
-    yield* _(Effect.logDebug(`Writing edit proposals: ${schemaEditProposals.proposals.length}`));
+    yield* _(
+      Effect.logDebug(`[EDIT PROPOSALS CREATED] Writing edit proposals: ${schemaEditProposals.proposals.length}`)
+    );
 
     const allNewVersionsInEdit = yield* _(
       aggregateNewVersions({
@@ -73,7 +77,7 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
       })
     );
 
-    yield* _(Effect.logDebug('Writing proposals + metadata'));
+    yield* _(Effect.logDebug('[EDIT PROPOSALS CREATED] Writing proposals + metadata'));
 
     // @TODO: Put this in a transaction since all these writes are related
     yield* _(
@@ -111,6 +115,8 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
         edits: schemaEditProposals.edits,
       })
     );
+
+    yield* _(Effect.logInfo('[EDIT PROPOSALS CREATED] Ended'));
   });
 }
 
@@ -119,6 +125,8 @@ export function handleMembershipProposalsCreated(
   block: BlockEvent
 ) {
   return Effect.gen(function* (_) {
+    yield* _(Effect.logInfo('[MEMBER PROPOSALS CREATED] Started'));
+
     const proposals: SinkMembershipProposal[] = proposalsCreated.map((p): SinkMembershipProposal => {
       const proposalId = deriveProposalId({ onchainProposalId: p.proposalId, pluginAddress: p.pluginAddress });
       const member = getChecksumAddress(p.member);
@@ -162,7 +170,11 @@ export function handleMembershipProposalsCreated(
     // process the proposals below, particularly for editor and member requests.
     yield* _(writeAccounts(schemaMembershipProposals.accounts));
 
-    yield* _(Effect.logDebug(`Writing membership proposals: ${schemaMembershipProposals.proposals.length}`));
+    yield* _(
+      Effect.logDebug(
+        `[MEMBER PROPOSALS CREATED] Writing membership proposals: ${schemaMembershipProposals.proposals.length}`
+      )
+    );
 
     yield* _(
       Effect.tryPromise({
@@ -179,7 +191,7 @@ export function handleMembershipProposalsCreated(
       retryEffect
     );
 
-    yield* _(Effect.logDebug('Membership proposals written'));
+    yield* _(Effect.logDebug('[MEMBER PROPOSALS CREATED] Ended'));
   });
 }
 
@@ -188,6 +200,7 @@ export function handleEditorshipProposalsCreated(
   block: BlockEvent
 ) {
   return Effect.gen(function* (_) {
+    yield* _(Effect.logInfo('[EDITOR PROPOSALS CREATED] Started'));
     const proposals: SinkEditorshipProposal[] = proposalsCreated.map((p): SinkEditorshipProposal => {
       const proposalId = deriveProposalId({ onchainProposalId: p.proposalId, pluginAddress: p.pluginAddress });
       const editor = getChecksumAddress(p.editor);
@@ -230,7 +243,11 @@ export function handleEditorshipProposalsCreated(
     // process the proposals below, particularly for editor and member requests.
     yield* _(writeAccounts(schemaEditorshipProposals.accounts));
 
-    yield* _(Effect.logDebug(`Writing membership proposals: ${schemaEditorshipProposals.proposals.length}`));
+    yield* _(
+      Effect.logDebug(
+        `[EDITOR PROPOSALS CREATED] Writing membership proposals: ${schemaEditorshipProposals.proposals.length}`
+      )
+    );
 
     yield* _(
       Effect.tryPromise({
@@ -246,6 +263,8 @@ export function handleEditorshipProposalsCreated(
       }),
       retryEffect
     );
+
+    yield* _(Effect.logInfo('[EDITOR PROPOSALS CREATED] Ended'));
   });
 }
 
@@ -254,6 +273,7 @@ export function handleSubspaceProposalsCreated(
   block: BlockEvent
 ) {
   return Effect.gen(function* (_) {
+    yield* _(Effect.logInfo('[SUBSPACE PROPOSALS CREATED] Started'));
     const proposals = proposalsCreated.map((p): SinkSubspaceProposal => {
       const proposalId = deriveProposalId({ onchainProposalId: p.proposalId, pluginAddress: p.pluginAddress });
       const subspaceAddress = getChecksumAddress(p.subspace);
@@ -292,7 +312,11 @@ export function handleSubspaceProposalsCreated(
 
     const { schemaSubspaceProposals } = mapIpfsProposalToSchemaProposalByType(proposals, block);
 
-    yield* _(Effect.logDebug(`Writing subspace proposals: ${schemaSubspaceProposals.proposals.length}`));
+    yield* _(
+      Effect.logDebug(
+        `[SUBSPACE PROPOSALS CREATED] Writing subspace proposals: ${schemaSubspaceProposals.proposals.length}`
+      )
+    );
 
     yield* _(
       Effect.tryPromise({
@@ -308,5 +332,7 @@ export function handleSubspaceProposalsCreated(
       }),
       retryEffect
     );
+
+    yield* _(Effect.logInfo('[SUBSPACE PROPOSALS CREATED] Ended'));
   });
 }

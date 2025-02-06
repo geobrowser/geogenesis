@@ -12,7 +12,7 @@ export function handleEditorRemoved(editorsRemoved: EditorRemoved[]) {
   return Effect.gen(function* (_) {
     const schemaEditors = yield* _(mapRemovedEditors(editorsRemoved));
 
-    yield* _(Effect.logInfo('Handling editor removed'));
+    yield* _(Effect.logInfo('[EDITORS REMOVED] Started'));
 
     yield* _(
       Effect.forEach(
@@ -31,6 +31,6 @@ export function handleEditorRemoved(editorsRemoved: EditorRemoved[]) {
       )
     );
 
-    yield* _(Effect.logInfo(`Editors removed`));
+    yield* _(Effect.logInfo('[EDITORS REMOVED] Ended'));
   });
 }

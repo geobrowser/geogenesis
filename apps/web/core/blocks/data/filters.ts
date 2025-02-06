@@ -1,0 +1,243 @@
+import { Schema } from '@effect/schema';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { Either } from 'effect';
+
+import { mergeEntityAsync } from '~/core/database/entities';
+import { EntityId } from '~/core/io/schema';
+import { fetchSpace } from '~/core/io/subgraph';
+import { OmitStrict, ValueTypeId } from '~/core/types';
+import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
+
+import { Source } from './source';
+
+export type Filter = {
+  columnId: string;
+  valueType: FilterableValueType;
+  value: string;
+  valueName: string | null;
+};
+
+/**
+ * We support two types of filters, either a filter on a set of entities,
+ * or a filter on a specific entity. These each have different filter
+ * semantics.
+ *
+ * e.g.,
+ * attribute: SYSTEM_IDS.TYPES_ATTRIBUTE, is: SYSTEM_IDS.PERSON_TYPE
+ * The above returns all entities that are type: Person
+ *
+ * entity: '1234', relationType: SYSTEM_IDS.TYPES_ATTRIBUTE
+ * The above returns all the type relations for entity 1234
+ *
+ * The latter is basically a "Relations View" on an entity where the latter
+ * is a query across the knowledge graph data set.
+ */
+const AttributeFilter = Schema.Struct({
+  attribute: Schema.String,
+  is: Schema.String,
+});
+
+type AttributeFilter = Schema.Schema.Type<typeof AttributeFilter>;
+
+const Property = Schema.Union(AttributeFilter);
+
+const FilterString = Schema.Struct({
+  where: Schema.Struct({
+    entity: Schema.optional(Schema.String),
+    spaces: Schema.optional(Schema.Array(Schema.String)),
+    AND: Schema.optional(Schema.Array(Property)),
+    OR: Schema.optional(Schema.Array(Property)),
+  }),
+});
+
+export type FilterString = Schema.Schema.Type<typeof FilterString>;
+
+export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], source: Source): string {
+  let filter: FilterString | null = null;
+
+  switch (source.type) {
+    case 'RELATIONS':
+      filter = {
+        where: {
+          entity: source.value,
+          AND: filters
+            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER && f.columnId !== SYSTEM_IDS.RELATION_FROM_ATTRIBUTE)
+            .map(f => {
+              return {
+                attribute: f.columnId,
+                is: f.value,
+              };
+            }),
+        },
+      };
+      break;
+    case 'SPACES':
+      filter = {
+        where: {
+          spaces: filters.filter(f => f.columnId === SYSTEM_IDS.SPACE_FILTER).map(f => f.value),
+          AND: filters
+            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
+            .map(f => {
+              return {
+                attribute: f.columnId,
+                is: f.value,
+              };
+            }),
+        },
+      };
+      break;
+    case 'COLLECTION':
+    case 'GEO':
+      filter = {
+        where: {
+          AND: filters
+            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
+            .map(f => {
+              return {
+                attribute: f.columnId,
+                is: f.value,
+              };
+            }),
+        },
+      };
+      break;
+  }
+
+  if (filter === null) {
+    console.error('[toGeoFilterState] Invalid source type', source.type);
+    throw new Error(`[toGeoFilterState] Invalid source type ${source.type}`);
+  }
+
+  const maybeEncoded = Schema.encodeUnknownEither(FilterString)(filter);
+
+  return Either.match(maybeEncoded, {
+    onLeft: error => {
+      console.info('Error encoding filter string, defaulting to empty filter string', { filters, filter, error });
+      return '';
+    },
+    onRight: value => {
+      return JSON.stringify(value);
+    },
+  });
+}
+
+export async function fromGeoFilterState(filterString: string | null): Promise<Filter[]> {
+  if (!filterString) {
+    return [];
+  }
+
+  // handle errors
+  const where = JSON.parse(filterString);
+  const decoded = Schema.decodeUnknownEither(FilterString)(where);
+
+  const filtersFromString = Either.match(decoded, {
+    onLeft: error => {
+      console.error('Error decoding filter string', error);
+      return null;
+    },
+    onRight: value => {
+      if (value.where.entity) {
+        return {
+          from: value.where.entity,
+          AND: value.where.AND ?? [],
+        };
+      }
+
+      return {
+        spaces: value.where.spaces,
+        AND: value.where.AND ?? [],
+      };
+    },
+  });
+
+  if (!filtersFromString) {
+    console.log('No filters from string', filtersFromString);
+    return [];
+  }
+
+  const filters: Filter[] = [];
+
+  const unresolvedSpaceFilters = filtersFromString.spaces
+    ? Promise.all(
+        filtersFromString.spaces.map(async (spaceId): Promise<Filter> => {
+          const spaceName = await getSpaceName(spaceId);
+
+          return {
+            columnId: SYSTEM_IDS.SPACE_FILTER,
+            valueType: 'RELATION',
+            value: spaceId,
+            valueName: spaceName,
+          };
+        })
+      )
+    : [];
+
+  const unresolvedEntityFilters = filtersFromString.from ? getResolvedEntity(filtersFromString.from) : null;
+
+  const unresolvedAttributeFilters = Promise.all(
+    filtersFromString.AND.map(async filter => {
+      return await getResolvedFilter(filter);
+    })
+  );
+
+  const [spaceFilters, attributeFilters, entityFilter] = await Promise.all([
+    unresolvedSpaceFilters,
+    unresolvedAttributeFilters,
+    unresolvedEntityFilters,
+  ]);
+
+  filters.push(...spaceFilters);
+  filters.push(...attributeFilters);
+  if (entityFilter) filters.push(entityFilter);
+
+  return filters;
+}
+
+async function getSpaceName(spaceId: string) {
+  const space = await fetchSpace({ id: spaceId });
+  return space?.spaceConfig.name ?? null;
+}
+
+async function getResolvedEntity(entityId: string): Promise<Filter> {
+  const entity = await mergeEntityAsync(EntityId(entityId));
+
+  if (!entity) {
+    return {
+      columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+      valueType: 'RELATION',
+      value: entityId,
+      valueName: null,
+    };
+  }
+
+  return {
+    columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+    valueType: 'RELATION',
+    value: entityId,
+    valueName: entity.name,
+  };
+}
+
+async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
+  const maybeAttributeEntity = await mergeEntityAsync(EntityId(filter.attribute));
+  const valueType = maybeAttributeEntity.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE)
+    ?.toEntity.id;
+
+  if (valueType === SYSTEM_IDS.RELATION) {
+    const valueEntity = await mergeEntityAsync(EntityId(filter.is));
+
+    return {
+      columnId: filter.attribute,
+      value: filter.is,
+      valueName: valueEntity?.name ?? null,
+      valueType: 'RELATION',
+    };
+  }
+
+  return {
+    columnId: filter.attribute,
+    value: filter.is,
+    valueName: null,
+    valueType: VALUE_TYPES[(valueType ?? SYSTEM_IDS.TEXT) as ValueTypeId] ?? SYSTEM_IDS.TEXT,
+  };
+}

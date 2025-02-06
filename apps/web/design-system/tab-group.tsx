@@ -9,6 +9,7 @@ import React from 'react';
 
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useEditable } from '~/core/state/editable-store';
+import { useTabId } from '~/core/state/editor/use-editor';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -20,14 +21,12 @@ interface TabGroupProps {
 export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   return (
     <div
-      className={cx(
-        'flex max-w-full items-center gap-6 overflow-x-auto overflow-y-clip border-b border-grey-02 pb-2',
-        className
-      )}
+      className={cx('relative z-0 flex max-w-full items-center gap-6 overflow-x-auto overflow-y-clip pb-2', className)}
     >
       {tabs.map(t => (
         <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
       ))}
+      <span className="absolute bottom-0 left-0 right-0 z-0 h-px bg-grey-02" />
     </div>
   );
 }
@@ -40,7 +39,7 @@ interface TabProps {
   hidden?: boolean;
 }
 
-const tabStyles = cva('relative inline-flex items-center gap-1.5 text-quoteMedium transition-colors duration-100', {
+const tabStyles = cva('relative z-10 flex items-center gap-1.5 text-quoteMedium transition-colors duration-100', {
   variants: {
     active: {
       true: 'text-text',
@@ -58,9 +57,13 @@ const tabStyles = cva('relative inline-flex items-center gap-1.5 text-quoteMediu
 
 function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   const isHydrated = useHydrated();
-  const path = usePathname();
-  const active = path === href;
   const { editable } = useEditable();
+
+  const path = usePathname();
+  const tabId = useTabId();
+
+  const fullPath = tabId ? `${path}?tabId=${tabId}` : `${path}`;
+  const active = href === fullPath;
 
   if (!editable && hidden) {
     return null;
@@ -77,6 +80,8 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
 
   return (
     <Link className={tabStyles({ active, disabled })} href={href}>
+      {label}
+      {badge && <Badge>{badge}</Badge>}
       {active && (
         // @HACK: This is a hack to workaround issues in the app directory. Right now (08/2023)
         // nested layouts in the app directory re-render when search params change. This causes
@@ -89,11 +94,9 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
                 layout: true,
               }
             : {})}
-          className="absolute -bottom-[9px] left-0 w-full border-b border-text"
+          className="absolute bottom-[-8px] left-0 right-0 z-100 h-px bg-text"
         />
       )}
-      {label}
-      {badge && <Badge>{badge}</Badge>}
     </Link>
   );
 }

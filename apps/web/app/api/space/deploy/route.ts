@@ -14,14 +14,13 @@ export const maxDuration = 300;
 export async function GET(request: Request) {
   const requestId = uuid();
   const url = new URL(request.url);
-  const baseUrl = url.host;
-  const protocol = url.protocol;
 
   const initialEditorAddress = url.searchParams.get('initialEditorAddress');
   const spaceName = url.searchParams.get('spaceName');
   const spaceAvatarUri = url.searchParams.get('spaceAvatarUri');
   const spaceCoverUri = url.searchParams.get('spaceCoverUri');
   const type = url.searchParams.get('type') as SpaceType | null;
+  const entityId = (url.searchParams.get('entityId') as string | null) ?? undefined;
   const governanceType = url.searchParams.get('governanceType') as SpaceGovernanceType | null;
 
   if (initialEditorAddress === null || spaceName === null || type === null) {
@@ -54,9 +53,9 @@ export async function GET(request: Request) {
       spaceName,
       spaceAvatarUri,
       spaceCoverUri,
-      baseUrl: `${protocol}//${baseUrl}`,
       type,
       governanceType: governanceType ?? undefined,
+      entityId,
     }),
     {
       schedule: Schedule.exponential(Duration.millis(100)).pipe(

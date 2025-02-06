@@ -7,10 +7,11 @@ import DefaultEntityPage from './default-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
 
 interface Props {
-  params: { id: string; entityId: string };
+  params: Promise<{ id: string; entityId: string }>;
 }
 
-export default async function EntityTemplateStrategy({ params }: Props) {
+export default async function EntityTemplateStrategy(props: Props) {
+  const params = await props.params;
   const types = await cachedFetchEntityType(params.entityId);
 
   if (types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {

@@ -1,20 +1,14 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
-import { motion } from 'framer-motion';
 
 import * as React from 'react';
 import { useCallback } from 'react';
 
-import { StoreRelation } from '~/core/database/types';
-import { DB } from '~/core/database/write';
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { DataBlockView, useView } from '~/core/blocks/data/use-view';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { EntityId } from '~/core/io/schema';
-import { useTableBlock } from '~/core/state/table-block-store';
-import type { DataBlockView } from '~/core/state/table-block-store';
-import { Relation } from '~/core/types';
 
 import { Check } from '~/design-system/icons/check';
 import { Close } from '~/design-system/icons/close';
@@ -24,17 +18,14 @@ import { TableView } from '~/design-system/icons/table-view';
 import { MenuItem } from '~/design-system/menu';
 import { ColorName } from '~/design-system/theme/colors';
 
-const MotionContent = motion(Dropdown.Content);
-
 type TableBlockViewMenuProps = {
   activeView: DataBlockView;
-  viewRelation?: Relation;
   isLoading: boolean;
 };
 
 export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { spaceId, relationId, viewRelation } = useTableBlock();
+  const { spaceId } = useDataBlock();
 
   const isEditing = useUserIsEditing(spaceId);
 
@@ -50,32 +41,15 @@ export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuP
         {isMenuOpen ? <Close color="grey-04" /> : <ViewIcon view={activeView} color="grey-04" />}
       </Dropdown.Trigger>
       <Dropdown.Portal>
-        <MotionContent
-          initial={{ opacity: 0, scale: 0.95, y: -10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: -10 }}
-          transition={{
-            duration: 0.1,
-            ease: 'easeInOut',
-          }}
+        <Dropdown.Content
           sideOffset={8}
           className="z-100 block !w-[140px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           align="end"
         >
           {DATA_BLOCK_VIEWS.map(view => {
-            return (
-              <ToggleView
-                key={view.value}
-                spaceId={spaceId}
-                activeView={activeView}
-                view={view}
-                viewRelation={viewRelation}
-                relationId={relationId}
-                isLoading={isLoading}
-              />
-            );
+            return <ToggleView key={view.value} activeView={activeView} view={view} isLoading={isLoading} />;
           })}
-        </MotionContent>
+        </Dropdown.Content>
       </Dropdown.Portal>
     </Dropdown.Root>
   );
@@ -101,48 +75,18 @@ const DATA_BLOCK_VIEWS: Array<DataBlockViewDetails> = [
 ];
 
 type ToggleViewProps = {
-  spaceId: string;
-  relationId: string;
   activeView: DataBlockView;
   view: DataBlockViewDetails;
-  viewRelation?: Relation;
   isLoading: boolean;
 };
 
-const ToggleView = ({ spaceId, activeView, view, viewRelation, relationId, isLoading }: ToggleViewProps) => {
+const ToggleView = ({ activeView, view, isLoading }: ToggleViewProps) => {
   const isActive = !isLoading && activeView === view.value;
+  const { setView } = useView();
 
   const onToggleView = useCallback(async () => {
-    if (!isActive) {
-      if (viewRelation) {
-        DB.removeRelation({ relationId: viewRelation.id, spaceId });
-      }
-
-      const newRelation: StoreRelation = {
-        space: spaceId,
-        index: INITIAL_RELATION_INDEX_VALUE,
-        typeOf: {
-          id: EntityId(SYSTEM_IDS.VIEW_ATTRIBUTE),
-          name: 'View',
-        },
-        fromEntity: {
-          id: EntityId(relationId),
-          name: '',
-        },
-        toEntity: {
-          id: EntityId(view.id),
-          name: view.name,
-          renderableType: 'RELATION',
-          value: EntityId(view.id),
-        },
-      };
-
-      DB.upsertRelation({
-        relation: newRelation,
-        spaceId,
-      });
-    }
-  }, [isActive, relationId, spaceId, view.id, view.name, viewRelation]);
+    setView(view);
+  }, [setView, view]);
 
   return (
     <MenuItem active={isActive}>

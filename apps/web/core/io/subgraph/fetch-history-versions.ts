@@ -5,9 +5,9 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 
 import { HistoryVersionDto } from '../dto/versions';
-import { SubstreamVersionWithEdit } from '../schema';
+import { SubstreamVersionHistorical } from '../schema';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { versionFragment } from './fragments';
+import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
 interface FetchVersionsArgs {
@@ -20,9 +20,9 @@ const PAGE_SIZE = 5;
 
 const query = (entityId: string, page = 0) => {
   return `query {
-    versions(filter: { entityId: {equalTo: ${JSON.stringify(entityId)}}}) {
+    versions(filter: { entityId: {equalTo: ${JSON.stringify(entityId)}}} orderBy: CREATED_AT_DESC) {
       nodes {
-        ${versionFragment}
+        ${getEntityFragment({ useHistorical: true })}
         edit {
           id
           name
@@ -40,7 +40,7 @@ const query = (entityId: string, page = 0) => {
 };
 
 interface NetworkResult {
-  versions: { nodes: SubstreamVersionWithEdit[] };
+  versions: { nodes: SubstreamVersionHistorical[] };
 }
 
 export async function fetchHistoryVersions(args: FetchVersionsArgs) {
@@ -91,7 +91,7 @@ export async function fetchHistoryVersions(args: FetchVersionsArgs) {
 
   const versions = networkVersions
     .map(v => {
-      const decoded = Schema.decodeEither(SubstreamVersionWithEdit)(v);
+      const decoded = Schema.decodeEither(SubstreamVersionHistorical)(v);
 
       return Either.match(decoded, {
         onLeft: error => {

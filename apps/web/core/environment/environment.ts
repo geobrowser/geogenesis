@@ -3,7 +3,6 @@ import { AppEnv } from '../types';
 import {
   ACCOUNT_ABSTRACTION_API_KEY,
   APP_ENV,
-  LIVEBLOCKS_PUBLIC_KEY,
   ONBOARD_CODE,
   ONBOARD_FLAG,
   PRIVY_APP_ID,
@@ -23,7 +22,6 @@ export type AppConfig = {
 };
 
 type IVars = Readonly<{
-  liveBlocksPublicKey: string;
   appEnv: string;
   walletConnectProjectId: string;
   privyAppId: string;
@@ -37,7 +35,6 @@ type IVars = Readonly<{
 export const variables: IVars = {
   appEnv: APP_ENV!,
   isTestEnv: TEST_ENV === 'true',
-  liveBlocksPublicKey: LIVEBLOCKS_PUBLIC_KEY!,
   privyAppId: PRIVY_APP_ID!,
   rpcEndpoint: RPC_ENDPOINT!,
   walletConnectProjectId: WALLETCONNECT_PROJECT_ID!,
@@ -60,7 +57,7 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '80451',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
-    api: 'https://geo-mainnet.up.railway.app/graphql',
+    api: 'https://hypergraph.up.railway.app/graphql',
     bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   testnet: {

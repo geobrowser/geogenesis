@@ -11,7 +11,7 @@ import * as React from 'react';
 import { useCallback } from 'react';
 import { useState } from 'react';
 
-import { IPFS_GATEWAY_PATH, IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -255,10 +255,7 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
           router.push(destination);
         }}
         spaceId={spaceId}
-        allowedTypes={[
-          { typeName: 'Space', typeId: SYSTEM_IDS.SPACE_TYPE, spaceIdOfAttribute: SYSTEM_IDS.ROOT_SPACE_ID },
-          { typeName: 'Project', typeId: SYSTEM_IDS.PROJECT_TYPE, spaceIdOfAttribute: SYSTEM_IDS.ROOT_SPACE_ID },
-        ]}
+        allowedTypes={[SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE]}
         inputClassName="!py-[3.5px]"
         variant="floating"
         width="full"

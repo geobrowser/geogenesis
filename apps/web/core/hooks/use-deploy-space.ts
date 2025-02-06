@@ -3,6 +3,8 @@
 import { useMutation } from '@tanstack/react-query';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { EntityId } from '~/core/io/schema';
+import { validateEntityId } from '~/core/utils/utils';
 
 import { SpaceGovernanceType } from '../types';
 
@@ -20,10 +22,11 @@ type DeployArgs = {
     | 'protocol'
     | 'dao'
     | 'government-org'
-    | 'interest-group';
+    | 'interest';
   spaceName: string;
   spaceImage?: string;
   governanceType?: SpaceGovernanceType;
+  entityId?: string;
 };
 
 export function useDeploySpace() {
@@ -49,6 +52,10 @@ export function useDeploySpace() {
           window.location.href
         );
 
+        if (validateEntityId(args.entityId)) {
+          url.searchParams.set('entityId', args.entityId as EntityId);
+        }
+
         if (args.type === 'personal' || args.type === 'company') {
           if (args.spaceImage && args.spaceImage !== '') {
             url.searchParams.set('spaceAvatarUri', args.spaceImage);
@@ -62,7 +69,7 @@ export function useDeploySpace() {
           args.type === 'protocol' ||
           args.type === 'dao' ||
           args.type === 'government-org' ||
-          args.type === 'interest-group'
+          args.type === 'interest'
         ) {
           if (args.spaceImage && args.spaceImage !== '') {
             url.searchParams.set('spaceCoverUri', args.spaceImage);

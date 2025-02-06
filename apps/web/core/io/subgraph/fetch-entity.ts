@@ -7,37 +7,23 @@ import { Environment } from '~/core/environment';
 import { Entity } from '~/core/io/dto/entities';
 import { SpaceId } from '~/core/types';
 
-import { EntityDto } from '../dto/entities';
-import { SubstreamEntity } from '../schema';
-import { getVersionFragment, versionFragment } from './fragments';
+import { EntityDtoLive } from '../dto/entities';
+import { SubstreamEntityLive } from '../schema';
+import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
 function getFetchEntityQuery(id: string, spaceId?: SpaceId) {
-  if (spaceId) {
-    return `query {
+  return `query {
       entity(id: ${JSON.stringify(id)}) {
         id
         currentVersion {
           version {
-            ${getVersionFragment(spaceId)}
+            ${getEntityFragment({ spaceId })}
           }
         }
       }
     }`;
-  }
-
-  return `query {
-    entity(id: ${JSON.stringify(id)}) {
-      id
-      currentVersion {
-        version {
-          ${versionFragment}
-        }
-      }
-    }
-  }`;
 }
-
 export interface FetchEntityOptions {
   spaceId?: SpaceId;
   id: string;
@@ -45,7 +31,7 @@ export interface FetchEntityOptions {
 }
 
 interface NetworkResult {
-  entity: SubstreamEntity | null;
+  entity: SubstreamEntityLive | null;
 }
 
 export async function fetchEntity(options: FetchEntityOptions): Promise<Entity | null> {
@@ -104,7 +90,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
     return null;
   }
 
-  const entityOrError = Schema.decodeEither(SubstreamEntity)(entity);
+  const entityOrError = Schema.decodeEither(SubstreamEntityLive)(entity);
 
   const decodedEntity = Either.match(entityOrError, {
     onLeft: error => {
@@ -120,5 +106,5 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
     return null;
   }
 
-  return EntityDto(decodedEntity);
+  return EntityDtoLive(decodedEntity);
 }

@@ -21,9 +21,22 @@ export function htmlToMarkdown(html: string): string {
   // Convert links
   md = md.replace(/<a href="(.*?)">(.*?)<\/a>/gi, '[$2]($1)');
 
-  // Convert unordered lists
-  md = md.replace(/<ul>(.*?)<\/ul>/gis, match => {
-    return match.replace(/<li>(.*?)<\/li>/gi, '- $1\n');
+  const ulRegex = /<ul[^>]*>([\s\S]*?)<\/ul>/g;
+  const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/g;
+
+  md = md.replace(ulRegex, match => {
+    const listItems = [];
+    let liMatch;
+
+    // Extract text content from <li> tags
+    while ((liMatch = liRegex.exec(match)) !== null) {
+      const cleanedText = liMatch[1]
+        .replace(/<[^>]*>/g, '') // Remove any nested HTML tags
+        .trim();
+      listItems.push(`- ${cleanedText}`);
+    }
+
+    return listItems.join('\n');
   });
 
   // Convert ordered lists
@@ -63,6 +76,9 @@ export function markdownToHtml(markdown: string): string {
   html = html.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
   html = html.replace(/^##### (.*$)/gim, '<h5>$1</h5>');
   html = html.replace(/^###### (.*$)/gim, '<h6>$1</h6>');
+
+  // Convert list items
+  html = html.replace(/^- (.*$)/gim, '<li>$1</li>');
 
   // Convert paragraphs
   html = html.replace(/^\s*(\n)?(.+)/gim, function (m) {

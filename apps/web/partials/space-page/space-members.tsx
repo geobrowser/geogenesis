@@ -22,7 +22,7 @@ interface Props {
 }
 
 export async function SpaceMembers({ spaceId }: Props) {
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
   const [isMember, space, hasRequestedSpaceMembership] = await Promise.all([
     getIsMemberForSpace(spaceId, connectedAddress),
     cachedFetchSpace(spaceId),

@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -20,7 +21,11 @@ interface Props {
 }
 
 export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Props) {
-  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId);
+  const entityId = id;
+
+  const [isRelationPage] = useRelationship(entityId, spaceId);
+
+  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId, isRelationPage);
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
@@ -31,13 +36,28 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
           return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableProperty[]} />;
         }
 
-        return <TriplesGroup key={attributeId} entityId={id} triples={renderable as TripleRenderableProperty[]} />;
+        return (
+          <TriplesGroup
+            key={attributeId}
+            entityId={entityId}
+            triples={renderable as TripleRenderableProperty[]}
+            spaceId={spaceId}
+          />
+        );
       })}
     </div>
   );
 }
 
-function TriplesGroup({ entityId, triples }: { entityId: string; triples: TripleRenderableProperty[] }) {
+function TriplesGroup({
+  entityId,
+  triples,
+  spaceId,
+}: {
+  entityId: string;
+  triples: TripleRenderableProperty[];
+  spaceId: string;
+}) {
   return (
     <>
       {triples.map((t, index) => {
@@ -77,6 +97,7 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
                       <WebUrlField
                         key={`uri-${renderable.attributeId}-${renderable.value}`}
                         isEditing={false}
+                        spaceId={spaceId}
                         value={renderable.value}
                       />
                     );

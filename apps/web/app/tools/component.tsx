@@ -7,6 +7,7 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
+import { useEntity } from '~/core/database/entities';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 import { FetchEntitiesOptions } from '~/core/io/subgraph';
@@ -115,9 +116,29 @@ const FetchEntity = () => {
       />
       <Button type="submit">fetch</Button>
 
-      {entity && <Block>{entity}</Block>}
+      <div className="mt-4 flex w-full gap-4">
+        {entity && (
+          <div className="w-1/2 overflow-clip">
+            <div>fetchEntity:</div>
+            <Block>{entity}</Block>
+          </div>
+        )}
+        {entity && (
+          <div className="w-1/2 overflow-clip">
+            <div>useEntity:</div>
+            <Entity entityId={entityId} />
+          </div>
+        )}
+      </div>
     </form>
   );
+};
+
+const Entity = ({ entityId }: any) => {
+  const entity = useEntity({ id: entityId as any });
+
+  return <Block>{entity ?? ''}</Block>;
+  return <Block>{entity ?? ''}</Block>;
 };
 
 const GenerateEntityIds = () => {
@@ -230,8 +251,8 @@ const CloneEntity = () => {
   const [ops, setOps] = useAtom(cloneOpsAtom);
 
   const handleCloneEntity = async () => {
-    const newOps = await cloneEntity({
-      oldEntityId: SYSTEM_IDS.COMPANY_OVERVIEW_PAGE_TEMPLATE,
+    const [newOps] = await cloneEntity({
+      oldEntityId: SYSTEM_IDS.COMPANY_TEMPLATE,
       entityName: spaceName,
     });
     setOps(newOps);

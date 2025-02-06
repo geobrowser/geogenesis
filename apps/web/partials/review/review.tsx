@@ -47,9 +47,10 @@ type Proposal = {
 
 const ReviewChanges = () => {
   const { state } = useStatusBar();
-  const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
+  const [activeSpace, setActiveSpace] = useState<string>('');
+  const { setIsReviewOpen } = useDiff();
 
-  const allSpacesWithActions = useTriples(
+  const allSpacesWithTripleChanges = useTriples(
     React.useMemo(() => {
       return {
         selector: t => t.hasBeenPublished === false,
@@ -58,9 +59,24 @@ const ReviewChanges = () => {
     }, [])
   ).map(t => t.space);
 
+  const allSpacesWithRelationChanges = useRelations(
+    React.useMemo(() => {
+      return {
+        selector: r => r.hasBeenPublished === false,
+        includeDeleted: true,
+      };
+    }, [])
+  ).map(r => r.space);
+
   const dedupedSpacesWithActions = React.useMemo(() => {
-    return [...new Set(allSpacesWithActions).values()];
-  }, [allSpacesWithActions]);
+    return [...new Set([...allSpacesWithTripleChanges, ...allSpacesWithRelationChanges]).values()];
+  }, [allSpacesWithTripleChanges, allSpacesWithRelationChanges]);
+
+  React.useEffect(() => {
+    if (activeSpace === '' && dedupedSpacesWithActions[0]) {
+      setActiveSpace(dedupedSpacesWithActions[0]);
+    }
+  }, [dedupedSpacesWithActions, activeSpace]);
 
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', dedupedSpacesWithActions],
@@ -144,7 +160,7 @@ const ReviewChanges = () => {
   );
 
   const isReadyToPublish =
-    proposalName?.length > 3 &&
+    proposalName?.length > 0 &&
     Triples.prepareTriplesForPublishing(triplesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
 
   const { makeProposal } = usePublish();
@@ -207,7 +223,7 @@ const ReviewChanges = () => {
 
   return (
     <>
-      <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
+      <div className="flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
           <SquareButton onClick={() => setIsReviewOpen(false)} icon={<Close />} />
           {dedupedSpacesWithActions.length > 0 && (
@@ -252,10 +268,10 @@ const ReviewChanges = () => {
           </Button>
         </div>
       </div>
-      <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[16px] bg-bg shadow-big">
+      <div className="h-full overflow-y-auto overflow-x-clip overscroll-contain bg-white">
         <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
           <div className="relative flex flex-col gap-16">
-            <div className="absolute right-0 top-0 flex items-center gap-8">
+            <div className="absolute right-0 top-0 z-10 flex items-center gap-8">
               <div className="inline-flex items-center gap-2">
                 <span>
                   <span className="font-medium">
@@ -278,7 +294,7 @@ const ReviewChanges = () => {
                 </SmallButton>
               </div>
             </div>
-            <div className="flex flex-col">
+            <div className="relative flex flex-col ">
               <div className="text-body">Proposal name</div>
               <input
                 type="text"
@@ -290,10 +306,11 @@ const ReviewChanges = () => {
                   })
                 }
                 placeholder="Name your proposal..."
-                className="bg-transparent text-3xl font-semibold text-text placeholder:text-grey-02 focus:outline-none"
+                className="bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
               />
+              <div className="absolute -bottom-10 -left-32 -right-32 h-px bg-divider" />
             </div>
-            <div className="flex flex-col gap-16 divide-y divide-grey-02">
+            <div className="relative flex flex-col gap-16 divide-y divide-divider pt-16">
               {changes.map(change => (
                 <ChangedEntity
                   key={change.id}

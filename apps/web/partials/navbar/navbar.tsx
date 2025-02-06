@@ -1,5 +1,6 @@
 import cx from 'classnames';
 
+import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -16,6 +17,8 @@ interface Props {
 }
 
 export function Navbar({ onSearchClick }: Props) {
+  const { shouldShowElement } = useOnboardGuard();
+
   return (
     <nav
       className={cx(
@@ -42,6 +45,17 @@ export function Navbar({ onSearchClick }: Props) {
       */}
       <ClientOnly>
         <div className="flex items-center gap-3">
+          {!shouldShowElement && (
+            <a
+              className="text-button font-normal text-ctaPrimary transition-colors duration-200 hover:text-ctaHover"
+              href="https://elfin-share-6f1.notion.site/175273e214eb80258d30ee6755415ce2?pvs=105"
+              rel="noreferrer noopener"
+              target="_blank"
+            >
+              Early access
+            </a>
+          )}
+
           <CreateSpaceDropdown />
 
           <button

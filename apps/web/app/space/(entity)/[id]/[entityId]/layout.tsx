@@ -9,7 +9,6 @@ import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId, TypeId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
@@ -28,11 +27,12 @@ import { cachedFetchEntity } from './cached-fetch-entity';
 const TABS = ['Overview', 'Activity'] as const;
 
 interface Props {
-  params: { id: string; entityId: string };
+  params: Promise<{ id: string; entityId: string }>;
   children: React.ReactNode;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   const spaceId = params.id;
   const entityId = params.entityId;
 
@@ -68,38 +68,44 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ProfileLayout({ children, params }: Props) {
+export default async function ProfileLayout(props: Props) {
+  const params = await props.params;
+
+  const {
+    children
+  } = props;
+
   const entityId = params.entityId;
 
   const types = await cachedFetchEntityType(entityId);
 
   if (!types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
-    return <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>;
+    return <>{children}</>;
   }
 
   const profile = await getProfilePage(entityId);
 
   return (
-    <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider
-        id={entityId}
+    <EntityStoreProvider
+      id={entityId}
+      spaceId={params.id}
+      initialSpaces={profile.spaces}
+      initialTriples={profile.triples}
+      initialRelations={profile.relationsOut}
+    >
+      <EditorProvider
+        id={profile.id}
         spaceId={params.id}
-        initialSpaces={profile.spaces}
-        initialTriples={profile.triples}
-        initialRelations={profile.relationsOut}
+        initialBlocks={profile.blocks}
+        initialBlockRelations={profile.blockRelations}
       >
-        <EditorProvider
-          id={profile.id}
-          spaceId={params.id}
-          initialBlocks={profile.blocks}
-          initialBlockRelations={profile.blockRelations}
-        >
-          <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-          <EntityPageContentContainer>
-            <EditableHeading spaceId={params.id} entityId={entityId} />
-            <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
+        <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+        <EntityPageContentContainer>
+          <EditableHeading spaceId={params.id} entityId={entityId} />
+          <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
 
-            <Spacer height={40} />
+          <Spacer height={40} />
+          <React.Suspense fallback={null}>
             <TabGroup
               tabs={TABS.map(label => {
                 const href =
@@ -112,14 +118,14 @@ export default async function ProfileLayout({ children, params }: Props) {
                 };
               })}
             />
+          </React.Suspense>
 
-            <Spacer height={20} />
+          <Spacer height={20} />
 
-            {children}
-          </EntityPageContentContainer>
-        </EditorProvider>
-      </EntityStoreProvider>
-    </TypesStoreServerContainer>
+          {children}
+        </EntityPageContentContainer>
+      </EditorProvider>
+    </EntityStoreProvider>
   );
 }
 

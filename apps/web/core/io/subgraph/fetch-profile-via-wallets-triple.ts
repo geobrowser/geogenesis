@@ -7,9 +7,9 @@ import { Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
-import { EntityDto } from '../dto/entities';
-import { SubstreamEntity } from '../schema';
-import { versionFragment } from './fragments';
+import { EntityDtoLive } from '../dto/entities';
+import { SubstreamEntityLive } from '../schema';
+import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
 const query = (address: string) => {
@@ -34,13 +34,17 @@ const query = (address: string) => {
             }
             relationsByFromVersionId: {
               some: {
-                typeOf: { entityId: { equalTo: "${SYSTEM_IDS.ACCOUNTS_ATTRIBUTE}" } }
-                toVersion: {
-                  triples: {
-                    some: {
-                      attributeId: { equalTo: "${SYSTEM_IDS.ADDRESS_ATTRIBUTE}" }
-                      textValue: {
-                        equalTo: "${address}"
+                typeOf: { id: { equalTo: "${SYSTEM_IDS.ACCOUNTS_ATTRIBUTE}" } }
+                toEntity: {
+                  currentVersion: {
+                    version: {
+                      triples: {
+                        some: {
+                          attributeId: { equalTo: "${SYSTEM_IDS.ADDRESS_ATTRIBUTE}" }
+                          textValue: {
+                            equalTo: "${address}"
+                          }
+                        }
                       }
                     }
                   }
@@ -55,7 +59,7 @@ const query = (address: string) => {
         id
         currentVersion {
           version {
-            ${versionFragment}
+            ${getEntityFragment()}
           }
         }
       }
@@ -65,7 +69,7 @@ const query = (address: string) => {
 };
 
 interface NetworkResult {
-  entities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamEntityLive[] };
 }
 
 export async function fetchProfileViaWalletsTripleAddress(address: string): Promise<Profile> {
@@ -101,13 +105,13 @@ export async function fetchProfileViaWalletsTripleAddress(address: string): Prom
 
   const profile = entities[0];
 
-  const parsedProfile = Either.match(Schema.decodeEither(SubstreamEntity)(profile), {
+  const parsedProfile = Either.match(Schema.decodeEither(SubstreamEntityLive)(profile), {
     onLeft: error => {
       console.error(`Unable to decode entity ${profile.id} with error ${error}`);
       return null;
     },
     onRight: entity => {
-      return EntityDto(entity);
+      return EntityDtoLive(entity);
     },
   });
 

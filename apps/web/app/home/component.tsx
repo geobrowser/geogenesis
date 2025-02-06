@@ -5,7 +5,6 @@ import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { Proposal } from '~/core/io/dto/proposals';
 import { fetchProfile } from '~/core/io/subgraph';
 import {
   NavUtils,
@@ -13,7 +12,6 @@ import {
   getIsProposalEnded,
   getIsProposalExecutable,
   getNoVotePercentage,
-  getProposalName,
   getProposalTimeRemaining,
   getUserVote,
   getYesVotePercentage,
@@ -93,19 +91,21 @@ function NoActivity() {
 
 function PersonalHomeNavigation() {
   return (
-    <TabGroup
-      tabs={TABS.map(label => {
-        const href = label === 'For You' ? `/home` : `/home/${label.toLowerCase()}`;
-        const disabled = label === 'For You' ? false : true;
+    <React.Suspense fallback={null}>
+      <TabGroup
+        tabs={TABS.map(label => {
+          const href = label === 'For You' ? `/home` : `/home/${label.toLowerCase()}`;
+          const disabled = label === 'For You' ? false : true;
 
-        return {
-          href,
-          label,
-          disabled,
-        };
-      })}
-      className="mt-8"
-    />
+          return {
+            href,
+            label,
+            disabled,
+          };
+        })}
+        className="mt-8"
+      />
+    </React.Suspense>
   );
 }
 
@@ -166,11 +166,9 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
     return null;
   }
 
-  const proposalName = `${proposal.type === 'ADD_MEMBER' ? 'Add' : 'Remove'} member ${
-    proposedMember.address ?? proposedMember.name ?? proposedMember.id ?? proposedMember.address
-  }`;
-
-  console.log('proposal name', proposalName);
+  const proposalName = `${proposal.type === 'ADD_MEMBER' ? 'Add' : 'Remove'} ${
+    proposedMember.name ?? proposedMember.address ?? proposedMember.id
+  } as member`;
 
   const ProfileHeader = proposedMember.profileLink ? (
     <Link href={proposedMember.profileLink} className="w-full">
@@ -226,6 +224,24 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
   );
 }
 
+async function getProposalNameWithEditor(
+  type: 'ADD_EDITOR' | 'ADD_MEMBER' | 'REMOVE_EDITOR' | 'REMOVE_MEMBER',
+  proposal: ActiveProposalsForSpacesWhereEditor['proposals'][number]
+) {
+  const profile = await fetchProfile({ address: proposal.createdBy.address });
+
+  switch (type) {
+    case 'ADD_EDITOR':
+      return `Add ${profile.name ?? profile.address} as editor`;
+    case 'ADD_MEMBER':
+      return `Add ${profile.name ?? profile.address} as member`;
+    case 'REMOVE_EDITOR':
+      return `Remove ${profile.name ?? profile.address} as editor`;
+    case 'REMOVE_MEMBER':
+      return `Remove ${profile.name ?? profile.address} as member`;
+  }
+}
+
 async function PendingContentProposal({ proposal, user }: PendingMembershipProposalProps) {
   const space = await cachedFetchSpace(proposal.space.id);
 
@@ -234,7 +250,22 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
     return null;
   }
 
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+  const proposalName = await (async () => {
+    switch (proposal.type) {
+      case 'ADD_EDIT':
+        return proposal.name;
+      case 'ADD_EDITOR':
+      case 'REMOVE_EDITOR':
+        return await getProposalNameWithEditor(proposal.type, proposal);
+      case 'ADD_SUBSPACE':
+      case 'REMOVE_SUBSPACE':
+        return proposal.name;
+      default:
+        throw new Error('Unsupported proposal type');
+    }
+  })();
+
+  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
@@ -246,7 +277,6 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
   const isProposalExecutable = getIsProposalExecutable(proposal, yesVotesPercentage);
   const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
-  const proposalName = getProposalName({ ...proposal, name: proposal.name ?? proposal.id });
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">

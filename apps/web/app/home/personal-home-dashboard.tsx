@@ -18,9 +18,9 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { InProgressSmall } from '~/design-system/icons/in-progress-small';
-import { InfoSmall } from '~/design-system/icons/info-small';
+// import { InfoSmall } from '~/design-system/icons/info-small';
 import { Member } from '~/design-system/icons/member';
-import { VideoSmall } from '~/design-system/icons/video-small';
+// import { VideoSmall } from '~/design-system/icons/video-small';
 import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
@@ -245,13 +245,13 @@ function Activity({ label = '', activities = [] }: ActivityProps) {
   );
 }
 
-const FindOrCreateCompanySpace = () => {
-  return (
-    <div className="w-full rounded bg-white p-2 focus-within:ring-2 focus-within:ring-black">
-      <input type="text" placeholder="Find or create..." className="w-full focus:outline-none" />
-    </div>
-  );
-};
+// const FindOrCreateCompanySpace = () => {
+//   return (
+//     <div className="w-full rounded bg-white p-2 focus-within:ring-2 focus-within:ring-black">
+//       <input type="text" placeholder="Find or create..." className="w-full focus:outline-none" />
+//     </div>
+//   );
+// };
 
 const recommendedSpaces: Array<`0x${string}`> = [
   '0x6144659cc8FCcBb7Bb41c94Fc8429Aec201A3ff5', // AI
@@ -297,24 +297,24 @@ const JoinSpaces = () => {
   );
 };
 
-const topics: { icon?: React.ReactNode; label: string; href: string }[] = [
-  { icon: <VideoSmall />, label: 'Videos', href: '/' },
-  { icon: <InfoSmall />, label: 'Guides and posts', href: '/' },
-];
+// const topics: { icon?: React.ReactNode; label: string; href: string }[] = [
+//   { icon: <VideoSmall />, label: 'Videos', href: '/' },
+//   { icon: <InfoSmall />, label: 'Guides and posts', href: '/' },
+// ];
 
-const LearnMore = () => {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {topics.map(topic => (
-        <Link
-          href={topic.href}
-          key={topic.label}
-          className="inline-flex items-center gap-1 rounded bg-white p-1 text-breadcrumb"
-        >
-          {topic.icon && <span className="inline-block scale-[0.75]">{topic.icon}</span>}
-          <span>{topic.label}</span>
-        </Link>
-      ))}
-    </div>
-  );
-};
+// const LearnMore = () => {
+//   return (
+//     <div className="flex flex-wrap gap-2">
+//       {topics.map(topic => (
+//         <Link
+//           href={topic.href}
+//           key={topic.label}
+//           className="inline-flex items-center gap-1 rounded bg-white p-1 text-breadcrumb"
+//         >
+//           {topic.icon && <span className="inline-block scale-[0.75]">{topic.icon}</span>}
+//           <span>{topic.label}</span>
+//         </Link>
+//       ))}
+//     </div>
+//   );
+// };

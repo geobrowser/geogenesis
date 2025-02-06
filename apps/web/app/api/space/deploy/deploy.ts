@@ -11,7 +11,7 @@ import { ContextParams, DaoCreationError, MissingExecPermissionError, Permission
 import { id } from '@ethersproject/hash';
 import { VotingMode, getChecksumAddress } from '@geogenesis/sdk';
 import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
-import { createEditProposal } from '@geogenesis/sdk/proto';
+import { EditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { ethers, providers } from 'ethers';
 import { v4 as uuid } from 'uuid';
@@ -66,7 +66,7 @@ interface DeployArgs {
   spaceAvatarUri: string | null;
   spaceCoverUri: string | null;
   initialEditorAddress: string;
-  baseUrl: string;
+  entityId?: string;
 }
 
 export function deploySpace(args: DeployArgs) {
@@ -86,7 +86,7 @@ export function deploySpace(args: DeployArgs) {
       catch: e => new GenerateOpsError(`Failed to generate ops: ${String(e)}`),
     });
 
-    const initialContent = createEditProposal({
+    const initialContent = EditProposal.make({
       name: args.spaceName,
       author: initialEditorAddress,
       ops,
@@ -111,7 +111,7 @@ export function deploySpace(args: DeployArgs) {
         votingSettings: {
           votingMode: VotingMode.EarlyExecution,
           supportThreshold: pctToRatio(50),
-          duration: BigInt(60 * 60 * 4), // 4 hours
+          duration: BigInt(60 * 60 * 24), // 4 hours
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 4), // 4 hours
         initialEditors: [getChecksumAddress(initialEditorAddress)],
@@ -211,7 +211,7 @@ function getGovernanceTypeForSpaceType(type: SpaceType, governanceType?: SpaceGo
     case 'academic-field':
     case 'dao':
     case 'industry':
-    case 'interest-group':
+    case 'interest':
     case 'region':
     case 'protocol':
       return 'PUBLIC';

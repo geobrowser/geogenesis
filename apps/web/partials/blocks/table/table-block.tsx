@@ -7,10 +7,13 @@ import produce from 'immer';
 
 import * as React from 'react';
 
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useFilters } from '~/core/blocks/data/use-filters';
+import { useSource } from '~/core/blocks/data/use-source';
+import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useTableBlock } from '~/core/state/table-block-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
@@ -18,7 +21,6 @@ import { Create } from '~/design-system/icons/create';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
@@ -41,26 +43,10 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
 
-  const {
-    columns,
-    rows,
-    setPage,
-    filterState,
-    setFilterState,
-    isLoading,
-    hasNextPage,
-    hasPreviousPage,
-    pageNumber,
-    view,
-    shownColumnIds,
-    placeholder,
-    source,
-  } = useTableBlock();
-
-  const allColumns = columns.map(column => ({
-    id: column.id,
-    name: column.name,
-  }));
+  const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
+  const { filterState, setFilterState } = useFilters();
+  const { shownColumnIds, view, placeholder } = useView();
+  const { source } = useSource();
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -72,25 +58,25 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
    *
    * Name and Space are treated specially throughout this code path.
    */
-  const filtersWithColumnName = filterState.map(f => {
+  const filtersWithPropertyName = filterState.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME_ATTRIBUTE) {
       return {
         ...f,
-        columnName: 'Name',
+        propertyName: 'Name',
       };
     }
 
     if (f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE) {
       return {
         ...f,
-        columnName: 'Types',
+        propertyName: 'Types',
       };
     }
 
     if (f.columnId === SYSTEM_IDS.SPACE_FILTER) {
       return {
         ...f,
-        columnName: 'Space',
+        propertyName: 'Space',
         value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
       };
     }
@@ -98,20 +84,20 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     if (f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) {
       return {
         ...f,
-        columnName: 'Relation type',
+        propertyName: 'Relation type',
       };
     }
 
-    if (f.columnId === SYSTEM_IDS.ENTITY_FILTER) {
+    if (f.columnId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE) {
       return {
         ...f,
-        columnName: 'Entity',
+        propertyName: 'From',
       };
     }
 
     return {
       ...f,
-      columnName: columns.find(c => c.id === f.columnId)?.name ?? '',
+      propertyName: properties.find(c => c.id === f.columnId)?.name ?? '',
     };
   });
 
@@ -135,7 +121,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           />
 
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
-          <TableBlockContextMenu allColumns={allColumns} />
+          <TableBlockContextMenu />
           {isEditing && source.type !== 'COLLECTION' && (
             <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
               <Create />
@@ -161,7 +147,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             >
               <TableBlockEditableFilters />
 
-              {filtersWithColumnName.map((f, index) => {
+              {filtersWithPropertyName.map((f, index) => {
                 return (
                   <TableBlockFilterPill
                     key={`${f.columnId}-${f.value}`}
@@ -189,12 +175,12 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
         ) : (
           <TableBlockTable
             space={spaceId}
-            columns={columns}
+            properties={properties}
             rows={rows}
-            shownColumnIds={shownColumnIds}
             placeholder={placeholder}
             view={view}
             source={source}
+            shownColumnIds={shownColumnIds}
             filterState={filterState}
           />
         )}

@@ -1,11 +1,14 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { redirect } from 'next/navigation';
+import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import { NavUtils } from '~/core/utils/utils';
+
+import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 
 import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 
@@ -68,13 +71,15 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       spaceId={params.id}
       relationsOut={person.relationsOut}
       referencedByComponent={
-        /*
-          Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
-          show any referenced by loading states but do want to stream it in
-        */
-        <React.Suspense fallback={<div />}>
-          <EntityReferencedByServerContainer entityId={params.entityId} name={person.name} spaceId={params.id} />
-        </React.Suspense>
+        <ErrorBoundary fallback={<EmptyErrorComponent />}>
+          {/*
+              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
+              show any referenced by loading states but do want to stream it in
+            */}
+          <React.Suspense fallback={<div />}>
+            <EntityReferencedByServerContainer entityId={params.entityId} name={person.name} spaceId={params.id} />
+          </React.Suspense>
+        </ErrorBoundary>
       }
     />
   );

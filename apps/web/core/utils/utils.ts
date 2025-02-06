@@ -1,4 +1,5 @@
 import { BASE58_ALLOWED_CHARS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
@@ -20,7 +21,7 @@ export const NavUtils = {
   toRoot: () => '/root',
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
-  toSpace: (spaceId: string) => `/space/${spaceId}`,
+  toSpace: (spaceId: string) => (spaceId === SYSTEM_IDS.ROOT_SPACE_ID ? `/root` : `/space/${spaceId}`),
   toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
   toEntity: (spaceId: string, newEntityId: string) => {
     return `/space/${spaceId}/${newEntityId}`;
@@ -131,16 +132,28 @@ export class GeoDate {
     year: string;
     hour: string;
     minute: string;
+    meridiem: 'am' | 'pm';
   } {
     const date = new Date(dateString);
     const isDate = GeoDate.isValidDate(date);
     const day = isDate ? date.getUTCDate().toString() : '';
     const month = isDate ? (date.getUTCMonth() + 1).toString() : '';
     const year = isDate ? date.getUTCFullYear().toString() : '';
-    const hour = isDate ? date.getUTCHours().toString() : '';
+    let hour = isDate ? date.getUTCHours().toString() : '';
     const minute = isDate ? date.getUTCMinutes().toString() : '';
+    let meridiem = isDate && hour !== '' ? (Number(hour) < 12 ? 'am' : 'pm') : 'am';
 
-    return { day, month, year, hour, minute };
+    if (hour !== '' && Number(hour) > 12) {
+      const hourAsNumber = Number(hour);
+      hour = (hourAsNumber - 12).toString();
+    }
+
+    if (hour !== '' && Number(hour) === 0) {
+      hour = '12';
+      meridiem = 'am';
+    }
+
+    return { day, month, year, hour, minute, meridiem: meridiem as 'am' | 'pm' };
   }
 
   static isLeapYear(year: number): boolean {
@@ -176,7 +189,8 @@ export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
   const entityName = entity?.name ?? null;
   const serverAvatarUrl = Entities.avatar(entity?.relationsOut) ?? null;
   const serverCoverUrl = Entities.cover(entity?.relationsOut);
-  const imageUrl = serverAvatarUrl || serverCoverUrl || '';
+
+  const imageUrl = serverAvatarUrl ?? serverCoverUrl ?? '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
   const description = Entities.description(entity?.triples ?? []);
 
@@ -314,7 +328,7 @@ export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) 
 }
 
 export function getUserVote(votes: SubstreamVote[], address: string) {
-  return votes.find(v => v.account.id === getAddress(address));
+  return votes.find(v => v.accountId === getAddress(address));
 }
 
 export function getProposalTimeRemaining(endTime: number) {

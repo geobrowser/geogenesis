@@ -11,10 +11,9 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Text from '@tiptap/extension-text';
 
 import { ConfiguredCommandExtension } from './command-extension';
+import { DataNode } from './data-node';
 import { HeadingNode } from './heading-node';
-import { ImageNode } from './image-node';
 import { ParagraphNode } from './paragraph-node';
-import { TableNode } from './table-node';
 import { TrailingNode } from './trailing-node';
 
 export const tiptapExtensions = [
@@ -45,30 +44,33 @@ export const tiptapExtensions = [
   ParagraphNode,
   HeadingNode,
   ConfiguredCommandExtension,
-  HardBreak.extend({
-    addKeyboardShortcuts() {
-      // Make hard breaks behave like normal paragraphs
-      const handleEnter = () =>
-        this.editor.commands.first(({ commands }) => [
-          () => commands.newlineInCode(),
-          () => commands.createParagraphNear(),
-          () => commands.liftEmptyBlock(),
-          () => commands.splitBlock(),
-        ]);
+  // HardBreak.extend({
+  //   addKeyboardShortcuts() {
+  //     // Make hard breaks behave like normal paragraphs
+  //     const handleEnter = () =>
+  //       this.editor.commands.first(({ commands }) => [
+  //         () => commands.newlineInCode(),
+  //         () => commands.createParagraphNear(),
+  //         () => commands.liftEmptyBlock(),
+  //         () => commands.splitBlock(),
+  //       ]);
 
-      return {
-        Enter: handleEnter,
-        'Mod-Enter': handleEnter,
-        'Shift-Enter': handleEnter,
-      };
-    },
-  }),
+  //     return {
+  //       // This was intercepting the 'Enter' behavior in `command-list.tsx`
+  //       // Disabling doesn't seem to make a difference so maybe it was unnecessary?
+  //       // Enter: handleEnter,
+
+  //       'Mod-Enter': handleEnter,
+  //       'Shift-Enter': handleEnter,
+  //     };
+  //   },
+  // }),
   Gapcursor,
   TrailingNode,
   BulletList,
   ListItem,
-  TableNode,
-  ImageNode,
+  DataNode,
+  Image,
   Placeholder.configure({
     placeholder: ({ node }) => {
       const isHeading = node.type.name === 'heading';

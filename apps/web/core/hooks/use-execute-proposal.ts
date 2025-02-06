@@ -17,13 +17,13 @@ export function useExecuteProposal({ address, onchainProposalId }: Args) {
 
   const { mutate, status } = useMutation({
     mutationFn: async () => {
-      const txEffect = await tx(
-        encodeFunctionData({
-          abi: MainVotingAbi,
-          functionName: 'execute',
-          args: [BigInt(onchainProposalId)],
-        })
-      );
+      const calldata = encodeFunctionData({
+        abi: MainVotingAbi,
+        functionName: 'execute',
+        args: [BigInt(onchainProposalId)],
+      });
+
+      const txEffect = tx(calldata);
 
       const hash = await Effect.runPromise(txEffect);
       console.log('Execute successful!', hash);

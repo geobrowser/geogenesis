@@ -1163,6 +1163,18 @@ declare module 'zapatos/schema' {
       */
       id: string;
       /**
+      * **proposals.name**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      name: string;
+      /**
+      * **proposals.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
       * **proposals.onchain_proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1224,6 +1236,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       id: string;
+      /**
+      * **proposals.name**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      name: string;
+      /**
+      * **proposals.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
       /**
       * **proposals.onchain_proposal_id**
       * - `text` in database
@@ -1287,6 +1311,18 @@ declare module 'zapatos/schema' {
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposals.name**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      name?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposals.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposals.onchain_proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1349,6 +1385,18 @@ declare module 'zapatos/schema' {
       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
+      * **proposals.name**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      name: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposals.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
       * **proposals.onchain_proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1410,6 +1458,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposals.name**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      name?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposals.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
       * **proposals.onchain_proposal_id**
       * - `text` in database
@@ -2197,6 +2257,24 @@ declare module 'zapatos/schema' {
       */
       type_of_id: string;
       /**
+      * **relations.to_entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      to_entity_id: string;
+      /**
+      * **relations.from_entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      from_entity_id: string;
+      /**
+      * **relations.type_of_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      type_of_version_id: string;
+      /**
       * **relations.to_version_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2240,6 +2318,24 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       type_of_id: string;
+      /**
+      * **relations.to_entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      to_entity_id: string;
+      /**
+      * **relations.from_entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      from_entity_id: string;
+      /**
+      * **relations.type_of_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      type_of_version_id: string;
       /**
       * **relations.to_version_id**
       * - `text` in database
@@ -2285,6 +2381,24 @@ declare module 'zapatos/schema' {
       */
       type_of_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **relations.to_entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      to_entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **relations.from_entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      from_entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **relations.type_of_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      type_of_version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **relations.to_version_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2329,6 +2443,24 @@ declare module 'zapatos/schema' {
       */
       type_of_id: string | db.Parameter<string> | db.SQLFragment;
       /**
+      * **relations.to_entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      to_entity_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **relations.from_entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      from_entity_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **relations.type_of_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      type_of_version_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **relations.to_version_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2372,6 +2504,24 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       type_of_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **relations.to_entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      to_entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **relations.from_entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      from_entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **relations.type_of_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      type_of_version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **relations.to_version_id**
       * - `text` in database

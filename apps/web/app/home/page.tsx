@@ -14,11 +14,11 @@ import { Component } from './component';
 export const dynamic = 'force-dynamic';
 
 interface Props {
-  searchParams: { proposalType?: 'membership' | 'content' };
+  searchParams: Promise<{ proposalType?: 'membership' | 'content' }>;
 }
 
 export default async function PersonalHomePage(props: Props) {
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
 
   const [person, proposalsCount] = await Promise.all([
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
@@ -32,12 +32,12 @@ export default async function PersonalHomePage(props: Props) {
   const acceptedProposalsCount = proposalsCount ?? 0;
 
   return (
-    <Component
+    (<Component
       header={<PersonalHomeHeader person={person} address={connectedAddress ?? null} />}
-      proposalType={props.searchParams.proposalType}
+      proposalType={(await props.searchParams).proposalType}
       acceptedProposalsCount={acceptedProposalsCount}
       connectedAddress={connectedAddress}
-    />
+    />)
   );
 }
 

@@ -5,8 +5,8 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 
 import { HistoryVersionDto } from '../dto/versions';
-import { SubstreamVersionWithEdit } from '../schema';
-import { versionFragment } from './fragments';
+import { SubstreamVersionHistorical } from '../schema';
+import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
 interface FetchVersionsArgs {
@@ -18,7 +18,7 @@ interface FetchVersionsArgs {
 const query = (versionId: string) => {
   return `query {
     version(id: "${versionId}") {
-      ${versionFragment}
+      ${getEntityFragment({ useHistorical: true })}
       edit {
         id
         name
@@ -35,7 +35,7 @@ const query = (versionId: string) => {
 };
 
 interface NetworkResult {
-  version: SubstreamVersionWithEdit | null;
+  version: SubstreamVersionHistorical | null;
 }
 
 export async function fetchHistoryVersion(args: FetchVersionsArgs) {
@@ -87,7 +87,7 @@ export async function fetchHistoryVersion(args: FetchVersionsArgs) {
     return null;
   }
 
-  const decoded = Schema.decodeEither(SubstreamVersionWithEdit)(networkVersion);
+  const decoded = Schema.decodeEither(SubstreamVersionHistorical)(networkVersion);
 
   return Either.match(decoded, {
     onLeft: error => {

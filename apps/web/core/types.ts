@@ -155,10 +155,13 @@ export type GeoType = {
 
 // A column in the table _is_ an Entity. It's a reference to a specific Attribute entity.
 // In this use case we don't really care about description, types, etc.
-export interface Schema {
+export interface PropertySchema {
   id: EntityId;
   name: string | null;
   valueType: ValueTypeId;
+  relationValueTypeId?: EntityId;
+  relationValueTypeName?: string | null;
+  homeSpace?: string;
 }
 
 export type Relation = {
@@ -192,15 +195,15 @@ export type Relation = {
 };
 
 export type Cell = {
+  slotId: string;
+  cellId: string;
   name: string | null;
-  columnId: string;
-  entityId: string;
-  triples: Triple[];
-  relations: Relation[];
+  renderables: RenderableProperty[];
   description?: string | null;
   image?: string | null;
   space?: string;
   verified?: boolean;
+  renderedPropertyId?: string;
 };
 
 export type Row = {
@@ -250,5 +253,5 @@ export type SpaceType =
   | 'protocol'
   | 'dao'
   | 'government-org'
-  | 'interest-group';
+  | 'interest';
 export type SpaceGovernanceType = 'PUBLIC' | 'PERSONAL';
