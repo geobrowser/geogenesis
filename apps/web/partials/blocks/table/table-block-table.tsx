@@ -35,13 +35,15 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { Cell, PropertySchema, Row } from '~/core/types';
+import { Cell, PropertySchema, RenderableProperty, Row } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
+import { LinkableRelationChip } from '~/design-system/chip';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
+import { Spacer } from '~/design-system/spacer';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
@@ -375,6 +377,8 @@ export const TableBlockTable = React.memo(
               const maybeCoverData: Cell | undefined = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
               const maybeDescriptionData: Cell | undefined = row.columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
 
+              console.log('row.columns', row.columns);
+
               // @TODO: An "everything" else ID that can be used to render any renderable.
               const { cellId, name, verified } = nameCell;
               let { description, image } = nameCell;
@@ -405,6 +409,16 @@ export const TableBlockTable = React.memo(
 
               const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
 
+              const otherPropertyData = Object.values(row.columns).filter(
+                c =>
+                  c.slotId !== SYSTEM_IDS.NAME_ATTRIBUTE &&
+                  c.slotId !== CONTENT_IDS.AVATAR_ATTRIBUTE &&
+                  c.slotId !== SYSTEM_IDS.COVER_ATTRIBUTE &&
+                  c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+              );
+
+              console.log('otherPropertyData', otherPropertyData);
+
               return (
                 <div key={index}>
                   <Link href={href} className="group flex w-full max-w-full items-center gap-6 pr-6">
@@ -430,6 +444,20 @@ export const TableBlockTable = React.memo(
                           {description}
                         </div>
                       )}
+
+                      {otherPropertyData.map(p => {
+                        return (
+                          <>
+                            <Spacer height={8} />
+                            <PropertyField
+                              key={p.slotId}
+                              renderables={p.renderables}
+                              spaceId={space}
+                              entityId={cellId}
+                            />
+                          </>
+                        );
+                      })}
                     </div>
                   </Link>
                 </div>
@@ -467,6 +495,14 @@ export const TableBlockTable = React.memo(
 
               const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
 
+              const otherPropertyData = Object.values(row.columns).filter(
+                c =>
+                  c.slotId !== SYSTEM_IDS.NAME_ATTRIBUTE &&
+                  c.slotId !== CONTENT_IDS.AVATAR_ATTRIBUTE &&
+                  c.slotId !== SYSTEM_IDS.COVER_ATTRIBUTE &&
+                  c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+              );
+
               return (
                 <Link key={index} href={href} className="group flex flex-col gap-3">
                   <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
@@ -485,6 +521,11 @@ export const TableBlockTable = React.memo(
                     )}
                     <div className="truncate text-smallTitle font-medium text-text">{name}</div>
                   </div>
+                  {otherPropertyData.map(p => {
+                    return (
+                      <PropertyField key={p.slotId} renderables={p.renderables} spaceId={space} entityId={cellId} />
+                    );
+                  })}
                 </Link>
               );
             })}
@@ -493,3 +534,28 @@ export const TableBlockTable = React.memo(
     }
   }
 );
+
+function PropertyField(props: { renderables: RenderableProperty[]; spaceId: string; entityId: string }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {props.renderables.map(renderable => {
+        console.log('renderable', renderable);
+        switch (renderable.type) {
+          case 'TEXT':
+          case 'CHECKBOX':
+          case 'TIME':
+          case 'NUMBER':
+          case 'URL':
+          case 'IMAGE':
+            return <p>Hello world</p>;
+          case 'RELATION':
+            return (
+              <LinkableRelationChip isEditing={false} entityHref={''} relationHref="">
+                {renderable.valueName ?? renderable.value}
+              </LinkableRelationChip>
+            );
+        }
+      })}
+    </div>
+  );
+}
