@@ -281,7 +281,7 @@ function AnimatedTogglePill({ controls }: { controls: AnimationControls }) {
       animate={controls}
       variants={variants}
       transition={{
-        duration: 0.15,
+        duration: 0.5,
         type: 'spring',
         bounce: 0,
       }}

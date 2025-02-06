@@ -199,14 +199,21 @@ export function useDataBlock() {
     // state then back into a loading state. By adding the isFetched state we
     // will stay in a placeholder state until we've fetched our queries at least
     // one time.
+    //
+    // @NOTE there's an edge-case issue where collection queries respond to the
+    // loading states differently than the other types of queries. If we include
+    // the renderable fetched state collection blocks will jitter between loading
+    // and fetched states. Will fix this in the future, for now just discard the
+    // renderable fetched state for collection blocks.
     isLoading:
-      isLoadingRenderables ||
-      isLoadingFilterState ||
-      isViewLoading ||
-      !isFilterStateFetched ||
-      !isRenderablesFetched ||
-      !isViewFetched,
-
+      source.type === 'COLLECTION'
+        ? isLoadingRenderables || isLoadingFilterState || isViewLoading || !isFilterStateFetched || !isViewFetched
+        : isLoadingRenderables ||
+          isLoadingFilterState ||
+          isViewLoading ||
+          !isFilterStateFetched ||
+          !isRenderablesFetched ||
+          !isViewFetched,
     name: blockEntity.name,
     setName,
   };

@@ -37,38 +37,26 @@ export const Editor = React.memo(function Editor({
 
   const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
 
-  const editor = useEditor({
-    extensions,
-    editable: true,
-    content: editorJson,
-    editorProps: {
-      transformPastedHTML: html => removeIdAttributes(html),
-    },
-    immediatelyRender: false,
-  });
-
   useInterceptEditorLinks(spaceId);
 
-  const onBlur = React.useCallback(
-    (params: { editor: TiptapEditor }) => {
-      // Responsible for converting all editor blocks to triples
-      // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
-      upsertEditorState(params.editor.getJSON());
+  const onBlur = (params: { editor: TiptapEditor }) => {
+    // Responsible for converting all editor blocks to Geo knowledge graph state
+    upsertEditorState(params.editor.getJSON());
+  };
+
+  const editor = useEditor(
+    {
+      extensions,
+      editable: true,
+      content: editorJson,
+      editorProps: {
+        transformPastedHTML: html => removeIdAttributes(html),
+      },
+      immediatelyRender: false,
+      onBlur: onBlur,
     },
-    [upsertEditorState]
+    [editorJson]
   );
-
-  // Running onBlur directly through the hook executes it twice for some reason.
-  // Doing it imperatively here correctly only executes once.
-  React.useEffect(() => {
-    // Tiptap doesn't export the needed type APIs for us to be able to make this typesafe
-    editor?.on('blur', onBlur as unknown as any);
-
-    return () => {
-      // Tiptap doesn't export the needed type APIs for us to be able to make this typesafe
-      editor?.off('blur', onBlur as unknown as any);
-    };
-  }, [onBlur, editor]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
@@ -94,7 +82,7 @@ export const Editor = React.memo(function Editor({
   return (
     <LayoutGroup id="editor">
       <div className={editable ? 'editable' : 'not-editable'}>
-        {!editor ? <ServerContent content={editorJson.content} /> : <EditorContent editor={editor} />}
+        {editor ? <EditorContent editor={editor} /> : <ServerContent content={editorJson.content} />}
 
         {shouldHandleOwnSpacing && <Spacer height={60} />}
       </div>
