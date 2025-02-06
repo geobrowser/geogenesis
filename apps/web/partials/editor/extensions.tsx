@@ -2,8 +2,6 @@ import Bold from '@tiptap/extension-bold';
 import BulletList from '@tiptap/extension-bullet-list';
 import Document from '@tiptap/extension-document';
 import Gapcursor from '@tiptap/extension-gapcursor';
-import HardBreak from '@tiptap/extension-hard-break';
-import Image from '@tiptap/extension-image';
 import Italic from '@tiptap/extension-italic';
 import Link from '@tiptap/extension-link';
 import ListItem from '@tiptap/extension-list-item';
@@ -13,6 +11,7 @@ import Text from '@tiptap/extension-text';
 import { ConfiguredCommandExtension } from './command-extension';
 import { DataNode } from './data-node';
 import { HeadingNode } from './heading-node';
+import { ImageNode } from './image-node';
 import { ParagraphNode } from './paragraph-node';
 import { TrailingNode } from './trailing-node';
 
@@ -70,7 +69,7 @@ export const tiptapExtensions = [
   BulletList,
   ListItem,
   DataNode,
-  Image,
+  ImageNode,
   Placeholder.configure({
     placeholder: ({ node }) => {
       const isHeading = node.type.name === 'heading';

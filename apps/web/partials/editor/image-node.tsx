@@ -1,7 +1,9 @@
 import Image from '@tiptap/extension-image';
 import { NodeViewRendererProps, ReactNodeViewRenderer } from '@tiptap/react';
+import NextImage from 'next/legacy/image';
+import Zoom from 'react-medium-image-zoom';
 
-import { PageImageField } from '~/design-system/editable-fields/editable-fields';
+import { getImagePath } from '~/core/utils/utils';
 
 export const ImageNode = Image.extend({
   addNodeView() {
@@ -12,5 +14,11 @@ export const ImageNode = Image.extend({
 function ImageNodeComponent({ node }: NodeViewRendererProps) {
   const { src } = node.attrs;
 
-  return <PageImageField imageSrc={src} onImageChange={() => {}} onImageRemove={() => {}} />;
+  return (
+    <Zoom>
+      <div className="min-h-[400px] w-full overflow-hidden rounded-lg">
+        <NextImage layout="fill" objectFit="cover" src={getImagePath(src)} alt="" />
+      </div>
+    </Zoom>
+  );
 }
