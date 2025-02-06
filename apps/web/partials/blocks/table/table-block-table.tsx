@@ -554,7 +554,7 @@ function PropertyField(props: { renderables: RenderableProperty[]; spaceId: stri
           }
           case 'TIME': {
             const time = new Date(renderable.value).toLocaleDateString(undefined, {
-              day: '2-digit',
+              day: 'numeric',
               month: 'long',
               year: 'numeric',
             });
