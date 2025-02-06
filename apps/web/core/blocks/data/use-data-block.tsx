@@ -46,16 +46,12 @@ export function useDataBlock() {
     id: EntityId(entityId),
   });
 
-  const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
+  const { filterState, isLoading: isLoadingFilterState } = useFilters();
   const { source } = useSource();
   const { collectionItems } = useCollection();
-  const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
+  const { shownColumnIds, mapping, isLoading: isViewLoading } = useView();
 
-  const {
-    data: rows,
-    isLoading: isLoadingRenderables,
-    isFetched: isRenderablesFetched,
-  } = useQuery({
+  const { data: rows, isLoading: isLoadingRenderables } = useQuery({
     enabled: filterState !== undefined,
     placeholderData: keepPreviousData,
     // @TODO: Should re-run when the relations for the entity source changes
@@ -199,14 +195,7 @@ export function useDataBlock() {
     // state then back into a loading state. By adding the isFetched state we
     // will stay in a placeholder state until we've fetched our queries at least
     // one time.
-    isLoading:
-      isLoadingRenderables ||
-      isLoadingFilterState ||
-      isViewLoading ||
-      !isFilterStateFetched ||
-      !isRenderablesFetched ||
-      !isViewFetched,
-
+    isLoading: isLoadingRenderables || isLoadingFilterState || isViewLoading,
     name: blockEntity.name,
     setName,
   };
