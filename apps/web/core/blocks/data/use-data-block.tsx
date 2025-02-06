@@ -200,12 +200,14 @@ export function useDataBlock() {
     // will stay in a placeholder state until we've fetched our queries at least
     // one time.
     isLoading:
-      isLoadingRenderables ||
-      isLoadingFilterState ||
-      isViewLoading ||
-      !isFilterStateFetched ||
-      !isViewFetched ||
-      !isRenderablesFetched,
+      source.type === 'COLLECTION'
+        ? isLoadingRenderables || isLoadingFilterState || isViewLoading || !isFilterStateFetched || !isViewFetched
+        : isLoadingRenderables ||
+          isLoadingFilterState ||
+          isViewLoading ||
+          !isFilterStateFetched ||
+          !isRenderablesFetched ||
+          !isViewFetched,
     name: blockEntity.name,
     setName,
   };
