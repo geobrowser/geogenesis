@@ -89,7 +89,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           votingContractAddress={space?.mainVotingPluginAddress as `0x${string}`}
         />
       </div>
-      <div className="relative overflow-y-auto overscroll-contain">
+      <div className="relative overflow-y-auto overflow-x-clip overscroll-contain">
         <MetadataMotionContainer>
           <div className="mx-auto max-w-[1200px] py-10 xl:pl-[2ch] xl:pr-[2ch]">
             <div className="flex flex-col items-center gap-8">
@@ -144,7 +144,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
             </div>
           </div>
         </MetadataMotionContainer>
-        <div className="h-full border-t border-divider">
+        <div className="h-full overflow-x-clip border-t border-divider">
           <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
             {proposal.type === 'ADD_EDIT' && <ContentProposal proposal={proposal} />}
             {(proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE') && (

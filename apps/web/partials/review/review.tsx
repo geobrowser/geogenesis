@@ -268,7 +268,7 @@ const ReviewChanges = () => {
           </Button>
         </div>
       </div>
-      <div className="h-full overflow-y-auto overscroll-contain bg-white">
+      <div className="h-full overflow-y-auto overflow-x-clip overscroll-contain bg-white">
         <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
           <div className="relative flex flex-col gap-16">
             <div className="absolute right-0 top-0 z-10 flex items-center gap-8">

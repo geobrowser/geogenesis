@@ -4,10 +4,11 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
+import type { Change as Difference } from 'diff';
 
 import * as React from 'react';
 
-import { EntityChange, RenderableChange } from '~/core/utils/change/types';
+import { BlockChange, EntityChange, RenderableChange } from '~/core/utils/change/types';
 import { GeoDate, getImagePath, groupBy } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -30,9 +31,9 @@ const getIsNewRelation = (changes: RenderableChange[]) => {
 };
 
 export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagingComponent }: ChangedEntityProps) => {
-  const { changes } = change;
+  const { changes, blockChanges } = change;
 
-  const isEmpty = changes.length === 0;
+  const isEmpty = changes.length === 0 && blockChanges.length === 0;
 
   if (isEmpty) {
     return null;
@@ -70,198 +71,201 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
           </div>
         </div>
       </div>
-      {/* {blocks.length > 0 && (
-        <div className="mt-4">
-          {blocks.map(blockChange => (
-            <ChangedBlock key={blockChange.id} blockId={blockChange.after.value} block={blocks[blockId]} />
+      {blockChanges.length > 0 && (
+        <div className="mb-4">
+          {blockChanges.map((blockChange, index) => (
+            <ChangedBlock key={index} index={index} blockChange={blockChange} />
           ))}
         </div>
-      )} */}
-      <div className="mt-2">
-        <ChangedAttribute
-          renderAttributeStagingComponent={renderAttributeStagingComponent}
-          key={`${change.id}-${change.id}`}
-          changes={changes}
-        />
-      </div>
+      )}
+      {changes.length > 0 && (
+        <div className="mt-2">
+          <ChangedAttribute
+            renderAttributeStagingComponent={renderAttributeStagingComponent}
+            key={`${change.id}-${change.id}`}
+            changes={changes}
+          />
+        </div>
+      )}
     </div>
   );
 };
 
-// type ChangedBlockProps = {
-//   blockId: BlockId;
-//   block: BlockChange;
-// };
+type ChangedBlockProps = {
+  index: number;
+  blockChange: BlockChange;
+};
 
-// const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
-//   const { before, after } = block;
+const ChangedBlock = ({ index, blockChange }: ChangedBlockProps) => {
+  const { before, after } = blockChange;
 
-//   // Don't show dead changes
-//   if (!before && !after) return null;
+  // Don't show dead changes
+  if (!before && !after) return null;
+  if (before === after) return null;
 
-//   switch (block.type) {
-//     case 'markdownContent': {
-//       const { markdownType: beforeMarkdownType, markdownContent: beforeMarkdownContent } = parseMarkdown(before ?? '');
-//       const { markdownType: afterMarkdownType, markdownContent: afterMarkdownContent } = parseMarkdown(after ?? '');
+  switch (blockChange.type) {
+    case 'textBlock': {
+      const { markdownType: beforeMarkdownType, markdownContent: beforeMarkdownContent } = parseMarkdown(before ?? '');
+      const { markdownType: afterMarkdownType, markdownContent: afterMarkdownContent } = parseMarkdown(after ?? '');
 
-//       const differences = diffWords(beforeMarkdownContent, afterMarkdownContent);
+      const differences = diffWords(beforeMarkdownContent, afterMarkdownContent);
 
-//       const BeforeComponent = beforeMarkdownType;
-//       const AfterComponent = afterMarkdownType;
+      const BeforeComponent = beforeMarkdownType;
+      const AfterComponent = afterMarkdownType;
 
-//       return (
-//         <div key={blockId} className="flex gap-16">
-//           <div className="ProseMirror flex-1 py-4">
-//             <BeforeComponent>
-//               {differences
-//                 .filter(item => !item.added)
-//                 .map((difference: Difference, index: number) => (
-//                   <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-//                     {difference.value}
-//                   </span>
-//                 ))}
-//             </BeforeComponent>
-//           </div>
-//           <div className="ProseMirror flex-1 py-4">
-//             <AfterComponent>
-//               {differences
-//                 .filter(item => !item.removed)
-//                 .map((difference: Difference, index: number) => (
-//                   <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-//                     {difference.value}
-//                   </span>
-//                 ))}
-//             </AfterComponent>
-//           </div>
-//         </div>
-//       );
-//     }
-//     case 'imageBlock': {
-//       return (
-//         <div key={blockId} className="flex gap-16">
-//           <div className="flex-1 py-4">
-//             <div>
-//               {before && (
-//                 <span className="-lg inline-block bg-errorTertiary p-1">
-//                   <img src={getImagePath(before)} className="rounded-lg" />
-//                 </span>
-//               )}
-//             </div>
-//           </div>
-//           <div className="flex-1 py-4">
-//             <div>
-//               {after && (
-//                 <span className="inline-block rounded-lg bg-successTertiary p-1">
-//                   <img src={getImagePath(after)} className="rounded-lg" />
-//                 </span>
-//               )}
-//             </div>
-//           </div>
-//         </div>
-//       );
-//     }
-//     case 'tableBlock': {
-//       const isNewTableBlock = before === null;
-//       const differences = diffWords(before ?? '', after ?? '');
+      return (
+        <div key={index} className="flex gap-16">
+          <div className="ProseMirror flex-1 py-4">
+            <BeforeComponent>
+              {differences
+                .filter(item => !item.added)
+                .map((difference: Difference, index: number) => (
+                  <span key={index} className={cx(difference.removed && 'rounded-sm bg-errorTertiary line-through')}>
+                    {difference.value}
+                  </span>
+                ))}
+            </BeforeComponent>
+          </div>
+          <div className="ProseMirror flex-1 py-4">
+            <AfterComponent>
+              {differences
+                .filter(item => !item.removed)
+                .map((difference: Difference, index: number) => (
+                  <span key={index} className={cx(difference.added && 'rounded-sm bg-successTertiary')}>
+                    {difference.value}
+                  </span>
+                ))}
+            </AfterComponent>
+          </div>
+        </div>
+      );
+    }
+    case 'imageBlock': {
+      return (
+        <div key={index} className="flex gap-16">
+          <div className="flex-1 py-4">
+            <div>
+              {before && (
+                <span className="inline-block w-full rounded-lg bg-errorTertiary p-1">
+                  <img src={getImagePath(before)} className="w-full rounded-lg" />
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex-1 py-4">
+            <div>
+              {after && (
+                <span className="inline-block w-full rounded-lg bg-successTertiary p-1">
+                  <img src={getImagePath(after)} className="w-full rounded-lg" />
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    // case 'tableBlock': {
+    //   const isNewTableBlock = before === null;
+    //   const differences = diffWords(before ?? '', after ?? '');
 
-//       return (
-//         <div key={blockId} className="flex gap-16">
-//           <div className="flex-1 py-4">
-//             {!isNewTableBlock && (
-//               <>
-//                 <div className="flex items-center gap-2">
-//                   <span className="overflow-hidden rounded">
-//                     <BoringAvatar
-//                       size={16}
-//                       square={true}
-//                       variant="bauhaus"
-//                       name={before ?? 'Untitled'}
-//                       colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
-//                     />
-//                   </span>
-//                   <div className="text-smallTitle">
-//                     {differences
-//                       .filter(item => !item.added)
-//                       .map((difference: Difference, index: number) => (
-//                         <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-//                           {difference.value}
-//                         </span>
-//                       ))}
-//                   </div>
-//                 </div>
-//                 <div className="mt-2">
-//                   <TableBlockPlaceholder
-//                     columns={2}
-//                     rows={2}
-//                     className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
-//                   />
-//                 </div>
-//               </>
-//             )}
-//           </div>
-//           <div className="flex-1 py-4">
-//             {after && (
-//               <>
-//                 <div className="flex items-center gap-2">
-//                   <span className="overflow-hidden rounded">
-//                     <BoringAvatar
-//                       size={16}
-//                       square={true}
-//                       variant="bauhaus"
-//                       name={after ?? 'Untitled'}
-//                       colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
-//                     />
-//                   </span>
-//                   <div className="text-smallTitle">
-//                     {differences
-//                       .filter(item => !item.removed)
-//                       .map((difference: Difference, index: number) => (
-//                         <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-//                           {difference.value}
-//                         </span>
-//                       ))}
-//                   </div>
-//                 </div>
-//                 <div className="mt-2">
-//                   <TableBlockPlaceholder
-//                     columns={2}
-//                     rows={2}
-//                     className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
-//                   />
-//                 </div>
-//               </>
-//             )}
-//           </div>
-//         </div>
-//       );
-//     }
-//     case 'tableFilter': {
-//       const isNewTableFilter = before === null;
+    //   return (
+    //     <div key={blockId} className="flex gap-16">
+    //       <div className="flex-1 py-4">
+    //         {!isNewTableBlock && (
+    //           <>
+    //             <div className="flex items-center gap-2">
+    //               <span className="overflow-hidden rounded">
+    //                 <BoringAvatar
+    //                   size={16}
+    //                   square={true}
+    //                   variant="bauhaus"
+    //                   name={before ?? 'Untitled'}
+    //                   colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
+    //                 />
+    //               </span>
+    //               <div className="text-smallTitle">
+    //                 {differences
+    //                   .filter(item => !item.added)
+    //                   .map((difference: Difference, index: number) => (
+    //                     <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+    //                       {difference.value}
+    //                     </span>
+    //                   ))}
+    //               </div>
+    //             </div>
+    //             <div className="mt-2">
+    //               <TableBlockPlaceholder
+    //                 columns={2}
+    //                 rows={2}
+    //                 className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
+    //               />
+    //             </div>
+    //           </>
+    //         )}
+    //       </div>
+    //       <div className="flex-1 py-4">
+    //         {after && (
+    //           <>
+    //             <div className="flex items-center gap-2">
+    //               <span className="overflow-hidden rounded">
+    //                 <BoringAvatar
+    //                   size={16}
+    //                   square={true}
+    //                   variant="bauhaus"
+    //                   name={after ?? 'Untitled'}
+    //                   colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
+    //                 />
+    //               </span>
+    //               <div className="text-smallTitle">
+    //                 {differences
+    //                   .filter(item => !item.removed)
+    //                   .map((difference: Difference, index: number) => (
+    //                     <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+    //                       {difference.value}
+    //                     </span>
+    //                   ))}
+    //               </div>
+    //             </div>
+    //             <div className="mt-2">
+    //               <TableBlockPlaceholder
+    //                 columns={2}
+    //                 rows={2}
+    //                 className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
+    //               />
+    //             </div>
+    //           </>
+    //         )}
+    //       </div>
+    //     </div>
+    //   );
+    // }
+    // case 'tableFilter': {
+    //   const isNewTableFilter = before === null;
 
-//       return (
-//         <div key={blockId} className="flex gap-16">
-//           <div className="flex-1 py-4">
-//             {!isNewTableFilter && (
-//               <div className="flex flex-wrap gap-2">
-//                 <TableFilters rawFilter={before} />
-//               </div>
-//             )}
-//           </div>
-//           <div className="flex-1 py-4">
-//             {after && (
-//               <div className="flex flex-wrap gap-2">
-//                 <TableFilters rawFilter={after} />
-//               </div>
-//             )}
-//           </div>
-//         </div>
-//       );
-//     }
-//     default: {
-//       return null;
-//     }
-//   }
-// };
+    //   return (
+    //     <div key={blockId} className="flex gap-16">
+    //       <div className="flex-1 py-4">
+    //         {!isNewTableFilter && (
+    //           <div className="flex flex-wrap gap-2">
+    //             <TableFilters rawFilter={before} />
+    //           </div>
+    //         )}
+    //       </div>
+    //       <div className="flex-1 py-4">
+    //         {after && (
+    //           <div className="flex flex-wrap gap-2">
+    //             <TableFilters rawFilter={after} />
+    //           </div>
+    //         )}
+    //       </div>
+    //     </div>
+    //   );
+    // }
+    default: {
+      return <div key={index} />;
+    }
+  }
+};
 
 type ChangedAttributeProps = {
   changes: EntityChange['changes'];
@@ -618,35 +622,35 @@ export const Chip = ({ status = 'UNCHANGED', children }: ChipProps) => {
   return <span className={chip({ status })}>{children}</span>;
 };
 
-// type MarkdownType = 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+type MarkdownType = 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
 
-// const markdownComponent: Record<number, MarkdownType> = {
-//   0: 'p',
-//   1: 'h1',
-//   2: 'h2',
-//   3: 'h3',
-//   4: 'h4',
-//   5: 'h5',
-//   6: 'h6',
-// };
+const markdownComponent: Record<number, MarkdownType> = {
+  0: 'p',
+  1: 'h1',
+  2: 'h2',
+  3: 'h3',
+  4: 'h4',
+  5: 'h5',
+  6: 'h6',
+};
 
-// // Parse raw markdown into basic formatting
-// // faster than rendering TipTap editor
-// function parseMarkdown(markdownString: string) {
-//   let markdownType: MarkdownType = 'p';
-//   let markdownContent = markdownString;
-//   let markdownLevel = 0;
+// Parse raw markdown into basic formatting
+// faster than rendering TipTap editor
+function parseMarkdown(markdownString: string) {
+  let markdownType: MarkdownType = 'p';
+  let markdownContent = markdownString;
+  let markdownLevel = 0;
 
-//   while (markdownContent.startsWith('#')) {
-//     markdownContent = markdownContent.substring(1);
-//     markdownLevel++;
-//   }
+  while (markdownContent.startsWith('#')) {
+    markdownContent = markdownContent.substring(1);
+    markdownLevel++;
+  }
 
-//   markdownType = markdownComponent[markdownLevel];
-//   markdownContent = markdownContent.trim();
+  markdownType = markdownComponent[markdownLevel];
+  markdownContent = markdownContent.trim();
 
-//   return { markdownType, markdownContent };
-// }
+  return { markdownType, markdownContent };
+}
 
 // type TableFiltersProps = {
 //   rawFilter: string;

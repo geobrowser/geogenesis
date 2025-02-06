@@ -69,6 +69,6 @@ export type EntityChange = {
   id: EntityId;
   name: string | null;
   avatar: string | null;
-  blockChanges: RenderableChange[];
+  blockChanges: BlockChange[];
   changes: RenderableChange[];
 };
