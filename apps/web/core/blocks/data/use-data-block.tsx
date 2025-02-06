@@ -4,12 +4,12 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
-import { mergeEntityAsync, useEntity } from '../../database/entities';
+import { useEntity } from '../../database/entities';
 import { upsert } from '../../database/write';
 import { useProperties } from '../../hooks/use-properties';
 import { Entity } from '../../io/dto/entities';
 import { EntityId, SpaceId } from '../../io/schema';
-import { Cell, PropertySchema } from '../../types';
+import { Cell, PropertySchema, Relation } from '../../types';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter } from './filters';
 import { MergeTableEntitiesArgs, mergeEntitiesAsync, mergeTableEntities } from './queries';
@@ -18,6 +18,7 @@ import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
 import { Mapping, mappingToCell, mappingToRows } from './use-mapping';
 import { usePagination } from './use-pagination';
+import { useRelationsBlock } from './use-relations-block';
 import { useSource } from './use-source';
 import { useView } from './use-view';
 
@@ -31,6 +32,7 @@ interface RenderablesQueryKey {
   collectionItems: Entity[];
   mapping: Mapping;
   spaceId: string;
+  sourceEntityRelations: Relation[];
 }
 
 const queryKeys = {
@@ -46,6 +48,7 @@ export function useDataBlock() {
     id: EntityId(entityId),
   });
 
+  const { relationBlockSourceRelations } = useRelationsBlock();
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
   const { source } = useSource();
   const { collectionItems } = useCollection();
@@ -67,6 +70,7 @@ export function useDataBlock() {
       filterState,
       mapping,
       spaceId,
+      sourceEntityRelations: relationBlockSourceRelations,
     }),
     queryFn: async () => {
       const run = Effect.gen(function* () {
@@ -114,21 +118,8 @@ export function useDataBlock() {
         }
 
         if (source.type === 'RELATIONS') {
-          const sourceEntity = yield* Effect.promise(() => mergeEntityAsync(EntityId(source.value)));
-          const maybeFilter = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
-
-          if (!maybeFilter) {
-            return [];
-          }
-
-          const relations = sourceEntity?.relationsOut.filter(r => r.typeOf.id === maybeFilter.value);
-
-          if (!relations) {
-            return [];
-          }
-
           const data = yield* Effect.forEach(
-            relations,
+            relationBlockSourceRelations,
             relation =>
               Effect.promise(async () => {
                 const cells: Cell[] = [];

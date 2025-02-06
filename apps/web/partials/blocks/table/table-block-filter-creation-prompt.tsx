@@ -12,6 +12,7 @@ import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Space } from '~/core/io/dto/spaces';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -180,7 +181,7 @@ function getInitialState(source: Source): PromptState {
       selectedColumn: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
       value: {
         type: 'entity',
-        entityId: '',
+        entityId: source.value,
         entityName: null,
       },
       open: false,
@@ -236,6 +237,7 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
 }
 
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
+  const { id: fromId, name: fromName } = useEntityPageStore();
   const { source } = useSource();
   const { filterState } = useFilters();
   const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
@@ -243,7 +245,11 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
     source.type === 'RELATIONS' ? 'RELATIONS' : 'ENTITIES'
   );
 
-  const [from, setFrom] = React.useState<Source | null>(source);
+  const [from, setFrom] = React.useState<Source | null>({
+    type: 'RELATIONS',
+    name: fromName,
+    value: fromId,
+  });
   const [relationType, setRelationType] = React.useState<Filter | null>(
     filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) ?? null
   );
@@ -445,7 +451,7 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
           <p className="flex h-9 min-w-28 items-center justify-start rounded bg-divider px-3 text-button">From</p>
           <TableBlockEntityFilterInput
             onSelect={onSetSource}
-            selectedValue={from?.type === 'RELATIONS' ? from?.name ?? '' : ''}
+            selectedValue={from?.type === 'RELATIONS' ? (from?.name ?? '') : ''}
           />
         </div>
       </div>
