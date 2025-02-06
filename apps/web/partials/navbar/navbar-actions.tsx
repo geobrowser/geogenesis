@@ -62,7 +62,7 @@ export function NavbarActions() {
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {profile.profileLink && (
+        {profile?.profileLink && (
           <>
             <AvatarMenuItem>
               <div className="flex items-center gap-2">
@@ -71,7 +71,7 @@ export function NavbarActions() {
                 </div>
                 <Link
                   prefetch={false}
-                  href={NavUtils.toSpace(profile.profileLink.split('/')[2])}
+                  href={NavUtils.toSpace(profile?.profileLink.split('/')[2])}
                   className="text-button"
                 >
                   Personal space
