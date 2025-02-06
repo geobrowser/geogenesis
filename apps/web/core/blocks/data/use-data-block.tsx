@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
-import { mergeEntityAsync, useEntity } from '../../database/entities';
+import { useEntity } from '../../database/entities';
 import { upsert } from '../../database/write';
 import { useProperties } from '../../hooks/use-properties';
 import { Entity } from '../../io/dto/entities';
@@ -18,6 +18,7 @@ import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
 import { Mapping, mappingToCell, mappingToRows } from './use-mapping';
 import { usePagination } from './use-pagination';
+import { useRelationsBlock } from './use-relations-block';
 import { useSource } from './use-source';
 import { useView } from './use-view';
 
@@ -47,19 +48,11 @@ export function useDataBlock() {
     id: EntityId(entityId),
   });
 
+  const { relationBlockSourceRelations } = useRelationsBlock();
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
   const { source } = useSource();
   const { collectionItems } = useCollection();
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
-
-  const relationBlockSourceEntity = useEntity({
-    id: source.type === 'RELATIONS' ? EntityId(source.value) : EntityId(''),
-  });
-
-  const relationBlockRelevantRelations = getRelevantRelationsForRelationBlock(
-    relationBlockSourceEntity.relationsOut,
-    filterState
-  );
 
   const {
     data: rows,
@@ -77,7 +70,7 @@ export function useDataBlock() {
       filterState,
       mapping,
       spaceId,
-      sourceEntityRelations: relationBlockRelevantRelations,
+      sourceEntityRelations: relationBlockSourceRelations,
     }),
     queryFn: async () => {
       const run = Effect.gen(function* () {
@@ -125,20 +118,8 @@ export function useDataBlock() {
         }
 
         if (source.type === 'RELATIONS') {
-          const maybeFilter = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
-
-          if (!maybeFilter) {
-            return [];
-          }
-
-          const relations = relationBlockSourceEntity.relationsOut.filter(r => r.typeOf.id === maybeFilter.value);
-
-          if (!relations) {
-            return [];
-          }
-
           const data = yield* Effect.forEach(
-            relations,
+            relationBlockSourceRelations,
             relation =>
               Effect.promise(async () => {
                 const cells: Cell[] = [];
@@ -227,13 +208,6 @@ export function useDataBlock() {
     name: blockEntity.name,
     setName,
   };
-}
-
-function getRelevantRelationsForRelationBlock(relations: Relation[], filterState: Filter[]) {
-  const maybeFilter = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
-  const relationType = maybeFilter?.value;
-
-  return relations.filter(r => r.typeOf.id === relationType);
 }
 
 const DataBlockContext = React.createContext<{
