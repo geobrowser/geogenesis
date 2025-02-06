@@ -38,7 +38,10 @@ import { EntityId, SpaceId } from '~/core/io/schema';
 import { Cell, PropertySchema, RenderableProperty, Row } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
+import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
+import { DateField } from '~/design-system/editable-fields/date-field';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -542,12 +545,38 @@ function PropertyField(props: { renderables: RenderableProperty[]; spaceId: stri
         console.log('renderable', renderable);
         switch (renderable.type) {
           case 'TEXT':
-          case 'CHECKBOX':
-          case 'TIME':
           case 'NUMBER':
-          case 'URL':
+            return (
+              <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
+                {renderable.value}
+              </Text>
+            );
+          case 'CHECKBOX': {
+            const checked = getChecked(renderable.value);
+            return <Checkbox key={`checkbox-${renderable.attributeId}-${renderable.value}`} checked={checked} />;
+          }
+          case 'TIME': {
+            return (
+              <DateField
+                key={`time-${renderable.attributeId}-${renderable.value}`}
+                isEditing={false}
+                value={renderable.value}
+              />
+            );
+          }
+          case 'URL': {
+            return (
+              <WebUrlField
+                key={`uri-${renderable.attributeId}-${renderable.value}`}
+                isEditing={false}
+                spaceId={props.spaceId}
+                value={renderable.value}
+              />
+            );
+          }
           case 'IMAGE':
-            return <p>Hello world</p>;
+            // We don't support rendering images in list or gallery views except the main image
+            return null;
           case 'RELATION':
             return (
               <LinkableRelationChip isEditing={false} entityHref={''} relationHref="">
