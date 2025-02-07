@@ -60,7 +60,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
       ]);
 
       if (maybeFromEntity && maybeToEntity) {
-        name = `${maybeFromEntity.name} → ${maybeToEntity.name}`;
+        name = `${maybeFromEntity.name ?? maybeFromEntity.id} → ${maybeToEntity.name ?? maybeToEntity.id}`;
       }
     }
   }
