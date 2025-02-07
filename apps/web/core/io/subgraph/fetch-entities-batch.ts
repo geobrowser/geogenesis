@@ -20,9 +20,6 @@ type FetchEntitiesBatchCachedOptions = {
 export async function fetchEntitiesBatchCached(options: FetchEntitiesBatchCachedOptions) {
   const { spaceId, entityIds, filterString } = options;
 
-  // @TODO remove console.info for entityIds
-  console.info('entityIds:', entityIds);
-
   return queryClient.fetchQuery({
     queryKey: ['entities-batch', spaceId, entityIds, filterString],
     queryFn: () => fetchEntitiesBatch(options),
