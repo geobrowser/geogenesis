@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUri, GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
@@ -37,13 +37,39 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const entityId = params.entityId;
 
   const entity = await cachedFetchEntity(entityId);
+
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
+  let name = entityName;
+
+  const maybeRelation = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.TYPES_ATTRIBUTE);
+  const maybeType = maybeRelation?.value.value;
+
+  if (
+    maybeRelation?.value.type === 'URL' &&
+    maybeType &&
+    SYSTEM_IDS.RELATION_TYPE === GraphUrl.toEntityId(maybeType as GraphUri)
+  ) {
+    const maybeFrom = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+    const maybeTo = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+
+    if (maybeFrom?.value.type === 'URL' && maybeTo?.value.type === 'URL') {
+      const [maybeFromEntity, maybeToEntity] = await Promise.all([
+        cachedFetchEntity(GraphUrl.toEntityId(maybeFrom.value.value as GraphUri)),
+        cachedFetchEntity(GraphUrl.toEntityId(maybeTo.value.value as GraphUri)),
+      ]);
+
+      if (maybeFromEntity && maybeToEntity) {
+        name = `${maybeFromEntity.name} → ${maybeToEntity.name}`;
+      }
+    }
+  }
+
   return {
-    title: entityName ?? 'New entity',
+    title: name ?? 'New entity',
     description,
     openGraph: {
-      title: entityName ?? 'New entity',
+      title: name ?? 'New entity',
       description: description ?? undefined,
       url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
       images: openGraphImageUrl
@@ -71,9 +97,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 export default async function ProfileLayout(props: Props) {
   const params = await props.params;
 
-  const {
-    children
-  } = props;
+  const { children } = props;
 
   const entityId = params.entityId;
 
