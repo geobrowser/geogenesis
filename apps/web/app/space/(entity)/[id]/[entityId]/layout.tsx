@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUri, GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
@@ -31,6 +31,33 @@ interface Props {
   children: React.ReactNode;
 }
 
+async function getTitleForRelation(entity: Entity | null): Promise<string | null> {
+  const maybeRelation = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.TYPES_ATTRIBUTE);
+  const maybeType = maybeRelation?.value.value;
+
+  if (
+    maybeRelation?.value.type === 'URL' &&
+    maybeType &&
+    SYSTEM_IDS.RELATION_TYPE === GraphUrl.toEntityId(maybeType as GraphUri)
+  ) {
+    const maybeFrom = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+    const maybeTo = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+
+    if (maybeFrom?.value.type === 'URL' && maybeTo?.value.type === 'URL') {
+      const [maybeFromEntity, maybeToEntity] = await Promise.all([
+        cachedFetchEntity(GraphUrl.toEntityId(maybeFrom.value.value as GraphUri)),
+        cachedFetchEntity(GraphUrl.toEntityId(maybeTo.value.value as GraphUri)),
+      ]);
+
+      if (maybeFromEntity && maybeToEntity) {
+        return `${maybeFromEntity.name ?? maybeFromEntity.id} → ${maybeToEntity.name ?? maybeToEntity.id}`;
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const params = await props.params;
   const spaceId = params.id;
@@ -38,12 +65,13 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
   const entity = await cachedFetchEntity(entityId);
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
+  const title = (await getTitleForRelation(entity)) ?? entityName ?? 'New entity';
 
   return {
-    title: entityName ?? 'New entity',
+    title,
     description,
     openGraph: {
-      title: entityName ?? 'New entity',
+      title,
       description: description ?? undefined,
       url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
       images: openGraphImageUrl
@@ -71,9 +99,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 export default async function ProfileLayout(props: Props) {
   const params = await props.params;
 
-  const {
-    children
-  } = props;
+  const { children } = props;
 
   const entityId = params.entityId;
 
