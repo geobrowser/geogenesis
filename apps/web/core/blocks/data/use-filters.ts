@@ -16,8 +16,8 @@ export function useFilters() {
   const { entityId, spaceId } = useDataBlockInstance();
 
   const blockEntity = useEntity({
-    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
-    id: React.useMemo(() => EntityId(entityId), [entityId]),
+    spaceId: SpaceId(spaceId),
+    id: EntityId(entityId),
   });
 
   const filterTriple = React.useMemo(() => {

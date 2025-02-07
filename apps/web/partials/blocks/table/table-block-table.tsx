@@ -417,8 +417,6 @@ export const TableBlockTable = React.memo(
                   c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
               );
 
-              console.log('otherPropertyData', otherPropertyData);
-
               return (
                 <div key={index}>
                   <Link href={href} className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">

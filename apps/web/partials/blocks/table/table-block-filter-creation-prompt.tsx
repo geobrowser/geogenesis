@@ -408,7 +408,7 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
       valueType: 'RELATION',
     });
 
-    const withoutRelationType = filterState.filter(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+    const withoutRelationType = filterState.filter(f => f.columnId !== SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
 
     setFilterState(
       [

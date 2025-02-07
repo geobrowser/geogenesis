@@ -187,6 +187,7 @@ export function makeRelationForSourceType(
     Match.when('COLLECTION', () => SYSTEM_IDS.COLLECTION_DATA_SOURCE),
     Match.when('SPACES', () => SYSTEM_IDS.QUERY_DATA_SOURCE),
     Match.when('GEO', () => SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE),
+    Match.when('RELATIONS', () => SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE),
     Match.orElse(() => SYSTEM_IDS.COLLECTION_DATA_SOURCE)
   );
 

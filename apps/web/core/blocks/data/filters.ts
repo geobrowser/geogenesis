@@ -43,7 +43,6 @@ const Property = Schema.Union(AttributeFilter);
 
 const FilterString = Schema.Struct({
   where: Schema.Struct({
-    entity: Schema.optional(Schema.String),
     spaces: Schema.optional(Schema.Array(Schema.String)),
     AND: Schema.optional(Schema.Array(Property)),
     OR: Schema.optional(Schema.Array(Property)),
@@ -59,9 +58,8 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
     case 'RELATIONS':
       filter = {
         where: {
-          entity: source.value,
           AND: filters
-            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER && f.columnId !== SYSTEM_IDS.RELATION_FROM_ATTRIBUTE)
+            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
             .map(f => {
               return {
                 attribute: f.columnId,
@@ -136,13 +134,6 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       return null;
     },
     onRight: value => {
-      if (value.where.entity) {
-        return {
-          from: value.where.entity,
-          AND: value.where.AND ?? [],
-        };
-      }
-
       return {
         spaces: value.where.spaces,
         AND: value.where.AND ?? [],
@@ -172,10 +163,11 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       )
     : [];
 
-  const unresolvedEntityFilters = filtersFromString.from ? getResolvedEntity(filtersFromString.from) : null;
+  const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+  const unresolvedEntityFilter = maybeFromFilter ? getResolvedEntity(maybeFromFilter.is) : null;
 
   const unresolvedAttributeFilters = Promise.all(
-    filtersFromString.AND.map(async filter => {
+    filtersFromString.AND.filter(f => f.attribute !== SYSTEM_IDS.RELATION_FROM_ATTRIBUTE).map(async filter => {
       return await getResolvedFilter(filter);
     })
   );
@@ -183,7 +175,7 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
   const [spaceFilters, attributeFilters, entityFilter] = await Promise.all([
     unresolvedSpaceFilters,
     unresolvedAttributeFilters,
-    unresolvedEntityFilters,
+    unresolvedEntityFilter,
   ]);
 
   filters.push(...spaceFilters);
