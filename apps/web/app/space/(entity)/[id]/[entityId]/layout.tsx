@@ -65,13 +65,13 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
   const entity = await cachedFetchEntity(entityId);
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
-  const name = (await getTitleForRelation(entity)) ?? entityName;
+  const title = (await getTitleForRelation(entity)) ?? entityName ?? 'New entity';
 
   return {
-    title: name ?? 'New entity',
+    title,
     description,
     openGraph: {
-      title: name ?? 'New entity',
+      title,
       description: description ?? undefined,
       url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
       images: openGraphImageUrl
