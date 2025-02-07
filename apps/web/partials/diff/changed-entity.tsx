@@ -52,8 +52,8 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
         <div className="h-full w-px bg-divider" />
       </div>
       <div className="flex flex-col gap-5">
-        <div className="flex items-center gap-4">
-          <div className="relative size-10 overflow-clip rounded bg-grey-01">
+        <div className="flex w-1/2 items-center gap-4 pr-8">
+          <div className="relative size-10 shrink-0 overflow-clip rounded bg-grey-01">
             {change.avatar && (
               <img
                 src={getImagePath(change.avatar)}
@@ -62,7 +62,7 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
               />
             )}
           </div>
-          <div className="text-mediumTitle">{change.name ?? change.id}</div>
+          <div className="truncate text-mediumTitle">{change.name ?? change.id}</div>
         </div>
         <div className="flex gap-16">
           <div className="mb-4 flex-1 border-b border-divider pb-4 text-body">Current version</div>
@@ -291,7 +291,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
   return (
     <div className="relative">
       <Corners />
-      {Object.entries(groupedChanges).map(([attributeId, changes]) => {
+      {Object.entries(groupedChanges).map(([attributeId, changes], index) => {
         // Don't show page blocks
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
@@ -307,7 +307,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           case 'NUMBER':
           case 'TEXT': {
             return (
-              <div key={attributeId} className="-mt-px flex gap-16">
+              <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">
                   <div className="text-bodySemibold capitalize">{name}</div>
                   <div className="break-all text-body">
@@ -353,7 +353,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           }
           case 'CHECKBOX': {
             return (
-              <div key={attributeId} className="-mt-px flex gap-16">
+              <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">
                   <div className="text-bodySemibold capitalize">{name}</div>
                   <div className="text-body">
@@ -384,7 +384,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           }
           case 'RELATION': {
             return (
-              <div key={attributeId} className="-mt-px flex gap-16">
+              <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">
                   <div className="text-bodySemibold capitalize">{name}</div>
                   <div className="flex flex-wrap gap-2">
@@ -413,7 +413,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           }
           case 'IMAGE': {
             return (
-              <div key={attributeId} className="-mt-px flex gap-16">
+              <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">
                   <div className="text-bodySemibold capitalize">{name}</div>
                   <div>
@@ -455,7 +455,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           }
           case 'TIME': {
             return (
-              <div key={attributeId} className="-mt-px flex gap-16">
+              <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">
                   <div className="text-bodySemibold capitalize">{name}</div>
                   <div className="text-body">
@@ -482,7 +482,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
           }
           case 'URL': {
             return (
-              <div key={attributeId} className="-mt-px flex gap-16">
+              <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">
                   <div className="text-bodySemibold capitalize">{name}</div>
                   <div className="truncate text-ctaPrimary no-underline">

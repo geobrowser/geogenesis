@@ -146,7 +146,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
         </MetadataMotionContainer>
         <div className="h-full overflow-x-clip border-t border-divider">
           <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
-            {proposal.type === 'ADD_EDIT' && <ContentProposal proposal={proposal} />}
+            {proposal.type === 'ADD_EDIT' && <ContentProposal proposal={proposal} spaceId={spaceId} />}
             {(proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE') && (
               <SubspaceProposal proposal={proposal} />
             )}

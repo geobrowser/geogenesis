@@ -23,7 +23,7 @@ export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
     queryFn: async ({ queryKey }) => {
       const [{ propertyIds }] = queryKey;
 
-      const properties = await fetchEntitiesBatch(propertyIds);
+      const properties = await fetchEntitiesBatch({ entityIds: propertyIds });
 
       const valueTypes = properties.map(a => {
         const valueTypeId = a.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE)?.toEntity.id;

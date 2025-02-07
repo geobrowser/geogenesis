@@ -51,10 +51,12 @@ export async function fromLocal(spaceId?: string) {
   const entityIdsToFetch = [...entityIds.values()];
 
   const collectEntities = Effect.gen(function* () {
-    const maybeRemoteEntitiesEffect = Effect.promise(() => fetchEntitiesBatchCached(entityIdsToFetch));
+    const maybeRemoteEntitiesEffect = Effect.promise(() =>
+      fetchEntitiesBatchCached({ spaceId, entityIds: entityIdsToFetch })
+    );
 
     const maybeLocalEntitiesEffect = Effect.promise(async () => {
-      const localEntitiesWithRemoteData = await fetchEntitiesBatchCached(entityIdsToFetch);
+      const localEntitiesWithRemoteData = await fetchEntitiesBatchCached({ spaceId, entityIds: entityIdsToFetch });
 
       const allEntities: Entity[] = [];
 
@@ -127,10 +129,15 @@ export async function fromLocal(spaceId?: string) {
   const parentEntityIdsToFetch = [...parentEntityIdsSet.values()];
 
   const collectParentEntities = Effect.gen(function* () {
-    const maybeRemoteParentEntitiesEffect = Effect.promise(() => fetchEntitiesBatchCached(parentEntityIdsToFetch));
+    const maybeRemoteParentEntitiesEffect = Effect.promise(() =>
+      fetchEntitiesBatchCached({ spaceId, entityIds: parentEntityIdsToFetch })
+    );
 
     const maybeLocalParentEntitiesEffect = Effect.promise(async () => {
-      const localParentEntitiesWithRemoteData = await fetchEntitiesBatchCached(entityIdsToFetch);
+      const localParentEntitiesWithRemoteData = await fetchEntitiesBatchCached({
+        spaceId,
+        entityIds: entityIdsToFetch,
+      });
 
       const allParentEntities: Entity[] = [];
 
@@ -204,82 +211,6 @@ export async function fromLocal(spaceId?: string) {
   return changes;
 }
 
-const getIsRenderedAsEntity = (entity: Entity | EntityWithSchema) => {
-  if (
-    entity.types.some(type =>
-      [
-        SYSTEM_IDS.TEXT_BLOCK,
-        SYSTEM_IDS.DATA_BLOCK,
-        SYSTEM_IDS.IMAGE_BLOCK,
-        SYSTEM_IDS.IMAGE_TYPE,
-        SYSTEM_IDS.RELATION_TYPE,
-      ].includes(type.id)
-    )
-  ) {
-    return false;
-  } else {
-    return true;
-  }
-};
-
-const getBlockParentEntityIds = async (blockIds: EntityId[], entities: Entity[]) => {
-  const blockParentEntityIds: Record<EntityId, EntityId | null> = {};
-
-  const parentEntityIds: Array<EntityId | null> = await Promise.all(
-    blockIds.map(async blockId => {
-      const possibleParentEntityId = await fetchParentEntityId(blockId);
-
-      return possibleParentEntityId;
-    })
-  );
-
-  blockIds.forEach((blockId: EntityId, index: number) => {
-    blockParentEntityIds[blockId] = parentEntityIds[index];
-  });
-
-  entities.forEach(entity => {
-    entity.relationsOut
-      .filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS)
-      .forEach(relation => {
-        blockParentEntityIds[relation.toEntity.id] = entity.id;
-      });
-  });
-
-  return blockParentEntityIds;
-};
-
-const getNewAndDeletedBlockParentEntityIds = (beforeEntities: Entity[], afterEntities: Entity[]) => {
-  const createdBlockParentEntityIds: Record<EntityId, EntityId> = {};
-  const deletedBlockParentEntityIds: Record<EntityId, EntityId> = {};
-
-  afterEntities.forEach(afterEntity => {
-    const beforeEntity = beforeEntities.find(entity => entity.id === afterEntity.id);
-
-    const beforeBlockIds =
-      beforeEntity?.relationsOut
-        .filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS)
-        .map(relation => relation.toEntity.id) ?? [];
-
-    const afterBlockIds = afterEntity.relationsOut
-      .filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS)
-      .map(relation => relation.toEntity.id);
-
-    const newlyCreatedBlockIds = afterBlockIds.filter(blockId => !beforeBlockIds.includes(blockId));
-
-    newlyCreatedBlockIds.forEach(entityId => {
-      createdBlockParentEntityIds[entityId] = afterEntity.id;
-    });
-
-    const newlyDeletedBlockIds = beforeBlockIds.filter(blockId => !afterBlockIds.includes(blockId));
-
-    newlyDeletedBlockIds.forEach(entityId => {
-      deletedBlockParentEntityIds[entityId] = afterEntity.id;
-    });
-  });
-
-  return { createdBlockParentEntityIds, deletedBlockParentEntityIds };
-};
-
 interface FromVersionsArgs {
   spaceId?: string;
   beforeVersion: Version | null;
@@ -297,19 +228,54 @@ export function fromVersions({ beforeVersion, afterVersion }: FromVersionsArgs):
   });
 }
 
-export async function fromActiveProposal(proposal: Proposal): Promise<EntityChange[]> {
+export async function fromActiveProposal(proposal: Proposal, spaceId: string): Promise<EntityChange[]> {
   const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId });
 
   // Version entity ids are mapped to the version.id
-  const currentVersionsForEntityIds = await fetchEntitiesBatch(versionsByEditId.map(v => v.id));
+  const currentVersionsForEntityIds = await fetchEntitiesBatch({ spaceId, entityIds: versionsByEditId.map(v => v.id) });
+
+  const beforeEntities = currentVersionsForEntityIds
+    .filter(v => v !== null)
+    .filter(entity => getIsRenderedAsEntity(entity));
+  const afterEntities = versionsByEditId.filter(entity => getIsRenderedAsEntity(entity));
+
+  const possibleBeforeBlocks = currentVersionsForEntityIds
+    .filter(v => v !== null)
+    .filter(entity => !getIsRenderedAsEntity(entity));
+  const possibleAfterBlocks = versionsByEditId.filter(entity => !getIsRenderedAsEntity(entity));
+  const possibleBlockIds = possibleBeforeBlocks.map(entity => entity.id);
+
+  const possibleBlockParentEntityIds = await getBlockParentEntityIds(possibleBlockIds, beforeEntities);
+
+  const parentEntityIdsSet: Set<EntityId> = new Set();
+  [...Object.values(possibleBlockParentEntityIds).filter(Boolean)].forEach(entityId => {
+    if (entityId) {
+      parentEntityIdsSet.add(entityId);
+    }
+  });
+
+  const { createdBlockParentEntityIds, deletedBlockParentEntityIds } = getNewAndDeletedBlockParentEntityIds(
+    beforeEntities,
+    afterEntities
+  );
+
+  const parentEntityIdsToFetch = [...parentEntityIdsSet.values()];
+
+  const beforeParentEntities = await fetchEntitiesBatch({ spaceId, entityIds: parentEntityIdsToFetch });
+
+  const parentEntityIds: Record<EntityId, EntityId | null> = {
+    ...possibleBlockParentEntityIds,
+    ...createdBlockParentEntityIds,
+    ...deletedBlockParentEntityIds,
+  };
 
   return aggregateChanges({
     spaceId: proposal.space.id,
-    beforeEntities: currentVersionsForEntityIds.filter(v => v !== null),
-    afterEntities: versionsByEditId,
-    beforeBlocks: [],
-    afterBlocks: [],
-    parentEntityIds: {},
+    beforeEntities: [...beforeEntities, ...beforeParentEntities],
+    afterEntities,
+    beforeBlocks: possibleBeforeBlocks,
+    afterBlocks: possibleAfterBlocks,
+    parentEntityIds,
   });
 }
 
@@ -641,3 +607,79 @@ function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
     return acc;
   }, {});
 }
+
+const getIsRenderedAsEntity = (entity: Entity | EntityWithSchema) => {
+  if (
+    entity.types.some(type =>
+      [
+        SYSTEM_IDS.TEXT_BLOCK,
+        SYSTEM_IDS.DATA_BLOCK,
+        SYSTEM_IDS.IMAGE_BLOCK,
+        SYSTEM_IDS.IMAGE_TYPE,
+        SYSTEM_IDS.RELATION_TYPE,
+      ].includes(type.id)
+    )
+  ) {
+    return false;
+  } else {
+    return true;
+  }
+};
+
+const getBlockParentEntityIds = async (blockIds: EntityId[], entities: Entity[]) => {
+  const blockParentEntityIds: Record<EntityId, EntityId | null> = {};
+
+  const parentEntityIds: Array<EntityId | null> = await Promise.all(
+    blockIds.map(async blockId => {
+      const possibleParentEntityId = await fetchParentEntityId(blockId);
+
+      return possibleParentEntityId;
+    })
+  );
+
+  blockIds.forEach((blockId: EntityId, index: number) => {
+    blockParentEntityIds[blockId] = parentEntityIds[index];
+  });
+
+  entities.forEach(entity => {
+    entity.relationsOut
+      .filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS)
+      .forEach(relation => {
+        blockParentEntityIds[relation.toEntity.id] = entity.id;
+      });
+  });
+
+  return blockParentEntityIds;
+};
+
+const getNewAndDeletedBlockParentEntityIds = (beforeEntities: Entity[], afterEntities: Entity[]) => {
+  const createdBlockParentEntityIds: Record<EntityId, EntityId> = {};
+  const deletedBlockParentEntityIds: Record<EntityId, EntityId> = {};
+
+  afterEntities.forEach(afterEntity => {
+    const beforeEntity = beforeEntities.find(entity => entity.id === afterEntity.id);
+
+    const beforeBlockIds =
+      beforeEntity?.relationsOut
+        .filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS)
+        .map(relation => relation.toEntity.id) ?? [];
+
+    const afterBlockIds = afterEntity.relationsOut
+      .filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS)
+      .map(relation => relation.toEntity.id);
+
+    const newlyCreatedBlockIds = afterBlockIds.filter(blockId => !beforeBlockIds.includes(blockId));
+
+    newlyCreatedBlockIds.forEach(entityId => {
+      createdBlockParentEntityIds[entityId] = afterEntity.id;
+    });
+
+    const newlyDeletedBlockIds = beforeBlockIds.filter(blockId => !afterBlockIds.includes(blockId));
+
+    newlyDeletedBlockIds.forEach(entityId => {
+      deletedBlockParentEntityIds[entityId] = afterEntity.id;
+    });
+  });
+
+  return { createdBlockParentEntityIds, deletedBlockParentEntityIds };
+};
