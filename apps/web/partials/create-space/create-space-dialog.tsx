@@ -45,7 +45,7 @@ const stepAtom = atom<Step>('select-type');
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
 export function CreateSpaceDialog() {
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const [open, onOpenChange] = useState(false);
   const { deploy } = useDeploySpace();
