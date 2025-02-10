@@ -17,7 +17,7 @@ interface AddMemberArgs {
 }
 
 export function useAddMember(args: AddMemberArgs) {
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const router = useRouter();
   const [isIdleAgain, setIsIdle] = React.useState(false);
 

@@ -17,7 +17,7 @@ interface AddEditorArgs {
 }
 
 export function useAddEditor(args: AddEditorArgs) {
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const router = useRouter();
   const [isIdleAgain, setIsIdle] = React.useState(false);
 

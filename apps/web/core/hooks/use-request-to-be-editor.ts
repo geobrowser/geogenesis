@@ -14,7 +14,7 @@ import { useStatusBar } from '~/core/state/status-bar-store';
 export function useRequestToBeEditor(votingPluginAddress: string | null) {
   const { dispatch } = useStatusBar();
 
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const tx = useSmartAccountTransaction({
     address: votingPluginAddress,
   });

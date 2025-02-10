@@ -30,7 +30,7 @@ type DeployArgs = {
 };
 
 export function useDeploySpace() {
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
 
   const { mutateAsync } = useMutation({
     mutationFn: async (args: DeployArgs) => {

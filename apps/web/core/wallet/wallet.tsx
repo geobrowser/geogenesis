@@ -1,6 +1,6 @@
 'use client';
 
-import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
+import { useLogin, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
 import { http } from 'viem';
@@ -10,11 +10,9 @@ import * as React from 'react';
 import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
 
 import { Button } from '~/design-system/button';
-import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 
 import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
-import { Cookie } from '../cookie';
 import { GEOGENESIS } from './geo-chain';
 
 const realWalletConfig = createConfig({
@@ -81,7 +79,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
 export function GeoConnectButton() {
   const { setActiveWallet } = useSetActiveWallet();
-  const { user } = usePrivy();
   const { wallets } = useWallets();
 
   const setName = useSetAtom(nameAtom);
@@ -120,30 +117,10 @@ export function GeoConnectButton() {
     login();
   };
 
-  const { logout } = useLogout({
-    onSuccess: async () => {
-      console.log('disconnecting');
-      await Cookie.onConnectionChange({ type: 'disconnect' });
-      resetOnboarding();
-    },
-  });
-
-  if (!user) {
-    return (
-      <Button onClick={onLogin}>
-        {/* <Wallet color="white" /> */}
-        Sign in
-      </Button>
-    );
-  }
-
   return (
-    <button
-      onClick={logout}
-      className="m-0 flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-0"
-    >
-      <p className="text-button">Sign out</p>
-      <DisconnectWallet />
-    </button>
+    <Button onClick={onLogin}>
+      {/* <Wallet color="white" /> */}
+      Sign in
+    </Button>
   );
 }

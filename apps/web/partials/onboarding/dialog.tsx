@@ -48,8 +48,7 @@ const MotionOverlay = motion(Overlay);
 export const OnboardingDialog = () => {
   const { isOnboardingVisible } = useOnboarding();
 
-  const smartAccount = useSmartAccount();
-
+  const { smartAccount } = useSmartAccount();
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
   const entityId = useAtomValue(entityIdAtom);

@@ -8,8 +8,7 @@ interface Args {
 }
 
 export function useSmartAccountTransaction({ address }: Args) {
-  const smartAccount = useSmartAccount();
-
+  const { smartAccount } = useSmartAccount();
   const sendTransaction = (calldata: `0x${string}`) => {
     return Effect.gen(function* () {
       if (!smartAccount || !address) {
