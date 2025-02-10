@@ -127,7 +127,7 @@ export function writeEdits(args: PopulateContentArgs) {
       } satisfies Schema.versions.Insertable);
 
       // Later we dedupe after applying space versions derived from relations
-      for (const triple of triplesForVersion) {
+      for (const triple of setTriples) {
         versionSpaces.push({
           version_id: triple.triple.version_id,
           space_id: triple.triple.space_id,
