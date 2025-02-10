@@ -5,7 +5,7 @@ import { Brand } from 'effect';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { PropertySchema, ValueTypeId } from '../types';
 
-type PropertyId = string & Brand.Brand<'PropertyId'>;
+export type PropertyId = string & Brand.Brand<'PropertyId'>;
 export const PropertyId = Brand.nominal<PropertyId>();
 
 type UsePropertyValueTypes = {

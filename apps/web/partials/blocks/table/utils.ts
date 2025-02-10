@@ -5,7 +5,7 @@ import { RenderableProperty, ValueTypeId } from '~/core/types';
 interface MakePlaceholderFromValueTypeArgs {
   valueType: ValueTypeId;
   attributeId: string;
-  attributeName: string;
+  attributeName: string | null;
   spaceId: string;
   entityId: string;
 }

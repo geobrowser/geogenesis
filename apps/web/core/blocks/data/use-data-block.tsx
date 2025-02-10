@@ -4,9 +4,11 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+
 import { useEntity } from '../../database/entities';
 import { upsert } from '../../database/write';
-import { useProperties } from '../../hooks/use-properties';
+import { PropertyId, useProperties } from '../../hooks/use-properties';
 import { Entity } from '../../io/dto/entities';
 import { EntityId, SpaceId } from '../../io/schema';
 import { Cell, PropertySchema, Relation } from '../../types';
@@ -33,6 +35,7 @@ interface RenderablesQueryKey {
   mapping: Mapping;
   spaceId: string;
   sourceEntityRelations: Relation[];
+  properties: Map<PropertyId, PropertySchema>;
 }
 
 const queryKeys = {
@@ -53,6 +56,8 @@ export function useDataBlock() {
   const { source } = useSource();
   const { collectionItems } = useCollection();
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
+  // Use the mapping to get the potential renderable properties.
+  const { properties: propertiesSchema } = useProperties(shownColumnIds);
 
   const {
     data: rows,
@@ -71,6 +76,7 @@ export function useDataBlock() {
       mapping,
       spaceId,
       sourceEntityRelations: relationBlockSourceRelations,
+      properties: propertiesSchema,
     }),
     queryFn: async () => {
       const run = Effect.gen(function* () {
@@ -103,7 +109,7 @@ export function useDataBlock() {
         if (source.type === 'SPACES' || source.type === 'GEO') {
           const data = yield* Effect.promise(() => mergeTableEntities({ options: params, filterState }));
 
-          return mappingToRows(data, shownColumnIds, collectionItems, spaceId);
+          return mappingToRows(data, shownColumnIds, collectionItems, spaceId, propertiesSchema);
         }
 
         if (source.type === 'COLLECTION') {
@@ -114,7 +120,7 @@ export function useDataBlock() {
             })
           );
 
-          return mappingToRows(data, shownColumnIds, collectionItems, spaceId);
+          return mappingToRows(data, shownColumnIds, collectionItems, spaceId, propertiesSchema);
         }
 
         if (source.type === 'RELATIONS') {
@@ -152,9 +158,6 @@ export function useDataBlock() {
       return await Effect.runPromise(run);
     },
   });
-
-  // Use the mapping to get the potential renderable properties.
-  const { properties: propertiesSchema } = useProperties(shownColumnIds);
 
   const setName = (newName: string) => {
     upsert(
