@@ -4,7 +4,14 @@ import { BaseRelationRenderableProperty, ImageRelationRenderableProperty, Native
 
 export type BlockId = string;
 
-export type BlockValueType = 'textBlock' | 'tableFilter' | 'imageBlock' | 'tableBlock' | 'markdownContent';
+export type BlockValueType =
+  | 'textBlock'
+  | 'imageBlock'
+  | 'dataBlock'
+  | 'dataBlockFilter'
+  | 'dataBlockProperties'
+  | 'dataBlockSource'
+  | 'dataBlockView';
 
 export type BlockChange = {
   type: BlockValueType;

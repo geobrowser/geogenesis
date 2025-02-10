@@ -218,9 +218,15 @@ type TableBlockPlaceholderProps = {
   className?: string;
   columns?: number;
   rows?: number;
+  shimmer?: boolean;
 };
 
-export function TableBlockLoadingPlaceholder({ className = '', columns = 3, rows = 10 }: TableBlockPlaceholderProps) {
+export function TableBlockLoadingPlaceholder({
+  className = '',
+  columns = 3,
+  rows = 10,
+  shimmer = true,
+}: TableBlockPlaceholderProps) {
   const PLACEHOLDER_COLUMNS = new Array(columns).fill(0);
   const PLACEHOLDER_ROWS = new Array(rows).fill(0);
 
@@ -236,7 +242,7 @@ export function TableBlockLoadingPlaceholder({ className = '', columns = 3, rows
                   className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
                   style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
                 >
-                  <p className="h-5 w-16 animate-pulse rounded-sm bg-divider align-middle"></p>
+                  <p className={cx('h-5 w-16 rounded-sm bg-divider align-middle', shimmer && 'animate-pulse')}></p>
                 </th>
               ))}
             </tr>
@@ -245,7 +251,13 @@ export function TableBlockLoadingPlaceholder({ className = '', columns = 3, rows
             {PLACEHOLDER_ROWS.map((_item: number, index: number) => (
               <tr key={index}>
                 {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
-                  <td key={index} className="animate-pulse border border-grey-02 bg-transparent p-[10px] align-top">
+                  <td
+                    key={index}
+                    className={cx(
+                      'border border-grey-02 bg-transparent p-[10px] align-top',
+                      shimmer && 'animate-pulse'
+                    )}
+                  >
                     <p className="h-5 rounded-sm bg-divider" />
                   </td>
                 ))}

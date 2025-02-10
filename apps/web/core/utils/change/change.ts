@@ -485,6 +485,12 @@ export function aggregateChanges({
             afterBlock?.relationsOut.some(relation => relation.typeOf.id === SYSTEM_IDS.IMAGE_TYPE)) ??
           false;
 
+        const isDataBlock =
+          (beforeBlock?.types?.some(type => type.id === SYSTEM_IDS.DATA_BLOCK) ||
+            afterBlock?.types?.some(type => type.id === SYSTEM_IDS.DATA_BLOCK) ||
+            afterBlock?.relationsOut.some(relation => relation.typeOf.id === SYSTEM_IDS.DATA_BLOCK)) ??
+          false;
+
         if (isTextBlock) {
           const beforeTriple = beforeBlock?.triples.find(triple => triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT);
 
@@ -506,6 +512,15 @@ export function aggregateChanges({
             type: 'imageBlock',
             before: `${beforeTriple?.value?.value ?? ''}`,
             after: `${afterTriple?.value?.value ?? ''}`,
+          });
+        } else if (isDataBlock) {
+          const beforeName = beforeBlock?.name ?? '';
+          const afterName = afterBlock?.name ?? '';
+
+          blockChanges.push({
+            type: 'dataBlock',
+            before: beforeBlock ? beforeName : null,
+            after: afterBlock ? afterName : null,
           });
         }
       }
@@ -609,22 +624,31 @@ function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
 }
 
 const getIsRenderedAsEntity = (entity: Entity | EntityWithSchema) => {
-  if (
-    entity.types.some(type =>
-      [
-        SYSTEM_IDS.TEXT_BLOCK,
-        SYSTEM_IDS.DATA_BLOCK,
-        SYSTEM_IDS.IMAGE_BLOCK,
-        SYSTEM_IDS.IMAGE_TYPE,
-        SYSTEM_IDS.RELATION_TYPE,
-      ].includes(type.id)
-    )
-  ) {
+  if (entity.types.some(type => blockTypes.includes(type.id))) {
     return false;
   } else {
     return true;
   }
 };
+
+const blockTypes = [
+  SYSTEM_IDS.DATA_BLOCK,
+  SYSTEM_IDS.IMAGE_BLOCK,
+  SYSTEM_IDS.IMAGE_TYPE,
+  SYSTEM_IDS.RELATION_TYPE,
+  SYSTEM_IDS.TEXT_BLOCK,
+];
+
+// @TODO use attributes as a hint as well
+// eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+const blockAttributes = [
+  SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE,
+  SYSTEM_IDS.ENTITY_FILTER,
+  SYSTEM_IDS.FILTER,
+  SYSTEM_IDS.SHOWN_COLUMNS,
+  SYSTEM_IDS.SPACE_FILTER,
+  SYSTEM_IDS.VIEW_TYPE,
+];
 
 const getBlockParentEntityIds = async (blockIds: EntityId[], entities: Entity[]) => {
   const blockParentEntityIds: Record<EntityId, EntityId | null> = {};
