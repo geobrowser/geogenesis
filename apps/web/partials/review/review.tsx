@@ -24,6 +24,7 @@ import { Blank } from '~/design-system/icons/blank';
 import { Close } from '~/design-system/icons/close';
 import { Dash } from '~/design-system/icons/dash';
 import { Tick } from '~/design-system/icons/tick';
+import { Pending } from '~/design-system/pending';
 import { SlideUp } from '~/design-system/slide-up';
 
 import { ChangedEntity } from '../diff/changed-entity';
@@ -163,6 +164,7 @@ const ReviewChanges = () => {
     proposalName?.length > 0 &&
     Triples.prepareTriplesForPublishing(triplesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
 
+  const [isPublishing, setIsPublishing] = useState(false);
   const { makeProposal } = usePublish();
   const [changes, isLoading] = useLocalChanges(activeSpace);
 
@@ -194,6 +196,7 @@ const ReviewChanges = () => {
 
   const handlePublish = useCallback(async () => {
     if (!activeSpace) return;
+    setIsPublishing(true);
 
     const clearProposalName = () => {
       setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
@@ -210,6 +213,8 @@ const ReviewChanges = () => {
         clearProposalName();
       },
     });
+
+    setIsPublishing(false);
   }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace, relationsFromSpace]);
 
   if (isLoading || !changes || isSpacesLoading) {
@@ -263,8 +268,8 @@ const ReviewChanges = () => {
           )}
         </div>
         <div>
-          <Button onClick={handlePublish} disabled={!isReadyToPublish}>
-            Publish
+          <Button onClick={handlePublish} disabled={!isReadyToPublish || isPublishing}>
+            <Pending isPending={isPublishing}>Publish</Pending>
           </Button>
         </div>
       </div>
