@@ -134,7 +134,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       <EntityTableCell
         entityId={cellData.cellId}
         columnId={propertyId}
-        renderables={renderables}
+        // Don't want to render placeholders in edit mode
+        renderables={renderables.filter(r => r.placeholder !== true)}
         space={spaceId}
         isExpanded={isExpanded}
       />

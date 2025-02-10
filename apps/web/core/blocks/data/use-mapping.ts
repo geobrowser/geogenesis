@@ -3,10 +3,13 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
+import { PropertyId } from '~/core/hooks/use-properties';
 import { Entity } from '~/core/io/dto/entities';
-import { Cell, RenderableProperty, Row } from '~/core/types';
+import { Cell, PropertySchema, RenderableProperty, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
+
+import { makePlaceholderFromValueType } from '~/partials/blocks/table/utils';
 
 import { PathSegment } from './data-selectors';
 import { mergeEntitiesAsync } from './queries';
@@ -102,7 +105,8 @@ export function mappingToRows(
   entities: Entity[],
   slotIds: string[],
   collectionItems: Entity[],
-  spaceId: string
+  spaceId: string,
+  properties: Map<PropertyId, PropertySchema>
 ): Row[] {
   /**
    * Take each row, take each mapping, take each "slot" in the mapping
@@ -142,12 +146,23 @@ export function mappingToRows(
           },
         });
 
+        const maybeProperty = properties.get(PropertyId(slotId));
+
+        const placeholder = makePlaceholderFromValueType({
+          attributeId: slotId,
+          attributeName: maybeProperty?.name ?? null,
+          entityId: id,
+          spaceId,
+          valueType: maybeProperty?.valueType ?? SYSTEM_IDS.TEXT,
+        });
+
         cell.renderables = toRenderables({
           entityId: id,
           entityName: name,
           spaceId,
           triples: mergedTriples,
           relations: mergedRelations,
+          placeholderRenderables: [placeholder],
         });
 
         const isNameCell = slotId === SYSTEM_IDS.NAME_ATTRIBUTE;
