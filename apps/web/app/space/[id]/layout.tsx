@@ -136,7 +136,7 @@ const getData = async (spaceId: string) => {
     .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.TABS_ATTRIBUTE))
     ?.map(r => r.toEntity.id);
 
-  const tabEntities = tabIds ? await fetchEntitiesBatch(tabIds) : [];
+  const tabEntities = tabIds ? await fetchEntitiesBatch({ spaceId, entityIds: tabIds }) : [];
 
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {

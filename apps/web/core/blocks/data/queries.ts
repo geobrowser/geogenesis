@@ -108,7 +108,7 @@ export async function mergeEntitiesAsync(args: CollectionItemArgs) {
 
   const cachedRemoteEntities = await queryClient.fetchQuery({
     queryKey: queryKeys.remoteCollectionItems(entityIds, filterState, filterString),
-    queryFn: ({ signal }) => fetchEntitiesBatch(entityIds, filterString, signal),
+    queryFn: ({ signal }) => fetchEntitiesBatch({ entityIds, filterString, signal }),
     staleTime: Duration.toMillis(Duration.seconds(20)),
   });
 

@@ -291,7 +291,7 @@ const localEntitiesAtom = atom(async get => {
 
   const remoteVersionsOfEntities = await queryClient.fetchQuery({
     queryKey: ['local-entities-merge-fetch', changedEntities],
-    queryFn: () => fetchEntitiesBatch(changedEntities),
+    queryFn: () => fetchEntitiesBatch({ entityIds: changedEntities }),
     staleTime: Duration.toMillis(Duration.seconds(30)),
   });
 
