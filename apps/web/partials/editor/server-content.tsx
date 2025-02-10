@@ -30,9 +30,15 @@ type BlockProps = {
 };
 
 const Block = ({ block }: BlockProps) => {
-  // if (!block.content) {
-  //   return null;
-  // }
+  /**
+   * If a paragraph block is empty the editor might not store the content
+   * array on the block. This can cause errors in here since we expect the
+   * content array to exist. If the content does not exist we set it here
+   * to an empty array.
+   */
+  if (!block.content) {
+    block.content = [];
+  }
 
   switch (block.type) {
     case 'paragraph': {
