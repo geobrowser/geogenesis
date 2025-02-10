@@ -57,7 +57,7 @@ export function useSource() {
         newSource
       );
 
-      if (fromEntityName) {
+      if (fromEntityName && blockEntity.name !== null) {
         upsert(
           {
             attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
