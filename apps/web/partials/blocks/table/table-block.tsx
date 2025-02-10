@@ -7,13 +7,18 @@ import produce from 'immer';
 
 import * as React from 'react';
 
+import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
+import { Filter } from '~/core/blocks/data/filters';
+import { Source } from '~/core/blocks/data/source';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
+import { upsert } from '~/core/database/write';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
+import { EntityId, SpaceId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
@@ -40,7 +45,6 @@ interface Props {
 // eslint-disable-next-line react/display-name
 export const TableBlock = React.memo(({ spaceId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
-  const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
 
   const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
@@ -101,12 +105,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     };
   });
 
-  const filteredTypes: Array<string> = filterState
-    .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
-    .map(filter => filter.value);
-
-  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, filteredTypes);
-
   const hasPagination = hasPreviousPage || hasNextPage;
 
   return (
@@ -122,11 +120,8 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
-          {isEditing && source.type !== 'COLLECTION' && (
-            <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
-              <Create />
-            </Link>
-          )}
+
+          <CreateEntityButton filterState={filterState} spaceId={spaceId} source={source} />
         </div>
       </div>
 
@@ -211,6 +206,56 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     </motion.div>
   );
 });
+
+function CreateEntityButton({
+  filterState,
+  spaceId,
+  source,
+}: {
+  filterState: Filter[];
+  spaceId: string;
+  source: Source;
+}) {
+  const filteredTypes: Array<string> = filterState
+    .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
+    .map(filter => filter.value);
+
+  const { onClick, nextEntityId } = useCreateEntityFromType(spaceId, filteredTypes);
+
+  const onCreate = () => {
+    upsert(
+      {
+        attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        entityId: nextEntityId,
+        entityName: null,
+        attributeName: 'Name',
+        value: { type: 'TEXT', value: 'New entity' },
+      },
+      spaceId
+    );
+    onClick();
+
+    if (source.type === 'COLLECTION') {
+      const id = ID.createEntityId();
+
+      upsertCollectionItemRelation({
+        relationId: EntityId(id),
+        collectionId: EntityId(source.value),
+        spaceId: SpaceId(spaceId),
+        toEntity: {
+          id: nextEntityId,
+          name: 'New entity',
+        },
+      });
+    }
+  };
+
+  return (
+    <button onClick={onCreate}>
+      <Create />
+    </button>
+  );
+}
 
 const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
 

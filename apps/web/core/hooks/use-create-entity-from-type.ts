@@ -5,17 +5,19 @@ import * as React from 'react';
 
 import { ID } from '~/core/id';
 
-import { mergeEntityAsync } from '../database/entities';
+import { mergeEntitiesAsync } from '../blocks/data/queries';
 import { upsertRelation } from '../database/write';
 import { EntityId } from '../io/schema';
 
 export function useCreateEntityFromType(spaceId: string, typeIds: string[]) {
   const [nextEntityId, setNextEntityId] = React.useState(ID.createEntityId());
 
-  const onClick = React.useCallback(() => {
+  const onClick = () => {
+    console.log('onClick', nextEntityId);
+
     addTypesToEntityId(nextEntityId, spaceId, typeIds);
     setNextEntityId(ID.createEntityId());
-  }, [nextEntityId, spaceId, typeIds]);
+  };
 
   return {
     onClick,
@@ -24,7 +26,7 @@ export function useCreateEntityFromType(spaceId: string, typeIds: string[]) {
 }
 
 async function addTypesToEntityId(entityId: string, spaceId: string, typeIds: string[]) {
-  const types = await Promise.all(typeIds.map(typeId => mergeEntityAsync(EntityId(typeId))));
+  const types = await mergeEntitiesAsync({ entityIds: typeIds, filterState: [] });
 
   for (const type of types) {
     upsertRelation({
