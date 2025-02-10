@@ -11,7 +11,7 @@ import { useSmartAccount } from './use-smart-account';
  * user interface into the knowledge graph.
  */
 export function useOnboardGuard() {
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { user } = usePrivy();
   const { profile } = useGeoProfile(address);

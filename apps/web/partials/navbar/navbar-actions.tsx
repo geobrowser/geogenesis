@@ -1,13 +1,16 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { useLogout } from '@privy-io/react-auth';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
+import { useSetAtom } from 'jotai';
 import { useParams } from 'next/navigation';
 
 import * as React from 'react';
 
+import { Cookie } from '~/core/cookie';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
@@ -20,32 +23,68 @@ import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
+import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Home } from '~/design-system/icons/home';
 import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '../onboarding/dialog';
+
+function useUser() {
+  const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
+  const address = smartAccount?.account.address;
+  const { profile, isLoading: isLoadingProfile } = useGeoProfile(address);
+
+  return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile };
+}
+
+function useResetOnboarding() {
+  const setName = useSetAtom(nameAtom);
+  const setEntityId = useSetAtom(entityIdAtom);
+  const setAvatar = useSetAtom(avatarAtom);
+  const setSpaceId = useSetAtom(spaceIdAtom);
+  const setStep = useSetAtom(stepAtom);
+
+  const resetOnboarding = () => {
+    setName('');
+    setEntityId('');
+    setAvatar('');
+    setSpaceId('');
+    setStep('start');
+  };
+
+  return resetOnboarding;
+}
+
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
 
-  const smartAccount = useSmartAccount();
-  const address = smartAccount?.account.address;
-  const { isLoading, profile } = useGeoProfile(address);
+  const { isLoading: isUserLoading, profile, address } = useUser();
 
   const { shouldShowElement } = useOnboardGuard();
+  const resetOnboarding = useResetOnboarding();
 
-  if (!address) {
-    return <GeoConnectButton />;
-  }
+  const { logout } = useLogout({
+    onSuccess: async () => {
+      console.log('disconnecting');
+      await Cookie.onConnectionChange({ type: 'disconnect' });
+      resetOnboarding();
+    },
+  });
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <div className="flex items-center gap-4">
         <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
         <Skeleton className="h-7 w-7" radius="rounded-full" />
       </div>
     );
+  }
+
+  if (!address) {
+    return <GeoConnectButton />;
   }
 
   return (
@@ -89,7 +128,13 @@ export function NavbarActions() {
           </AvatarMenuItem>
         )}
         <AvatarMenuItem>
-          <GeoConnectButton />
+          <button
+            onClick={logout}
+            className="m-0 flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-0"
+          >
+            <p className="text-button">Sign out</p>
+            <DisconnectWallet />
+          </button>
         </AvatarMenuItem>
       </Menu>
     </div>

@@ -32,7 +32,7 @@ interface MakeProposalOptions {
 
 export function usePublish() {
   const { restore, restoreRelations } = useWriteOps();
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const { dispatch } = useStatusBar();
 
   /**
@@ -159,7 +159,7 @@ export function usePublish() {
 }
 
 export function useBulkPublish() {
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const { dispatch } = useStatusBar();
 
   /**
@@ -234,7 +234,7 @@ export function useBulkPublish() {
 interface MakeProposalArgs {
   name: string;
   ops: Op[];
-  smartAccount: NonNullable<ReturnType<typeof useSmartAccount>>;
+  smartAccount: NonNullable<ReturnType<typeof useSmartAccount>['smartAccount']>;
   space: {
     id: string;
     spacePluginAddress: string;

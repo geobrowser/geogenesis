@@ -15,8 +15,7 @@ interface RemoveEditorArgs {
 }
 
 export function useRemoveMember(args: RemoveEditorArgs) {
-  const smartAccount = useSmartAccount();
-
+  const { smartAccount } = useSmartAccount();
   const tx = useSmartAccountTransaction({
     address: args.votingPluginAddress,
   });

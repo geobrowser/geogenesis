@@ -19,10 +19,10 @@ import { Environment } from '../environment';
 import { GEOGENESIS } from '../wallet/geo-chain';
 
 export function useSmartAccount() {
-  const { data: walletClient } = useWalletClient();
+  const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
   const [cookies] = useCookies([WALLET_ADDRESS]);
 
-  const { data: smartAccount } = useQuery({
+  const { data: smartAccount, isLoading } = useQuery({
     queryKey: ['smart-account', walletClient?.account.address, cookies.walletAddress],
     queryFn: async () => {
       if (!walletClient) {
@@ -79,5 +79,5 @@ export function useSmartAccount() {
     },
   });
 
-  return smartAccount ?? null;
+  return { smartAccount: smartAccount ?? null, isLoading: isLoading || isLoadingWallet };
 }
