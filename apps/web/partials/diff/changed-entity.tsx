@@ -1,6 +1,7 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import BoringAvatar from 'boring-avatars';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
@@ -15,6 +16,9 @@ import { GeoDate, getImagePath, groupBy } from '~/core/utils/utils';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
+import { colors } from '~/design-system/theme/colors';
+
+import { TableBlockLoadingPlaceholder } from '~/partials/blocks/table/table-block';
 
 type ChangedEntityProps = {
   change: EntityChange;
@@ -177,81 +181,82 @@ const ChangedBlock = ({ index, blockChange }: ChangedBlockProps) => {
         </div>
       );
     }
-    // case 'tableBlock': {
-    //   const isNewTableBlock = before === null;
-    //   const differences = diffWords(before ?? '', after ?? '');
+    case 'dataBlock': {
+      const isNewDataBlock = before === null;
+      const differences = diffWords(before ?? '', after ?? '');
 
-    //   return (
-    //     <div key={blockId} className="flex gap-16">
-    //       <div className="flex-1 py-4">
-    //         {!isNewTableBlock && (
-    //           <>
-    //             <div className="flex items-center gap-2">
-    //               <span className="overflow-hidden rounded">
-    //                 <BoringAvatar
-    //                   size={16}
-    //                   square={true}
-    //                   variant="bauhaus"
-    //                   name={before ?? 'Untitled'}
-    //                   colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
-    //                 />
-    //               </span>
-    //               <div className="text-smallTitle">
-    //                 {differences
-    //                   .filter(item => !item.added)
-    //                   .map((difference: Difference, index: number) => (
-    //                     <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-    //                       {difference.value}
-    //                     </span>
-    //                   ))}
-    //               </div>
-    //             </div>
-    //             <div className="mt-2">
-    //               <TableBlockPlaceholder
-    //                 columns={2}
-    //                 rows={2}
-    //                 className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
-    //               />
-    //             </div>
-    //           </>
-    //         )}
-    //       </div>
-    //       <div className="flex-1 py-4">
-    //         {after && (
-    //           <>
-    //             <div className="flex items-center gap-2">
-    //               <span className="overflow-hidden rounded">
-    //                 <BoringAvatar
-    //                   size={16}
-    //                   square={true}
-    //                   variant="bauhaus"
-    //                   name={after ?? 'Untitled'}
-    //                   colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
-    //                 />
-    //               </span>
-    //               <div className="text-smallTitle">
-    //                 {differences
-    //                   .filter(item => !item.removed)
-    //                   .map((difference: Difference, index: number) => (
-    //                     <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-    //                       {difference.value}
-    //                     </span>
-    //                   ))}
-    //               </div>
-    //             </div>
-    //             <div className="mt-2">
-    //               <TableBlockPlaceholder
-    //                 columns={2}
-    //                 rows={2}
-    //                 className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
-    //               />
-    //             </div>
-    //           </>
-    //         )}
-    //       </div>
-    //     </div>
-    //   );
-    // }
+      return (
+        <div key={index} className="flex gap-16">
+          <div className="flex-1 py-4">
+            {!isNewDataBlock && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="overflow-hidden rounded">
+                    <BoringAvatar
+                      size={16}
+                      square={true}
+                      variant="bauhaus"
+                      name={before ?? 'Untitled'}
+                      colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
+                    />
+                  </span>
+                  <div className="text-smallTitle">
+                    {differences
+                      .filter(item => !item.added)
+                      .map((difference: Difference, index: number) => (
+                        <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+                          {difference.value}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <TableBlockLoadingPlaceholder
+                    columns={2}
+                    rows={2}
+                    className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex-1 py-4">
+            {after && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="overflow-hidden rounded">
+                    <BoringAvatar
+                      size={16}
+                      square={true}
+                      variant="bauhaus"
+                      name={after ?? 'Untitled'}
+                      colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
+                    />
+                  </span>
+                  <div className="text-smallTitle">
+                    {differences
+                      .filter(item => !item.removed)
+                      .map((difference: Difference, index: number) => (
+                        <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                          {difference.value}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <TableBlockLoadingPlaceholder
+                    columns={2}
+                    rows={2}
+                    className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
+                    shimmer={false}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
     // case 'tableFilter': {
     //   const isNewTableFilter = before === null;
 
