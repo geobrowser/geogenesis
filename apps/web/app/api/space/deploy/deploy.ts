@@ -138,37 +138,27 @@ export function deploySpace(args: DeployArgs) {
     const deployStartTime = Date.now();
     yield* Effect.logInfo('Creating DAO');
 
-    const dao = yield* Effect.retry(
-      Effect.tryPromise({
-        try: async () => {
-          const steps = await createDao(createParams, deployParams);
-          let dao = '';
-          let pluginAddresses = [];
+    const dao = yield* Effect.tryPromise({
+      try: async () => {
+        const steps = await createDao(createParams, deployParams);
+        let dao = '';
+        let pluginAddresses = [];
 
-          for await (const step of steps) {
-            switch (step.key) {
-              case DaoCreationSteps.CREATING:
-                break;
-              case DaoCreationSteps.DONE: {
-                dao = step.address;
-                pluginAddresses = step.pluginAddresses ?? [];
-              }
+        for await (const step of steps) {
+          switch (step.key) {
+            case DaoCreationSteps.CREATING:
+              break;
+            case DaoCreationSteps.DONE: {
+              dao = step.address;
+              pluginAddresses = step.pluginAddresses ?? [];
             }
           }
+        }
 
-          return { dao, pluginAddresses };
-        },
-        catch: e => new DeployDaoError(`Failed creating DAO: ${e}`),
-      }),
-      {
-        schedule: Schedule.exponential(Duration.millis(100)).pipe(
-          Schedule.jittered,
-          Schedule.compose(Schedule.elapsed),
-          Schedule.tapInput(() => Effect.succeed(Telemetry.metric(Metrics.deploymentRetry))),
-          Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.minutes(1)))
-        ),
-      }
-    );
+        return { dao, pluginAddresses };
+      },
+      catch: e => new DeployDaoError(`Failed creating DAO: ${e}`),
+    });
 
     const deployEndTime = Date.now() - deployStartTime;
     Telemetry.metric(Metrics.timing('deploy_dao_duration', deployEndTime));
