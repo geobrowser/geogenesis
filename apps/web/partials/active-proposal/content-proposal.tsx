@@ -11,7 +11,7 @@ export async function ContentProposal({ proposal, spaceId }: { proposal: Proposa
   // either the live versions of entities in the proposal or against the state of
   // entities in the proposal as they existed at the time the proposal ended.
   const changes = getIsProposalEnded(proposal.status, proposal.endTime)
-    ? await Change.fromEndedProposal(proposal)
+    ? await Change.fromEndedProposal(proposal, spaceId)
     : await Change.fromActiveProposal(proposal, spaceId);
 
   return (
