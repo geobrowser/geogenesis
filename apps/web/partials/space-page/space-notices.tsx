@@ -2,14 +2,13 @@
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { cva } from 'class-variance-authority';
-import cx from 'classnames';
 import { useAtom } from 'jotai';
+import Image from 'next/image';
 import type { LinkProps } from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 import { useCallback } from 'react';
-import { useState } from 'react';
 
 import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
@@ -17,7 +16,6 @@ import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-typ
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
-import { Button } from '~/design-system/button';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ResizableContainer } from '~/design-system/resizable-container';
@@ -33,7 +31,7 @@ type SpaceNoticesProps = {
   entityId: string;
 };
 
-export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps) => {
+export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
   const { isEditor } = useAccessControl(spaceId);
   const isEditing = useUserIsEditing(spaceId);
   const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, [SYSTEM_IDS.POST_TYPE]);
@@ -44,56 +42,27 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
         <NoticesContainer>
           <Notice
             id="personJoinProject"
-            color="blue"
+            color="purple"
             media={<img src="/project.png" alt="" className="h-24 w-auto object-contain" />}
-            title={`Make sure you’re part of at least one project`}
-            description={`If your project already exists on Geo send your person ID to an editor in that space to link your profile and request to join as a member. If it doesn’t exist, create it!`}
-            action={
-              <div className="flex w-full gap-6">
-                <div className="w-full flex-grow">
-                  <FindProjects spaceId={spaceId} />
-                </div>
-                <div className="flex-shrink-0">
-                  <CopyPersonId personId={entityId} />
-                </div>
-              </div>
-            }
-            format="wide"
-          />
-          <Notice
-            id="personFillProfile"
-            color="green"
-            media={<img src="/showcase.png" alt="" className="h-24 w-auto object-contain" />}
-            title={`Showcase your work, goals and favorite things`}
-            description={`Filled profiles are more likely to be accepted as a space members`}
-          />
-          <Notice
-            id="personJoinSpaces"
-            color="orange"
-            media={
-              <div className="-mr-16 pl-4 pt-2">
-                <JoinSpaces />
-              </div>
-            }
-            title={`Join spaces of interest as a member or editor`}
-            action={
-              <div className="flex h-[38px] items-end">
-                <SimpleButton href={`/spaces`}>View all spaces</SimpleButton>
-              </div>
-            }
+            title={`Join or create a project you’re a team member of`}
+            action={<FindProjects spaceId={spaceId} />}
           />
           <Notice
             id="personFirstPost"
-            color="purple"
+            color="blue"
             media={<img src="/post.png" alt="" className="h-24 w-auto object-contain" />}
             title={`Write and publish your first post`}
             action={
-              <div className="flex h-[38px] items-end">
-                <SimpleButton onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
-                  Write a post
-                </SimpleButton>
-              </div>
+              <SimpleButton onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
+                Create post
+              </SimpleButton>
             }
+          />
+          <Notice
+            id="personJoinSpaces"
+            color="green"
+            title={`Join spaces of interest that excite you`}
+            action={<JoinSpaces />}
           />
         </NoticesContainer>
       );
@@ -103,66 +72,66 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
   if (!isEditing) return null;
 
   switch (spaceType) {
-    case 'company':
-      return (
-        <NoticesContainer>
-          <Notice
-            id="personFillProfile"
-            color="green"
-            media={<img src="/showcase.png" alt="" className="h-24 w-auto object-contain" />}
-            title={`Showcase your company to the rest of Geo`}
-            description={`Fill out your company profile by adding events, jobs and more!`}
-          />
-          <Notice
-            id="companyAddTeamMembers"
-            color="blue"
-            media={<img src="/team.png" alt="" className="h-24 w-auto object-contain" />}
-            title={`Add team members to your company`}
-            action={
-              <div className="flex h-[38px] items-end">
-                <SimpleButton href={`/space/${spaceId}/team`}>Add team members</SimpleButton>
-              </div>
-            }
-          />
-          <Notice
-            id="companyFirstPost"
-            color="purple"
-            media={<img src="/posts.png" alt="" className="h-24 w-auto object-contain" />}
-            title={`Write and publish your first post`}
-            action={
-              <div className="flex h-[38px] items-end">
-                <SimpleButton href={NavUtils.toEntity(spaceId, nextEntityId)}>Write a post</SimpleButton>
-              </div>
-            }
-          />
-        </NoticesContainer>
-      );
-    case 'nonprofit':
-      return (
-        <NoticesContainer>
-          <Notice
-            id="nonprofitFirstPost"
-            color="purple"
-            media={<img src="/posts.png" alt="" className="h-24 w-auto object-contain" />}
-            title={`Write and publish your first post`}
-            action={<SimpleButton href={NavUtils.toEntity(spaceId, nextEntityId)}>Write a post</SimpleButton>}
-          />
-          <Notice
-            id="nonprofitFindOrAddProjects"
-            color="blue"
-            media={<img src="/projects.png" alt="" className="h-24 w-auto object-contain" />}
-            title={`Find or add projects that you’re working on`}
-            action={<SimpleButton href={`/space/${spaceId}/projects`}>Find or add projects</SimpleButton>}
-          />
-          <Notice
-            id="nonprofitAddTeamMembers"
-            color="yellow"
-            media={<img src="/team.png" alt="" className="h-24 w-auto object-contain" />}
-            title={`Add team members to your nonprofit`}
-            action={<SimpleButton href={`/space/${spaceId}/team`}>Add team members</SimpleButton>}
-          />
-        </NoticesContainer>
-      );
+    // case 'company':
+    //   return (
+    //     <NoticesContainer>
+    //       <Notice
+    //         id="personFillProfile"
+    //         color="green"
+    //         media={<img src="/showcase.png" alt="" className="h-24 w-auto object-contain" />}
+    //         title={`Showcase your company to the rest of Geo`}
+    //         description={`Fill out your company profile by adding events, jobs and more!`}
+    //       />
+    //       <Notice
+    //         id="companyAddTeamMembers"
+    //         color="blue"
+    //         media={<img src="/team.png" alt="" className="h-24 w-auto object-contain" />}
+    //         title={`Add team members to your company`}
+    //         action={
+    //           <div className="flex h-[38px] items-end">
+    //             <SimpleButton href={`/space/${spaceId}/team`}>Add team members</SimpleButton>
+    //           </div>
+    //         }
+    //       />
+    //       <Notice
+    //         id="companyFirstPost"
+    //         color="purple"
+    //         media={<img src="/posts.png" alt="" className="h-24 w-auto object-contain" />}
+    //         title={`Write and publish your first post`}
+    //         action={
+    //           <div className="flex h-[38px] items-end">
+    //             <SimpleButton href={NavUtils.toEntity(spaceId, nextEntityId)}>Write a post</SimpleButton>
+    //           </div>
+    //         }
+    //       />
+    //     </NoticesContainer>
+    //   );
+    // case 'nonprofit':
+    //   return (
+    //     <NoticesContainer>
+    //       <Notice
+    //         id="nonprofitFirstPost"
+    //         color="purple"
+    //         media={<img src="/posts.png" alt="" className="h-24 w-auto object-contain" />}
+    //         title={`Write and publish your first post`}
+    //         action={<SimpleButton href={NavUtils.toEntity(spaceId, nextEntityId)}>Write a post</SimpleButton>}
+    //       />
+    //       <Notice
+    //         id="nonprofitFindOrAddProjects"
+    //         color="blue"
+    //         media={<img src="/projects.png" alt="" className="h-24 w-auto object-contain" />}
+    //         title={`Find or add projects that you’re working on`}
+    //         action={<SimpleButton href={`/space/${spaceId}/projects`}>Find or add projects</SimpleButton>}
+    //       />
+    //       <Notice
+    //         id="nonprofitAddTeamMembers"
+    //         color="yellow"
+    //         media={<img src="/team.png" alt="" className="h-24 w-auto object-contain" />}
+    //         title={`Add team members to your nonprofit`}
+    //         action={<SimpleButton href={`/space/${spaceId}/team`}>Add team members</SimpleButton>}
+    //       />
+    //     </NoticesContainer>
+    //   );
     default:
       return null;
   }
@@ -173,20 +142,20 @@ type NoticesContainerProps = {
 };
 
 const NoticesContainer = ({ children }: NoticesContainerProps) => {
-  return <ResizableContainer className="grid grid-cols-3 gap-8 pb-4">{children}</ResizableContainer>;
+  return <ResizableContainer className="grid grid-cols-3 gap-5 pb-5">{children}</ResizableContainer>;
 };
 
 type NoticeProps = {
   id: string;
   color: 'grey' | 'blue' | 'green' | 'orange' | 'purple' | 'yellow';
-  media?: React.ReactNode;
   title: string;
   description?: string;
   action?: React.ReactNode;
+  media?: React.ReactNode;
   format?: 'normal' | 'wide';
 };
 
-const noticeClassNames = cva('group relative flex w-full justify-between rounded-lg p-4', {
+const noticeClassNames = cva('group relative flex rounded-lg p-4', {
   variants: {
     color: {
       purple: 'bg-gradient-purple',
@@ -197,7 +166,7 @@ const noticeClassNames = cva('group relative flex w-full justify-between rounded
       orange: 'bg-gradient-orange',
     },
     format: {
-      normal: 'col-span-1 aspect-square flex-col',
+      normal: 'col-span-1 aspect-video flex-col',
       wide: 'col-span-3 flex-row gap-6 pr-10',
     },
   },
@@ -215,12 +184,12 @@ const Notice = ({ id, color, media, title, description, action, format = 'normal
 
   return (
     <div id={id} className={noticeClassNames({ color, format })}>
-      <div className="relative -top-1.5 -mx-4 flex-shrink-0">{media}</div>
-      <div>
-        <div className="text-balance text-smallTitle">{title}</div>
-        {description && <div className="mt-4 text-metadata">{description}</div>}
-        {action && <div className="mt-4 flex gap-2">{action}</div>}
+      <div className="relative z-10 flex h-full flex-col">
+        <div className="grow text-balance text-[1.0625rem] font-medium leading-tight">{title}</div>
+        {description && <div className="mt-4 shrink-0 text-metadata">{description}</div>}
+        {action && <div className="mt-4 flex shrink-0 gap-2">{action}</div>}
       </div>
+      {media && <div className="absolute bottom-0.5 right-0 z-0 flex overflow-clip">{media}</div>}
       <div className="absolute right-0 top-0 p-3">
         <button
           onClick={handleDismissNotice}
@@ -247,9 +216,9 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
   const router = useRouter();
 
   return (
-    <div>
+    <div className="pr-[3.25rem]">
       <SelectEntity
-        placeholder="Search projects..."
+        placeholder=""
         onDone={result => {
           const destination = NavUtils.toEntity(SYSTEM_IDS.ROOT_SPACE_ID, result.id);
           router.push(destination);
@@ -265,44 +234,59 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
   );
 };
 
-type CopyPersonIdProps = {
-  personId: string;
-};
+// type CopyPersonIdProps = {
+//   personId: string;
+// };
 
-const CopyPersonId = ({ personId }: CopyPersonIdProps) => {
-  const [hasCopiedId, setHasCopiedId] = useState(false);
+// const CopyPersonId = ({ personId }: CopyPersonIdProps) => {
+//   const [hasCopiedId, setHasCopiedId] = useState(false);
 
-  const onCopyId = async () => {
-    try {
-      await navigator.clipboard.writeText(personId);
-      setHasCopiedId(true);
-      setTimeout(() => {
-        setHasCopiedId(false);
-      }, 3000);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+//   const onCopyId = async () => {
+//     try {
+//       await navigator.clipboard.writeText(personId);
+//       setHasCopiedId(true);
+//       setTimeout(() => {
+//         setHasCopiedId(false);
+//       }, 3000);
+//     } catch (error) {
+//       console.error(error);
+//     }
+//   };
 
-  return (
-    <Button onClick={onCopyId} icon={<CustomCopy />} variant="transparent">
-      <span className={cx('absolute', !hasCopiedId && 'invisible')}>Copied!</span>
-      <span className={cx(hasCopiedId && 'invisible')}>Copy person ID</span>
-    </Button>
-  );
-};
+//   return (
+//     <Button onClick={onCopyId} icon={<CustomCopy />} variant="transparent">
+//       <span className={cx('absolute', !hasCopiedId && 'invisible')}>Copied!</span>
+//       <span className={cx(hasCopiedId && 'invisible')}>Copy person ID</span>
+//     </Button>
+//   );
+// };
 
-const CustomCopy = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="1.5" y="3.5" width="10" height="12" rx="1.5" stroke="#35363A" />
-    <rect x="1.5" y="3.5" width="10" height="12" rx="1.5" stroke="black" strokeOpacity="0.2" />
-    <rect x="4.5" y="0.5" width="10" height="12" rx="1.5" fill="#BDEEFF" />
-    <rect x="4.5" y="0.5" width="10" height="12" rx="1.5" stroke="#35363A" />
-    <rect x="4.5" y="0.5" width="10" height="12" rx="1.5" stroke="black" strokeOpacity="0.2" />
-  </svg>
-);
+// const CustomCopy = () => (
+//   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+//     <rect x="1.5" y="3.5" width="10" height="12" rx="1.5" stroke="#35363A" />
+//     <rect x="1.5" y="3.5" width="10" height="12" rx="1.5" stroke="black" strokeOpacity="0.2" />
+//     <rect x="4.5" y="0.5" width="10" height="12" rx="1.5" fill="#BDEEFF" />
+//     <rect x="4.5" y="0.5" width="10" height="12" rx="1.5" stroke="#35363A" />
+//     <rect x="4.5" y="0.5" width="10" height="12" rx="1.5" stroke="black" strokeOpacity="0.2" />
+//   </svg>
+// );
 
 const spaces: SpaceData[] = [
+  {
+    id: 'BDuZwkjCg3nPWMDshoYtpS',
+    name: 'Crypto news',
+    image: 'bafybeie5xj53emanvi3nobzzwtetktwhvyytpbetf6sex7svnqegot7gma',
+  },
+  {
+    id: 'DqiHGrgbniQ9RXRbcQArQ2',
+    name: 'Industries',
+    image: 'bafybeiafalcnab52gaxyhuyaa7sme6wo3esl46ajwr4bu6goh5tvwhdfru',
+  },
+  {
+    id: 'Qs46y2TuFyVvgVV3QbbVW1',
+    name: 'San Francisco',
+    image: 'bafybeib2ctxxks7wscwjkdsov2nwkiidfbxonmptwsgcwte3u4o26ndvsu',
+  },
   {
     id: 'SgjATMbm41LX6naizMqBVd',
     name: 'Crypto',
@@ -312,7 +296,7 @@ const spaces: SpaceData[] = [
 
 const JoinSpaces = () => {
   return (
-    <div className="flex flex-wrap gap-2 pr-16">
+    <div className="relative -top-2 flex flex-wrap gap-2 pr-4">
       {spaces.map(space => {
         const spaceImage = space?.image
           ? getImagePath(`${IPFS_GATEWAY_READ_PATH}/${space.image}`)
@@ -322,12 +306,12 @@ const JoinSpaces = () => {
           <Link
             key={space.id}
             href={NavUtils.toSpace(space.id)}
-            className="inline-flex items-center gap-1.5 rounded bg-white p-1 text-breadcrumb"
+            className="inline-flex items-center gap-1.5 rounded bg-white p-1"
           >
-            <span className="relative h-3 w-3 overflow-hidden rounded-sm">
-              <img src={spaceImage} className="absolute inset-0 h-full w-full object-cover object-center" alt="" />
+            <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
+              <img src={spaceImage} className="absolute inset-0 h-full w-full object-cover" alt="" />
             </span>
-            <span>{space.name}</span>
+            <span className="whitespace-nowrap text-breadcrumb">{space.name}</span>
           </Link>
         );
       })}
