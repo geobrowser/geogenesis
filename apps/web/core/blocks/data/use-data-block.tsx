@@ -53,9 +53,9 @@ export function useDataBlock() {
 
   const { relationBlockSourceRelations } = useRelationsBlock();
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
+  const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
   const { collectionItems } = useCollection();
-  const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   // Use the mapping to get the potential renderable properties.
   const { properties: propertiesSchema } = useProperties(shownColumnIds);
 
@@ -69,12 +69,12 @@ export function useDataBlock() {
     // @TODO: Should re-run when the relations for the entity source changes
     queryKey: queryKeys.renderables({
       pageNumber,
-      collectionItems,
       entityId,
       source,
       filterState,
       mapping,
       spaceId,
+      collectionItems,
       sourceEntityRelations: relationBlockSourceRelations,
       properties: propertiesSchema,
     }),

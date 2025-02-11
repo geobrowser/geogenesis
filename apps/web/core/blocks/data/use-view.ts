@@ -35,6 +35,7 @@ export function useView() {
   const viewRelation = blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
   const shownColumnRelations = blockRelation.relationsOut.filter(
+    // We fall back to an old properties used to render shown columns.
     relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS || relation.typeOf.id === SYSTEM_IDS.PROPERTIES
   );
 
@@ -194,6 +195,7 @@ export function useView() {
     viewRelation,
     setView,
     shownColumnIds,
+    shownColumnRelations,
     toggleProperty,
     mapping,
   };

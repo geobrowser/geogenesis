@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { SpaceId } from '~/core/io/schema';
@@ -100,73 +99,7 @@ export const DataBlockSourceMenu = ({
           </MenuItem>
         </>
       )}
-      {view === 'entity' && <EntityMenu onBack={() => setView('initial')} />}
       {view === 'spaces' && <SpacesMenu onBack={() => setView('initial')} />}
-    </>
-  );
-};
-
-type EntityMenuProps = {
-  onBack: () => void;
-};
-
-const EntityMenu = ({ onBack }: EntityMenuProps) => {
-  const { query, onQueryChange, results } = useSearch();
-  const { setSource, source } = useSource();
-
-  const handleToggleEntity = (entityId: string, entityName: string | null) => {
-    setSource({
-      type: 'RELATIONS',
-      value: entityId,
-      name: entityName,
-    });
-  };
-
-  return (
-    <>
-      <div className="border-b border-grey-02">
-        <button onClick={onBack} className="flex w-full items-center gap-1 p-2">
-          <ArrowLeft color="grey-04" />
-          <span className="text-smallButton text-grey-04">Back</span>
-        </button>
-      </div>
-      <div className="p-1">
-        <Input
-          withSearchIcon
-          placeholder="Search..."
-          value={query}
-          onChange={event => onQueryChange(event.target.value)}
-        />
-      </div>
-      <div className="max-h-[273px] w-full overflow-y-auto">
-        {results.map(entity => {
-          const active = source.type === 'RELATIONS' && source.value === entity.id;
-
-          return (
-            <MenuItem
-              key={entity.id}
-              onClick={() => handleToggleEntity(entity.id, entity.name)}
-              active={active}
-              className="group"
-            >
-              <div className="flex items-center gap-2">
-                <div className="flex-shrink-0">
-                  <img src={PLACEHOLDER_SPACE_IMAGE} className="h-[12px] w-[12px] rounded-sm" />
-                </div>
-                <div className="flex-grow truncate text-button text-text">{entity.name}</div>
-                {active && (
-                  <div className="relative text-grey-04">
-                    <Check />
-                    <div className="absolute inset-0 flex items-center justify-center bg-grey-01 opacity-0 group-hover:opacity-100">
-                      <Close />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </MenuItem>
-          );
-        })}
-      </div>
     </>
   );
 };

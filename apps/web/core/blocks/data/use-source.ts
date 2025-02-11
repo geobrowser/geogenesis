@@ -8,10 +8,12 @@ import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store'
 import { Source, getSource, removeSourceType, upsertSourceType } from './source';
 import { useDataBlockInstance } from './use-data-block';
 import { useFilters } from './use-filters';
+import { useView } from './use-view';
 
 export function useSource() {
   const { entityId, spaceId } = useDataBlockInstance();
   const { name: fromEntityName } = useEntityPageStore();
+  const { shownColumnRelations, toggleProperty } = useView();
 
   const blockEntity = useEntity({
     spaceId: SpaceId(spaceId),
@@ -28,12 +30,6 @@ export function useSource() {
   });
 
   const setSource = (newSource: Source) => {
-    // We have three source types
-    // 1. Collection
-    // 2. Query
-    // For each source type we need to change the source type
-    // For `spaces` we need to update the filter string by setting the new
-    // filter state
     removeSourceType({
       relations: blockEntity.relationsOut,
       spaceId: SpaceId(spaceId),
@@ -67,6 +63,36 @@ export function useSource() {
             value: { type: 'TEXT', value: fromEntityName },
           },
           spaceId
+        );
+      }
+
+      /**
+       * When creating a relation block we set the Properties to set the Name
+       * selector by default. If there's no Name property set on the Blocks
+       * relation then we create it.
+       */
+      const maybeExistingNamePropertyRelation = shownColumnRelations.find(
+        t => t.toEntity.id === SYSTEM_IDS.NAME_ATTRIBUTE
+      );
+
+      if (maybeExistingNamePropertyRelation) {
+        upsert(
+          {
+            attributeId: SYSTEM_IDS.SELECTOR_ATTRIBUTE,
+            attributeName: 'Selector',
+            entityId: maybeExistingNamePropertyRelation.id,
+            entityName: null,
+            value: { type: 'TEXT', value: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]` },
+          },
+          spaceId
+        );
+      } else {
+        toggleProperty(
+          {
+            id: SYSTEM_IDS.NAME_ATTRIBUTE,
+            name: 'Name',
+          },
+          `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`
         );
       }
     }
