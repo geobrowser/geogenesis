@@ -229,7 +229,7 @@ export function fromVersions({ beforeVersion, afterVersion }: FromVersionsArgs):
 }
 
 export async function fromActiveProposal(proposal: Proposal, spaceId: string): Promise<EntityChange[]> {
-  const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId });
+  const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId, spaceId });
 
   // Version entity ids are mapped to the version.id
   const currentVersionsForEntityIds = await fetchEntitiesBatch({ spaceId, entityIds: versionsByEditId.map(v => v.id) });
@@ -279,8 +279,8 @@ export async function fromActiveProposal(proposal: Proposal, spaceId: string): P
   });
 }
 
-export async function fromEndedProposal(proposal: Proposal): Promise<EntityChange[]> {
-  const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId });
+export async function fromEndedProposal(proposal: Proposal, spaceId: string): Promise<EntityChange[]> {
+  const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId, spaceId });
 
   // const previousVersions = await fetchVersionsBatch({
   //   versionIds: versionsByEditId.map(v => v.versionId),
@@ -297,13 +297,46 @@ export async function fromEndedProposal(proposal: Proposal): Promise<EntityChang
     )
   );
 
+  const beforeEntities = previousVersions.filter(e => e !== null).filter(entity => getIsRenderedAsEntity(entity));
+  const afterEntities = versionsByEditId.filter(entity => getIsRenderedAsEntity(entity));
+
+  const possibleBeforeBlocks = previousVersions
+    .filter(e => e !== null)
+    .filter(entity => !getIsRenderedAsEntity(entity));
+  const possibleAfterBlocks = versionsByEditId.filter(entity => !getIsRenderedAsEntity(entity));
+  const possibleBlockIds = possibleBeforeBlocks.map(entity => entity.id);
+
+  const possibleBlockParentEntityIds = await getBlockParentEntityIds(possibleBlockIds, beforeEntities);
+
+  const parentEntityIdsSet: Set<EntityId> = new Set();
+  [...Object.values(possibleBlockParentEntityIds).filter(Boolean)].forEach(entityId => {
+    if (entityId) {
+      parentEntityIdsSet.add(entityId);
+    }
+  });
+
+  const { createdBlockParentEntityIds, deletedBlockParentEntityIds } = getNewAndDeletedBlockParentEntityIds(
+    beforeEntities,
+    afterEntities
+  );
+
+  const parentEntityIdsToFetch = [...parentEntityIdsSet.values()];
+
+  const beforeParentEntities = await fetchEntitiesBatch({ spaceId, entityIds: parentEntityIdsToFetch });
+
+  const parentEntityIds: Record<EntityId, EntityId | null> = {
+    ...possibleBlockParentEntityIds,
+    ...createdBlockParentEntityIds,
+    ...deletedBlockParentEntityIds,
+  };
+
   return aggregateChanges({
     spaceId: proposal.space.id,
-    beforeEntities: previousVersions.filter(e => e !== null),
-    afterEntities: versionsByEditId,
-    beforeBlocks: [],
-    afterBlocks: [],
-    parentEntityIds: {},
+    beforeEntities: [...beforeEntities, ...beforeParentEntities],
+    afterEntities,
+    beforeBlocks: possibleBeforeBlocks,
+    afterBlocks: possibleAfterBlocks,
+    parentEntityIds,
   });
 }
 
