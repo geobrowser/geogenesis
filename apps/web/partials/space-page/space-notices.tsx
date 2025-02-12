@@ -3,7 +3,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { cva } from 'class-variance-authority';
 import { useAtom } from 'jotai';
-import Image from 'next/image';
 import type { LinkProps } from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -189,8 +188,8 @@ const Notice = ({ id, color, media, title, description, action, format = 'normal
         {description && <div className="mt-4 shrink-0 text-metadata">{description}</div>}
         {action && <div className="mt-4 flex shrink-0 gap-2">{action}</div>}
       </div>
-      {media && <div className="absolute bottom-0.5 right-0 z-0 flex overflow-clip">{media}</div>}
-      <div className="absolute right-0 top-0 p-3">
+      {media && <div className="pointer-events-none absolute bottom-0.5 right-0 z-0 flex overflow-clip">{media}</div>}
+      <div className="absolute right-0 top-0 z-10 p-3">
         <button
           onClick={handleDismissNotice}
           className="p-1 opacity-50 transition duration-300 ease-in-out hover:opacity-100"
