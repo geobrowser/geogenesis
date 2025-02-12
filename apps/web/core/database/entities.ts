@@ -78,8 +78,10 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     },
   });
 
+  const schemaWithDefaults = dedupeWith(DEFAULT_ENTITY_SCHEMA.concat(remoteSchema ?? []), (a, b) => a.id === b.id);
+
   // @TODO merge with local state
-  const schema = remoteSchema ?? [];
+  const schema = schemaWithDefaults ?? [];
 
   return {
     id,
@@ -169,8 +171,6 @@ export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> 
 // Name, description, and types are always required for every entity even
 // if they aren't defined in the schema.
 export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [
-  // Name, description, and types are always required for every entity even
-  // if they aren't defined in the schema.
   {
     id: EntityId(SYSTEM_IDS.NAME_ATTRIBUTE),
     name: 'Name',
@@ -258,7 +258,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
   // If the schema exists already in the list then we should dedupe it.
   // Some types might share some elements in their schemas, e.g., Person
   // and Pet both have Avatar as part of their schema.
-  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...schema], (a, b) => a.id === b.id);
+  return dedupeWith(schema, (a, b) => a.id === b.id);
 }
 
 /**
