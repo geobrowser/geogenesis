@@ -78,15 +78,13 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     },
   });
 
-  const schemaWithDefaults = dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...(schema ?? [])], (a, b) => a.id === b.id);
-
   return {
     id,
     name,
     nameTripleSpaces,
     spaces,
     description,
-    schema: schemaWithDefaults,
+    schema: schema ?? DEFAULT_ENTITY_SCHEMA,
     triples,
     relationsOut: relations,
     types,
@@ -255,7 +253,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
   // If the schema exists already in the list then we should dedupe it.
   // Some types might share some elements in their schemas, e.g., Person
   // and Pet both have Avatar as part of their schema.
-  return dedupeWith(schema, (a, b) => a.id === b.id);
+  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...schema], (a, b) => a.id === b.id);
 }
 
 /**
