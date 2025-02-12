@@ -68,7 +68,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   const description = Entities.description(triples);
   const types = readTypes(relations);
 
-  const { data: remoteSchema } = useQuery({
+  const { data: schema } = useQuery({
     enabled: types.length > 0,
     queryKey: ['entity-schema-for-merging', id, types],
     placeholderData: keepPreviousData,
@@ -78,10 +78,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     },
   });
 
-  const schemaWithDefaults = dedupeWith(DEFAULT_ENTITY_SCHEMA.concat(remoteSchema ?? []), (a, b) => a.id === b.id);
-
-  // @TODO merge with local state
-  const schema = schemaWithDefaults ?? [];
+  const schemaWithDefaults = dedupeWith(DEFAULT_ENTITY_SCHEMA.concat(schema ?? []), (a, b) => a.id === b.id);
 
   return {
     id,
@@ -89,7 +86,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     nameTripleSpaces,
     spaces,
     description,
-    schema,
+    schema: schemaWithDefaults,
     triples,
     relationsOut: relations,
     types,
