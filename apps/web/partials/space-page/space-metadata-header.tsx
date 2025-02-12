@@ -83,7 +83,7 @@ export function SpacePageMetadataHeader({
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-y-2 text-text">
+    <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-2 text-text">
       <div className="flex items-center gap-2">
         <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">Space</span>
         {additionalTypeChips}
