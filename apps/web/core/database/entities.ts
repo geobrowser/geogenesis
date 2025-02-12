@@ -78,7 +78,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     },
   });
 
-  const schemaWithDefaults = dedupeWith(DEFAULT_ENTITY_SCHEMA.concat(schema ?? []), (a, b) => a.id === b.id);
+  const schemaWithDefaults = dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...(schema ?? [])], (a, b) => a.id === b.id);
 
   return {
     id,
