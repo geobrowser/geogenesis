@@ -61,6 +61,62 @@ const nextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/graphql',
+        has: [
+          {
+            type: 'host',
+            value: 'api-testnet.*.*',
+          },
+        ],
+        destination: 'https://geo-conduit.up.railway.app/graphql',
+      },
+      {
+        source: '/graphiql',
+        has: [
+          {
+            type: 'host',
+            value: 'api-testnet.*.*',
+          },
+        ],
+        destination: 'https://geo-conduit.up.railway.app/graphiql',
+      },
+
+      {
+        source: '/graphql',
+        has: [
+          {
+            type: 'host',
+            value: 'api.*.*',
+          },
+        ],
+        destination: 'https://hypergraph.up.railway.app/graphql',
+      },
+      {
+        source: '/graphiql',
+        has: [
+          {
+            type: 'host',
+            value: 'api.*.*',
+          },
+        ],
+        destination: 'https://hypergraph.up.railway.app/graphiql',
+      },
+
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: 'api.*.*',
+          },
+        ],
+        destination: 'https://gaia.up.railway.app/:path*',
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
