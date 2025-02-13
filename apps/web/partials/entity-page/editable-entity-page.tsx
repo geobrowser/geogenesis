@@ -174,7 +174,7 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
     return (
       <EntityTextAutocomplete
         spaceId={spaceId}
-        placeholder="Add attribute..."
+        placeholder="Add Property..."
         onDone={result => {
           onChange();
           send({
