@@ -14,10 +14,8 @@ export const RelationshipHeading = ({ relationship }: RelationshipHeadingProps) 
 
   return (
     <div className="relative mb-4 mt-4 flex justify-center rounded-lg border border-grey-02">
-      <div className="flex flex-1 shrink-0 items-center justify-center truncate px-6">
-        <div className="flex w-full max-w-full items-center">
-          <div className="inline-block w-full truncate text-mediumTitle">{relationship.from.name}</div>
-        </div>
+      <div className="flex flex-1 !shrink-0 items-center truncate px-6">
+        <div className="w-full text-center text-mediumTitle">{relationship.from.name}</div>
       </div>
       <div className="flex flex-col items-center justify-center gap-0.5 bg-divider px-3 py-4">
         <div className="line-clamp-2 max-w-32 text-metadata">{relationship.relationType.name}</div>
@@ -25,10 +23,8 @@ export const RelationshipHeading = ({ relationship }: RelationshipHeadingProps) 
           <RightArrowLong />
         </div>
       </div>
-      <div className="flex flex-1 !shrink-0 items-center justify-center truncate px-6">
-        <div className="flex w-full max-w-full items-center">
-          <div className="inline-block w-full truncate text-mediumTitle">{relationship.to.name}</div>
-        </div>
+      <div className="flex flex-1 !shrink-0 items-center truncate px-6">
+        <div className="w-full text-center text-mediumTitle">{relationship.to.name}</div>
       </div>
       <RelationTags />
     </div>
