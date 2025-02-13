@@ -6,7 +6,6 @@ import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import type { Entity } from '~/core/io/dto/entities';
 import { Proposal } from '~/core/io/dto/proposals';
-import { Version } from '~/core/io/dto/versions';
 import { fetchParentEntityId } from '~/core/io/fetch-parent-entity-id';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntitiesBatch, fetchEntitiesBatchCached } from '~/core/io/subgraph/fetch-entities-batch';
@@ -106,6 +105,8 @@ export async function fromLocal(spaceId?: string) {
   const { remoteEntities, localEntities } = await Effect.runPromise(collectEntities);
 
   const beforeEntities = remoteEntities.filter(entity => getIsRenderedAsEntity(entity));
+  const beforeEntityIdsSet = new Set(beforeEntities.map(entity => entity.id));
+
   const afterEntities = localEntities.filter(entity => getIsRenderedAsEntity(entity));
 
   const possibleBeforeBlocks = remoteEntities.filter(entity => !getIsRenderedAsEntity(entity));
@@ -126,7 +127,7 @@ export async function fromLocal(spaceId?: string) {
     afterEntities
   );
 
-  const parentEntityIdsToFetch = [...parentEntityIdsSet.values()];
+  const parentEntityIdsToFetch = [...parentEntityIdsSet.values()].filter(entityId => !beforeEntityIdsSet.has(entityId));
 
   const collectParentEntities = Effect.gen(function* () {
     const maybeRemoteParentEntitiesEffect = Effect.promise(() =>
@@ -211,23 +212,6 @@ export async function fromLocal(spaceId?: string) {
   return changes;
 }
 
-interface FromVersionsArgs {
-  spaceId?: string;
-  beforeVersion: Version | null;
-  afterVersion: Version;
-}
-
-export function fromVersions({ beforeVersion, afterVersion }: FromVersionsArgs): EntityChange[] {
-  return aggregateChanges({
-    spaceId: undefined,
-    afterEntities: [afterVersion],
-    beforeEntities: beforeVersion ? [beforeVersion] : [],
-    beforeBlocks: [],
-    afterBlocks: [],
-    parentEntityIds: {},
-  });
-}
-
 export async function fromActiveProposal(proposal: Proposal, spaceId: string): Promise<EntityChange[]> {
   const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId, spaceId });
 
@@ -237,6 +221,7 @@ export async function fromActiveProposal(proposal: Proposal, spaceId: string): P
   const beforeEntities = currentVersionsForEntityIds
     .filter(v => v !== null)
     .filter(entity => getIsRenderedAsEntity(entity));
+  const beforeEntityIdsSet = new Set(beforeEntities.map(entity => entity.id));
   const afterEntities = versionsByEditId.filter(entity => getIsRenderedAsEntity(entity));
 
   const possibleBeforeBlocks = currentVersionsForEntityIds
@@ -259,7 +244,7 @@ export async function fromActiveProposal(proposal: Proposal, spaceId: string): P
     afterEntities
   );
 
-  const parentEntityIdsToFetch = [...parentEntityIdsSet.values()];
+  const parentEntityIdsToFetch = [...parentEntityIdsSet.values()].filter(entityId => !beforeEntityIdsSet.has(entityId));
 
   const beforeParentEntities = await fetchEntitiesBatch({ spaceId, entityIds: parentEntityIdsToFetch });
 
@@ -288,16 +273,17 @@ export async function fromEndedProposal(proposal: Proposal, spaceId: string): Pr
 
   // We should batch this but not sure the easiest way to do it in a single query
   const previousVersions = await Promise.all(
-    versionsByEditId.map(v =>
-      fetchPreviousVersionByCreatedAt({
+    versionsByEditId.map(v => {
+      return fetchPreviousVersionByCreatedAt({
         createdAt: proposal.createdAt,
         entityId: v.id,
         spaceId: proposal.space.id,
-      })
-    )
+      });
+    })
   );
 
   const beforeEntities = previousVersions.filter(e => e !== null).filter(entity => getIsRenderedAsEntity(entity));
+  const beforeEntityIdsSet = new Set(beforeEntities.map(entity => entity.id));
   const afterEntities = versionsByEditId.filter(entity => getIsRenderedAsEntity(entity));
 
   const possibleBeforeBlocks = previousVersions
@@ -320,7 +306,7 @@ export async function fromEndedProposal(proposal: Proposal, spaceId: string): Pr
     afterEntities
   );
 
-  const parentEntityIdsToFetch = [...parentEntityIdsSet.values()];
+  const parentEntityIdsToFetch = [...parentEntityIdsSet.values()].filter(entityId => !beforeEntityIdsSet.has(entityId));
 
   const beforeParentEntities = await fetchEntitiesBatch({ spaceId, entityIds: parentEntityIdsToFetch });
 
