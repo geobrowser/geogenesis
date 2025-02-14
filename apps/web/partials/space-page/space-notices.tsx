@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useCallback } from 'react';
 
-import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE, ROOT_SPACE_ID } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -219,7 +219,7 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
       <SelectEntity
         placeholder=""
         onDone={result => {
-          const destination = NavUtils.toEntity(SYSTEM_IDS.ROOT_SPACE_ID, result.id);
+          const destination = NavUtils.toEntity(ROOT_SPACE_ID, result.id);
           router.push(destination);
         }}
         spaceId={spaceId}

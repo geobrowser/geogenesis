@@ -11,7 +11,7 @@ import {
   WALLETCONNECT_PROJECT_ID,
 } from './config';
 
-type SupportedChainId = '31337' | '80451';
+type SupportedChainId = '31337' | '19411';
 
 export type AppConfig = {
   chainId: SupportedChainId;
@@ -54,14 +54,14 @@ export const options: Record<AppEnv, AppConfig> = {
     bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   production: {
-    chainId: '80451',
+    chainId: '19411',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
-    api: 'https://hypergraph.up.railway.app/graphql',
+    api: 'https://geo-conduit.up.railway.app/graphql',
     bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   testnet: {
-    chainId: '80451',
+    chainId: '19411',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
     api: 'https://geo-conduit.up.railway.app/graphql',

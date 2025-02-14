@@ -1,5 +1,6 @@
 import { CONTENT_IDS, Op, Relation, SYSTEM_IDS } from '@graphprotocol/grc-20';
 
+import { ROOT_SPACE_ID } from '~/core/constants';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 import { Relation as RelationType } from '~/core/types';
@@ -23,7 +24,7 @@ export const cloneEntity = async (
 
   const { oldEntityId, entityId = null, entityName, parentEntityId = null, parentEntityName = null } = options;
 
-  const oldEntity = await Subgraph.fetchEntity({ id: oldEntityId, spaceId: SYSTEM_IDS.ROOT_SPACE_ID });
+  const oldEntity = await Subgraph.fetchEntity({ id: oldEntityId, spaceId: ROOT_SPACE_ID });
 
   if (!oldEntity) return [[], previouslySeenEntityIds ?? new Set()];
 

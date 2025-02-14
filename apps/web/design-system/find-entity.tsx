@@ -5,6 +5,7 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { startTransition, useState } from 'react';
 
+import { ROOT_SPACE_ID } from '~/core/constants';
 import { useSearch } from '~/core/hooks/use-search';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId } from '~/core/io/schema';
@@ -125,7 +126,7 @@ export const FindEntity = ({
                                     <button
                                       onClick={event => {
                                         event.stopPropagation();
-                                        window.open(NavUtils.toEntity(SYSTEM_IDS.ROOT_SPACE_ID, result.id));
+                                        window.open(NavUtils.toEntity(ROOT_SPACE_ID, result.id));
                                       }}
                                       className="relative text-text hover:text-ctaPrimary"
                                     >
