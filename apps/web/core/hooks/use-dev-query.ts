@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
 
+type QueryArgs = {
+  queryFn: any;
+  [key: string]: any;
+};
+
 // Can be used in place of `useQuery` for local development
-export const useDevQuery = (queryFn: () => any) => {
+export const useDevQuery = (args: QueryArgs) => {
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const { queryFn } = args;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -21,5 +27,5 @@ export const useDevQuery = (queryFn: () => any) => {
     fetchData();
   }, [queryFn]);
 
-  return { data, isLoading };
+  return { data, isLoading } as const;
 };
