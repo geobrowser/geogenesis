@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 
 import { RelationDtoHistorical, RelationDtoLive } from '~/core/io/dto/relations';
 import { TripleDto } from '~/core/io/dto/triples';

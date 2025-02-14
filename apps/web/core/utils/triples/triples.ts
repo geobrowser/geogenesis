@@ -1,4 +1,4 @@
-import { CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SYSTEM_IDS, SetTripleOp } from '@geogenesis/sdk';
+import { CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SYSTEM_IDS, SetTripleOp } from '@graphprotocol/grc-20';
 
 import { Triple as T } from '~/core/database/Triple';
 import { StoredRelation, StoredTriple } from '~/core/database/types';

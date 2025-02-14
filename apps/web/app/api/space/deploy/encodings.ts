@@ -1,10 +1,8 @@
 import { CreateDaoParams } from '@aragon/sdk-client';
-import { VotingMode } from '@geogenesis/sdk';
+import { VotingMode } from '@graphprotocol/grc-20';
 import {
-  GOVERNANCE_PLUGIN_REPO_ADDRESS,
-  PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
-  SPACE_PLUGIN_REPO_ADDRESS,
-} from '@geogenesis/sdk/contracts';
+  MAINNET
+} from '@graphprotocol/grc-20/contracts';
 import { ethers } from 'ethers';
 import { encodeAbiParameters } from 'viem';
 
@@ -63,7 +61,7 @@ export function getSpacePluginInstallItem({
   ]);
 
   return {
-    id: SPACE_PLUGIN_REPO_ADDRESS,
+    id: MAINNET.SPACE_PLUGIN_REPO_ADDRESS  as `0x${string}`,
     data: encodedParams,
   };
 }
@@ -87,7 +85,7 @@ export function getPersonalSpaceGovernancePluginInstallItem({
   const encodedParams = encodeAbiParameters(prepareInstallationInputs, [initialEditor]);
 
   return {
-    id: PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
+    id: MAINNET.PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS as `0x${string}`,
     data: encodedParams,
   };
 }
@@ -151,7 +149,7 @@ export function getGovernancePluginInstallItem(params: {
   ]);
 
   return {
-    id: GOVERNANCE_PLUGIN_REPO_ADDRESS,
+    id: MAINNET.GOVERNANCE_PLUGIN_REPO_ADDRESS as `0x${string}`,
     data: encodedParams,
   };
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import * as Dialog from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';

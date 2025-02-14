@@ -1,6 +1,6 @@
-import { Op } from '@geogenesis/sdk';
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
-import { EditProposal } from '@geogenesis/sdk/proto';
+import { Op } from '@graphprotocol/grc-20';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@graphprotocol/grc-20/abis';
+import { EditProposal } from '@graphprotocol/grc-20/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 

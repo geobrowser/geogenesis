@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 
 import { useEntity } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';

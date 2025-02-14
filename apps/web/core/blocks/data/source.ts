@@ -1,5 +1,5 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { Match } from 'effect';
 
 import { Filter } from '~/core/blocks/data/filters';

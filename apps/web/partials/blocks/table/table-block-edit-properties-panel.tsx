@@ -1,4 +1,4 @@
-import { CONTENT_IDS, SYSTEM_IDS } from '@geogenesis/sdk';
+import { CONTENT_IDS, SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
 import { pipe } from 'effect';

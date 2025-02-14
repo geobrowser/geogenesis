@@ -1,4 +1,4 @@
-import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { MainVotingAbi } from '@graphprotocol/grc-20/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData } from 'viem';

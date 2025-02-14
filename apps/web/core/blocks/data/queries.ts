@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 

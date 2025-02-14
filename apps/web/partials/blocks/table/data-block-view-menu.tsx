@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 
 import * as React from 'react';

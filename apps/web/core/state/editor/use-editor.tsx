@@ -1,7 +1,7 @@
 'use client';
 
-import { Relation as R, SYSTEM_IDS } from '@geogenesis/sdk';
-import { Image } from '@geogenesis/sdk';
+import { Relation as R, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { Image } from '@graphprotocol/grc-20';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { Array } from 'effect';

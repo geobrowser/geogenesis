@@ -1,5 +1,5 @@
-import { BASE58_ALLOWED_CHARS } from '@geogenesis/sdk';
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { BASE58_ALLOWED_CHARS } from '@graphprotocol/grc-20';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 

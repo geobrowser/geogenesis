@@ -1,4 +1,4 @@
-import { CONTENT_IDS, SYSTEM_IDS } from '@geogenesis/sdk';
+import { CONTENT_IDS, SYSTEM_IDS } from '@graphprotocol/grc-20';
 
 import { EntityId } from '~/core/io/schema';
 import { Triple as ITriple, Relation, RenderableProperty } from '~/core/types';

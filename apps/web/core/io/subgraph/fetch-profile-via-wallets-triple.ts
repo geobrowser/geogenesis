@@ -1,5 +1,5 @@
 import { Schema } from '@effect/schema';
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';

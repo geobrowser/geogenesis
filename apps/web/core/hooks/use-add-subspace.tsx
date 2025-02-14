@@ -1,6 +1,6 @@
 'use client';
 
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@graphprotocol/grc-20/abis';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';
@@ -24,7 +24,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
 
   const tx = useSmartAccountTransaction({
     address:
-      space?.type === 'PERSONAL' ? space?.personalSpaceAdminPluginAddress : space?.mainVotingPluginAddress ?? null,
+      space?.type === 'PERSONAL' ? space?.personalSpaceAdminPluginAddress : (space?.mainVotingPluginAddress ?? null),
   });
 
   const { mutate, status } = useMutation({

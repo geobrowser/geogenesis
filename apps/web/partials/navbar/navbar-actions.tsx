@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { useLogout } from '@privy-io/react-auth';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
