@@ -7,4 +7,4 @@ export const DEFAULT_OPENGRAPH_DESCRIPTION =
 export const IPFS_GATEWAY_PATH = 'https://node.lighthouse.storage';
 export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`;
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-export const ROOT_SPACE_ID = 'AZQ1R3WY2DEdaHjbE2mfb6';
+export const ROOT_SPACE_ID = '2xBvgiT53h7njMQB4APGAu';
