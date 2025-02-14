@@ -1,4 +1,4 @@
-import { CONTENT_IDS, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
+import { CONTENT_IDS, Op, Relation, SYSTEM_IDS } from '@graphprotocol/grc-20';
 
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';

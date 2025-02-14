@@ -1,4 +1,4 @@
-import { ProposalStatus } from '@geogenesis/sdk';
+import { ProposalStatus } from '@graphprotocol/grc-20';
 
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 

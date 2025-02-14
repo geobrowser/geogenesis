@@ -23,6 +23,7 @@
     "@ethersproject/hash": "^5.7.0",
     "@ethersproject/providers": "^5.6.8",
     "@geogenesis/sdk": "workspace:*",
+    "@graphprotocol/grc-20": "^0.4.1",
     "@mobily/ts-belt": "^4.0.0-rc.2",
     "@privy-io/react-auth": "^2.1.0",
     "@privy-io/wagmi": "^1.0.2",

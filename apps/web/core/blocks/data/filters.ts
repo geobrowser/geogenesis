@@ -1,5 +1,5 @@
 import { Schema } from '@effect/schema';
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { Either } from 'effect';
 
 import { mergeEntityAsync } from '~/core/database/entities';

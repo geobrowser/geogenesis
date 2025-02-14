@@ -1,4 +1,4 @@
-import { GraphUri, GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUri, GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { getRelations } from '~/core/database/relations';

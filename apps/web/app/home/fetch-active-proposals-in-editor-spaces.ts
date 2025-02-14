@@ -1,5 +1,5 @@
 import { Schema } from '@effect/schema';
-import { getChecksumAddress } from '@geogenesis/sdk';
+import { getChecksumAddress } from '@graphprotocol/grc-20';
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';

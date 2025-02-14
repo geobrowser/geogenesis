@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 
 import { TripleDto } from '~/core/io/dto/triples';
 import { RenderableEntityType } from '~/core/types';

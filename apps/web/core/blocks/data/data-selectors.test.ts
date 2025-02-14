@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { describe, expect, it } from 'vitest';
 
 import { generateSelector, parseSelectorIntoLexicon } from './data-selectors';

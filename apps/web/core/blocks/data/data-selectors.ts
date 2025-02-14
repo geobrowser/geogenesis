@@ -1,4 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
 
 import { mergeEntityAsync } from '~/core/database/entities';
 import { Entity } from '~/core/io/dto/entities';

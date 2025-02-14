@@ -1,8 +1,8 @@
 'use client';
 
-import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
-import { Image } from '@geogenesis/sdk';
-import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { Image } from '@graphprotocol/grc-20';
+import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
 import * as React from 'react';
 

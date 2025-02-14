@@ -1,6 +1,6 @@
 import { Extension, ReactRenderer } from '@tiptap/react';
 import Suggestion from '@tiptap/suggestion';
-import type { SuggestionOptions } from '@tiptap/suggestion/dist/packages/suggestion/src/suggestion';
+import type { SuggestionOptions } from '@tiptap/suggestion';
 import tippy from 'tippy.js';
 import type { Instance } from 'tippy.js';
 

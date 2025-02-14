@@ -1,4 +1,4 @@
-import type { Op } from '@geogenesis/sdk';
+import type { Op } from '@graphprotocol/grc-20';
 import { atom } from 'jotai';
 
 export const cloneSpaceNameAtom = atom('');
