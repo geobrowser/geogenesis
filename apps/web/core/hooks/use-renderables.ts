@@ -4,14 +4,14 @@ import { pipe } from 'effect';
 
 import * as React from 'react';
 
+import { mergeEntitiesAsync } from '~/core/blocks/data/queries';
 import { EntityId } from '~/core/io/schema';
-import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 
 import { sortRenderables } from '~/partials/entity-page/entity-page-utils';
 
 import { useTriples } from '../database/triples';
 import { useEntityPageStore } from '../state/entity-page-store/entity-store';
-import { RenderableProperty, Triple } from '../types';
+import { PropertySchema, RenderableProperty, Triple, ValueTypeId } from '../types';
 import { toRenderables } from '../utils/to-renderables';
 import { groupBy } from '../utils/utils';
 import { useUserIsEditing } from './use-user-is-editing';
@@ -34,6 +34,9 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
 
   const { triples: localTriples, relations, schema, name, id } = useEntityPageStore();
 
+  // @TODO remove console.info for schema
+  console.info('schema:', schema);
+
   const triplesFromSpace = useTriples({
     selector: t => t.space === spaceId,
     includeDeleted: true,
@@ -51,12 +54,12 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
 
   const possibleTypeProperties = [...new Set(serverUrlTriples.map(triple => triple.attributeId))];
 
-  const { data: typePropertyRenderables } = useQuery({
-    queryKey: ['type-property-renderables', possibleTypeProperties.join('-')],
+  const { data: typePropertySchema } = useQuery({
+    queryKey: ['type-property-schema', possibleTypeProperties.join('-')],
     queryFn: async () => {
-      const possibleTypePropertyAttributeEntities = await fetchEntitiesBatch({
-        spaceId: SYSTEM_IDS.ROOT_SPACE_ID,
+      const possibleTypePropertyAttributeEntities = await mergeEntitiesAsync({
         entityIds: possibleTypeProperties,
+        filterState: [],
       });
 
       const typeProperties = possibleTypePropertyAttributeEntities
@@ -73,29 +76,29 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
         .filter(triple => typeProperties.includes(EntityId(triple.attributeId)))
         .map(triple => GraphUrl.toEntityId(triple.value.value as `graph://${string}`));
 
-      const typePropertyValueEntities = await fetchEntitiesBatch({
-        spaceId: SYSTEM_IDS.ROOT_SPACE_ID,
+      const typePropertyValueEntities = await mergeEntitiesAsync({
         entityIds: typePropertyValueEntityIds,
+        filterState: [],
       });
 
-      const typePropertyRenderables = typePropertyValueEntities.flatMap(entity =>
+      const typePropertySchema = typePropertyValueEntities.flatMap(entity =>
         entity.relationsOut
           .filter(relation => relation.typeOf.id === SYSTEM_IDS.PROPERTIES)
           .map(relation => ({
-            type: 'RELATION',
-            entityId: relation.toEntity.id,
-            entityName: null,
-            attributeId: relation.toEntity.id,
-            attributeName: relation.toEntity.name,
-            spaceId,
-            value: '',
-            placeholder: true,
+            id: relation.toEntity.id,
+            name: relation.toEntity.name,
+            valueType: SYSTEM_IDS.RELATION as ValueTypeId,
           }))
       );
 
-      return typePropertyRenderables;
+      return typePropertySchema;
     },
   });
+
+  const fullSchema: PropertySchema[] = [...schema, ...(typePropertySchema ?? [])];
+
+  // @TODO remove console.info for fullSchema
+  console.info('fullSchema:', fullSchema);
 
   const SKIPPED_PROPERTIES = !isRelationPage ? [SYSTEM_IDS.BLOCKS] : [SYSTEM_IDS.BLOCKS, SYSTEM_IDS.TYPES_ATTRIBUTE];
 
@@ -106,10 +109,8 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
     triples,
     relations,
     // We don't show placeholder renderables in browse mode
-    schema: isEditing ? schema : undefined,
-    placeholderRenderables: isEditing
-      ? [...placeholderRenderables, ...((typePropertyRenderables ?? []) as RenderableProperty[])]
-      : undefined,
+    schema: isEditing ? fullSchema : undefined,
+    placeholderRenderables: isEditing ? placeholderRenderables : undefined,
   }).filter(r => !SKIPPED_PROPERTIES.includes(r.attributeId));
 
   const renderablesGroupedByAttributeId = pipe(
