@@ -7,7 +7,7 @@ import {
   createSmartAccountClient,
   walletClientToSmartAccountSigner,
 } from 'permissionless';
-import { signerToSafeSmartAccount } from 'permissionless/accounts';
+import { signerToSafeSmartAccount, signerToSimpleSmartAccount } from 'permissionless/accounts';
 import { pimlicoBundlerActions, pimlicoPaymasterActions } from 'permissionless/actions/pimlico';
 import { useCookies } from 'react-cookie';
 import { createClient, createPublicClient, http } from 'viem';
@@ -39,10 +39,16 @@ export function useSmartAccount() {
 
       const signer = walletClientToSmartAccountSigner(walletClient);
 
-      const safeAccount = await signerToSafeSmartAccount(publicClient, {
+      // const safeAccount = await signerToSafeSmartAccount(publicClient, {
+      //   signer: signer,
+      //   entryPoint: ENTRYPOINT_ADDRESS_V07,
+      //   safeVersion: '1.4.1',
+      // });
+
+      const safeAccount = await signerToSimpleSmartAccount(publicClient, {
         signer: signer,
         entryPoint: ENTRYPOINT_ADDRESS_V07,
-        safeVersion: '1.4.1',
+        factoryAddress: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985',
       });
 
       const bundlerClient = createClient({
@@ -78,6 +84,8 @@ export function useSmartAccount() {
       return smartAccount;
     },
   });
+
+  console.log('smart account', smartAccount);
 
   return { smartAccount: smartAccount ?? null, isLoading: isLoading || isLoadingWallet };
 }
