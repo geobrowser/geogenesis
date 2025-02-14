@@ -71,7 +71,7 @@ const nextConfig = {
             value: 'testnet.geobrowser.io',
           },
         ],
-        destination: 'geogenesis-git-feat-testnet-geo-browser.vercel.app/:path*',
+        destination: 'https://geogenesis-git-feat-testnet-geo-browser.vercel.app/:path*',
       },
     ];
   },
