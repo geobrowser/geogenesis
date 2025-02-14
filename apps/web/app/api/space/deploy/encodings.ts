@@ -1,8 +1,6 @@
 import { CreateDaoParams } from '@aragon/sdk-client';
 import { VotingMode } from '@graphprotocol/grc-20';
-import {
-  TESTNET
-} from '@graphprotocol/grc-20/contracts';
+import { TESTNET } from '@graphprotocol/grc-20/contracts';
 import { ethers } from 'ethers';
 import { encodeAbiParameters } from 'viem';
 
@@ -61,7 +59,7 @@ export function getSpacePluginInstallItem({
   ]);
 
   return {
-    id: TESTNET.SPACE_PLUGIN_REPO_ADDRESS  as `0x${string}`,
+    id: TESTNET.SPACE_PLUGIN_REPO_ADDRESS as `0x${string}`,
     data: encodedParams,
   };
 }
