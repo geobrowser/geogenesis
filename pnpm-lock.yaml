@@ -50,9 +50,6 @@ importers:
       '@ethersproject/providers':
         specifier: ^5.6.8
         version: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      '@geogenesis/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
       '@graphprotocol/grc-20':
         specifier: ^0.4.1
         version: 0.4.1(@types/node@17.0.45)(@vitest/ui@0.25.8)(bufferutil@4.0.9)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
@@ -11174,7 +11171,7 @@ snapshots:
 
   '@types/ws@8.5.14':
     dependencies:
-      '@types/node': 17.0.45
+      '@types/node': 22.13.4
 
   '@types/yargs-parser@21.0.3': {}
 
