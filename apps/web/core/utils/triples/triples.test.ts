@@ -1,4 +1,4 @@
-import { Relation } from '@geogenesis/sdk';
+import { Relation } from '@graphprotocol/grc-20';
 import { describe, expect, it } from 'vitest';
 
 import { Triple } from '~/core/database/Triple';

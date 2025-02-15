@@ -65,6 +65,20 @@ const nextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: 'testnet.geobrowser.io',
+          },
+        ],
+        destination: 'https://geogenesis-git-feat-testnet-geo-browser.vercel.app/:path*',
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

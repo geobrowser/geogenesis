@@ -1,6 +1,6 @@
 'use client';
 
-import { GraphUrl } from '@geogenesis/sdk';
+import { GraphUrl } from '@graphprotocol/grc-20';
 import { cva } from 'class-variance-authority';
 
 import * as React from 'react';

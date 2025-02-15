@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 
 import { makeRelationForSourceType } from '~/core/blocks/data/source';
 import { StoreRelation } from '~/core/database/types';

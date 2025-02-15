@@ -1,6 +1,6 @@
 'use client';
 
-import { GraphUrl } from '@geogenesis/sdk';
+import { GraphUrl } from '@graphprotocol/grc-20';
 import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 import { LayoutGroup } from 'framer-motion';
 import { useRouter } from 'next/navigation';

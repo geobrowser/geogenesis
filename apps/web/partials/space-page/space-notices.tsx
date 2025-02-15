@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { cva } from 'class-variance-authority';
 import { useAtom } from 'jotai';
 import type { LinkProps } from 'next/link';
