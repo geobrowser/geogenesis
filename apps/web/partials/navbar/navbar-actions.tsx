@@ -1,6 +1,5 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { useLogout } from '@privy-io/react-auth';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
@@ -10,6 +9,7 @@ import { useParams } from 'next/navigation';
 
 import * as React from 'react';
 
+import { ROOT_SPACE_ID } from '~/core/constants';
 import { Cookie } from '~/core/cookie';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -192,7 +192,7 @@ const useSpaceId = () => {
   const segment = usePathSegments();
 
   if (segment[0] === 'root') {
-    return SYSTEM_IDS.ROOT_SPACE_ID;
+    return ROOT_SPACE_ID;
   }
 
   const spaceId = params?.['id'] as string | undefined;

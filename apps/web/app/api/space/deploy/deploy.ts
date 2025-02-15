@@ -10,7 +10,7 @@ import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
 import { VotingMode, getChecksumAddress } from '@graphprotocol/grc-20';
-import { MAINNET } from '@graphprotocol/grc-20/contracts';
+import { TESTNET } from '@graphprotocol/grc-20/contracts';
 import { EditProposal } from '@graphprotocol/grc-20/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { ethers, providers } from 'ethers';
@@ -40,8 +40,8 @@ const deployParams = {
   network: SupportedNetworks.LOCAL, // I don't think this matters but is required by Aragon SDK
   signer: signer,
   web3Providers: new providers.JsonRpcProvider(Environment.variables.rpcEndpoint),
-  DAOFactory: MAINNET.DAO_FACTORY_ADDRESS,
-  ENSRegistry: MAINNET.ENS_REGISTRY_ADDRESS,
+  DAOFactory: TESTNET.DAO_FACTORY_ADDRESS,
+  ENSRegistry: TESTNET.ENS_REGISTRY_ADDRESS,
 };
 
 class DeployDaoError extends Error {
@@ -325,7 +325,7 @@ async function* createDao(params: CreateGeoDaoParams, context: ContextParams) {
   // This check isn't 100% correct all the time
   // simulate the DAO creation to get an address
   // const pluginSetupProcessorAddr = await daoFactoryInstance.pluginSetupProcessor();
-  const pluginSetupProcessor = PluginSetupProcessor__factory.connect(MAINNET.PLUGIN_SETUP_PROCESSOR_ADDRESS, signer);
+  const pluginSetupProcessor = PluginSetupProcessor__factory.connect(TESTNET.PLUGIN_SETUP_PROCESSOR_ADDRESS, signer);
   let execPermissionFound = false;
 
   // using the DAO base because it reflects a newly created DAO the best
@@ -354,7 +354,7 @@ async function* createDao(params: CreateGeoDaoParams, context: ContextParams) {
   // write the tx using the geo signer.
   // @TODO can this just be a smart account client?
   const hash = await walletClient.sendTransaction({
-    to: MAINNET.DAO_FACTORY_ADDRESS as `0x${string}`,
+    to: TESTNET.DAO_FACTORY_ADDRESS as `0x${string}`,
     data: encodeFunctionData({
       abi: DaoFactoryAbi,
       functionName: 'createDao',
