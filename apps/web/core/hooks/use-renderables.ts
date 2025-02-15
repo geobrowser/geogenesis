@@ -1,4 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { useQuery } from '@tanstack/react-query';
 import { pipe } from 'effect';
 
