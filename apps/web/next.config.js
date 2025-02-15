@@ -11,6 +11,10 @@ const nextConfig = {
   experimental: {
     reactCompiler: true,
   },
+  devIndicators: {
+    appIsrStatus: false,
+    buildActivity: false,
+  },
   images: {
     remotePatterns: [
       {

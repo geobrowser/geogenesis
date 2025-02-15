@@ -34,9 +34,6 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
 
   const { triples: localTriples, relations, schema, name, id } = useEntityPageStore();
 
-  // @TODO remove console.info for schema
-  console.info('schema:', schema);
-
   const triplesFromSpace = useTriples({
     selector: t => t.space === spaceId,
     includeDeleted: true,
@@ -96,9 +93,6 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
   });
 
   const fullSchema: PropertySchema[] = [...schema, ...(typePropertySchema ?? [])];
-
-  // @TODO remove console.info for fullSchema
-  console.info('fullSchema:', fullSchema);
 
   const SKIPPED_PROPERTIES = !isRelationPage ? [SYSTEM_IDS.BLOCKS] : [SYSTEM_IDS.BLOCKS, SYSTEM_IDS.TYPES_ATTRIBUTE];
 
