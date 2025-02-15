@@ -59,12 +59,13 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
         filterState: [],
       });
 
+      const IS_TYPE_PROPERTY_ATTRIBUTE = 'T2TRBTBe5NS8vR94PLhzce';
+
       const typeProperties = possibleTypePropertyAttributeEntities
         ? possibleTypePropertyAttributeEntities
             .filter(
               entity =>
-                entity?.triples?.find(triple => triple.attributeId === SYSTEM_IDS.IS_TYPE_PROPERTY_ATTRIBUTE)?.value
-                  ?.value === '1'
+                entity?.triples?.find(triple => triple.attributeId === IS_TYPE_PROPERTY_ATTRIBUTE)?.value?.value === '1'
             )
             .map(entity => entity.id)
         : [];
