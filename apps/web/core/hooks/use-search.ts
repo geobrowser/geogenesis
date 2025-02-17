@@ -64,7 +64,7 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
           }
         }
 
-        return [resultOrError.right];
+        return resultOrError.right ? [resultOrError.right] : [];
       }
 
       const fetchResultsEffect = Effect.either(
