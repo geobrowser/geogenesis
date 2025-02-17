@@ -1,5 +1,6 @@
 import { Duration } from 'effect';
 
+import { SearchResult } from '../io/dto/search';
 import { EntityId } from '../io/schema';
 import { fetchResult, fetchSpaces } from '../io/subgraph';
 import { queryClient } from '../query-client';
@@ -60,5 +61,5 @@ export async function mergeSearchResult(args: FetchResultOptions) {
     };
   }
 
-  return merged;
+  return merged as SearchResult | null;
 }
