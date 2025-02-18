@@ -11,6 +11,9 @@ export function getStaleEntitiesInEdit(args: {
 }) {
   const { createdRelations, entitiesFromDeletedRelations: deletedRelations, entityIds } = args;
   const createdRelationFromIds = createdRelations.map(r => r.relation.fromEntity);
+
+  // Only return entities that don't already have new versions in the edit. There might be duplicate
+  // entity ids in created and deleted relations, so we dedupe them at the callsite.
   return [...createdRelationFromIds, ...deletedRelations].filter(entityId => !entityIds.has(entityId));
 }
 
