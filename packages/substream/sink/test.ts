@@ -1,12 +1,8 @@
-import { getChecksumAddress } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 
-import type { ChainEditProposal } from '../schema/proposal';
-import { Spaces } from '~/sink/db';
-import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder } from '~/sink/proto';
-import type { Op, SetTripleOp, SinkEditProposal } from '~/sink/types';
+import type { Op, SetTripleOp } from '~/sink/types';
 
 /**
  * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
@@ -18,35 +14,16 @@ import type { Op, SetTripleOp, SinkEditProposal } from '~/sink/types';
  *
  * Later on we map this to the database schema and write the proposal to the database.
  */
-export function getProposalFromIpfs(
-  proposal: ChainEditProposal
-): Effect.Effect<SinkEditProposal | null, SpaceWithPluginAddressNotFoundError> {
+export function getProposalFromIpfs(contentUri: string) {
   return Effect.gen(function* (_) {
     yield* _(Effect.logDebug('[FETCH PROPOSAL] Fetching proposal from IPFS'));
 
-    const maybeSpace = yield* _(Effect.promise(() => Spaces.findForDaoAddress(proposal.daoAddress)));
-
-    if (!maybeSpace) {
-      yield* _(Effect.logError(`[FETCH PROPOSAL] Space not found for DAO address ${proposal.daoAddress}`));
-      return null;
-    }
-
-    if (maybeSpace.main_voting_plugin_address !== getChecksumAddress(proposal.pluginAddress)) {
-      yield* _(Effect.logError(`[FETCH PROPOSAL] Proposal is not for the voting plugin`));
-      return null;
-    }
-
     yield* _(
       Effect.logDebug(`[FETCH PROPOSAL] Fetching IPFS content for proposal
-      proposalId:    ${proposal.proposalId}
-      pluginAddress: ${proposal.pluginAddress}
-      creator:       ${proposal.creator}
-      contentUri:   ${proposal.contentUri}
-      startTime:     ${proposal.startTime}
-      endTime:       ${proposal.endTime}`)
+      contentUri:   ${contentUri}`)
     );
 
-    const fetchIpfsContentEffect = getFetchIpfsContentEffect(proposal.contentUri);
+    const fetchIpfsContentEffect = getFetchIpfsContentEffect(contentUri);
     const maybeIpfsContent = yield* _(Effect.either(fetchIpfsContentEffect));
 
     if (Either.isLeft(maybeIpfsContent)) {
@@ -54,39 +31,31 @@ export function getProposalFromIpfs(
 
       switch (error._tag) {
         case 'UnableToParseBase64Error':
-          yield* _(
-            Effect.logError(`[FETCH PROPOSAL] Unable to parse base64 string ${proposal.contentUri}. ${String(error)}`)
-          );
+          yield* _(Effect.logError(`[FETCH PROPOSAL] Unable to parse base64 string ${contentUri}. ${String(error)}`));
           break;
         case 'FailedFetchingIpfsContentError':
           yield* _(
-            Effect.logError(
-              `[FETCH PROPOSAL] Failed fetching IPFS content from uri ${proposal.contentUri}. ${String(error)}`
-            )
+            Effect.logError(`[FETCH PROPOSAL] Failed fetching IPFS content from uri ${contentUri}. ${String(error)}`)
           );
           break;
         case 'UnableToParseJsonError':
           yield* _(
             Effect.logError(
-              `[FETCH PROPOSAL] Unable to parse JSON when reading content from uri ${proposal.contentUri}. ${String(
-                error
-              )}`
+              `[FETCH PROPOSAL] Unable to parse JSON when reading content from uri ${contentUri}. ${String(error)}`
             )
           );
           break;
         case 'TimeoutException':
           yield* _(
             Effect.logError(
-              `[FETCH PROPOSAL] Timed out when fetching IPFS content for uri ${proposal.contentUri}. ${String(error)}`
+              `[FETCH PROPOSAL] Timed out when fetching IPFS content for uri ${contentUri}. ${String(error)}`
             )
           );
           break;
         default:
           yield* _(
             Effect.logError(
-              `[FETCH PROPOSAL] Unknown error when fetching IPFS content for uri ${proposal.contentUri}. ${String(
-                error
-              )}`
+              `[FETCH PROPOSAL] Unknown error when fetching IPFS content for uri ${contentUri}. ${String(error)}`
             )
           );
           break;
@@ -118,25 +87,21 @@ export function getProposalFromIpfs(
           return null;
         }
 
-        const mappedProposal: SinkEditProposal = {
-          ...proposal,
-          type: 'ADD_EDIT',
-          name: parsedContent.name ?? null,
-          proposalId: parsedContent.id,
-          onchainProposalId: proposal.proposalId,
-          pluginAddress: getChecksumAddress(proposal.pluginAddress),
+        console.log('parsedContent', parsedContent);
+
+        const mappedProposal = {
           ops: parsedContent.ops.map((op): Op => {
             switch (op.type) {
               case 'SET_TRIPLE':
                 return {
                   type: 'SET_TRIPLE',
-                  space: maybeSpace.id,
+                  space: '',
                   triple: op.triple,
                 } as SetTripleOp;
               case 'DELETE_TRIPLE':
                 return {
                   type: 'DELETE_TRIPLE',
-                  space: maybeSpace.id,
+                  space: '',
                   triple: {
                     attribute: op.triple.attribute,
                     entity: op.triple.entity,
@@ -146,20 +111,17 @@ export function getProposalFromIpfs(
               case 'CREATE_RELATION':
                 return {
                   type: 'CREATE_RELATION',
-                  space: maybeSpace.id,
+                  space: '',
                   relation: op.relation,
                 };
               case 'DELETE_RELATION':
                 return {
                   type: 'DELETE_RELATION',
-                  space: maybeSpace.id,
+                  space: '',
                   relation: op.relation,
                 };
             }
           }),
-          creator: getChecksumAddress(proposal.creator),
-          daoAddress: getChecksumAddress(proposal.daoAddress),
-          space: maybeSpace.id,
         };
 
         return mappedProposal;
@@ -171,3 +133,5 @@ export function getProposalFromIpfs(
     }
   });
 }
+
+await Effect.runPromise(getProposalFromIpfs('ipfs://bafkreigjb5bejzykgfycjnieva4qnj5vx73enmyq22i6mqdcppplvc7nsy'));

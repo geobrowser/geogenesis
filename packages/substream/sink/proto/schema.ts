@@ -13,6 +13,13 @@ const ZodEditSetTriplePayload = z.object({
   // format once it's decoded.
   value: z.object({
     value: z.string(),
+    options: z
+      .object({
+        format: z.string().optional(),
+        language: z.string().optional(),
+        unit: z.string().optional(),
+      })
+      .optional(),
     type: z.number().transform(t => {
       switch (t) {
         case 1:
