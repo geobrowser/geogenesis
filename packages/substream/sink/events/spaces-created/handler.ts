@@ -1,4 +1,4 @@
-import { NETWORK_IDS } from '@geogenesis/sdk';
+import { NetworkIds } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
 
 import { mapGovernanceToSpaces, mapPersonalToSpaces, mapSpaces } from './map-spaces';
@@ -47,7 +47,7 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
     const personalPluginsWithSpaceId = personalPluginsCreated.map(p => {
       return {
         ...p,
-        id: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+        id: deriveSpaceId({ address: p.daoAddress, network: NetworkIds.GEO }),
       };
     });
 
@@ -78,7 +78,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
     const governancePluginsWithSpaceId = governancePluginsCreated.map(g => {
       return {
         ...g,
-        id: deriveSpaceId({ address: g.daoAddress, network: NETWORK_IDS.GEO }),
+        id: deriveSpaceId({ address: g.daoAddress, network: NetworkIds.GEO }),
       };
     });
 

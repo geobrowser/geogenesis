@@ -1,4 +1,4 @@
-import { getChecksumAddress } from '@geogenesis/sdk';
+import { getChecksumAddress } from '@graphprotocol/grc-20';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 

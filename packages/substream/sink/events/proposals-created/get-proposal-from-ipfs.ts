@@ -1,4 +1,4 @@
-import { getChecksumAddress } from '@geogenesis/sdk';
+import { getChecksumAddress } from '@graphprotocol/grc-20';
 import { Effect, Either } from 'effect';
 
 import type { ChainEditProposal } from '../schema/proposal';

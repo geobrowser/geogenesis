@@ -1,6 +1,6 @@
 import type { IMessageTypeRegistry } from '@bufbuild/protobuf';
 import { createGrpcTransport } from '@connectrpc/connect-node';
-import { ID, NETWORK_IDS } from '@geogenesis/sdk';
+import { Id, NetworkIds } from '@graphprotocol/grc-20';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import type { BlockScopedData } from '@substreams/core/proto';
 import { readPackageFromFile } from '@substreams/manifest';
@@ -157,7 +157,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
         return Effect.gen(function* (_) {
           const blockNumber = Number(message.clock?.number.toString());
 
-          const requestId = ID.make();
+          const requestId = Id.generate();
           const telemetry = yield* _(Telemetry);
           const logLevel = yield* _(getConfiguredLogLevel);
 
@@ -313,7 +313,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
           handleNewGeoBlock({
             ...block,
             hash: message.clock?.id ?? '',
-            network: NETWORK_IDS.GEO,
+            network: NetworkIds.GEO,
           })
         )
       );

@@ -1,4 +1,4 @@
-import { NETWORK_IDS, getChecksumAddress } from '@geogenesis/sdk';
+import { NetworkIds, getChecksumAddress } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
 
 import type {
@@ -144,7 +144,7 @@ export function handleMembershipProposalsCreated(
           member,
           onchainProposalId: p.proposalId,
           proposalId,
-          space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+          space: deriveSpaceId({ address: p.daoAddress, network: NetworkIds.GEO }),
           type: 'ADD_MEMBER',
         };
       }
@@ -158,7 +158,7 @@ export function handleMembershipProposalsCreated(
         member,
         onchainProposalId: p.proposalId,
         proposalId,
-        space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+        space: deriveSpaceId({ address: p.daoAddress, network: NetworkIds.GEO }),
         type: 'REMOVE_MEMBER',
       };
     });
@@ -217,7 +217,7 @@ export function handleEditorshipProposalsCreated(
           name: `Add editor ${editor}`,
           onchainProposalId: p.proposalId,
           proposalId,
-          space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+          space: deriveSpaceId({ address: p.daoAddress, network: NetworkIds.GEO }),
           type: 'ADD_EDITOR',
         };
       }
@@ -231,7 +231,7 @@ export function handleEditorshipProposalsCreated(
         name: `Remove editor ${editor}`,
         onchainProposalId: p.proposalId,
         proposalId,
-        space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+        space: deriveSpaceId({ address: p.daoAddress, network: NetworkIds.GEO }),
         type: 'REMOVE_EDITOR',
       };
     });
@@ -290,8 +290,8 @@ export function handleSubspaceProposalsCreated(
           daoAddress,
           onchainProposalId: p.proposalId,
           proposalId,
-          subspace: deriveSpaceId({ address: subspaceAddress, network: NETWORK_IDS.GEO }),
-          space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+          subspace: deriveSpaceId({ address: subspaceAddress, network: NetworkIds.GEO }),
+          space: deriveSpaceId({ address: p.daoAddress, network: NetworkIds.GEO }),
           type: 'ADD_SUBSPACE',
         };
       }
@@ -304,8 +304,8 @@ export function handleSubspaceProposalsCreated(
         daoAddress,
         onchainProposalId: p.proposalId,
         proposalId,
-        subspace: deriveSpaceId({ address: subspaceAddress, network: NETWORK_IDS.GEO }),
-        space: deriveSpaceId({ address: p.daoAddress, network: NETWORK_IDS.GEO }),
+        subspace: deriveSpaceId({ address: subspaceAddress, network: NetworkIds.GEO }),
+        space: deriveSpaceId({ address: p.daoAddress, network: NetworkIds.GEO }),
         type: 'REMOVE_SUBSPACE',
       };
     });
