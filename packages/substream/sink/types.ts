@@ -25,6 +25,12 @@ export interface GeoBlock extends BlockEvent {
 
 export type ValueType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'URL' | 'TIME' | 'POINT';
 
+export type ValueOptions = {
+  language?: string;
+  unit?: string;
+  format?: string;
+};
+
 export type SetTripleOp = {
   type: 'SET_TRIPLE';
   space: string;
@@ -34,6 +40,7 @@ export type SetTripleOp = {
     value: {
       type: ValueType;
       value: string;
+      options?: ValueOptions;
     };
   };
 };

@@ -1,4 +1,4 @@
-import { ID } from '@geogenesis/sdk';
+import { Id } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
@@ -159,7 +159,7 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
             const to_version_id = latestVersionForChangedEntities[r.to_entity_id] ?? r.to_version_id;
 
             return {
-              id: ID.make(), // Not deterministic
+              id: Id.generate(), // Not deterministic
               // We look up the latest version for both the type and to versions
               // using their entity ids so they're updated before writing to the
               // db. The latest version can come from the db or come from the
@@ -198,7 +198,7 @@ export function aggregateRelations({ relationOpsByEditId, versions, edits, editT
           }
 
           return {
-            id: ID.make(), // Not deterministic
+            id: Id.generate(), // Not deterministic
             // We look up the latest version for both the type and to versions
             // using their entity ids so they're updated before writing to the
             // db. The latest version can come from the db or come from the

@@ -30,6 +30,9 @@ export function getTripleFromOp(
       value_type,
       created_at: block.timestamp,
       created_at_block: block.blockNumber,
+      format_option: value.options?.format,
+      language_option: value.options?.language,
+      unit_option: value.options?.unit,
     };
   }
 

@@ -1,4 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import type * as S from 'zapatos/schema';
 
 import { createVersionId } from '../../utils/id';
@@ -331,7 +331,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
         space: op.space,
         triple: {
           entity: op.relation.id,
-          attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+          attribute: SystemIds.RELATION_TYPE_ATTRIBUTE,
           value: {
             type: 'URL',
             value: GraphUrl.fromEntityId(op.relation.type),
@@ -343,10 +343,10 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
         space: op.space,
         triple: {
           entity: op.relation.id,
-          attribute: SYSTEM_IDS.TYPES_ATTRIBUTE,
+          attribute: SystemIds.TYPES_ATTRIBUTE,
           value: {
             type: 'URL',
-            value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE),
+            value: GraphUrl.fromEntityId(SystemIds.RELATION_TYPE),
           },
         },
       },
@@ -355,7 +355,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
         space: op.space,
         triple: {
           entity: op.relation.id,
-          attribute: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+          attribute: SystemIds.RELATION_FROM_ATTRIBUTE,
           value: {
             type: 'URL',
             value: GraphUrl.fromEntityId(op.relation.fromEntity),
@@ -367,7 +367,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
         space: op.space,
         triple: {
           entity: op.relation.id,
-          attribute: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+          attribute: SystemIds.RELATION_TO_ATTRIBUTE,
           value: {
             type: 'URL',
             value: GraphUrl.fromEntityId(op.relation.toEntity),
@@ -379,7 +379,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
         space: op.space,
         triple: {
           entity: op.relation.id,
-          attribute: SYSTEM_IDS.RELATION_INDEX,
+          attribute: SystemIds.RELATION_INDEX,
           value: {
             type: 'TEXT',
             value: op.relation.index,
@@ -395,7 +395,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
       space: op.space,
       triple: {
         entity: op.relation.id,
-        attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+        attribute: SystemIds.RELATION_TYPE_ATTRIBUTE,
         value: {},
       },
     },
@@ -404,7 +404,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
       space: op.space,
       triple: {
         entity: op.relation.id,
-        attribute: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        attribute: SystemIds.TYPES_ATTRIBUTE,
         value: {},
       },
     },
@@ -413,7 +413,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
       space: op.space,
       triple: {
         entity: op.relation.id,
-        attribute: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+        attribute: SystemIds.RELATION_FROM_ATTRIBUTE,
         value: {},
       },
     },
@@ -422,7 +422,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
       space: op.space,
       triple: {
         entity: op.relation.id,
-        attribute: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+        attribute: SystemIds.RELATION_TO_ATTRIBUTE,
         value: {},
       },
     },
@@ -431,7 +431,7 @@ function relationOpToTripleOps(op: CreateRelationOp | DeleteRelationOp): (SetTri
       space: op.space,
       triple: {
         entity: op.relation.id,
-        attribute: SYSTEM_IDS.RELATION_INDEX,
+        attribute: SystemIds.RELATION_INDEX,
         value: {},
       },
     },

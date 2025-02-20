@@ -149,7 +149,10 @@ CREATE TABLE public.triples (
     entity_value_id text REFERENCES public.entities(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
-    version_id text NOT NULL REFERENCES public.versions(id)
+    version_id text NOT NULL REFERENCES public.versions(id),
+    format_option text,
+    language_option text,
+    unit_option text
 );
 
 CREATE TABLE public.spaces_metadata (
