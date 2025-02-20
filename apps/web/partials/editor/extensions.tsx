@@ -2,7 +2,7 @@ import Bold from '@tiptap/extension-bold';
 import BulletList from '@tiptap/extension-bullet-list';
 import Document from '@tiptap/extension-document';
 import Gapcursor from '@tiptap/extension-gapcursor';
-import HardBreak from '@tiptap/extension-hard-break';
+import History from '@tiptap/extension-history';
 import Image from '@tiptap/extension-image';
 import Italic from '@tiptap/extension-italic';
 import Link from '@tiptap/extension-link';
@@ -77,4 +77,5 @@ export const tiptapExtensions = [
       return isHeading ? 'Heading...' : '/ to select content block or write some content...';
     },
   }),
+  History,
 ];
