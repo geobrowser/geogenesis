@@ -346,6 +346,7 @@ export function useEditorStore() {
       const { added, removed, moved } = getBlockPositionChanges(blockIds, newBlockIds);
 
       const addedBlocks = newBlocks.filter(b => added.includes(b.id));
+      const movedBlocks = newBlocks.filter(b => moved.includes(b.id));
 
       // Updating all of the Geo state as the editor state changes is complex. There are
       // many relations and entities created to create the graph of different block types
@@ -433,8 +434,12 @@ export function useEditorStore() {
           return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
         }),
         removedBlockIds: removed,
-        movedBlockIds: moved,
-        movedBlocks: newBlocks.filter(b => moved.includes(b.id)),
+        movedBlocks: movedBlocks.map(block => {
+          const imageHash = getImageHash(block.attrs?.src ?? '');
+          const imageUrl = `ipfs://${imageHash}`;
+
+          return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
+        }),
         spaceId,
         blockRelations: blockRelations,
         entityPageId: activeEntityId,
