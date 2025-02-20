@@ -84,4 +84,13 @@ it('should return moved blocks', () => {
     removed: ['c'],
     moved: ['a', 'b'],
   });
+
+  previous = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+  next = ['a', 'c', 'd', 'b', 'e', 'f', 'g'];
+
+  expect(getBlockPositionChanges(previous, next)).toEqual({
+    added: [],
+    removed: [],
+    moved: ['b'],
+  });
 });
