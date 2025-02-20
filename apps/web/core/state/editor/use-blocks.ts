@@ -1,7 +1,5 @@
 import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 
-import * as React from 'react';
-
 import { useRelations } from '~/core/database/relations';
 import { EntityId, TypeId } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
@@ -27,18 +25,12 @@ export type RelationWithBlock = {
  *
  */
 export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
-  const blocks = useRelations(
-    React.useMemo(() => {
-      return {
-        mergeWith: initialBlockRelations,
-        selector: r => r.fromEntity.id === fromEntityId && r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS),
-      };
-    }, [initialBlockRelations, fromEntityId])
-  );
+  const blocks = useRelations({
+    mergeWith: initialBlockRelations,
+    selector: r => r.fromEntity.id === fromEntityId && r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS),
+  });
 
-  return React.useMemo(() => {
-    return blocks.map(relationToRelationWithBlock).sort(sortByIndex);
-  }, [blocks]);
+  return blocks.map(relationToRelationWithBlock).sort(sortByIndex);
 }
 
 function relationToRelationWithBlock(r: Relation): RelationWithBlock {

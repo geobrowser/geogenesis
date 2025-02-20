@@ -4,7 +4,6 @@ import { Relation as R, SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { Image } from '@graphprotocol/grc-20';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
-import { Array } from 'effect';
 import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
@@ -22,16 +21,100 @@ import { Relation, RenderableEntityType } from '../../types';
 import { Values } from '../../utils/value';
 import { getRelationForBlockType } from './block-types';
 import { useEditorInstance } from './editor-provider';
+import { getBlockPositionChanges } from './get-block-position-changes';
 import * as Parser from './parser';
 import * as TextEntity from './text-entity';
 import { Content } from './types';
 import { RelationWithBlock, useBlocks } from './use-blocks';
 import { getNodeId } from './utils';
 
+interface MakeNewBlockArgs {
+  addedBlock: { id: string; value: string };
+  tiptapBlock: { id: string; type: Content['type'] };
+  spaceId: string;
+  nextBlockIds: string[];
+  newBlocks: Relation[];
+  blockRelations: RelationWithBlock[];
+  entityPageId: string;
+}
+
+function makeNewBlockRelation({
+  tiptapBlock,
+  addedBlock,
+  nextBlockIds,
+  blockRelations,
+  spaceId,
+  newBlocks,
+  entityPageId,
+}: MakeNewBlockArgs) {
+  const newRelationId = ID.createEntityId();
+
+  const position = nextBlockIds.indexOf(addedBlock.id);
+
+  // @TODO: noUncheckedIndexAccess
+  const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
+  const afterBlockIndex = nextBlockIds[position + 1] as string | undefined;
+
+  // Check both the existing blocks and any that are created as part of this update
+  // tick. This is necessary as right now we don't update the Geo state until the
+  // user blurs the editor. See the comment earlier in this function.
+  const beforeCollectionItemIndex =
+    blockRelations.find(c => c.block.id === beforeBlockIndex)?.index ??
+    newBlocks.find(c => c.id === beforeBlockIndex)?.index;
+  const afterCollectionItemIndex =
+    blockRelations.find(c => c.block.id === afterBlockIndex)?.index ??
+    newBlocks.find(c => c.id === afterBlockIndex)?.index;
+
+  const newTripleOrdering = R.reorder({
+    relationId: newRelationId,
+    beforeIndex: beforeCollectionItemIndex,
+    afterIndex: afterCollectionItemIndex,
+  });
+
+  const renderableType = ((): RenderableEntityType => {
+    switch (tiptapBlock.type) {
+      case 'paragraph':
+      case 'text':
+      case 'heading':
+      case 'listItem':
+      case 'bulletList':
+      case 'orderedList':
+        return 'TEXT';
+      case 'tableNode':
+        return 'DATA';
+      case 'image':
+        return 'IMAGE';
+    }
+  })();
+
+  const newRelation: Relation = {
+    space: spaceId,
+    id: newRelationId,
+    index: newTripleOrdering.triple.value.value,
+    typeOf: {
+      id: EntityId(SYSTEM_IDS.BLOCKS),
+      name: 'Blocks',
+    },
+    toEntity: {
+      id: EntityId(addedBlock.id),
+      renderableType,
+      name: null,
+      value: addedBlock.value,
+    },
+    fromEntity: {
+      id: EntityId(entityPageId),
+      name: null,
+    },
+  };
+
+  return newRelation;
+}
+
 interface UpsertBlocksRelationsArgs {
   entityId: string;
   nextBlocks: { id: string; type: Content['type'] }[];
   addedBlocks: { id: string; value: string }[];
+  movedBlocks: { id: string; value: string }[];
   removedBlockIds: string[];
   blockRelations: RelationWithBlock[];
   spaceId: string;
@@ -48,6 +131,7 @@ const makeBlocksRelations = async ({
   entityPageId,
   addedBlocks,
   removedBlockIds,
+  movedBlocks,
 }: UpsertBlocksRelationsArgs) => {
   // We store the new collection items being created so we can check if the new
   // ordering for a block is dependent on other blocks being created at the same time.
@@ -61,65 +145,17 @@ const makeBlocksRelations = async ({
   const nextBlockIds = nextBlocks.map(b => b.id);
 
   for (const addedBlock of addedBlocks) {
-    const newRelationId = ID.createEntityId();
-    const block = nextBlocks.find(b => b.id === addedBlock.id)!;
+    const tiptapBlock = nextBlocks.find(b => b.id === addedBlock.id)!;
 
-    const position = nextBlockIds.indexOf(addedBlock.id);
-    // @TODO: noUncheckedIndexAccess
-    const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
-    const afterBlockIndex = nextBlockIds[position + 1] as string | undefined;
-
-    // Check both the existing blocks and any that are created as part of this update
-    // tick. This is necessary as right now we don't update the Geo state until the
-    // user blurs the editor. See the comment earlier in this function.
-    const beforeCollectionItemIndex =
-      blockRelations.find(c => c.block.id === beforeBlockIndex)?.index ??
-      newBlocks.find(c => c.id === beforeBlockIndex)?.index;
-    const afterCollectionItemIndex =
-      blockRelations.find(c => c.block.id === afterBlockIndex)?.index ??
-      newBlocks.find(c => c.id === afterBlockIndex)?.index;
-
-    const newTripleOrdering = R.reorder({
-      relationId: newRelationId,
-      beforeIndex: beforeCollectionItemIndex,
-      afterIndex: afterCollectionItemIndex,
+    const newRelation = makeNewBlockRelation({
+      tiptapBlock,
+      addedBlock,
+      nextBlockIds,
+      blockRelations,
+      spaceId,
+      newBlocks,
+      entityPageId,
     });
-
-    const renderableType = ((): RenderableEntityType => {
-      switch (block.type) {
-        case 'paragraph':
-        case 'text':
-        case 'heading':
-        case 'listItem':
-        case 'bulletList':
-        case 'orderedList':
-          return 'TEXT';
-        case 'tableNode':
-          return 'DATA';
-        case 'image':
-          return 'IMAGE';
-      }
-    })();
-
-    const newRelation: Relation = {
-      space: spaceId,
-      id: newRelationId,
-      index: newTripleOrdering.triple.value.value,
-      typeOf: {
-        id: EntityId(SYSTEM_IDS.BLOCKS),
-        name: 'Blocks',
-      },
-      toEntity: {
-        id: EntityId(addedBlock.id),
-        renderableType,
-        name: null,
-        value: addedBlock.value,
-      },
-      fromEntity: {
-        id: EntityId(entityPageId),
-        name: null,
-      },
-    };
 
     DB.upsertRelation({ relation: newRelation, spaceId });
     newBlocks.push(newRelation);
@@ -134,6 +170,32 @@ const makeBlocksRelations = async ({
       fromEntityId: EntityId(entityId),
       spaceId,
     });
+  }
+
+  for (const movedBlock of movedBlocks) {
+    const relationForMovedBlock = blockRelations.find(r => r.block.id === movedBlock.id);
+
+    if (relationForMovedBlock) {
+      DB.removeRelation({
+        relationId: relationForMovedBlock?.relationId,
+        fromEntityId: EntityId(entityId),
+        spaceId,
+      });
+    }
+
+    const newRelation = makeNewBlockRelation({
+      tiptapBlock: nextBlocks.find(b => b.id === movedBlock.id)!,
+      addedBlock: movedBlock,
+      nextBlockIds,
+      blockRelations,
+      spaceId,
+      newBlocks,
+      entityPageId,
+    });
+
+    console.log('new relation', newRelation);
+
+    DB.upsertRelation({ relation: newRelation, spaceId });
   }
 };
 
@@ -275,8 +337,15 @@ export function useEditorStore() {
 
       const newBlockIds = newBlocks.map(b => b.id);
 
-      const addedBlockIds = Array.difference(newBlockIds, blockIds);
-      const addedBlocks = newBlocks.filter(b => addedBlockIds.includes(b.id));
+      // We also need to check the re-ordering of any blocks. If a block has been reordered then
+      // we need to calculate it's new position.
+      //
+      // Q:
+      // Does tiptap copy metadata about the block when you copy-paste it in the editor?
+
+      const { added, removed, moved } = getBlockPositionChanges(blockIds, newBlockIds);
+
+      const addedBlocks = newBlocks.filter(b => added.includes(b.id));
 
       // Updating all of the Geo state as the editor state changes is complex. There are
       // many relations and entities created to create the graph of different block types
@@ -349,9 +418,7 @@ export function useEditorStore() {
         }
       }
 
-      const removedBlockIds = Array.difference(blockIds, newBlockIds);
-
-      for (const removedBlockId of removedBlockIds) {
+      for (const removedBlockId of removed) {
         // @TODO(performance) removeMany
         DB.removeEntity(removedBlockId, spaceId);
       }
@@ -365,7 +432,9 @@ export function useEditorStore() {
 
           return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
         }),
-        removedBlockIds,
+        removedBlockIds: removed,
+        movedBlockIds: moved,
+        movedBlocks: newBlocks.filter(b => moved.includes(b.id)),
         spaceId,
         blockRelations: blockRelations,
         entityPageId: activeEntityId,
