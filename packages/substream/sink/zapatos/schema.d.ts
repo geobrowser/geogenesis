@@ -10,6 +10,7 @@ Released under the MIT licence: see LICENCE file
 declare module 'zapatos/schema' {
 
   import type * as db from 'zapatos/db';
+  import type * as c from 'zapatos/custom';
 
   // got a type error on schemaVersionCanary below? update by running `npx zapatos`
   export interface schemaVersionCanary extends db.SchemaVersionCanary { version: 104 }
@@ -602,6 +603,18 @@ declare module 'zapatos/schema' {
       */
       id: string;
       /**
+      * **entities.name**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      name: string | null;
+      /**
+      * **entities.search_vector**
+      * - `tsvector` in database
+      * - Nullable, no default
+      */
+      search_vector: c.PgTsvector | null;
+      /**
       * **entities.updated_at**
       * - `int4` in database
       * - Nullable, no default
@@ -639,6 +652,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       id: string;
+      /**
+      * **entities.name**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      name: string | null;
+      /**
+      * **entities.search_vector**
+      * - `tsvector` in database
+      * - Nullable, no default
+      */
+      search_vector: c.PgTsvector | null;
       /**
       * **entities.updated_at**
       * - `int4` in database
@@ -678,6 +703,18 @@ declare module 'zapatos/schema' {
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **entities.name**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      name?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **entities.search_vector**
+      * - `tsvector` in database
+      * - Nullable, no default
+      */
+      search_vector?: c.PgTsvector | db.Parameter<c.PgTsvector> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, c.PgTsvector | db.Parameter<c.PgTsvector> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **entities.updated_at**
       * - `int4` in database
       * - Nullable, no default
@@ -716,6 +753,18 @@ declare module 'zapatos/schema' {
       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
+      * **entities.name**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **entities.search_vector**
+      * - `tsvector` in database
+      * - Nullable, no default
+      */
+      search_vector?: c.PgTsvector | db.Parameter<c.PgTsvector> | null | db.DefaultType | db.SQLFragment;
+      /**
       * **entities.updated_at**
       * - `int4` in database
       * - Nullable, no default
@@ -753,6 +802,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **entities.name**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **entities.search_vector**
+      * - `tsvector` in database
+      * - Nullable, no default
+      */
+      search_vector?: c.PgTsvector | db.Parameter<c.PgTsvector> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, c.PgTsvector | db.Parameter<c.PgTsvector> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **entities.updated_at**
       * - `int4` in database

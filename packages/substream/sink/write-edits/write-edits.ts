@@ -85,17 +85,6 @@ export function writeEdits(args: PopulateContentArgs) {
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
     for (const version of versions) {
-      const entity: Schema.entities.Insertable = {
-        id: version.entity_id,
-        created_by_id: version.created_by_id,
-        created_at: block.timestamp,
-        created_at_block: block.blockNumber,
-        updated_at: block.timestamp,
-        updated_at_block: block.blockNumber,
-      };
-
-      entities.push(entity);
-
       const editWithCreatedById: SchemaTripleEdit = {
         versonId: version.id.toString(),
         createdById: version.created_by_id.toString(),
@@ -125,6 +114,18 @@ export function writeEdits(args: PopulateContentArgs) {
         name,
         description,
       } satisfies Schema.versions.Insertable);
+
+      const entity: Schema.entities.Insertable = {
+        id: version.entity_id,
+        created_by_id: version.created_by_id,
+        created_at: block.timestamp,
+        created_at_block: block.blockNumber,
+        updated_at: block.timestamp,
+        updated_at_block: block.blockNumber,
+        name: name,
+      };
+
+      entities.push(entity);
 
       // Later we dedupe after applying space versions derived from relations
       for (const triple of setTriples) {

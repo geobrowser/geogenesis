@@ -2,6 +2,8 @@ DROP SCHEMA public CASCADE;
 
 CREATE SCHEMA IF NOT EXISTS public;
 
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 CREATE TABLE public.accounts (id text PRIMARY KEY);
 
 CREATE TABLE public.cursors (
@@ -18,8 +20,12 @@ CREATE TABLE public.entities (
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     updated_at integer,
-    updated_at_block integer
+    updated_at_block integer,
+    name text,
+    search_vector tsvector
 );
+
+UPDATE entities SET search_vector = to_tsvector('english', name);
 
 CREATE TYPE public.space_type as ENUM ('personal', 'public');
 
