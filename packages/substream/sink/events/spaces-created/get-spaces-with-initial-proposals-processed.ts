@@ -1,4 +1,4 @@
-import { getChecksumAddress } from '@geogenesis/sdk';
+import { getChecksumAddress } from '@graphprotocol/grc-20';
 
 import type { ChainEditPublished } from '../schema/edit-published';
 import type { SpacePluginCreated } from './parser';

@@ -1,4 +1,4 @@
-import { Edit, Import, ImportEdit, IpfsMetadata } from '@geogenesis/sdk/proto';
+import { Edit, Import, ImportEdit, IpfsMetadata } from '@graphprotocol/grc-20/proto';
 import { Effect, Either } from 'effect';
 import { z } from 'zod';
 

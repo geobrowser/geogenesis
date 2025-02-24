@@ -1,4 +1,4 @@
-import { encodeBase58, getChecksumAddress } from '@geogenesis/sdk';
+import { Base58, getChecksumAddress } from '@graphprotocol/grc-20';
 import { createHash } from 'crypto';
 import { v4 } from 'uuid';
 
@@ -23,7 +23,7 @@ export function createIdFromUniqueString(text: string) {
   const hashed = createHash('md5').update(text).digest('hex');
   const bytes = hexToBytesArray(hashed);
   const uuid = v4({ random: bytes });
-  return encodeBase58(uuid.split('-').join(''));
+  return Base58.encodeBase58(uuid.split('-').join(''));
 }
 
 function hexToBytesArray(hex: string) {

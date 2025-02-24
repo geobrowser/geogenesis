@@ -1,4 +1,4 @@
-import { getChecksumAddress } from '@geogenesis/sdk';
+import { getChecksumAddress } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
 
 import { writeAccounts } from '../write-accounts';

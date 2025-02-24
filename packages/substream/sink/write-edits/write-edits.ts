@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
@@ -85,17 +85,6 @@ export function writeEdits(args: PopulateContentArgs) {
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
     for (const version of versions) {
-      const entity: Schema.entities.Insertable = {
-        id: version.entity_id,
-        created_by_id: version.created_by_id,
-        created_at: block.timestamp,
-        created_at_block: block.blockNumber,
-        updated_at: block.timestamp,
-        updated_at_block: block.blockNumber,
-      };
-
-      entities.push(entity);
-
       const editWithCreatedById: SchemaTripleEdit = {
         versonId: version.id.toString(),
         createdById: version.created_by_id.toString(),
@@ -113,9 +102,9 @@ export function writeEdits(args: PopulateContentArgs) {
       triplesWithCreatedBy.push(...triplesForVersion);
 
       const setTriples = triplesForVersion.filter(t => t.op === 'SET_TRIPLE');
-      const nameTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.NAME_ATTRIBUTE);
+      const nameTriple = setTriples.find(t => t.triple.attribute_id === SystemIds.NAME_ATTRIBUTE);
 
-      const descriptionTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE);
+      const descriptionTriple = setTriples.find(t => t.triple.attribute_id === SystemIds.DESCRIPTION_ATTRIBUTE);
 
       const name = nameTriple?.triple.text_value?.toString();
       const description = descriptionTriple?.triple.text_value?.toString();
@@ -125,6 +114,18 @@ export function writeEdits(args: PopulateContentArgs) {
         name,
         description,
       } satisfies Schema.versions.Insertable);
+
+      const entity: Schema.entities.Insertable = {
+        id: version.entity_id,
+        created_by_id: version.created_by_id,
+        created_at: block.timestamp,
+        created_at_block: block.blockNumber,
+        updated_at: block.timestamp,
+        updated_at_block: block.blockNumber,
+        name: name,
+      };
+
+      entities.push(entity);
 
       // Later we dedupe after applying space versions derived from relations
       for (const triple of setTriples) {
@@ -220,7 +221,7 @@ function aggregateTypesFromRelationsAndTriples(relations: Schema.relations.Inser
     const fromVersionId = relation.from_version_id.toString();
     const toVersionId = relation.to_version_id.toString();
 
-    if (relation.type_of_id.toString() === SYSTEM_IDS.TYPES_ATTRIBUTE) {
+    if (relation.type_of_id.toString() === SystemIds.TYPES_ATTRIBUTE) {
       const alreadyFoundTypes = types.get(fromVersionId) ?? [];
       types.set(fromVersionId, [...alreadyFoundTypes, toVersionId]);
     }

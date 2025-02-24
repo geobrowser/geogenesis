@@ -122,6 +122,9 @@ importers:
       '@tiptap/extension-heading':
         specifier: ^2.10.4
         version: 2.11.3(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))
+      '@tiptap/extension-history':
+        specifier: ^2.11.5
+        version: 2.11.5(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))(@tiptap/pm@2.10.4)
       '@tiptap/extension-image':
         specifier: 2.10.4
         version: 2.10.4(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))
@@ -564,9 +567,9 @@ importers:
       '@effect/schema':
         specifier: ^0.63.0
         version: 0.63.4(effect@2.4.19)(fast-check@3.13.2)
-      '@geogenesis/sdk':
-        specifier: workspace:*
-        version: link:../sdk
+      '@graphprotocol/grc-20':
+        specifier: ^0.6.0
+        version: 0.6.0(@types/node@22.13.4)(bufferutil@4.0.9)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
       '@sentry/node':
         specifier: ^7.112.2
         version: 7.120.3
@@ -1704,6 +1707,9 @@ packages:
 
   '@graphprotocol/grc-20@0.5.0':
     resolution: {integrity: sha512-jaPf/UZREQ20G9vQTqUZLoUtYibgbM0PHCNjK40eHuvzoR2nJK01zOhIOqYhEHt/YciK4vsL8mxlBzh4aDkVWg==}
+
+  '@graphprotocol/grc-20@0.6.0':
+    resolution: {integrity: sha512-N+bjPoB7TjNrJQQIOJ0Snveslq42uY7mO4sb9zy3XCB0yJlhy1TuBuQ+AXzwLi1LBEd62yNKSbz6dV9ghJa5CQ==}
 
   '@headlessui/react@2.2.0':
     resolution: {integrity: sha512-RzCEg+LXsuI7mHiSomsu/gBJSjpupm6A1qIZ5sWjd7JhARNlMiSA4kKfJpCKwU9tE+zMRterhhrP74PvfJrpXQ==}
@@ -3009,6 +3015,12 @@ packages:
     resolution: {integrity: sha512-PuScgMuVxD/dUcizLCfQ1G4lI8ie2Wg5UCcixKefN2feFJneZdsIW6gUYYcjyH285VSjj+A76mwHzNdJGlGU2w==}
     peerDependencies:
       '@tiptap/core': ^2.7.0
+
+  '@tiptap/extension-history@2.11.5':
+    resolution: {integrity: sha512-b+wOS33Dz1azw6F1i9LFTEIJ/gUui0Jwz5ZvmVDpL2ZHBhq1Ui0/spTT+tuZOXq7Y/uCbKL8Liu4WoedIvhboQ==}
+    peerDependencies:
+      '@tiptap/core': ^2.7.0
+      '@tiptap/pm': ^2.7.0
 
   '@tiptap/extension-image@2.10.4':
     resolution: {integrity: sha512-fPdAqP4M1zwz5jyrQNIEL4OvvGeJso45svaaBLV342yRLOpbVIgAp/RsuWSGDQTUWoGhdkHdIrbH2bUGNEbMBg==}
@@ -9363,6 +9375,41 @@ snapshots:
       - utf-8-validate
       - zod
 
+  '@graphprotocol/grc-20@0.6.0(@types/node@22.13.4)(bufferutil@4.0.9)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
+    dependencies:
+      '@biomejs/biome': 1.9.4
+      '@bufbuild/protobuf': 1.10.0
+      '@changesets/cli': 2.27.12
+      '@ethersproject/abi': 5.7.0
+      '@ethersproject/providers': 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      '@types/uuid': 9.0.8
+      effect: 3.13.1
+      ethers: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      position-strings: 2.0.1
+      uuid: 9.0.1
+      viem: 1.21.4(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
+      vite: 5.4.14(@types/node@22.13.4)
+      vitest: 1.6.1(@types/node@22.13.4)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+    transitivePeerDependencies:
+      - '@edge-runtime/vm'
+      - '@types/node'
+      - '@vitest/browser'
+      - '@vitest/ui'
+      - bufferutil
+      - happy-dom
+      - jsdom
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+      - typescript
+      - utf-8-validate
+      - zod
+
   '@headlessui/react@2.2.0(react-dom@19.0.0(react@19.0.0))(react@19.0.0)':
     dependencies:
       '@floating-ui/react': 0.26.28(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -10906,6 +10953,11 @@ snapshots:
   '@tiptap/extension-heading@2.11.3(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))':
     dependencies:
       '@tiptap/core': 2.10.4(@tiptap/pm@2.10.4)
+
+  '@tiptap/extension-history@2.11.5(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))(@tiptap/pm@2.10.4)':
+    dependencies:
+      '@tiptap/core': 2.10.4(@tiptap/pm@2.10.4)
+      '@tiptap/pm': 2.10.4
 
   '@tiptap/extension-image@2.10.4(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))':
     dependencies:
@@ -16729,6 +16781,24 @@ snapshots:
       - supports-color
       - terser
 
+  vite-node@1.6.1(@types/node@22.13.4):
+    dependencies:
+      cac: 6.7.14
+      debug: 4.4.0
+      pathe: 1.1.2
+      picocolors: 1.1.1
+      vite: 5.4.14(@types/node@22.13.4)
+    transitivePeerDependencies:
+      - '@types/node'
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+
   vite@3.2.11(@types/node@17.0.45):
     dependencies:
       esbuild: 0.15.18
@@ -16839,6 +16909,41 @@ snapshots:
     optionalDependencies:
       '@types/node': 17.0.45
       '@vitest/ui': 0.25.8
+      jsdom: 20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+    transitivePeerDependencies:
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+
+  vitest@1.6.1(@types/node@22.13.4)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
+    dependencies:
+      '@vitest/expect': 1.6.1
+      '@vitest/runner': 1.6.1
+      '@vitest/snapshot': 1.6.1
+      '@vitest/spy': 1.6.1
+      '@vitest/utils': 1.6.1
+      acorn-walk: 8.3.4
+      chai: 4.5.0
+      debug: 4.4.0
+      execa: 8.0.1
+      local-pkg: 0.5.1
+      magic-string: 0.30.17
+      pathe: 1.1.2
+      picocolors: 1.1.1
+      std-env: 3.8.0
+      strip-literal: 2.1.1
+      tinybench: 2.9.0
+      tinypool: 0.8.4
+      vite: 5.4.14(@types/node@22.13.4)
+      vite-node: 1.6.1(@types/node@22.13.4)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 22.13.4
       jsdom: 20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - less
