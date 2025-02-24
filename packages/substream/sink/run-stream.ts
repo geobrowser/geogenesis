@@ -173,6 +173,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             Effect.either
           );
 
+          yield* _(
+            Effect.tryPromise({
+              try: () => writeCursor(message.cursor, blockNumber),
+              catch: () => new CouldNotWriteCursorError(),
+            })
+          );
+
           if (Either.isLeft(result)) {
             const error = result.left;
             telemetry.captureMessage(error.message);
@@ -181,13 +188,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           const hasValidEvent = result.right;
-
-          yield* _(
-            Effect.tryPromise({
-              try: () => writeCursor(message.cursor, blockNumber),
-              catch: () => new CouldNotWriteCursorError(),
-            })
-          );
 
           if (hasValidEvent) {
             yield* _(
