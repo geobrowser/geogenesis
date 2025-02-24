@@ -579,7 +579,11 @@ function PropertyField(props: { renderables: RenderableProperty[]; spaceId: stri
             return null;
           case 'RELATION':
             return (
-              <LinkableRelationChip isEditing={false} entityHref={''} relationHref="">
+              <LinkableRelationChip
+                isEditing={false}
+                entityHref={NavUtils.toEntity(renderable.spaceId, renderable.value)}
+                relationHref={NavUtils.toEntity(renderable.spaceId, renderable.relationId)}
+              >
                 {renderable.valueName ?? renderable.value}
               </LinkableRelationChip>
             );
