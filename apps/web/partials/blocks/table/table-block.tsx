@@ -13,7 +13,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
@@ -41,6 +41,7 @@ interface Props {
 export const TableBlock = React.memo(({ spaceId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
+  const canEdit = useCanUserEdit(spaceId);
   const { spaces } = useSpaces();
 
   const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
@@ -122,7 +123,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
-          {isEditing && source.type !== 'COLLECTION' && (
+          {canEdit && (
             <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
               <Create />
             </Link>
