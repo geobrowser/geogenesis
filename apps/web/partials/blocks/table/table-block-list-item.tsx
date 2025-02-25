@@ -1,18 +1,23 @@
 import { CONTENT_IDS, SYSTEM_IDS } from '@graphprotocol/grc-20';
 import Image from 'next/image';
 import Link from 'next/link';
+import { send } from 'process';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { editEvent, useEditEvents } from '~/core/events/edit-events';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { Cell } from '~/core/types';
+import { Cell, RelationRenderableProperty, RenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
+import { LinkableRelationChip } from '~/design-system/chip';
 import { Divider } from '~/design-system/divider';
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
+import { Create } from '~/design-system/icons/create';
 import { Upload } from '~/design-system/icons/upload';
 import { SelectEntity } from '~/design-system/select-entity';
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Spacer } from '~/design-system/spacer';
 
 import { TableBlockPropertyField } from './table-block-property-field';
@@ -63,8 +68,6 @@ export function TableBlockListItem({ columns, currentSpaceId }: Props) {
       c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
   );
 
-  console.log('other properties data', otherPropertyData);
-
   if (isEditing) {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
@@ -85,7 +88,19 @@ export function TableBlockListItem({ columns, currentSpaceId }: Props) {
           </div>
 
           {otherPropertyData.map(p => {
-            return <div key={p.slotId}>{p.slotId}</div>;
+            return (
+              <>
+                <Divider type="horizontal" style="dashed" />
+                <div key={p.slotId}>
+                  <TableBlockPropertyField
+                    key={p.slotId}
+                    renderables={p.renderables}
+                    spaceId={currentSpaceId}
+                    entityId={cellId}
+                  />
+                </div>
+              </>
+            );
           })}
         </div>
       </div>

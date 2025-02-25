@@ -38,15 +38,6 @@ interface Props {
   spaceId: string;
 }
 
-function usePlaceholderRow(rowsLength: number) {
-  const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(rowsLength === 0);
-
-  return {
-    hasPlaceholderRow,
-    setHasPlaceholderRow,
-  };
-}
-
 function makePlaceholderRow(properties: PropertySchema[]) {
   const columns: Record<string, Cell> = {};
 
@@ -73,7 +64,8 @@ function makePlaceholderRow(properties: PropertySchema[]) {
   };
 }
 
-// @TODO: Maybe this can live in the useDataBlock hook?
+// @TODO: Maybe this can live in the useDataBlock hook? Probably want it to so
+// we can access it deeply in table cells, etc.
 function useEntries() {
   const { rows: entries, spaceId, properties } = useDataBlock();
   const { filterState } = useFilters();
@@ -87,18 +79,19 @@ function useEntries() {
     const filteredTypes: Array<string> = filterState
       .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
       .map(filter => filter.value);
+    // Could be adding data, could be doing FOC
+    // How do we replace the placeholder? We don't want to render it if it's been replaced. We do
+    //     want to render it if the user has selected to render it manually.
+  };
 
+  const onAddPlaceholder = () => {
     setEditable(true);
-    // 1. Create a placeholder row
-    // 2. Problem is that we want to use the existing data model where the rows
-    //    come from the store rather than here. To use that same model we'd have
-    //    to create empty placeholders for each.
     setHasPlaceholderRow(true);
   };
 
   return {
     entries: renderedEntries,
-    onCreate,
+    onAddPlaceholder,
   };
 }
 
@@ -111,7 +104,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const { filterState, setFilterState } = useFilters();
   const { shownColumnIds, view, placeholder } = useView();
   const { source } = useSource();
-  const { entries, onCreate } = useEntries();
+  const { entries, onAddPlaceholder } = useEntries();
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -182,7 +175,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
           {canEdit && (
-            <button onClick={onCreate}>
+            <button onClick={onAddPlaceholder}>
               <Create />
             </button>
           )}
