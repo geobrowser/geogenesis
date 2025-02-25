@@ -11,9 +11,10 @@ import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
-import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useEditable } from '~/core/state/editable-store';
+import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
@@ -37,17 +38,80 @@ interface Props {
   spaceId: string;
 }
 
+function usePlaceholderRow(rowsLength: number) {
+  const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(rowsLength === 0);
+
+  return {
+    hasPlaceholderRow,
+    setHasPlaceholderRow,
+  };
+}
+
+function makePlaceholderRow(properties: PropertySchema[]) {
+  const columns: Record<string, Cell> = {};
+
+  columns[SYSTEM_IDS.NAME_ATTRIBUTE] = {
+    slotId: SYSTEM_IDS.NAME_ATTRIBUTE,
+    renderables: [],
+    name: null,
+    cellId: '',
+  };
+
+  for (const p of properties) {
+    columns[p.id] = {
+      cellId: '',
+      name: null,
+      renderables: [],
+      slotId: p.id,
+    };
+  }
+
+  return {
+    placeholder: true,
+    columns,
+    entityId: '',
+  };
+}
+
+// @TODO: Maybe this can live in the useDataBlock hook?
+function useEntries() {
+  const { rows: entries, spaceId, properties } = useDataBlock();
+  const { filterState } = useFilters();
+  const isEditing = useUserIsEditing(spaceId);
+  const { setEditable } = useEditable();
+  const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(entries.length === 0);
+
+  const renderedEntries = hasPlaceholderRow && isEditing ? entries.concat([makePlaceholderRow(properties)]) : entries;
+
+  const onCreate = () => {
+    const filteredTypes: Array<string> = filterState
+      .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
+      .map(filter => filter.value);
+
+    setEditable(true);
+    // 1. Create a placeholder row
+    // 2. Problem is that we want to use the existing data model where the rows
+    //    come from the store rather than here. To use that same model we'd have
+    //    to create empty placeholders for each.
+    setHasPlaceholderRow(true);
+  };
+
+  return {
+    entries: renderedEntries,
+    onCreate,
+  };
+}
+
 // eslint-disable-next-line react/display-name
 export const TableBlock = React.memo(({ spaceId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
-  const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { spaces } = useSpaces();
-
-  const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
+  const { properties, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { shownColumnIds, view, placeholder } = useView();
   const { source } = useSource();
+  const { entries, onCreate } = useEntries();
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -102,12 +166,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     };
   });
 
-  const filteredTypes: Array<string> = filterState
-    .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
-    .map(filter => filter.value);
-
-  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, filteredTypes);
-
   const hasPagination = hasPreviousPage || hasNextPage;
 
   return (
@@ -124,9 +182,9 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
           {canEdit && (
-            <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
+            <button onClick={onCreate}>
               <Create />
-            </Link>
+            </button>
           )}
         </div>
       </div>
@@ -177,7 +235,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           <TableBlockTable
             space={spaceId}
             properties={properties}
-            rows={rows}
+            rows={entries}
             placeholder={placeholder}
             view={view}
             source={source}

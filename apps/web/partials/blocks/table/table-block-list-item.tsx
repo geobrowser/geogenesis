@@ -3,10 +3,16 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Cell } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
+import { SquareButton } from '~/design-system/button';
+import { Divider } from '~/design-system/divider';
+import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
+import { Upload } from '~/design-system/icons/upload';
+import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 
 import { TableBlockPropertyField } from './table-block-property-field';
@@ -17,6 +23,7 @@ type Props = {
 };
 
 export function TableBlockListItem({ columns, currentSpaceId }: Props) {
+  const isEditing = useUserIsEditing(currentSpaceId);
   const nameCell = columns[SYSTEM_IDS.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
   const maybeCoverData: Cell | undefined = columns[SYSTEM_IDS.COVER_ATTRIBUTE];
@@ -56,6 +63,35 @@ export function TableBlockListItem({ columns, currentSpaceId }: Props) {
       c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
   );
 
+  console.log('other properties data', otherPropertyData);
+
+  if (isEditing) {
+    return (
+      <div className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
+        <div className="relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
+          <SquareButton>
+            <Upload />
+          </SquareButton>
+        </div>
+        <div className="w-full space-y-4">
+          <div>
+            <div className="text-metadata text-grey-04">Name</div>
+            <SelectEntity onDone={() => {}} spaceId={currentSpaceId} onCreateEntity={() => {}} allowedTypes={[]} />
+          </div>
+          <Divider type="horizontal" style="dashed" />
+          <div>
+            <div className="text-metadata text-grey-04">Description</div>
+            <PageStringField placeholder="Add description..." onChange={() => {}} value={description ?? ''} />
+          </div>
+
+          {otherPropertyData.map(p => {
+            return <div key={p.slotId}>{p.slotId}</div>;
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <Link href={href} className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
@@ -82,7 +118,7 @@ export function TableBlockListItem({ columns, currentSpaceId }: Props) {
 
           {otherPropertyData.map(p => {
             return (
-              <>
+              <div>
                 <Spacer height={12} />
                 <TableBlockPropertyField
                   key={p.slotId}
@@ -90,7 +126,7 @@ export function TableBlockListItem({ columns, currentSpaceId }: Props) {
                   spaceId={currentSpaceId}
                   entityId={cellId}
                 />
-              </>
+              </div>
             );
           })}
         </div>
