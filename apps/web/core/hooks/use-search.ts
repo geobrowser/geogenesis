@@ -9,9 +9,9 @@ import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 import { EntityId } from '~/core/io/schema';
-import { fetchResult } from '~/core/io/subgraph';
 import { validateEntityId } from '~/core/utils/utils';
 
+import { mergeSearchResult } from '../database/result';
 import { mergeSearchResults } from '../database/results';
 import { useDebouncedValue } from './use-debounced-value';
 
@@ -35,9 +35,36 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
 
       if (isValidEntityId) {
         const id = EntityId(maybeEntityId);
-        const result = await fetchResult({ id });
-        if (result) return [result];
-        return [];
+
+        const fetchResultEffect = Effect.either(
+          Effect.tryPromise({
+            try: async () =>
+              await mergeSearchResult({
+                id,
+              }),
+            catch: error => {
+              console.error('error', error);
+              return new Subgraph.Errors.AbortError();
+            },
+          })
+        );
+
+        const resultOrError = await Effect.runPromise(fetchResultEffect);
+
+        if (Either.isLeft(resultOrError)) {
+          const error = resultOrError.left;
+
+          switch (error._tag) {
+            case 'AbortError':
+              console.log(`abort error`);
+              return [];
+            default:
+              console.error('useSearch error:', String(error));
+              throw error;
+          }
+        }
+
+        return resultOrError.right ? [resultOrError.right] : [];
       }
 
       const fetchResultsEffect = Effect.either(
