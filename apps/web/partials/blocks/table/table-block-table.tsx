@@ -1,6 +1,6 @@
 'use client';
 
-import { CONTENT_IDS, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import {
   ColumnDef,
@@ -13,7 +13,6 @@ import {
 } from '@tanstack/react-table';
 import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
-import Image from 'next/image';
 
 import * as React from 'react';
 import { useState } from 'react';
@@ -28,24 +27,18 @@ import { Source } from '~/core/blocks/data/source';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useSource } from '~/core/blocks/data/use-source';
 import { DataBlockView } from '~/core/blocks/data/use-view';
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { DB } from '~/core/database/write';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { Cell, PropertySchema, RenderableProperty, Row } from '~/core/types';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { Cell, PropertySchema, Row } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
-import { Checkbox, getChecked } from '~/design-system/checkbox';
-import { LinkableRelationChip } from '~/design-system/chip';
-import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { EyeHide } from '~/design-system/icons/eye-hide';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
-import { Spacer } from '~/design-system/spacer';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
@@ -53,6 +46,8 @@ import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 
+import { TableBlockGalleryItem } from './table-block-gallery-item';
+import { TableBlockListItem } from './table-block-list-item';
 import { editingPropertiesAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
@@ -308,15 +303,6 @@ export const TableBlockTable = React.memo(
                   ))}
                 </thead>
                 <tbody>
-                  {source.type === 'COLLECTION' && isEditable && (
-                    <TableCell width={784} isExpanded={false} toggleExpanded={() => {}} isShown>
-                      <SelectEntity
-                        spaceId={space}
-                        onDone={onSelectCollectionItem}
-                        onCreateEntity={onCreateNewEntity}
-                      />
-                    </TableCell>
-                  )}
                   {table.getRowModel().rows.map((row, index: number) => {
                     const cells = row.getVisibleCells();
                     const entityId = cells?.[0]?.getValue<Cell>()?.cellId;
@@ -373,93 +359,10 @@ export const TableBlockTable = React.memo(
         );
       case 'LIST':
         return (
-          <div className="flex flex-col gap-4">
+          <div className="flex w-full flex-col">
             {rows.map((row, index: number) => {
-              const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-              const maybeAvatarData: Cell | undefined = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
-              const maybeCoverData: Cell | undefined = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
-              const maybeDescriptionData: Cell | undefined = row.columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
-
-              // @TODO: An "everything" else ID that can be used to render any renderable.
-              const { cellId, name, verified } = nameCell;
-              let { description, image } = nameCell;
-
-              const maybeDescription = maybeDescriptionData?.renderables.find(
-                r => r.attributeId === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
-              )?.value;
-
-              if (maybeDescription) {
-                description = maybeDescription;
-              }
-
-              const maybeAvatarUrl = maybeAvatarData?.renderables.find(
-                r => r.attributeId === CONTENT_IDS.AVATAR_ATTRIBUTE
-              )?.value;
-
-              const maybeCoverUrl = maybeCoverData?.renderables.find(
-                r => r.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE
-              )?.value;
-
-              if (maybeCoverUrl) {
-                image = maybeCoverUrl;
-              }
-
-              if (maybeAvatarUrl) {
-                image = maybeAvatarUrl;
-              }
-
-              const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
-
-              const otherPropertyData = Object.values(row.columns).filter(
-                c =>
-                  c.slotId !== SYSTEM_IDS.NAME_ATTRIBUTE &&
-                  c.slotId !== CONTENT_IDS.AVATAR_ATTRIBUTE &&
-                  c.slotId !== SYSTEM_IDS.COVER_ATTRIBUTE &&
-                  c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
-              );
-
               return (
-                <div key={index}>
-                  <Link href={href} className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
-                    <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
-                      <Image
-                        src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
-                        className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-                        alt=""
-                        fill
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        {verified && (
-                          <div>
-                            <CheckCircle />
-                          </div>
-                        )}
-                        <div className="line-clamp-1 text-smallTitle font-medium text-text md:line-clamp-2">{name}</div>
-                      </div>
-                      {description && (
-                        <div className="mt-0.5 line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">
-                          {description}
-                        </div>
-                      )}
-
-                      {otherPropertyData.map(p => {
-                        return (
-                          <>
-                            <Spacer height={12} />
-                            <PropertyField
-                              key={p.slotId}
-                              renderables={p.renderables}
-                              spaceId={space}
-                              entityId={cellId}
-                            />
-                          </>
-                        );
-                      })}
-                    </div>
-                  </Link>
-                </div>
+                <TableBlockListItem key={`${row.entityId}-${index}`} columns={row.columns} currentSpaceId={space} />
               );
             })}
           </div>
@@ -468,64 +371,8 @@ export const TableBlockTable = React.memo(
         return (
           <div className="grid grid-cols-3 gap-x-4 gap-y-10">
             {rows.map((row, index: number) => {
-              const nameCell: Cell | undefined = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-              const maybeAvatarData: Cell | undefined = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
-              const maybeCoverData: Cell | undefined = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
-
-              // @TODO: An "everything" else ID that can be used to render any renderable.
-              const { cellId, name, verified } = nameCell;
-              let { image } = nameCell;
-
-              const maybeAvatarUrl = maybeAvatarData?.renderables.find(
-                r => r.attributeId === CONTENT_IDS.AVATAR_ATTRIBUTE
-              )?.value;
-
-              const maybeCoverUrl = maybeCoverData?.renderables.find(
-                r => r.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE
-              )?.value;
-
-              if (maybeAvatarUrl) {
-                image = maybeAvatarUrl;
-              }
-
-              if (maybeCoverUrl) {
-                image = maybeCoverUrl;
-              }
-
-              const href = NavUtils.toEntity(nameCell?.space ?? space, cellId);
-
-              const otherPropertyData = Object.values(row.columns).filter(
-                c =>
-                  c.slotId !== SYSTEM_IDS.NAME_ATTRIBUTE &&
-                  c.slotId !== CONTENT_IDS.AVATAR_ATTRIBUTE &&
-                  c.slotId !== SYSTEM_IDS.COVER_ATTRIBUTE &&
-                  c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
-              );
-
               return (
-                <Link key={index} href={href} className="group flex flex-col gap-3">
-                  <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
-                    <Image
-                      src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
-                      className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-                      alt=""
-                      fill
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {verified && (
-                      <div>
-                        <CheckCircle />
-                      </div>
-                    )}
-                    <div className="truncate text-smallTitle font-medium text-text">{name}</div>
-                  </div>
-                  {otherPropertyData.map(p => {
-                    return (
-                      <PropertyField key={p.slotId} renderables={p.renderables} spaceId={space} entityId={cellId} />
-                    );
-                  })}
-                </Link>
+                <TableBlockGalleryItem key={`${row.entityId}-${index}`} columns={row.columns} currentSpaceId={space} />
               );
             })}
           </div>
@@ -533,62 +380,3 @@ export const TableBlockTable = React.memo(
     }
   }
 );
-
-function PropertyField(props: { renderables: RenderableProperty[]; spaceId: string; entityId: string }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {props.renderables.map(renderable => {
-        console.log('renderable', renderable);
-        switch (renderable.type) {
-          case 'TEXT':
-          case 'NUMBER':
-            return (
-              <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-                {renderable.value}
-              </Text>
-            );
-          case 'CHECKBOX': {
-            const checked = getChecked(renderable.value);
-            return <Checkbox key={`checkbox-${renderable.attributeId}-${renderable.value}`} checked={checked} />;
-          }
-          case 'TIME': {
-            const time = new Date(renderable.value).toLocaleDateString(undefined, {
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            });
-
-            return (
-              <Text variant="breadcrumb" color="text" key={`time-${renderable.attributeId}-${renderable.value}`}>
-                {time}
-              </Text>
-            );
-          }
-          case 'URL': {
-            return (
-              <WebUrlField
-                key={`uri-${renderable.attributeId}-${renderable.value}`}
-                isEditing={false}
-                spaceId={props.spaceId}
-                value={renderable.value}
-              />
-            );
-          }
-          case 'IMAGE':
-            // We don't support rendering images in list or gallery views except the main image
-            return null;
-          case 'RELATION':
-            return (
-              <LinkableRelationChip
-                isEditing={false}
-                entityHref={NavUtils.toEntity(renderable.spaceId, renderable.value)}
-                relationHref={NavUtils.toEntity(renderable.spaceId, renderable.relationId)}
-              >
-                {renderable.valueName ?? renderable.value}
-              </LinkableRelationChip>
-            );
-        }
-      })}
-    </div>
-  );
-}
