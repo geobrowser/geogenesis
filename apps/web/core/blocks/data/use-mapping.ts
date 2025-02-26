@@ -61,6 +61,7 @@ export function useMapping(
     data: mapping,
     isLoading,
     isFetched,
+    error,
   } = useQuery({
     placeholderData: keepPreviousData,
     enabled: shownPropertyRelationEntityIds.length > 0,
@@ -97,7 +98,7 @@ export function useMapping(
 
   return {
     isLoading,
-    isFetched,
+    isFetched: shownPropertyRelationEntityIds.length === 0 || isFetched,
     mapping,
   };
 }

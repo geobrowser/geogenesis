@@ -27,13 +27,16 @@ export function TableBlockPropertyField(props: {
 
     if (isRelation) {
       return (
-        <RelationsGroup
-          isPlaceholderEntry={true}
-          entityId={entityId}
-          spaceId={spaceId}
-          renderables={renderables as RelationRenderableProperty[]}
-          entityName={null}
-        />
+        <div>
+          <div className="text-metadata text-grey-04">{firstRenderable.attributeName}</div>
+          <RelationsGroup
+            isPlaceholderEntry={true}
+            entityId={entityId}
+            spaceId={spaceId}
+            renderables={renderables as RelationRenderableProperty[]}
+            entityName={null}
+          />
+        </div>
       );
     }
   }
