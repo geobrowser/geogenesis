@@ -6,12 +6,12 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 
 import { SpaceConfigEntity, SpaceMetadataDto } from '../dto/spaces';
-import { SpaceId, SubstreamVersion } from '../schema';
+import { SubstreamVersion } from '../schema';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
-const getFetchSpacesWhereEditorQuery = (address: string) => `query {
-  spaces(filter: { spaceEditors: { some: { accountId: { equalTo: "${address}" } } } }) {
+const getFetchSpacesWhereMemberQuery = (address: string) => `query {
+  spaces(filter: { spaceMembers: { some: { accountId: { equalTo: "${address}" } } } }) {
     nodes {
       id
       ${spaceMetadataFragment}
@@ -23,18 +23,24 @@ interface NetworkResult {
   spaces: {
     nodes: {
       id: string;
-      spacesMetadatum: SubstreamVersion;
+      spacesMetadatum: {
+        version: SubstreamVersion;
+      };
     }[];
   };
 }
 
-export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWhereEditor[]> {
+export async function fetchSpacesWhereMember(address?: string): Promise<SpaceWhereMember[]> {
+  if (!address) {
+    return [];
+  }
+
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchSpacesWhereEditorQuery(address),
+    query: getFetchSpacesWhereMemberQuery(address),
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -51,9 +57,9 @@ export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWher
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchSpacesWhereEditor. queryId: ${queryId} endpoint: ${endpoint}
+            `Encountered runtime graphql error in fetchSpacesWhereMember. queryId: ${queryId} endpoint: ${endpoint}
 
-            queryString: ${getFetchSpacesWhereEditorQuery(address)}
+            queryString: ${getFetchSpacesWhereMemberQuery(address)}
             `,
             error.message
           );
@@ -65,7 +71,7 @@ export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWher
           };
 
         default:
-          console.error(`${error._tag}: Unable to fetch spaces for editor, queryId: ${queryId} endpoint: ${endpoint}`);
+          console.error(`${error._tag}: Unable to fetch spaces for member, queryId: ${queryId} endpoint: ${endpoint}`);
 
           return {
             spaces: {
@@ -82,15 +88,15 @@ export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWher
 
   const spaces = result.spaces.nodes
     .map(space => {
-      const decodedSpace = Schema.decodeEither(SpaceWhereEditorSchema)(space);
+      const decodedSpace = Schema.decodeEither(SpaceWhereMemberSchema)(space);
 
       return Either.match(decodedSpace, {
         onLeft: error => {
-          console.error(`Encountered error decoding space where editor. spaceId: ${space.id} error: ${error}`);
+          console.error(`Encountered error decoding space where member. spaceId: ${space.id} error: ${error}`);
           return null;
         },
         onRight: space => {
-          return SpaceWhereEditorDto(space);
+          return SpaceWhereMemberDto(space);
         },
       });
     })
@@ -101,20 +107,20 @@ export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWher
   return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
 }
 
-const SpaceWhereEditorSchema = Schema.Struct({
-  id: Schema.String.pipe(Schema.length(22), Schema.fromBrand(SpaceId)),
-  spacesMetadatum: SubstreamVersion,
+const SpaceWhereMemberSchema = Schema.Struct({
+  id: Schema.String,
+  spacesMetadatum: Schema.Struct({ version: SubstreamVersion }),
 });
 
-type SpaceWhereEditorSchema = Schema.Schema.Type<typeof SpaceWhereEditorSchema>;
+type SpaceWhereMemberSchema = Schema.Schema.Type<typeof SpaceWhereMemberSchema>;
 
-type SpaceWhereEditor = {
-  id: SpaceId;
+type SpaceWhereMember = {
+  id: string;
   spaceConfig: SpaceConfigEntity;
 };
 
-function SpaceWhereEditorDto(space: SpaceWhereEditorSchema) {
-  const spaceConfigWithImage = SpaceMetadataDto(space.id, space.spacesMetadatum);
+function SpaceWhereMemberDto(space: SpaceWhereMemberSchema) {
+  const spaceConfigWithImage = SpaceMetadataDto(space.id, space.spacesMetadatum.version);
 
   return {
     id: space.id,

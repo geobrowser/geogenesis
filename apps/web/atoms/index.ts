@@ -1,6 +1,8 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
+export const shouldStartInEditModeAtom = atom<boolean>(false);
+
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
 export const editingPropertiesAtom = atom<boolean>(false);

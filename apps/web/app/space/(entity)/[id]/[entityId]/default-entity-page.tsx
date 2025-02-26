@@ -10,13 +10,13 @@ import { EntityId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
-import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
 
 import { Editor } from '~/partials/editor/editor';
+import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageHeading } from '~/partials/entity-page/entity-page-heading';
@@ -68,8 +68,8 @@ export default async function DefaultEntityPage({
           {(showSpacer || !!notice) && <Spacer height={40} />}
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
           <ToggleEntityPage {...props} />
+          <AutomaticModeToggle />
           <Spacer height={40} />
-
           <ErrorBoundary fallback={<EmptyErrorComponent />}>
             {/*
               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
@@ -95,15 +95,6 @@ const getData = async (spaceId: string, entityId: string) => {
     console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
 
     return redirect(NavUtils.toSpace(spaceId));
-  }
-
-  // Redirect from an invalid space to a valid one
-  if (entity && !spaces.includes(spaceId)) {
-    const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
-
-    console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
-
-    return redirect(NavUtils.toEntity(newSpaceId, entityId));
   }
 
   const serverAvatarUrl = Entities.avatar(entity?.relationsOut);
