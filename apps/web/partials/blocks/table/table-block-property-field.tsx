@@ -115,7 +115,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName }: Relation
     context: {
       entityId: entityId,
       spaceId,
-      entityName: entityName ?? '',
+      entityName: entityName,
     },
   });
 

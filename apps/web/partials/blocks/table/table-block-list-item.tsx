@@ -3,6 +3,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { EditEvent, EditEventContext } from '~/core/events/edit-events';
+import { SearchResult } from '~/core/io/dto/search';
+import { EntityId } from '~/core/io/schema';
 import { Cell } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -16,13 +19,36 @@ import { Spacer } from '~/design-system/spacer';
 
 import { TableBlockPropertyField } from './table-block-property-field';
 
+type ChangeEntryParams =
+  | {
+      type: 'EVENT';
+      data: EditEvent;
+    }
+  | {
+      type: 'FOC';
+      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
+    };
+
 type Props = {
   columns: Record<string, Cell>;
   currentSpaceId: string;
   isEditing: boolean;
+  rowEntityId: string;
+  isPlaceholder: boolean;
+  onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
+  // allowedTypes
+  // onCreate
+  // onDone
 };
 
-export function TableBlockListItem({ columns, currentSpaceId, isEditing }: Props) {
+export function TableBlockListItem({
+  columns,
+  currentSpaceId,
+  isEditing,
+  rowEntityId,
+  isPlaceholder,
+  onChangeEntry,
+}: Props) {
   const nameCell = columns[SYSTEM_IDS.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
   const maybeCoverData: Cell | undefined = columns[SYSTEM_IDS.COVER_ATTRIBUTE];
@@ -62,6 +88,8 @@ export function TableBlockListItem({ columns, currentSpaceId, isEditing }: Props
   );
 
   if (isEditing) {
+    // @TODO: Might need a separate editing experience if the row is a placeholder vs not
+
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
         <div className="relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
@@ -72,12 +100,115 @@ export function TableBlockListItem({ columns, currentSpaceId, isEditing }: Props
         <div className="w-full space-y-4">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
-            <SelectEntity onDone={() => {}} spaceId={currentSpaceId} onCreateEntity={() => {}} allowedTypes={[]} />
+            {isPlaceholder ? (
+              <SelectEntity
+                // What actually happens here? We create a link to the entity for the source?
+                // If the entity already exists then it should be a text block instead of the
+                // search experience
+                onDone={result => {
+                  onChangeEntry(
+                    {
+                      entityId: rowEntityId,
+                      entityName: name,
+                      spaceId: currentSpaceId,
+                    },
+                    {
+                      type: 'FOC',
+                      data: result,
+                    }
+                  );
+                }}
+                onCreateEntity={result => {
+                  // This actually works quite differently than other creates since
+                  // we want to use the existing placeholder entity id.
+                  onChangeEntry(
+                    {
+                      entityId: rowEntityId,
+                      entityName: name,
+                      spaceId: currentSpaceId,
+                    },
+                    {
+                      type: 'FOC',
+                      data: result,
+                    }
+                  );
+                }}
+                spaceId={currentSpaceId}
+                allowedTypes={[]}
+              />
+            ) : (
+              <PageStringField
+                placeholder="Add name..."
+                onChange={e => {
+                  onChangeEntry(
+                    {
+                      entityId: rowEntityId,
+                      entityName: name,
+                      spaceId: currentSpaceId,
+                    },
+                    {
+                      type: 'EVENT',
+                      data: {
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable: {
+                            attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+                            entityId: rowEntityId,
+                            spaceId: currentSpaceId,
+                            attributeName: 'Name',
+                            entityName: name,
+                            type: 'TEXT',
+                            value: name ?? '',
+                          },
+                          value: { type: 'TEXT', value: e.currentTarget.value },
+                        },
+                      },
+                    }
+                  );
+
+                  return;
+                }}
+                value={name ?? ''}
+              />
+            )}
           </div>
           <Divider type="horizontal" style="dashed" />
+          {/* @TODO: description should just be part of the otherPropertyData */}
           <div>
             <div className="text-metadata text-grey-04">Description</div>
-            <PageStringField placeholder="Add description..." onChange={() => {}} value={description ?? ''} />
+            <PageStringField
+              placeholder="Add description..."
+              onChange={e => {
+                onChangeEntry(
+                  {
+                    entityId: rowEntityId,
+                    entityName: name,
+                    spaceId: currentSpaceId,
+                  },
+                  {
+                    type: 'EVENT',
+                    data: {
+                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                      payload: {
+                        renderable: {
+                          attributeId: SYSTEM_IDS.DESCRIPTION_ATTRIBUTE,
+                          entityId: rowEntityId,
+                          spaceId: currentSpaceId,
+                          attributeName: 'Description',
+                          entityName: name,
+                          type: 'TEXT',
+                          value: description ?? '',
+                        },
+                        value: { type: 'TEXT', value: e.currentTarget.value },
+                      },
+                    },
+                  }
+                );
+
+                return;
+              }}
+              value={description ?? ''}
+            />
           </div>
 
           {otherPropertyData.map(p => {
@@ -89,7 +220,7 @@ export function TableBlockListItem({ columns, currentSpaceId, isEditing }: Props
                     key={p.slotId}
                     renderables={p.renderables}
                     spaceId={currentSpaceId}
-                    entityId={cellId}
+                    entityId={rowEntityId}
                   />
                 </div>
               </>
@@ -126,7 +257,7 @@ export function TableBlockListItem({ columns, currentSpaceId, isEditing }: Props
 
           {otherPropertyData.map(p => {
             return (
-              <div>
+              <div key={`${p.slotId}-${cellId}`}>
                 <Spacer height={12} />
                 <TableBlockPropertyField
                   key={p.slotId}

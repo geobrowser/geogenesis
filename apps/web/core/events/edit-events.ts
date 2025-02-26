@@ -92,13 +92,15 @@ interface EditApi {
   remove: ReturnType<typeof useWriteOps>['remove'];
 }
 
+export interface EditEventContext {
+  spaceId: string;
+  entityId: string;
+  entityName: string | null;
+}
+
 interface ListenerConfig {
   api: EditApi;
-  context: {
-    spaceId: string;
-    entityId: string;
-    entityName: string | null;
-  };
+  context: EditEventContext;
 }
 
 const listener =

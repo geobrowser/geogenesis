@@ -7,18 +7,27 @@ import produce from 'immer';
 
 import * as React from 'react';
 
+import {
+  upsertCollectionItemRelation,
+  upsertSourceSpaceOnCollectionItem,
+  upsertVerifiedSourceOnCollectionItem,
+} from '~/core/blocks/data/collection';
 import { Filter } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
+import { EditEvent, EditEventContext, editEvent } from '~/core/events/edit-events';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import { SearchResult } from '~/core/io/dto/search';
+import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
 import { Cell, PropertySchema, Row } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
+import { VALUE_TYPES } from '~/core/value-types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -58,25 +67,29 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
       continue;
     }
 
-    columns[p.id] = {
-      slotId: p.id,
-      cellId: ID.createEntityId(),
-      name: null,
-      renderables: [
-        {
-          type: 'RELATION',
-          relationId: p.id,
-          valueName: p.name,
-          entityId: entityId,
-          entityName: null,
-          attributeId: p.id,
-          attributeName: p.name,
-          spaceId,
-          value: '',
-          placeholder: true,
-        },
-      ],
-    };
+    const maybeColumn = columns[p.id];
+
+    if (!maybeColumn || maybeColumn?.renderables.length === 0) {
+      columns[p.id] = {
+        slotId: p.id,
+        cellId: ID.createEntityId(),
+        name: null,
+        renderables: [
+          {
+            type: VALUE_TYPES[p.valueType] ?? 'TEXT',
+            relationId: p.id,
+            valueName: p.name,
+            entityId: entityId,
+            entityName: null,
+            attributeId: p.id,
+            attributeName: p.name,
+            spaceId,
+            value: '',
+            placeholder: true,
+          },
+        ],
+      };
+    }
   }
 
   return {
@@ -86,32 +99,89 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
   };
 }
 
+type ChangeEntryParams =
+  | {
+      type: 'EVENT';
+      data: EditEvent;
+    }
+  | {
+      type: 'FOC';
+      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
+    };
+
 // @TODO: Maybe this can live in the useDataBlock hook? Probably want it to so
 // we can access it deeply in table cells, etc.
 function useEntries(entries: Row[], properties: PropertySchema[], spaceId: string, filterState: Filter[]) {
   const isEditing = useUserIsEditing(spaceId);
+  const { source } = useSource();
   const { setEditable } = useEditable();
-  const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(entries.length === 0);
+  const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
 
-  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, []);
+  const filteredTypes: Array<string> = filterState
+    .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
+    .map(filter => filter.value);
+
+  const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityFromType(spaceId, filteredTypes);
 
   const renderedEntries =
-    hasPlaceholderRow && isEditing ? entries.concat([makePlaceholderRow(nextEntityId, spaceId, properties)]) : entries;
+    hasPlaceholderRow && isEditing && !entries.find(e => e.entityId === nextEntityId)
+      ? entries.concat([makePlaceholderRow(nextEntityId, spaceId, properties)])
+      : entries;
 
-  const onCreateFromPlaceholder = () => {
-    const filteredTypes: Array<string> = filterState
-      .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
-      .map(filter => filter.value);
-    // Could be adding data, could be doing FOC
-    //
-    // How do we replace the placeholder? We don't want to render it if it's been replaced. We do
-    //     want to render it if the user has selected to render it manually. What's the right
-    //     abstraction in this case? Sometimes we're doing FOC where we set an entity. Sometimes
-    //     we send an event via editEvents.
-    //
-    // We also need to know the source type as different sources will require writing extra data
-    //     e.g., setting a collection item, verified state, relations, etc.
-    onClick();
+  const onChangeEntry = (context: EditEventContext, event: ChangeEntryParams) => {
+    if (event.type === 'EVENT') {
+      const send = editEvent({
+        context,
+      });
+
+      send(event.data);
+    }
+
+    if (event.type === 'FOC') {
+      // @TODO: relation block
+      if (source.type === 'COLLECTION') {
+        console.log('source', source);
+        const selectedEntity = event.data;
+        // Should we require that the user enters a name or selects an entity before
+        // altering any other data?
+        const id = ID.createEntityId();
+        console.log('selected entity', selectedEntity);
+
+        upsertCollectionItemRelation({
+          relationId: EntityId(id),
+          collectionId: EntityId(source.value),
+          spaceId: SpaceId(spaceId),
+          toEntity: {
+            id: EntityId(selectedEntity.id),
+            name: selectedEntity.name,
+          },
+        });
+
+        // Callers can optionally pass a selected entity in the case of Find or Create
+        // to set the collection. We allow setting any data or using FOC.
+        if (selectedEntity.space) {
+          upsertSourceSpaceOnCollectionItem({
+            collectionItemId: EntityId(id),
+            toId: EntityId(selectedEntity.id),
+            spaceId: SpaceId(spaceId),
+            sourceSpaceId: selectedEntity.space,
+          });
+
+          if (selectedEntity.verified) {
+            upsertVerifiedSourceOnCollectionItem({
+              collectionItemId: EntityId(id),
+              spaceId: SpaceId(spaceId),
+            });
+          }
+        }
+      }
+    }
+
+    if (context.entityId === nextEntityId) {
+      setHasPlaceholderRow(false);
+    }
+
+    createEntityWithTypes();
   };
 
   const onAddPlaceholder = () => {
@@ -122,11 +192,11 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
   return {
     entries: renderedEntries,
     onAddPlaceholder,
+    onChangeEntry,
   };
 }
 
-// eslint-disable-next-line react/display-name
-export const TableBlock = React.memo(({ spaceId }: Props) => {
+export const TableBlock = ({ spaceId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
@@ -135,7 +205,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder } = useView();
   const { source } = useSource();
-  const { entries, onAddPlaceholder } = useEntries(rows, properties, spaceId, filterState);
+  const { entries, onAddPlaceholder, onChangeEntry } = useEntries(rows, properties, spaceId, filterState);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -214,6 +284,9 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
               key={`${row.entityId}-${index}`}
               columns={row.columns}
               currentSpaceId={spaceId}
+              rowEntityId={row.entityId}
+              isPlaceholder={Boolean(row.placeholder)}
+              onChangeEntry={onChangeEntry}
             />
           );
         })}
@@ -338,7 +411,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       </motion.div>
     </motion.div>
   );
-});
+};
 
 const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
 
