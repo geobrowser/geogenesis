@@ -21,7 +21,6 @@ import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { FindEntity } from '~/design-system/find-entity';
-import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
