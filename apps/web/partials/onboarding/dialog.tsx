@@ -159,8 +159,6 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
 };
 
 const StepHeader = () => {
-  const { hideOnboarding } = useOnboarding();
-
   const [step, setStep] = useAtom(stepAtom);
   const setName = useSetAtom(nameAtom);
   const setEntityId = useSetAtom(entityIdAtom);
@@ -186,9 +184,6 @@ const StepHeader = () => {
           <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="!border-none !bg-transparent" />
         )}
       </div>
-      {!workflowSteps.includes(step) && (
-        <SquareButton icon={<Close />} onClick={hideOnboarding} className="!border-none !bg-transparent" />
-      )}
     </div>
   );
 };
