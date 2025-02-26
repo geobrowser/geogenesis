@@ -27,7 +27,11 @@ export function useCollection() {
     },
   });
 
-  const collectionItemIds = collectionItemsRelations?.map(c => c.toEntity.id) ?? [];
+  const orderedCollectionItems = collectionItemsRelations.sort((a, z) =>
+    a.index.toLowerCase().localeCompare(z.index.toLowerCase())
+  );
+
+  const collectionItemIds = orderedCollectionItems?.map(c => c.toEntity.id) ?? [];
 
   // We need to check for any local changes to collection items in order to re-fetch the list
   // of them and merge with local data.
