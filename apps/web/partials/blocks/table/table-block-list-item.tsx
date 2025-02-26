@@ -51,7 +51,6 @@ export function TableBlockListItem({
 }: Props) {
   const nameCell = columns[SYSTEM_IDS.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
-  const maybeCoverData: Cell | undefined = columns[SYSTEM_IDS.COVER_ATTRIBUTE];
   const maybeDescriptionData: Cell | undefined = columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
 
   const { cellId, name, verified } = nameCell;
@@ -66,12 +65,6 @@ export function TableBlockListItem({
   }
 
   const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === CONTENT_IDS.AVATAR_ATTRIBUTE)?.value;
-
-  const maybeCoverUrl = maybeCoverData?.renderables.find(r => r.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE)?.value;
-
-  if (maybeCoverUrl) {
-    image = maybeCoverUrl;
-  }
 
   if (maybeAvatarUrl) {
     image = maybeAvatarUrl;
@@ -88,14 +81,21 @@ export function TableBlockListItem({
   );
 
   if (isEditing) {
-    // @TODO: Might need a separate editing experience if the row is a placeholder vs not
-
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
         <div className="relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
-          <SquareButton>
-            <Upload />
-          </SquareButton>
+          {image ? (
+            <Image
+              src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
+              className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+              alt=""
+              fill
+            />
+          ) : (
+            <SquareButton>
+              <Upload />
+            </SquareButton>
+          )}
         </div>
         <div className="w-full space-y-4">
           <div>
