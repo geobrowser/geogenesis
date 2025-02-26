@@ -45,6 +45,10 @@ export type Mapping = {
  *   of the entity is always rendered in the name slot in the List/Gallery.
  */
 
+const initialData = {
+  [SYSTEM_IDS.NAME_ATTRIBUTE]: null,
+};
+
 export function useMapping(
   blockRelationId: string,
   shownPropertyRelationEntityIds: string[]
@@ -54,50 +58,47 @@ export function useMapping(
   isFetched: boolean;
 } {
   const {
-    data: shownPropertyEntities,
+    data: mapping,
     isLoading,
     isFetched,
   } = useQuery({
     placeholderData: keepPreviousData,
-    queryKey: ['block-shown-properties', blockRelationId, shownPropertyRelationEntityIds],
+    enabled: shownPropertyRelationEntityIds.length > 0,
+    initialData,
+    queryKey: ['mapping-shown-properties', blockRelationId, shownPropertyRelationEntityIds],
     queryFn: async () => {
-      if (shownPropertyRelationEntityIds.length === 0) {
-        return [];
+      const entities = await mergeEntitiesAsync({ entityIds: shownPropertyRelationEntityIds, filterState: [] });
+
+      const mapping = entities.reduce<Mapping>((acc, entity) => {
+        const key = entity.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value;
+        const selector = entity.triples.find(t => t.attributeId === SYSTEM_IDS.SELECTOR_ATTRIBUTE)?.value.value;
+        const decodedKey = key ? GraphUrl.toEntityId(key as GraphUri) : null;
+
+        if (decodedKey && selector) {
+          acc[decodedKey] = selector;
+        }
+
+        if (decodedKey && !selector) {
+          acc[decodedKey] = null;
+        }
+
+        return acc;
+      }, {});
+
+      // Currently require the name attribute to be rendered for every view and every query mode. Rendering
+      // the data block will break otherwise.
+      if (!mapping[SYSTEM_IDS.NAME_ATTRIBUTE]) {
+        mapping[SYSTEM_IDS.NAME_ATTRIBUTE] = null;
       }
 
-      return await mergeEntitiesAsync({ entityIds: shownPropertyRelationEntityIds, filterState: [] });
+      return mapping;
     },
   });
-
-  const mapping =
-    shownPropertyEntities && shownPropertyEntities.length > 0
-      ? shownPropertyEntities.reduce<Mapping>((acc, entity) => {
-          const key = entity.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value;
-          const selector = entity.triples.find(t => t.attributeId === SYSTEM_IDS.SELECTOR_ATTRIBUTE)?.value.value;
-          const decodedKey = key ? GraphUrl.toEntityId(key as GraphUri) : null;
-
-          if (decodedKey && selector) {
-            acc[decodedKey] = selector;
-          }
-
-          if (decodedKey && !selector) {
-            acc[decodedKey] = null;
-          }
-
-          return acc;
-        }, {})
-      : {};
-
-  // Currently require the name attribute to be rendered for every view and every query mode. Rendering
-  // the data block will break otherwise.
-  if (!mapping[SYSTEM_IDS.NAME_ATTRIBUTE]) {
-    mapping[SYSTEM_IDS.NAME_ATTRIBUTE] = null;
-  }
 
   return {
     isLoading,
     isFetched,
-    mapping: mapping ?? {},
+    mapping,
   };
 }
 
@@ -106,7 +107,7 @@ export function mappingToRows(
   slotIds: string[],
   collectionItems: Entity[],
   spaceId: string,
-  properties: Map<PropertyId, PropertySchema>
+  properties?: Record<PropertyId, PropertySchema>
 ): Row[] {
   /**
    * Take each row, take each mapping, take each "slot" in the mapping
@@ -146,7 +147,7 @@ export function mappingToRows(
           },
         });
 
-        const maybeProperty = properties.get(PropertyId(slotId));
+        const maybeProperty = properties?.[PropertyId(slotId)];
 
         const placeholder = makePlaceholderFromValueType({
           attributeId: slotId,

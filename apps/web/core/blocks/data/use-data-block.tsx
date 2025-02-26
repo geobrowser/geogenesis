@@ -4,8 +4,6 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-
 import { useEntity } from '../../database/entities';
 import { upsert } from '../../database/write';
 import { PropertyId, useProperties } from '../../hooks/use-properties';
@@ -35,7 +33,7 @@ interface RenderablesQueryKey {
   mapping: Mapping;
   spaceId: string;
   sourceEntityRelations: Relation[];
-  properties: Map<PropertyId, PropertySchema>;
+  properties?: Record<PropertyId, PropertySchema>;
 }
 
 const queryKeys = {
@@ -179,7 +177,7 @@ export function useDataBlock() {
     relationId,
 
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
-    properties: [...propertiesSchema.values()],
+    properties: propertiesSchema ? Object.values(propertiesSchema) : [],
     propertiesSchema,
 
     pageNumber,
@@ -231,13 +229,15 @@ interface Props {
 export function DataBlockProvider({ spaceId, children, entityId, relationId }: Props) {
   const { pageNumber, setPage } = usePagination();
 
-  const store = {
-    spaceId,
-    entityId,
-    relationId,
-    pageNumber,
-    setPage,
-  };
+  const store = React.useMemo(() => {
+    return {
+      spaceId,
+      entityId,
+      relationId,
+      pageNumber,
+      setPage,
+    };
+  }, [spaceId, entityId, relationId, pageNumber, setPage]);
 
   return <DataBlockContext.Provider value={store}>{children}</DataBlockContext.Provider>;
 }
@@ -246,7 +246,7 @@ export function useDataBlockInstance() {
   const context = React.useContext(DataBlockContext);
 
   if (context === null) {
-    throw new Error(`Missing EntityPageTableBlockStoreProvider`);
+    throw new Error(`Missing DataBlockProvider`);
   }
 
   return context;

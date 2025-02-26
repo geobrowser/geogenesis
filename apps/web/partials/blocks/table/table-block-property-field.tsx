@@ -18,10 +18,24 @@ export function TableBlockPropertyField(props: {
   spaceId: string;
   entityId: string;
 }) {
+  const { renderables, spaceId, entityId } = props;
   const isEditing = useUserIsEditing(props.spaceId);
 
   if (isEditing) {
-    return <div className="flex flex-wrap gap-2">Hello world</div>;
+    const firstRenderable = renderables[0] as RenderableProperty | undefined;
+    const isRelation = firstRenderable?.type === 'RELATION' || firstRenderable?.type === 'IMAGE';
+
+    if (isRelation) {
+      return (
+        <RelationsGroup
+          isPlaceholderEntry={true}
+          entityId={entityId}
+          spaceId={spaceId}
+          renderables={renderables as RelationRenderableProperty[]}
+          entityName={null}
+        />
+      );
+    }
   }
 
   return (

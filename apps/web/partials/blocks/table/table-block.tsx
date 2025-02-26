@@ -13,8 +13,9 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
-import { Cell, PropertySchema } from '~/core/types';
+import { Cell, PropertySchema, Row } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
@@ -32,56 +33,84 @@ import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
+import { TableBlockGalleryItem } from './table-block-gallery-item';
+import { TableBlockListItem } from './table-block-list-item';
 import { TableBlockTable } from './table-block-table';
 
 interface Props {
   spaceId: string;
 }
 
-function makePlaceholderRow(properties: PropertySchema[]) {
+function makePlaceholderRow(spaceId: string, properties: PropertySchema[]) {
+  const entityId = ID.createEntityId();
   const columns: Record<string, Cell> = {};
 
   columns[SYSTEM_IDS.NAME_ATTRIBUTE] = {
     slotId: SYSTEM_IDS.NAME_ATTRIBUTE,
-    renderables: [],
+    cellId: ID.createEntityId(),
     name: null,
-    cellId: '',
+    renderables: [],
   };
 
   for (const p of properties) {
+    if (p.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
+      continue;
+    }
+
     columns[p.id] = {
-      cellId: '',
-      name: null,
-      renderables: [],
       slotId: p.id,
+      cellId: ID.createEntityId(),
+      name: null,
+      renderables: [
+        {
+          type: 'RELATION',
+          relationId: p.id,
+          valueName: p.name,
+          entityId: entityId,
+          entityName: null,
+          attributeId: p.id,
+          attributeName: p.name,
+          spaceId,
+          value: '',
+          placeholder: true,
+        },
+      ],
     };
   }
+
+  console.log('columns', columns);
 
   return {
     placeholder: true,
     columns,
-    entityId: '',
+    entityId,
   };
 }
 
 // @TODO: Maybe this can live in the useDataBlock hook? Probably want it to so
 // we can access it deeply in table cells, etc.
-function useEntries() {
-  const { rows: entries, spaceId, properties } = useDataBlock();
+function useEntries(entries: Row[], properties: PropertySchema[], spaceId: string) {
   const { filterState } = useFilters();
   const isEditing = useUserIsEditing(spaceId);
   const { setEditable } = useEditable();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(entries.length === 0);
 
-  const renderedEntries = hasPlaceholderRow && isEditing ? entries.concat([makePlaceholderRow(properties)]) : entries;
+  const renderedEntries =
+    hasPlaceholderRow && isEditing ? entries.concat([makePlaceholderRow(spaceId, properties)]) : entries;
 
-  const onCreate = () => {
+  const onCreateFromPlaceholder = () => {
     const filteredTypes: Array<string> = filterState
       .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
       .map(filter => filter.value);
     // Could be adding data, could be doing FOC
+    //
     // How do we replace the placeholder? We don't want to render it if it's been replaced. We do
-    //     want to render it if the user has selected to render it manually.
+    //     want to render it if the user has selected to render it manually. What's the right
+    //     abstraction in this case? Sometimes we're doing FOC where we set an entity. Sometimes
+    //     we send an event via editEvents.
+    //
+    // We also need to know the source type as different sources will require writing extra data
+    //     e.g., setting a collection item, verified state, relations, etc.
   };
 
   const onAddPlaceholder = () => {
@@ -98,13 +127,14 @@ function useEntries() {
 // eslint-disable-next-line react/display-name
 export const TableBlock = React.memo(({ spaceId }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
+  const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { spaces } = useSpaces();
-  const { properties, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
+  const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { shownColumnIds, view, placeholder } = useView();
   const { source } = useSource();
-  const { entries, onAddPlaceholder } = useEntries();
+  const { entries, onAddPlaceholder } = useEntries(rows, properties, spaceId);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -160,6 +190,60 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   });
 
   const hasPagination = hasPreviousPage || hasNextPage;
+
+  let EntriesComponent = (
+    <TableBlockTable
+      space={spaceId}
+      properties={properties}
+      rows={entries}
+      placeholder={placeholder}
+      source={source}
+      shownColumnIds={shownColumnIds}
+      filterState={filterState}
+    />
+  );
+
+  if (view === 'LIST') {
+    EntriesComponent = (
+      <div className="flex w-full flex-col">
+        {entries.map((row, index: number) => {
+          return (
+            <TableBlockListItem
+              isEditing={isEditing}
+              key={`${row.entityId}-${index}`}
+              columns={row.columns}
+              currentSpaceId={spaceId}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (view === 'GALLERY') {
+    EntriesComponent = (
+      <div className="grid grid-cols-3 gap-x-4 gap-y-10">
+        {entries.map((row, index: number) => {
+          return (
+            <TableBlockGalleryItem key={`${row.entityId}-${index}`} columns={row.columns} currentSpaceId={spaceId} />
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (entries.length === 0) {
+    EntriesComponent = (
+      <div className="block rounded-lg bg-grey-01">
+        <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
+          <div>{placeholder.text}</div>
+          <div>
+            <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
@@ -225,16 +309,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             <TableBlockLoadingPlaceholder />
           </>
         ) : (
-          <TableBlockTable
-            space={spaceId}
-            properties={properties}
-            rows={entries}
-            placeholder={placeholder}
-            view={view}
-            source={source}
-            shownColumnIds={shownColumnIds}
-            filterState={filterState}
-          />
+          EntriesComponent
         )}
         {hasPagination && (
           <>

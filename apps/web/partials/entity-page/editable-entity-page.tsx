@@ -199,7 +199,7 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
 
 type RelationsGroupProps = {
   relations: RelationRenderableProperty[];
-  properties: Map<string, PropertySchema>;
+  properties?: Record<string, PropertySchema>;
 };
 
 function RelationsGroup({ relations, properties }: RelationsGroupProps) {
@@ -217,7 +217,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const typeOfId = relations[0].attributeId;
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
-  const property = properties.get(typeOfId);
+  const property = properties?.[typeOfId];
   const filterByType = property?.relationValueTypeId;
 
   return (

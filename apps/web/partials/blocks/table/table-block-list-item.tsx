@@ -1,23 +1,17 @@
 import { CONTENT_IDS, SYSTEM_IDS } from '@graphprotocol/grc-20';
 import Image from 'next/image';
 import Link from 'next/link';
-import { send } from 'process';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { editEvent, useEditEvents } from '~/core/events/edit-events';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { Cell, RelationRenderableProperty, RenderableProperty } from '~/core/types';
+import { Cell } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
-import { LinkableRelationChip } from '~/design-system/chip';
 import { Divider } from '~/design-system/divider';
-import { ImageZoom, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
-import { Create } from '~/design-system/icons/create';
 import { Upload } from '~/design-system/icons/upload';
 import { SelectEntity } from '~/design-system/select-entity';
-import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Spacer } from '~/design-system/spacer';
 
 import { TableBlockPropertyField } from './table-block-property-field';
@@ -25,16 +19,15 @@ import { TableBlockPropertyField } from './table-block-property-field';
 type Props = {
   columns: Record<string, Cell>;
   currentSpaceId: string;
+  isEditing: boolean;
 };
 
-export function TableBlockListItem({ columns, currentSpaceId }: Props) {
-  const isEditing = useUserIsEditing(currentSpaceId);
+export function TableBlockListItem({ columns, currentSpaceId, isEditing }: Props) {
   const nameCell = columns[SYSTEM_IDS.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
   const maybeCoverData: Cell | undefined = columns[SYSTEM_IDS.COVER_ATTRIBUTE];
   const maybeDescriptionData: Cell | undefined = columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
 
-  // @TODO: An "everything" else ID that can be used to render any renderable.
   const { cellId, name, verified } = nameCell;
   let { description, image } = nameCell;
 

@@ -97,17 +97,14 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { propertiesSchema } = useDataBlock();
 
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { source } = useSource();
-
     const cellData = getValue<Cell | undefined>();
 
     // Currently relations (rollup) blocks aren't editable.
-    const isEditable = source.type === 'RELATIONS' ? false : table.options.meta?.isEditable;
+    const isEditable = table.options.meta?.isEditable;
 
     if (!cellData) return null;
 
-    const maybePropertiesSchema = propertiesSchema.get(PropertyId(cellData.slotId));
+    const maybePropertiesSchema = propertiesSchema?.[PropertyId(cellData.slotId)];
     const filterableRelationType = maybePropertiesSchema?.relationValueTypeId;
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
@@ -143,7 +140,6 @@ interface Props {
   properties: PropertySchema[];
   rows: Row[];
   shownColumnIds: string[];
-  view: DataBlockView;
   source: Source;
   placeholder: { text: string; image: string };
   filterState: Filter[];
@@ -151,11 +147,10 @@ interface Props {
 
 // eslint-disable-next-line react/display-name
 export const TableBlockTable = React.memo(
-  ({ rows, space, properties, shownColumnIds, placeholder, view, source, filterState }: Props) => {
+  ({ rows, space, properties, shownColumnIds, placeholder, source, filterState }: Props) => {
     const isEditingColumns = useAtomValue(editingPropertiesAtom);
-
     const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
-    const isEditable = useUserIsEditing(space);
+    const isEditable = true;
 
     const table = useReactTable({
       data: rows,
@@ -256,116 +251,93 @@ export const TableBlockTable = React.memo(
       );
     }
 
-    switch (view) {
-      case 'TABLE':
-        return (
-          <div className="overflow-hidden rounded-lg border border-grey-02 p-0">
-            <div className="overflow-x-scroll rounded-lg">
-              <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
-                <thead>
-                  {table.getHeaderGroups().map(headerGroup => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map(header => {
-                        const isShown = shownColumnIds.includes(header.id);
-                        const headerClassNames = isShown
-                          ? null
-                          : !isEditingColumns || !isEditable
-                            ? 'hidden'
-                            : '!bg-grey-01 !text-grey-03';
-
-                        return (
-                          <th
-                            key={header.id}
-                            className={cx(
-                              'group relative min-w-[250px] border-b border-grey-02 p-[10px] text-left',
-                              headerClassNames
-                            )}
-                          >
-                            <div className="flex h-full w-full items-center gap-[10px]">
-                              {isEditable && !isShown ? <EyeHide /> : null}
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                            </div>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </thead>
-                <tbody>
-                  {table.getRowModel().rows.map((row, index: number) => {
-                    const cells = row.getVisibleCells();
-                    const entityId = cells?.[0]?.getValue<Cell>()?.cellId;
+    return (
+      <div className="overflow-hidden rounded-lg border border-grey-02 p-0">
+        <div className="overflow-x-scroll rounded-lg">
+          <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
+            <thead>
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map(header => {
+                    const isShown = shownColumnIds.includes(header.id);
+                    const headerClassNames = isShown
+                      ? null
+                      : !isEditingColumns || !isEditable
+                        ? 'hidden'
+                        : '!bg-grey-01 !text-grey-03';
 
                     return (
-                      <tr key={entityId ?? index} className="hover:bg-bg">
-                        {cells.map(cell => {
-                          const cellId = `${row.original.entityId}-${cell.column.id}`;
-                          const firstTriple = cell.getValue<Cell>()?.renderables.find(r => r.type === 'TEXT');
-
-                          const isNameCell = Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
-                          const isExpandable = firstTriple && firstTriple.type === 'TEXT';
-                          const isShown = shownColumnIds.includes(cell.column.id);
-
-                          const href = NavUtils.toEntity(
-                            isNameCell ? (row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space) : space,
-                            entityId
-                          );
-                          const { verified } = row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-
-                          return (
-                            <TableCell
-                              key={cellId}
-                              isLinkable={isNameCell && isEditable}
-                              href={href}
-                              isExpandable={isExpandable}
-                              isExpanded={expandedCells[cellId]}
-                              width={cell.column.getSize()}
-                              toggleExpanded={() =>
-                                setExpandedCells(prev => ({
-                                  ...prev,
-                                  [cellId]: !prev[cellId],
-                                }))
-                              }
-                              isShown={isShown}
-                              isEditMode={isEditable}
-                            >
-                              {isNameCell && verified && (
-                                <span>
-                                  <CheckCircle color={isEditable ? 'text' : 'ctaPrimary'} />
-                                </span>
-                              )}
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </TableCell>
-                          );
-                        })}
-                      </tr>
+                      <th
+                        key={header.id}
+                        className={cx(
+                          'group relative min-w-[250px] border-b border-grey-02 p-[10px] text-left',
+                          headerClassNames
+                        )}
+                      >
+                        <div className="flex h-full w-full items-center gap-[10px]">
+                          {isEditable && !isShown ? <EyeHide /> : null}
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        </div>
+                      </th>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      case 'LIST':
-        return (
-          <div className="flex w-full flex-col">
-            {rows.map((row, index: number) => {
-              return (
-                <TableBlockListItem key={`${row.entityId}-${index}`} columns={row.columns} currentSpaceId={space} />
-              );
-            })}
-          </div>
-        );
-      case 'GALLERY':
-        return (
-          <div className="grid grid-cols-3 gap-x-4 gap-y-10">
-            {rows.map((row, index: number) => {
-              return (
-                <TableBlockGalleryItem key={`${row.entityId}-${index}`} columns={row.columns} currentSpaceId={space} />
-              );
-            })}
-          </div>
-        );
-    }
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.map((row, index: number) => {
+                const cells = row.getVisibleCells();
+                const entityId = cells?.[0]?.getValue<Cell>()?.cellId;
+
+                return (
+                  <tr key={entityId ?? index} className="hover:bg-bg">
+                    {cells.map(cell => {
+                      const cellId = `${row.original.entityId}-${cell.column.id}`;
+                      const firstTriple = cell.getValue<Cell>()?.renderables.find(r => r.type === 'TEXT');
+
+                      const isNameCell = Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
+                      const isExpandable = firstTriple && firstTriple.type === 'TEXT';
+                      const isShown = shownColumnIds.includes(cell.column.id);
+
+                      const href = NavUtils.toEntity(
+                        isNameCell ? (row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space) : space,
+                        entityId
+                      );
+                      const { verified } = row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
+
+                      return (
+                        <TableCell
+                          key={cellId}
+                          isLinkable={isNameCell && isEditable}
+                          href={href}
+                          isExpandable={isExpandable}
+                          isExpanded={expandedCells[cellId]}
+                          width={cell.column.getSize()}
+                          toggleExpanded={() =>
+                            setExpandedCells(prev => ({
+                              ...prev,
+                              [cellId]: !prev[cellId],
+                            }))
+                          }
+                          isShown={isShown}
+                          isEditMode={isEditable}
+                        >
+                          {isNameCell && verified && (
+                            <span>
+                              <CheckCircle color={isEditable ? 'text' : 'ctaPrimary'} />
+                            </span>
+                          )}
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   }
 );

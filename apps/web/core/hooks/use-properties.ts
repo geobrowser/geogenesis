@@ -9,20 +9,16 @@ export type PropertyId = string & Brand.Brand<'PropertyId'>;
 export const PropertyId = Brand.nominal<PropertyId>();
 
 type UsePropertyValueTypes = {
-  properties: Map<PropertyId, PropertySchema>;
+  properties: Record<PropertyId, PropertySchema> | undefined;
 };
-
-const initialData = new Map();
 
 export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
   const { data: properties } = useQuery({
     placeholderData: keepPreviousData,
-    initialData: initialData,
     enabled: propertyIds.length > 0,
+    initialData: {},
     queryKey: [{ key: 'properties', propertyIds }],
-    queryFn: async ({ queryKey }) => {
-      const [{ propertyIds }] = queryKey;
-
+    queryFn: async () => {
       const properties = await fetchEntitiesBatch({ entityIds: propertyIds });
 
       const valueTypes = properties.map(a => {
@@ -57,12 +53,19 @@ export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
         };
       });
 
-      return new Map<PropertyId, PropertySchema>(sortProperties(schema).map(s => [PropertyId(s.id), s]));
+      const sorted = sortProperties(schema);
+      const map: Record<PropertyId, PropertySchema> = {};
+
+      for (const p of sorted) {
+        map[PropertyId(p.id)] = p;
+      }
+
+      return map;
     },
   });
 
   return {
-    properties: properties ?? initialData,
+    properties,
   };
 }
 
