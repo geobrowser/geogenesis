@@ -137,41 +137,58 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       send(event.data);
     }
 
-    if (event.type === 'FOC') {
-      // @TODO: relation block
-      if (source.type === 'COLLECTION') {
-        console.log('source', source);
-        const selectedEntity = event.data;
-        // Should we require that the user enters a name or selects an entity before
-        // altering any other data?
-        const id = ID.createEntityId();
-        console.log('selected entity', selectedEntity);
+    // Adding a collection item shouldn't _only_ be for FOC. Should be for adding any data
+    // How do we know what the collection item values should be?
+    // @TODO: Make sure we don't add a new collection item if it already exists
+    if (source.type === 'COLLECTION') {
+      const maybeHasCollectionItem = entries.find(e => e.entityId === context.entityId);
 
-        upsertCollectionItemRelation({
-          relationId: EntityId(id),
-          collectionId: EntityId(source.value),
-          spaceId: SpaceId(spaceId),
-          toEntity: {
-            id: EntityId(selectedEntity.id),
-            name: selectedEntity.name,
-          },
-        });
+      if (!maybeHasCollectionItem) {
+        let to: (Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }) | null = null;
 
-        // Callers can optionally pass a selected entity in the case of Find or Create
-        // to set the collection. We allow setting any data or using FOC.
-        if (selectedEntity.space) {
-          upsertSourceSpaceOnCollectionItem({
-            collectionItemId: EntityId(id),
-            toId: EntityId(selectedEntity.id),
+        if (event.type === 'FOC') {
+          to = event.data;
+        }
+
+        if (event.type === 'EVENT') {
+          to = {
+            id: EntityId(context.entityId),
+            name: context.entityName,
+            space: EntityId(context.spaceId),
+            verified: false,
+          };
+        }
+
+        if (to !== null) {
+          // @TODO: relation block
+          const id = ID.createEntityId();
+
+          upsertCollectionItemRelation({
+            relationId: EntityId(id),
+            collectionId: EntityId(source.value),
             spaceId: SpaceId(spaceId),
-            sourceSpaceId: selectedEntity.space,
+            toEntity: {
+              id: EntityId(to.id),
+              name: to.name,
+            },
           });
 
-          if (selectedEntity.verified) {
-            upsertVerifiedSourceOnCollectionItem({
+          // Callers can optionally pass a selected entity in the case of Find or Create
+          // to set the collection. We allow setting any data or using FOC.
+          if (to.space) {
+            upsertSourceSpaceOnCollectionItem({
               collectionItemId: EntityId(id),
+              toId: EntityId(to.id),
               spaceId: SpaceId(spaceId),
+              sourceSpaceId: to.space,
             });
+
+            if (to.verified) {
+              upsertVerifiedSourceOnCollectionItem({
+                collectionItemId: EntityId(id),
+                spaceId: SpaceId(spaceId),
+              });
+            }
           }
         }
       }
@@ -179,15 +196,16 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
     if (context.entityId === nextEntityId) {
       setHasPlaceholderRow(false);
+      createEntityWithTypes();
     }
-
-    createEntityWithTypes();
   };
 
   const onAddPlaceholder = () => {
     setEditable(true);
     setHasPlaceholderRow(true);
   };
+
+  console.log('rendered', renderedEntries);
 
   return {
     entries: renderedEntries,
@@ -274,7 +292,7 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   if (view === 'LIST') {
     EntriesComponent = (
-      <div className="flex w-full flex-col">
+      <div className="flex w-full flex-col space-y-4">
         {entries.map((row, index: number) => {
           return (
             <TableBlockListItem
@@ -285,6 +303,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               rowEntityId={row.entityId}
               isPlaceholder={Boolean(row.placeholder)}
               onChangeEntry={onChangeEntry}
+              spaceId={spaceId}
             />
           );
         })}

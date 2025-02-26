@@ -10,6 +10,7 @@ import { getImagePath } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 
+import { Dots } from '../dots';
 import { Trash } from '../icons/trash';
 import { Upload } from '../icons/upload';
 
@@ -118,10 +119,63 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   );
 }
 
+export function ListImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+  const [isUploading, setIsUploading] = React.useState(false);
+  const { ipfs } = Services.useServices();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileInputClick = () => {
+    // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setIsUploading(true);
+      const file = e.target.files[0];
+      const imageSrc = await ipfs.uploadFile(file);
+      onImageChange(imageSrc);
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      {imageSrc && (
+        <div className="pt-1">
+          <ImageZoom variant={variant} imageSrc={imageSrc} />
+        </div>
+      )}
+
+      <div className="flex justify-center gap-2 pt-2">
+        {isUploading ? (
+          <Dots />
+        ) : (
+          <label htmlFor="avatar-file">
+            <SquareButton onClick={handleFileInputClick} icon={<Upload />} />
+          </label>
+        )}
+        {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash />} />}
+      </div>
+
+      <input
+        ref={fileInputRef}
+        accept="image/png, image/jpeg"
+        id="avatar-file"
+        onChange={handleChange}
+        type="file"
+        className="hidden"
+      />
+    </div>
+  );
+}
+
 interface ImageFieldProps {
   imageSrc?: string;
   onImageChange: (imageSrc: string) => void;
-  onImageRemove: () => void;
+  onImageRemove?: () => void;
   variant?: ImageVariant;
   horizontal?: boolean;
 }

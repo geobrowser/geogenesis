@@ -1,19 +1,18 @@
-import { CONTENT_IDS, SYSTEM_IDS } from '@graphprotocol/grc-20';
-import Image from 'next/image';
+import { CONTENT_IDS, Image, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import NextImage from 'next/image';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { EditEvent, EditEventContext } from '~/core/events/edit-events';
+import { DB } from '~/core/database/write';
+import { EditEvent, EditEventContext, editEvent } from '~/core/events/edit-events';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId } from '~/core/io/schema';
 import { Cell } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
-import { SquareButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { ListImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
-import { Upload } from '~/design-system/icons/upload';
 import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 
@@ -34,11 +33,10 @@ type Props = {
   currentSpaceId: string;
   isEditing: boolean;
   rowEntityId: string;
+  spaceId: string;
   isPlaceholder: boolean;
   onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
   // allowedTypes
-  // onCreate
-  // onDone
 };
 
 export function TableBlockListItem({
@@ -46,6 +44,7 @@ export function TableBlockListItem({
   currentSpaceId,
   isEditing,
   rowEntityId,
+  spaceId,
   isPlaceholder,
   onChangeEntry,
 }: Props) {
@@ -85,16 +84,83 @@ export function TableBlockListItem({
       <div className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
         <div className="relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
           {image ? (
-            <Image
+            <NextImage
               src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
               alt=""
               fill
             />
           ) : (
-            <SquareButton>
-              <Upload />
-            </SquareButton>
+            <ListImageField
+              imageSrc={image ?? undefined}
+              onImageChange={imageSrc => {
+                const { imageId, ops } = Image.make(imageSrc);
+                const [createRelationOp, setTripleOp] = ops;
+
+                const imageEntityDispatch = editEvent({
+                  context: {
+                    entityId: createRelationOp.relation.fromEntity,
+                    entityName: null,
+                    spaceId,
+                  },
+                });
+
+                imageEntityDispatch({
+                  type: 'UPSERT_RELATION',
+                  payload: {
+                    fromEntityId: createRelationOp.relation.fromEntity,
+                    fromEntityName: name,
+                    toEntityId: createRelationOp.relation.toEntity,
+                    toEntityName: null,
+                    typeOfId: createRelationOp.relation.type,
+                    typeOfName: 'Types',
+                  },
+                });
+
+                imageEntityDispatch({
+                  type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                  payload: {
+                    renderable: {
+                      attributeId: setTripleOp.triple.attribute,
+                      entityId: imageId,
+                      spaceId,
+                      attributeName: 'Image URL',
+                      entityName: null,
+                      type: 'URL',
+                      value: setTripleOp.triple.value.value,
+                    },
+                    value: {
+                      type: 'URL',
+                      value: setTripleOp.triple.value.value,
+                    },
+                  },
+                });
+
+                onChangeEntry(
+                  {
+                    entityId: rowEntityId,
+                    entityName: name,
+                    spaceId,
+                  },
+                  {
+                    type: 'EVENT',
+                    data: {
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: rowEntityId,
+                        fromEntityName: name,
+                        toEntityId: imageId,
+                        toEntityName: null,
+                        typeOfId: CONTENT_IDS.AVATAR_ATTRIBUTE,
+                        typeOfName: 'Avatar',
+                        renderableType: 'IMAGE',
+                        value: setTripleOp.triple.value.value,
+                      },
+                    },
+                  }
+                );
+              }}
+            />
           )}
         </div>
         <div className="w-full space-y-4">
@@ -235,7 +301,7 @@ export function TableBlockListItem({
     <div>
       <Link href={href} className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
         <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
-          <Image
+          <NextImage
             src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
             className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
             alt=""
