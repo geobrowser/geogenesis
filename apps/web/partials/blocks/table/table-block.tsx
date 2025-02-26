@@ -79,8 +79,6 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
     };
   }
 
-  console.log('columns', columns);
-
   return {
     placeholder: true,
     columns,
