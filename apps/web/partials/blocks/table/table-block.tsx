@@ -203,7 +203,7 @@ export const TableBlock = ({ spaceId }: Props) => {
   const { spaces } = useSpaces();
   const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
-  const { view, placeholder } = useView();
+  const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
   const { entries, onAddPlaceholder, onChangeEntry } = useEntries(rows, properties, spaceId, filterState);
 
@@ -268,9 +268,7 @@ export const TableBlock = ({ spaceId }: Props) => {
       properties={properties}
       rows={entries}
       placeholder={placeholder}
-      source={source}
-      shownColumnIds={properties.map(p => p.id)}
-      filterState={filterState}
+      shownColumnIds={shownColumnIds}
     />
   );
 
