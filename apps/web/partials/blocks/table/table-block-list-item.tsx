@@ -3,7 +3,6 @@ import NextImage from 'next/image';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { DB } from '~/core/database/write';
 import { EditEvent, EditEventContext, editEvent } from '~/core/events/edit-events';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId } from '~/core/io/schema';

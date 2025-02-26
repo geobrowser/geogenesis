@@ -105,6 +105,7 @@ type ChangeEntryParams =
       data: EditEvent;
     }
   | {
+      // Find or Create
       type: 'FOC';
       data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
     };
@@ -196,8 +197,9 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
     if (context.entityId === nextEntityId) {
       setHasPlaceholderRow(false);
-      createEntityWithTypes();
     }
+
+    createEntityWithTypes();
   };
 
   const onAddPlaceholder = () => {
