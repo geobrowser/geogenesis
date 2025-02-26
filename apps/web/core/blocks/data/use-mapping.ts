@@ -61,7 +61,6 @@ export function useMapping(
     data: mapping,
     isLoading,
     isFetched,
-    error,
   } = useQuery({
     placeholderData: keepPreviousData,
     enabled: shownPropertyRelationEntityIds.length > 0,
@@ -127,27 +126,6 @@ export function mappingToRows(
           name,
         };
 
-        const mergedTriples = getTriples({
-          mergeWith: cellTriples,
-          selector: triple => {
-            const isRowCell = triple.entityId === id;
-            const isColCell = triple.attributeId === slotId;
-
-            // For mapped data we don't care about the correct value type
-            return isRowCell && isColCell;
-          },
-        });
-
-        const mergedRelations = getRelations({
-          mergeWith: cellRelations,
-          selector: relation => {
-            const isRowCell = relation.fromEntity.id === id;
-            const isColCell = relation.typeOf.id === slotId;
-
-            return isRowCell && isColCell;
-          },
-        });
-
         const maybeProperty = properties?.[PropertyId(slotId)];
 
         const placeholder = makePlaceholderFromValueType({
@@ -162,8 +140,8 @@ export function mappingToRows(
           entityId: id,
           entityName: name,
           spaceId,
-          triples: mergedTriples,
-          relations: mergedRelations,
+          triples: cellTriples,
+          relations: cellRelations,
           placeholderRenderables: [placeholder],
         });
 

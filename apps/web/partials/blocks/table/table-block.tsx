@@ -126,7 +126,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
   const renderedEntries =
     hasPlaceholderRow && isEditing && !entries.find(e => e.entityId === nextEntityId)
-      ? entries.concat([makePlaceholderRow(nextEntityId, spaceId, properties)])
+      ? [makePlaceholderRow(nextEntityId, spaceId, properties), ...entries]
       : entries;
 
   const onChangeEntry = (context: EditEventContext, event: ChangeEntryParams) => {
@@ -207,8 +207,6 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
     setHasPlaceholderRow(true);
   };
 
-  console.log('rendered', renderedEntries);
-
   return {
     entries: renderedEntries,
     onAddPlaceholder,
@@ -221,7 +219,8 @@ export const TableBlock = ({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { spaces } = useSpaces();
-  const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
+  const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber, propertiesSchema } =
+    useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
@@ -306,6 +305,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               isPlaceholder={Boolean(row.placeholder)}
               onChangeEntry={onChangeEntry}
               spaceId={spaceId}
+              properties={propertiesSchema}
             />
           );
         })}

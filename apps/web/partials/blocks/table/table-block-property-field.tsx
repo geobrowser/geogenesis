@@ -1,6 +1,9 @@
+import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+
 import { editEvent, useEditEvents } from '~/core/events/edit-events';
+import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { RelationRenderableProperty, RenderableProperty } from '~/core/types';
+import { PropertySchema, RelationRenderableProperty, RenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
@@ -17,8 +20,9 @@ export function TableBlockPropertyField(props: {
   renderables: RenderableProperty[];
   spaceId: string;
   entityId: string;
+  properties?: Record<PropertyId, PropertySchema>;
 }) {
-  const { renderables, spaceId, entityId } = props;
+  const { renderables, spaceId, entityId, properties } = props;
   const isEditing = useUserIsEditing(props.spaceId);
 
   if (isEditing) {
@@ -35,6 +39,7 @@ export function TableBlockPropertyField(props: {
             spaceId={spaceId}
             renderables={renderables as RelationRenderableProperty[]}
             entityName={null}
+            properties={properties}
           />
         </div>
       );
@@ -104,9 +109,10 @@ type RelationsGroupProps = {
   entityName: string | null;
   renderables: RelationRenderableProperty[];
   isPlaceholderEntry: boolean;
+  properties?: Record<PropertyId, PropertySchema>;
 };
 
-function RelationsGroup({ renderables, entityId, spaceId, entityName }: RelationsGroupProps) {
+function RelationsGroup({ renderables, entityId, spaceId, entityName, properties }: RelationsGroupProps) {
   // @TODO: What should these ids actually be? They can be from different entities and
   // different spaces actually.
   //
@@ -124,7 +130,8 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName }: Relation
   const typeOfId = firstRenderable.attributeId;
   const typeOfName = firstRenderable.attributeName;
 
-  const filterSearchByTypes: string[] = [];
+  const property = properties?.[PropertyId(typeOfId)];
+  const filterSearchByTypes = property?.relationValueTypeId ? [property.relationValueTypeId] : [];
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -162,6 +169,21 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName }: Relation
               <SelectEntity
                 spaceId={spaceId}
                 allowedTypes={filterSearchByTypes}
+                onCreateEntity={result => {
+                  if (property?.relationValueTypeId) {
+                    send({
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: result.id,
+                        fromEntityName: result.name,
+                        toEntityId: property.relationValueTypeId,
+                        toEntityName: property.relationValueTypeName ?? null,
+                        typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+                        typeOfName: 'Types',
+                      },
+                    });
+                  }
+                }}
                 onDone={result => {
                   send({
                     type: 'UPSERT_RELATION',
@@ -209,6 +231,21 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName }: Relation
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
             allowedTypes={filterSearchByTypes}
+            onCreateEntity={result => {
+              if (property?.relationValueTypeId) {
+                send({
+                  type: 'UPSERT_RELATION',
+                  payload: {
+                    fromEntityId: result.id,
+                    fromEntityName: result.name,
+                    toEntityId: property.relationValueTypeId,
+                    toEntityName: property.relationValueTypeName ?? null,
+                    typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+                    typeOfName: 'Types',
+                  },
+                });
+              }
+            }}
             onDone={result => {
               send({
                 type: 'UPSERT_RELATION',

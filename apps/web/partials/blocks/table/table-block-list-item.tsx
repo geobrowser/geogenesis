@@ -4,9 +4,10 @@ import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { EditEvent, EditEventContext, editEvent } from '~/core/events/edit-events';
+import { PropertyId } from '~/core/hooks/use-properties';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId } from '~/core/io/schema';
-import { Cell } from '~/core/types';
+import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
@@ -35,6 +36,7 @@ type Props = {
   spaceId: string;
   isPlaceholder: boolean;
   onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
+  properties?: Record<PropertyId, PropertySchema>;
   // allowedTypes
 };
 
@@ -46,6 +48,7 @@ export function TableBlockListItem({
   spaceId,
   isPlaceholder,
   onChangeEntry,
+  properties,
 }: Props) {
   const nameCell = columns[SYSTEM_IDS.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
@@ -286,6 +289,7 @@ export function TableBlockListItem({
                     renderables={p.renderables}
                     spaceId={currentSpaceId}
                     entityId={rowEntityId}
+                    properties={properties}
                   />
                 </div>
               </>
@@ -329,6 +333,7 @@ export function TableBlockListItem({
                   renderables={p.renderables}
                   spaceId={currentSpaceId}
                   entityId={cellId}
+                  properties={properties}
                 />
               </div>
             );

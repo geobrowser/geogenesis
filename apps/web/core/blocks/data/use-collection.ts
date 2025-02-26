@@ -1,11 +1,10 @@
 import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
-import * as React from 'react';
-
 import { useEntity } from '~/core/database/entities';
 import { useRelations } from '~/core/database/relations';
-import { EntityId, SpaceId } from '~/core/io/schema';
+import { useTriples } from '~/core/database/triples';
+import { EntityId } from '~/core/io/schema';
 
 import { mergeEntitiesAsync } from './queries';
 import { useDataBlockInstance } from './use-data-block';
@@ -16,29 +15,31 @@ export function useCollection() {
   const { source } = useSource();
 
   const blockEntity = useEntity({
-    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
-    id: React.useMemo(() => EntityId(entityId), [entityId]),
+    spaceId: spaceId,
+    id: EntityId(entityId),
   });
 
-  const collectionItemsRelations = useRelations(
-    React.useMemo(() => {
-      return {
-        mergeWith: blockEntity.relationsOut,
-        selector: r => {
-          if (source.type !== 'COLLECTION') return false;
+  const collectionItemsRelations = useRelations({
+    mergeWith: blockEntity.relationsOut,
+    selector: r => {
+      if (source.type !== 'COLLECTION') return false;
+      return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
+    },
+  });
 
-          // Return all local relations pointing to the collection id in the source block
-          // @TODO(data blocks): Merge with any remote collection items
-          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
-        },
-      };
-    }, [blockEntity.relationsOut, source])
-  );
+  const collectionItemIds = collectionItemsRelations?.map(c => c.toEntity.id) ?? [];
 
-  const collectionItemIds = React.useMemo(
-    () => collectionItemsRelations?.map(c => c.toEntity.id) ?? [],
-    [collectionItemsRelations]
-  );
+  // We need to check for any local changes to collection items in order to re-fetch the list
+  // of them and merge with local data.
+  const allTriples = useTriples({
+    includeDeleted: true,
+  }).map(t => t.entityId);
+
+  const allRelations = useRelations({
+    includeDeleted: true,
+  }).map(r => r.fromEntity.id);
+
+  const changedEntities = [...allTriples, ...allRelations].filter(e => collectionItemIds.includes(EntityId(e)));
 
   const {
     data: collectionItems,
@@ -47,14 +48,14 @@ export function useCollection() {
   } = useQuery({
     placeholderData: keepPreviousData,
     enabled: collectionItemsRelations.length > 0,
-    queryKey: ['blocks', 'data', 'collection-items', collectionItemIds],
+    // @TODO: Need to figure out how to stay in sync in case any of the collection items actually
+    // change locally.
+    queryKey: ['blocks', 'data', 'collection-items', collectionItemIds, changedEntities],
     queryFn: async () => {
-      const entities = await mergeEntitiesAsync({
+      return await mergeEntitiesAsync({
         entityIds: collectionItemIds,
         filterState: [],
       });
-
-      return entities;
     },
   });
 
