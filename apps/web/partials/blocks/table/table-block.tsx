@@ -7,10 +7,12 @@ import produce from 'immer';
 
 import * as React from 'react';
 
+import { Filter } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
+import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -41,8 +43,7 @@ interface Props {
   spaceId: string;
 }
 
-function makePlaceholderRow(spaceId: string, properties: PropertySchema[]) {
-  const entityId = ID.createEntityId();
+function makePlaceholderRow(entityId: string, spaceId: string, properties: PropertySchema[]) {
   const columns: Record<string, Cell> = {};
 
   columns[SYSTEM_IDS.NAME_ATTRIBUTE] = {
@@ -89,14 +90,15 @@ function makePlaceholderRow(spaceId: string, properties: PropertySchema[]) {
 
 // @TODO: Maybe this can live in the useDataBlock hook? Probably want it to so
 // we can access it deeply in table cells, etc.
-function useEntries(entries: Row[], properties: PropertySchema[], spaceId: string) {
-  const { filterState } = useFilters();
+function useEntries(entries: Row[], properties: PropertySchema[], spaceId: string, filterState: Filter[]) {
   const isEditing = useUserIsEditing(spaceId);
   const { setEditable } = useEditable();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(entries.length === 0);
 
+  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, []);
+
   const renderedEntries =
-    hasPlaceholderRow && isEditing ? entries.concat([makePlaceholderRow(spaceId, properties)]) : entries;
+    hasPlaceholderRow && isEditing ? entries.concat([makePlaceholderRow(nextEntityId, spaceId, properties)]) : entries;
 
   const onCreateFromPlaceholder = () => {
     const filteredTypes: Array<string> = filterState
@@ -111,6 +113,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
     //
     // We also need to know the source type as different sources will require writing extra data
     //     e.g., setting a collection item, verified state, relations, etc.
+    onClick();
   };
 
   const onAddPlaceholder = () => {
@@ -132,9 +135,9 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const { spaces } = useSpaces();
   const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
-  const { shownColumnIds, view, placeholder } = useView();
+  const { view, placeholder } = useView();
   const { source } = useSource();
-  const { entries, onAddPlaceholder } = useEntries(rows, properties, spaceId);
+  const { entries, onAddPlaceholder } = useEntries(rows, properties, spaceId, filterState);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -198,7 +201,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       rows={entries}
       placeholder={placeholder}
       source={source}
-      shownColumnIds={shownColumnIds}
+      shownColumnIds={properties.map(p => p.id)}
       filterState={filterState}
     />
   );

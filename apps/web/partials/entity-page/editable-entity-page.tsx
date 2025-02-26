@@ -67,7 +67,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     },
   });
 
-  const { properties } = useProperties(Object.keys(renderablesGroupedByAttributeId));
+  const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
   return (
     <>

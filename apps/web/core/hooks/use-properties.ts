@@ -8,16 +8,12 @@ import { PropertySchema, ValueTypeId } from '../types';
 export type PropertyId = string & Brand.Brand<'PropertyId'>;
 export const PropertyId = Brand.nominal<PropertyId>();
 
-type UsePropertyValueTypes = {
-  properties: Record<PropertyId, PropertySchema> | undefined;
-};
-
-export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
+export function useProperties(propertyIds: string[]): Record<PropertyId, PropertySchema> | undefined {
   const { data: properties } = useQuery({
     placeholderData: keepPreviousData,
     enabled: propertyIds.length > 0,
     initialData: {},
-    queryKey: [{ key: 'properties', propertyIds }],
+    queryKey: ['properties-schema', propertyIds],
     queryFn: async () => {
       const properties = await fetchEntitiesBatch({ entityIds: propertyIds });
 
@@ -64,9 +60,7 @@ export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
     },
   });
 
-  return {
-    properties,
-  };
+  return properties;
 }
 
 function sortProperties(renderables: PropertySchema[]) {

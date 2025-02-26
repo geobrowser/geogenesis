@@ -8,17 +8,14 @@ import { ID } from '~/core/id';
 import { mergeEntityAsync } from '../database/entities';
 import { upsertRelation } from '../database/write';
 import { EntityId } from '../io/schema';
-import { useEditable } from '../state/editable-store';
 
 export function useCreateEntityFromType(spaceId: string, typeIds: string[]) {
   const [nextEntityId, setNextEntityId] = React.useState(ID.createEntityId());
-  const { setEditable } = useEditable();
 
   const onClick = React.useCallback(() => {
     addTypesToEntityId(nextEntityId, spaceId, typeIds);
     setNextEntityId(ID.createEntityId());
-    setEditable(true);
-  }, [nextEntityId, spaceId, typeIds, setEditable]);
+  }, [nextEntityId, spaceId, typeIds]);
 
   return {
     onClick,

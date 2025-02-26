@@ -55,7 +55,7 @@ export function useDataBlock() {
   const { source } = useSource();
   const { collectionItems } = useCollection();
   // Use the mapping to get the potential renderable properties.
-  const { properties: propertiesSchema } = useProperties(shownColumnIds);
+  const propertiesSchema = useProperties(shownColumnIds);
 
   const {
     data: rows,
