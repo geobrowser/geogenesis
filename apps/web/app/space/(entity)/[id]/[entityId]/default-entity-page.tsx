@@ -27,7 +27,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 interface Props {
   params: { id: string; entityId: string };
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams?: { [key: string]: string | string[] | undefined };
   showCover?: boolean;
   showHeading?: boolean;
   showHeader?: boolean;
@@ -36,7 +36,7 @@ interface Props {
 
 export default async function DefaultEntityPage({
   params,
-  searchParams,
+  searchParams = {},
   showCover = true,
   showHeading = true,
   showHeader = true,
