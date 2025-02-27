@@ -2,8 +2,6 @@ import { A } from '@mobily/ts-belt';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
-import Fuse from 'fuse.js';
-import { useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { useCallback, useState } from 'react';
@@ -23,8 +21,6 @@ import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Search } from '~/design-system/icons/search';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
-
-import { shouldStartInEditModeAtom } from '~/atoms';
 
 interface Props {
   open: boolean;
@@ -245,15 +241,10 @@ const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: Cr
 
   const [query, setQuery] = useState<string>('');
 
-  const fuseOptions = {
-    keys: ['spaceConfig.name', 'spaceConfig.description'],
-  };
-
-  const fuse = new Fuse(spaces, fuseOptions);
-
-  const renderedSpaces = query.length === 0 ? spaces : fuse.search(query).map(result => result.item);
-
-  const setShouldStartInEditMode = useSetAtom(shouldStartInEditModeAtom);
+  const renderedSpaces =
+    query.length === 0
+      ? spaces
+      : spaces.filter(space => space?.spaceConfig?.name?.toLowerCase()?.startsWith(query.toLowerCase()));
 
   return (
     <div>
@@ -275,9 +266,7 @@ const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: Cr
             <Command.Item
               key={space.id}
               onSelect={() => {
-                // Ensure they arrive in edit mode
-                setShouldStartInEditMode(true);
-                router.push(NavUtils.toEntity(space.id, entityId));
+                router.push(NavUtils.toEntity(space.id, entityId, true));
                 onDone?.();
               }}
               className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01"

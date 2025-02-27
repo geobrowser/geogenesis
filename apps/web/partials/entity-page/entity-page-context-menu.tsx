@@ -1,7 +1,6 @@
 'use client';
 
 import cx from 'classnames';
-import Fuse from 'fuse.js';
 import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
@@ -150,13 +149,10 @@ const CreateNewVersionInSpace = ({ entityId, setIsCreatingNewVersion, onDone }: 
 
   const [query, setQuery] = useState<string>('');
 
-  const fuseOptions = {
-    keys: ['spaceConfig.name', 'spaceConfig.description'],
-  };
-
-  const fuse = new Fuse(spaces, fuseOptions);
-
-  const renderedSpaces = query.length === 0 ? spaces : fuse.search(query).map(result => result.item);
+  const renderedSpaces =
+    query.length === 0
+      ? spaces
+      : spaces.filter(space => space?.spaceConfig?.name?.toLowerCase()?.startsWith(query.toLowerCase()));
 
   return (
     <div className="bg-white">
@@ -178,7 +174,7 @@ const CreateNewVersionInSpace = ({ entityId, setIsCreatingNewVersion, onDone }: 
             <button
               key={space.id}
               onClick={() => {
-                router.push(NavUtils.toEntity(space.id, entityId));
+                router.push(NavUtils.toEntity(space.id, entityId, true));
                 onDone?.();
               }}
               className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01"

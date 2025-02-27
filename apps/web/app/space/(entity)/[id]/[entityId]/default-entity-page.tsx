@@ -10,6 +10,7 @@ import { EntityId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
+import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
@@ -26,6 +27,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 interface Props {
   params: { id: string; entityId: string };
+  searchParams: { [key: string]: string | string[] | undefined };
   showCover?: boolean;
   showHeading?: boolean;
   showHeader?: boolean;
@@ -34,6 +36,7 @@ interface Props {
 
 export default async function DefaultEntityPage({
   params,
+  searchParams,
   showCover = true,
   showHeading = true,
   showHeader = true,
@@ -41,7 +44,7 @@ export default async function DefaultEntityPage({
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
-  const props = await getData(params.id, params.entityId);
+  const props = await getData(params.id, params.entityId, searchParams?.edit === 'true' ? true : false);
 
   const avatarUrl = Entities.avatar(props.relationsOut) ?? props.serverAvatarUrl;
   const coverUrl = Entities.cover(props.relationsOut) ?? props.serverCoverUrl;
@@ -85,7 +88,7 @@ export default async function DefaultEntityPage({
   );
 }
 
-const getData = async (spaceId: string, entityId: string) => {
+const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
   const entity = await Subgraph.fetchEntity({ spaceId, id: entityId });
   const nameTripleSpace = entity?.nameTripleSpaces?.[0];
   const spaces = entity?.spaces ?? [];
@@ -95,6 +98,15 @@ const getData = async (spaceId: string, entityId: string) => {
     console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
 
     return redirect(NavUtils.toSpace(spaceId));
+  }
+
+  // Redirect from an invalid space to a valid one
+  if (entity && !spaces.includes(spaceId) && !preventRedirect) {
+    const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
+
+    console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
+
+    return redirect(NavUtils.toEntity(newSpaceId, entityId));
   }
 
   const serverAvatarUrl = Entities.avatar(entity?.relationsOut);
