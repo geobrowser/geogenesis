@@ -52,8 +52,6 @@ export function useCollection() {
   } = useQuery({
     placeholderData: keepPreviousData,
     enabled: collectionItemsRelations.length > 0,
-    // @TODO: Need to figure out how to stay in sync in case any of the collection items actually
-    // change locally.
     queryKey: ['blocks', 'data', 'collection-items', collectionItemIds, changedEntities],
     queryFn: async () => {
       return await mergeEntitiesAsync({

@@ -140,7 +140,6 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
     // Adding a collection item shouldn't _only_ be for FOC. Should be for adding any data
     // How do we know what the collection item values should be?
-    // @TODO: Make sure we don't add a new collection item if it already exists
     if (source.type === 'COLLECTION') {
       const maybeHasCollectionItem = entries.find(e => e.entityId === context.entityId);
 

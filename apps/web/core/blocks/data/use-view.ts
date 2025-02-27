@@ -1,8 +1,6 @@
 import { SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
-import * as React from 'react';
-
 import { useEntity } from '~/core/database/entities';
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
@@ -46,7 +44,7 @@ export function useView() {
     shownColumnRelations.map(r => r.id)
   );
 
-  const shownColumnIds = React.useMemo(() => [...Object.keys(mapping), SYSTEM_IDS.NAME_ATTRIBUTE], [mapping]);
+  const shownColumnIds = [...Object.keys(mapping), SYSTEM_IDS.NAME_ATTRIBUTE];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
