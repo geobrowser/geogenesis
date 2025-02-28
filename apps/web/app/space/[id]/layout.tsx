@@ -83,6 +83,7 @@ export default async function Layout(props0: LayoutProps) {
           <SpacePageMetadataHeader
             typeNames={typeNames}
             spaceId={props.spaceId}
+            spaceName={props.name ?? ''}
             entityId={props.id}
             addSubspaceComponent={
               <AddSubspaceDialog
