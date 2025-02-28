@@ -25,10 +25,11 @@ import { Menu } from '~/design-system/menu';
 
 interface Props {
   entityId: string;
+  entityName: string;
   spaceId: string;
 }
 
-export function EntityPageContextMenu({ entityId, spaceId }: Props) {
+export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
   const isEditing = useUserIsEditing(spaceId);
@@ -75,6 +76,7 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
       {isCreatingNewVersion && (
         <CreateNewVersionInSpace
           entityId={entityId as EntityId}
+          entityName={entityName}
           setIsCreatingNewVersion={setIsCreatingNewVersion}
           onDone={() => {
             setIsMenuOpen(false);
@@ -136,11 +138,17 @@ function EntityPageContextMenuItem({ children }: EntityPageContextMenuItemProps)
 
 type CreateNewVersionInSpaceProps = {
   entityId: EntityId;
+  entityName?: string;
   setIsCreatingNewVersion: React.Dispatch<React.SetStateAction<boolean>>;
   onDone?: () => void;
 };
 
-const CreateNewVersionInSpace = ({ entityId, setIsCreatingNewVersion, onDone }: CreateNewVersionInSpaceProps) => {
+const CreateNewVersionInSpace = ({
+  entityId,
+  entityName,
+  setIsCreatingNewVersion,
+  onDone,
+}: CreateNewVersionInSpaceProps) => {
   const router = useRouter();
 
   const { smartAccount } = useSmartAccount();
@@ -174,7 +182,7 @@ const CreateNewVersionInSpace = ({ entityId, setIsCreatingNewVersion, onDone }: 
             <button
               key={space.id}
               onClick={() => {
-                router.push(NavUtils.toEntity(space.id, entityId, true));
+                router.push(NavUtils.toEntity(space.id, entityId, true, entityName));
                 onDone?.();
               }}
               className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01"

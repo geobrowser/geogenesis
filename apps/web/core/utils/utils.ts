@@ -23,8 +23,8 @@ export const NavUtils = {
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === SYSTEM_IDS.ROOT_SPACE_ID ? `/root` : `/space/${spaceId}`),
   toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
-  toEntity: (spaceId: string, newEntityId: string, editParam?: boolean) => {
-    return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}`;
+  toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
+    return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
   },
   toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
