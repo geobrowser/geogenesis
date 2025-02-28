@@ -1,11 +1,14 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
+import cx from 'classnames';
 
+import { useState } from 'react';
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import { EntityId } from '~/core/io/schema';
 import { fetchCompletedProposals } from '~/core/io/subgraph/fetch-completed-proposals';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -13,10 +16,13 @@ import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
+import { Copy } from '~/design-system/icons/copy';
 import { Create } from '~/design-system/icons/create';
-// import { CsvImport } from '~/design-system/icons/csv-import';
+import { MoveSpace } from '~/design-system/icons/move-space';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
+import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 
 import { HistoryEmpty } from '../history/history-empty';
 import { HistoryItem } from '../history/history-item';
@@ -24,6 +30,7 @@ import { HistoryPanel } from '../history/history-panel';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
+  spaceName: string;
   membersComponent: React.ReactElement<any>;
   addSubspaceComponent: React.ReactElement<any>;
   typeNames: string[];
@@ -32,14 +39,15 @@ interface SpacePageMetadataHeaderProps {
 
 export function SpacePageMetadataHeader({
   spaceId,
+  spaceName,
   membersComponent,
   typeNames,
   entityId,
   addSubspaceComponent,
 }: SpacePageMetadataHeaderProps) {
   const isEditing = useUserIsEditing(spaceId);
-  const [isContextMenuOpen, setIsContextMenuOpen] = React.useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const {
     data: proposals,
@@ -73,7 +81,16 @@ export function SpacePageMetadataHeader({
       </span>
     ));
 
-  const onCopyId = async () => {
+  const onCopySpaceId = async () => {
+    try {
+      await navigator.clipboard.writeText(spaceId);
+      setIsContextMenuOpen(false);
+    } catch (err) {
+      console.error('Failed to copy space ID in: ', spaceId);
+    }
+  };
+
+  const onCopyEntityId = async () => {
     try {
       await navigator.clipboard.writeText(entityId);
       setIsContextMenuOpen(false);
@@ -81,6 +98,8 @@ export function SpacePageMetadataHeader({
       console.error('Failed to copy entity ID in: ', entityId);
     }
   };
+
+  const [isCreatingNewVersion, setIsCreatingNewVersion] = useState<boolean>(false);
 
   return (
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-2 text-text">
@@ -131,21 +150,41 @@ export function SpacePageMetadataHeader({
           onOpenChange={setIsContextMenuOpen}
           align="end"
           trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-          className="max-w-[9rem] whitespace-nowrap"
+          className={cx(!isCreatingNewVersion ? 'max-w-[160]' : 'max-w-[320px]')}
         >
-          <MenuItem onClick={onCopyId}>
-            <p className="text-button">Copy ID</p>
-          </MenuItem>
-
-          {isEditing && addSubspaceComponent}
-
-          {/* <Link
-            href={`${pathname}/import`}
-            onClick={() => onOpenChange(false)}
-            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2 hover:bg-bg"
-          >
-              <p className="text-button">CSV import</p>
-          </Link> */}
+          {isCreatingNewVersion && (
+            <CreateNewVersionInSpace
+              entityId={entityId as EntityId}
+              entityName={spaceName}
+              setIsCreatingNewVersion={setIsCreatingNewVersion}
+              onDone={() => {
+                setIsContextMenuOpen(false);
+              }}
+            />
+          )}
+          {!isCreatingNewVersion && (
+            <>
+              <MenuItem onClick={onCopySpaceId}>
+                <Copy color="grey-04" />
+                <p>Copy Space ID</p>
+              </MenuItem>
+              <MenuItem onClick={onCopyEntityId}>
+                <Copy color="grey-04" />
+                <p>Copy Entity ID</p>
+              </MenuItem>
+              {isEditing && (
+                <>
+                  <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
+                    <div className="shrink-0">
+                      <MoveSpace />
+                    </div>
+                    <p>Create in space</p>
+                  </MenuItem>
+                  {addSubspaceComponent}
+                </>
+              )}
+            </>
+          )}
         </Menu>
       </div>
     </div>
