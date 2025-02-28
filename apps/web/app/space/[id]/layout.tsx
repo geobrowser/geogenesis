@@ -13,6 +13,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
+import { Create } from '~/design-system/icons/create';
 import { MenuItem } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
@@ -88,7 +89,12 @@ export default async function Layout(props0: LayoutProps) {
             addSubspaceComponent={
               <AddSubspaceDialog
                 spaceId={spaceId}
-                trigger={<MenuItem>Add subspace</MenuItem>}
+                trigger={
+                  <MenuItem>
+                    <Create />
+                    <p>Add subspace</p>
+                  </MenuItem>
+                }
                 subspaces={subspaces}
                 inflightSubspaces={inflightSubspaces}
                 spaceType={props.space.type}
