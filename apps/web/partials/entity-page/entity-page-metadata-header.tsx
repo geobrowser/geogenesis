@@ -18,10 +18,11 @@ import { EntityPageTypeChip } from './entity-page-type-chip';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
+  entityName: string;
   spaceId: string;
 }
 
-export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHeaderProps) {
+export function EntityPageMetadataHeader({ id, entityName, spaceId }: EntityPageMetadataHeaderProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 
   const {
@@ -87,7 +88,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
             </div>
           )}
         </HistoryPanel>
-        <EntityPageContextMenu entityId={id} spaceId={spaceId} />
+        <EntityPageContextMenu entityId={id} entityName={entityName} spaceId={spaceId} />
       </div>
     </div>
   );
