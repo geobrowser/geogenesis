@@ -1,5 +1,7 @@
 import { BASE58_ALLOWED_CHARS } from '@graphprotocol/grc-20';
 import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { parseISO } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
@@ -63,6 +65,8 @@ export function formatShortAddress(address: string): string {
 }
 
 export class GeoDate {
+  static defaultFormat = 'h:mm a, EEEE, MMMM d, yyyy';
+
   /**
    * We return blocktime from the subgraph for createdAt and updatedAt fields.
    * JavaScript date expects milliseconds, so we need to convert from seconds.
@@ -163,6 +167,32 @@ export class GeoDate {
   static isMonth30Days(month: number): boolean {
     return [4, 6, 9, 11].includes(month);
   }
+
+  private static validateDateFormat = (format?: string) => {
+    if (!format || typeof format !== 'string') {
+      return this.defaultFormat;
+    }
+
+    try {
+      const testDate = new Date();
+      formatInTimeZone(testDate, 'UTC', format);
+      return format;
+    } catch (e) {
+      console.warn(`Invalid date format: "${format}". Using default format instead.`);
+      return this.defaultFormat;
+    }
+  };
+
+  static formatDate = (dateIsoString: string, displayFormat?: string) => {
+    try {
+      const validatedFormat = this.validateDateFormat(displayFormat);
+      const date = parseISO(dateIsoString);
+      return formatInTimeZone(date, 'UTC', validatedFormat);
+    } catch (e) {
+      console.error(`Unable to format date: "${dateIsoString}" with format: "${displayFormat}".`);
+      return dateIsoString;
+    }
+  };
 }
 
 // We rewrite the URL to use the geobrowser preview API in vercel.json.
