@@ -331,9 +331,22 @@ export function DateField(props: DateFieldProps) {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex w-[164px] gap-3">
-          <div className="flex w-full flex-[2] flex-col">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex w-[136px] items-center gap-1">
+          <div className="flex flex-[6] flex-col">
+            <input
+              data-testid="date-field-year"
+              value={year.value}
+              onChange={onYearChange}
+              onBlur={() => onBlur(meridiem)}
+              placeholder="YYYY"
+              className={`${dateFieldStyles({ variant: props.variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
+            />
+          </div>
+
+          <span className="size flex flex-[1] justify-center text-lg text-grey-02">/</span>
+
+          <div className="flex flex-[4] flex-col">
             <input
               data-testid="date-field-month"
               value={month.value}
@@ -345,16 +358,11 @@ export function DateField(props: DateFieldProps) {
                 error: !isValidMonth || !dateFormState.isValid,
               })}
             />
-            <span
-              className={labelStyles({ active: month.value !== '', error: !isValidMonth || !dateFormState.isValid })}
-            >
-              Month
-            </span>
           </div>
 
-          <span className="w-full flex-[1] pt-[3px] text-grey-02">/</span>
+          <span className="size flex flex-[1] justify-center text-lg text-grey-02">/</span>
 
-          <div className="flex flex-[2] flex-col items-center">
+          <div className="flex flex-[4] flex-col">
             <input
               data-testid="date-field-day"
               value={day.value}
@@ -366,30 +374,11 @@ export function DateField(props: DateFieldProps) {
                 error: !isValidDay || !dateFormState.isValid,
               })}
             />
-            <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !dateFormState.isValid })}>
-              Day
-            </span>
-          </div>
-
-          <span className="flex-[1] pt-[3px] text-grey-02">/</span>
-
-          <div className="flex w-full flex-[4] flex-col items-center">
-            <input
-              data-testid="date-field-year"
-              value={year.value}
-              onChange={onYearChange}
-              onBlur={() => onBlur(meridiem)}
-              placeholder="YYYY"
-              className={dateFieldStyles({ variant: props.variant, error: !isValidYear || !dateFormState.isValid })}
-            />
-            <span className={labelStyles({ active: year.value !== '', error: !isValidYear || !dateFormState.isValid })}>
-              Year
-            </span>
           </div>
         </div>
         <div className="flex items-center">
-          <Minus color="grey-03" />
-          <Spacer width={18} />
+          <Minus color="grey-02" className="size-4" />
+          <Spacer width={14} />
           <div className="flex items-center gap-1">
             <input
               data-testid="date-field-hour"
@@ -413,11 +402,7 @@ export function DateField(props: DateFieldProps) {
 
           <Spacer width={12} />
           <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
-            <SmallButton
-              onClick={() => (props.isEditing ? onToggleMeridiem() : undefined)}
-              variant="secondary"
-              className="whitespace-nowrap uppercase"
-            >
+            <SmallButton onClick={() => onToggleMeridiem()} variant="secondary" className="whitespace-nowrap uppercase">
               {meridiem}
             </SmallButton>
           </motion.div>
