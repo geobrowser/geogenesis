@@ -42,6 +42,7 @@ import { Text } from '~/design-system/text';
 
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
+import { DateTimeFormatTypeDropdown } from './time-type-dropdown';
 
 interface Props {
   triples: ITriple[];
@@ -120,6 +121,9 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                 <div className="absolute right-0 top-6 flex items-center gap-1">
                   {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
                   <>
+                    {/* @ts-expect-error Need to be implemented*/}
+                    {renderableType === 'TIME' && <DateTimeFormatTypeDropdown value={undefined} onSelect={undefined} />}
+
                     <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
 
                     {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
