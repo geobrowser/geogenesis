@@ -142,7 +142,7 @@ export const VERIFIED_SOURCE_ATTRIBUTE = '5jodArZNFzucsYzQaDVFBL';
 export const SOURCE_SPACE_ATTRIBUTE = 'GzkEQP3yedWjXE8QPFKEwV';
 
 /** Core types */
-export const ACADEMIC_FIELD_TYPE = 'ExCjm3rzYVfpMRwDchdrE';
+export const ACADEMIC_FIELD_TYPE = 'KwKGhkY5AmzmHHggg7abvi';
 export const COMPANY_TYPE = 'UhpHYoFEzAov9WwqtDwQk4';
 export const DAO_TYPE = 'Hh8hc47TMBvRsD4oqUNxP9';
 export const GOVERNMENT_ORG_TYPE = 'MokrHqV4jZhBfPN3mLPjM8';
