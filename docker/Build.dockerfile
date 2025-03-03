@@ -7,7 +7,7 @@ ARG TURBO_TOKEN
 
 RUN apk --no-cache add curl python3 build-base jq yq
 
-RUN npm install -g pnpm@7.30.5
+RUN npm install -g pnpm@10.5.2
 
 WORKDIR /app
 
