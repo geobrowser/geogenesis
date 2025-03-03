@@ -44,8 +44,7 @@ export function useView() {
     shownColumnRelations.map(r => r.id)
   );
 
-  // const shownColumnIds = [...shownColumnRelations.map(r => r.toEntity.id), SYSTEM_IDS.NAME_ATTRIBUTE];
-  const shownColumnIds = [...(Object.keys(mapping) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
+  const shownColumnIds = [...Object.keys(mapping), SYSTEM_IDS.NAME_ATTRIBUTE];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);

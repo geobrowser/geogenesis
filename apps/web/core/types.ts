@@ -208,6 +208,10 @@ export type Cell = {
 
 export type Row = {
   entityId: string;
+  // There's a UX where users can press a + button to create a new row. This
+  // new row doesn't have any data and isn't associated with an entity until
+  // the association is made by adding real data or selecting an existing entity.
+  placeholder?: boolean;
   // attributeId -> Cell
   columns: Record<string, Cell>;
 };
