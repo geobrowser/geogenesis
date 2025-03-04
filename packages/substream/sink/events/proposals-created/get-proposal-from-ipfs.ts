@@ -1,12 +1,13 @@
 import { getChecksumAddress } from '@graphprotocol/grc-20';
 import { Effect, Either } from 'effect';
 
+import { postProcessProposalOps } from '../post-process-edit-proposals';
 import type { ChainEditProposal } from '../schema/proposal';
 import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder } from '~/sink/proto';
-import type { Op, SetTripleOp, SinkEditProposal } from '~/sink/types';
+import type { IntermediateSinkEditProposal, Op, SetTripleOp, SinkEditProposal } from '~/sink/types';
 
 /**
  * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
@@ -18,9 +19,9 @@ import type { Op, SetTripleOp, SinkEditProposal } from '~/sink/types';
  *
  * Later on we map this to the database schema and write the proposal to the database.
  */
-export function getProposalFromIpfs(
+function getProposalFromIpfs(
   proposal: ChainEditProposal
-): Effect.Effect<SinkEditProposal | null, SpaceWithPluginAddressNotFoundError> {
+): Effect.Effect<IntermediateSinkEditProposal | null, SpaceWithPluginAddressNotFoundError> {
   return Effect.gen(function* (_) {
     yield* _(Effect.logDebug('[FETCH PROPOSAL] Fetching proposal from IPFS'));
 
@@ -169,5 +170,18 @@ export function getProposalFromIpfs(
         yield* _(Effect.logError(`[FETCH PROPOSAL] Unsupported content type ${validIpfsMetadata.type}`));
         return null;
     }
+  });
+}
+
+export function getProposalsFromIpfs(proposals: ChainEditProposal[]) {
+  return Effect.gen(function* (_) {
+    const ipfsProposals = yield* _(
+      Effect.forEach(proposals, proposal => getProposalFromIpfs(proposal), {
+        concurrency: 20,
+      })
+    );
+
+    const sinkProposals = ipfsProposals.filter(maybeProposal => maybeProposal !== null);
+    return sinkProposals.map(p => postProcessProposalOps(p, p.space));
   });
 }

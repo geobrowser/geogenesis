@@ -80,6 +80,7 @@ const ZodDeleteRelationOp = z.object({
 });
 
 export const ZodOp = z.union([ZodEditSetTripleOp, ZodEditDeleteTripleOp, ZodCreateRelationOp, ZodDeleteRelationOp]);
+export type ZodOp = z.infer<typeof ZodOp>;
 
 export const ZodEdit = z.object({
   version: z.string(),
