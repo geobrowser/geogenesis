@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { Triple } from '../types';
 import { Space } from './dto/spaces';
@@ -11,10 +11,10 @@ export async function fetchSpaceTypeTriples(spaceId: string): Promise<Triple[]> 
     skip: 0,
     first: 1000,
     filter: [
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPES_ATTRIBUTE },
+      { field: 'attribute-id', value: SystemIds.TYPES_ATTRIBUTE },
       {
         field: 'linked-to',
-        value: SYSTEM_IDS.SCHEMA_TYPE,
+        value: SystemIds.SCHEMA_TYPE,
       },
     ],
   });
@@ -30,7 +30,7 @@ export async function fetchForeignTypeTriples(space: Space): Promise<Triple[]> {
     first: 1000,
     filter: [
       { field: 'entity-id', value: space.spaceConfig?.id ?? '' },
-      { field: 'attribute-id', value: SYSTEM_IDS.FOREIGN_TYPES },
+      { field: 'attribute-id', value: SystemIds.FOREIGN_TYPES },
     ],
   });
 
@@ -44,8 +44,8 @@ export async function fetchForeignTypeTriples(space: Space): Promise<Triple[]> {
         first: 1000,
         filter: [
           { field: 'entity-id', value: entityId },
-          { field: 'attribute-id', value: SYSTEM_IDS.TYPES_ATTRIBUTE },
-          { field: 'linked-to', value: SYSTEM_IDS.SCHEMA_TYPE },
+          { field: 'attribute-id', value: SystemIds.TYPES_ATTRIBUTE },
+          { field: 'linked-to', value: SystemIds.SCHEMA_TYPE },
         ],
       })
     )

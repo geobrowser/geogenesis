@@ -1,6 +1,6 @@
 'use client';
 
-import { Relation as R, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { Relation as R, SystemIds } from '@graphprotocol/grc-20';
 import { Image } from '@graphprotocol/grc-20';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
@@ -92,7 +92,7 @@ function makeNewBlockRelation({
     id: newRelationId,
     index: newTripleOrdering.triple.value.value,
     typeOf: {
-      id: EntityId(SYSTEM_IDS.BLOCKS),
+      id: EntityId(SystemIds.BLOCKS),
       name: 'Blocks',
     },
     toEntity: {
@@ -243,7 +243,7 @@ export function useEditorStore() {
       content: blockRelations.map(block => {
         const markdownTriplesForBlockId = getTriples({
           mergeWith: initialBlockTriples,
-          selector: triple => triple.entityId === block.block.id && triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT,
+          selector: triple => triple.entityId === block.block.id && triple.attributeId === SystemIds.MARKDOWN_CONTENT,
         });
 
         const markdownTripleForBlockId = markdownTriplesForBlockId[0];
@@ -367,48 +367,50 @@ export function useEditorStore() {
         const blockType = (() => {
           switch (node.type) {
             case 'tableNode':
-              return SYSTEM_IDS.DATA_BLOCK;
+              return SystemIds.DATA_BLOCK;
             case 'bulletList':
             case 'paragraph':
-              return SYSTEM_IDS.TEXT_BLOCK;
+              return SystemIds.TEXT_BLOCK;
             case 'image':
-              return SYSTEM_IDS.IMAGE_TYPE;
+              return SystemIds.IMAGE_TYPE;
             default:
-              return SYSTEM_IDS.TEXT_BLOCK;
+              return SystemIds.TEXT_BLOCK;
           }
         })();
 
         // Create an entity with Types -> XBlock
         // @TODO: ImageBlock
         switch (blockType) {
-          case SYSTEM_IDS.TEXT_BLOCK:
-            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.TEXT_BLOCK, spaceId), spaceId });
+          case SystemIds.TEXT_BLOCK:
+            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SystemIds.TEXT_BLOCK, spaceId), spaceId });
             break;
-          case SYSTEM_IDS.IMAGE_TYPE: {
+          case SystemIds.IMAGE_TYPE: {
             const imageHash = getImageHash(node.attrs?.src);
             const imageUrl = `ipfs://${imageHash}`;
-            const { ops } = Image.make(imageUrl);
+            const { ops } = Image.make({ cid: imageUrl });
             const [, setTripleOp] = ops;
 
-            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.IMAGE_TYPE, spaceId), spaceId });
+            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SystemIds.IMAGE_TYPE, spaceId), spaceId });
 
-            DB.upsert(
-              {
-                value: {
-                  type: 'URL',
-                  value: setTripleOp.triple.value.value,
+            if (setTripleOp.type === 'SET_TRIPLE') {
+              DB.upsert(
+                {
+                  value: {
+                    type: 'URL',
+                    value: setTripleOp.triple.value.value,
+                  },
+                  entityId: node.id,
+                  attributeId: setTripleOp.triple.attribute,
+                  entityName: null,
+                  attributeName: 'Image URL',
                 },
-                entityId: node.id,
-                attributeId: setTripleOp.triple.attribute,
-                entityName: null,
-                attributeName: 'Image URL',
-              },
-              spaceId
-            );
+                spaceId
+              );
+            }
 
             break;
           }
-          case SYSTEM_IDS.DATA_BLOCK: {
+          case SystemIds.DATA_BLOCK: {
             // @TODO(performance): upsertMany
             for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId)) {
               DB.upsertRelation({ relation, spaceId });

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -157,7 +157,7 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
     case 'done':
       return {
         open: false,
-        selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
+        selectedColumn: SystemIds.NAME_ATTRIBUTE,
         value: {
           type: 'string',
           value: '',
@@ -166,7 +166,7 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
     case 'reset':
       return {
         ...state,
-        selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
+        selectedColumn: SystemIds.NAME_ATTRIBUTE,
         value: {
           type: 'string',
           value: '',
@@ -178,7 +178,7 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
 function getInitialState(source: Source): PromptState {
   if (source.type === 'RELATIONS') {
     return {
-      selectedColumn: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+      selectedColumn: SystemIds.RELATION_TYPE_ATTRIBUTE,
       value: {
         type: 'entity',
         entityId: source.value,
@@ -189,7 +189,7 @@ function getInitialState(source: Source): PromptState {
   }
 
   return {
-    selectedColumn: SYSTEM_IDS.NAME_ATTRIBUTE,
+    selectedColumn: SystemIds.NAME_ATTRIBUTE,
     value: {
       type: 'string',
       value: '',
@@ -251,7 +251,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
     value: fromId,
   });
   const [relationType, setRelationType] = React.useState<Filter | null>(
-    filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) ?? null
+    filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE) ?? null
   );
 
   const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
@@ -366,7 +366,7 @@ function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
         </div>
         <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
         <div className="relative flex flex-1">
-          {state.selectedColumn === SYSTEM_IDS.SPACE_FILTER ? (
+          {state.selectedColumn === SystemIds.SPACE_FILTER ? (
             <TableBlockSpaceFilterInput
               selectedValue={getFilterValueName(state.value) ?? ''}
               onSelect={onSelectSpaceValue}
@@ -402,19 +402,19 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
 
   const onSetRelationType = (entity: { id: string; name: string | null }) => {
     setRelationType({
-      columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+      columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
       value: entity.id,
       valueName: entity.name,
       valueType: 'RELATION',
     });
 
-    const withoutRelationType = filterState.filter(f => f.columnId !== SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+    const withoutRelationType = filterState.filter(f => f.columnId !== SystemIds.RELATION_TYPE_ATTRIBUTE);
 
     setFilterState(
       [
         ...withoutRelationType,
         {
-          columnId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+          columnId: SystemIds.RELATION_TYPE_ATTRIBUTE,
           value: entity.id,
           valueName: entity.name,
           valueType: 'RELATION',

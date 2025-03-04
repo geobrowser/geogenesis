@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
 
 import { useEffect } from 'react';
@@ -38,7 +38,7 @@ export const AutomaticModeToggle = () => {
         upsert(
           {
             entityId,
-            attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+            attributeId: SystemIds.NAME_ATTRIBUTE,
             entityName: newEntityName,
             attributeName: 'Name',
             value: {

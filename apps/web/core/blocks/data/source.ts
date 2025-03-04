@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { Match } from 'effect';
 
@@ -49,9 +49,9 @@ type GetSourceArgs = {
  * {@link Source}.
  *
  * Valid data source types are:
- *  - Collection ({@link SYSTEM_IDS.COLLECTION_DATA_SOURCE})
- *  - Spaces ({@link SYSTEM_IDS.QUERY_DATA_SOURCE})
- *  - All of Geo ({@link SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE})
+ *  - Collection ({@link SystemIds.COLLECTION_DATA_SOURCE})
+ *  - Spaces ({@link SystemIds.QUERY_DATA_SOURCE})
+ *  - All of Geo ({@link SystemIds.ALL_OF_GEO_DATA_SOURCE})
  *
  * Depending on the source type we either need to later read from a single
  * collection, or generate a query.
@@ -63,10 +63,10 @@ type GetSourceArgs = {
  * a fallback source with a type of Spaces containing the current space id.
  */
 export function getSource({ blockId, dataEntityRelations, currentSpaceId, filterState }: GetSourceArgs): Source {
-  const sourceType = dataEntityRelations.find(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE)?.toEntity
+  const sourceType = dataEntityRelations.find(r => r.typeOf.id === EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE))?.toEntity
     .id;
 
-  const maybeEntityFilter = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+  const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_ATTRIBUTE);
 
   if (maybeEntityFilter) {
     return {
@@ -76,7 +76,7 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
     };
   }
 
-  if (sourceType === SYSTEM_IDS.COLLECTION_DATA_SOURCE) {
+  if (sourceType === EntityId(SystemIds.COLLECTION_DATA_SOURCE)) {
     // We default to using the block as the collection source. Any defined collection items
     // will point from the block itself.
     return {
@@ -85,14 +85,14 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
     };
   }
 
-  if (sourceType === SYSTEM_IDS.QUERY_DATA_SOURCE) {
+  if (sourceType === EntityId(SystemIds.QUERY_DATA_SOURCE)) {
     return {
       type: 'SPACES',
-      value: filterState.filter(f => f.columnId === SYSTEM_IDS.SPACE_FILTER).map(f => SpaceId(f.value)),
+      value: filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => SpaceId(f.value)),
     };
   }
 
-  if (sourceType === SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE) {
+  if (sourceType === EntityId(SystemIds.ALL_OF_GEO_DATA_SOURCE)) {
     return {
       type: 'GEO',
     };
@@ -125,7 +125,7 @@ export function removeSourceType({
 }) {
   // Delete the existing source type relation. There should only be one source type
   // relation, but delete many just in case.
-  const sourceTypeRelations = relations.filter(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE);
+  const sourceTypeRelations = relations.filter(r => r.typeOf.id === EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE));
 
   for (const relation of sourceTypeRelations) {
     DB.removeRelation({
@@ -167,8 +167,8 @@ export function upsertSourceType({
  * a set of Spaces, or All of Geo. This function returns the relation representing
  * the source type as a {@link StoreRelation}.
  *
- * The type of the source is represented in the knowledge graph as either {@link SYSTEM_IDS.COLLECTION_DATA_SOURCE},
- * {@link SYSTEM_IDS.QUERY_DATA_SOURCE}, or {@link SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE}.
+ * The type of the source is represented in the knowledge graph as either {@link SystemIds.COLLECTION_DATA_SOURCE},
+ * {@link SystemIds.QUERY_DATA_SOURCE}, or {@link SystemIds.ALL_OF_GEO_DATA_SOURCE}.
  *
  * In the application it's mapped to a {@link Source}.
  *
@@ -184,18 +184,18 @@ export function makeRelationForSourceType(
 ): StoreRelation {
   // Get the source type system id based on the source type
   const sourceTypeId = Match.value(sourceType).pipe(
-    Match.when('COLLECTION', () => SYSTEM_IDS.COLLECTION_DATA_SOURCE),
-    Match.when('SPACES', () => SYSTEM_IDS.QUERY_DATA_SOURCE),
-    Match.when('GEO', () => SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE),
-    Match.when('RELATIONS', () => SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE),
-    Match.orElse(() => SYSTEM_IDS.COLLECTION_DATA_SOURCE)
+    Match.when('COLLECTION', () => SystemIds.COLLECTION_DATA_SOURCE),
+    Match.when('SPACES', () => SystemIds.QUERY_DATA_SOURCE),
+    Match.when('GEO', () => SystemIds.ALL_OF_GEO_DATA_SOURCE),
+    Match.when('RELATIONS', () => SystemIds.ALL_OF_GEO_DATA_SOURCE),
+    Match.orElse(() => SystemIds.COLLECTION_DATA_SOURCE)
   );
 
   return {
     space: spaceId,
     index: INITIAL_RELATION_INDEX_VALUE,
     typeOf: {
-      id: EntityId(SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE),
+      id: EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE),
       name: 'Data Source Type',
     },
     toEntity: {
@@ -213,17 +213,17 @@ export function makeRelationForSourceType(
 
 function getSourceTypeName(
   sourceType:
-    | typeof SYSTEM_IDS.COLLECTION_DATA_SOURCE
-    | typeof SYSTEM_IDS.QUERY_DATA_SOURCE
-    | typeof SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE
+    | typeof SystemIds.COLLECTION_DATA_SOURCE
+    | typeof SystemIds.QUERY_DATA_SOURCE
+    | typeof SystemIds.ALL_OF_GEO_DATA_SOURCE
     | string
 ) {
   switch (sourceType) {
-    case SYSTEM_IDS.COLLECTION_DATA_SOURCE:
+    case SystemIds.COLLECTION_DATA_SOURCE:
       return 'Collection';
-    case SYSTEM_IDS.QUERY_DATA_SOURCE:
+    case SystemIds.QUERY_DATA_SOURCE:
       return 'Spaces';
-    case SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE:
+    case SystemIds.ALL_OF_GEO_DATA_SOURCE:
       return 'All of Geo';
     default:
       return null;

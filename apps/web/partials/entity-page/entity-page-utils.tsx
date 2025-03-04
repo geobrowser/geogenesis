@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { RenderableProperty, Triple } from '~/core/types';
 
@@ -14,12 +14,12 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
     const { attributeId: attributeIdA, attributeName: attributeNameA } = tripleA;
     const { attributeId: attributeIdB, attributeName: attributeNameB } = tripleB;
 
-    const isNameA = attributeIdA === SYSTEM_IDS.NAME_ATTRIBUTE;
-    const isNameB = attributeIdB === SYSTEM_IDS.NAME_ATTRIBUTE;
-    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
-    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
-    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
-    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
+    const isNameA = attributeIdA === SystemIds.NAME_ATTRIBUTE;
+    const isNameB = attributeIdB === SystemIds.NAME_ATTRIBUTE;
+    const isDescriptionA = attributeIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = attributeIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = attributeIdA === SystemIds.TYPES_ATTRIBUTE;
+    const isTypesB = attributeIdB === SystemIds.TYPES_ATTRIBUTE;
 
     const aIndex = schemaAttributeIds.indexOf(attributeIdA);
     const bIndex = schemaAttributeIds.indexOf(attributeIdB);
@@ -62,25 +62,25 @@ export function sortRenderables(renderables: RenderableProperty[], isRelationPag
     const { attributeId: attributeIdA, attributeName: attributeNameA } = renderableA;
     const { attributeId: attributeIdB, attributeName: attributeNameB } = renderableB;
 
-    const isNameA = attributeIdA === SYSTEM_IDS.NAME_ATTRIBUTE;
-    const isNameB = attributeIdB === SYSTEM_IDS.NAME_ATTRIBUTE;
-    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
-    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
-    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
-    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
+    const isNameA = attributeIdA === SystemIds.NAME_ATTRIBUTE;
+    const isNameB = attributeIdB === SystemIds.NAME_ATTRIBUTE;
+    const isDescriptionA = attributeIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = attributeIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = attributeIdA === SystemIds.TYPES_ATTRIBUTE;
+    const isTypesB = attributeIdB === SystemIds.TYPES_ATTRIBUTE;
 
     if (isRelationPage) {
-      const isRelationTypeA = attributeIdA === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE;
-      const isRelationTypeB = attributeIdB === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE;
+      const isRelationTypeA = attributeIdA === SystemIds.RELATION_TYPE_ATTRIBUTE;
+      const isRelationTypeB = attributeIdB === SystemIds.RELATION_TYPE_ATTRIBUTE;
 
-      const isRelationFromA = attributeIdA === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE;
-      const isRelationFromB = attributeIdB === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE;
+      const isRelationFromA = attributeIdA === SystemIds.RELATION_FROM_ATTRIBUTE;
+      const isRelationFromB = attributeIdB === SystemIds.RELATION_FROM_ATTRIBUTE;
 
-      const isRelationToA = attributeIdA === SYSTEM_IDS.RELATION_TO_ATTRIBUTE;
-      const isRelationToB = attributeIdB === SYSTEM_IDS.RELATION_TO_ATTRIBUTE;
+      const isRelationToA = attributeIdA === SystemIds.RELATION_TO_ATTRIBUTE;
+      const isRelationToB = attributeIdB === SystemIds.RELATION_TO_ATTRIBUTE;
 
-      const isRelationIndexA = attributeIdA === SYSTEM_IDS.RELATION_INDEX;
-      const isRelationIndexB = attributeIdB === SYSTEM_IDS.RELATION_INDEX;
+      const isRelationIndexA = attributeIdA === SystemIds.RELATION_INDEX;
+      const isRelationIndexB = attributeIdB === SystemIds.RELATION_INDEX;
 
       if (isRelationTypeA && !isRelationTypeB) return -1;
       if (!isRelationTypeA && isRelationTypeB) return 1;

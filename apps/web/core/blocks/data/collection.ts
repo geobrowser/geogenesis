@@ -1,4 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
 import { StoreRelation } from '~/core/database/types';
@@ -17,7 +17,7 @@ type CreateCollectionItemRelationArgs = {
 
 /**
  * Creates the relation describing a collection item in a collection. Collection items
- * are just Relations with a Relation type of {@link SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE}
+ * are just Relations with a Relation type of {@link SystemIds.COLLECTION_ITEM_RELATION_TYPE}
  *
  * @params collectionId - The collection id as an {@link EntityId}
  * @params spaceId - The space id as a {@link SpaceId}
@@ -59,7 +59,7 @@ export function upsertSourceSpaceOnCollectionItem({
 }: UpsertSourceSpaceCollectionItemArgs) {
   DB.upsert(
     {
-      attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+      attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
       attributeName: 'To entity',
       entityId: collectionItemId,
       entityName: null,
@@ -83,7 +83,7 @@ export function upsertVerifiedSourceOnCollectionItem({
 }: UpsertVerifiedSourceCollectionItemArgs) {
   DB.upsert(
     {
-      attributeId: SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE,
+      attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
       attributeName: 'Verified Source',
       entityId: collectionItemId,
       entityName: null,
@@ -122,7 +122,7 @@ function makeRelationForCollectionItem({
     space: spaceId,
     index: INITIAL_RELATION_INDEX_VALUE,
     typeOf: {
-      id: EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE),
+      id: EntityId(SystemIds.COLLECTION_ITEM_RELATION_TYPE),
       name: 'Collection Item',
     },
     fromEntity: {

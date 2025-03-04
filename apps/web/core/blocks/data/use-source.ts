@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { useEntity } from '~/core/database/entities';
 import { upsert } from '~/core/database/write';
@@ -38,13 +38,13 @@ export function useSource() {
     upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 
     if (newSource.type === 'RELATIONS') {
-      const maybeExistingRelationType = filterState.filter(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+      const maybeExistingRelationType = filterState.filter(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE);
 
       setFilterState(
         [
           ...maybeExistingRelationType,
           {
-            columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+            columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
             valueType: 'RELATION',
             value: newSource.value,
             valueName: newSource.name,
@@ -56,7 +56,7 @@ export function useSource() {
       if (fromEntityName && blockEntity.name !== null) {
         upsert(
           {
-            attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+            attributeId: SystemIds.NAME_ATTRIBUTE,
             entityId: entityId,
             entityName: fromEntityName,
             attributeName: 'Name',
@@ -72,27 +72,27 @@ export function useSource() {
        * relation then we create it.
        */
       const maybeExistingNamePropertyRelation = shownColumnRelations.find(
-        t => t.toEntity.id === SYSTEM_IDS.NAME_ATTRIBUTE
+        t => t.toEntity.id === EntityId(SystemIds.NAME_ATTRIBUTE)
       );
 
       if (maybeExistingNamePropertyRelation) {
         upsert(
           {
-            attributeId: SYSTEM_IDS.SELECTOR_ATTRIBUTE,
+            attributeId: SystemIds.SELECTOR_ATTRIBUTE,
             attributeName: 'Selector',
             entityId: maybeExistingNamePropertyRelation.id,
             entityName: null,
-            value: { type: 'TEXT', value: `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]` },
+            value: { type: 'TEXT', value: `->[${SystemIds.RELATION_TO_ATTRIBUTE}]` },
           },
           spaceId
         );
       } else {
         toggleProperty(
           {
-            id: SYSTEM_IDS.NAME_ATTRIBUTE,
+            id: SystemIds.NAME_ATTRIBUTE,
             name: 'Name',
           },
-          `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`
+          `->[${SystemIds.RELATION_TO_ATTRIBUTE}]`
         );
       }
     }
@@ -100,12 +100,12 @@ export function useSource() {
     if (newSource.type === 'SPACES') {
       // We only allow one space filter at a time currently, so remove any existing space filters before
       // adding the new one.
-      const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER) ?? [];
+      const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SystemIds.SPACE_FILTER) ?? [];
 
       setFilterState(
         [
           ...filtersWithoutSpaces,
-          { columnId: SYSTEM_IDS.SPACE_FILTER, valueType: 'RELATION', value: newSource.value[0], valueName: null },
+          { columnId: SystemIds.SPACE_FILTER, valueType: 'RELATION', value: newSource.value[0], valueName: null },
         ],
         newSource
       );

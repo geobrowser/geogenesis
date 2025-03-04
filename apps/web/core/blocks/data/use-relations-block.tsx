@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { useEntity } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';
@@ -25,7 +25,7 @@ export function useRelationsBlock() {
 }
 
 function getRelevantRelationsForRelationBlock(relations: Relation[], filterState: Filter[]) {
-  const maybeFilter = filterState.find(f => f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+  const maybeFilter = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE);
   const relationType = maybeFilter?.value;
 
   return relations.filter(r => r.typeOf.id === relationType);

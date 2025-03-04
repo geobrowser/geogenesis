@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
 import { useEntity } from '~/core/database/entities';
@@ -32,11 +32,14 @@ export function useView() {
     id: EntityId(relationId),
   });
 
-  const viewRelation = blockRelation.relationsOut.find(relation => relation.typeOf.id === SYSTEM_IDS.VIEW_ATTRIBUTE);
+  const viewRelation = blockRelation.relationsOut.find(
+    relation => relation.typeOf.id === EntityId(SystemIds.VIEW_ATTRIBUTE)
+  );
 
   const shownColumnRelations = blockRelation.relationsOut.filter(
     // We fall back to an old properties used to render shown columns.
-    relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS || relation.typeOf.id === SYSTEM_IDS.PROPERTIES
+    relation =>
+      relation.typeOf.id === EntityId(SystemIds.SHOWN_COLUMNS) || relation.typeOf.id === EntityId(SystemIds.PROPERTIES)
   );
 
   const { mapping, isLoading, isFetched } = useMapping(
@@ -44,8 +47,8 @@ export function useView() {
     shownColumnRelations.map(r => r.id)
   );
 
-  // const shownColumnIds = [...shownColumnRelations.map(r => r.toEntity.id), SYSTEM_IDS.NAME_ATTRIBUTE];
-  const shownColumnIds = [...(Object.keys(mapping) ?? []), SYSTEM_IDS.NAME_ATTRIBUTE];
+  // const shownColumnIds = [...shownColumnRelations.map(r => r.toEntity.id), SystemIds.NAME_ATTRIBUTE];
+  const shownColumnIds = [...(Object.keys(mapping) ?? []), SystemIds.NAME_ATTRIBUTE];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
@@ -62,7 +65,7 @@ export function useView() {
         space: spaceId,
         index: INITIAL_RELATION_INDEX_VALUE,
         typeOf: {
-          id: EntityId(SYSTEM_IDS.VIEW_ATTRIBUTE),
+          id: EntityId(SystemIds.VIEW_ATTRIBUTE),
           name: 'View',
         },
         fromEntity: {
@@ -114,7 +117,7 @@ export function useView() {
 
         DB.upsert(
           {
-            attributeId: SYSTEM_IDS.SELECTOR_ATTRIBUTE,
+            attributeId: SystemIds.SELECTOR_ATTRIBUTE,
             attributeName: 'Selector',
             entityId: newId,
             entityName: null,
@@ -131,7 +134,7 @@ export function useView() {
           space: spaceId,
           index: INITIAL_RELATION_INDEX_VALUE,
           typeOf: {
-            id: EntityId(SYSTEM_IDS.PROPERTIES),
+            id: EntityId(SystemIds.PROPERTIES),
             name: 'Properties',
           },
           fromEntity: {
@@ -161,7 +164,7 @@ export function useView() {
         space: spaceId,
         index: INITIAL_RELATION_INDEX_VALUE,
         typeOf: {
-          id: EntityId(SYSTEM_IDS.PROPERTIES),
+          id: EntityId(SystemIds.PROPERTIES),
           name: 'Properties',
         },
         fromEntity: {
@@ -207,14 +210,14 @@ const getView = (viewRelation: Relation | undefined): DataBlockView => {
   let view: DataBlockView = 'TABLE';
 
   if (viewRelation) {
-    switch (viewRelation?.toEntity.id) {
-      case SYSTEM_IDS.TABLE_VIEW:
+    switch (viewRelation?.toEntity.id.toString()) {
+      case SystemIds.TABLE_VIEW:
         view = 'TABLE';
         break;
-      case SYSTEM_IDS.LIST_VIEW:
+      case SystemIds.LIST_VIEW:
         view = 'LIST';
         break;
-      case SYSTEM_IDS.GALLERY_VIEW:
+      case SystemIds.GALLERY_VIEW:
         view = 'GALLERY';
         break;
       default:
@@ -232,16 +235,14 @@ const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockV
   let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
 
   if (blockEntity) {
-    const placeholderTextTriple = blockEntity.triples.find(
-      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
-    );
+    const placeholderTextTriple = blockEntity.triples.find(triple => triple.attributeId === SystemIds.PLACEHOLDER_TEXT);
 
     if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
       text = placeholderTextTriple.value.value;
     }
 
     // @TODO(relations): This should be a relation pointing to the image entity
-    // const placeholderImageRelation = // find relation with attributeId SYSTEM_IDS.PLACEHOLDER_IMAGE
+    // const placeholderImageRelation = // find relation with attributeId SystemIds.PLACEHOLDER_IMAGE
   }
 
   // @TODO(relations): This should be a relation pointing to the image entity
