@@ -33,6 +33,8 @@ export function postProcessProposalOps(proposal: IntermediateSinkEditProposal, s
             space: spaceId,
             relation: op.relation,
           };
+        case 'IMPORT_FILE':
+          throw new Error('Not implemented');
       }
     }),
   };

@@ -59,7 +59,6 @@ function decodeEdit(data: Buffer): Effect.Effect<DecodedEdit | null> {
       const edit = Edit.fromBinary(data);
       const parseResult = ZodEdit.safeParse(edit);
 
-      // @TODO: Implement IMPORT_FILE Op
       // @TODO: Postprocess ops in separate function. This will map
       //        to substream ops
 

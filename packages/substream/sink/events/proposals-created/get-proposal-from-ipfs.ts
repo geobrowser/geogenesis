@@ -7,7 +7,7 @@ import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder } from '~/sink/proto';
-import type { IntermediateSinkEditProposal, Op, SetTripleOp, SinkEditProposal } from '~/sink/types';
+import type { IntermediateSinkEditProposal } from '~/sink/types';
 
 /**
  * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
@@ -119,45 +119,14 @@ function getProposalFromIpfs(
           return null;
         }
 
-        const mappedProposal: SinkEditProposal = {
+        const mappedProposal: IntermediateSinkEditProposal = {
           ...proposal,
           type: 'ADD_EDIT',
           name: parsedContent.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          ops: parsedContent.ops.map((op): Op => {
-            switch (op.type) {
-              case 'SET_TRIPLE':
-                return {
-                  type: 'SET_TRIPLE',
-                  space: maybeSpace.id,
-                  triple: op.triple,
-                } as SetTripleOp;
-              case 'DELETE_TRIPLE':
-                return {
-                  type: 'DELETE_TRIPLE',
-                  space: maybeSpace.id,
-                  triple: {
-                    attribute: op.triple.attribute,
-                    entity: op.triple.entity,
-                    value: {},
-                  },
-                };
-              case 'CREATE_RELATION':
-                return {
-                  type: 'CREATE_RELATION',
-                  space: maybeSpace.id,
-                  relation: op.relation,
-                };
-              case 'DELETE_RELATION':
-                return {
-                  type: 'DELETE_RELATION',
-                  space: maybeSpace.id,
-                  relation: op.relation,
-                };
-            }
-          }),
+          ops: parsedContent.ops,
           creator: getChecksumAddress(proposal.creator),
           daoAddress: getChecksumAddress(proposal.daoAddress),
           space: maybeSpace.id,
