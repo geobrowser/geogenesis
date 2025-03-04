@@ -1,5 +1,5 @@
 import { Schema } from '@effect/schema';
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
@@ -34,13 +34,13 @@ const query = (address: string) => {
             }
             relationsByFromVersionId: {
               some: {
-                typeOf: { id: { equalTo: "${SYSTEM_IDS.ACCOUNTS_ATTRIBUTE}" } }
+                typeOf: { id: { equalTo: "${SystemIds.ACCOUNTS_ATTRIBUTE}" } }
                 toEntity: {
                   currentVersion: {
                     version: {
                       triples: {
                         some: {
-                          attributeId: { equalTo: "${SYSTEM_IDS.ADDRESS_ATTRIBUTE}" }
+                          attributeId: { equalTo: "${SystemIds.ADDRESS_ATTRIBUTE}" }
                           textValue: {
                             equalTo: "${address}"
                           }

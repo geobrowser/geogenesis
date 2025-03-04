@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
@@ -83,13 +83,13 @@ export async function mergeColumns(typeIds: string[]): Promise<PropertySchema[]>
   });
 
   const localAttributesForSelectedType = getRelations({
-    selector: r => r.typeOf.id === SYSTEM_IDS.PROPERTIES && typeIds.includes(r.fromEntity.id),
+    selector: r => r.typeOf.id === EntityId(SystemIds.PROPERTIES) && typeIds.includes(r.fromEntity.id),
   }).map((r): PropertySchema => {
     return {
       id: r.toEntity.id,
       name: r.toEntity.name,
       // @TODO: use the real value type
-      valueType: SYSTEM_IDS.TEXT,
+      valueType: SystemIds.TEXT,
     };
   });
 
@@ -146,9 +146,9 @@ function filterValue(value: Value, valueToFilter: string) {
 function filterLocalEntities(entities: Entity[], filterState: Filter[]) {
   return entities.filter(entity => {
     return filterState.every(filter => {
-      if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
+      if (filter.columnId === SystemIds.SPACE_FILTER) {
         const maybeTripleSpace = entity.triples.find(
-          t => t.attributeId === SYSTEM_IDS.SPACE_FILTER && t.space === filter.value
+          t => t.attributeId === SystemIds.SPACE_FILTER && t.space === filter.value
         );
         const maybeRelationSpace = entity.relationsOut.find(r => r.space === filter.value);
         return maybeTripleSpace || maybeRelationSpace;
@@ -159,7 +159,7 @@ function filterLocalEntities(entities: Entity[], filterState: Filter[]) {
       }
 
       return entity.triples.some(triple => {
-        if (filter.columnId === SYSTEM_IDS.SPACE_FILTER) {
+        if (filter.columnId === SystemIds.SPACE_FILTER) {
           // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
           // attached to a triple in the data model. Once we represents entities across multiple spaces
           // this filter likely won't make sense anymore.

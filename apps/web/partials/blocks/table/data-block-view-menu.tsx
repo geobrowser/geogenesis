@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 
 import * as React from 'react';
@@ -69,9 +69,9 @@ function ViewIcon({ view, color }: { view: DataBlockView; color: ColorName }) {
 type DataBlockViewDetails = { name: string; id: string; value: DataBlockView };
 
 const DATA_BLOCK_VIEWS: Array<DataBlockViewDetails> = [
-  { name: 'Table', id: SYSTEM_IDS.TABLE_VIEW, value: 'TABLE' },
-  { name: 'Gallery', id: SYSTEM_IDS.GALLERY_VIEW, value: 'GALLERY' },
-  { name: 'List', id: SYSTEM_IDS.LIST_VIEW, value: 'LIST' },
+  { name: 'Table', id: SystemIds.TABLE_VIEW, value: 'TABLE' },
+  { name: 'Gallery', id: SystemIds.GALLERY_VIEW, value: 'GALLERY' },
+  { name: 'List', id: SystemIds.LIST_VIEW, value: 'LIST' },
 ];
 
 type ToggleViewProps = {

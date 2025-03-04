@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { describe, expect, it } from 'vitest';
 
 import { generateSelector, parseSelectorIntoLexicon } from './data-selectors';
@@ -91,18 +91,18 @@ describe('generateSelector', () => {
       'TO'
     );
 
-    expect(selector).toEqual(`->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->.[1]`);
+    expect(selector).toEqual(`->[${SystemIds.RELATION_TO_ATTRIBUTE}]->.[1]`);
 
     // Name triple's default to the entity itself rather than its name
     const nameSelector = generateSelector(
       {
-        id: SYSTEM_IDS.NAME_ATTRIBUTE,
+        id: SystemIds.NAME_ATTRIBUTE,
         renderableType: 'TEXT',
       },
       'TO'
     );
 
-    expect(nameSelector).toEqual(`->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`);
+    expect(nameSelector).toEqual(`->[${SystemIds.RELATION_TO_ATTRIBUTE}]`);
   });
 
   it('TO entity with relation', () => {
@@ -114,7 +114,7 @@ describe('generateSelector', () => {
       'TO'
     );
 
-    expect(selector).toEqual(`->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[1]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`);
+    expect(selector).toEqual(`->[${SystemIds.RELATION_TO_ATTRIBUTE}]->[1]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`);
   });
 
   it('FROM entity with triple', () => {
@@ -126,18 +126,18 @@ describe('generateSelector', () => {
       'FROM'
     );
 
-    expect(selector).toEqual(`->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]->.[1]`);
+    expect(selector).toEqual(`->[${SystemIds.RELATION_FROM_ATTRIBUTE}]->.[1]`);
 
     // Name triple's default to the entity itself rather than its name
     const nameSelector = generateSelector(
       {
-        id: SYSTEM_IDS.NAME_ATTRIBUTE,
+        id: SystemIds.NAME_ATTRIBUTE,
         renderableType: 'TEXT',
       },
       'FROM'
     );
 
-    expect(nameSelector).toEqual(`->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]`);
+    expect(nameSelector).toEqual(`->[${SystemIds.RELATION_FROM_ATTRIBUTE}]`);
   });
 
   it('FROM entity with relation', () => {
@@ -149,7 +149,7 @@ describe('generateSelector', () => {
       'FROM'
     );
 
-    expect(selector).toEqual(`->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]->[1]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`);
+    expect(selector).toEqual(`->[${SystemIds.RELATION_FROM_ATTRIBUTE}]->[1]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`);
   });
 
   it('SOURCE entity with name', () => {
@@ -173,6 +173,6 @@ describe('generateSelector', () => {
       'SOURCE'
     );
 
-    expect(selector).toEqual(`->[1]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`);
+    expect(selector).toEqual(`->[1]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`);
   });
 });

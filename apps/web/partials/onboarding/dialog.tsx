@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -267,7 +267,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
     }
   };
 
-  const allowedTypes = [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.PERSON_TYPE];
+  const allowedTypes = [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE];
 
   return (
     <div className="space-y-4">

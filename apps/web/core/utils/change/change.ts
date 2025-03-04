@@ -1,4 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { Effect, Record } from 'effect';
 
 import { EntityWithSchema, mergeEntity } from '~/core/database/entities';
@@ -474,7 +474,7 @@ export function aggregateChanges({
       }
     }
 
-    const nonBlockRelationChanges = relationChanges.filter(c => c.attribute.id !== SYSTEM_IDS.BLOCKS);
+    const nonBlockRelationChanges = relationChanges.filter(c => c.attribute.id !== SystemIds.BLOCKS);
 
     // Filter out any "dead" changes where the values are the exact same
     // in the before and after.
@@ -493,27 +493,27 @@ export function aggregateChanges({
         const afterBlock = afterBlocks.find(afterEntity => afterEntity.id === blockId);
 
         const isTextBlock =
-          (beforeBlock?.types.some(type => type.id === SYSTEM_IDS.TEXT_BLOCK) ||
-            afterBlock?.types.some(type => type.id === SYSTEM_IDS.TEXT_BLOCK) ||
-            afterBlock?.relationsOut.some(relation => relation.typeOf.id === SYSTEM_IDS.TEXT_BLOCK)) ??
+          (beforeBlock?.types.some(type => type.id === EntityId(SystemIds.TEXT_BLOCK)) ||
+            afterBlock?.types.some(type => type.id === EntityId(SystemIds.TEXT_BLOCK)) ||
+            afterBlock?.relationsOut.some(relation => relation.typeOf.id === EntityId(SystemIds.TEXT_BLOCK))) ??
           false;
 
         const isImageBlock =
-          (beforeBlock?.types?.some(type => type.id === SYSTEM_IDS.IMAGE_TYPE) ||
-            afterBlock?.types?.some(type => type.id === SYSTEM_IDS.IMAGE_TYPE) ||
-            afterBlock?.relationsOut.some(relation => relation.typeOf.id === SYSTEM_IDS.IMAGE_TYPE)) ??
+          (beforeBlock?.types?.some(type => type.id === EntityId(SystemIds.IMAGE_TYPE)) ||
+            afterBlock?.types?.some(type => type.id === EntityId(SystemIds.IMAGE_TYPE)) ||
+            afterBlock?.relationsOut.some(relation => relation.typeOf.id === EntityId(SystemIds.IMAGE_TYPE))) ??
           false;
 
         const isDataBlock =
-          (beforeBlock?.types?.some(type => type.id === SYSTEM_IDS.DATA_BLOCK) ||
-            afterBlock?.types?.some(type => type.id === SYSTEM_IDS.DATA_BLOCK) ||
-            afterBlock?.relationsOut.some(relation => relation.typeOf.id === SYSTEM_IDS.DATA_BLOCK)) ??
+          (beforeBlock?.types?.some(type => type.id === EntityId(SystemIds.DATA_BLOCK)) ||
+            afterBlock?.types?.some(type => type.id === EntityId(SystemIds.DATA_BLOCK)) ||
+            afterBlock?.relationsOut.some(relation => relation.typeOf.id === EntityId(SystemIds.DATA_BLOCK))) ??
           false;
 
         if (isTextBlock) {
-          const beforeTriple = beforeBlock?.triples.find(triple => triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT);
+          const beforeTriple = beforeBlock?.triples.find(triple => triple.attributeId === SystemIds.MARKDOWN_CONTENT);
 
-          const afterTriple = afterBlock?.triples.find(triple => triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT);
+          const afterTriple = afterBlock?.triples.find(triple => triple.attributeId === SystemIds.MARKDOWN_CONTENT);
 
           blockChanges.push({
             type: 'textBlock',
@@ -522,10 +522,10 @@ export function aggregateChanges({
           });
         } else if (isImageBlock) {
           const beforeTriple = beforeBlock?.triples.find(
-            triple => triple.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE
+            triple => triple.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE
           );
 
-          const afterTriple = afterBlock?.triples.find(triple => triple.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE);
+          const afterTriple = afterBlock?.triples.find(triple => triple.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE);
 
           blockChanges.push({
             type: 'imageBlock',
@@ -578,23 +578,23 @@ type TripleByAttributeMap = Record<string, Triple>;
 type EntityByAttributeMapMap = Record<string, TripleByAttributeMap>;
 
 const RELATION_TRIPLES = [
-  SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
-  SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
-  SYSTEM_IDS.RELATION_INDEX,
-  SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+  EntityId(SystemIds.RELATION_FROM_ATTRIBUTE),
+  EntityId(SystemIds.RELATION_TO_ATTRIBUTE),
+  EntityId(SystemIds.RELATION_INDEX),
+  EntityId(SystemIds.RELATION_TYPE_ATTRIBUTE),
 ];
 
 function shouldFilterTriple(triple: Triple) {
   // Filter out any triples for relation entities. This is to prevent
   // the diffs from being noisy with metadata about the relation.
-  if (RELATION_TRIPLES.includes(triple.attributeId)) {
+  if (RELATION_TRIPLES.includes(EntityId(triple.attributeId))) {
     return true;
   }
 
   if (
-    triple.attributeId === SYSTEM_IDS.TYPES_ATTRIBUTE &&
+    triple.attributeId === SystemIds.TYPES_ATTRIBUTE &&
     triple.value.type === 'URL' &&
-    triple.value.value === GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE)
+    triple.value.value === GraphUrl.fromEntityId(SystemIds.RELATION_TYPE)
   ) {
     return true;
   }
@@ -651,22 +651,22 @@ const getIsRenderedAsEntity = (entity: Entity | EntityWithSchema) => {
 };
 
 const blockTypes = [
-  SYSTEM_IDS.DATA_BLOCK,
-  SYSTEM_IDS.IMAGE_BLOCK,
-  SYSTEM_IDS.IMAGE_TYPE,
-  SYSTEM_IDS.RELATION_TYPE,
-  SYSTEM_IDS.TEXT_BLOCK,
+  EntityId(SystemIds.DATA_BLOCK),
+  EntityId(SystemIds.IMAGE_BLOCK),
+  EntityId(SystemIds.IMAGE_TYPE),
+  EntityId(SystemIds.RELATION_TYPE),
+  EntityId(SystemIds.TEXT_BLOCK),
 ];
 
 // @TODO use attributes as a hint as well
 // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
 const blockAttributes = [
-  SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE,
-  SYSTEM_IDS.ENTITY_FILTER,
-  SYSTEM_IDS.FILTER,
-  SYSTEM_IDS.SHOWN_COLUMNS,
-  SYSTEM_IDS.SPACE_FILTER,
-  SYSTEM_IDS.VIEW_TYPE,
+  SystemIds.DATA_SOURCE_ATTRIBUTE,
+  SystemIds.ENTITY_FILTER,
+  SystemIds.FILTER,
+  SystemIds.SHOWN_COLUMNS,
+  SystemIds.SPACE_FILTER,
+  SystemIds.VIEW_TYPE,
 ];
 
 const getBlockParentEntityIds = async (blockIds: EntityId[], entities: Entity[]) => {
@@ -686,7 +686,7 @@ const getBlockParentEntityIds = async (blockIds: EntityId[], entities: Entity[])
 
   entities.forEach(entity => {
     entity.relationsOut
-      .filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS)
+      .filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS))
       .forEach(relation => {
         blockParentEntityIds[relation.toEntity.id] = entity.id;
       });
@@ -704,11 +704,11 @@ const getNewAndDeletedBlockParentEntityIds = (beforeEntities: Entity[], afterEnt
 
     const beforeBlockIds =
       beforeEntity?.relationsOut
-        .filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS)
+        .filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS))
         .map(relation => relation.toEntity.id) ?? [];
 
     const afterBlockIds = afterEntity.relationsOut
-      .filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS)
+      .filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS))
       .map(relation => relation.toEntity.id);
 
     const newlyCreatedBlockIds = afterBlockIds.filter(blockId => !beforeBlockIds.includes(blockId));

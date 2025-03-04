@@ -51,8 +51,8 @@ importers:
         specifier: ^5.6.8
         version: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
       '@graphprotocol/grc-20':
-        specifier: ^0.5.0
-        version: 0.5.0(@types/node@17.0.45)(@vitest/ui@0.25.8)(bufferutil@4.0.9)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
+        specifier: ^0.8.0
+        version: 0.8.0(@types/node@17.0.45)(@vitest/ui@0.25.8)(bufferutil@4.0.9)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
       '@mobily/ts-belt':
         specifier: ^4.0.0-rc.2
         version: 4.0.0-rc.5
@@ -1058,26 +1058,26 @@ packages:
       '@bufbuild/protobuf': ^1.10.0
       '@connectrpc/connect': 1.6.1
 
-  '@connectrpc/connect-node@2.0.1':
-    resolution: {integrity: sha512-jXE9vMZ71aZnIXPDBqedwQyT/nN5pYs6pI8BScvvxJEKPJNAuwxltdJ2u0RpPaqox/dEW+ipzAN7kjYQIy3NHg==}
+  '@connectrpc/connect-node@2.0.2':
+    resolution: {integrity: sha512-33Ut3SRkb6SugpwVCtXXRvUrOdtiyG6z6d5+eijBOLOI75sw1tDCwcs0o/9WL3rUj1M08dLUrPmJB47fjpv6EA==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       '@bufbuild/protobuf': ^2.2.0
-      '@connectrpc/connect': 2.0.1
+      '@connectrpc/connect': 2.0.2
 
-  '@connectrpc/connect-web@2.0.1':
-    resolution: {integrity: sha512-FmUR9TyuHu/3efr9cYZcqqAccgsswLSm3PQBXGuya5h57AjQWROW6ejL6Fg0d+A9EwsxRmJktefmFszXUMlU9Q==}
+  '@connectrpc/connect-web@2.0.2':
+    resolution: {integrity: sha512-QANMFPiL2o66BdBEctg4TsQLe5ozsBLqcle3dCBp7BwGlNGTY6NnNnqmt+YRnpeMW88GgomJwWNMGCrRD9pRKA==}
     peerDependencies:
       '@bufbuild/protobuf': ^2.2.0
-      '@connectrpc/connect': 2.0.1
+      '@connectrpc/connect': 2.0.2
 
   '@connectrpc/connect@1.6.1':
     resolution: {integrity: sha512-KchMDNtU4CDTdkyf0qG7ugJ6qHTOR/aI7XebYn3OTCNagaDYWiZUVKgRgwH79yeMkpNgvEUaXSK7wKjaBK9b/Q==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.10.0
 
-  '@connectrpc/connect@2.0.1':
-    resolution: {integrity: sha512-o+MauvcOnfN4vjpS8ngoX+ubhcCDvnexlLwtk/VnkCLjoRMUz2PKqi87Si58ViWq0vzmGYPRf2LNwhJk5kcCXA==}
+  '@connectrpc/connect@2.0.2':
+    resolution: {integrity: sha512-xZuylIUNvNlH52e/4eQsZvY4QZyDJRtEFEDnn/yBrv5Xi5ZZI/p8X+GAHH35ucVaBvv9u7OzHZo8+tEh1EFTxA==}
     peerDependencies:
       '@bufbuild/protobuf': ^2.2.0
 
@@ -1705,11 +1705,11 @@ packages:
     resolution: {integrity: sha512-Fakuk190EAKxWSa9YQyr/87g8mvAv8HBvk6yPCPuIoA3bYXF7n6kl0XSqKjSd5VfjEqhtnzQ6zJGzDf1Gv/tJg==}
     engines: {node: '>=8.6'}
 
-  '@graphprotocol/grc-20@0.5.0':
-    resolution: {integrity: sha512-jaPf/UZREQ20G9vQTqUZLoUtYibgbM0PHCNjK40eHuvzoR2nJK01zOhIOqYhEHt/YciK4vsL8mxlBzh4aDkVWg==}
-
   '@graphprotocol/grc-20@0.6.0':
     resolution: {integrity: sha512-N+bjPoB7TjNrJQQIOJ0Snveslq42uY7mO4sb9zy3XCB0yJlhy1TuBuQ+AXzwLi1LBEd62yNKSbz6dV9ghJa5CQ==}
+
+  '@graphprotocol/grc-20@0.8.0':
+    resolution: {integrity: sha512-c5v8ZXYKHiwM9ifus7eLXPZXCtH4TD4YNO+xYVpqNXE5gLTsMLYMq5TT1cWXjCPfTxrje5wMUAKPMdpv6+qrxQ==}
 
   '@headlessui/react@2.2.0':
     resolution: {integrity: sha512-RzCEg+LXsuI7mHiSomsu/gBJSjpupm6A1qIZ5sWjd7JhARNlMiSA4kKfJpCKwU9tE+zMRterhhrP74PvfJrpXQ==}
@@ -5333,6 +5333,11 @@ packages:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
 
+  image-size@2.0.0:
+    resolution: {integrity: sha512-HP07n1SpdIXGUL4VotUIOQz66MQOq8g7VN+Yj02YTVowqZScQ5i/JYU0+lkNr2pwt5j4hOpk94/UBV1ZCbS2fA==}
+    engines: {node: '>=16.x'}
+    hasBin: true
+
   immediate@3.0.6:
     resolution: {integrity: sha512-XXOFtyqDjNDAQxVfYxuF7g9Il/IbWmmlQg2MYKOH8ExIT1qg6xc4zyS3HaEEATgs1btfzxq15ciUiY7gjSXRGQ==}
 
@@ -7743,6 +7748,10 @@ packages:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
 
+  uuid@11.1.0:
+    resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
+    hasBin: true
+
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
     hasBin: true
@@ -8744,21 +8753,21 @@ snapshots:
       '@connectrpc/connect': 1.6.1(@bufbuild/protobuf@1.10.0)
       undici: 5.28.5
 
-  '@connectrpc/connect-node@2.0.1(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.1(@bufbuild/protobuf@2.2.3))':
+  '@connectrpc/connect-node@2.0.2(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.3))':
     dependencies:
       '@bufbuild/protobuf': 2.2.3
-      '@connectrpc/connect': 2.0.1(@bufbuild/protobuf@2.2.3)
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.2.3)
 
-  '@connectrpc/connect-web@2.0.1(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.1(@bufbuild/protobuf@2.2.3))':
+  '@connectrpc/connect-web@2.0.2(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.3))':
     dependencies:
       '@bufbuild/protobuf': 2.2.3
-      '@connectrpc/connect': 2.0.1(@bufbuild/protobuf@2.2.3)
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.2.3)
 
   '@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0)':
     dependencies:
       '@bufbuild/protobuf': 1.10.0
 
-  '@connectrpc/connect@2.0.1(@bufbuild/protobuf@2.2.3)':
+  '@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.3)':
     dependencies:
       '@bufbuild/protobuf': 2.2.3
 
@@ -9340,7 +9349,7 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@graphprotocol/grc-20@0.5.0(@types/node@17.0.45)(@vitest/ui@0.25.8)(bufferutil@4.0.9)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
+  '@graphprotocol/grc-20@0.6.0(@types/node@22.13.5)(bufferutil@4.0.9)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
     dependencies:
       '@biomejs/biome': 1.9.4
       '@bufbuild/protobuf': 1.10.0
@@ -9353,8 +9362,8 @@ snapshots:
       position-strings: 2.0.1
       uuid: 9.0.1
       viem: 1.21.4(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
-      vite: 5.4.14(@types/node@17.0.45)
-      vitest: 1.6.1(@types/node@17.0.45)(@vitest/ui@0.25.8)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+      vite: 5.4.14(@types/node@22.13.5)
+      vitest: 1.6.1(@types/node@22.13.5)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
     transitivePeerDependencies:
       - '@edge-runtime/vm'
       - '@types/node'
@@ -9375,21 +9384,21 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@graphprotocol/grc-20@0.6.0(@types/node@22.13.5)(bufferutil@4.0.9)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
+  '@graphprotocol/grc-20@0.8.0(@types/node@17.0.45)(@vitest/ui@0.25.8)(bufferutil@4.0.9)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
     dependencies:
       '@biomejs/biome': 1.9.4
       '@bufbuild/protobuf': 1.10.0
       '@changesets/cli': 2.27.12
       '@ethersproject/abi': 5.7.0
       '@ethersproject/providers': 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      '@types/uuid': 9.0.8
       effect: 3.13.1
       ethers: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      image-size: 2.0.0
       position-strings: 2.0.1
-      uuid: 9.0.1
+      uuid: 11.1.0
       viem: 1.21.4(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
-      vite: 5.4.14(@types/node@22.13.5)
-      vitest: 1.6.1(@types/node@22.13.5)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+      vite: 5.4.14(@types/node@17.0.45)
+      vitest: 1.6.1(@types/node@17.0.45)(@vitest/ui@0.25.8)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
     transitivePeerDependencies:
       - '@edge-runtime/vm'
       - '@types/node'
@@ -10807,10 +10816,10 @@ snapshots:
       '@bufbuild/protobuf': 1.10.0
       '@connectrpc/connect': 1.6.1(@bufbuild/protobuf@1.10.0)
 
-  '@substreams/core@0.17.0(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.1(@bufbuild/protobuf@2.2.3))':
+  '@substreams/core@0.17.0(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.3))':
     dependencies:
       '@bufbuild/protobuf': 2.2.3
-      '@connectrpc/connect': 2.0.1(@bufbuild/protobuf@2.2.3)
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.2.3)
 
   '@substreams/manifest@0.15.0(@bufbuild/buf@1.50.0)(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0))(@effect/schema@0.63.4(effect@2.4.19)(fast-check@3.13.2))(effect@2.4.19)(yaml@2.7.0)':
     dependencies:
@@ -10826,10 +10835,10 @@ snapshots:
   '@substreams/node@0.6.2':
     dependencies:
       '@bufbuild/protobuf': 2.2.3
-      '@connectrpc/connect': 2.0.1(@bufbuild/protobuf@2.2.3)
-      '@connectrpc/connect-node': 2.0.1(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.1(@bufbuild/protobuf@2.2.3))
-      '@connectrpc/connect-web': 2.0.1(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.1(@bufbuild/protobuf@2.2.3))
-      '@substreams/core': 0.17.0(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.1(@bufbuild/protobuf@2.2.3))
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.2.3)
+      '@connectrpc/connect-node': 2.0.2(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.3))
+      '@connectrpc/connect-web': 2.0.2(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.3))
+      '@substreams/core': 0.17.0(@bufbuild/protobuf@2.2.3)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.3))
       eventemitter3: 5.0.1
 
   '@substreams/sink@0.14.1(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0))(effect@2.4.19)':
@@ -11223,7 +11232,7 @@ snapshots:
 
   '@types/ws@8.5.14':
     dependencies:
-      '@types/node': 17.0.45
+      '@types/node': 20.17.16
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -12726,7 +12735,7 @@ snapshots:
 
   date-fns@2.30.0:
     dependencies:
-      '@babel/runtime': 7.26.7
+      '@babel/runtime': 7.26.9
 
   dateformat@4.6.3: {}
 
@@ -14162,6 +14171,8 @@ snapshots:
   ieee754@1.2.1: {}
 
   ignore@5.3.2: {}
+
+  image-size@2.0.0: {}
 
   immediate@3.0.6: {}
 
@@ -16696,6 +16707,8 @@ snapshots:
       which-typed-array: 1.1.18
 
   utils-merge@1.0.1: {}
+
+  uuid@11.1.0: {}
 
   uuid@8.3.2: {}
 

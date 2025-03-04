@@ -1,6 +1,6 @@
 'use client';
 
-import { GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
 import { useMemo } from 'react';
@@ -164,7 +164,7 @@ const listener =
             {
               entityId: renderable.relationId,
               entityName: null,
-              attributeId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+              attributeId: SystemIds.RELATION_TYPE_ATTRIBUTE,
               attributeName: 'Relation type',
               // Relations are the only entity in the system that we expect
               // to use an entity value type in a triple
@@ -265,7 +265,7 @@ const listener =
           {
             entityId: context.entityId,
             entityName: name,
-            attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+            attributeId: SystemIds.NAME_ATTRIBUTE,
             attributeName: 'Name',
             value: { type: 'TEXT', value: name },
           },

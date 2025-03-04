@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -131,7 +131,7 @@ export const SelectEntity = ({
       upsert(
         {
           entityId: newEntityId,
-          attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+          attributeId: SystemIds.NAME_ATTRIBUTE,
           entityName: query,
           attributeName: 'Name',
           value: {

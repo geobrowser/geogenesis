@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { TripleDto } from '~/core/io/dto/triples';
 import { RenderableEntityType } from '~/core/types';
@@ -13,7 +13,7 @@ export function RelationDtoLive(relation: SubstreamRelationLive) {
   // the image URI for that image. We need to parse the triples to find the correct
   // triple URI value representing the image URI.
   const imageEntityUrlValue =
-    toEntityTriples.find(relation => relation.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
+    toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
 
   const renderableType = getRenderableEntityType(toEntityTypes);
 
@@ -51,7 +51,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
   // the image URI for that image. We need to parse the triples to find the correct
   // triple URI value representing the image URI.
   const imageEntityUrlValue =
-    toEntityTriples.find(relation => relation.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
+    toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
 
   const renderableType = getRenderableEntityType(toEntityTypes);
 
@@ -84,15 +84,15 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
 function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
   const typeIds = types.map(relation => relation.entityId);
 
-  if (typeIds.includes(EntityId(SYSTEM_IDS.IMAGE_TYPE))) {
+  if (typeIds.includes(EntityId(SystemIds.IMAGE_TYPE))) {
     return 'IMAGE';
   }
 
-  if (typeIds.includes(EntityId(SYSTEM_IDS.DATA_BLOCK))) {
+  if (typeIds.includes(EntityId(SystemIds.DATA_BLOCK))) {
     return 'DATA';
   }
 
-  if (typeIds.includes(EntityId(SYSTEM_IDS.TEXT_BLOCK))) {
+  if (typeIds.includes(EntityId(SystemIds.TEXT_BLOCK))) {
     return 'TEXT';
   }
 

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { describe, expect, it } from 'vitest';
 
 import { queryStringFromFilters } from './to-query-string';
@@ -30,7 +30,7 @@ describe('to-query-string', () => {
 
     const nameFilter = queryStringFromFilters([
       {
-        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        columnId: SystemIds.NAME_ATTRIBUTE,
         value: 'id 1',
         valueType: 'TEXT',
       },
@@ -40,12 +40,12 @@ describe('to-query-string', () => {
 
     const andFilter = queryStringFromFilters([
       {
-        columnId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        columnId: SystemIds.TYPES_ATTRIBUTE,
         value: 'Value 1',
         valueType: 'RELATION',
       },
       {
-        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        columnId: SystemIds.NAME_ATTRIBUTE,
         value: 'id 1',
         valueType: 'TEXT',
       },
@@ -57,7 +57,7 @@ describe('to-query-string', () => {
 
     const spaceFilter = queryStringFromFilters([
       {
-        columnId: SYSTEM_IDS.SPACE_FILTER,
+        columnId: SystemIds.SPACE_FILTER,
         valueType: 'TEXT',
         value: '0x0000000000000000000000000000000000000000',
       },
@@ -99,7 +99,7 @@ describe('to-query-string', () => {
 
     const nameFilter = queryStringFromFilters([
       {
-        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        columnId: SystemIds.NAME_ATTRIBUTE,
         value: 'id 1',
         valueType: 'TEXT',
       },
@@ -119,7 +119,7 @@ describe('to-query-string', () => {
         valueType: 'RELATION',
       },
       {
-        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        columnId: SystemIds.NAME_ATTRIBUTE,
         value: 'id 1',
         valueType: 'TEXT',
       },
@@ -129,7 +129,7 @@ describe('to-query-string', () => {
 
     const spaceFilter = queryStringFromFilters([
       {
-        columnId: SYSTEM_IDS.SPACE_FILTER,
+        columnId: SystemIds.SPACE_FILTER,
         valueType: 'TEXT',
         value: '0x0000000000000000000000000000000000000000',
       },

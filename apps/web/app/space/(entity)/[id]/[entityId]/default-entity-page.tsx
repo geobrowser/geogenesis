@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -96,7 +96,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_TYPE) && nameTripleSpace) {
+  if (entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && nameTripleSpace) {
     console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
 
     return redirect(NavUtils.toSpace(spaceId));
@@ -115,7 +115,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const serverCoverUrl = Entities.cover(entity?.relationsOut);
 
   const blockIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
     ?.map(r => r.toEntity.id);
 
   const blocks = blockIds ? await fetchBlocks(blockIds) : [];

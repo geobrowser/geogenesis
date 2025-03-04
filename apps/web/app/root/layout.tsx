@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -41,6 +41,6 @@ export const metadata: Metadata = {
 export const revalidate = 60; // 1 minute
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const params = new Promise<{ id: string }>(resolve => resolve({ id: SYSTEM_IDS.ROOT_SPACE_ID }));
+  const params = new Promise<{ id: string }>(resolve => resolve({ id: SystemIds.ROOT_SPACE_ID }));
   return <Layout params={params}>{children}</Layout>;
 }

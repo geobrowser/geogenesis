@@ -1,5 +1,5 @@
-import { BASE58_ALLOWED_CHARS } from '@graphprotocol/grc-20';
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { Base58 } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
@@ -21,7 +21,7 @@ export const NavUtils = {
   toRoot: () => '/root',
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
-  toSpace: (spaceId: string) => (spaceId === SYSTEM_IDS.ROOT_SPACE_ID ? `/root` : `/space/${spaceId}`),
+  toSpace: (spaceId: string) => (spaceId === SystemIds.ROOT_SPACE_ID ? `/root` : `/space/${spaceId}`),
   toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
   toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
     return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
@@ -352,7 +352,7 @@ export const validateEntityId = (maybeEntityId: EntityId | string | null | undef
   if (!VALID_ENTITY_ID_LENGTHS.includes(maybeEntityId.length)) return false;
 
   for (const char of maybeEntityId) {
-    const index = BASE58_ALLOWED_CHARS.indexOf(char);
+    const index = Base58.BASE58_ALLOWED_CHARS.indexOf(char);
     if (index === -1) {
       return false;
     }

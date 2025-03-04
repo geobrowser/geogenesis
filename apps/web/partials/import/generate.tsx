@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { parse } from 'csv/sync';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
@@ -173,7 +173,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           space: spaceId,
           entityId: newEntityId,
           entityName: entity[entityNameIndex],
-          attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+          attributeId: SystemIds.NAME_ATTRIBUTE,
           attributeName: 'Name',
           value: {
             type: 'TEXT',

@@ -1,10 +1,11 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import Image from 'next/legacy/image';
 
 import { Suspense } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
+import { EntityId } from '~/core/io/schema';
 import { getImagePath, getProposalName } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -41,7 +42,7 @@ async function ActivityList({ searchParams, entityId }: Props) {
   // Fetch the activity based on the wallets defined on the entity's Wallets triple
   // Right now we assume it's set as an entity value but it might be a collection at
   // some point in the future.
-  const address = entity?.relationsOut.find(t => t.typeOf.id === SYSTEM_IDS.ACCOUNTS_ATTRIBUTE)?.toEntity.name;
+  const address = entity?.relationsOut.find(t => t.typeOf.id === EntityId(SystemIds.ACCOUNTS_ATTRIBUTE))?.toEntity.name;
 
   const proposals = address
     ? await fetchProposalsByUser({

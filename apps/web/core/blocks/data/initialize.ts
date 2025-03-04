@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { makeRelationForSourceType } from '~/core/blocks/data/source';
 import { StoreRelation } from '~/core/database/types';
@@ -22,6 +22,6 @@ export function makeInitialDataEntityRelations(blockId: EntityId, spaceId: strin
     makeRelationForSourceType('COLLECTION', blockId, spaceId),
 
     // Create the type relation for the block itself. e.g., Table, Image, Text, etc.
-    getRelationForBlockType(blockId, SYSTEM_IDS.DATA_BLOCK, spaceId),
+    getRelationForBlockType(blockId, SystemIds.DATA_BLOCK, spaceId),
   ];
 }

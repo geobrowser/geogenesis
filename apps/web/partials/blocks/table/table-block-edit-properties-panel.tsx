@@ -1,4 +1,4 @@
-import { CONTENT_IDS, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
 import { pipe } from 'effect';
@@ -75,12 +75,13 @@ function RelationsPropertySelector() {
   }
 
   // @TODO: This should be stored as a data structure somewhere
-  const filteredPropertyId = filterState.find(r => r.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE)?.value;
+  const filteredPropertyId = filterState.find(r => r.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE)?.value;
   const relationIds = sourceEntity.relationsOut.filter(r => r.typeOf.id === filteredPropertyId).map(r => r.id);
   const toIds = sourceEntity.relationsOut.filter(r => r.typeOf.id === filteredPropertyId).map(r => r.toEntity.id);
 
-  const maybeSourceEntityImage = sourceEntity.relationsOut.find(r => r.typeOf.id === CONTENT_IDS.AVATAR_ATTRIBUTE)
-    ?.toEntity.value;
+  const maybeSourceEntityImage = sourceEntity.relationsOut.find(
+    r => r.typeOf.id === EntityId(ContentIds.AVATAR_ATTRIBUTE)
+  )?.toEntity.value;
 
   const onBack = () => {
     if (selectedEntities && selectedEntities.entityIds.length > 0) {
@@ -155,7 +156,7 @@ function DefaultPropertySelector() {
     queryKey: ['available-columns', filterState],
     queryFn: async () => {
       const schema = await getSchemaFromTypeIds(
-        filterState.filter(f => f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE).map(f => f.value)
+        filterState.filter(f => f.columnId === SystemIds.TYPES_ATTRIBUTE).map(f => f.value)
       );
 
       return schema;
