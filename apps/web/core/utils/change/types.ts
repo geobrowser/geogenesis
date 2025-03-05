@@ -1,6 +1,11 @@
 import { EntityId } from '~/core/io/schema';
 
-import { BaseRelationRenderableProperty, ImageRelationRenderableProperty, NativeRenderableProperty } from '../../types';
+import {
+  BaseRelationRenderableProperty,
+  ImageRelationRenderableProperty,
+  NativeRenderableProperty,
+  TripleValueOptions,
+} from '../../types';
 
 export type BlockId = string;
 
@@ -33,6 +38,8 @@ export type TripleChangeValue = {
   // mostly to make discriminated unions easier to handle at consumers by matching
   // the same shape as RelationValueChange
   valueName: null;
+  // import from lib
+  options?: TripleValueOptions | null;
 } & ChangeType;
 
 type Attribute = {

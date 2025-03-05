@@ -17,6 +17,9 @@ describe('create-edit-proposal', () => {
             value: {
               type: 'TEXT',
               value: 'test value',
+              options: {
+                color: 'red',
+              },
             },
           },
         },

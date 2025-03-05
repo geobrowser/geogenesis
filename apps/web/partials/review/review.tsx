@@ -225,7 +225,7 @@ const ReviewChanges = () => {
   const totalEdits = changes.flatMap(c => c.changes).length;
 
   const unstaged = false;
-
+  // console.log({ triplesFromSpace, changes });
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 md:px-4 md:py-3">

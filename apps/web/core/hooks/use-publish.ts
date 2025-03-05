@@ -92,7 +92,7 @@ export function usePublish() {
             return a.id;
           }),
         ]);
-
+        console.log({ dataBeingPublished, triplesToPublish, ops });
         // We filter out the actions that are being published from the actionsBySpace. We do this
         // since we need to update the entire state of the space with the published actions and the
         // unpublished actions being merged together.

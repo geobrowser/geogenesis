@@ -24,6 +24,7 @@ function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeW
     localOpsAtom,
     ops => {
       const mergedTriples = Triples.merge(ops, mergeWith);
+      // console.log({ mergedTriples, ops, mergeWith });
       return mergedTriples.filter(t => {
         return (selector ? selector(t) : true) && (includeDeleted ? true : isNotDeletedSelector(t));
       });
@@ -35,6 +36,8 @@ function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeW
 export function useTriples(args?: UseTriplesArgs) {
   const memoizedArgs = React.useMemo(() => args, [args]);
   const memoizedAtom = React.useMemo(() => makeLocalOpsAtomWithSelector(memoizedArgs ?? {}), [memoizedArgs]);
+  // console.log({ args, memoizedAtom, memoizedArgs, useAtomValue: useAtomValue(memoizedAtom) });
+  // // debugger; //cia esme
   return useAtomValue(memoizedAtom);
 }
 

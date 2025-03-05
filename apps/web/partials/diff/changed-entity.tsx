@@ -6,11 +6,12 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
+import equal from 'fast-deep-equal';
 import Image from 'next/image';
 
 import * as React from 'react';
 
-import { BlockChange, EntityChange, RenderableChange } from '~/core/utils/change/types';
+import { BlockChange, EntityChange, RenderableChange, TripleChangeValue } from '~/core/utils/change/types';
 import { GeoDate, getImagePath, groupBy } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -422,11 +423,11 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                 <div className="flex-1 border border-grey-02 p-4">
                   <div className="text-bodySemibold capitalize">{name}</div>
                   <div>
-                    {changes.map(c => {
+                    {changes.map((c, index) => {
                       if (!c.before?.value) return null;
 
                       return (
-                        <span key={c.before.value} className="inline-block rounded-lg bg-errorTertiary p-1">
+                        <span key={`c.before.value_${index}`} className="inline-block rounded-lg bg-errorTertiary p-1">
                           <img src={getImagePath(c.before.value)} className="h-24 w-auto rounded-lg" />
                         </span>
                       );
@@ -467,7 +468,13 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                     {changes.map(c => {
                       const { before, after } = c;
                       return (
-                        before && <DateTimeDiff mode="before" before={before.value} after={after?.value ?? null} />
+                        before && (
+                          <DateTimeDiff
+                            mode="before"
+                            before={before as TripleChangeValue}
+                            after={after as TripleChangeValue}
+                          />
+                        )
                       );
                     })}
                   </div>
@@ -478,7 +485,15 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                   <div className="text-body">
                     {changes.map(c => {
                       const { before, after } = c;
-                      return after && <DateTimeDiff mode="after" before={before?.value ?? null} after={after.value} />;
+                      return (
+                        after && (
+                          <DateTimeDiff
+                            mode="after"
+                            before={before as TripleChangeValue}
+                            after={after as TripleChangeValue}
+                          />
+                        )
+                      );
                     })}
                   </div>
                 </div>
@@ -542,8 +557,8 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
 
 type DateTimeProps = {
   mode: 'before' | 'after';
-  before: string | null;
-  after: string | null;
+  before: TripleChangeValue;
+  after: TripleChangeValue;
 };
 
 type DateTimeType = {
@@ -556,34 +571,44 @@ type DateTimeType = {
 };
 
 export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
-  const beforeDateTime = before ? GeoDate.fromISOStringUTC(before) : null;
-  const afterDateTime = after ? GeoDate.fromISOStringUTC(after) : null;
+  const beforeDateTime = before ? GeoDate.fromISOStringUTC(before.value) : null;
+  const afterDateTime = after ? GeoDate.fromISOStringUTC(after.value) : null;
+
+  const formattedDateBefore = GeoDate.formatDate(before.value, before.options?.format);
+  const formattedDateAfter = GeoDate.formatDate(after.value, after.options?.format);
+
+  const formattedDate = mode === 'before' ? formattedDateBefore : formattedDateAfter;
 
   const renderedDateTime: DateTimeType = (mode === 'before' ? beforeDateTime : afterDateTime) as DateTimeType;
   const highlightClassName = mode === 'before' ? 'rounded bg-errorTertiary' : 'bg-successTertiary rounded';
 
+  if (!equal(before.options, after.options)) {
+    return (
+      <p className="text-sm text-grey-04">
+        Browse format · <span className={highlightClassName}>{formattedDate}</span>
+      </p>
+    );
+  }
+
   return (
     <div className="flex items-start gap-4">
       <div className="flex w-[164px] gap-3">
+        <div className="flex w-full flex-[4] flex-col items-center">
+          <p className={cx(beforeDateTime?.year !== afterDateTime?.year && highlightClassName, dateFieldClassNames)}>
+            {renderedDateTime.year}
+          </p>
+        </div>
+        <span className="flex-[1] pt-[3px] text-grey-02">/</span>
         <div className="flex w-full flex-[2] flex-col">
           <p className={cx(beforeDateTime?.month !== afterDateTime?.month && highlightClassName, dateFieldClassNames)}>
             {renderedDateTime.month.padStart(2, '0')}
           </p>
-          <span className={labelClassNames}>Month</span>
         </div>
         <span className="w-full flex-[1] pt-[3px] text-grey-02">/</span>
         <div className="flex flex-[2] flex-col items-center">
           <p className={cx(beforeDateTime?.day !== afterDateTime?.day && highlightClassName, dateFieldClassNames)}>
             {renderedDateTime.day.padStart(2, '0')}
           </p>
-          <span className={labelClassNames}>Day</span>
-        </div>
-        <span className="flex-[1] pt-[3px] text-grey-02">/</span>
-        <div className="flex w-full flex-[4] flex-col items-center">
-          <p className={cx(beforeDateTime?.year !== afterDateTime?.year && highlightClassName, dateFieldClassNames)}>
-            {renderedDateTime.year}
-          </p>
-          <span className={labelClassNames}>Year</span>
         </div>
       </div>
       <div className="flex items-center">
@@ -614,7 +639,6 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
 };
 
 const dateFieldClassNames = `w-full text-center text-body tabular-nums`;
-const labelClassNames = `text-footnote text-grey-04`;
 const timeClassNames = `w-[21px] tabular-nums p-0 m-0 text-body`;
 
 type ChipProps = {

@@ -5,6 +5,7 @@ export type ValueType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'URL' | 'TIME' | 'POINT
 export type Value = {
   type: ValueType;
   value: string;
+  options?: Record<string, string>; // fix import
 };
 
 type Triple = {

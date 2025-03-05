@@ -20,6 +20,7 @@ export function make({ name, ops, author }: MakeeEditProposalArgs): Uint8Array {
 }
 
 function opsToBinary(ops: Op[]): OpBinary[] {
+  console.log({ ops });
   return ops.map(o => {
     switch (o.type) {
       case 'CREATE_RELATION':

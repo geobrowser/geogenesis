@@ -9,28 +9,43 @@ import { useState } from 'react';
 import { GeoDate } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
-import { Check } from '~/design-system/icons/check';
+import { DateFormat } from '~/design-system/icons/date-format';
 
 interface Props {
   value?: string;
   onSelect: (value: string) => void;
 }
 
-const formatOptions: { value: string; label: React.ReactNode }[] = [
-  { value: 'h:mm a, EEEE, MMMM d, yyyy', label: '12:00 PM, Friday, March 4, 2025' },
-  { value: 'h:mm a, MMMM d, yyyy', label: '12:00 PM, March 4, 2025' },
-  { value: 'h:mm a, MM/dd/yyyy', label: '12:00 PM, 03/04/2025' },
-  { value: 'h:mm a, MM/dd', label: '12:00 PM, 03/04' },
-  { value: 'h:mm a, MMM d, yy', label: '12:00 PM, Mar 04, 25' },
-];
-
-export const DateTimeFormatTypeDropdown = ({ value = GeoDate.defaultFormat, onSelect }: Props) => {
+export const DateFormatDropdown = ({ value = GeoDate.defaultFormat, onSelect }: Props) => {
   const [open, setOpen] = useState(false);
+
+  const formatOptions = React.useMemo(() => {
+    const now = new Date().toISOString();
+
+    const dateFormats = [
+      'h:mma, EEEE, MMMM d, yyyy',
+      'h:mma, MMMM d, yyyy',
+      'h:mma, MMM d, yyyy',
+      'h:mma, MMM d, yy',
+      'EEEE, MMMM d, yyyy',
+      'MMMM d, yyyy',
+      'MMM d, yyyy',
+      'MMM d, yy',
+      'MM/dd/yyyy',
+      'MM/dd/yy',
+    ];
+
+    const formatOptions = dateFormats.map(format => ({
+      value: format,
+      label: GeoDate.formatDate(now, format),
+    }));
+    return formatOptions;
+  }, []);
 
   return (
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
       <DropdownPrimitive.Trigger asChild>
-        <SquareButton icon={<Check />} isActive={open} />
+        <SquareButton icon={<DateFormat />} isActive={open} />
       </DropdownPrimitive.Trigger>
       <DropdownPrimitive.Content
         align="end"

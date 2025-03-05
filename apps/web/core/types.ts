@@ -1,9 +1,19 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import {
+  SYSTEM_IDS,
+  /** import TripleValueOptions  */
+} from '@graphprotocol/grc-20';
 
 import { EntityId } from './io/schema';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
+
+// todo import from grc-20-ts
+export type TripleValueOptions = {
+  format?: string;
+  unit?: string;
+  language?: string;
+};
 
 export type ValueType =
   | 'TEXT'
@@ -16,6 +26,7 @@ export type ValueType =
 export type Value = {
   type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER';
   value: string;
+  options?: TripleValueOptions;
 };
 
 export type SetTripleAppOp = {
@@ -26,6 +37,7 @@ export type SetTripleAppOp = {
   attributeName: string | null;
   entityName: string | null;
   value: Value;
+  options?: TripleValueOptions;
 };
 
 export type DeleteTripleAppOp = {
@@ -77,6 +89,7 @@ export type NativeRenderableProperty = {
   spaceId: string;
   value: string;
   placeholder?: boolean;
+  options?: TripleValueOptions;
 };
 
 type RelationPropertyProperties = {

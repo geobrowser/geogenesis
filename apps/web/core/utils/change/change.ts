@@ -1,5 +1,6 @@
 import { GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
 import { Effect, Record } from 'effect';
+import equal from 'fast-deep-equal';
 
 import { EntityWithSchema, mergeEntity } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
@@ -103,6 +104,7 @@ export async function fromLocal(spaceId?: string) {
   });
 
   const { remoteEntities, localEntities } = await Effect.runPromise(collectEntities);
+  // debugger;
 
   const beforeEntities = remoteEntities.filter(entity => getIsRenderedAsEntity(entity));
   const beforeEntityIdsSet = new Set(beforeEntities.map(entity => entity.id));
@@ -563,6 +565,14 @@ function isRealChange(
 ) {
   // The before and after values are the same
   if (before?.value === after?.value && before?.valueName === after?.valueName) {
+    const beforeOptions = before && 'options' in before ? before.options : undefined;
+    const afterOptions = after && 'options' in after ? after.options : undefined;
+
+    // The options are different
+    if (!equal(beforeOptions, afterOptions)) {
+      return true;
+    }
+
     return false;
   }
 

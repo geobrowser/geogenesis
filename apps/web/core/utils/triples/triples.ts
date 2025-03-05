@@ -99,6 +99,8 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
         value: {
           type: t.value.type,
           value: t.value.value,
+          // @ts-expect-error update pkg
+          options: t.value.options,
         },
       },
     };

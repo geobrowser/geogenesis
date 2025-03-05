@@ -14,7 +14,7 @@ import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 
 interface DateFieldProps {
-  onBlur?: (date: string) => void;
+  onBlur?: ({ value, format }: { value: string; format?: string }) => void;
   variant?: 'body' | 'tableCell';
   value: string;
   format?: string;
@@ -39,22 +39,6 @@ const dateFieldStyles = cva(
     },
   }
 );
-
-const labelStyles = cva('text-footnote transition-colors duration-75 ease-in-out', {
-  variants: {
-    active: {
-      true: 'text-text',
-      false: 'text-grey-02',
-    },
-    error: {
-      true: 'text-red-01',
-    },
-  },
-  defaultVariants: {
-    active: false,
-    error: false,
-  },
-});
 
 const timeStyles = cva('m-0 w-[21px] bg-transparent p-0 tabular-nums placeholder:text-grey-02 focus:outline-none', {
   variants: {
@@ -312,7 +296,7 @@ export function DateField(props: DateFieldProps) {
       });
 
       // Only create the triple if the form is valid
-      props.onBlur?.(isoString);
+      props.onBlur?.({ value: isoString, format: props.format });
     }
   };
 
@@ -331,7 +315,7 @@ export function DateField(props: DateFieldProps) {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-[280px] items-start justify-between gap-3">
         <div className="flex w-[136px] items-center gap-1">
           <div className="flex flex-[6] flex-col">
             <input
@@ -491,7 +475,7 @@ export function DateField(props: DateFieldProps) {
         </div>
       </AnimatePresence>
 
-      <span className="text-sm text-grey-04">Browse format · {formattedDate}</span>
+      <p className="text-sm text-grey-04">Browse format · {formattedDate}</p>
     </div>
   );
 }

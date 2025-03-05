@@ -27,6 +27,7 @@ import { useUserIsEditing } from './use-user-is-editing';
  *
  * Schemas are derived from the entity's types and are also a form of placeholders.
  */
+// these need options
 export function useRenderables(serverTriples: Triple[], spaceId: string, isRelationPage?: boolean) {
   const isEditing = useUserIsEditing(spaceId);
   const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
@@ -113,6 +114,7 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
     renderables => sortRenderables(renderables, !!isRelationPage),
     sortedRenderables => groupBy(sortedRenderables, r => r.attributeId)
   );
+  // console.log({ renderables, renderablesGroupedByAttributeId, triples });
 
   return {
     renderablesGroupedByAttributeId,
