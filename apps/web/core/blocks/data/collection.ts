@@ -57,10 +57,13 @@ export function upsertSourceSpaceOnCollectionItem({
   toId,
   sourceSpaceId,
 }: UpsertSourceSpaceCollectionItemArgs) {
+  // @TODO remove console.info for ``
+  console.info(`upsert source space is happening`);
+
   DB.upsert(
     {
       attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
-      attributeName: 'To entity',
+      attributeName: 'To Entity',
       entityId: collectionItemId,
       entityName: null,
       value: {

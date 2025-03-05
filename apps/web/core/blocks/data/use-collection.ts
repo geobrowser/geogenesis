@@ -40,26 +40,34 @@ export function useCollection() {
     [collectionItemsRelations]
   );
 
-  const {
-    data: collectionItems,
-    isLoading,
-    isFetched,
-  } = useQuery({
+  const collectionRelationIds = React.useMemo(
+    () => collectionItemsRelations?.map(c => c.id) ?? [],
+    [collectionItemsRelations]
+  );
+
+  const { data, isLoading, isFetched } = useQuery({
     placeholderData: keepPreviousData,
     enabled: collectionItemsRelations.length > 0,
     queryKey: ['blocks', 'data', 'collection-items', collectionItemIds],
     queryFn: async () => {
-      const entities = await mergeEntitiesAsync({
-        entityIds: collectionItemIds,
-        filterState: [],
-      });
+      const [collectionItems, collectionRelations] = await Promise.all([
+        mergeEntitiesAsync({
+          entityIds: collectionItemIds,
+          filterState: [],
+        }),
+        mergeEntitiesAsync({
+          entityIds: collectionRelationIds,
+          filterState: [],
+        }),
+      ]);
 
-      return entities;
+      return { collectionItems, collectionRelations };
     },
   });
 
   return {
-    collectionItems: collectionItems ?? [],
+    collectionItems: data?.collectionItems ?? [],
+    collectionRelations: data?.collectionRelations ?? [],
     isLoading,
     isFetched,
   };

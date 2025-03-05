@@ -4,8 +4,6 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-
 import { useEntity } from '../../database/entities';
 import { upsert } from '../../database/write';
 import { PropertyId, useProperties } from '../../hooks/use-properties';
@@ -55,7 +53,7 @@ export function useDataBlock() {
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
-  const { collectionItems } = useCollection();
+  const { collectionItems, collectionRelations } = useCollection();
   // Use the mapping to get the potential renderable properties.
   const { properties: propertiesSchema } = useProperties(shownColumnIds);
 
@@ -109,7 +107,7 @@ export function useDataBlock() {
         if (source.type === 'SPACES' || source.type === 'GEO') {
           const data = yield* Effect.promise(() => mergeTableEntities({ options: params, filterState }));
 
-          return mappingToRows(data, shownColumnIds, collectionItems, spaceId, propertiesSchema);
+          return mappingToRows(data, shownColumnIds, [], spaceId, propertiesSchema);
         }
 
         if (source.type === 'COLLECTION') {
@@ -120,7 +118,7 @@ export function useDataBlock() {
             })
           );
 
-          return mappingToRows(data, shownColumnIds, collectionItems, spaceId, propertiesSchema);
+          return mappingToRows(data, shownColumnIds, collectionRelations, spaceId, propertiesSchema);
         }
 
         if (source.type === 'RELATIONS') {

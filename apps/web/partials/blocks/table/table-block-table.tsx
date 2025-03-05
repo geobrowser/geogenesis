@@ -94,7 +94,7 @@ const formatColumns = (
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, table, cell }) => {
-    const spaceId = table.options.meta!.space;
+    const space = table.options.meta!.space;
     const cellId = `${row.original.entityId}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
 
@@ -115,6 +115,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const maybePropertiesSchema = propertiesSchema.get(PropertyId(cellData.slotId));
     const filterableRelationType = maybePropertiesSchema?.relationValueTypeId;
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
+
+    const isNameCell = propertyId === SYSTEM_IDS.NAME_ATTRIBUTE;
+    const spaceId = isNameCell ? (row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space) : space;
 
     const renderables = cellData.renderables;
 
@@ -331,10 +334,11 @@ export const TableBlockTable = React.memo(
                           const isExpandable = firstTriple && firstTriple.type === 'TEXT';
                           const isShown = shownColumnIds.includes(cell.column.id);
 
-                          const href = NavUtils.toEntity(
-                            isNameCell ? (row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space) : space,
-                            entityId
-                          );
+                          const spaceId = isNameCell
+                            ? (row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space)
+                            : space;
+
+                          const href = NavUtils.toEntity(spaceId, entityId);
                           const { verified } = row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
 
                           return (
