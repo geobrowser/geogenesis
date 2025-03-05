@@ -18,6 +18,7 @@ interface DateFieldProps {
   variant?: 'body' | 'tableCell';
   value: string;
   isEditing?: boolean;
+  format?: string;
 }
 
 const dateFieldStyles = cva(
@@ -80,6 +81,8 @@ export function DateField(props: DateFieldProps) {
     minute: initialMinute,
     meridiem: initialMeridiem,
   } = GeoDate.fromISOStringUTC(props.value);
+
+  const formattedDate = GeoDate.format(props.value, props.format);
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
   const formattedInitialMonth = initialMonth === '' ? initialMonth : initialMonth.padStart(2, '0');
@@ -318,6 +321,13 @@ export function DateField(props: DateFieldProps) {
   const isValidDay = day.value === '' || (!day.isValidating && day.isValid);
   const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
   const isValidYear = year.value === '' || (!year.isValidating && year.isValid);
+
+  if (!props.isEditing)
+    return (
+      <p className="text-body text-text" data-testid="date-field-value">
+        {formattedDate}
+      </p>
+    );
 
   return (
     <div>
