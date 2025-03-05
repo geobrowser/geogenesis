@@ -211,6 +211,6 @@ export function getEditsProposalsFromIpfsUri(proposalsProcessed: ChainEditPublis
     // to the fully-qualified representation of ops. The fully qualified representation may
     // require data fetching in the case of file imports. File imports might generate many
     // more ops as well.
-    return proposalsFromIpfs.map(p => postProcessProposalOps(p, p.space));
+    return yield* _(Effect.forEach(proposalsFromIpfs, p => postProcessProposalOps(p, p.space)));
   });
 }

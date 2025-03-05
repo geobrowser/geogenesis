@@ -90,33 +90,35 @@ const ZodDeleteRelationOp = z.object({
 
 const ZodCsvMetadata = z.object({
   type: z.literal('CSV'),
-  columns: z.object({
-    id: z.string(),
-    // @TODO: Is this a number or a string?
-    type: z.number().transform(t => {
-      switch (t) {
-        case 1:
-          return 'TEXT';
-        case 2:
-          return 'NUMBER';
-        case 3:
-          return 'CHECKBOX';
-        case 4:
-          return 'URL';
-        case 5:
-          return 'TIME';
-        case 6:
-          return 'POINT';
-        case 7:
-          return 'RELATION';
-        default:
-          return 'TEXT';
-      }
-    }),
-    relationType: z.optional(z.string()),
-    isId: z.optional(z.boolean()),
-    options: ZodValueOptions,
-  }),
+  columns: z.array(
+    z.object({
+      id: z.string(),
+      // @TODO: Is this a number or a string?
+      type: z.number().transform(t => {
+        switch (t) {
+          case 1:
+            return 'TEXT';
+          case 2:
+            return 'NUMBER';
+          case 3:
+            return 'CHECKBOX';
+          case 4:
+            return 'URL';
+          case 5:
+            return 'TIME';
+          case 6:
+            return 'POINT';
+          case 7:
+            return 'RELATION';
+          default:
+            return 'TEXT';
+        }
+      }),
+      relationType: z.optional(z.string()),
+      isId: z.optional(z.boolean()),
+      options: ZodValueOptions,
+    })
+  ),
 });
 
 const ZodImportFileOp = z.object({
