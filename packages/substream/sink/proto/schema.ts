@@ -5,6 +5,14 @@ export const ZodIpfsMetadata = z.object({
   type: z.union([z.literal('ADD_EDIT'), z.literal('IMPORT_SPACE')]),
 });
 
+const ZodValueOptions = z
+  .object({
+    language: z.optional(z.string()),
+    unit: z.optional(z.string()),
+    format: z.optional(z.string()),
+  })
+  .optional();
+
 const ZodEditSetTriplePayload = z.object({
   entity: z.string(),
   attribute: z.string(),
@@ -12,6 +20,7 @@ const ZodEditSetTriplePayload = z.object({
   // to any here and trust that it is constructed into the correct
   // format once it's decoded.
   value: z.object({
+    options: ZodValueOptions,
     value: z.string(),
     type: z.number().transform(t => {
       switch (t) {
@@ -79,7 +88,54 @@ const ZodDeleteRelationOp = z.object({
   }),
 });
 
-export const ZodOp = z.union([ZodEditSetTripleOp, ZodEditDeleteTripleOp, ZodCreateRelationOp, ZodDeleteRelationOp]);
+const ZodCsvMetadata = z.object({
+  type: z.literal('CSV'),
+  columns: z.array(
+    z.object({
+      id: z.string(),
+      // @TODO: Is this a number or a string?
+      type: z.number().transform(t => {
+        switch (t) {
+          case 1:
+            return 'TEXT';
+          case 2:
+            return 'NUMBER';
+          case 3:
+            return 'CHECKBOX';
+          case 4:
+            return 'URL';
+          case 5:
+            return 'TIME';
+          case 6:
+            return 'POINT';
+          case 7:
+            return 'RELATION';
+          default:
+            return 'TEXT';
+        }
+      }),
+      options: ZodValueOptions,
+    })
+  ),
+});
+
+const ZodImportFileOp = z.object({
+  type: z
+    .literal(7)
+    .transform(() => 'IMPORT_FILE')
+    .superRefine(arg => arg === 'IMPORT_FILE'),
+  url: z.string(),
+  metadata: ZodCsvMetadata,
+});
+
+export const ZodOp = z.union([
+  ZodEditSetTripleOp,
+  ZodEditDeleteTripleOp,
+  ZodCreateRelationOp,
+  ZodDeleteRelationOp,
+  ZodImportFileOp,
+]);
+export type ZodOp = z.infer<typeof ZodOp>;
 
 export const ZodEdit = z.object({
   version: z.string(),

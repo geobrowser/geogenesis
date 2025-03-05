@@ -3,7 +3,8 @@ import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
 import { getFetchIpfsContentEffect } from '../../ipfs';
-import type { BlockEvent, Op, SetTripleOp, SinkEditProposal } from '../../types';
+import type { BlockEvent, IntermediateSinkEditProposal } from '../../types';
+import { postProcessProposalOps } from '../post-process-edit-proposals';
 import type { ChainEditPublished } from '../schema/edit-published';
 import { Decoder } from '~/sink/proto';
 
@@ -113,45 +114,14 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
           return null;
         }
 
-        const contentProposal: SinkEditProposal = {
+        const contentProposal: IntermediateSinkEditProposal = {
           type: 'ADD_EDIT',
           name: parsedContent.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: '-1',
           daoAddress: processedProposal.daoAddress,
           pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
-          ops: parsedContent.ops.map((op): Op => {
-            switch (op.type) {
-              case 'SET_TRIPLE':
-                return {
-                  type: 'SET_TRIPLE',
-                  space: maybeSpaceIdForSpacePlugin.id,
-                  triple: op.triple,
-                } as SetTripleOp;
-              case 'DELETE_TRIPLE':
-                return {
-                  type: 'DELETE_TRIPLE',
-                  space: maybeSpaceIdForSpacePlugin.id,
-                  triple: {
-                    attribute: op.triple.attribute,
-                    entity: op.triple.entity,
-                    value: {},
-                  },
-                };
-              case 'CREATE_RELATION':
-                return {
-                  type: 'CREATE_RELATION',
-                  space: maybeSpaceIdForSpacePlugin.id,
-                  relation: op.relation,
-                };
-              case 'DELETE_RELATION':
-                return {
-                  type: 'DELETE_RELATION',
-                  space: maybeSpaceIdForSpacePlugin.id,
-                  relation: op.relation,
-                };
-            }
-          }),
+          ops: parsedContent.ops,
           // @TODO: For non-import edits there's currently no event that includes the createdById
           // for the caller. For public spaces we read it from the event that created the proposal,
           // but for actions that don't have a proposal we don't know who triggered the action, or
@@ -201,45 +171,14 @@ function fetchEditProposalFromIpfs(processedProposal: ChainEditPublished, block:
         const decodedEdits = maybeDecodedEdits.flatMap(e => (e ? [e] : []));
 
         const proposals = decodedEdits.map(e => {
-          const contentProposal: SinkEditProposal = {
+          const contentProposal: IntermediateSinkEditProposal = {
             type: 'ADD_EDIT',
             daoAddress: getChecksumAddress(processedProposal.daoAddress),
             name: e.name ?? null,
             proposalId: e.id,
             onchainProposalId: '-1',
             pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
-            ops: e.ops.map((op): Op => {
-              switch (op.type) {
-                case 'SET_TRIPLE':
-                  return {
-                    type: 'SET_TRIPLE',
-                    space: maybeSpaceIdForSpacePlugin.id,
-                    triple: op.triple,
-                  } as SetTripleOp;
-                case 'DELETE_TRIPLE':
-                  return {
-                    type: 'DELETE_TRIPLE',
-                    space: maybeSpaceIdForSpacePlugin.id,
-                    triple: {
-                      attribute: op.triple.attribute,
-                      entity: op.triple.entity,
-                      value: {},
-                    },
-                  };
-                case 'CREATE_RELATION':
-                  return {
-                    type: 'CREATE_RELATION',
-                    space: maybeSpaceIdForSpacePlugin.id,
-                    relation: op.relation,
-                  };
-                case 'DELETE_RELATION':
-                  return {
-                    type: 'DELETE_RELATION',
-                    space: maybeSpaceIdForSpacePlugin.id,
-                    relation: op.relation,
-                  };
-              }
-            }),
+            ops: e.ops,
             creator: getChecksumAddress(e.createdBy),
             space: maybeSpaceIdForSpacePlugin.id,
             endTime: block.timestamp.toString(),
@@ -267,6 +206,11 @@ export function getEditsProposalsFromIpfsUri(proposalsProcessed: ChainEditPublis
     );
 
     const proposalsFromIpfs = maybeProposalsFromIpfs.flatMap(e => (e ? [e] : [])).flat();
-    return proposalsFromIpfs;
+
+    // We post-process the proposal to map from the intermediate Zod representation of ops
+    // to the fully-qualified representation of ops. The fully qualified representation may
+    // require data fetching in the case of file imports. File imports might generate many
+    // more ops as well.
+    return yield* _(Effect.forEach(proposalsFromIpfs, p => postProcessProposalOps(p, p.space)));
   });
 }
