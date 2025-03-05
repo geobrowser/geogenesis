@@ -48,7 +48,7 @@ export function useCollection() {
   const { data, isLoading, isFetched } = useQuery({
     placeholderData: keepPreviousData,
     enabled: collectionItemsRelations.length > 0,
-    queryKey: ['blocks', 'data', 'collection-items', collectionItemIds],
+    queryKey: ['blocks', 'data', 'collection-items-and-relations', collectionItemIds, collectionRelationIds],
     queryFn: async () => {
       const [collectionItems, collectionRelations] = await Promise.all([
         mergeEntitiesAsync({
