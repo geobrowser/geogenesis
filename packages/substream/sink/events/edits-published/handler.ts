@@ -215,7 +215,10 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
                 entity_id: v.entity_id,
                 version_id: v.id,
               };
-            })
+            }),
+            {
+              chunked: true,
+            }
           ),
         catch: error => {
           console.error(`Failed to insert current versions. ${(error as Error).message}`);
