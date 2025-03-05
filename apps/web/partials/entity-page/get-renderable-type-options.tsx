@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -15,17 +15,17 @@ import { Url } from '~/design-system/icons/url';
 
 export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
   switch (valueType) {
-    case SYSTEM_IDS.TEXT:
+    case SystemIds.TEXT:
       return 'TEXT';
-    case SYSTEM_IDS.CHECKBOX:
+    case SystemIds.CHECKBOX:
       return 'CHECKBOX';
-    case SYSTEM_IDS.TIME:
+    case SystemIds.TIME:
       return 'TIME';
-    case SYSTEM_IDS.URL:
+    case SystemIds.URL:
       return 'URL';
-    case SYSTEM_IDS.RELATION:
+    case SystemIds.RELATION:
       return 'RELATION';
-    case SYSTEM_IDS.IMAGE:
+    case SystemIds.IMAGE:
       return 'IMAGE';
     default:
       return 'TEXT';

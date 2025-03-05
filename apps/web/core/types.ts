@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { EntityId } from './io/schema';
 
@@ -139,13 +139,13 @@ export type FilterClause = {
 export type FilterState = FilterClause[];
 
 export type ValueTypeId =
-  | typeof SYSTEM_IDS.TEXT
-  | typeof SYSTEM_IDS.RELATION
-  | typeof SYSTEM_IDS.TIME
-  | typeof SYSTEM_IDS.URL
-  | typeof SYSTEM_IDS.CHECKBOX
-  | typeof SYSTEM_IDS.NUMBER
-  | typeof SYSTEM_IDS.IMAGE;
+  | typeof SystemIds.TEXT
+  | typeof SystemIds.RELATION
+  | typeof SystemIds.TIME
+  | typeof SystemIds.URL
+  | typeof SystemIds.CHECKBOX
+  | typeof SystemIds.NUMBER
+  | typeof SystemIds.IMAGE;
 
 export type GeoType = {
   entityId: string;

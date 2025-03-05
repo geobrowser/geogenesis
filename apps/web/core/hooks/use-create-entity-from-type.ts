@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
 import * as React from 'react';
@@ -43,7 +43,7 @@ async function addTypesToEntityId(entityId: string, spaceId: string, typeIds: st
           value: type.id,
         },
         typeOf: {
-          id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
+          id: EntityId(SystemIds.TYPES_ATTRIBUTE),
           name: 'Types',
         },
       },

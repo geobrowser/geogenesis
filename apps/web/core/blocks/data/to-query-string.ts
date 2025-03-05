@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { OmitStrict } from '~/core/types';
 
@@ -10,19 +10,19 @@ export function queryStringFromFilters(filters: OmitStrict<Filter, 'valueName'>[
   const filtersAsStrings = filters
     .map(filter => {
       // Assume we can only filter by one type at a time for now
-      if (filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE && filter.valueType === 'RELATION') {
+      if (filter.columnId === SystemIds.TYPES_ATTRIBUTE && filter.valueType === 'RELATION') {
         return `versionTypes: { some: { type: { entityId: {equalTo: "${filter.value}" } } } }`;
       }
 
       // We treat Name and Space as special filters even though they are not always
       // columns on the type schema for a table. We allow users to be able to filter
       // by name and space.
-      if (filter.columnId === SYSTEM_IDS.NAME_ATTRIBUTE && filter.valueType === 'TEXT') {
+      if (filter.columnId === SystemIds.NAME_ATTRIBUTE && filter.valueType === 'TEXT') {
         // For the name we can just search for the name based on the indexed GeoEntity name
         return `name: { startsWithInsensitive: "${filter.value}" }`;
       }
 
-      if (filter.columnId === SYSTEM_IDS.SPACE_FILTER && filter.valueType === 'RELATION') {
+      if (filter.columnId === SystemIds.SPACE_FILTER && filter.valueType === 'RELATION') {
         return `versionSpaces: {
           some: {
             spaceId: { equalTo: "${filter.value}" }

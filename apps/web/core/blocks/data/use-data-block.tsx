@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
@@ -160,7 +160,7 @@ export function useDataBlock() {
   const setName = (newName: string) => {
     upsert(
       {
-        attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        attributeId: SystemIds.NAME_ATTRIBUTE,
         entityId: entityId,
         entityName: newName,
         attributeName: 'Name',

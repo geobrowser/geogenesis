@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -21,7 +21,7 @@ export function useFilters() {
   });
 
   const filterTriple = React.useMemo(() => {
-    return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+    return blockEntity?.triples.find(t => t.attributeId === SystemIds.FILTER);
   }, [blockEntity?.triples]);
 
   const geoFilterString = React.useMemo(() => {
@@ -56,7 +56,7 @@ export function useFilters() {
     enabled: filterState !== undefined,
     queryKey: ['blocks', 'data', 'filterable-properties', filterState],
     queryFn: async () => {
-      const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
+      const typesInFilter = filterState?.filter(f => f.columnId === SystemIds.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
       return await mergeColumns(typesInFilter);
     },
   });
@@ -72,7 +72,7 @@ export function useFilters() {
 
       return upsert(
         {
-          attributeId: SYSTEM_IDS.FILTER,
+          attributeId: SystemIds.FILTER,
           attributeName: 'Filter',
           entityId,
           entityName,

@@ -163,7 +163,7 @@ export function writeEdits(args: PopulateContentArgs) {
       Effect.all(
         [
           Effect.tryPromise({
-            try: () => Versions.upsertMetadata(versionsWithMetadata),
+            try: () => Versions.upsertMetadata(versionsWithMetadata, { chunked: true }),
             catch: error =>
               new CouldNotWriteVersionsError({
                 message: `Failed to insert versions with metadata. ${(error as Error).message}`,
@@ -172,12 +172,12 @@ export function writeEdits(args: PopulateContentArgs) {
           Effect.tryPromise({
             // We update the name and description for an entity when mapping
             // through triples.
-            try: () => Entities.upsert(uniqueEntities),
+            try: () => Entities.upsert(uniqueEntities, { chunked: true }),
             catch: error =>
               new CouldNotWriteEntitiesError({ message: `Failed to insert entities. ${(error as Error).message}` }),
           }),
           Effect.tryPromise({
-            try: () => VersionSpaces.upsert(versionSpacesUnique),
+            try: () => VersionSpaces.upsert(versionSpacesUnique, { chunked: true }),
             catch: error =>
               new CouldNotWriteVersionSpacesError({
                 message: `Failed to insert version spaces. ${(error as Error).message}`,
@@ -203,7 +203,7 @@ export function writeEdits(args: PopulateContentArgs) {
 
     yield* _(
       Effect.tryPromise({
-        try: () => Types.upsert(versionTypes),
+        try: () => Types.upsert(versionTypes, { chunked: true }),
         catch: error =>
           new CouldNotWriteVersionTypesError({
             message: `Failed to insert version types. ${(error as Error).message}`,

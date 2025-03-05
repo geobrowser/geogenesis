@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { TypeId } from '~/core/io/schema';
 
@@ -16,7 +16,7 @@ export default async function EntityTemplateStrategy(props: Props) {
   const searchParams = await props.searchParams;
   const types = await cachedFetchEntityType(params.entityId);
 
-  if (types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
+  if (types.includes(TypeId(SystemIds.PERSON_TYPE))) {
     return <ProfileEntityServerContainer params={params} />;
   }
 

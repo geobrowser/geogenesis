@@ -1,4 +1,4 @@
-import { CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SYSTEM_IDS, SetTripleOp } from '@graphprotocol/grc-20';
+import { CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SetTripleOp, SystemIds } from '@graphprotocol/grc-20';
 
 import { Triple as T } from '~/core/database/Triple';
 import { StoredRelation, StoredTriple } from '~/core/database/types';
@@ -114,11 +114,11 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
 }
 
 const RELATION_ATTRIBUTES = [
-  SYSTEM_IDS.TYPES_ATTRIBUTE,
-  SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
-  SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
-  SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
-  SYSTEM_IDS.RELATION_INDEX,
+  EntityId(SystemIds.TYPES_ATTRIBUTE),
+  EntityId(SystemIds.RELATION_FROM_ATTRIBUTE),
+  EntityId(SystemIds.RELATION_TO_ATTRIBUTE),
+  EntityId(SystemIds.RELATION_TYPE_ATTRIBUTE),
+  EntityId(SystemIds.RELATION_INDEX),
 ];
 
 function getTriplesForRelations(triples: Triple[], relations: Relation[]): Triple[] {
@@ -128,7 +128,7 @@ function getTriplesForRelations(triples: Triple[], relations: Relation[]): Tripl
     .filter(t => {
       const isForRelationEntity = relationIds.includes(EntityId(t.entityId));
 
-      if (isForRelationEntity && RELATION_ATTRIBUTES.includes(t.attributeId)) {
+      if (isForRelationEntity && RELATION_ATTRIBUTES.includes(EntityId(t.attributeId))) {
         return true;
       }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { CONTENT_IDS, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import {
   ColumnDef,
@@ -69,7 +69,7 @@ const formatColumns = (
     columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
-        const isNameColumn = column.id === SYSTEM_IDS.NAME_ATTRIBUTE;
+        const isNameColumn = column.id === EntityId(SystemIds.NAME_ATTRIBUTE);
 
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
@@ -116,8 +116,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const filterableRelationType = maybePropertiesSchema?.relationValueTypeId;
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
-    const isNameCell = propertyId === SYSTEM_IDS.NAME_ATTRIBUTE;
-    const spaceId = isNameCell ? (row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space) : space;
+    const isNameCell = propertyId === SystemIds.NAME_ATTRIBUTE;
+    const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_ATTRIBUTE]?.space ?? space) : space;
 
     const renderables = cellData.renderables;
 
@@ -189,7 +189,7 @@ export const TableBlockTable = React.memo(
       entity: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }
     ) => {
       for (const filter of filterState) {
-        if (filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE) {
+        if (filter.columnId === SystemIds.TYPES_ATTRIBUTE) {
           DB.upsertRelation({
             spaceId: space,
             relation: {
@@ -330,16 +330,16 @@ export const TableBlockTable = React.memo(
                           const cellId = `${row.original.entityId}-${cell.column.id}`;
                           const firstTriple = cell.getValue<Cell>()?.renderables.find(r => r.type === 'TEXT');
 
-                          const isNameCell = Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
+                          const isNameCell = Boolean(firstTriple?.attributeId === SystemIds.NAME_ATTRIBUTE);
                           const isExpandable = firstTriple && firstTriple.type === 'TEXT';
                           const isShown = shownColumnIds.includes(cell.column.id);
 
                           const spaceId = isNameCell
-                            ? (row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space)
+                            ? (row.original.columns[SystemIds.NAME_ATTRIBUTE]?.space ?? space)
                             : space;
 
                           const href = NavUtils.toEntity(spaceId, entityId);
-                          const { verified } = row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
+                          const { verified } = row.original.columns[SystemIds.NAME_ATTRIBUTE];
 
                           return (
                             <TableCell
@@ -379,17 +379,17 @@ export const TableBlockTable = React.memo(
         return (
           <div className="flex flex-col gap-4">
             {rows.map((row, index: number) => {
-              const nameCell = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-              const maybeAvatarData: Cell | undefined = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
-              const maybeCoverData: Cell | undefined = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
-              const maybeDescriptionData: Cell | undefined = row.columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
+              const nameCell = row.columns[SystemIds.NAME_ATTRIBUTE];
+              const maybeAvatarData: Cell | undefined = row.columns[ContentIds.AVATAR_ATTRIBUTE];
+              const maybeCoverData: Cell | undefined = row.columns[SystemIds.COVER_ATTRIBUTE];
+              const maybeDescriptionData: Cell | undefined = row.columns[SystemIds.DESCRIPTION_ATTRIBUTE];
 
               // @TODO: An "everything" else ID that can be used to render any renderable.
               const { cellId, name, verified } = nameCell;
               let { description, image } = nameCell;
 
               const maybeDescription = maybeDescriptionData?.renderables.find(
-                r => r.attributeId === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+                r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE
               )?.value;
 
               if (maybeDescription) {
@@ -397,11 +397,11 @@ export const TableBlockTable = React.memo(
               }
 
               const maybeAvatarUrl = maybeAvatarData?.renderables.find(
-                r => r.attributeId === CONTENT_IDS.AVATAR_ATTRIBUTE
+                r => r.attributeId === ContentIds.AVATAR_ATTRIBUTE
               )?.value;
 
               const maybeCoverUrl = maybeCoverData?.renderables.find(
-                r => r.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE
+                r => r.attributeId === SystemIds.COVER_ATTRIBUTE
               )?.value;
 
               if (maybeCoverUrl) {
@@ -416,10 +416,10 @@ export const TableBlockTable = React.memo(
 
               const otherPropertyData = Object.values(row.columns).filter(
                 c =>
-                  c.slotId !== SYSTEM_IDS.NAME_ATTRIBUTE &&
-                  c.slotId !== CONTENT_IDS.AVATAR_ATTRIBUTE &&
-                  c.slotId !== SYSTEM_IDS.COVER_ATTRIBUTE &&
-                  c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+                  c.slotId !== SystemIds.NAME_ATTRIBUTE &&
+                  c.slotId !== ContentIds.AVATAR_ATTRIBUTE &&
+                  c.slotId !== SystemIds.COVER_ATTRIBUTE &&
+                  c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
               );
 
               return (
@@ -472,20 +472,20 @@ export const TableBlockTable = React.memo(
         return (
           <div className="grid grid-cols-3 gap-x-4 gap-y-10">
             {rows.map((row, index: number) => {
-              const nameCell: Cell | undefined = row.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-              const maybeAvatarData: Cell | undefined = row.columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
-              const maybeCoverData: Cell | undefined = row.columns[SYSTEM_IDS.COVER_ATTRIBUTE];
+              const nameCell: Cell | undefined = row.columns[SystemIds.NAME_ATTRIBUTE];
+              const maybeAvatarData: Cell | undefined = row.columns[ContentIds.AVATAR_ATTRIBUTE];
+              const maybeCoverData: Cell | undefined = row.columns[SystemIds.COVER_ATTRIBUTE];
 
               // @TODO: An "everything" else ID that can be used to render any renderable.
               const { cellId, name, verified } = nameCell;
               let { image } = nameCell;
 
               const maybeAvatarUrl = maybeAvatarData?.renderables.find(
-                r => r.attributeId === CONTENT_IDS.AVATAR_ATTRIBUTE
+                r => r.attributeId === ContentIds.AVATAR_ATTRIBUTE
               )?.value;
 
               const maybeCoverUrl = maybeCoverData?.renderables.find(
-                r => r.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE
+                r => r.attributeId === SystemIds.COVER_ATTRIBUTE
               )?.value;
 
               if (maybeAvatarUrl) {
@@ -500,10 +500,10 @@ export const TableBlockTable = React.memo(
 
               const otherPropertyData = Object.values(row.columns).filter(
                 c =>
-                  c.slotId !== SYSTEM_IDS.NAME_ATTRIBUTE &&
-                  c.slotId !== CONTENT_IDS.AVATAR_ATTRIBUTE &&
-                  c.slotId !== SYSTEM_IDS.COVER_ATTRIBUTE &&
-                  c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+                  c.slotId !== SystemIds.NAME_ATTRIBUTE &&
+                  c.slotId !== ContentIds.AVATAR_ATTRIBUTE &&
+                  c.slotId !== SystemIds.COVER_ATTRIBUTE &&
+                  c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
               );
 
               return (

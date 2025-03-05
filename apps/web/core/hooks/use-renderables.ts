@@ -1,4 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { useQuery } from '@tanstack/react-query';
 import { pipe } from 'effect';
 
@@ -81,11 +81,11 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
 
       const typePropertySchema = typePropertyValueEntities.flatMap(entity =>
         entity.relationsOut
-          .filter(relation => relation.typeOf.id === SYSTEM_IDS.PROPERTIES)
+          .filter(relation => relation.typeOf.id === EntityId(SystemIds.PROPERTIES))
           .map(relation => ({
             id: relation.toEntity.id,
             name: relation.toEntity.name,
-            valueType: SYSTEM_IDS.RELATION as ValueTypeId,
+            valueType: SystemIds.RELATION as ValueTypeId,
           }))
       );
 
@@ -95,7 +95,9 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
 
   const fullSchema: PropertySchema[] = [...schema, ...(typePropertySchema ?? [])];
 
-  const SKIPPED_PROPERTIES = !isRelationPage ? [SYSTEM_IDS.BLOCKS] : [SYSTEM_IDS.BLOCKS, SYSTEM_IDS.TYPES_ATTRIBUTE];
+  const SKIPPED_PROPERTIES = !isRelationPage
+    ? [EntityId(SystemIds.BLOCKS)]
+    : [EntityId(SystemIds.BLOCKS), EntityId(SystemIds.TYPES_ATTRIBUTE)];
 
   const renderables = toRenderables({
     entityId: id,
@@ -106,7 +108,7 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
     // We don't show placeholder renderables in browse mode
     schema: isEditing ? fullSchema : undefined,
     placeholderRenderables: isEditing ? placeholderRenderables : undefined,
-  }).filter(r => !SKIPPED_PROPERTIES.includes(r.attributeId));
+  }).filter(r => !SKIPPED_PROPERTIES.includes(EntityId(r.attributeId)));
 
   const renderablesGroupedByAttributeId = pipe(
     renderables,

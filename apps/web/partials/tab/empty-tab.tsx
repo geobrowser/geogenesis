@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
 import { useState } from 'react';
@@ -30,7 +30,7 @@ export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProp
       DB.upsert(
         {
           entityId: newEntityId,
-          attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+          attributeId: SystemIds.NAME_ATTRIBUTE,
           entityName: null,
           attributeName: 'Name',
           value: {
@@ -45,7 +45,7 @@ export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProp
         space: spaceId,
         index: INITIAL_RELATION_INDEX_VALUE,
         typeOf: {
-          id: EntityId(SYSTEM_IDS.TYPES_ATTRIBUTE),
+          id: EntityId(SystemIds.TYPES_ATTRIBUTE),
           name: 'Types',
         },
         fromEntity: {
@@ -53,10 +53,10 @@ export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProp
           name: null,
         },
         toEntity: {
-          id: EntityId(SYSTEM_IDS.PAGE_TYPE),
+          id: EntityId(SystemIds.PAGE_TYPE),
           name: 'Page',
           renderableType: 'RELATION',
-          value: EntityId(SYSTEM_IDS.PAGE_TYPE),
+          value: EntityId(SystemIds.PAGE_TYPE),
         },
       };
 
@@ -69,7 +69,7 @@ export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProp
         space: spaceId,
         index: INITIAL_RELATION_INDEX_VALUE,
         typeOf: {
-          id: EntityId(SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE),
+          id: EntityId(SystemIds.PAGE_TYPE_ATTRIBUTE),
           name: 'Page Type',
         },
         fromEntity: {
