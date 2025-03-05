@@ -1,3 +1,4 @@
+import type { CsvMetadata } from '@graphprotocol/grc-20';
 import * as Csv from '@std/csv';
 import { Effect } from 'effect';
 import { Duration, Either, Schedule } from 'effect';
@@ -41,7 +42,7 @@ export function postProcessProposalOps(proposal: IntermediateSinkEditProposal, s
               relation: op.relation,
             } as const;
           case 'IMPORT_FILE': {
-            const csv = yield* _(csvToOps(op.url));
+            const csv = yield* _(csvToOps(op.url, op.metadata));
             throw new Error('Not implemented');
           }
         }
@@ -59,7 +60,7 @@ export function postProcessProposalOps(proposal: IntermediateSinkEditProposal, s
   });
 }
 
-function csvToOps(url: string) {
+function csvToOps(url: string, metadata: CsvMetadata) {
   return Effect.gen(function* (_) {
     const result = yield* _(getFetchIpfsCsvEffect(url));
 
@@ -70,7 +71,7 @@ function csvToOps(url: string) {
     const data = decompressSync(result);
     const parsed = Csv.parse(new TextDecoder().decode(data));
 
-    console.log('result', parsed);
+    console.log('result', parsed, metadata);
   });
 }
 
