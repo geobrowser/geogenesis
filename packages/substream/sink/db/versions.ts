@@ -38,7 +38,20 @@ export class Versions {
     return await db.insert('versions', versions).run(pool);
   }
 
-  static async upsertMetadata(versions: S.versions.Insertable[]) {
+  static async upsertMetadata(versions: S.versions.Insertable[], { chunked }: { chunked?: boolean } = {}) {
+    if (chunked) {
+      for (let i = 0; i < versions.length; i += CHUNK_SIZE) {
+        const chunk = versions.slice(i, i + CHUNK_SIZE);
+        await db
+          .upsert('versions', chunk, ['id'], {
+            updateColumns: ['name', 'description'],
+          })
+          .run(pool);
+      }
+
+      return;
+    }
+
     return await db.upsert('versions', versions, ['id'], { updateColumns: ['name', 'description'] }).run(pool);
   }
 

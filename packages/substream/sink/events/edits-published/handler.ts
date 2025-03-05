@@ -215,7 +215,10 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
                 entity_id: v.entity_id,
                 version_id: v.id,
               };
-            })
+            }),
+            {
+              chunked: true,
+            }
           ),
         catch: error => {
           console.error(`Failed to insert current versions. ${(error as Error).message}`);
@@ -240,7 +243,11 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
 
     yield* _(
       Effect.tryPromise({
-        try: () => SpaceMetadata.upsert(dedupeWith(spaceMetadatum, (a, z) => a.space_id === z.space_id)),
+        try: () =>
+          SpaceMetadata.upsert(
+            dedupeWith(spaceMetadatum, (a, z) => a.space_id === z.space_id),
+            { chunked: true }
+          ),
         catch: error =>
           new CouldNotWriteSpaceMetadataError({
             message: `Failed to insert space metadata. ${(error as Error).message}`,

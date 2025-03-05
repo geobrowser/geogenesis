@@ -67,7 +67,7 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
             // Content proposals
             Edits.upsert(schemaEditProposals.edits),
             Proposals.upsert(schemaEditProposals.proposals),
-            Versions.upsert(allNewVersionsInEdit),
+            Versions.upsert(allNewVersionsInEdit, { chunked: true }),
           ]);
         },
         catch: error => {
