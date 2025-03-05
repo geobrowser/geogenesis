@@ -59,9 +59,6 @@ function decodeEdit(data: Buffer): Effect.Effect<DecodedEdit | null> {
       const edit = Edit.fromBinary(data);
       const parseResult = ZodEdit.safeParse(edit);
 
-      // @TODO: Postprocess ops in separate function. This will map
-      //        to substream ops
-
       if (parseResult.success) {
         return parseResult.data;
       }

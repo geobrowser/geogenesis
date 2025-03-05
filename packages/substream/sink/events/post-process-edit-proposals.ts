@@ -1,4 +1,4 @@
-import type { IntermediateSinkEditProposal, Op, SetTripleOp } from '../types';
+import type { IntermediateSinkEditProposal, Op } from '../types';
 
 export function postProcessProposalOps(proposal: IntermediateSinkEditProposal, spaceId: string) {
   return {
@@ -10,7 +10,7 @@ export function postProcessProposalOps(proposal: IntermediateSinkEditProposal, s
             type: 'SET_TRIPLE',
             space: spaceId,
             triple: op.triple,
-          } as SetTripleOp;
+          };
         case 'DELETE_TRIPLE':
           return {
             type: 'DELETE_TRIPLE',
