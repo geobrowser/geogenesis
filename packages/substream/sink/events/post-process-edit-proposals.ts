@@ -1,4 +1,4 @@
-import type { CsvMetadata } from '@graphprotocol/grc-20';
+import { type CsvMetadata, Id } from '@graphprotocol/grc-20';
 import * as Csv from '@std/csv';
 import { Effect } from 'effect';
 import { Duration, Either, Schedule } from 'effect';
@@ -6,7 +6,7 @@ import type { TimeoutException } from 'effect/Cause';
 import { decompressSync } from 'fflate';
 
 import { IPFS_GATEWAY } from '../constants/constants';
-import type { IntermediateSinkEditProposal, SinkEditProposal } from '../types';
+import type { IntermediateSinkEditProposal, Op, SinkEditProposal } from '../types';
 
 export function postProcessProposalOps(proposal: IntermediateSinkEditProposal, spaceId: string) {
   return Effect.gen(function* (_) {
@@ -42,8 +42,8 @@ export function postProcessProposalOps(proposal: IntermediateSinkEditProposal, s
               relation: op.relation,
             } as const;
           case 'IMPORT_FILE': {
-            const csv = yield* _(csvToOps(op.url, op.metadata));
-            throw new Error('Not implemented');
+            const ops = yield* _(csvToOps(op.url, op.metadata, spaceId));
+            return ops ?? [];
           }
         }
       });
@@ -53,14 +53,18 @@ export function postProcessProposalOps(proposal: IntermediateSinkEditProposal, s
 
     const sinkProposal: SinkEditProposal = {
       ...proposal,
-      ops,
+      ops: ops.flat(), // How slow is this for large datasets?
     };
 
     return sinkProposal;
   });
 }
 
-function csvToOps(url: string, metadata: CsvMetadata) {
+class InvalidCsvError extends Error {
+  _tag = 'InvalidCsvError';
+}
+
+function csvToOps(url: string, metadata: CsvMetadata, spaceId: string) {
   return Effect.gen(function* (_) {
     const result = yield* _(getFetchIpfsCsvEffect(url));
 
@@ -68,10 +72,121 @@ function csvToOps(url: string, metadata: CsvMetadata) {
       return null;
     }
 
-    const data = decompressSync(result);
-    const parsed = Csv.parse(new TextDecoder().decode(data));
+    const csv = Csv.parse(new TextDecoder().decode(decompressSync(result)));
 
-    console.log('result', parsed, metadata);
+    // @TODO: Validate
+    //        2. isId column exists
+    //        4. File size?
+
+    // @TODO: Can put CSV + metadata to Op mapping in a separate function to test it
+
+    const ops: Op[] = [];
+
+    let longestRow = 0;
+
+    for (const row of csv) {
+      const rowLength = row.length;
+
+      if (rowLength > longestRow) {
+        longestRow = rowLength;
+      }
+    }
+
+    if (longestRow !== metadata.columns.length) {
+      yield* _(Effect.fail(new InvalidCsvError('CSV row length does not match metadata')));
+    }
+
+    for (const row of csv) {
+      // @TODO: Do we enforce that the first column is always the id?
+      const rowId = row[0];
+
+      if (!rowId) {
+        continue;
+      }
+
+      const isValidId = Id.isValid(rowId);
+
+      if (!isValidId) {
+        continue;
+      }
+
+      for (const [index, cell] of row.entries()) {
+        const cellMetadata = metadata.columns[index];
+
+        // This shouldn't happen since we validate previously
+        if (!cellMetadata) {
+          continue;
+        }
+
+        switch (cellMetadata.type) {
+          case 'RELATION': {
+            const relationType = cellMetadata.id;
+
+            if (!Id.isValid(relationType)) {
+              continue;
+            }
+
+            // Multiple relations in the same cell are split by a pipe
+            const relations = cell.split('|');
+
+            for (const relation of relations) {
+              const [relationId, toId] = relation.split('/');
+
+              if (!relationId || !toId) {
+                continue;
+              }
+
+              const isValidRelationId = Id.isValid(relationId);
+              const isValidToId = Id.isValid(toId);
+
+              if (!isValidRelationId || !isValidToId) {
+                continue;
+              }
+
+              ops.push({
+                type: 'CREATE_RELATION',
+                space: spaceId,
+                relation: {
+                  id: relationId,
+                  index: cell,
+                  fromEntity: rowId,
+                  toEntity: toId,
+                  type: relationType,
+                },
+              });
+            }
+
+            break;
+          }
+          // We validate the column types in the metadata during decoding
+          // so we know we only get valid value types here.
+          default: {
+            const attributeId = cellMetadata.id;
+
+            if (!Id.isValid(attributeId) || cell === '') {
+              continue;
+            }
+
+            ops.push({
+              type: 'SET_TRIPLE',
+              space: spaceId,
+              triple: {
+                attribute: cellMetadata.id,
+                entity: rowId,
+                value: {
+                  type: cellMetadata.type,
+                  value: cell,
+                  options: cellMetadata.options,
+                },
+              },
+            });
+            break;
+          }
+        }
+      }
+    }
+
+    return ops;
   });
 }
 
