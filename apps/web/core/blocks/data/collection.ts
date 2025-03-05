@@ -60,7 +60,7 @@ export function upsertSourceSpaceOnCollectionItem({
   DB.upsert(
     {
       attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
-      attributeName: 'To entity',
+      attributeName: 'To Entity',
       entityId: collectionItemId,
       entityName: null,
       value: {
