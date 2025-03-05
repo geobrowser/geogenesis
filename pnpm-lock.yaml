@@ -568,8 +568,8 @@ importers:
         specifier: ^0.63.0
         version: 0.63.4(effect@2.4.19)(fast-check@3.13.2)
       '@graphprotocol/grc-20':
-        specifier: ^0.9.3
-        version: 0.9.3(bufferutil@4.0.9)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
+        specifier: ^0.9.4
+        version: 0.9.4(bufferutil@4.0.9)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
       '@sentry/node':
         specifier: ^7.112.2
         version: 7.120.3
@@ -1660,6 +1660,9 @@ packages:
 
   '@graphprotocol/grc-20@0.9.3':
     resolution: {integrity: sha512-B9c/S/ZYaCzlDOLfim/WTgvwFwM2LWi98Hq+/btr/oqxsV7c/9OSEepwPrD0oRV40gRIEkZj11ViPxTcTcN4hw==}
+
+  '@graphprotocol/grc-20@0.9.4':
+    resolution: {integrity: sha512-Dod9W8nvAgc0LpM4AwtNSghsj/eJ1pvzLF0ItYlcJz7e+kCS/9NQ0ysdupqZ/ITwfOF9sS5igLsGIvvNQ5MmXQ==}
 
   '@headlessui/react@2.2.0':
     resolution: {integrity: sha512-RzCEg+LXsuI7mHiSomsu/gBJSjpupm6A1qIZ5sWjd7JhARNlMiSA4kKfJpCKwU9tE+zMRterhhrP74PvfJrpXQ==}
@@ -9249,6 +9252,25 @@ snapshots:
       tslib: 2.8.1
 
   '@graphprotocol/grc-20@0.9.3(bufferutil@4.0.9)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
+    dependencies:
+      '@bufbuild/protobuf': 1.10.0
+      '@changesets/cli': 2.27.12
+      effect: 3.13.6
+      ethers: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      fflate: 0.8.2
+      image-size: 2.0.0
+      permissionless: 0.2.35(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(viem@2.23.6(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1))
+      position-strings: 2.0.1
+      uuid: 11.1.0
+      viem: 2.23.6(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
+    transitivePeerDependencies:
+      - bufferutil
+      - ox
+      - typescript
+      - utf-8-validate
+      - zod
+
+  '@graphprotocol/grc-20@0.9.4(bufferutil@4.0.9)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
     dependencies:
       '@bufbuild/protobuf': 1.10.0
       '@changesets/cli': 2.27.12

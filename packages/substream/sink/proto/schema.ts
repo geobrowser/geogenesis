@@ -114,8 +114,6 @@ const ZodCsvMetadata = z.object({
             return 'TEXT';
         }
       }),
-      relationType: z.optional(z.string()),
-      isId: z.optional(z.boolean()),
       options: ZodValueOptions,
     })
   ),

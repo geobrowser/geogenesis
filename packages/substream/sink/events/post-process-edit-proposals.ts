@@ -1,4 +1,4 @@
-import { type CsvMetadata, Id } from '@graphprotocol/grc-20';
+import { type CsvMetadata, Id, SystemIds } from '@graphprotocol/grc-20';
 import * as Csv from '@std/csv';
 import { Effect } from 'effect';
 import { Duration, Either, Schedule } from 'effect';
@@ -72,11 +72,9 @@ function csvToOps(url: string, metadata: CsvMetadata, spaceId: string) {
       return null;
     }
 
-    const csv = Csv.parse(new TextDecoder().decode(decompressSync(result)));
-
     // @TODO: Validate
-    //        2. isId column exists
     //        4. File size?
+    const csv = Csv.parse(new TextDecoder().decode(decompressSync(result)));
 
     // @TODO: Can put CSV + metadata to Op mapping in a separate function to test it
 
@@ -97,10 +95,15 @@ function csvToOps(url: string, metadata: CsvMetadata, spaceId: string) {
     }
 
     for (const row of csv) {
-      // @TODO: Do we enforce that the first column is always the id?
       const rowId = row[0];
 
       if (!rowId) {
+        continue;
+      }
+
+      // We skip the entity id row since it's not actually written to the db
+      // and only used as metadata for the row.
+      if (rowId === '' || rowId === SystemIds.ENTITY_ID_PROPERTY) {
         continue;
       }
 
