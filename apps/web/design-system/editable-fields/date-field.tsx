@@ -14,7 +14,7 @@ import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 
 interface DateFieldProps {
-  onBlur?: (date: string) => void;
+  onBlur?: ({ value, format }: { value: string; format?: string }) => void;
   variant?: 'body' | 'tableCell';
   value: string;
   format?: string;
@@ -312,7 +312,7 @@ export function DateField(props: DateFieldProps) {
       });
 
       // Only create the triple if the form is valid
-      props.onBlur?.(isoString);
+      props.onBlur?.({ value: isoString, format: props.format });
     }
   };
 
