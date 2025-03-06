@@ -65,7 +65,7 @@ export function formatShortAddress(address: string): string {
 }
 
 export class GeoDate {
-  static defaultFormat = 'h:mm a, EEEE, MMMM d, yyyy';
+  static defaultFormat = 'h:mmaaa, EEEE, MMMM d, yyyy';
 
   /**
    * We return blocktime from the subgraph for createdAt and updatedAt fields.
@@ -168,7 +168,7 @@ export class GeoDate {
     return [4, 6, 9, 11].includes(month);
   }
 
-  private static validateDateFormat = (format?: string) => {
+  private static validateFormat = (format?: string) => {
     if (!format || typeof format !== 'string') {
       return this.defaultFormat;
     }
@@ -183,9 +183,9 @@ export class GeoDate {
     }
   };
 
-  static formatDate = (dateIsoString: string, displayFormat?: string) => {
+  static format = (dateIsoString: string, displayFormat?: string) => {
     try {
-      const validatedFormat = this.validateDateFormat(displayFormat);
+      const validatedFormat = this.validateFormat(displayFormat);
       const date = parseISO(dateIsoString);
       return formatInTimeZone(date, 'UTC', validatedFormat);
     } catch (e) {
