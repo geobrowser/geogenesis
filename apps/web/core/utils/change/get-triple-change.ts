@@ -1,3 +1,5 @@
+import equal from 'fast-deep-equal';
+
 import { Triple } from '~/core/types';
 
 import { TripleChangeValue } from './types';
@@ -59,9 +61,10 @@ export const BeforeTripleDiff = {
     }
 
     // Values exist and aren't equal
-    if (beforeValue.value !== afterValue.value) {
+    if (beforeValue.value !== afterValue.value || !equal(beforeValue.options, afterValue.options)) {
       return {
         value: beforeValue.value,
+        options: beforeValue.options,
         valueName: null,
         type: 'UPDATE',
       };
@@ -71,6 +74,7 @@ export const BeforeTripleDiff = {
     return {
       value: afterValue.value,
       valueName: null,
+      options: afterValue.options,
       type: 'UPDATE',
     };
   },
@@ -78,10 +82,11 @@ export const BeforeTripleDiff = {
     if (afterValue === null) {
       return null;
     }
-
-    if (beforeValue.value !== afterValue.value) {
+    // @TODO: verify these changes. Why was it previously beforeValue?
+    if (beforeValue.value !== afterValue.value || !equal(beforeValue.options, afterValue.options)) {
       return {
-        value: beforeValue.value,
+        value: afterValue.value,
+        options: afterValue.options,
         valueName: null,
         type: 'UPDATE',
       };
@@ -89,6 +94,7 @@ export const BeforeTripleDiff = {
 
     return {
       value: beforeValue.value,
+      options: beforeValue.options,
       valueName: null,
       type: 'UPDATE',
     };
