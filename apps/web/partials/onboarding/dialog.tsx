@@ -384,7 +384,6 @@ const retryMessage: Record<Step, string> = {
 };
 
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
-  const { hideOnboarding } = useOnboarding();
   const router = useRouter();
 
   const spaceId = useAtomValue(spaceIdAtom);
@@ -394,7 +393,6 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
 
   if (hasCompleted) {
     setTimeout(() => {
-      hideOnboarding();
       const destination = NavUtils.toSpace(spaceId);
       router.push(destination);
     }, 3_600);
