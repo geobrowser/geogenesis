@@ -1,4 +1,12 @@
-import { CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SetTripleOp, SystemIds } from '@graphprotocol/grc-20';
+import {
+  CreateRelationOp,
+  DeleteRelationOp,
+  DeleteTripleOp,
+  GraphUri,
+  GraphUrl,
+  SetTripleOp,
+  SystemIds,
+} from '@graphprotocol/grc-20';
 
 import { Triple as T } from '~/core/database/Triple';
 import { StoredRelation, StoredTriple } from '~/core/database/types';
@@ -129,6 +137,16 @@ function getTriplesForRelations(triples: Triple[], relations: Relation[]): Tripl
       const isForRelationEntity = relationIds.includes(EntityId(t.entityId));
 
       if (isForRelationEntity && RELATION_ATTRIBUTES.includes(EntityId(t.attributeId))) {
+        // For triples defining the RELATION_TO_PROPERTY we don't want to filter it out
+        // if it contains an optional space id.
+        if (t.attributeId === SystemIds.RELATION_TO_PROPERTY) {
+          const maybeSpaceId = GraphUrl.toSpaceId(t.value.value as GraphUri);
+
+          if (maybeSpaceId) {
+            return false;
+          }
+        }
+
         return true;
       }
 

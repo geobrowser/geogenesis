@@ -581,7 +581,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     }
 
     if (executedProposals.success) {
-      yield* _(handleProposalsExecuted(executedProposals.data.executedProposals));
+      yield* _(handleProposalsExecuted(executedProposals.data.executedProposals, block));
     }
 
     return hasValidEvent;
