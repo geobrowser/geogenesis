@@ -186,7 +186,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             const error = result.left;
 
             if (error._tag === 'TimeoutException') {
-              yield* _(Effect.logError('[BLOCK] Timed out after 3 seconds'));
+              yield* _(Effect.logError('[BLOCK] Timed out after 5 minutes'));
               return;
             }
 
