@@ -40,22 +40,6 @@ const dateFieldStyles = cva(
   }
 );
 
-const labelStyles = cva('text-footnote transition-colors duration-75 ease-in-out', {
-  variants: {
-    active: {
-      true: 'text-text',
-      false: 'text-grey-02',
-    },
-    error: {
-      true: 'text-red-01',
-    },
-  },
-  defaultVariants: {
-    active: false,
-    error: false,
-  },
-});
-
 const timeStyles = cva('m-0 w-[21px] bg-transparent p-0 tabular-nums placeholder:text-grey-02 focus:outline-none', {
   variants: {
     variant: {
