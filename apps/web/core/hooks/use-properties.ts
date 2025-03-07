@@ -35,21 +35,17 @@ export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
         };
       });
 
-      const relationValueTypes = properties.flatMap(a => {
-        const relationValueTypes = a.relationsOut
-          .filter(r => r.typeOf.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE))
-          .map(r => ({ typeId: r.toEntity.id, typeName: r.toEntity.name }));
-
-        return relationValueTypes;
-      });
-
       const schema = properties.map((s): PropertySchema => {
+        const relationValueTypes = s.relationsOut
+          .filter(s => s.typeOf.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE))
+          .map(s => ({ typeId: s.toEntity.id, typeName: s.toEntity.name }));
+
         return {
           id: s.id,
           name: s.name,
           valueType: (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SystemIds.TEXT) as ValueTypeId,
-          homeSpace: s.spaces[0],
           relationValueTypes,
+          homeSpace: s.spaces[0],
         };
       });
 
