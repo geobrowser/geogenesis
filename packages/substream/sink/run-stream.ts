@@ -168,7 +168,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             handleMessage(message, registry).pipe(
               withRequestId(requestId),
               Logger.withMinimumLogLevel(logLevel),
-              Effect.provide(LoggerLive)
+              Effect.provide(LoggerLive),
+              Effect.timeout(Duration.minutes(5))
             ),
             Effect.either
           );
@@ -182,6 +183,12 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (Either.isLeft(result)) {
             const error = result.left;
+
+            if (error._tag === 'TimeoutException') {
+              yield* _(Effect.logError('[BLOCK] Timed out after 3 seconds'));
+              return;
+            }
+
             telemetry.captureMessage(error.message);
             yield* _(Effect.logError(error.message));
             return;
