@@ -582,64 +582,64 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
   const renderedDateTime: DateTimeType = (mode === 'before' ? beforeDateTime : afterDateTime) as DateTimeType;
   const highlightClassName = mode === 'before' ? 'rounded bg-errorTertiary' : 'bg-successTertiary rounded';
 
-  if (!equal(before.options, after.options)) {
-    return (
-      <p className="py-2 text-sm text-grey-04">
-        Browse format · <span className={highlightClassName}>{formattedDate}</span>
-      </p>
-    );
-  }
-
   return (
-    <div className="flex items-start gap-4">
-      <div className="flex w-[164px] items-center gap-3">
-        <div className="flex w-full flex-[4] flex-col items-center">
-          <p className={cx(beforeDateTime?.year !== afterDateTime?.year && highlightClassName, dateFieldClassNames)}>
-            {renderedDateTime.year}
-          </p>
+    <>
+      <div className="flex items-start gap-4">
+        <div className="flex w-[164px] items-center gap-3">
+          <div className="flex w-full flex-[4] flex-col items-center">
+            <p className={cx(beforeDateTime?.year !== afterDateTime?.year && highlightClassName, dateFieldClassNames)}>
+              {renderedDateTime.year}
+            </p>
+          </div>
+          <span className="flex flex-[1] items-center text-grey-02">/</span>
+          <div className="flex w-full flex-[2] flex-col">
+            <p
+              className={cx(beforeDateTime?.month !== afterDateTime?.month && highlightClassName, dateFieldClassNames)}
+            >
+              {renderedDateTime.month.padStart(2, '0')}
+            </p>
+          </div>
+          <span className="w-full flex-[1] text-grey-02">/</span>
+          <div className="flex flex-[2] flex-col items-center">
+            <p className={cx(beforeDateTime?.day !== afterDateTime?.day && highlightClassName, dateFieldClassNames)}>
+              {renderedDateTime.day.padStart(2, '0')}
+            </p>
+          </div>
         </div>
-        <span className="flex flex-[1] items-center text-grey-02">/</span>
-        <div className="flex w-full flex-[2] flex-col">
-          <p className={cx(beforeDateTime?.month !== afterDateTime?.month && highlightClassName, dateFieldClassNames)}>
-            {renderedDateTime.month.padStart(2, '0')}
-          </p>
-        </div>
-        <span className="w-full flex-[1] text-grey-02">/</span>
-        <div className="flex flex-[2] flex-col items-center">
-          <p className={cx(beforeDateTime?.day !== afterDateTime?.day && highlightClassName, dateFieldClassNames)}>
-            {renderedDateTime.day.padStart(2, '0')}
+        <div className="flex items-center">
+          <Minus color="grey-03" />
+          <Spacer width={18} />
+          <div className="flex items-center gap-1">
+            <p className={cx(beforeDateTime?.hour !== afterDateTime?.hour && highlightClassName, timeClassNames)}>
+              {renderedDateTime.hour.padStart(2, '0')}
+            </p>
+            <span>:</span>
+            <p className={cx(beforeDateTime?.minute !== afterDateTime?.minute && highlightClassName, timeClassNames)}>
+              {renderedDateTime.minute.padStart(2, '0')}
+            </p>
+          </div>
+          <p
+            className={cx(
+              (!before || !after || Number(beforeDateTime?.hour) < 12 !== Number(afterDateTime?.hour) < 12) &&
+                highlightClassName,
+              'uppercase',
+              timeClassNames
+            )}
+          >
+            {renderedDateTime.meridiem}
           </p>
         </div>
       </div>
-      <div className="flex items-center">
-        <Minus color="grey-03" />
-        <Spacer width={18} />
-        <div className="flex items-center gap-1">
-          <p className={cx(beforeDateTime?.hour !== afterDateTime?.hour && highlightClassName, timeClassNames)}>
-            {renderedDateTime.hour.padStart(2, '0')}
-          </p>
-          <span>:</span>
-          <p className={cx(beforeDateTime?.minute !== afterDateTime?.minute && highlightClassName, timeClassNames)}>
-            {renderedDateTime.minute.padStart(2, '0')}
-          </p>
-        </div>
-        <p
-          className={cx(
-            (!before || !after || Number(beforeDateTime?.hour) < 12 !== Number(afterDateTime?.hour) < 12) &&
-              highlightClassName,
-            'uppercase',
-            timeClassNames
-          )}
-        >
-          {renderedDateTime.meridiem}
+      {!equal(before.options, after.options) && (
+        <p className="py-2 text-sm text-grey-04">
+          Browse format · <span className={highlightClassName}>{formattedDate}</span>
         </p>
-      </div>
-    </div>
+      )}
+    </>
   );
 };
 
 const dateFieldClassNames = `w-full text-center text-body tabular-nums`;
-const labelClassNames = `text-footnote text-grey-04`;
 const timeClassNames = `w-[21px] tabular-nums p-0 m-0 text-body`;
 
 type ChipProps = {
