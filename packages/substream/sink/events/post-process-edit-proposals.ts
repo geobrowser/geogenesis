@@ -64,6 +64,7 @@ class InvalidCsvError extends Error {
   _tag = 'InvalidCsvError';
 }
 
+// We don't want to convert to ops directly and instead convert to the raw triple and relation data
 function csvToOps(url: string, metadata: CsvMetadata, spaceId: string) {
   return Effect.gen(function* (_) {
     const result = yield* _(getFetchIpfsCsvEffect(url));

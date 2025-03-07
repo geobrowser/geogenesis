@@ -3,8 +3,13 @@ import type * as S from 'zapatos/schema';
 
 import { pool } from '../utils/pool';
 import { CHUNK_SIZE } from './constants';
+import { copyBulk } from './copy';
 
 export class Versions {
+  static async copy(versions: S.versions.Insertable[]) {
+    await copyBulk('versions', versions);
+  }
+
   static async upsert(
     versions: S.versions.Insertable[],
     options: { chunked?: boolean; client?: db.TxnClient<db.IsolationLevel.Serializable> } = {}

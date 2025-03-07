@@ -19,11 +19,7 @@ export function writeTriples({ schemaTriples }: PopulateTriplesArgs) {
   return Effect.gen(function* (_) {
     yield* _(
       Effect.tryPromise({
-        try: () =>
-          Triples.upsert(
-            schemaTriples.filter(t => t.op === 'SET_TRIPLE').map(op => op.triple),
-            { chunked: true }
-          ),
+        try: () => Triples.copy(schemaTriples.filter(t => t.op === 'SET_TRIPLE').map(op => op.triple)),
         catch: error => new CouldNotWriteTriplesError(`Failed to insert bulk triples. ${(error as Error).message}`),
       })
     );

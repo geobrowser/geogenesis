@@ -3,8 +3,13 @@ import type * as S from 'zapatos/schema';
 
 import { pool } from '../utils/pool';
 import { CHUNK_SIZE } from './constants';
+import { copyBulk } from './copy';
 
 export class Entities {
+  static async copy(entities: S.entities.Insertable[]) {
+    await copyBulk('entities', entities);
+  }
+
   static async upsert(entities: S.entities.Insertable[], { chunked }: { chunked?: boolean } = {}) {
     if (chunked) {
       for (let i = 0; i < entities.length; i += CHUNK_SIZE) {
