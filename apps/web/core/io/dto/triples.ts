@@ -9,7 +9,16 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
     case 'CHECKBOX':
       return { type: 'CHECKBOX', value: networkTriple.booleanValue ? '1' : '0' };
     case 'TIME':
-      return { type: 'TIME', value: networkTriple.textValue };
+      return {
+        type: 'TIME',
+        value: networkTriple.textValue,
+        options: {
+          format: networkTriple.formatOption || undefined,
+          language: networkTriple.languageOption || undefined,
+          unit: networkTriple.unitOption || undefined,
+        },
+      };
+
     case 'URL':
       return { type: 'URL', value: networkTriple.textValue };
     case 'NUMBER':
