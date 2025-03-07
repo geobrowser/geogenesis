@@ -70,7 +70,9 @@ CREATE TABLE public.proposals (
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     edit_id text REFERENCES public.edits(id),
     start_time integer NOT NULL,
-    end_time integer NOT NULL
+    end_time integer NOT NULL,
+    executed_at integer,
+    executed_at_block integer
 );
 
 CREATE TABLE public.space_editors (

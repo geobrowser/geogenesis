@@ -1242,6 +1242,18 @@ declare module 'zapatos/schema' {
       */
       end_time: number;
       /**
+      * **proposals.executed_at**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      executed_at: number | null;
+      /**
+      * **proposals.executed_at_block**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      executed_at_block: number | null;
+      /**
       * **proposals.id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1315,6 +1327,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       end_time: number;
+      /**
+      * **proposals.executed_at**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      executed_at: number | null;
+      /**
+      * **proposals.executed_at_block**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      executed_at_block: number | null;
       /**
       * **proposals.id**
       * - `text` in database
@@ -1390,6 +1414,18 @@ declare module 'zapatos/schema' {
       */
       end_time?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposals.executed_at**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      executed_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposals.executed_at_block**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      executed_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposals.id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1464,6 +1500,18 @@ declare module 'zapatos/schema' {
       */
       end_time: number | db.Parameter<number> | db.SQLFragment;
       /**
+      * **proposals.executed_at**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      executed_at?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **proposals.executed_at_block**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      executed_at_block?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment;
+      /**
       * **proposals.id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1537,6 +1585,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       end_time?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **proposals.executed_at**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      executed_at?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **proposals.executed_at_block**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      executed_at_block?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **proposals.id**
       * - `text` in database
