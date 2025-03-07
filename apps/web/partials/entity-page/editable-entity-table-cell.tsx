@@ -210,7 +210,14 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               />
             );
           case 'TIME':
-            return <DateField key={renderable.attributeId} isEditing={true} value={renderable.value} />;
+            return (
+              <DateField
+                key={renderable.attributeId}
+                isEditing={true}
+                value={renderable.value}
+                format={renderable.options?.format}
+              />
+            );
           case 'URL':
             return (
               <WebUrlField
