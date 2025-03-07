@@ -168,7 +168,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             handleMessage(message, registry).pipe(
               withRequestId(requestId),
               Logger.withMinimumLogLevel(logLevel),
-              Effect.provide(LoggerLive)
+              Effect.provide(LoggerLive),
+              // Limit the maximum time a block takes to index to 5 minutes
+              Effect.timeout(Duration.minutes(5))
             ),
             Effect.either
           );
@@ -182,6 +184,12 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (Either.isLeft(result)) {
             const error = result.left;
+
+            if (error._tag === 'TimeoutException') {
+              yield* _(Effect.logError('[BLOCK] Timed out after 5 minutes'));
+              return;
+            }
+
             telemetry.captureMessage(error.message);
             yield* _(Effect.logError(error.message));
             return;
