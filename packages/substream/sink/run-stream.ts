@@ -169,6 +169,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               withRequestId(requestId),
               Logger.withMinimumLogLevel(logLevel),
               Effect.provide(LoggerLive),
+              // Limit the maximum time a block takes to index to 5 minutes
               Effect.timeout(Duration.minutes(5))
             ),
             Effect.either
