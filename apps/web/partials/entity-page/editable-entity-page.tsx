@@ -218,7 +218,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
   const property = properties.get(typeOfId);
-  const filterByTypes = property?.relationValueTypes?.map(r => r.typeId) ?? [];
+  const filterByTypes = property?.relationValueTypes?.map(r => r.typeId);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
