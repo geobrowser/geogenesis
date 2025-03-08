@@ -15,6 +15,7 @@ export type Filter = {
   valueType: FilterableValueType;
   value: string;
   valueName: string | null;
+  relationValueTypes?: { typeId: EntityId; typeName: string | null }[];
 };
 
 /**
@@ -212,8 +213,9 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 
 async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
   const maybeAttributeEntity = await mergeEntityAsync(EntityId(filter.attribute));
-  const valueType = maybeAttributeEntity.relationsOut.find(r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE))
-    ?.toEntity.id;
+  const valueType = maybeAttributeEntity.relationsOut.find(
+    r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE)
+  )?.toEntity.id;
 
   if (valueType === EntityId(SystemIds.RELATION)) {
     const valueEntity = await mergeEntityAsync(EntityId(filter.is));

@@ -354,6 +354,8 @@ function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
   const onSelectSpaceValue = (space: { id: string; name: string | null }) =>
     dispatch({ type: 'selectSpaceValue', payload: { id: space.id, name: space.name } });
 
+  const selectedOption = options.find(o => o.columnId === state.selectedColumn);
+
   return (
     <div className="flex items-center justify-center gap-3 px-2">
       <>
@@ -371,9 +373,11 @@ function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
               selectedValue={getFilterValueName(state.value) ?? ''}
               onSelect={onSelectSpaceValue}
             />
-          ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'RELATION' ? (
+          ) : selectedOption?.valueType === 'RELATION' ? (
             <TableBlockEntityFilterInput
-              // filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
+              filterByTypes={
+                selectedOption.relationValueTypes ? selectedOption.relationValueTypes.map(r => r.typeId) : undefined
+              }
               selectedValue={getFilterValueName(state.value) ?? ''}
               onSelect={onSelectEntityValue}
             />
