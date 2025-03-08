@@ -1,8 +1,9 @@
-import { CONTENT_IDS, Op, Relation, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { ContentIds, Op, Relation, SystemIds } from '@graphprotocol/grc-20';
 
 import { ROOT_SPACE_ID } from '~/core/constants';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
+import { EntityId } from '~/core/io/schema';
 import { Relation as RelationType } from '~/core/types';
 import { Ops } from '~/core/utils/ops';
 
@@ -38,16 +39,18 @@ export const cloneEntity = async (
   const newEntityName = entityName;
   const newOps: Array<Op> = [];
 
-  const triplesToClone = oldEntity.triples.filter(triple => !SKIPPED_ATTRIBUTES.includes(triple.attributeId));
+  const triplesToClone = oldEntity.triples.filter(triple => !SKIPPED_ATTRIBUTES.includes(EntityId(triple.attributeId)));
   const relationsToClone = oldEntity.relationsOut.filter(relation => !SKIPPED_ATTRIBUTES.includes(relation.typeOf.id));
-  const tabsToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.TABS_ATTRIBUTE);
-  const blocksToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === SYSTEM_IDS.BLOCKS);
+  const tabsToClone = oldEntity.relationsOut.filter(
+    relation => relation.typeOf.id === EntityId(SystemIds.TABS_ATTRIBUTE)
+  );
+  const blocksToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS));
 
   if (newEntityName) {
     newOps.push(
       Ops.create({
         entity: newEntityId,
-        attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
+        attribute: SystemIds.NAME_ATTRIBUTE,
         value: {
           type: 'TEXT',
           value: newEntityName,
@@ -169,11 +172,11 @@ const cloneRelatedEntities = async (
 };
 
 const SKIPPED_ATTRIBUTES = [
-  SYSTEM_IDS.NAME_ATTRIBUTE,
-  SYSTEM_IDS.DESCRIPTION_ATTRIBUTE,
-  CONTENT_IDS.AVATAR_ATTRIBUTE,
-  SYSTEM_IDS.TABS_ATTRIBUTE,
-  SYSTEM_IDS.BLOCKS,
+  EntityId(SystemIds.NAME_ATTRIBUTE),
+  EntityId(SystemIds.DESCRIPTION_ATTRIBUTE),
+  EntityId(ContentIds.AVATAR_ATTRIBUTE),
+  EntityId(SystemIds.TABS_ATTRIBUTE),
+  EntityId(SystemIds.BLOCKS),
 ];
 
 const hasVariable = (value: string) => {

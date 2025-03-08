@@ -11,6 +11,10 @@ const nextConfig = {
   experimental: {
     reactCompiler: true,
   },
+  devIndicators: {
+    appIsrStatus: false,
+    buildActivity: false,
+  },
   images: {
     remotePatterns: [
       {
@@ -58,6 +62,20 @@ const nextConfig = {
         source: '/join',
         destination: 'https://www.geobrowser.io/',
         permanent: false,
+      },
+    ];
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: 'testnet.geobrowser.io',
+          },
+        ],
+        destination: 'https://geogenesis-git-feat-testnet-geo-browser.vercel.app/:path*',
       },
     ];
   },

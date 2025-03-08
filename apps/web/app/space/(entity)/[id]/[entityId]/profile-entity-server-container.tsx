@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
+import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
@@ -42,7 +43,7 @@ export async function ProfileEntityServerContainer({ params }: Props) {
 
   // Redirect from space configuration page to space page. An entity might be a Person _and_ a Space.
   // In that case we want to render on the space front page.
-  if (person?.types.some(type => type.id === SYSTEM_IDS.SPACE_TYPE) && profile?.homeSpaceId) {
+  if (person?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && profile?.homeSpaceId) {
     console.log(`Redirecting from space configuration entity ${person.id} to space page ${profile?.homeSpaceId}`);
 
     // We need to stay in the space that we're currently in

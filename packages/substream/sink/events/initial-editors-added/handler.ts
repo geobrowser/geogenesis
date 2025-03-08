@@ -1,4 +1,4 @@
-import { NETWORK_IDS, getChecksumAddress } from '@geogenesis/sdk';
+import { NetworkIds, getChecksumAddress } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
@@ -36,7 +36,7 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
     const newEditors = editorsAdded.flatMap(({ addresses, daoAddress }) =>
       addresses.map(a => {
         const editor: S.space_editors.Insertable = {
-          space_id: deriveSpaceId({ address: daoAddress, network: NETWORK_IDS.GEO }),
+          space_id: deriveSpaceId({ address: daoAddress, network: NetworkIds.GEO }),
           account_id: getChecksumAddress(a),
           created_at: block.timestamp,
           created_at_block: block.blockNumber,
@@ -90,7 +90,7 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
             //
             // @NOTE: This might break if we start indexing at a block that occurs after the
             // space was created.
-            space_id: deriveSpaceId({ address: daoAddress, network: NETWORK_IDS.GEO }),
+            space_id: deriveSpaceId({ address: daoAddress, network: NetworkIds.GEO }),
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,

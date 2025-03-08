@@ -5,17 +5,15 @@ import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
 import { useSetAtom } from 'jotai';
-import { useParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { ROOT_SPACE_ID } from '~/core/constants';
 import { Cookie } from '~/core/cookie';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
-import { usePathSegments } from '~/core/hooks/use-path-segments';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
@@ -186,18 +184,6 @@ const variants = {
 };
 
 const MotionPopoverContent = motion(Popover.Content);
-
-const useSpaceId = () => {
-  const params = useParams();
-  const segment = usePathSegments();
-
-  if (segment[0] === 'root') {
-    return ROOT_SPACE_ID;
-  }
-
-  const spaceId = params?.['id'] as string | undefined;
-  return spaceId;
-};
 
 function ModeToggle() {
   const controls = useAnimation();

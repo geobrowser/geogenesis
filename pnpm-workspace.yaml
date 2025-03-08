@@ -1,3 +1,13 @@
 packages:
-  - 'packages/*'
-  - 'apps/*'
+  - packages/*
+  - apps/*
+onlyBuiltDependencies:
+  - '@biomejs/biome'
+  - '@bufbuild/buf'
+  - bigint-buffer
+  - bufferutil
+  - esbuild
+  - keccak
+  - sharp
+  - utf-8-validate
+  - zapatos

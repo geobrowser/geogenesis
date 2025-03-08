@@ -1,4 +1,4 @@
-import { GraphUri, GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { GraphUri, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -32,16 +32,16 @@ interface Props {
 }
 
 async function getTitleForRelation(entity: Entity | null): Promise<string | null> {
-  const maybeRelation = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.TYPES_ATTRIBUTE);
+  const maybeRelation = entity?.triples.find(t => t.attributeId === SystemIds.TYPES_ATTRIBUTE);
   const maybeType = maybeRelation?.value.value;
 
   if (
     maybeRelation?.value.type === 'URL' &&
     maybeType &&
-    SYSTEM_IDS.RELATION_TYPE === GraphUrl.toEntityId(maybeType as GraphUri)
+    SystemIds.RELATION_TYPE === GraphUrl.toEntityId(maybeType as GraphUri)
   ) {
-    const maybeFrom = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
-    const maybeTo = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+    const maybeFrom = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE);
+    const maybeTo = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE);
 
     if (maybeFrom?.value.type === 'URL' && maybeTo?.value.type === 'URL') {
       const [maybeFromEntity, maybeToEntity] = await Promise.all([
@@ -105,7 +105,7 @@ export default async function ProfileLayout(props: Props) {
 
   const types = await cachedFetchEntityType(entityId);
 
-  if (!types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
+  if (!types.includes(TypeId(SystemIds.PERSON_TYPE))) {
     return <>{children}</>;
   }
 
@@ -128,7 +128,7 @@ export default async function ProfileLayout(props: Props) {
         <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
         <EntityPageContentContainer>
           <EditableHeading spaceId={params.id} entityId={entityId} />
-          <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
+          <EntityPageMetadataHeader id={profile.id} entityName={profile.name ?? ''} spaceId={params.id} />
 
           <Spacer height={40} />
           <React.Suspense fallback={null}>
@@ -184,7 +184,7 @@ async function getProfilePage(entityId: string): Promise<
   }
 
   const blockIds = person?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
     ?.map(r => r.toEntity.id);
 
   const blocks = blockIds ? await fetchBlocks(blockIds) : [];

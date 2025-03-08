@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { cva } from 'class-variance-authority';
 import { useAtom } from 'jotai';
 import type { LinkProps } from 'next/link';
@@ -33,7 +33,7 @@ type SpaceNoticesProps = {
 export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
   const { isEditor } = useAccessControl(spaceId);
   const isEditing = useUserIsEditing(spaceId);
-  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, [SYSTEM_IDS.POST_TYPE]);
+  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, [SystemIds.POST_TYPE]);
 
   if (spaceType === 'person') {
     if (isEditor) {
@@ -223,7 +223,7 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
           router.push(destination);
         }}
         spaceId={spaceId}
-        allowedTypes={[SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE]}
+        allowedTypes={[SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE]}
         inputClassName="!py-[3.5px]"
         variant="floating"
         width="full"

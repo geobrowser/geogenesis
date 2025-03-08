@@ -22,6 +22,9 @@ export class Triples {
               'text_value',
               'value_type',
               'version_id',
+              'unit_option',
+              'format_option',
+              'language_option',
             ],
           })
           .run(pool);
@@ -43,6 +46,9 @@ export class Triples {
           'text_value',
           'value_type',
           'version_id',
+          'unit_option',
+          'format_option',
+          'language_option',
         ],
       })
       .run(pool);

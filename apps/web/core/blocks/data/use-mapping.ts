@@ -1,10 +1,11 @@
-import { GraphUri, GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { GraphUri, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { Entity } from '~/core/io/dto/entities';
+import { EntityId } from '~/core/io/schema';
 import { Cell, PropertySchema, RenderableProperty, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
@@ -72,8 +73,8 @@ export function useMapping(
   const mapping =
     shownPropertyEntities && shownPropertyEntities.length > 0
       ? shownPropertyEntities.reduce<Mapping>((acc, entity) => {
-          const key = entity.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value;
-          const selector = entity.triples.find(t => t.attributeId === SYSTEM_IDS.SELECTOR_ATTRIBUTE)?.value.value;
+          const key = entity.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)?.value.value;
+          const selector = entity.triples.find(t => t.attributeId === SystemIds.SELECTOR_ATTRIBUTE)?.value.value;
           const decodedKey = key ? GraphUrl.toEntityId(key as GraphUri) : null;
 
           if (decodedKey && selector) {
@@ -90,8 +91,8 @@ export function useMapping(
 
   // Currently require the name attribute to be rendered for every view and every query mode. Rendering
   // the data block will break otherwise.
-  if (!mapping[SYSTEM_IDS.NAME_ATTRIBUTE]) {
-    mapping[SYSTEM_IDS.NAME_ATTRIBUTE] = null;
+  if (!mapping[SystemIds.NAME_ATTRIBUTE]) {
+    mapping[SystemIds.NAME_ATTRIBUTE] = null;
   }
 
   return {
@@ -153,7 +154,7 @@ export function mappingToRows(
           attributeName: maybeProperty?.name ?? null,
           entityId: id,
           spaceId,
-          valueType: maybeProperty?.valueType ?? SYSTEM_IDS.TEXT,
+          valueType: maybeProperty?.valueType ?? SystemIds.TEXT,
         });
 
         cell.renderables = toRenderables({
@@ -165,7 +166,7 @@ export function mappingToRows(
           placeholderRenderables: [placeholder],
         });
 
-        const isNameCell = slotId === SYSTEM_IDS.NAME_ATTRIBUTE;
+        const isNameCell = slotId === SystemIds.NAME_ATTRIBUTE;
 
         if (isNameCell) {
           cell.description = description;
@@ -173,12 +174,12 @@ export function mappingToRows(
 
           const collectionEntity = collectionItems?.find(entity =>
             entity.triples
-              .find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+              .find(triple => triple.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)
               ?.value.value.startsWith(`graph://${cell.cellId}`)
           );
 
           if (collectionEntity) {
-            const url = collectionEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+            const url = collectionEntity.triples.find(triple => triple.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)
               ?.value.value;
 
             if (url?.startsWith('graph://')) {
@@ -188,7 +189,7 @@ export function mappingToRows(
                 cell.space = spaceId;
 
                 const verifiedSourceTriple = collectionEntity.triples.find(
-                  triple => triple.attributeId === SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE
+                  triple => triple.attributeId === SystemIds.VERIFIED_SOURCE_ATTRIBUTE
                 );
 
                 if (verifiedSourceTriple) {
@@ -243,13 +244,13 @@ export function mappingToCell(
     const entityName = Entities.name(cellTriples);
 
     if (
-      propertyToFilter === SYSTEM_IDS.RELATION_TO_ATTRIBUTE ||
-      propertyToFilter === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE
+      propertyToFilter === SystemIds.RELATION_TO_ATTRIBUTE ||
+      propertyToFilter === SystemIds.RELATION_FROM_ATTRIBUTE
     ) {
       const imageEntityUrlValue =
-        triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
+        triples.find(t => t.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
 
-      return entity.types.some(t => t.id === SYSTEM_IDS.IMAGE_TYPE)
+      return entity.types.some(t => t.id === EntityId(SystemIds.IMAGE_TYPE))
         ? [
             {
               type: 'IMAGE',
@@ -308,7 +309,7 @@ export function mappingToCell(
     });
   });
 
-  const isNameCell = propertyId === SYSTEM_IDS.NAME_ATTRIBUTE;
+  const isNameCell = propertyId === SystemIds.NAME_ATTRIBUTE;
 
   if (isNameCell) {
     const relations = entities.flatMap(e => e.relationsOut);

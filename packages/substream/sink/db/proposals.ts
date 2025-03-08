@@ -1,7 +1,8 @@
-import { getChecksumAddress } from '@geogenesis/sdk';
+import { getChecksumAddress } from '@graphprotocol/grc-20';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
+import type { BlockEvent } from '../types';
 import { deriveProposalId } from '../utils/id';
 import { pool } from '../utils/pool';
 import { CHUNK_SIZE } from './constants';
@@ -64,13 +65,23 @@ export class Proposals {
     return await db.update('proposals', { status: 'accepted' }, { id }).run(pool);
   }
 
-  static async setAccepted({ onchainProposalId, pluginAddress }: { onchainProposalId: string; pluginAddress: string }) {
+  static async setAccepted({
+    onchainProposalId,
+    pluginAddress,
+    block,
+  }: {
+    onchainProposalId: string;
+    pluginAddress: string;
+    block: BlockEvent;
+  }) {
     return await db
       .update(
         'proposals',
         { status: 'accepted' },
         {
           id: deriveProposalId({ onchainProposalId, pluginAddress: getChecksumAddress(pluginAddress) }),
+          executed_at_block: block.blockNumber,
+          executed_at: block.timestamp,
         }
       )
       .run(pool);

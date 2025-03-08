@@ -40,8 +40,10 @@ export const Editor = React.memo(function Editor({
   useInterceptEditorLinks(spaceId);
 
   const onBlur = (params: { editor: TiptapEditor }) => {
-    // Responsible for converting all editor blocks to Geo knowledge graph state
-    upsertEditorState(params.editor.getJSON());
+    if (editable) {
+      // Responsible for converting all editor blocks to Geo knowledge graph state
+      upsertEditorState(params.editor.getJSON());
+    }
   };
 
   const editor = useEditor(

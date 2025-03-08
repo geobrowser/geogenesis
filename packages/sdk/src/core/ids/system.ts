@@ -9,6 +9,8 @@ export const TYPES_ATTRIBUTE = 'Jfmby78N4BCseZinBmdVov';
 export const TABS_ATTRIBUTE = 'AasCPmGHxVcsswE9PzmNT4';
 export const BLOCKS = 'QYbjCM6NT9xmh2hFGsqpQX';
 
+export const IS_TYPE_PROPERTY_ATTRIBUTE = 'T2TRBTBe5NS8vR94PLhzce';
+
 /** Value types */
 export const VALUE_TYPE_ATTRIBUTE = 'WQfdWjboZWFuTseDhG5Cw1';
 export const CHECKBOX = 'G9NpD4c7GB7nH5YU9Tesgf';

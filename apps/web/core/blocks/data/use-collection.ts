@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -29,7 +29,7 @@ export function useCollection() {
 
           // Return all local relations pointing to the collection id in the source block
           // @TODO(data blocks): Merge with any remote collection items
-          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
+          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SystemIds.COLLECTION_ITEM_RELATION_TYPE);
         },
       };
     }, [blockEntity.relationsOut, source])
@@ -40,26 +40,34 @@ export function useCollection() {
     [collectionItemsRelations]
   );
 
-  const {
-    data: collectionItems,
-    isLoading,
-    isFetched,
-  } = useQuery({
+  const collectionRelationIds = React.useMemo(
+    () => collectionItemsRelations?.map(c => c.id) ?? [],
+    [collectionItemsRelations]
+  );
+
+  const { data, isLoading, isFetched } = useQuery({
     placeholderData: keepPreviousData,
     enabled: collectionItemsRelations.length > 0,
-    queryKey: ['blocks', 'data', 'collection-items', collectionItemIds],
+    queryKey: ['blocks', 'data', 'collection-items-and-relations', collectionItemIds, collectionRelationIds],
     queryFn: async () => {
-      const entities = await mergeEntitiesAsync({
-        entityIds: collectionItemIds,
-        filterState: [],
-      });
+      const [collectionItems, collectionRelations] = await Promise.all([
+        mergeEntitiesAsync({
+          entityIds: collectionItemIds,
+          filterState: [],
+        }),
+        mergeEntitiesAsync({
+          entityIds: collectionRelationIds,
+          filterState: [],
+        }),
+      ]);
 
-      return entities;
+      return { collectionItems, collectionRelations };
     },
   });
 
   return {
-    collectionItems: collectionItems ?? [],
+    collectionItems: data?.collectionItems ?? [],
+    collectionRelations: data?.collectionRelations ?? [],
     isLoading,
     isFetched,
   };

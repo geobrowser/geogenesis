@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
@@ -215,7 +215,10 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
                 entity_id: v.entity_id,
                 version_id: v.id,
               };
-            })
+            }),
+            {
+              chunked: true,
+            }
           ),
         catch: error => {
           console.error(`Failed to insert current versions. ${(error as Error).message}`);
@@ -240,7 +243,11 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
 
     yield* _(
       Effect.tryPromise({
-        try: () => SpaceMetadata.upsert(dedupeWith(spaceMetadatum, (a, z) => a.space_id === z.space_id)),
+        try: () =>
+          SpaceMetadata.upsert(
+            dedupeWith(spaceMetadatum, (a, z) => a.space_id === z.space_id),
+            { chunked: true }
+          ),
         catch: error =>
           new CouldNotWriteSpaceMetadataError({
             message: `Failed to insert space metadata. ${(error as Error).message}`,
@@ -263,7 +270,7 @@ function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) 
     const typeId = relation.type_of_id.toString();
     const toEntityId = relation.to_entity_id.toString();
 
-    if (typeId === SYSTEM_IDS.TYPES_ATTRIBUTE && toEntityId === SYSTEM_IDS.SPACE_TYPE) {
+    if (typeId === SystemIds.TYPES_ATTRIBUTE && toEntityId === SystemIds.SPACE_TYPE) {
       spaceMetadatas.push({
         space_id: relation.space_id,
         version_id: relation.from_version_id.toString(),

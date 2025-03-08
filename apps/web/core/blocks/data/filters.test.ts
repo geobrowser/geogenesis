@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { describe, expect, it } from 'vitest';
 
 import { FilterString, fromGeoFilterState } from './filters';
@@ -10,11 +10,11 @@ describe('filters', () => {
         spaces: ['0x0000000000000000000000000000000000000000'],
         AND: [
           {
-            attribute: SYSTEM_IDS.TYPES_ATTRIBUTE,
-            is: SYSTEM_IDS.SCHEMA_TYPE,
+            attribute: SystemIds.TYPES_ATTRIBUTE,
+            is: SystemIds.SCHEMA_TYPE,
           },
           {
-            attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
+            attribute: SystemIds.NAME_ATTRIBUTE,
             is: 'name',
           },
         ],
@@ -25,19 +25,19 @@ describe('filters', () => {
 
     expect(stringFilter).toEqual([
       {
-        columnId: SYSTEM_IDS.SPACE_FILTER,
+        columnId: SystemIds.SPACE_FILTER,
         value: '0x0000000000000000000000000000000000000000',
         valueType: 'RELATION',
         valueName: null,
       },
       {
-        columnId: SYSTEM_IDS.TYPES_ATTRIBUTE,
-        value: SYSTEM_IDS.SCHEMA_TYPE,
+        columnId: SystemIds.TYPES_ATTRIBUTE,
+        value: SystemIds.SCHEMA_TYPE,
         valueType: 'RELATION',
         valueName: 'Type',
       },
       {
-        columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        columnId: SystemIds.NAME_ATTRIBUTE,
         value: 'name',
         valueType: 'TEXT',
         valueName: null,

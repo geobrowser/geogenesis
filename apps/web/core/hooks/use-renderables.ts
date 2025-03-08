@@ -1,13 +1,17 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { useQuery } from '@tanstack/react-query';
 import { pipe } from 'effect';
 
 import * as React from 'react';
+
+import { mergeEntitiesAsync } from '~/core/blocks/data/queries';
+import { EntityId } from '~/core/io/schema';
 
 import { sortRenderables } from '~/partials/entity-page/entity-page-utils';
 
 import { useTriples } from '../database/triples';
 import { useEntityPageStore } from '../state/entity-page-store/entity-store';
-import { RenderableProperty, Triple } from '../types';
+import { PropertySchema, RenderableProperty, Triple, ValueTypeId } from '../types';
 import { toRenderables } from '../utils/to-renderables';
 import { groupBy } from '../utils/utils';
 import { useUserIsEditing } from './use-user-is-editing';
@@ -30,14 +34,10 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
 
   const { triples: localTriples, relations, schema, name, id } = useEntityPageStore();
 
-  const triplesFromSpace = useTriples(
-    React.useMemo(() => {
-      return {
-        selector: t => t.space === spaceId,
-        includeDeleted: true,
-      };
-    }, [spaceId])
-  );
+  const triplesFromSpace = useTriples({
+    selector: t => t.space === spaceId,
+    includeDeleted: true,
+  });
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -45,24 +45,70 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
   // There may be some deleted triples locally. We check the actions to make sure that there are
   // actually 0 actions in the case that there are 0 local triples as the local triples here
   // are only the ones where `isDeleted` is false.
-  const triples = React.useMemo(() => {
-    return localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
-  }, [localTriples, serverTriples, triplesFromSpace]);
+  const triples = localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
 
-  const renderables = React.useMemo(() => {
-    const SKIPPED_PROPERTIES = !isRelationPage ? [SYSTEM_IDS.BLOCKS] : [SYSTEM_IDS.BLOCKS, SYSTEM_IDS.TYPES_ATTRIBUTE];
+  const serverUrlTriples = serverTriples.filter(triple => triple.value.type === 'URL');
 
-    return toRenderables({
-      entityId: id,
-      entityName: name,
-      spaceId,
-      triples,
-      relations,
-      // We don't show placeholder renderables in browse mode
-      schema: isEditing ? schema : undefined,
-      placeholderRenderables: isEditing ? placeholderRenderables : undefined,
-    }).filter(r => !SKIPPED_PROPERTIES.includes(r.attributeId));
-  }, [isRelationPage, id, name, spaceId, triples, relations, isEditing, schema, placeholderRenderables]);
+  const possibleTypeProperties = [...new Set(serverUrlTriples.map(triple => triple.attributeId))];
+
+  const { data: typePropertySchema } = useQuery({
+    queryKey: ['type-property-schema', possibleTypeProperties.join('-')],
+    queryFn: async () => {
+      const possibleTypePropertyAttributeEntities = await mergeEntitiesAsync({
+        entityIds: possibleTypeProperties,
+        filterState: [],
+      });
+
+      const IS_TYPE_PROPERTY_ATTRIBUTE = 'T2TRBTBe5NS8vR94PLhzce';
+
+      const typeProperties = possibleTypePropertyAttributeEntities
+        ? possibleTypePropertyAttributeEntities
+            .filter(
+              entity =>
+                entity?.triples?.find(triple => triple.attributeId === IS_TYPE_PROPERTY_ATTRIBUTE)?.value?.value === '1'
+            )
+            .map(entity => entity.id)
+        : [];
+
+      const typePropertyValueEntityIds = serverUrlTriples
+        .filter(triple => typeProperties.includes(EntityId(triple.attributeId)))
+        .map(triple => GraphUrl.toEntityId(triple.value.value as `graph://${string}`));
+
+      const typePropertyValueEntities = await mergeEntitiesAsync({
+        entityIds: typePropertyValueEntityIds,
+        filterState: [],
+      });
+
+      const typePropertySchema = typePropertyValueEntities.flatMap(entity =>
+        entity.relationsOut
+          .filter(relation => relation.typeOf.id === EntityId(SystemIds.PROPERTIES))
+          .map(relation => ({
+            id: relation.toEntity.id,
+            name: relation.toEntity.name,
+            valueType: SystemIds.RELATION as ValueTypeId,
+          }))
+      );
+
+      return typePropertySchema;
+    },
+  });
+
+  const fullSchema: PropertySchema[] = [...schema, ...(typePropertySchema ?? [])];
+
+  const SKIPPED_PROPERTIES = !isRelationPage
+    ? [EntityId(SystemIds.BLOCKS)]
+    : [EntityId(SystemIds.BLOCKS), EntityId(SystemIds.TYPES_ATTRIBUTE)];
+
+  const renderables = toRenderables({
+    entityId: id,
+    entityName: name,
+    spaceId,
+    triples,
+    relations,
+    // We don't show placeholder renderables in browse mode
+    schema: isEditing ? fullSchema : undefined,
+    placeholderRenderables: isEditing ? placeholderRenderables : undefined,
+  }).filter(r => !SKIPPED_PROPERTIES.includes(EntityId(r.attributeId)));
 
   const renderablesGroupedByAttributeId = pipe(
     renderables,

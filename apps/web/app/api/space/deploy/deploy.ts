@@ -86,7 +86,7 @@ export function deploySpace(args: DeployArgs) {
       catch: e => new GenerateOpsError(`Failed to generate ops: ${String(e)}`),
     });
 
-    const initialContent = EditProposal.make({
+    const initialContent = EditProposal.encode({
       name: args.spaceName,
       author: initialEditorAddress,
       ops,

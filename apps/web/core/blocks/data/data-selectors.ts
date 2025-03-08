@@ -1,4 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 
 import { mergeEntityAsync } from '~/core/database/entities';
 import { Entity } from '~/core/io/dto/entities';
@@ -84,8 +84,8 @@ export async function mapSelectorLexiconToSourceEntity(
 
     // @TODO: Need to handle if the entity is an image
     if (segment.type === 'RELATION') {
-      if (segment.property === SYSTEM_IDS.RELATION_TO_ATTRIBUTE) {
-        const newInputId = input.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)?.value.value;
+      if (segment.property === SystemIds.RELATION_TO_ATTRIBUTE) {
+        const newInputId = input.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)?.value.value;
 
         if (!newInputId) {
           continue;
@@ -96,8 +96,8 @@ export async function mapSelectorLexiconToSourceEntity(
         continue;
       }
 
-      if (segment.property === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE) {
-        const newInputId = input.triples.find(t => t.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE)?.value.value;
+      if (segment.property === SystemIds.RELATION_FROM_ATTRIBUTE) {
+        const newInputId = input.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE)?.value.value;
 
         if (!newInputId) {
           continue;
@@ -137,33 +137,33 @@ export function generateSelector(
     }
 
     if (where === 'TO') {
-      selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->.[${property.id}]`;
+      selector = `->[${SystemIds.RELATION_TO_ATTRIBUTE}]->.[${property.id}]`;
 
-      if (property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
-        selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+      if (property.id === SystemIds.NAME_ATTRIBUTE) {
+        selector = `->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
       }
     }
 
     if (where === 'FROM') {
-      selector = `->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]->.[${property.id}]`;
+      selector = `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]->.[${property.id}]`;
 
-      if (property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
-        selector = `->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]`;
+      if (property.id === SystemIds.NAME_ATTRIBUTE) {
+        selector = `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]`;
       }
     }
   }
 
   if (property.renderableType === 'RELATION' || property.renderableType === 'IMAGE') {
     if (where === 'SOURCE') {
-      selector = `->[${property.id}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+      selector = `->[${property.id}]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
     }
 
     if (where === 'TO') {
-      selector = `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]->[${property.id}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+      selector = `->[${SystemIds.RELATION_TO_ATTRIBUTE}]->[${property.id}]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
     }
 
     if (where === 'FROM') {
-      selector = `->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]->[${property.id}]->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+      selector = `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]->[${property.id}]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
     }
   }
 
@@ -183,12 +183,12 @@ export function getIsSelected(
     const generatedSelector = generateSelector(property, where);
 
     // Render the name field of a TO selector to use the name
-    if (where === 'TO' && property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
-      return s === `->[${SYSTEM_IDS.RELATION_TO_ATTRIBUTE}]`;
+    if (where === 'TO' && property.id === SystemIds.NAME_ATTRIBUTE) {
+      return s === `->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
     }
 
-    if (where === 'FROM' && property.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
-      return s === `->[${SYSTEM_IDS.RELATION_FROM_ATTRIBUTE}]`;
+    if (where === 'FROM' && property.id === SystemIds.NAME_ATTRIBUTE) {
+      return s === `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]`;
     }
 
     return s === generatedSelector;

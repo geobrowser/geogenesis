@@ -1,6 +1,6 @@
 import type { IMessageTypeRegistry } from '@bufbuild/protobuf';
 import { createGrpcTransport } from '@connectrpc/connect-node';
-import { ID, NETWORK_IDS } from '@geogenesis/sdk';
+import { Id, NetworkIds } from '@graphprotocol/grc-20';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import type { BlockScopedData } from '@substreams/core/proto';
 import { readPackageFromFile } from '@substreams/manifest';
@@ -157,7 +157,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
         return Effect.gen(function* (_) {
           const blockNumber = Number(message.clock?.number.toString());
 
-          const requestId = ID.make();
+          const requestId = Id.generate();
           const telemetry = yield* _(Telemetry);
           const logLevel = yield* _(getConfiguredLogLevel);
 
@@ -168,19 +168,12 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             handleMessage(message, registry).pipe(
               withRequestId(requestId),
               Logger.withMinimumLogLevel(logLevel),
-              Effect.provide(LoggerLive)
+              Effect.provide(LoggerLive),
+              // Limit the maximum time a block takes to index to 5 minutes
+              Effect.timeout(Duration.minutes(5))
             ),
             Effect.either
           );
-
-          if (Either.isLeft(result)) {
-            const error = result.left;
-            telemetry.captureMessage(error.message);
-            yield* _(Effect.logError(error.message));
-            return;
-          }
-
-          const hasValidEvent = result.right;
 
           yield* _(
             Effect.tryPromise({
@@ -188,6 +181,21 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               catch: () => new CouldNotWriteCursorError(),
             })
           );
+
+          if (Either.isLeft(result)) {
+            const error = result.left;
+
+            if (error._tag === 'TimeoutException') {
+              yield* _(Effect.logError('[BLOCK] Timed out after 5 minutes'));
+              return;
+            }
+
+            telemetry.captureMessage(error.message);
+            yield* _(Effect.logError(error.message));
+            return;
+          }
+
+          const hasValidEvent = result.right;
 
           if (hasValidEvent) {
             yield* _(
@@ -313,7 +321,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
           handleNewGeoBlock({
             ...block,
             hash: message.clock?.id ?? '',
-            network: NETWORK_IDS.GEO,
+            network: NetworkIds.GEO,
           })
         )
       );
@@ -573,7 +581,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     }
 
     if (executedProposals.success) {
-      yield* _(handleProposalsExecuted(executedProposals.data.executedProposals));
+      yield* _(handleProposalsExecuted(executedProposals.data.executedProposals, block));
     }
 
     return hasValidEvent;

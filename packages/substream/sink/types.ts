@@ -7,6 +7,7 @@ import type {
   ChainRemoveMemberProposal,
   ChainRemoveSubspaceProposal,
 } from './events/schema/proposal';
+import type { ZodOp } from './proto/schema';
 
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
@@ -25,6 +26,12 @@ export interface GeoBlock extends BlockEvent {
 
 export type ValueType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'URL' | 'TIME' | 'POINT';
 
+export type ValueOptions = {
+  language?: string;
+  unit?: string;
+  format?: string;
+};
+
 export type SetTripleOp = {
   type: 'SET_TRIPLE';
   space: string;
@@ -34,6 +41,7 @@ export type SetTripleOp = {
     value: {
       type: ValueType;
       value: string;
+      options?: ValueOptions;
     };
   };
 };
@@ -66,6 +74,25 @@ export type DeleteRelationOp = {
   relation: {
     id: string;
   };
+};
+
+// @TODO: Use type from grc-20 lib
+type CsvMetadata = {
+  type: 'CSV';
+  columns: {
+    id: string;
+    type: ValueType | 'RELATION';
+    relationType?: string;
+    isId?: boolean;
+    options?: ValueOptions;
+  }[];
+};
+
+export type ImportFileOp = {
+  type: 'IMPORT_FILE';
+  space: string;
+  url: string;
+  metadata: CsvMetadata;
 };
 
 /**
@@ -104,3 +131,5 @@ export type SinkRemoveSubspaceProposal = ChainRemoveSubspaceProposal & {
 export type SinkMembershipProposal = SinkAddMemberProposal | SinkRemoveMemberProposal;
 export type SinkEditorshipProposal = SinkAddEditorProposal | SinkRemoveEditorProposal;
 export type SinkSubspaceProposal = SinkAddSubspaceProposal | SinkRemoveSubspaceProposal;
+
+export type IntermediateSinkEditProposal = OmitStrict<SinkEditProposal, 'ops'> & { ops: ZodOp[] };

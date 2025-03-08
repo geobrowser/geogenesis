@@ -31,10 +31,10 @@
     "rimraf": "^3.0.2",
     "turbo": "^1.10.6"
   },
-  "packageManager": "pnpm@9.15.4",
   "pnpm": {
     "patchedDependencies": {
       "permissionless@0.1.29": "patches/permissionless@0.1.29.patch"
     }
-  }
+  },
+  "packageManager": "pnpm@10.5.2"
 }

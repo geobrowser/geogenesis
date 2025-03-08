@@ -102,7 +102,7 @@ export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWher
 }
 
 const SpaceWhereEditorSchema = Schema.Struct({
-  id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
+  id: Schema.String.pipe(Schema.length(22), Schema.fromBrand(SpaceId)),
   spacesMetadatum: SubstreamVersion,
 });
 

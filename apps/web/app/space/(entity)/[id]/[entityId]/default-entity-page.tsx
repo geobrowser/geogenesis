@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -17,6 +17,7 @@ import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
 
 import { Editor } from '~/partials/editor/editor';
+import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageHeading } from '~/partials/entity-page/entity-page-heading';
@@ -26,6 +27,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 interface Props {
   params: { id: string; entityId: string };
+  searchParams?: { [key: string]: string | string[] | undefined };
   showCover?: boolean;
   showHeading?: boolean;
   showHeader?: boolean;
@@ -34,6 +36,7 @@ interface Props {
 
 export default async function DefaultEntityPage({
   params,
+  searchParams = {},
   showCover = true,
   showHeading = true,
   showHeader = true,
@@ -41,7 +44,7 @@ export default async function DefaultEntityPage({
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
-  const props = await getData(params.id, params.entityId);
+  const props = await getData(params.id, params.entityId, searchParams?.edit === 'true' ? true : false);
 
   const avatarUrl = Entities.avatar(props.relationsOut) ?? props.serverAvatarUrl;
   const coverUrl = Entities.cover(props.relationsOut) ?? props.serverCoverUrl;
@@ -63,13 +66,15 @@ export default async function DefaultEntityPage({
         {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
         <EntityPageContentContainer>
           {showHeading && <EntityPageHeading spaceId={props.spaceId} entityId={props.id} />}
-          {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
+          {showHeader && (
+            <EntityPageMetadataHeader id={props.id} entityName={props.name ?? ''} spaceId={props.spaceId} />
+          )}
           {notice}
           {(showSpacer || !!notice) && <Spacer height={40} />}
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
           <ToggleEntityPage {...props} />
+          <AutomaticModeToggle />
           <Spacer height={40} />
-
           <ErrorBoundary fallback={<EmptyErrorComponent />}>
             {/*
               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
@@ -85,20 +90,20 @@ export default async function DefaultEntityPage({
   );
 }
 
-const getData = async (spaceId: string, entityId: string) => {
+const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
   const entity = await Subgraph.fetchEntity({ spaceId, id: entityId });
   const nameTripleSpace = entity?.nameTripleSpaces?.[0];
   const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_TYPE) && nameTripleSpace) {
+  if (entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && nameTripleSpace) {
     console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
 
     return redirect(NavUtils.toSpace(spaceId));
   }
 
   // Redirect from an invalid space to a valid one
-  if (entity && !spaces.includes(spaceId)) {
+  if (entity && !spaces.includes(spaceId) && !preventRedirect) {
     const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
 
     console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
@@ -110,7 +115,7 @@ const getData = async (spaceId: string, entityId: string) => {
   const serverCoverUrl = Entities.cover(entity?.relationsOut);
 
   const blockIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
     ?.map(r => r.toEntity.id);
 
   const blocks = blockIds ? await fetchBlocks(blockIds) : [];
