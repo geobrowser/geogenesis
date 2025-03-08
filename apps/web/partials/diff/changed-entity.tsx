@@ -571,16 +571,17 @@ type DateTimeType = {
 };
 
 export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
-  const beforeDateTime = before ? GeoDate.fromISOStringUTC(before.value) : null;
-  const afterDateTime = after ? GeoDate.fromISOStringUTC(after.value) : null;
+  const beforeDateTime = before.value ? GeoDate.fromISOStringUTC(before.value) : null;
+  const afterDateTime = after.value ? GeoDate.fromISOStringUTC(after.value) : null;
 
   const formattedDateBefore = GeoDate.format(before.value, before.options?.format);
   const formattedDateAfter = GeoDate.format(after.value, after.options?.format);
 
-  const formattedDate = mode === 'before' ? formattedDateBefore : formattedDateAfter;
-
   const renderedDateTime: DateTimeType = (mode === 'before' ? beforeDateTime : afterDateTime) as DateTimeType;
   const highlightClassName = mode === 'before' ? 'rounded bg-errorTertiary' : 'bg-successTertiary rounded';
+
+  const formattedDate = mode === 'before' ? formattedDateBefore : formattedDateAfter;
+  const formattedDateHighlightClassName = before.options?.format !== after.options?.format ? highlightClassName : '';
 
   return (
     <>
@@ -620,9 +621,9 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
           </div>
           <p
             className={cx(
-              (!before || !after || Number(beforeDateTime?.hour) < 12 !== Number(afterDateTime?.hour) < 12) &&
+              (!before.value || !after.value || beforeDateTime?.meridiem !== afterDateTime?.meridiem) &&
                 highlightClassName,
-              'uppercase',
+              'w-[32px] text-center uppercase',
               timeClassNames
             )}
           >
@@ -632,7 +633,7 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
       </div>
       {!equal(before.options, after.options) && (
         <p className="py-2 text-sm text-grey-04">
-          Browse format · <span className={highlightClassName}>{formattedDate}</span>
+          Browse format · <span className={formattedDateHighlightClassName}>{formattedDate}</span>
         </p>
       )}
     </>
