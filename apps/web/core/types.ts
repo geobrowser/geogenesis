@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds, TripleValueOptions } from '@graphprotocol/grc-20';
 
 import { EntityId } from './io/schema';
 
@@ -16,6 +16,7 @@ export type ValueType =
 export type Value = {
   type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER';
   value: string;
+  options?: TripleValueOptions;
 };
 
 export type SetTripleAppOp = {
@@ -77,6 +78,7 @@ export type NativeRenderableProperty = {
   spaceId: string;
   value: string;
   placeholder?: boolean;
+  options?: TripleValueOptions;
 };
 
 type RelationPropertyProperties = {

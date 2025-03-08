@@ -69,7 +69,15 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
         }
 
         if (renderable.type === 'TIME') {
-          return <DateField variant="tableCell" isEditing={false} key={renderable.value} value={renderable.value} />;
+          return (
+            <DateField
+              variant="tableCell"
+              isEditing={false}
+              key={renderable.value}
+              value={renderable.value}
+              format={renderable.options?.format}
+            />
+          );
         }
 
         if (renderable.type === 'CHECKBOX') {

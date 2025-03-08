@@ -93,6 +93,7 @@ export function toRenderables({
       attributeName: t.attributeName,
       spaceId,
       value: t.value.value,
+      options: t.value.options,
     };
   });
 

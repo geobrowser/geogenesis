@@ -66,6 +66,9 @@ const SubstreamTimeValue = Schema.Struct({
   valueType: Schema.Literal('TIME'),
   // @TODO: Schema.Date refinement
   textValue: Schema.String,
+  formatOption: Schema.NullOr(Schema.String),
+  languageOption: Schema.NullOr(Schema.String),
+  unitOption: Schema.NullOr(Schema.String),
 });
 
 type SubstreamTimeValue = Schema.Schema.Type<typeof SubstreamTimeValue>;

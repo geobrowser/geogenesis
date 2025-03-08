@@ -586,6 +586,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                 key={renderable.attributeId}
                 isEditing={true}
                 value={renderable.value}
+                format={renderable.options?.format}
               />
             );
           }
