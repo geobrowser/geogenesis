@@ -96,12 +96,24 @@ const SubstreamCheckboxValue = Schema.Struct({
 
 type SubstreamCheckboxValue = Schema.Schema.Type<typeof SubstreamCheckboxValue>;
 
+/**
+ * POINT value
+ */
+const SubstreamPointValue = Schema.Struct({
+  valueType: Schema.Literal('POINT'),
+  // @TODO: Schema.Date refinement
+  textValue: Schema.String,
+});
+
+type SubstreamPointValue = Schema.Schema.Type<typeof SubstreamPointValue>;
+
 const SubstreamValue = Schema.Union(
   SubstreamTextValue,
   SubstreamTimeValue,
   SubstreamUrlValue,
   SubstreamCheckboxValue,
-  SubstreamNumberValue
+  SubstreamNumberValue,
+  SubstreamPointValue
 );
 
 type SubstreamValue = Schema.Schema.Type<typeof SubstreamValue>;
