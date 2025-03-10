@@ -448,42 +448,44 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       const data = membersAdded.data.membersAdded.filter(
         f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
       );
-      yield* _(Effect.fork(handleMemberAdded(data, block)));
+
+      console.log('members added', data);
+      yield* _(handleMemberAdded(data, block));
     }
 
     if (membersRemoved.success) {
       const data = membersRemoved.data.membersRemoved.filter(
         f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
       );
-      yield* _(Effect.fork(handleMemberRemoved(data)));
+      yield* _(handleMemberRemoved(data));
     }
 
     if (editorsAdded.success) {
       const data = editorsAdded.data.editorsAdded.filter(
         f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
       );
-      yield* _(Effect.fork(handleEditorsAdded(data, block)));
+      yield* _(handleEditorsAdded(data, block));
     }
 
     if (editorsRemoved.success) {
       const data = editorsRemoved.data.editorsRemoved.filter(
         f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
       );
-      yield* _(Effect.fork(handleEditorRemoved(data)));
+      yield* _(handleEditorRemoved(data));
     }
 
     if (subspacesAdded.success) {
       const data = subspacesAdded.data.subspacesAdded.filter(
         f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
       );
-      yield* _(Effect.fork(handleSubspacesAdded(data, block)));
+      yield* _(handleSubspacesAdded(data, block));
     }
 
     if (subspacesRemoved.success) {
       const data = subspacesRemoved.data.subspacesRemoved.filter(
         f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
       );
-      yield* _(Effect.fork(handleSubspacesRemoved(data)));
+      yield* _(handleSubspacesRemoved(data));
     }
 
     if (addMembersProposed.success) {
