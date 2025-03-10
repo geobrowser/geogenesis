@@ -580,8 +580,9 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
   const renderedDateTime: DateTimeType = (mode === 'before' ? beforeDateTime : afterDateTime) as DateTimeType;
   const highlightClassName = mode === 'before' ? 'rounded bg-errorTertiary' : 'bg-successTertiary rounded';
 
+  const hasFormatChanged = before.options?.format !== after.options?.format;
   const formattedDate = mode === 'before' ? formattedDateBefore : formattedDateAfter;
-  const formattedDateHighlightClassName = before.options?.format !== after.options?.format ? highlightClassName : '';
+  const formattedDateHighlightClassName = hasFormatChanged ? highlightClassName : '';
 
   return (
     <>
@@ -631,7 +632,7 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
           </p>
         </div>
       </div>
-      {!equal(before.options, after.options) && (
+      {hasFormatChanged && (
         <p className="py-2 text-sm text-grey-04">
           Browse format · <span className={formattedDateHighlightClassName}>{formattedDate}</span>
         </p>
