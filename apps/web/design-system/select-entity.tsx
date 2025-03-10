@@ -17,7 +17,6 @@ import { EntityId } from '~/core/io/schema';
 import { getImagePath } from '~/core/utils/utils';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
-import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { TopRanked } from '~/design-system/icons/top-ranked';
 import { Tag } from '~/design-system/tag';
 import { Toggle } from '~/design-system/toggle';
