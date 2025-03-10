@@ -159,6 +159,8 @@ export function writeEdits(args: PopulateContentArgs) {
       (a, z) => a.space_id.toString() === z.space_id.toString() && a.version_id.toString() === z.version_id.toString()
     );
 
+    const versionTypes = aggregateTypesFromRelationsAndTriples(relations);
+
     yield* _(
       Effect.all(
         [
@@ -191,24 +193,16 @@ export function writeEdits(args: PopulateContentArgs) {
             catch: error =>
               new CouldNotWriteRelationsError({ message: `Failed to insert relations. ${(error as Error).message}` }),
           }),
+          Effect.tryPromise({
+            try: () => Types.upsert(versionTypes, { chunked: true }),
+            catch: error =>
+              new CouldNotWriteVersionTypesError({
+                message: `Failed to insert version types. ${(error as Error).message}`,
+              }),
+          }),
         ],
         { concurrency: 'unbounded' }
       )
-    );
-
-    // We run this after versions are written so that we can fetch all of the types for the
-    // type entity and compare them against the type_of_id version for each relatons to see
-    // of the type_of_id is for the type entity.
-    const versionTypes = aggregateTypesFromRelationsAndTriples(relations);
-
-    yield* _(
-      Effect.tryPromise({
-        try: () => Types.upsert(versionTypes, { chunked: true }),
-        catch: error =>
-          new CouldNotWriteVersionTypesError({
-            message: `Failed to insert version types. ${(error as Error).message}`,
-          }),
-      })
     );
   });
 }
