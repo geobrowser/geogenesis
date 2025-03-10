@@ -30,7 +30,7 @@ export class CouldNotWriteCurrentVersionsError extends Error {
  * event is emitted depends on the governance mechanism that a space has configured
  * (voting vs no voting).
  */
-export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdSpaceIds: string[], block: BlockEvent) {
+export function handleEditsPublished(ipfsProposals: SinkEditProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     yield* _(Effect.logInfo('[EDITS PUBLISHED] Started'));
 
@@ -197,6 +197,29 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       return acc;
     }, new Map<string, Schema.versions.Insertable>());
 
+    yield* _(
+      Effect.tryPromise({
+        try: () =>
+          CurrentVersions.upsert(
+            [...allNonstaleVersions.values()].map(v => {
+              return {
+                entity_id: v.entity_id,
+                version_id: v.id,
+              };
+            }),
+            {
+              chunked: true,
+            }
+          ),
+        catch: error => {
+          console.error(`Failed to insert current versions. ${(error as Error).message}`);
+          return new CouldNotWriteCurrentVersionsError(
+            `Failed to insert current versions. ${(error as Error).message}`
+          );
+        },
+      })
+    );
+
     const relations = yield* _(
       aggregateRelations({
         relationOpsByEditId,
@@ -209,46 +232,17 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
     const spaceMetadatum = aggregateSpacesFromRelations(relations);
 
     yield* _(
-      Effect.fork(
-        Effect.all(
-          [
-            Effect.tryPromise({
-              try: () =>
-                CurrentVersions.upsert(
-                  [...allNonstaleVersions.values()].map(v => {
-                    return {
-                      entity_id: v.entity_id,
-                      version_id: v.id,
-                    };
-                  }),
-                  {
-                    chunked: true,
-                  }
-                ),
-              catch: error => {
-                console.error(`Failed to insert current versions. ${(error as Error).message}`);
-                return new CouldNotWriteCurrentVersionsError(
-                  `Failed to insert current versions. ${(error as Error).message}`
-                );
-              },
-            }),
-            Effect.tryPromise({
-              try: () =>
-                SpaceMetadata.upsert(
-                  dedupeWith(spaceMetadatum, (a, z) => a.space_id === z.space_id),
-                  { chunked: true }
-                ),
-              catch: error =>
-                new CouldNotWriteSpaceMetadataError({
-                  message: `Failed to insert space metadata. ${(error as Error).message}`,
-                }),
-            }),
-          ],
-          {
-            concurrency: 50,
-          }
-        )
-      )
+      Effect.tryPromise({
+        try: () =>
+          SpaceMetadata.upsert(
+            dedupeWith(spaceMetadatum, (a, z) => a.space_id === z.space_id),
+            { chunked: true }
+          ),
+        catch: error =>
+          new CouldNotWriteSpaceMetadataError({
+            message: `Failed to insert space metadata. ${(error as Error).message}`,
+          }),
+      })
     );
 
     yield* _(Effect.logInfo('[EDITS PUBLISHED] Ended'));

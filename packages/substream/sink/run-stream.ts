@@ -335,7 +335,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     let createdSpaceIds: string[] | null = null;
 
     if (spacePluginCreatedResponse.success) {
-      const data = spacePluginCreatedResponse.data.spacesCreated.filter(
+      const spaceData = spacePluginCreatedResponse.data.spacesCreated.filter(
         f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
       );
 
@@ -366,14 +366,15 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
        * of this logic for checking proposals happens in the same place.
        */
       if (editsPublishedResponse.success) {
-        const spacesWithInitialProposal = getSpacesWithInitialProposalsProcessed(
-          data,
-          editsPublishedResponse.data.editsPublished
+        const editData = editsPublishedResponse.data.editsPublished.filter(
+          f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
         );
+
+        const spacesWithInitialProposal = getSpacesWithInitialProposalsProcessed(spaceData, editData);
 
         const spacePluginAddressesWithInitialProposal = new Set(spacesWithInitialProposal.map(s => s.spaceAddress));
 
-        const initialProposalsForSpaces = editsPublishedResponse.data.editsPublished.filter(p =>
+        const initialProposalsForSpaces = editData.filter(p =>
           spacePluginAddressesWithInitialProposal.has(p.pluginAddress)
         );
 
@@ -384,7 +385,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
           return acc;
         }, new Map<string, string | null>());
 
-        const spacesCreated = data.map(s => {
+        const spacesCreated = spaceData.map(s => {
           return {
             id: initialSpaceIdsByPluginAddress.get(s.spaceAddress) ?? null,
             daoAddress: s.daoAddress,
@@ -394,7 +395,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
 
         createdSpaceIds = yield* _(handleSpacesCreated(spacesCreated, block));
       } else {
-        createdSpaceIds = yield* _(handleSpacesCreated(data, block));
+        createdSpaceIds = yield* _(handleSpacesCreated(spaceData, block));
       }
     }
 
@@ -531,6 +532,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       const data = editsProposed.data.edits.filter(
         f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
       );
+
       yield* _(handleEditProposalCreated(data, block));
     }
 
@@ -638,7 +640,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       }
 
       if (proposals.length > 0) {
-        yield* _(handleEditsPublished(proposals, createdSpaceIds ?? [], block));
+        yield* _(handleEditsPublished(proposals, block));
       }
     }
 
@@ -646,6 +648,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       const data = executedProposals.data.executedProposals.filter(
         f => f.pluginAddress !== US_LAW_SPACE.mainVotingPluginAddress
       );
+
       yield* _(handleProposalsExecuted(data, block));
     }
 
