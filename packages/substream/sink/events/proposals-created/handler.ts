@@ -17,7 +17,6 @@ import { Edits } from '~/sink/db/edits';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
 import type { BlockEvent, SinkEditorshipProposal, SinkMembershipProposal, SinkSubspaceProposal } from '~/sink/types';
 import { deriveProposalId, deriveSpaceId } from '~/sink/utils/id';
-import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { writeEdits } from '~/sink/write-edits/write-edits';
@@ -73,8 +72,7 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
         catch: error => {
           return new CouldNotWriteCreatedProposalsError(String(error));
         },
-      }),
-      retryEffect
+      })
     );
 
     const opsByVersionId = yield* _(
@@ -167,8 +165,7 @@ export function handleMembershipProposalsCreated(
         catch: error => {
           return new CouldNotWriteCreatedProposalsError(String(error));
         },
-      }),
-      retryEffect
+      })
     );
 
     yield* _(Effect.logDebug('[MEMBER PROPOSALS CREATED] Ended'));
@@ -240,8 +237,7 @@ export function handleEditorshipProposalsCreated(
         catch: error => {
           return new CouldNotWriteCreatedProposalsError(String(error));
         },
-      }),
-      retryEffect
+      })
     );
 
     yield* _(Effect.logInfo('[EDITOR PROPOSALS CREATED] Ended'));
@@ -309,8 +305,7 @@ export function handleSubspaceProposalsCreated(
         catch: error => {
           return new CouldNotWriteCreatedProposalsError(String(error));
         },
-      }),
-      retryEffect
+      })
     );
 
     yield* _(Effect.logInfo('[SUBSPACE PROPOSALS CREATED] Ended'));

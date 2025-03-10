@@ -19,7 +19,20 @@ export class CurrentVersions {
   }
 
   static async selectOne(where: S.current_versions.Whereable) {
-    return db.selectOne('current_versions', where, { columns: ['entity_id', 'version_id'] }).run(pool);
+    return db
+      .selectOne('current_versions', where, {
+        columns: ['entity_id', 'version_id'],
+        lateral: {
+          version: db.selectOne(
+            'versions',
+            { id: db.parent('version_id') },
+            {
+              columns: ['id', 'created_at_block'],
+            }
+          ),
+        },
+      })
+      .run(pool);
   }
 
   static async select(where: S.current_versions.Whereable) {

@@ -4,7 +4,6 @@ import { mapVotes } from './map-votes';
 import type { VoteCast } from './parser';
 import { ProposalVotes } from '~/sink/db/proposal-votes';
 import type { BlockEvent } from '~/sink/types';
-import { retryEffect } from '~/sink/utils/retry-effect';
 
 class CouldNotWriteVotesError extends Error {
   _tag: 'CouldNotWriteVotesError' = 'CouldNotWriteVotesError';
@@ -26,8 +25,7 @@ export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
         catch: error => {
           return new CouldNotWriteVotesError(String(error));
         },
-      }),
-      retryEffect
+      })
     );
 
     yield* _(Effect.logInfo('[VOTES CAST] Ended'));

@@ -7,7 +7,7 @@ import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder } from '~/sink/proto';
-import type { IntermediateSinkEditProposal, SinkEditProposal } from '~/sink/types';
+import type { IntermediateSinkEditProposal } from '~/sink/types';
 
 /**
  * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
