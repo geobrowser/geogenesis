@@ -233,20 +233,27 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
       r => r.typeOf.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
     )?.toEntity;
 
+    const relationValueTypes = a.relationsOut
+      .filter(r => r.typeOf.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE))
+      .map(r => ({ typeId: r.toEntity.id, typeName: r.toEntity.name }));
+
     return {
       attributeId: a.id,
       relationValueTypeId: relationValueType?.id,
       relationValueTypeName: relationValueType?.name,
+      relationValueTypes,
     };
   });
 
   const schema = schemaWithoutValueType.map((s): PropertySchema => {
     const relationValueType = relationValueTypes.find(t => t.attributeId === s.id) ?? null;
+
     return {
       ...s,
       valueType: (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SystemIds.TEXT) as ValueTypeId,
       relationValueTypeId: relationValueType?.relationValueTypeId,
       relationValueTypeName: relationValueType?.relationValueTypeName,
+      relationValueTypes: relationValueType?.relationValueTypes,
     };
   });
 
