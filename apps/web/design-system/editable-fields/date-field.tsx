@@ -360,7 +360,7 @@ export function DateField(props: DateFieldProps) {
             />
           </div>
         </div>
-        <div className="flex items-center">
+        <div className="flex grow items-center">
           <Minus color="grey-02" className="size-4" />
           <Spacer width={14} />
           <div className="flex items-center gap-1">
