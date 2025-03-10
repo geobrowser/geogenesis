@@ -557,8 +557,8 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
 
 type DateTimeProps = {
   mode: 'before' | 'after';
-  before: TripleChangeValue;
-  after: TripleChangeValue;
+  before: TripleChangeValue | null;
+  after: TripleChangeValue | null;
 };
 
 type DateTimeType = {
@@ -571,18 +571,22 @@ type DateTimeType = {
 };
 
 export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
-  const beforeDateTime = before.value ? GeoDate.fromISOStringUTC(before.value) : null;
-  const afterDateTime = after.value ? GeoDate.fromISOStringUTC(after.value) : null;
+  const beforeDateTime = before?.value ? GeoDate.fromISOStringUTC(before.value) : null;
+  const afterDateTime = after?.value ? GeoDate.fromISOStringUTC(after.value) : null;
 
-  const formattedDateBefore = GeoDate.format(before.value, before.options?.format);
-  const formattedDateAfter = GeoDate.format(after.value, after.options?.format);
+  const formattedDateBefore = before?.value ? GeoDate.format(before.value, before?.options?.format) : null;
+  const formattedDateAfter = after?.value ? GeoDate.format(after.value, after?.options?.format) : null;
 
-  const renderedDateTime: DateTimeType = (mode === 'before' ? beforeDateTime : afterDateTime) as DateTimeType;
+  const renderedDateTime: DateTimeType | null = (
+    mode === 'before' ? beforeDateTime : afterDateTime
+  ) as DateTimeType | null;
   const highlightClassName = mode === 'before' ? 'rounded bg-errorTertiary' : 'bg-successTertiary rounded';
 
-  const hasFormatChanged = before.options?.format !== after.options?.format;
+  const hasFormatChanged = before?.options?.format !== after?.options?.format;
   const formattedDate = mode === 'before' ? formattedDateBefore : formattedDateAfter;
   const formattedDateHighlightClassName = hasFormatChanged ? highlightClassName : '';
+
+  if (!renderedDateTime) return null;
 
   return (
     <>
@@ -622,7 +626,7 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
           </div>
           <p
             className={cx(
-              (!before.value || !after.value || beforeDateTime?.meridiem !== afterDateTime?.meridiem) &&
+              (!before?.value || !after?.value || beforeDateTime?.meridiem !== afterDateTime?.meridiem) &&
                 highlightClassName,
               'w-[32px] text-center uppercase',
               timeClassNames
@@ -632,7 +636,7 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
           </p>
         </div>
       </div>
-      {hasFormatChanged && (
+      {hasFormatChanged && formattedDate && (
         <p className="py-2 text-sm text-grey-04">
           Browse format · <span className={formattedDateHighlightClassName}>{formattedDate}</span>
         </p>
