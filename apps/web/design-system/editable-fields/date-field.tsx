@@ -66,7 +66,7 @@ export function DateField(props: DateFieldProps) {
     meridiem: initialMeridiem,
   } = GeoDate.fromISOStringUTC(props.value);
 
-  const formattedDate = GeoDate.format(props.value, props.format);
+  const formattedDate = props.value ? GeoDate.format(props.value, props.format) : null;
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
   const formattedInitialMonth = initialMonth === '' ? initialMonth : initialMonth.padStart(2, '0');
