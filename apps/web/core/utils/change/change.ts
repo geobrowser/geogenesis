@@ -565,8 +565,6 @@ export function aggregateChanges({
     };
   });
 
-  console.log({ aggregatedChanges });
-
   return aggregatedChanges;
 }
 
