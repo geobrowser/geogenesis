@@ -107,6 +107,9 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
         value: {
           type: t.value.type,
           value: t.value.value,
+          ...(t.value.options !== undefined && {
+            options: Object.fromEntries(Object.entries(t.value.options).filter(([_, v]) => v !== undefined)),
+          }),
         },
       },
     };

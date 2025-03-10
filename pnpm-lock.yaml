@@ -183,10 +183,10 @@ importers:
         specifier: ^6.3.3
         version: 6.3.11
       date-fns:
-        specifier: ^4.1.0
+        specifier: 4.1.0
         version: 4.1.0
       date-fns-tz:
-        specifier: ^3.2.0
+        specifier: 3.2.0
         version: 3.2.0(date-fns@4.1.0)
       dayjs:
         specifier: ^1.11.9
@@ -11106,7 +11106,7 @@ snapshots:
 
   '@types/ws@8.5.14':
     dependencies:
-      '@types/node': 22.13.9
+      '@types/node': 20.17.16
 
   '@types/yargs-parser@21.0.3': {}
 

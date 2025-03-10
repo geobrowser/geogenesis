@@ -66,6 +66,7 @@ export function formatShortAddress(address: string): string {
 
 export class GeoDate {
   static defaultFormat = 'h:mmaaa, EEEE, MMMM d, yyyy';
+
   /**
    * We return blocktime from the subgraph for createdAt and updatedAt fields.
    * JavaScript date expects milliseconds, so we need to convert from seconds.

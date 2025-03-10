@@ -1,5 +1,6 @@
 import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { Effect, Record } from 'effect';
+import equal from 'fast-deep-equal';
 
 import { EntityWithSchema, mergeEntity } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
@@ -389,6 +390,8 @@ export function aggregateChanges({
     const tripleChanges: TripleChange[] = [];
     const relationChanges: RelationChange[] = [];
 
+    const processedAttributes = new Set<string>();
+
     const afterTriplesForEntity = afterTriplesByEntityId[entityId] ?? {};
     const beforeTriplesForEntity = beforeTriplesByEntityId[entityId] ?? {};
     const afterRelationsForEntity = afterRelationsByEntityId[entityId] ?? {};
@@ -396,6 +399,8 @@ export function aggregateChanges({
 
     if (afterEntityIds.includes(entityId)) {
       for (const afterTriple of Object.values(afterTriplesForEntity)) {
+        if (processedAttributes.has(afterTriple.attributeId)) continue;
+
         const beforeTriple: Triple | null = beforeTriplesForEntity[afterTriple.attributeId] ?? null;
         const beforeValue = beforeTriple ? beforeTriple.value : null;
         const before = AfterTripleDiff.diffBefore(afterTriple.value, beforeValue);
@@ -410,9 +415,13 @@ export function aggregateChanges({
           before,
           after,
         });
+
+        processedAttributes.add(afterTriple.attributeId);
       }
 
       for (const beforeTriple of Object.values(beforeTriplesForEntity)) {
+        if (processedAttributes.has(beforeTriple.attributeId)) continue;
+
         const afterTriple: Triple | null = afterTriplesForEntity[beforeTriple.attributeId] ?? null;
         const afterValue = afterTriple ? afterTriple.value : null;
         const before = BeforeTripleDiff.diffBefore(beforeTriple.value, afterValue);
@@ -427,6 +436,8 @@ export function aggregateChanges({
           before,
           after,
         });
+
+        processedAttributes.add(beforeTriple.attributeId);
       }
 
       for (const relations of Object.values(afterRelationsForEntity)) {
@@ -563,6 +574,14 @@ function isRealChange(
 ) {
   // The before and after values are the same
   if (before?.value === after?.value && before?.valueName === after?.valueName) {
+    const beforeOptions = before && 'options' in before ? before.options : undefined;
+    const afterOptions = after && 'options' in after ? after.options : undefined;
+
+    // The options are different
+    if (!equal(beforeOptions, afterOptions)) {
+      return true;
+    }
+
     return false;
   }
 
