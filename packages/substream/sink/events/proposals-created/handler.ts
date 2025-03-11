@@ -14,6 +14,7 @@ import { writeAccounts } from '../write-accounts';
 import { getProposalsFromIpfs } from './get-proposal-from-ipfs';
 import { Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
+import { Transaction } from '~/sink/db/transaction';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
 import type { BlockEvent, SinkEditorshipProposal, SinkMembershipProposal, SinkSubspaceProposal } from '~/sink/types';
 import { deriveProposalId, deriveSpaceId } from '~/sink/utils/id';
@@ -58,29 +59,36 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
 
     yield* _(Effect.logDebug('[EDIT PROPOSALS CREATED] Writing proposals + metadata'));
 
-    // @TODO: Put this in a transaction since all these writes are related
-    yield* _(
-      Effect.tryPromise({
-        try: async () => {
-          await Promise.all([
-            // Content proposals
-            Edits.upsert(schemaEditProposals.edits),
-            Proposals.upsert(schemaEditProposals.proposals),
-            Versions.upsert(allNewVersionsInEdit, { chunked: true }),
-          ]);
-        },
-        catch: error => {
-          return new CouldNotWriteCreatedProposalsError(String(error));
-        },
-      })
-    );
+    const [, opsByVersionId] = yield* _(
+      Effect.all(
+        [
+          Effect.tryPromise({
+            try: async () => {
+              await Transaction.run(async txClient => {
+                await Promise.all([
+                  // Content proposals
+                  Edits.upsert(schemaEditProposals.edits, { client: txClient }),
+                  Proposals.upsert(schemaEditProposals.proposals, { client: txClient }),
+                  Versions.copy(allNewVersionsInEdit),
+                ]);
 
-    const opsByVersionId = yield* _(
-      mergeOpsWithPreviousVersions({
-        edits: schemaEditProposals.edits,
-        tripleOpsByVersionId: schemaEditProposals.tripleOpsByVersionId,
-        versions: allNewVersionsInEdit,
-      })
+                return true;
+              });
+            },
+            catch: error => {
+              return new CouldNotWriteCreatedProposalsError(String(error));
+            },
+          }),
+          mergeOpsWithPreviousVersions({
+            edits: schemaEditProposals.edits,
+            tripleOpsByVersionId: schemaEditProposals.tripleOpsByVersionId,
+            versions: allNewVersionsInEdit,
+          }),
+        ],
+        {
+          concurrency: 'unbounded',
+        }
+      )
     );
 
     yield* _(

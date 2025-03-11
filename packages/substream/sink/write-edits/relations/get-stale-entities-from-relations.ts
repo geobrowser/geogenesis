@@ -19,6 +19,7 @@ export function getStaleEntitiesFromDeletedRelations(ops: DeleteRelationOp[]) {
     // The relations we get here are unfortunately versions so we have to then query
     // the versions to get the entity ids. We could do a JOIN here with a special SQL
     // query but I've found it's super slow.
+    // @TODO: Join instead of two queries
     const relations = yield* _(getDeletedRelationsFromOps(ops));
 
     const getEntityIdOfFromRelations = Effect.forEach(

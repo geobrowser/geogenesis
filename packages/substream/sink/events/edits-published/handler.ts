@@ -7,7 +7,6 @@ import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-
 import { CurrentVersions, Proposals, SpaceMetadata, Versions } from '~/sink/db';
 import type { BlockEvent, DeleteTripleOp, SetTripleOp, SinkEditProposal } from '~/sink/types';
 import { createVersionId } from '~/sink/utils/id';
-import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { aggregateRelations } from '~/sink/write-edits/relations/aggregate-relations';

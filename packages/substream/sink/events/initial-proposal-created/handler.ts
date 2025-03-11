@@ -4,6 +4,7 @@ import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-
 import { writeAccounts } from '../write-accounts';
 import { Proposals, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
+import { Transaction } from '~/sink/db/transaction';
 import type { BlockEvent, SinkEditProposal } from '~/sink/types';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
@@ -54,21 +55,29 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
 
     // @TODO transactions are pretty slow for actual content writing for now, so
     // we are skipping writing the actual content in a transaction for now.
-    yield* _(
-      Effect.tryPromise({
-        try: async () => {
-          // @TODO this can probably go into an effect somewhere that's defined after
-          // we aggregate all the appropriate data to write.
-          await Promise.all([
-            Edits.upsert(schemaEditProposals.edits),
-            Proposals.upsert(schemaEditProposals.proposals),
-            Versions.upsert(versionsWithStaleEntities, { chunked: true }),
-          ]);
+    const [, opsByNewVersions] = yield* _(
+      Effect.all([
+        Effect.tryPromise({
+          try: async () => {
+            await Transaction.run(async txClient => {
+              // @TODO this can probably go into an effect somewhere that's defined after
+              // we aggregate all the appropriate data to write.
+              await Promise.all([
+                Edits.upsert(schemaEditProposals.edits, { client: txClient }),
+                Proposals.upsert(schemaEditProposals.proposals, { client: txClient }),
+              ]);
 
-          return true;
-        },
-        catch: error => new CouldNotWriteInitialSpaceProposalsError(String(error)),
-      })
+              return true;
+            });
+          },
+          catch: error => new CouldNotWriteInitialSpaceProposalsError(String(error)),
+        }),
+        mergeOpsWithPreviousVersions({
+          edits: schemaEditProposals.edits,
+          tripleOpsByVersionId: schemaEditProposals.tripleOpsByVersionId,
+          versions: versionsWithStaleEntities,
+        }),
+      ])
     );
 
     yield* _(Effect.logDebug('[INITIAL PROPOSAL CREATED] Writing content for edits'));

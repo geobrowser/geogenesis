@@ -43,7 +43,12 @@ export class Versions {
     return await db.insert('versions', versions).run(pool);
   }
 
-  static async upsertMetadata(versions: S.versions.Insertable[], { chunked }: { chunked?: boolean } = {}) {
+  static async upsertMetadata(
+    versions: S.versions.Insertable[],
+    { chunked, txClient }: { chunked?: boolean; txClient?: db.TxnClient<db.IsolationLevel.Serializable> } = {}
+  ) {
+    const client = txClient ?? pool;
+
     if (chunked) {
       for (let i = 0; i < versions.length; i += CHUNK_SIZE) {
         const chunk = versions.slice(i, i + CHUNK_SIZE);
@@ -51,13 +56,13 @@ export class Versions {
           .upsert('versions', chunk, ['id'], {
             updateColumns: ['name', 'description'],
           })
-          .run(pool);
+          .run(client);
       }
 
       return;
     }
 
-    return await db.upsert('versions', versions, ['id'], { updateColumns: ['name', 'description'] }).run(pool);
+    return await db.upsert('versions', versions, ['id'], { updateColumns: ['name', 'description'] }).run(client);
   }
 
   static select(where: S.versions.Whereable) {

@@ -1,9 +1,14 @@
 import { from as copyFrom } from 'pg-copy-streams';
 import { Readable, pipeline } from 'stream';
+import * as db from 'zapatos/db';
 
 import { pool } from '../utils/pool';
 
-export async function copyBulk(table: string, data: unknown[]) {
+export async function copyBulk(
+  table: string,
+  data: unknown[],
+  txClient?: db.TxnClient<db.IsolationLevel.Serializable>
+) {
   const maybeFirstRow = data[0];
 
   if (!maybeFirstRow) {

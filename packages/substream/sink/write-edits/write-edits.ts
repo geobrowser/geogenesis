@@ -5,6 +5,7 @@ import type * as Schema from 'zapatos/schema';
 
 import { CurrentVersions, Entities, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
+import { Transaction } from '../db/transaction';
 import type { BlockEvent, CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SetTripleOp } from '../types';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
 import { aggregateRelations } from './relations/aggregate-relations';
@@ -51,6 +52,7 @@ interface PopulateContentArgs {
  * versions as a single unit.
  */
 export function writeEdits(args: PopulateContentArgs) {
+  const start = Date.now();
   const { versions, tripleOpsByVersionId, relationOpsByEditId, edits, block, editType } = args;
 
   const spaceIdByEditId = new Map<string, string>();
@@ -161,49 +163,81 @@ export function writeEdits(args: PopulateContentArgs) {
 
     const versionTypes = aggregateTypesFromRelationsAndTriples(relations);
 
+    console.log('versions length with metadata', versionsWithMetadata.length);
+    console.log('entities length', uniqueEntities.length);
+    console.log('version spaces length', versionSpacesUnique.length);
+    console.log('triples length', triplesWithCreatedBy.length);
+    console.log('relations length', relations.length);
+    console.log('version types length', versionTypes.length);
+
     yield* _(
-      Effect.all(
-        [
-          Effect.tryPromise({
-            try: () => Versions.upsertMetadata(versionsWithMetadata, { chunked: true }),
-            catch: error =>
-              new CouldNotWriteVersionsError({
-                message: `Failed to insert versions with metadata. ${(error as Error).message}`,
+      Effect.tryPromise({
+        try: () =>
+          Transaction.run(async txClient => {
+            await Promise.all([
+              Versions.upsertMetadata(versionsWithMetadata, { chunked: true, txClient }),
+              Entities.copy(uniqueEntities),
+              VersionSpaces.copy(versionSpacesUnique),
+              writeTriples({
+                schemaTriples: triplesWithCreatedBy,
               }),
+              Relations.copy(relations),
+              Types.copy(versionTypes),
+            ]);
+
+            return true;
           }),
-          Effect.tryPromise({
-            // We update the name and description for an entity when mapping
-            // through triples.
-            try: () => Entities.upsert(uniqueEntities, { chunked: true }),
-            catch: error =>
-              new CouldNotWriteEntitiesError({ message: `Failed to insert entities. ${(error as Error).message}` }),
-          }),
-          Effect.tryPromise({
-            try: () => VersionSpaces.upsert(versionSpacesUnique, { chunked: true }),
-            catch: error =>
-              new CouldNotWriteVersionSpacesError({
-                message: `Failed to insert version spaces. ${(error as Error).message}`,
-              }),
-          }),
-          writeTriples({
-            schemaTriples: triplesWithCreatedBy,
-          }),
-          Effect.tryPromise({
-            try: () => Relations.upsert(relations, { chunked: true }),
-            catch: error =>
-              new CouldNotWriteRelationsError({ message: `Failed to insert relations. ${(error as Error).message}` }),
-          }),
-          Effect.tryPromise({
-            try: () => Types.upsert(versionTypes, { chunked: true }),
-            catch: error =>
-              new CouldNotWriteVersionTypesError({
-                message: `Failed to insert version types. ${(error as Error).message}`,
-              }),
-          }),
-        ],
-        { concurrency: 'unbounded' }
-      )
+        catch: error =>
+          new CouldNotWriteVersionsError({ message: `Failed to insert bulk versions. ${(error as Error).message}` }),
+      })
     );
+
+    // yield* _(
+    //   Effect.all(
+    //     [
+    //       Effect.tryPromise({
+    //         try: () => Versions.upsertMetadata(versionsWithMetadata, { chunked: true }),
+    //         catch: error =>
+    //           new CouldNotWriteVersionsError({
+    //             message: `Failed to insert versions with metadata. ${(error as Error).message}`,
+    //           }),
+    //       }),
+    //       Effect.tryPromise({
+    //         // We update the name and description for an entity when mapping
+    //         // through triples.
+    //         try: () => Entities.copy(uniqueEntities),
+    //         catch: error =>
+    //           new CouldNotWriteEntitiesError({ message: `Failed to insert entities. ${(error as Error).message}` }),
+    //       }),
+    //       Effect.tryPromise({
+    //         try: () => VersionSpaces.copy(versionSpacesUnique),
+    //         catch: error =>
+    //           new CouldNotWriteVersionSpacesError({
+    //             message: `Failed to insert version spaces. ${(error as Error).message}`,
+    //           }),
+    //       }),
+    //       writeTriples({
+    //         schemaTriples: triplesWithCreatedBy,
+    //       }),
+    //       Effect.tryPromise({
+    //         try: () => Relations.copy(relations),
+    //         catch: error =>
+    //           new CouldNotWriteRelationsError({ message: `Failed to insert relations. ${(error as Error).message}` }),
+    //       }),
+    //       Effect.tryPromise({
+    //         try: () => Types.copy(versionTypes),
+    //         catch: error =>
+    //           new CouldNotWriteVersionTypesError({
+    //             message: `Failed to insert version types. ${(error as Error).message}`,
+    //           }),
+    //       }),
+    //     ],
+    //     { concurrency: 'unbounded' }
+    //   )
+    // );
+
+    const end = Date.now();
+    console.log('[WRITE EDITS][DURATION]', end - start);
   });
 }
 
