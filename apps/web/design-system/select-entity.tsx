@@ -17,16 +17,15 @@ import { EntityId } from '~/core/io/schema';
 import { getImagePath } from '~/core/utils/utils';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
+import { TopRanked } from '~/design-system/icons/top-ranked';
 import { Tag } from '~/design-system/tag';
 import { Toggle } from '~/design-system/toggle';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { ArrowLeft } from './icons/arrow-left';
 import { InfoSmall } from './icons/info-small';
-import { RightArrowLong } from './icons/right-arrow-long';
 import { Search } from './icons/search';
 import { ResizableContainer } from './resizable-container';
-import { Spacer } from './spacer';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
 
@@ -41,8 +40,6 @@ type SelectEntityProps = {
   variant?: 'floating' | 'fixed';
   width?: 'clamped' | 'full';
   withSearchIcon?: boolean;
-  /** When `withSelectSpace` is true, the <SelectEntity> component allows you to optionally pick a `spaceId` and whether or not that space has been verified. When false, the  <SelectEntity> component only selects the `entityId`. */
-  withSelectSpace?: boolean;
 };
 
 const inputStyles = cva('', {
@@ -95,9 +92,7 @@ export const SelectEntity = ({
   containerClassName = '',
   inputClassName = '',
   withSearchIcon = false,
-  withSelectSpace = true,
 }: SelectEntityProps) => {
-  const [isVerified, setIsVerified] = useState<boolean>(false);
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
 
   const [result, setResult] = useState<SearchResult | null>(null);
@@ -122,26 +117,20 @@ export const SelectEntity = ({
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
 
-    // @NOTE The only place we're currently not using `withSelectSpace` for now is for the space
-    // creation flow, which doesn't create new entities. So we don't want to upsert a name triple of
-    // an unused entity if "Create new" is selected in that flow. This check should probably be
-    // moved to a separate prop.
-    if (withSelectSpace) {
-      // Create new entity with name and types
-      upsert(
-        {
-          entityId: newEntityId,
-          attributeId: SystemIds.NAME_ATTRIBUTE,
-          entityName: query,
-          attributeName: 'Name',
-          value: {
-            type: 'TEXT',
-            value: query,
-          },
+    // Create new entity with name and types
+    upsert(
+      {
+        entityId: newEntityId,
+        attributeId: SystemIds.NAME_ATTRIBUTE,
+        entityName: query,
+        attributeName: 'Name',
+        value: {
+          type: 'TEXT',
+          value: query,
         },
-        spaceId
-      );
-    }
+      },
+      spaceId
+    );
 
     // This component is used in many different use-cases across the system, so we
     // need to be able to pass in a callback. onCreateEntity is used to enable to
@@ -151,14 +140,9 @@ export const SelectEntity = ({
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
       onCreateEntity({ id: newEntityId, name: query });
-      if (!withSelectSpace) {
-        onQueryChange('');
-      }
     }
     onDone({ id: newEntityId, name: query });
-    if (withSelectSpace) {
-      setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
-    }
+    setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
   return (
@@ -193,138 +177,123 @@ export const SelectEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
-              className="z-[9999] w-[var(--radix-popper-anchor-width)]"
+              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
               forceMount
             >
               <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
                 <div
                   className={cx(
-                    '-ml-px overflow-hidden rounded-md border border-divider bg-white',
+                    '-ml-px overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
                     width === 'clamped' ? 'w-[400px]' : '-mr-px',
                     withSearchIcon && 'rounded-t-none'
                   )}
                 >
                   {!result ? (
                     <ResizableContainer>
-                      <div className="flex max-h-[180px] flex-col overflow-y-auto overflow-x-clip bg-white">
+                      <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
                         {!results?.length && isLoading && (
-                          <div className="w-full border-b border-divider bg-white px-3 py-2">
-                            <div className="truncate text-button text-text">Loading...</div>
+                          <div className="w-full bg-white px-3 py-2">
+                            <div className="text-resultTitle truncate text-text">Loading...</div>
                           </div>
                         )}
                         {isEmpty ? (
-                          <div className="w-full border-b border-divider bg-white px-3 py-2">
-                            <div className="truncate text-button text-text">No results.</div>
+                          <div className="w-full bg-white px-3 py-2">
+                            <div className="text-resultTitle truncate text-text">No results.</div>
                           </div>
                         ) : (
-                          <div className="divider-y-divider bg-white">
+                          <div className="divide-y divide-divider bg-white">
                             {results.map((result, index) => (
                               <div key={index} className="w-full">
                                 <div className="p-1">
                                   <button
                                     onClick={() => {
-                                      if (withSelectSpace) {
-                                        setResult(null);
-                                        onDone({
-                                          id: result.id,
-                                          name: result.name,
-                                        });
-                                        onQueryChange('');
-                                      } else {
-                                        onDone({
-                                          id: result.id,
-                                          name: result.name,
-                                        });
-                                        onQueryChange('');
-                                      }
+                                      setResult(null);
+                                      onDone({
+                                        id: result.id,
+                                        name: result.name,
+                                      });
+                                      onQueryChange('');
                                     }}
-                                    className="relative z-10 flex w-full flex-col rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
+                                    className="relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
                                   >
-                                    <div className="max-w-full truncate text-button text-text">{result.name}</div>
-                                    {result.types.length > 0 && (
-                                      <>
-                                        <Spacer height={4} />
-                                        <div className="flex items-center gap-1.5">
-                                          {result.types.map(type => (
-                                            <Tag key={type.id}>{type.name}</Tag>
-                                          ))}
-                                        </div>
-                                        {withSelectSpace && <Spacer height={4} />}
-                                      </>
+                                    {isShowingIds && (
+                                      <div className="mb-2 text-[0.6875rem] text-grey-04">ID · {result.id}</div>
                                     )}
+                                    <div className="text-resultTitle max-w-full truncate text-text">{result.name}</div>
+                                    <div className="mt-1.5 flex items-center gap-1.5">
+                                      <div className="flex shrink-0 items-center gap-1">
+                                        <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
+                                          <TopRanked color="grey-04" />
+                                        </span>
+                                        <span className="text-[0.875rem] text-text">Top-ranked</span>
+                                      </div>
+                                      {result.types.length > 0 && (
+                                        <>
+                                          <div className="shrink-0">
+                                            <svg
+                                              width="8"
+                                              height="9"
+                                              viewBox="0 0 8 9"
+                                              fill="none"
+                                              xmlns="http://www.w3.org/2000/svg"
+                                            >
+                                              <path
+                                                d="M2.25 8L5.75 4.5L2.25 1"
+                                                stroke="#606060"
+                                                strokeLinecap="round"
+                                              />
+                                            </svg>
+                                          </div>
+                                          <div className="flex items-center gap-1.5">
+                                            {result.types.slice(0, 3).map(type => (
+                                              <Tag key={type.id}>{type.name}</Tag>
+                                            ))}
+                                            {result.types.length > 3 ? (
+                                              <Tag>{`+${result.types.length - 3}`}</Tag>
+                                            ) : null}
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
                                     {result.description && (
                                       <>
-                                        <Spacer height={4} />
-                                        <Truncate maxLines={3} shouldTruncate variant="footnote">
-                                          <p className="text-footnote text-grey-04">{result.description}</p>
+                                        <Truncate maxLines={3} shouldTruncate variant="footnote" className="mt-2">
+                                          <p className="!text-[0.75rem] leading-[1.2] text-grey-04">
+                                            {result.description}
+                                          </p>
                                         </Truncate>
                                       </>
                                     )}
-
-                                    {isShowingIds && (
-                                      <div className="mb-2 mt-1 text-footnoteMedium text-grey-04">
-                                        Entity ID &mdash; {result.id}
-                                      </div>
-                                    )}
-
-                                    <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
-                                      {!withSelectSpace ? (
-                                        <>
-                                          <div className="inline-flex gap-0">
-                                            {(result.spaces ?? []).slice(0, 3).map(space => (
-                                              <div
-                                                key={space.spaceId}
-                                                className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                                              >
-                                                <img
-                                                  src={getImagePath(space.image)}
-                                                  alt=""
-                                                  className="h-full w-full object-cover"
-                                                />
-                                              </div>
-                                            ))}
-                                          </div>
-                                          {(result.spaces ?? []).length}{' '}
-                                          {pluralize('space', (result.spaces ?? []).length)}
-                                        </>
-                                      ) : (
-                                        <span>Any space</span>
-                                      )}
-                                    </div>
                                   </button>
                                 </div>
-                                {withSelectSpace && (
-                                  <div className="-mt-2 p-1">
-                                    <button
-                                      onClick={() => setResult(result)}
-                                      className="relative z-0 flex w-full items-center justify-between rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01"
-                                    >
-                                      <div className="flex items-center gap-1">
-                                        <div className="inline-flex gap-0">
-                                          {(result.spaces ?? []).slice(0, 3).map(space => (
-                                            <div
-                                              key={space.spaceId}
-                                              className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                                            >
-                                              <img
-                                                src={getImagePath(space.image)}
-                                                alt=""
-                                                className="h-full w-full object-cover"
-                                              />
-                                            </div>
-                                          ))}
-                                        </div>
-                                        <div className="text-[0.75rem] font-medium text-grey-04">
-                                          {(result.spaces ?? []).length}{' '}
-                                          {pluralize('space', (result.spaces ?? []).length)}
-                                        </div>
+                                <div className="-mt-2 p-1">
+                                  <button
+                                    onClick={() => setResult(result)}
+                                    className="relative z-0 flex w-full items-center justify-between rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-grey-01"
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <div className="inline-flex gap-0">
+                                        {(result.spaces ?? []).slice(0, 3).map(space => (
+                                          <div
+                                            key={space.spaceId}
+                                            className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
+                                          >
+                                            <img
+                                              src={getImagePath(space.image)}
+                                              alt=""
+                                              className="h-full w-full object-cover"
+                                            />
+                                          </div>
+                                        ))}
                                       </div>
-                                      <div className="size-[12px] *:size-[12px]">
-                                        <RightArrowLong color="grey-04" />
+                                      <div className="text-[0.875rem] text-text">
+                                        {(result.spaces ?? []).length}{' '}
+                                        {pluralize('space', (result.spaces ?? []).length)}
                                       </div>
-                                    </button>
-                                  </div>
-                                )}
+                                    </div>
+                                    <div className="text-[0.875rem] text-grey-04">Select space</div>
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -334,47 +303,28 @@ export const SelectEntity = ({
                   ) : (
                     <>
                       <div className="flex items-center justify-between border-b border-divider bg-white">
-                        <div className="flex-1">
+                        <div className="w-1/3">
                           <button onClick={() => setResult(null)} className="p-2">
                             <ArrowLeft color="grey-04" />
                           </button>
                         </div>
-                        <div className="inline-flex flex-1 items-center gap-1 p-2 text-button text-text">
-                          <span>Select a space</span>
+                        <div className="text-resultTitle flex w-1/3 items-center justify-center p-2 text-center text-text">
+                          <span>Select space</span>
+                        </div>
+                        <div className="flex w-1/3 justify-end px-2">
                           <Tooltip
                             trigger={
                               <div className="*:size-[12px]">
                                 <InfoSmall color="grey-04" />
                               </div>
                             }
-                            label={`Selecting a specific space to link to will mean that any time you access this entity, it’ll take you to that space’s view on this entity.`}
+                            label={`Selecting a specific space will mean that any time anyone clicks this link, it’ll take them to that space’s view of this entity.`}
                             position="top"
                             variant="light"
                           />
                         </div>
-                        <div className="flex-1" />
                       </div>
-                      <div className="flex w-full items-center justify-between bg-grey-01 px-3 py-1.5">
-                        <div className="inline-flex items-center gap-1">
-                          <div className="inline-flex items-center gap-1.5">
-                            <div className="text-footnoteMedium text-grey-04">Set relation as verified</div>
-                          </div>
-                          <Tooltip
-                            trigger={
-                              <div className="*:size-[12px]">
-                                <InfoSmall color="grey-04" />
-                              </div>
-                            }
-                            label={`Different versions of the same entity can live in one or multiple spaces. You can select which version of that entity you feel is the source of truth for the most legitimate information.`}
-                            position="top"
-                            variant="light"
-                          />
-                        </div>
-                        <button onClick={() => setIsVerified(!isVerified)}>
-                          <Toggle checked={isVerified} />
-                        </button>
-                      </div>
-                      <div className="flex max-h-[180px] flex-col overflow-y-auto overflow-x-clip bg-white">
+                      <div className="flex max-h-[219px] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
                         {(result.spaces ?? []).map((space, index) => (
                           <button
                             key={index}
@@ -384,21 +334,20 @@ export const SelectEntity = ({
                                 id: result.id,
                                 name: result.name,
                                 space: EntityId(space.spaceId),
-                                verified: isVerified,
                               });
                               onQueryChange('');
                             }}
-                            className="flex w-full items-center justify-between border-t border-divider px-3 py-2 hover:bg-grey-01"
+                            className="flex w-full items-center gap-3 px-3 py-2 hover:bg-grey-01"
                           >
                             <div>
-                              <div className="truncate text-button text-text">{space.name}</div>
-                              <div>
-                                <Tag>Space</Tag>
+                              <div className="h-[24px] w-[24px] overflow-clip rounded-md">
+                                <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
                               </div>
                             </div>
                             <div>
-                              <div className="h-[32px] w-[32px] overflow-clip rounded-md">
-                                <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
+                              <div className="text-resultTitle truncate text-text">{space.name}</div>
+                              <div className="mt-1.5">
+                                <Tag>Space</Tag>
                               </div>
                             </div>
                           </button>
@@ -407,12 +356,12 @@ export const SelectEntity = ({
                     </>
                   )}
                   {!result && (
-                    <div className="flex w-full items-center justify-between px-3 py-1.5">
+                    <div className="flex w-full items-center justify-between border-t border-grey-02 px-4 py-2">
                       <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
                         <Toggle checked={isShowingIds} />
-                        <div className="text-footnoteMedium text-grey-04">Show IDs</div>
+                        <div className="text-[0.875rem] text-grey-04">IDs</div>
                       </button>
-                      <button onClick={onCreateNewEntity} className="text-smallButton text-grey-04">
+                      <button onClick={onCreateNewEntity} className="text-resultLink text-ctaHover">
                         Create new
                       </button>
                     </div>

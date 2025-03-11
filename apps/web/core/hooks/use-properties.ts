@@ -35,26 +35,16 @@ export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
         };
       });
 
-      const relationValueTypes = properties.map(a => {
-        const relationValueType = a.relationsOut.find(
-          r => r.typeOf.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
-        )?.toEntity;
-
-        return {
-          attributeId: a.id,
-          relationValueTypeId: relationValueType?.id,
-          relationValueTypeName: relationValueType?.name,
-        };
-      });
-
       const schema = properties.map((s): PropertySchema => {
-        const relationValueType = relationValueTypes.find(t => t.attributeId === s.id) ?? null;
+        const relationValueTypes = s.relationsOut
+          .filter(s => s.typeOf.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE))
+          .map(s => ({ typeId: s.toEntity.id, typeName: s.toEntity.name }));
+
         return {
           id: s.id,
           name: s.name,
           valueType: (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SystemIds.TEXT) as ValueTypeId,
-          relationValueTypeId: relationValueType?.relationValueTypeId,
-          relationValueTypeName: relationValueType?.relationValueTypeName,
+          relationValueTypes,
           homeSpace: s.spaces[0],
         };
       });

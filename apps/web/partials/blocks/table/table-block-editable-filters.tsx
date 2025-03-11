@@ -39,6 +39,7 @@ export function TableBlockEditableFilters() {
                 valueType: VALUE_TYPES[c.valueType],
                 value: '',
                 valueName: null,
+                relationValueTypes: c.relationValueTypes,
               };
             })
             // Filter out any columns with names and any columns that are not entity or string value types
