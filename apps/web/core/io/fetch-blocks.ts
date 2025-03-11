@@ -72,6 +72,8 @@ export async function fetchBlocks(ids: string[]): Promise<Entity[]> {
       }
     }
 
+    console.log('resultOrError', resultOrError);
+
     return resultOrError.right;
   });
 

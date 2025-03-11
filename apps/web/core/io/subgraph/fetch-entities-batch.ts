@@ -73,8 +73,8 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
     signal,
   });
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* () {
+    const resultOrError = yield* Effect.either(graphqlFetchEffect);
 
     if (Either.isLeft(resultOrError)) {
       const error = resultOrError.left;
@@ -114,7 +114,6 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
 
       return Either.match(decodedSpace, {
         onLeft: () => {
-          // console.error(`Unable to decode collection item entity ${e.id} with error ${error}`);
           return null;
         },
         onRight: substreamEntity => {
