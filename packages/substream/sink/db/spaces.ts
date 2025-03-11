@@ -11,7 +11,7 @@ export class Spaces {
 
   static async getById(spaceId: string) {
     return await db
-      .selectOne(
+      .selectExactlyOne(
         'spaces',
         { id: spaceId },
         { columns: ['id', 'type', 'main_voting_plugin_address', 'personal_space_admin_plugin_address'] }

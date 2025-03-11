@@ -12,9 +12,9 @@ export class Versions {
 
   static async upsert(
     versions: S.versions.Insertable[],
-    options: { chunked?: boolean; client?: db.TxnClient<db.IsolationLevel.Serializable> } = {}
+    options: { chunked?: boolean; txClient?: db.TxnClient<db.IsolationLevel.Serializable> } = {}
   ) {
-    const client = options.client ?? pool;
+    const client = options.txClient ?? pool;
 
     if (options.chunked) {
       for (let i = 0; i < versions.length; i += CHUNK_SIZE) {
@@ -29,18 +29,23 @@ export class Versions {
     return await db.upsert('versions', versions, ['id'], { updateColumns: db.doNothing }).run(client);
   }
 
-  static async insert(versions: S.versions.Insertable[], options: { chunked?: boolean } = {}) {
+  static async insert(
+    versions: S.versions.Insertable[],
+    options: { chunked?: boolean; txClient?: db.TxnClient<db.IsolationLevel.Serializable> } = {}
+  ) {
+    const client = options.txClient ?? pool;
+
     if (options.chunked) {
       for (let i = 0; i < versions.length; i += CHUNK_SIZE) {
         const chunk = versions.slice(i, i + CHUNK_SIZE);
 
-        await db.insert('versions', chunk).run(pool);
+        await db.insert('versions', chunk).run(client);
       }
 
       return;
     }
 
-    return await db.insert('versions', versions).run(pool);
+    return await db.insert('versions', versions).run(client);
   }
 
   static async upsertMetadata(

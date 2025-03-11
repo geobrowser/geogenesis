@@ -2,6 +2,7 @@ import { Duration, Effect, Either, Schedule } from 'effect';
 import type { TimeoutException } from 'effect/Cause';
 
 import { IPFS_GATEWAY } from '../constants/constants';
+import { cache } from './cache';
 
 class UnableToParseBase64Error extends Error {
   _tag: 'UnableToParseBase64Error' = 'UnableToParseBase64Error';
@@ -31,6 +32,11 @@ export function getFetchIpfsContentEffect(
   never
 > {
   return Effect.gen(function* (unwrap) {
+    if (cache.has(uri)) {
+      yield* unwrap(Effect.logInfo(`[FETCH IPFS CONTENT] Cache hit for ${uri}`));
+      return cache.get(uri);
+    }
+
     if (uri.startsWith('data:application/json;base64,')) {
       const base64 = uri.split(',')[1];
 
@@ -94,7 +100,9 @@ export function getFetchIpfsContentEffect(
         Effect.tryPromise({
           try: async () => {
             const buffer = await response.arrayBuffer();
-            return Buffer.from(buffer);
+            const output = Buffer.from(buffer);
+            cache.set(uri, output);
+            return output;
           },
           catch: error =>
             new UnableToParseJsonError(`Unable to parse JSON when reading content from uri ${uri}. ${String(error)}`),

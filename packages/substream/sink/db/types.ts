@@ -10,7 +10,12 @@ export class Types {
     return await copyBulk('version_types', types);
   }
 
-  static async upsert(types: S.version_types.Insertable[], { chunked }: { chunked?: boolean } = {}) {
+  static async upsert(
+    types: S.version_types.Insertable[],
+    { chunked, txClient }: { chunked?: boolean; txClient?: db.TxnClient<db.IsolationLevel.Serializable> } = {}
+  ) {
+    const client = txClient ?? pool;
+
     if (chunked) {
       for (let i = 0; i < types.length; i += CHUNK_SIZE) {
         const chunk = types.slice(i, i + CHUNK_SIZE);
@@ -18,7 +23,7 @@ export class Types {
           .upsert('version_types', chunk, ['version_id', 'type_id'], {
             updateColumns: db.doNothing,
           })
-          .run(pool);
+          .run(client);
       }
 
       return;
@@ -26,6 +31,6 @@ export class Types {
 
     return await db
       .upsert('version_types', types, ['version_id', 'type_id'], { updateColumns: db.doNothing })
-      .run(pool);
+      .run(client);
   }
 }

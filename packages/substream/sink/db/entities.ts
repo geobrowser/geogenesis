@@ -10,7 +10,12 @@ export class Entities {
     await copyBulk('entities', entities);
   }
 
-  static async upsert(entities: S.entities.Insertable[], { chunked }: { chunked?: boolean } = {}) {
+  static async upsert(
+    entities: S.entities.Insertable[],
+    { chunked, txClient }: { chunked?: boolean; txClient?: db.TxnClient<db.IsolationLevel.Serializable> } = {}
+  ) {
+    const client = txClient ?? pool;
+
     if (chunked) {
       for (let i = 0; i < entities.length; i += CHUNK_SIZE) {
         const chunk = entities.slice(i, i + CHUNK_SIZE);
@@ -18,7 +23,7 @@ export class Entities {
           .upsert('entities', chunk, db.constraint('entities_pkey'), {
             updateColumns: ['updated_at', 'updated_at_block', 'created_by_id'],
           })
-          .run(pool);
+          .run(client);
       }
 
       return;
@@ -29,6 +34,6 @@ export class Entities {
         updateColumns: ['updated_at', 'updated_at_block'],
         noNullUpdateColumns: ['updated_at', 'updated_at_block', 'created_by_id'],
       })
-      .run(pool);
+      .run(client);
   }
 }

@@ -60,8 +60,6 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
         Effect.tryPromise({
           try: async () => {
             await Transaction.run(async txClient => {
-              // @TODO this can probably go into an effect somewhere that's defined after
-              // we aggregate all the appropriate data to write.
               await Promise.all([
                 Edits.upsert(schemaEditProposals.edits, { client: txClient }),
                 Proposals.upsert(schemaEditProposals.proposals, { client: txClient }),
