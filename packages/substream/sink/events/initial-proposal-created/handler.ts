@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import { writeAccounts } from '../write-accounts';
-import { Proposals, Versions } from '~/sink/db';
+import { Proposals } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
 import { Transaction } from '~/sink/db/transaction';
 import type { BlockEvent, SinkEditProposal } from '~/sink/types';
@@ -81,14 +81,6 @@ export function createInitialContentForSpaces(args: InitialContentArgs) {
     );
 
     yield* _(Effect.logDebug('[INITIAL PROPOSAL CREATED] Writing content for edits'));
-
-    const opsByNewVersions = yield* _(
-      mergeOpsWithPreviousVersions({
-        edits: schemaEditProposals.edits,
-        tripleOpsByVersionId: schemaEditProposals.tripleOpsByVersionId,
-        versions: versionsWithStaleEntities,
-      })
-    );
 
     yield* _(
       writeEdits({
