@@ -101,8 +101,6 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
       }
     }
 
-    console.log('resultOrRight', resultOrError.right);
-
     return resultOrError.right.entities.nodes;
   });
 
