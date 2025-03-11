@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
@@ -55,15 +55,15 @@ interface Props {
 function makePlaceholderRow(entityId: string, spaceId: string, properties: PropertySchema[]) {
   const columns: Record<string, Cell> = {};
 
-  columns[SYSTEM_IDS.NAME_ATTRIBUTE] = {
-    slotId: SYSTEM_IDS.NAME_ATTRIBUTE,
+  columns[SystemIds.NAME_ATTRIBUTE] = {
+    slotId: SystemIds.NAME_ATTRIBUTE,
     cellId: ID.createEntityId(),
     name: null,
     renderables: [],
   };
 
   for (const p of properties) {
-    if (p.id === SYSTEM_IDS.NAME_ATTRIBUTE) {
+    if (p.id === EntityId(SystemIds.NAME_ATTRIBUTE)) {
       continue;
     }
 
@@ -119,7 +119,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
 
   const filteredTypes: Array<string> = filterState
-    .filter(filter => filter.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE)
+    .filter(filter => filter.columnId === SystemIds.TYPES_ATTRIBUTE)
     .map(filter => filter.value);
 
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityFromType(spaceId, filteredTypes);
@@ -236,21 +236,21 @@ export const TableBlock = ({ spaceId }: Props) => {
    * Name and Space are treated specially throughout this code path.
    */
   const filtersWithPropertyName = filterState.map(f => {
-    if (f.columnId === SYSTEM_IDS.NAME_ATTRIBUTE) {
+    if (f.columnId === SystemIds.NAME_ATTRIBUTE) {
       return {
         ...f,
         propertyName: 'Name',
       };
     }
 
-    if (f.columnId === SYSTEM_IDS.TYPES_ATTRIBUTE) {
+    if (f.columnId === SystemIds.TYPES_ATTRIBUTE) {
       return {
         ...f,
         propertyName: 'Types',
       };
     }
 
-    if (f.columnId === SYSTEM_IDS.SPACE_FILTER) {
+    if (f.columnId === SystemIds.SPACE_FILTER) {
       return {
         ...f,
         propertyName: 'Space',
@@ -258,14 +258,14 @@ export const TableBlock = ({ spaceId }: Props) => {
       };
     }
 
-    if (f.columnId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE) {
+    if (f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE) {
       return {
         ...f,
         propertyName: 'Relation type',
       };
     }
 
-    if (f.columnId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE) {
+    if (f.columnId === SystemIds.RELATION_FROM_ATTRIBUTE) {
       return {
         ...f,
         propertyName: 'From',

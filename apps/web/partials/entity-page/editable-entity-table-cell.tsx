@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { memo } from 'react';
 
@@ -42,7 +42,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     },
   });
 
-  const isNameCell = attributeId === SYSTEM_IDS.NAME_ATTRIBUTE;
+  const isNameCell = attributeId === SystemIds.NAME_ATTRIBUTE;
 
   if (isNameCell) {
     // This should exist as there should be a placeholder that exists if no
@@ -210,7 +210,14 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               />
             );
           case 'TIME':
-            return <DateField key={renderable.attributeId} isEditing={true} value={renderable.value} />;
+            return (
+              <DateField
+                key={renderable.attributeId}
+                isEditing={true}
+                value={renderable.value}
+                format={renderable.options?.format}
+              />
+            );
           case 'URL':
             return (
               <WebUrlField

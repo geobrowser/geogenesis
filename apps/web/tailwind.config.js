@@ -303,6 +303,22 @@ module.exports = {
             fontWeight: '500',
           },
         ],
+        resultTitle: [
+          '1rem',
+          {
+            lineHeight: '1rem',
+            fontWeight: '500',
+            letterSpacing: '-0.25px',
+          },
+        ],
+        resultLink: [
+          '1rem',
+          {
+            lineHeight: '1rem',
+            fontWeight: '400',
+            letterSpacing: '-0.25px',
+          },
+        ],
       },
       zIndex: {
         60: '60',

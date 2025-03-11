@@ -7,6 +7,7 @@ import type {
   ChainRemoveMemberProposal,
   ChainRemoveSubspaceProposal,
 } from './events/schema/proposal';
+import type { ZodOp } from './proto/schema';
 
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
@@ -75,6 +76,25 @@ export type DeleteRelationOp = {
   };
 };
 
+// @TODO: Use type from grc-20 lib
+type CsvMetadata = {
+  type: 'CSV';
+  columns: {
+    id: string;
+    type: ValueType | 'RELATION';
+    relationType?: string;
+    isId?: boolean;
+    options?: ValueOptions;
+  }[];
+};
+
+export type ImportFileOp = {
+  type: 'IMPORT_FILE';
+  space: string;
+  url: string;
+  metadata: CsvMetadata;
+};
+
 /**
  * We hardcode our Op type instead of deriving it from the Zod types. This is due to zod having
  * issues generating disciminate types from discriminate unions. See `ZodEditDeleteTriplePayload`
@@ -111,3 +131,5 @@ export type SinkRemoveSubspaceProposal = ChainRemoveSubspaceProposal & {
 export type SinkMembershipProposal = SinkAddMemberProposal | SinkRemoveMemberProposal;
 export type SinkEditorshipProposal = SinkAddEditorProposal | SinkRemoveEditorProposal;
 export type SinkSubspaceProposal = SinkAddSubspaceProposal | SinkRemoveSubspaceProposal;
+
+export type IntermediateSinkEditProposal = OmitStrict<SinkEditProposal, 'ops'> & { ops: ZodOp[] };

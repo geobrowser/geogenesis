@@ -11,19 +11,12 @@ import type {
   ChainRemoveSubspaceProposal,
 } from '../schema/proposal';
 import { writeAccounts } from '../write-accounts';
-import { getProposalFromIpfs } from './get-proposal-from-ipfs';
+import { getProposalsFromIpfs } from './get-proposal-from-ipfs';
 import { Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
-import type {
-  BlockEvent,
-  SinkEditProposal,
-  SinkEditorshipProposal,
-  SinkMembershipProposal,
-  SinkSubspaceProposal,
-} from '~/sink/types';
+import type { BlockEvent, SinkEditorshipProposal, SinkMembershipProposal, SinkSubspaceProposal } from '~/sink/types';
 import { deriveProposalId, deriveSpaceId } from '~/sink/utils/id';
-import { retryEffect } from '~/sink/utils/retry-effect';
 import { aggregateNewVersions } from '~/sink/write-edits/aggregate-versions';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
 import { writeEdits } from '~/sink/write-edits/write-edits';
@@ -39,16 +32,7 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
       Effect.logDebug(`[EDIT PROPOSALS CREATED] Gathering IPFS content for ${proposalsCreated.length} proposals`)
     );
 
-    const maybeProposals = yield* _(
-      Effect.forEach(proposalsCreated, proposal => getProposalFromIpfs(proposal), {
-        concurrency: 20,
-      })
-    );
-
-    const proposals = maybeProposals.filter(
-      (maybeProposal): maybeProposal is SinkEditProposal => maybeProposal !== null
-    );
-
+    const proposals = yield* _(getProposalsFromIpfs(proposalsCreated));
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposals, block);
 
     /**
@@ -57,11 +41,6 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
      *    This includes new entities, and entities that become stale because a relation
      *    has changed, either with new data or if the relation was created/deleted.
      */
-
-    // This might be the very first onchain interaction for a wallet address,
-    // so we need to make sure that any accounts are already created when we
-    // process the proposals below, particularly for editor and member requests.
-    // yield* _(writeAccounts([...schemaMembershipProposals.accounts, ...schemaEditorshipProposals.accounts]));
 
     yield* _(
       Effect.logDebug(`[EDIT PROPOSALS CREATED] Writing edit proposals: ${schemaEditProposals.proposals.length}`)
@@ -87,14 +66,13 @@ export function handleEditProposalCreated(proposalsCreated: ChainEditProposal[],
             // Content proposals
             Edits.upsert(schemaEditProposals.edits),
             Proposals.upsert(schemaEditProposals.proposals),
-            Versions.upsert(allNewVersionsInEdit),
+            Versions.upsert(allNewVersionsInEdit, { chunked: true }),
           ]);
         },
         catch: error => {
           return new CouldNotWriteCreatedProposalsError(String(error));
         },
-      }),
-      retryEffect
+      })
     );
 
     const opsByVersionId = yield* _(
@@ -187,8 +165,7 @@ export function handleMembershipProposalsCreated(
         catch: error => {
           return new CouldNotWriteCreatedProposalsError(String(error));
         },
-      }),
-      retryEffect
+      })
     );
 
     yield* _(Effect.logDebug('[MEMBER PROPOSALS CREATED] Ended'));
@@ -260,8 +237,7 @@ export function handleEditorshipProposalsCreated(
         catch: error => {
           return new CouldNotWriteCreatedProposalsError(String(error));
         },
-      }),
-      retryEffect
+      })
     );
 
     yield* _(Effect.logInfo('[EDITOR PROPOSALS CREATED] Ended'));
@@ -329,8 +305,7 @@ export function handleSubspaceProposalsCreated(
         catch: error => {
           return new CouldNotWriteCreatedProposalsError(String(error));
         },
-      }),
-      retryEffect
+      })
     );
 
     yield* _(Effect.logInfo('[SUBSPACE PROPOSALS CREATED] Ended'));

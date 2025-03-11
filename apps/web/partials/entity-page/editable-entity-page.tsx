@@ -1,6 +1,6 @@
 'use client';
 
-import { GraphUrl, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { Image } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
@@ -182,7 +182,7 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
             payload: { renderable, attributeId: result.id, attributeName: result.name },
           });
         }}
-        filterByTypes={[{ typeId: SYSTEM_IDS.ATTRIBUTE, typeName: 'Attribute' }]}
+        filterByTypes={[{ typeId: SystemIds.ATTRIBUTE, typeName: 'Attribute' }]}
         alreadySelectedIds={[]}
       />
     );
@@ -218,7 +218,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
   const property = properties?.[typeOfId];
-  const filterByType = property?.relationValueTypeId;
+  const filterByTypes = property?.relationValueTypes?.map(r => r.typeId);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -233,48 +233,52 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             <div key={`relation-upload-image-${relationId}`}>
               <PageImageField
                 onImageChange={imageSrc => {
-                  const { imageId, ops } = Image.make(imageSrc);
+                  const { id: imageId, ops } = Image.make({ cid: imageSrc });
                   const [createRelationOp, setTripleOp] = ops;
 
-                  send({
-                    type: 'UPSERT_RELATION',
-                    payload: {
-                      fromEntityId: createRelationOp.relation.fromEntity,
-                      fromEntityName: name,
-                      toEntityId: createRelationOp.relation.toEntity,
-                      toEntityName: null,
-                      typeOfId: createRelationOp.relation.type,
-                      typeOfName: 'Types',
-                    },
-                  });
+                  if (createRelationOp.type === 'CREATE_RELATION') {
+                    send({
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: createRelationOp.relation.fromEntity,
+                        fromEntityName: name,
+                        toEntityId: createRelationOp.relation.toEntity,
+                        toEntityName: null,
+                        typeOfId: createRelationOp.relation.type,
+                        typeOfName: 'Types',
+                      },
+                    });
+                  }
 
-                  DB.upsert(
-                    {
-                      value: {
-                        type: 'URL',
+                  if (setTripleOp.type === 'SET_TRIPLE') {
+                    DB.upsert(
+                      {
+                        value: {
+                          type: 'URL',
+                          value: setTripleOp.triple.value.value,
+                        },
+                        entityId: imageId,
+                        attributeId: setTripleOp.triple.attribute,
+                        entityName: null,
+                        attributeName: 'Image URL',
+                      },
+                      spaceId
+                    );
+
+                    send({
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: id,
+                        fromEntityName: name,
+                        toEntityId: imageId,
+                        toEntityName: null,
+                        typeOfId: r.attributeId,
+                        typeOfName: r.attributeName,
+                        renderableType: 'IMAGE',
                         value: setTripleOp.triple.value.value,
                       },
-                      entityId: imageId,
-                      attributeId: setTripleOp.triple.attribute,
-                      entityName: null,
-                      attributeName: 'Image URL',
-                    },
-                    spaceId
-                  );
-
-                  send({
-                    type: 'UPSERT_RELATION',
-                    payload: {
-                      fromEntityId: id,
-                      fromEntityName: name,
-                      toEntityId: imageId,
-                      toEntityName: null,
-                      typeOfId: r.attributeId,
-                      typeOfName: r.attributeName,
-                      renderableType: 'IMAGE',
-                      value: setTripleOp.triple.value.value,
-                    },
-                  });
+                    });
+                  }
                 }}
                 onImageRemove={() => console.log(`remove`)}
               />
@@ -291,7 +295,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
                 spaceId={spaceId}
-                allowedTypes={filterByType ? [filterByType] : undefined}
+                allowedTypes={filterByTypes ? filterByTypes : undefined}
                 onCreateEntity={result => {
                   if (property?.relationValueTypeId) {
                     send({
@@ -301,7 +305,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                         fromEntityName: result.name,
                         toEntityId: property.relationValueTypeId,
                         toEntityName: property.relationValueTypeName ?? null,
-                        typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+                        typeOfId: SystemIds.TYPES_ATTRIBUTE,
                         typeOfName: 'Types',
                       },
                     });
@@ -338,7 +342,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                   if (result.space) {
                     DB.upsert(
                       {
-                        attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+                        attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
                         attributeName: 'To Entity',
                         entityId: newRelationId,
                         entityName: null,
@@ -353,7 +357,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                     if (result.verified) {
                       DB.upsert(
                         {
-                          attributeId: SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE,
+                          attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
                           attributeName: 'Verified Source',
                           entityId: newRelationId,
                           entityName: null,
@@ -398,7 +402,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
         <div className="mt-1">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
-            allowedTypes={filterByType ? [filterByType] : undefined}
+            allowedTypes={filterByTypes ? filterByTypes : undefined}
             onCreateEntity={result => {
               if (property?.relationValueTypeId) {
                 send({
@@ -408,7 +412,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                     fromEntityName: result.name,
                     toEntityId: property.relationValueTypeId,
                     toEntityName: property.relationValueTypeName ?? null,
-                    typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+                    typeOfId: SystemIds.TYPES_ATTRIBUTE,
                     typeOfName: 'Types',
                   },
                 });
@@ -445,7 +449,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
               if (result.space) {
                 DB.upsert(
                   {
-                    attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+                    attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
                     attributeName: 'To Entity',
                     entityId: newRelationId,
                     entityName: null,
@@ -460,7 +464,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                 if (result.verified) {
                   DB.upsert(
                     {
-                      attributeId: SYSTEM_IDS.VERIFIED_SOURCE_ATTRIBUTE,
+                      attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
                       attributeName: 'Verified Source',
                       entityId: newRelationId,
                       entityName: null,
@@ -582,6 +586,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                 key={renderable.attributeId}
                 isEditing={true}
                 value={renderable.value}
+                format={renderable.options?.format}
               />
             );
           }

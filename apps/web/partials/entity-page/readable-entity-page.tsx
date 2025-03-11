@@ -89,6 +89,7 @@ function TriplesGroup({
                         key={`time-${renderable.attributeId}-${renderable.value}`}
                         isEditing={false}
                         value={renderable.value}
+                        format={renderable.options?.format}
                       />
                     );
                   }

@@ -1,6 +1,5 @@
 import { cookies } from 'next/headers';
 
-import * as React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { fetchProposalCountByUser } from '~/core/io/fetch-proposal-count-by-user';

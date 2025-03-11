@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
@@ -21,7 +21,7 @@ const space: Space = {
     description: 'Description-1',
     types: [
       {
-        id: SYSTEM_IDS.SPACE_TYPE,
+        id: SystemIds.SPACE_TYPE,
         name: 'Space Configuration',
       },
     ],

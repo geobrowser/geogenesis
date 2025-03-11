@@ -248,7 +248,7 @@ interface MakeProposalArgs {
 function makeProposal(args: MakeProposalArgs) {
   const { name, ops, smartAccount, space, onChangePublishState } = args;
 
-  const proposal = EditProposal.make({ name, ops, author: smartAccount.account.address });
+  const proposal = EditProposal.encode({ name, ops, author: smartAccount.account.address });
 
   const writeTxEffect = Effect.gen(function* () {
     if (ops.length === 0) {

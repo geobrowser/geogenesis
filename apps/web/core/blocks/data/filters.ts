@@ -1,5 +1,5 @@
 import { Schema } from '@effect/schema';
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { Either } from 'effect';
 
 import { mergeEntityAsync } from '~/core/database/entities';
@@ -15,6 +15,7 @@ export type Filter = {
   valueType: FilterableValueType;
   value: string;
   valueName: string | null;
+  relationValueTypes?: { typeId: EntityId; typeName: string | null }[];
 };
 
 /**
@@ -23,10 +24,10 @@ export type Filter = {
  * semantics.
  *
  * e.g.,
- * attribute: SYSTEM_IDS.TYPES_ATTRIBUTE, is: SYSTEM_IDS.PERSON_TYPE
+ * attribute: SystemIds.TYPES_ATTRIBUTE, is: SystemIds.PERSON_TYPE
  * The above returns all entities that are type: Person
  *
- * entity: '1234', relationType: SYSTEM_IDS.TYPES_ATTRIBUTE
+ * entity: '1234', relationType: SystemIds.TYPES_ATTRIBUTE
  * The above returns all the type relations for entity 1234
  *
  * The latter is basically a "Relations View" on an entity where the latter
@@ -59,7 +60,7 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
       filter = {
         where: {
           AND: filters
-            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
+            .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
             .map(f => {
               return {
                 attribute: f.columnId,
@@ -72,9 +73,9 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
     case 'SPACES':
       filter = {
         where: {
-          spaces: filters.filter(f => f.columnId === SYSTEM_IDS.SPACE_FILTER).map(f => f.value),
+          spaces: filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value),
           AND: filters
-            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
+            .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
             .map(f => {
               return {
                 attribute: f.columnId,
@@ -89,7 +90,7 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
       filter = {
         where: {
           AND: filters
-            .filter(f => f.columnId !== SYSTEM_IDS.SPACE_FILTER)
+            .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
             .map(f => {
               return {
                 attribute: f.columnId,
@@ -154,7 +155,7 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
           const spaceName = await getSpaceName(spaceId);
 
           return {
-            columnId: SYSTEM_IDS.SPACE_FILTER,
+            columnId: SystemIds.SPACE_FILTER,
             valueType: 'RELATION',
             value: spaceId,
             valueName: spaceName,
@@ -163,11 +164,11 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       )
     : [];
 
-  const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+  const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SystemIds.RELATION_FROM_ATTRIBUTE);
   const unresolvedEntityFilter = maybeFromFilter ? getResolvedEntity(maybeFromFilter.is) : null;
 
   const unresolvedAttributeFilters = Promise.all(
-    filtersFromString.AND.filter(f => f.attribute !== SYSTEM_IDS.RELATION_FROM_ATTRIBUTE).map(async filter => {
+    filtersFromString.AND.filter(f => f.attribute !== SystemIds.RELATION_FROM_ATTRIBUTE).map(async filter => {
       return await getResolvedFilter(filter);
     })
   );
@@ -195,7 +196,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 
   if (!entity) {
     return {
-      columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+      columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
       valueType: 'RELATION',
       value: entityId,
       valueName: null,
@@ -203,7 +204,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
   }
 
   return {
-    columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+    columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
     valueType: 'RELATION',
     value: entityId,
     valueName: entity.name,
@@ -212,10 +213,11 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 
 async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
   const maybeAttributeEntity = await mergeEntityAsync(EntityId(filter.attribute));
-  const valueType = maybeAttributeEntity.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE)
-    ?.toEntity.id;
+  const valueType = maybeAttributeEntity.relationsOut.find(
+    r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE)
+  )?.toEntity.id;
 
-  if (valueType === SYSTEM_IDS.RELATION) {
+  if (valueType === EntityId(SystemIds.RELATION)) {
     const valueEntity = await mergeEntityAsync(EntityId(filter.is));
 
     return {
@@ -230,6 +232,6 @@ async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
     columnId: filter.attribute,
     value: filter.is,
     valueName: null,
-    valueType: VALUE_TYPES[(valueType ?? SYSTEM_IDS.TEXT) as ValueTypeId] ?? SYSTEM_IDS.TEXT,
+    valueType: VALUE_TYPES[(valueType ?? SystemIds.TEXT) as ValueTypeId] ?? SystemIds.TEXT,
   };
 }

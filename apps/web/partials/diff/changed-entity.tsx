@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import BoringAvatar from 'boring-avatars';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -30,8 +30,8 @@ type ChangedEntityProps = {
 
 const getIsNewRelation = (changes: RenderableChange[]) => {
   return (
-    changes.some(change => change.before === null && change.attribute.id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE) &&
-    changes.some(change => change.before === null && change.attribute.id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE)
+    changes.some(change => change.before === null && change.attribute.id === SystemIds.RELATION_FROM_ATTRIBUTE) &&
+    changes.some(change => change.before === null && change.attribute.id === SystemIds.RELATION_TO_ATTRIBUTE)
   );
 };
 
@@ -298,7 +298,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
       <Corners />
       {Object.entries(groupedChanges).map(([attributeId, changes], index) => {
         // Don't show page blocks
-        if (attributeId === SYSTEM_IDS.BLOCKS) return null;
+        if (attributeId === SystemIds.BLOCKS) return null;
 
         if (changes.length === 0) {
           return <h2 key={attributeId}>This entity has no changes between the two versions.</h2>;
@@ -740,7 +740,7 @@ function parseMarkdown(markdownString: string) {
 //     typeIds: [],
 //   });
 //   const filtersWithColumnName = filters.map(f => {
-//     if (f.columnId === SYSTEM_IDS.NAME_ATTRIBUTE) {
+//     if (f.columnId === SystemIds.NAME_ATTRIBUTE) {
 //       return {
 //         ...f,
 //         columnName: 'Name',

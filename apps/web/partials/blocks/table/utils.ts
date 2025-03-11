@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { RenderableProperty, ValueTypeId } from '~/core/types';
 
@@ -14,7 +14,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
   const { attributeId, attributeName, entityId, valueType, spaceId } = args;
 
   switch (valueType) {
-    case SYSTEM_IDS.RELATION:
+    case SystemIds.RELATION:
       return {
         type: 'RELATION',
         attributeId,
@@ -27,7 +27,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         relationId: '',
         placeholder: true,
       };
-    case SYSTEM_IDS.TIME:
+    case SystemIds.TIME:
       return {
         type: 'TIME',
         attributeId,
@@ -38,7 +38,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         value: '',
         placeholder: true,
       };
-    case SYSTEM_IDS.URL:
+    case SystemIds.URL:
       return {
         type: 'URL',
         attributeId,
@@ -50,7 +50,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         placeholder: true,
       };
 
-    case SYSTEM_IDS.TEXT:
+    case SystemIds.TEXT:
     default:
       return {
         type: 'TEXT',

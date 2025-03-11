@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import {
   PropertySchema,
@@ -44,7 +44,7 @@ export function toRenderables({
     .filter(renderable => !attributesWithAValue.has(renderable.id) && !placeholders.has(renderable.id))
     .map((s): TripleRenderableProperty | RelationRenderableProperty => {
       switch (s.valueType) {
-        case SYSTEM_IDS.RELATION:
+        case SystemIds.RELATION:
           return {
             type: 'RELATION',
             relationId: s.id,
@@ -57,7 +57,7 @@ export function toRenderables({
             value: '',
             placeholder: true,
           };
-        case SYSTEM_IDS.IMAGE:
+        case SystemIds.IMAGE:
           return {
             type: 'IMAGE',
             relationId: s.id,
@@ -93,6 +93,7 @@ export function toRenderables({
       attributeName: t.attributeName,
       spaceId,
       value: t.value.value,
+      options: t.value.options,
     };
   });
 

@@ -286,7 +286,11 @@ function mapEditProposalToSchema(
       // Here we map these op types into triple ops in order to write the triples to the db. This allows
       // us to write the ops for each relation as if they are entities while also performing any side-effects
       // related to the relations themselves by still using the CREATE_RELATION and DELETE_RELATION op types.
-      tripleOpsByVersionId.set(id, [...opsForEntityId, ...opsForEntityIdWhereRelation.flatMap(relationOpToTripleOps)]);
+      //
+      // Note we put the triple ops _after_ the relation ops so any triples that overwrite the ops generated
+      // by the relation take precedence. e.g., you might pass a RELATION_TO Op that specifies a space. We
+      // want that to overwrite the op from the relation that doesn't set a space.
+      tripleOpsByVersionId.set(id, [...opsForEntityIdWhereRelation.flatMap(relationOpToTripleOps), ...opsForEntityId]);
     }
 
     relationOpsByEditId.set(

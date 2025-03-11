@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { useRelations } from '~/core/database/relations';
 import { EntityId, TypeId } from '~/core/io/schema';
@@ -16,7 +16,7 @@ export type RelationWithBlock = {
 };
 
 /**
- * Blocks are defined via relations with relation type of {@link SYSTEM_IDS.BLOCKS}.
+ * Blocks are defined via relations with relation type of {@link SystemIds.BLOCKS}.
  * These relations point to entities which are renderable by the content editor. The
  * currently renderable block types are:
  * 1) Text
@@ -27,7 +27,7 @@ export type RelationWithBlock = {
 export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
   const blocks = useRelations({
     mergeWith: initialBlockRelations,
-    selector: r => r.fromEntity.id === fromEntityId && r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS),
+    selector: r => r.fromEntity.id === fromEntityId && r.typeOf.id === EntityId(SystemIds.BLOCKS),
   });
 
   return blocks.map(relationToRelationWithBlock).sort(sortByIndex);

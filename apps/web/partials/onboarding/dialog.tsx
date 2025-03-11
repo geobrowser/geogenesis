@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -21,7 +21,6 @@ import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { FindEntity } from '~/design-system/find-entity';
-import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
@@ -159,8 +158,6 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
 };
 
 const StepHeader = () => {
-  const { hideOnboarding } = useOnboarding();
-
   const [step, setStep] = useAtom(stepAtom);
   const setName = useSetAtom(nameAtom);
   const setEntityId = useSetAtom(entityIdAtom);
@@ -186,9 +183,6 @@ const StepHeader = () => {
           <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="!border-none !bg-transparent" />
         )}
       </div>
-      {!workflowSteps.includes(step) && (
-        <SquareButton icon={<Close />} onClick={hideOnboarding} className="!border-none !bg-transparent" />
-      )}
     </div>
   );
 };
@@ -273,7 +267,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
     }
   };
 
-  const allowedTypes = [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.PERSON_TYPE];
+  const allowedTypes = [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE];
 
   return (
     <div className="space-y-4">
@@ -390,7 +384,6 @@ const retryMessage: Record<Step, string> = {
 };
 
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
-  const { hideOnboarding } = useOnboarding();
   const router = useRouter();
 
   const spaceId = useAtomValue(spaceIdAtom);
@@ -400,7 +393,6 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
 
   if (hasCompleted) {
     setTimeout(() => {
-      hideOnboarding();
       const destination = NavUtils.toSpace(spaceId);
       router.push(destination);
     }, 3_600);

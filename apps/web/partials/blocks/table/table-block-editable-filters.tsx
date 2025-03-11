@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { Filter } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -25,9 +25,9 @@ export function TableBlockEditableFilters() {
           // @TODO(data blocks): We should add the default filters to the data model
           // itself instead of manually here.
           // {
-          //   columnId: SYSTEM_IDS.NAME_ATTRIBUTE,
+          //   columnId: SystemIds.NAME_ATTRIBUTE,
           //   columnName: 'Name',
-          //   valueType: valueTypes[SYSTEM_IDS.TEXT],
+          //   valueType: valueTypes[SystemIds.TEXT],
           //   value: '',
           //   valueName: null,
           // },
@@ -39,6 +39,7 @@ export function TableBlockEditableFilters() {
                 valueType: VALUE_TYPES[c.valueType],
                 value: '',
                 valueName: null,
+                relationValueTypes: c.relationValueTypes,
               };
             })
             // Filter out any columns with names and any columns that are not entity or string value types
@@ -46,14 +47,14 @@ export function TableBlockEditableFilters() {
         ]
       : [
           {
-            columnId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+            columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
             columnName: 'From',
             valueType: 'RELATION',
             value: '',
             valueName: null,
           },
           {
-            columnId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+            columnId: SystemIds.RELATION_TYPE_ATTRIBUTE,
             columnName: 'Relation type',
             valueType: 'RELATION',
             value: '',
@@ -107,12 +108,12 @@ function sortFilters(filters: RenderableFilter[]): RenderableFilter[] {
     const { columnId: attributeIdA, columnName: attributeNameA } = renderableA;
     const { columnId: attributeIdB, columnName: attributeNameB } = renderableB;
 
-    const isNameA = attributeIdA === SYSTEM_IDS.NAME_ATTRIBUTE;
-    const isNameB = attributeIdB === SYSTEM_IDS.NAME_ATTRIBUTE;
-    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
-    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE;
-    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES_ATTRIBUTE;
-    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES_ATTRIBUTE;
+    const isNameA = attributeIdA === SystemIds.NAME_ATTRIBUTE;
+    const isNameB = attributeIdB === SystemIds.NAME_ATTRIBUTE;
+    const isDescriptionA = attributeIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = attributeIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = attributeIdA === SystemIds.TYPES_ATTRIBUTE;
+    const isTypesB = attributeIdB === SystemIds.TYPES_ATTRIBUTE;
 
     if (isNameA && !isNameB) return -1;
     if (!isNameA && isNameB) return 1;

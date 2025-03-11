@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { RenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -18,12 +18,12 @@ interface Props {
 }
 
 export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpanded }: Props) => {
-  const isNameCell = columnId === SYSTEM_IDS.NAME_ATTRIBUTE;
+  const isNameCell = columnId === SystemIds.NAME_ATTRIBUTE;
 
   if (isNameCell) {
     // the name might exist but be empty, fall back to the entity id in this case.
     const value =
-      (renderables.find(r => r.type === 'TEXT' && r.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE)?.value as
+      (renderables.find(r => r.type === 'TEXT' && r.attributeId === SystemIds.NAME_ATTRIBUTE)?.value as
         | string
         | undefined) ?? entityId;
     return <CellContent key={value} href={NavUtils.toEntity(space, entityId)} isExpanded={isExpanded} value={value} />;
@@ -69,7 +69,15 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
         }
 
         if (renderable.type === 'TIME') {
-          return <DateField variant="tableCell" isEditing={false} key={renderable.value} value={renderable.value} />;
+          return (
+            <DateField
+              variant="tableCell"
+              isEditing={false}
+              key={renderable.value}
+              value={renderable.value}
+              format={renderable.options?.format}
+            />
+          );
         }
 
         if (renderable.type === 'CHECKBOX') {

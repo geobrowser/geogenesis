@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { useEntity } from '~/core/database/entities';
@@ -23,7 +23,7 @@ export function useCollection() {
     mergeWith: blockEntity.relationsOut,
     selector: r => {
       if (source.type !== 'COLLECTION') return false;
-      return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
+      return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SystemIds.COLLECTION_ITEM_RELATION_TYPE);
     },
   });
 
@@ -32,6 +32,7 @@ export function useCollection() {
   );
 
   const collectionItemIds = orderedCollectionItems?.map(c => c.toEntity.id) ?? [];
+  const collectionRelationIds = orderedCollectionItems?.map(c => c.id) ?? [];
 
   // We need to check for any local changes to collection items in order to re-fetch the list
   // of them and merge with local data.
@@ -45,24 +46,36 @@ export function useCollection() {
 
   const changedEntities = [...allTriples, ...allRelations].filter(e => collectionItemIds.includes(EntityId(e)));
 
-  const {
-    data: collectionItems,
-    isLoading,
-    isFetched,
-  } = useQuery({
+  const { data, isLoading, isFetched } = useQuery({
     placeholderData: keepPreviousData,
     enabled: collectionItemsRelations.length > 0,
-    queryKey: ['blocks', 'data', 'collection-items', collectionItemIds, changedEntities],
+    queryKey: [
+      'blocks',
+      'data',
+      'collection-items-and-relations',
+      collectionItemIds,
+      collectionRelationIds,
+      changedEntities,
+    ],
     queryFn: async () => {
-      return await mergeEntitiesAsync({
-        entityIds: collectionItemIds,
-        filterState: [],
-      });
+      const [collectionItems, collectionRelations] = await Promise.all([
+        mergeEntitiesAsync({
+          entityIds: collectionItemIds,
+          filterState: [],
+        }),
+        mergeEntitiesAsync({
+          entityIds: collectionRelationIds,
+          filterState: [],
+        }),
+      ]);
+
+      return { collectionItems, collectionRelations };
     },
   });
 
   return {
-    collectionItems: collectionItems ?? [],
+    collectionItems: data?.collectionItems ?? [],
+    collectionRelations: data?.collectionRelations ?? [],
     isLoading,
     isFetched,
   };

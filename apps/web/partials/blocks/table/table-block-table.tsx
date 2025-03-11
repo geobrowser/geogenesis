@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import {
   ColumnDef,
   createColumnHelper,
@@ -19,7 +19,7 @@ import { useState } from 'react';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { SpaceId } from '~/core/io/schema';
+import { EntityId, SpaceId } from '~/core/io/schema';
 import { Cell, PropertySchema, Row } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -48,7 +48,7 @@ const formatColumns = (
     columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
-        const isNameColumn = column.id === SYSTEM_IDS.NAME_ATTRIBUTE;
+        const isNameColumn = column.id === EntityId(SystemIds.NAME_ATTRIBUTE);
 
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
@@ -73,7 +73,7 @@ const formatColumns = (
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, table, cell }) => {
-    const spaceId = table.options.meta!.space;
+    const space = table.options.meta!.space;
     const cellId = `${row.original.entityId}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
 
@@ -91,6 +91,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const maybePropertiesSchema = propertiesSchema?.[PropertyId(cellData.slotId)];
     const filterableRelationType = maybePropertiesSchema?.relationValueTypeId;
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
+
+    const isNameCell = propertyId === SystemIds.NAME_ATTRIBUTE;
+    const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_ATTRIBUTE]?.space ?? space) : space;
 
     const renderables = cellData.renderables;
 
@@ -212,15 +215,15 @@ export const TableBlockTable = React.memo(({ rows, space, properties, shownColum
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
                     const firstTriple = cell.getValue<Cell>()?.renderables.find(r => r.type === 'TEXT');
 
-                    const isNameCell = Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
+                    const isNameCell = Boolean(firstTriple?.attributeId === SystemIds.NAME_ATTRIBUTE);
                     const isExpandable = firstTriple && firstTriple.type === 'TEXT';
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     const href = NavUtils.toEntity(
-                      isNameCell ? (row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE]?.space ?? space) : space,
+                      isNameCell ? (row.original.columns[SystemIds.NAME_ATTRIBUTE]?.space ?? space) : space,
                       entityId
                     );
-                    const { verified } = row.original.columns[SYSTEM_IDS.NAME_ATTRIBUTE];
+                    const { verified } = row.original.columns[SystemIds.NAME_ATTRIBUTE];
 
                     return (
                       <TableCell

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
@@ -53,7 +53,7 @@ export function useDataBlock() {
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
-  const { collectionItems } = useCollection();
+  const { collectionItems, collectionRelations } = useCollection();
   // Use the mapping to get the potential renderable properties.
   const propertiesSchema = useProperties(shownColumnIds);
 
@@ -107,7 +107,7 @@ export function useDataBlock() {
         if (source.type === 'SPACES' || source.type === 'GEO') {
           const data = yield* Effect.promise(() => mergeTableEntities({ options: params, filterState }));
 
-          return mappingToRows(data, shownColumnIds, collectionItems, spaceId, propertiesSchema);
+          return mappingToRows(data, shownColumnIds, [], spaceId, propertiesSchema);
         }
 
         if (source.type === 'COLLECTION') {
@@ -118,7 +118,7 @@ export function useDataBlock() {
             })
           );
 
-          return mappingToRows(data, shownColumnIds, collectionItems, spaceId, propertiesSchema);
+          return mappingToRows(data, shownColumnIds, collectionRelations, spaceId, propertiesSchema);
         }
 
         if (source.type === 'RELATIONS') {
@@ -160,7 +160,7 @@ export function useDataBlock() {
   const setName = (newName: string) => {
     upsert(
       {
-        attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        attributeId: SystemIds.NAME_ATTRIBUTE,
         entityId: entityId,
         entityName: newName,
         attributeName: 'Name',

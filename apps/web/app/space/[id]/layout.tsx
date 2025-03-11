@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -13,6 +13,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
+import { Create } from '~/design-system/icons/create';
 import { MenuItem } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
@@ -83,11 +84,17 @@ export default async function Layout(props0: LayoutProps) {
           <SpacePageMetadataHeader
             typeNames={typeNames}
             spaceId={props.spaceId}
+            spaceName={props.name ?? ''}
             entityId={props.id}
             addSubspaceComponent={
               <AddSubspaceDialog
                 spaceId={spaceId}
-                trigger={<MenuItem>Add subspace</MenuItem>}
+                trigger={
+                  <MenuItem>
+                    <Create />
+                    <p>Add subspace</p>
+                  </MenuItem>
+                }
                 subspaces={subspaces}
                 inflightSubspaces={inflightSubspaces}
                 spaceType={props.space.type}
@@ -133,7 +140,7 @@ const getData = async (spaceId: string) => {
 
   const spaces = entity?.spaces ?? [];
   const tabIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.TABS_ATTRIBUTE))
+    .filter(r => r.typeOf.id === EntityId(SystemIds.TABS_ATTRIBUTE))
     ?.map(r => r.toEntity.id);
 
   const tabEntities = tabIds ? await fetchEntitiesBatch({ spaceId, entityIds: tabIds }) : [];
@@ -141,7 +148,7 @@ const getData = async (spaceId: string) => {
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
       const blockIds = entity?.relationsOut
-        .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+        .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
         ?.map(r => r.toEntity.id);
 
       const blocks = blockIds ? await fetchBlocks(blockIds) : [];
@@ -159,7 +166,7 @@ const getData = async (spaceId: string) => {
   });
 
   const blockIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
     ?.map(r => r.toEntity.id);
 
   const blocks = blockIds ? await fetchBlocks(blockIds) : [];
@@ -214,14 +221,14 @@ function buildTabsForSpacePage(
   // Order of how we add the tabs matters. We want to
   // show "content-based" tabs first, then "space-based" tabs.
 
-  if (typeIds.includes(SYSTEM_IDS.SPACE_TYPE)) {
+  if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     tabs.push(...ALL_SPACES_TABS);
 
     if (DYNAMIC_TABS.length > 0) {
       tabs.push(...DYNAMIC_TABS);
     }
 
-    if (!typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
+    if (!typeIds.includes(SystemIds.PERSON_TYPE)) {
       tabs.push(...SOME_SPACES_TABS);
     }
   }

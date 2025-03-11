@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds, TripleValueOptions } from '@graphprotocol/grc-20';
 
 import { EntityId } from './io/schema';
 
@@ -16,6 +16,7 @@ export type ValueType =
 export type Value = {
   type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER';
   value: string;
+  options?: TripleValueOptions;
 };
 
 export type SetTripleAppOp = {
@@ -77,6 +78,7 @@ export type NativeRenderableProperty = {
   spaceId: string;
   value: string;
   placeholder?: boolean;
+  options?: TripleValueOptions;
 };
 
 type RelationPropertyProperties = {
@@ -139,13 +141,13 @@ export type FilterClause = {
 export type FilterState = FilterClause[];
 
 export type ValueTypeId =
-  | typeof SYSTEM_IDS.TEXT
-  | typeof SYSTEM_IDS.RELATION
-  | typeof SYSTEM_IDS.TIME
-  | typeof SYSTEM_IDS.URL
-  | typeof SYSTEM_IDS.CHECKBOX
-  | typeof SYSTEM_IDS.NUMBER
-  | typeof SYSTEM_IDS.IMAGE;
+  | typeof SystemIds.TEXT
+  | typeof SystemIds.RELATION
+  | typeof SystemIds.TIME
+  | typeof SystemIds.URL
+  | typeof SystemIds.CHECKBOX
+  | typeof SystemIds.NUMBER
+  | typeof SystemIds.IMAGE;
 
 export type GeoType = {
   entityId: string;
@@ -162,6 +164,7 @@ export interface PropertySchema {
   relationValueTypeId?: EntityId;
   relationValueTypeName?: string | null;
   homeSpace?: string;
+  relationValueTypes?: { typeId: EntityId; typeName: string | null }[];
 }
 
 export type Relation = {

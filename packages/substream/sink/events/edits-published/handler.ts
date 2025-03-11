@@ -30,23 +30,13 @@ export class CouldNotWriteCurrentVersionsError extends Error {
  * event is emitted depends on the governance mechanism that a space has configured
  * (voting vs no voting).
  */
-export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdSpaceIds: string[], block: BlockEvent) {
+export function handleEditsPublished(ipfsProposals: SinkEditProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     yield* _(Effect.logInfo('[EDITS PUBLISHED] Started'));
 
     const {
       schemaEditProposals: { versions, relationOpsByEditId, tripleOpsByVersionId, edits },
     } = mapIpfsProposalToSchemaProposalByType(ipfsProposals, block);
-
-    const nonstaleVersions = yield* _(
-      aggregateNewVersions({
-        block,
-        edits: edits,
-        ipfsVersions: versions,
-        relationOpsByEditId,
-        editType: 'DEFAULT',
-      })
-    );
 
     /**
      * @TODO
@@ -65,21 +55,21 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
      */
 
     yield* _(
-      Effect.forEach(
-        ipfsProposals,
-        proposal =>
-          retryEffect(
+      Effect.fork(
+        Effect.forEach(
+          ipfsProposals,
+          proposal =>
             Effect.tryPromise({
               try: () => Proposals.setAcceptedById(proposal.proposalId),
               catch: error => {
                 console.error('Could not set proposal to accepted for proposal id', proposal.proposalId);
                 return new ProposalDoesNotExistError(String(error));
               },
-            })
-          ),
-        {
-          concurrency: 50,
-        }
+            }),
+          {
+            concurrency: 50,
+          }
+        )
       )
     );
     /**
@@ -94,6 +84,16 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
      */
 
     // Currently we don't solve for above ordering issue.
+
+    const nonstaleVersions = yield* _(
+      aggregateNewVersions({
+        block,
+        edits: edits,
+        ipfsVersions: versions,
+        relationOpsByEditId,
+        editType: 'DEFAULT',
+      })
+    );
 
     /**
      * Before writing new current versions we should check to see if the active current
@@ -116,28 +116,19 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
       nonstaleVersions,
       version =>
         Effect.promise(async () => {
-          const maybeCurrentVersion = await CurrentVersions.selectOne({ entity_id: version.entity_id });
+          const [maybeCurrentVersion, editVersion] = await Promise.all([
+            CurrentVersions.selectOne({ entity_id: version.entity_id }),
 
-          if (!maybeCurrentVersion) {
+            // Query the DB representation since the mapped version doesn't have the
+            // real created at block
+            Versions.selectOne({ id: version.id }),
+          ]);
+
+          if (!maybeCurrentVersion || !maybeCurrentVersion.version || !editVersion) {
             return null;
           }
 
-          // Can do a JOIN on current version instead of querying again
-          const currentVersion = await Versions.selectOne({ id: maybeCurrentVersion.version_id });
-
-          if (!currentVersion) {
-            return null;
-          }
-
-          // Query the DB representation since the mapped version doesn't have the
-          // real created at block
-          const editVersion = await Versions.selectOne({ id: version.id });
-
-          if (!editVersion) {
-            return null;
-          }
-
-          if (currentVersion.created_at_block > editVersion.created_at_block) {
+          if (maybeCurrentVersion.version.created_at_block > editVersion.created_at_block) {
             const newVersionId = createVersionId({
               entityId: version.id.toString(),
               proposalId: version.edit_id.toString(),
@@ -215,7 +206,10 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
                 entity_id: v.entity_id,
                 version_id: v.id,
               };
-            })
+            }),
+            {
+              chunked: true,
+            }
           ),
         catch: error => {
           console.error(`Failed to insert current versions. ${(error as Error).message}`);
@@ -223,8 +217,7 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
             `Failed to insert current versions. ${(error as Error).message}`
           );
         },
-      }),
-      retryEffect
+      })
     );
 
     const relations = yield* _(
@@ -240,7 +233,11 @@ export function handleEditsPublished(ipfsProposals: SinkEditProposal[], createdS
 
     yield* _(
       Effect.tryPromise({
-        try: () => SpaceMetadata.upsert(dedupeWith(spaceMetadatum, (a, z) => a.space_id === z.space_id)),
+        try: () =>
+          SpaceMetadata.upsert(
+            dedupeWith(spaceMetadatum, (a, z) => a.space_id === z.space_id),
+            { chunked: true }
+          ),
         catch: error =>
           new CouldNotWriteSpaceMetadataError({
             message: `Failed to insert space metadata. ${(error as Error).message}`,

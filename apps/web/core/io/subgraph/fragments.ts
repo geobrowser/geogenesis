@@ -42,6 +42,9 @@ export const tripleFragment = `
     entityId
     name
   }
+  formatOption
+  unitOption
+  languageOption
   numberValue
   textValue
   booleanValue

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { Triple, TripleWithDateValue, TripleWithStringValue, TripleWithUrlValue, Value } from '~/core/types';
 
@@ -7,7 +7,7 @@ export const makeStubTriple = (name: string, entityId?: string): Triple => {
     id: name,
     entityId: entityId ?? name,
     entityName: name,
-    attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+    attributeId: SystemIds.NAME_ATTRIBUTE,
     attributeName: 'Name',
     value: {
       type: 'TEXT',
