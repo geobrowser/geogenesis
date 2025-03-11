@@ -97,6 +97,11 @@ export async function fetchProfileViaWalletsTripleAddress(address: string): Prom
     }
   }
 
+  // Flaky
+  if (!result.right) {
+    return defaultProfile(address);
+  }
+
   const entities = result.right.entities.nodes;
 
   if (entities.length === 0) {
