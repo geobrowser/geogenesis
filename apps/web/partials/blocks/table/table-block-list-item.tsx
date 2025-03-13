@@ -1,4 +1,4 @@
-import { CONTENT_IDS, Image, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
 import Link from 'next/link';
 
@@ -48,22 +48,22 @@ export function TableBlockListItem({
   onChangeEntry,
   properties,
 }: Props) {
-  const nameCell = columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-  const maybeAvatarData: Cell | undefined = columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
-  const maybeDescriptionData: Cell | undefined = columns[SYSTEM_IDS.DESCRIPTION_ATTRIBUTE];
+  const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
+  const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
+  const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_ATTRIBUTE];
 
   const { cellId, name, verified } = nameCell;
   let { description, image } = nameCell;
 
   const maybeDescription = maybeDescriptionData?.renderables.find(
-    r => r.attributeId === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+    r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE
   )?.value;
 
   if (maybeDescription) {
     description = maybeDescription;
   }
 
-  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === CONTENT_IDS.AVATAR_ATTRIBUTE)?.value;
+  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === ContentIds.AVATAR_ATTRIBUTE)?.value;
 
   if (maybeAvatarUrl) {
     image = maybeAvatarUrl;
@@ -73,10 +73,10 @@ export function TableBlockListItem({
 
   const otherPropertyData = Object.values(columns).filter(
     c =>
-      c.slotId !== SYSTEM_IDS.NAME_ATTRIBUTE &&
-      c.slotId !== CONTENT_IDS.AVATAR_ATTRIBUTE &&
-      c.slotId !== SYSTEM_IDS.COVER_ATTRIBUTE &&
-      c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+      c.slotId !== SystemIds.NAME_ATTRIBUTE &&
+      c.slotId !== ContentIds.AVATAR_ATTRIBUTE &&
+      c.slotId !== SystemIds.COVER_ATTRIBUTE &&
+      c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
   );
 
   if (isEditing) {
@@ -153,7 +153,7 @@ export function TableBlockListItem({
                             fromEntityName: name,
                             toEntityId: imageId,
                             toEntityName: null,
-                            typeOfId: CONTENT_IDS.AVATAR_ATTRIBUTE,
+                            typeOfId: ContentIds.AVATAR_ATTRIBUTE,
                             typeOfName: 'Avatar',
                             renderableType: 'IMAGE',
                             value: setTripleOp.triple.value.value,
@@ -222,7 +222,7 @@ export function TableBlockListItem({
                         type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                         payload: {
                           renderable: {
-                            attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+                            attributeId: SystemIds.NAME_ATTRIBUTE,
                             entityId: rowEntityId,
                             spaceId: currentSpaceId,
                             attributeName: 'Name',
@@ -261,7 +261,7 @@ export function TableBlockListItem({
                       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                       payload: {
                         renderable: {
-                          attributeId: SYSTEM_IDS.DESCRIPTION_ATTRIBUTE,
+                          attributeId: SystemIds.DESCRIPTION_ATTRIBUTE,
                           entityId: rowEntityId,
                           spaceId: currentSpaceId,
                           attributeName: 'Description',

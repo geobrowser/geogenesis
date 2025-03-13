@@ -1,4 +1,4 @@
-import { CONTENT_IDS, SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -16,17 +16,16 @@ type Props = {
 };
 
 export function TableBlockGalleryItem({ columns, currentSpaceId }: Props) {
-  const nameCell: Cell | undefined = columns[SYSTEM_IDS.NAME_ATTRIBUTE];
-  const maybeAvatarData: Cell | undefined = columns[CONTENT_IDS.AVATAR_ATTRIBUTE];
-  const maybeCoverData: Cell | undefined = columns[SYSTEM_IDS.COVER_ATTRIBUTE];
+  const nameCell: Cell | undefined = columns[SystemIds.NAME_ATTRIBUTE];
+  const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
+  const maybeCoverData: Cell | undefined = columns[SystemIds.COVER_ATTRIBUTE];
 
-  // @TODO: An "everything" else ID that can be used to render any renderable.
   const { cellId, name, verified } = nameCell;
   let { image } = nameCell;
 
-  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === CONTENT_IDS.AVATAR_ATTRIBUTE)?.value;
+  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === ContentIds.AVATAR_ATTRIBUTE)?.value;
 
-  const maybeCoverUrl = maybeCoverData?.renderables.find(r => r.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE)?.value;
+  const maybeCoverUrl = maybeCoverData?.renderables.find(r => r.attributeId === SystemIds.COVER_ATTRIBUTE)?.value;
 
   if (maybeAvatarUrl) {
     image = maybeAvatarUrl;
@@ -40,10 +39,10 @@ export function TableBlockGalleryItem({ columns, currentSpaceId }: Props) {
 
   const otherPropertyData = Object.values(columns).filter(
     c =>
-      c.slotId !== SYSTEM_IDS.NAME_ATTRIBUTE &&
-      c.slotId !== CONTENT_IDS.AVATAR_ATTRIBUTE &&
-      c.slotId !== SYSTEM_IDS.COVER_ATTRIBUTE &&
-      c.slotId !== SYSTEM_IDS.DESCRIPTION_ATTRIBUTE
+      c.slotId !== SystemIds.NAME_ATTRIBUTE &&
+      c.slotId !== ContentIds.AVATAR_ATTRIBUTE &&
+      c.slotId !== SystemIds.COVER_ATTRIBUTE &&
+      c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
   );
 
   return (
