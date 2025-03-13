@@ -1,21 +1,38 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
-import Image from 'next/image';
+import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
+import NextImage from 'next/image';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { EditEvent, EditEventContext, editEvent } from '~/core/events/edit-events';
+import { SearchResult } from '~/core/io/dto/search';
+import { EntityId } from '~/core/io/schema';
 import { Cell } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
+import { ListImageField } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 
 import { TableBlockPropertyField } from './table-block-property-field';
 
+type ChangeEntryParams =
+  | {
+      type: 'EVENT';
+      data: EditEvent;
+    }
+  | {
+      type: 'FOC';
+      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
+    };
+
 type Props = {
   columns: Record<string, Cell>;
   currentSpaceId: string;
+  isEditing: boolean;
+  rowEntityId: string;
+  onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
 };
 
-export function TableBlockGalleryItem({ columns, currentSpaceId }: Props) {
+export function TableBlockGalleryItem({ columns, currentSpaceId, isEditing, rowEntityId, onChangeEntry }: Props) {
   const nameCell: Cell | undefined = columns[SystemIds.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
   const maybeCoverData: Cell | undefined = columns[SystemIds.COVER_ATTRIBUTE];
@@ -45,10 +62,102 @@ export function TableBlockGalleryItem({ columns, currentSpaceId }: Props) {
       c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
   );
 
+  if (isEditing) {
+    return (
+      <div className="group flex flex-col gap-3">
+        <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
+          {image ? (
+            <NextImage
+              src={getImagePath(image)}
+              className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+              alt=""
+              fill
+            />
+          ) : (
+            <ListImageField
+              imageSrc={image ?? undefined}
+              onImageChange={imageSrc => {
+                const { id: imageId, ops } = Image.make({ cid: imageSrc });
+                const [createRelationOp, setTripleOp] = ops;
+
+                if (createRelationOp.type === 'CREATE_RELATION') {
+                  const imageEntityDispatch = editEvent({
+                    context: {
+                      entityId: createRelationOp.relation.fromEntity,
+                      entityName: null,
+                      spaceId: currentSpaceId,
+                    },
+                  });
+
+                  imageEntityDispatch({
+                    type: 'UPSERT_RELATION',
+                    payload: {
+                      fromEntityId: createRelationOp.relation.fromEntity,
+                      fromEntityName: name,
+                      toEntityId: createRelationOp.relation.toEntity,
+                      toEntityName: null,
+                      typeOfId: createRelationOp.relation.type,
+                      typeOfName: 'Types',
+                    },
+                  });
+
+                  if (setTripleOp.type === 'SET_TRIPLE') {
+                    imageEntityDispatch({
+                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                      payload: {
+                        renderable: {
+                          attributeId: setTripleOp.triple.attribute,
+                          entityId: imageId,
+                          spaceId: currentSpaceId,
+                          attributeName: 'Image URL',
+                          entityName: null,
+                          type: 'URL',
+                          value: setTripleOp.triple.value.value,
+                        },
+                        value: {
+                          type: 'URL',
+                          value: setTripleOp.triple.value.value,
+                        },
+                      },
+                    });
+
+                    onChangeEntry(
+                      {
+                        entityId: rowEntityId,
+                        entityName: name,
+                        spaceId: currentSpaceId,
+                      },
+                      {
+                        type: 'EVENT',
+                        data: {
+                          type: 'UPSERT_RELATION',
+                          payload: {
+                            fromEntityId: rowEntityId,
+                            fromEntityName: name,
+                            toEntityId: imageId,
+                            toEntityName: null,
+                            typeOfId: ContentIds.AVATAR_ATTRIBUTE,
+                            typeOfName: 'Avatar',
+                            renderableType: 'IMAGE',
+                            value: setTripleOp.triple.value.value,
+                          },
+                        },
+                      }
+                    );
+                  }
+                }
+              }}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Link href={href} className="group flex flex-col gap-3">
       <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
-        <Image
+        <NextImage
           src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
           className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
           alt=""

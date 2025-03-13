@@ -112,6 +112,9 @@ type ChangeEntryParams =
 
 // @TODO: Maybe this can live in the useDataBlock hook? Probably want it to so
 // we can access it deeply in table cells, etc.
+//
+// We might want a way to store this in some local state so changes are optimistic
+// and we don't have to enter loading states when adding/removing entries
 function useEntries(entries: Row[], properties: PropertySchema[], spaceId: string, filterState: Filter[]) {
   const isEditing = useUserIsEditing(spaceId);
   const { source } = useSource();
@@ -316,7 +319,14 @@ export const TableBlock = ({ spaceId }: Props) => {
       <div className="grid grid-cols-3 gap-x-4 gap-y-10">
         {entries.map((row, index: number) => {
           return (
-            <TableBlockGalleryItem key={`${row.entityId}-${index}`} columns={row.columns} currentSpaceId={spaceId} />
+            <TableBlockGalleryItem
+              key={`${row.entityId}-${index}`}
+              rowEntityId={row.entityId}
+              isEditing={isEditing}
+              columns={row.columns}
+              currentSpaceId={spaceId}
+              onChangeEntry={onChangeEntry}
+            />
           );
         })}
       </div>

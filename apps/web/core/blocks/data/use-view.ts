@@ -69,11 +69,11 @@ export function useView() {
         },
         fromEntity: {
           id: EntityId(relationId),
-          name: '',
+          name: blockEntity.name,
         },
         toEntity: {
           id: EntityId(newView.id),
-          name: newView.name,
+          name: `${newView.name} view`,
           renderableType: 'RELATION',
           value: EntityId(newView.id),
         },
