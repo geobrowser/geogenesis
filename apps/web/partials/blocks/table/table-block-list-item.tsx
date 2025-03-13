@@ -33,7 +33,6 @@ type Props = {
   currentSpaceId: string;
   isEditing: boolean;
   rowEntityId: string;
-  spaceId: string;
   isPlaceholder: boolean;
   onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
   properties?: Record<PropertyId, PropertySchema>;
@@ -45,7 +44,6 @@ export function TableBlockListItem({
   currentSpaceId,
   isEditing,
   rowEntityId,
-  spaceId,
   isPlaceholder,
   onChangeEntry,
   properties,
@@ -96,71 +94,75 @@ export function TableBlockListItem({
             <ListImageField
               imageSrc={image ?? undefined}
               onImageChange={imageSrc => {
-                const { imageId, ops } = Image.make(imageSrc);
+                const { id: imageId, ops } = Image.make({ cid: imageSrc });
                 const [createRelationOp, setTripleOp] = ops;
 
-                const imageEntityDispatch = editEvent({
-                  context: {
-                    entityId: createRelationOp.relation.fromEntity,
-                    entityName: null,
-                    spaceId,
-                  },
-                });
-
-                imageEntityDispatch({
-                  type: 'UPSERT_RELATION',
-                  payload: {
-                    fromEntityId: createRelationOp.relation.fromEntity,
-                    fromEntityName: name,
-                    toEntityId: createRelationOp.relation.toEntity,
-                    toEntityName: null,
-                    typeOfId: createRelationOp.relation.type,
-                    typeOfName: 'Types',
-                  },
-                });
-
-                imageEntityDispatch({
-                  type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                  payload: {
-                    renderable: {
-                      attributeId: setTripleOp.triple.attribute,
-                      entityId: imageId,
-                      spaceId,
-                      attributeName: 'Image URL',
+                if (createRelationOp.type === 'CREATE_RELATION') {
+                  const imageEntityDispatch = editEvent({
+                    context: {
+                      entityId: createRelationOp.relation.fromEntity,
                       entityName: null,
-                      type: 'URL',
-                      value: setTripleOp.triple.value.value,
+                      spaceId: currentSpaceId,
                     },
-                    value: {
-                      type: 'URL',
-                      value: setTripleOp.triple.value.value,
-                    },
-                  },
-                });
+                  });
 
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: name,
-                    spaceId,
-                  },
-                  {
-                    type: 'EVENT',
-                    data: {
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: rowEntityId,
-                        fromEntityName: name,
-                        toEntityId: imageId,
-                        toEntityName: null,
-                        typeOfId: CONTENT_IDS.AVATAR_ATTRIBUTE,
-                        typeOfName: 'Avatar',
-                        renderableType: 'IMAGE',
-                        value: setTripleOp.triple.value.value,
-                      },
+                  imageEntityDispatch({
+                    type: 'UPSERT_RELATION',
+                    payload: {
+                      fromEntityId: createRelationOp.relation.fromEntity,
+                      fromEntityName: name,
+                      toEntityId: createRelationOp.relation.toEntity,
+                      toEntityName: null,
+                      typeOfId: createRelationOp.relation.type,
+                      typeOfName: 'Types',
                     },
+                  });
+
+                  if (setTripleOp.type === 'SET_TRIPLE') {
+                    imageEntityDispatch({
+                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                      payload: {
+                        renderable: {
+                          attributeId: setTripleOp.triple.attribute,
+                          entityId: imageId,
+                          spaceId: currentSpaceId,
+                          attributeName: 'Image URL',
+                          entityName: null,
+                          type: 'URL',
+                          value: setTripleOp.triple.value.value,
+                        },
+                        value: {
+                          type: 'URL',
+                          value: setTripleOp.triple.value.value,
+                        },
+                      },
+                    });
+
+                    onChangeEntry(
+                      {
+                        entityId: rowEntityId,
+                        entityName: name,
+                        spaceId: currentSpaceId,
+                      },
+                      {
+                        type: 'EVENT',
+                        data: {
+                          type: 'UPSERT_RELATION',
+                          payload: {
+                            fromEntityId: rowEntityId,
+                            fromEntityName: name,
+                            toEntityId: imageId,
+                            toEntityName: null,
+                            typeOfId: CONTENT_IDS.AVATAR_ATTRIBUTE,
+                            typeOfName: 'Avatar',
+                            renderableType: 'IMAGE',
+                            value: setTripleOp.triple.value.value,
+                          },
+                        },
+                      }
+                    );
                   }
-                );
+                }
               }}
             />
           )}

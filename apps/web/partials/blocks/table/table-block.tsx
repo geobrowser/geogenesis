@@ -303,7 +303,6 @@ export const TableBlock = ({ spaceId }: Props) => {
               rowEntityId={row.entityId}
               isPlaceholder={Boolean(row.placeholder)}
               onChangeEntry={onChangeEntry}
-              spaceId={spaceId}
               properties={propertiesSchema}
             />
           );
