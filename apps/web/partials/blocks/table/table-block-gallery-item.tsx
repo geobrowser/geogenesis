@@ -9,8 +9,9 @@ import { EntityId } from '~/core/io/schema';
 import { Cell } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
-import { ListImageField } from '~/design-system/editable-fields/editable-fields';
+import { ListImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
+import { SelectEntity } from '~/design-system/select-entity';
 
 import { TableBlockPropertyField } from './table-block-property-field';
 
@@ -30,9 +31,17 @@ type Props = {
   isEditing: boolean;
   rowEntityId: string;
   onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
+  isPlaceholder: boolean;
 };
 
-export function TableBlockGalleryItem({ columns, currentSpaceId, isEditing, rowEntityId, onChangeEntry }: Props) {
+export function TableBlockGalleryItem({
+  columns,
+  currentSpaceId,
+  isEditing,
+  rowEntityId,
+  onChangeEntry,
+  isPlaceholder,
+}: Props) {
   const nameCell: Cell | undefined = columns[SystemIds.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
   const maybeCoverData: Cell | undefined = columns[SystemIds.COVER_ATTRIBUTE];
@@ -147,6 +156,80 @@ export function TableBlockGalleryItem({ columns, currentSpaceId, isEditing, rowE
                   }
                 }
               }}
+            />
+          )}
+        </div>
+        <div>
+          <div className="text-metadata text-grey-04">Name</div>
+          {isPlaceholder ? (
+            <SelectEntity
+              // What actually happens here? We create a link to the entity for the source?
+              // If the entity already exists then it should be a text block instead of the
+              // search experience
+              onDone={result => {
+                onChangeEntry(
+                  {
+                    entityId: rowEntityId,
+                    entityName: name,
+                    spaceId: currentSpaceId,
+                  },
+                  {
+                    type: 'FOC',
+                    data: result,
+                  }
+                );
+              }}
+              onCreateEntity={result => {
+                // This actually works quite differently than other creates since
+                // we want to use the existing placeholder entity id.
+                onChangeEntry(
+                  {
+                    entityId: rowEntityId,
+                    entityName: name,
+                    spaceId: currentSpaceId,
+                  },
+                  {
+                    type: 'FOC',
+                    data: result,
+                  }
+                );
+              }}
+              spaceId={currentSpaceId}
+              allowedTypes={[]}
+            />
+          ) : (
+            <PageStringField
+              placeholder="Add name..."
+              onChange={e => {
+                onChangeEntry(
+                  {
+                    entityId: rowEntityId,
+                    entityName: name,
+                    spaceId: currentSpaceId,
+                  },
+                  {
+                    type: 'EVENT',
+                    data: {
+                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                      payload: {
+                        renderable: {
+                          attributeId: SystemIds.NAME_ATTRIBUTE,
+                          entityId: rowEntityId,
+                          spaceId: currentSpaceId,
+                          attributeName: 'Name',
+                          entityName: name,
+                          type: 'TEXT',
+                          value: name ?? '',
+                        },
+                        value: { type: 'TEXT', value: e.currentTarget.value },
+                      },
+                    },
+                  }
+                );
+
+                return;
+              }}
+              value={name ?? ''}
             />
           )}
         </div>

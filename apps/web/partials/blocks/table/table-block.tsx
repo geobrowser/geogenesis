@@ -326,6 +326,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               columns={row.columns}
               currentSpaceId={spaceId}
               onChangeEntry={onChangeEntry}
+              isPlaceholder={Boolean(row.placeholder)}
             />
           );
         })}
