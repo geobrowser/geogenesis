@@ -247,6 +247,7 @@ export function TableBlockGalleryItem({
                   spaceId={currentSpaceId}
                   entityId={rowEntityId}
                   properties={properties}
+                  onChangeEntry={onChangeEntry}
                 />
               </div>
             </>
@@ -281,6 +282,7 @@ export function TableBlockGalleryItem({
             renderables={p.renderables}
             spaceId={currentSpaceId}
             entityId={cellId}
+            onChangeEntry={onChangeEntry}
           />
         );
       })}
