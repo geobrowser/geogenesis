@@ -76,7 +76,7 @@ export function TableBlockGalleryItem({
 
   if (isEditing) {
     return (
-      <div className="group flex flex-col gap-3">
+      <div className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2">
         <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
           {image ? (
             <NextImage
@@ -162,54 +162,15 @@ export function TableBlockGalleryItem({
             />
           )}
         </div>
-        <div>
-          <div className="text-metadata text-grey-04">Name</div>
-          {isPlaceholder ? (
-            <SelectEntity
-              // What actually happens here? We create a link to the entity for the source?
-              // If the entity already exists then it should be a text block instead of the
-              // search experience
-              onDone={result => {
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'FOC',
-                    data: result,
-                  }
-                );
-              }}
-              onCreateEntity={result => {
-                // This actually works quite differently than other creates since
-                // we want to use the existing placeholder entity id.
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'FOC',
-                    data: result,
-                  }
-                );
-              }}
-              spaceId={currentSpaceId}
-              allowedTypes={[]}
-            />
-          ) : (
-            <div className="flex items-center gap-2">
-              {verified && (
-                <span>
-                  <CheckCircle color={isEditing ? 'text' : 'ctaPrimary'} />
-                </span>
-              )}
-              <PageStringField
-                placeholder="Add name..."
-                onChange={e => {
+        <div className="flex flex-col gap-3 px-1">
+          <div>
+            <div className="text-metadata text-grey-04">Name</div>
+            {isPlaceholder ? (
+              <SelectEntity
+                // What actually happens here? We create a link to the entity for the source?
+                // If the entity already exists then it should be a text block instead of the
+                // search experience
+                onDone={result => {
                   onChangeEntry(
                     {
                       entityId: rowEntityId,
@@ -217,55 +178,99 @@ export function TableBlockGalleryItem({
                       spaceId: currentSpaceId,
                     },
                     {
-                      type: 'EVENT',
-                      data: {
-                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                        payload: {
-                          renderable: {
-                            attributeId: SystemIds.NAME_ATTRIBUTE,
-                            entityId: rowEntityId,
-                            spaceId: currentSpaceId,
-                            attributeName: 'Name',
-                            entityName: name,
-                            type: 'TEXT',
-                            value: name ?? '',
-                          },
-                          value: { type: 'TEXT', value: e.currentTarget.value },
-                        },
-                      },
+                      type: 'FOC',
+                      data: result,
                     }
                   );
-
-                  return;
                 }}
-                value={name ?? ''}
+                onCreateEntity={result => {
+                  // This actually works quite differently than other creates since
+                  // we want to use the existing placeholder entity id.
+                  onChangeEntry(
+                    {
+                      entityId: rowEntityId,
+                      entityName: name,
+                      spaceId: currentSpaceId,
+                    },
+                    {
+                      type: 'FOC',
+                      data: result,
+                    }
+                  );
+                }}
+                spaceId={currentSpaceId}
+                allowedTypes={[]}
               />
-            </div>
-          )}
-        </div>
-        {otherPropertyData.map(p => {
-          return (
-            <>
-              <Divider type="horizontal" style="dashed" />
-              <div key={p.slotId}>
-                <TableBlockPropertyField
-                  key={p.slotId}
-                  renderables={p.renderables}
-                  spaceId={currentSpaceId}
-                  entityId={rowEntityId}
-                  properties={properties}
-                  onChangeEntry={onChangeEntry}
+            ) : (
+              <div className="flex items-center gap-2">
+                {verified && (
+                  <span>
+                    <CheckCircle color={isEditing ? 'text' : 'ctaPrimary'} />
+                  </span>
+                )}
+                <PageStringField
+                  placeholder="Add name..."
+                  onChange={e => {
+                    onChangeEntry(
+                      {
+                        entityId: rowEntityId,
+                        entityName: name,
+                        spaceId: currentSpaceId,
+                      },
+                      {
+                        type: 'EVENT',
+                        data: {
+                          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                          payload: {
+                            renderable: {
+                              attributeId: SystemIds.NAME_ATTRIBUTE,
+                              entityId: rowEntityId,
+                              spaceId: currentSpaceId,
+                              attributeName: 'Name',
+                              entityName: name,
+                              type: 'TEXT',
+                              value: name ?? '',
+                            },
+                            value: { type: 'TEXT', value: e.currentTarget.value },
+                          },
+                        },
+                      }
+                    );
+
+                    return;
+                  }}
+                  value={name ?? ''}
                 />
               </div>
-            </>
-          );
-        })}
+            )}
+          </div>
+          {otherPropertyData.map(p => {
+            return (
+              <>
+                <Divider type="horizontal" style="dashed" />
+                <div key={p.slotId}>
+                  <TableBlockPropertyField
+                    key={p.slotId}
+                    renderables={p.renderables}
+                    spaceId={currentSpaceId}
+                    entityId={rowEntityId}
+                    properties={properties}
+                    onChangeEntry={onChangeEntry}
+                  />
+                </div>
+              </>
+            );
+          })}
+        </div>
       </div>
     );
   }
 
   return (
-    <Link href={href} className="group flex flex-col gap-3">
+    <Link
+      href={href}
+      className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2 transition duration-200 hover:bg-divider"
+    >
       <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
         <NextImage
           src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
@@ -274,25 +279,27 @@ export function TableBlockGalleryItem({
           fill
         />
       </div>
-      <div className="flex items-center gap-2">
-        {verified && (
-          <div>
-            <CheckCircle />
-          </div>
-        )}
-        <div className="truncate text-smallTitle font-medium text-text">{name}</div>
+      <div className="flex flex-col gap-3 px-1">
+        <div className="flex items-center gap-2">
+          {verified && (
+            <div>
+              <CheckCircle />
+            </div>
+          )}
+          <div className="truncate text-smallTitle font-medium text-text">{name}</div>
+        </div>
+        {otherPropertyData.map(p => {
+          return (
+            <TableBlockPropertyField
+              key={p.slotId}
+              renderables={p.renderables}
+              spaceId={currentSpaceId}
+              entityId={cellId}
+              onChangeEntry={onChangeEntry}
+            />
+          );
+        })}
       </div>
-      {otherPropertyData.map(p => {
-        return (
-          <TableBlockPropertyField
-            key={p.slotId}
-            renderables={p.renderables}
-            spaceId={currentSpaceId}
-            entityId={cellId}
-            onChangeEntry={onChangeEntry}
-          />
-        );
-      })}
     </Link>
   );
 }
