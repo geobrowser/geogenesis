@@ -292,6 +292,7 @@ export function TableBlockListItem({
                     spaceId={currentSpaceId}
                     entityId={rowEntityId}
                     properties={properties}
+                    onChangeEntry={onChangeEntry}
                   />
                 </div>
               </>
@@ -336,6 +337,7 @@ export function TableBlockListItem({
                   spaceId={currentSpaceId}
                   entityId={cellId}
                   properties={properties}
+                  onChangeEntry={onChangeEntry}
                 />
               </div>
             );
