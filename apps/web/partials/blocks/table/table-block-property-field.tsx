@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { editEvent, useEditEvents } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
@@ -178,7 +178,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                         fromEntityName: result.name,
                         toEntityId: property.relationValueTypeId,
                         toEntityName: property.relationValueTypeName ?? null,
-                        typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+                        typeOfId: SystemIds.TYPES_ATTRIBUTE,
                         typeOfName: 'Types',
                       },
                     });
@@ -240,7 +240,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                     fromEntityName: result.name,
                     toEntityId: property.relationValueTypeId,
                     toEntityName: property.relationValueTypeName ?? null,
-                    typeOfId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+                    typeOfId: SystemIds.TYPES_ATTRIBUTE,
                     typeOfName: 'Types',
                   },
                 });
