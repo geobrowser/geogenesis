@@ -207,39 +207,46 @@ export function TableBlockListItem({
                 allowedTypes={[]}
               />
             ) : (
-              <PageStringField
-                placeholder="Add name..."
-                onChange={e => {
-                  onChangeEntry(
-                    {
-                      entityId: rowEntityId,
-                      entityName: name,
-                      spaceId: currentSpaceId,
-                    },
-                    {
-                      type: 'EVENT',
-                      data: {
-                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                        payload: {
-                          renderable: {
-                            attributeId: SystemIds.NAME_ATTRIBUTE,
-                            entityId: rowEntityId,
-                            spaceId: currentSpaceId,
-                            attributeName: 'Name',
-                            entityName: name,
-                            type: 'TEXT',
-                            value: name ?? '',
-                          },
-                          value: { type: 'TEXT', value: e.currentTarget.value },
-                        },
+              <div className="flex items-center gap-2">
+                {verified && (
+                  <span>
+                    <CheckCircle color={isEditing ? 'text' : 'ctaPrimary'} />
+                  </span>
+                )}
+                <PageStringField
+                  placeholder="Add name..."
+                  onChange={e => {
+                    onChangeEntry(
+                      {
+                        entityId: rowEntityId,
+                        entityName: name,
+                        spaceId: currentSpaceId,
                       },
-                    }
-                  );
+                      {
+                        type: 'EVENT',
+                        data: {
+                          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                          payload: {
+                            renderable: {
+                              attributeId: SystemIds.NAME_ATTRIBUTE,
+                              entityId: rowEntityId,
+                              spaceId: currentSpaceId,
+                              attributeName: 'Name',
+                              entityName: name,
+                              type: 'TEXT',
+                              value: name ?? '',
+                            },
+                            value: { type: 'TEXT', value: e.currentTarget.value },
+                          },
+                        },
+                      }
+                    );
 
-                  return;
-                }}
-                value={name ?? ''}
-              />
+                    return;
+                  }}
+                  value={name ?? ''}
+                />
+              </div>
             )}
           </div>
           <Divider type="horizontal" style="dashed" />
