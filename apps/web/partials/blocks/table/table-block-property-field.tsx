@@ -1,28 +1,43 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { editEvent, useEditEvents } from '~/core/events/edit-events';
+import { EditEvent, EditEventContext, editEvent, useEditEvents } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { SearchResult } from '~/core/io/dto/search';
+import { EntityId } from '~/core/io/schema';
 import { PropertySchema, RelationRenderableProperty, RenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
-import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { DateField } from '~/design-system/editable-fields/date-field';
+import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
+type ChangeEntryParams =
+  | {
+      type: 'EVENT';
+      data: EditEvent;
+    }
+  | {
+      type: 'FOC';
+      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
+    };
+
 export function TableBlockPropertyField(props: {
   renderables: RenderableProperty[];
   spaceId: string;
   entityId: string;
   properties?: Record<PropertyId, PropertySchema>;
+  onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
 }) {
-  const { renderables, spaceId, entityId, properties } = props;
+  const { renderables, spaceId, entityId, properties, onChangeEntry } = props;
   const isEditing = useUserIsEditing(props.spaceId);
 
   if (isEditing) {
@@ -31,7 +46,7 @@ export function TableBlockPropertyField(props: {
 
     if (isRelation) {
       return (
-        <div>
+        <div className="space-y-1">
           <div className="text-metadata text-grey-04">{firstRenderable.attributeName}</div>
           <RelationsGroup
             isPlaceholderEntry={true}
@@ -44,6 +59,173 @@ export function TableBlockPropertyField(props: {
         </div>
       );
     }
+
+    return (
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <div className="text-metadata text-grey-04">{firstRenderable?.attributeName}</div>
+          <div className="flex w-full flex-wrap gap-2">
+            {renderables.map(renderable => {
+              switch (renderable.type) {
+                case 'NUMBER':
+                  return (
+                    <NumberField
+                      key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                      value={renderable.value}
+                      onChange={value => {
+                        onChangeEntry(
+                          {
+                            entityId: renderable.entityId,
+                            entityName: renderable.entityName,
+                            spaceId: renderable.spaceId,
+                          },
+                          {
+                            type: 'EVENT',
+                            data: {
+                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                              payload: {
+                                renderable,
+                                value: {
+                                  type: 'NUMBER',
+                                  value: value,
+                                },
+                              },
+                            },
+                          }
+                        );
+                      }}
+                    />
+                  );
+                case 'TEXT':
+                  return (
+                    <TableStringField
+                      key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                      placeholder="Add value..."
+                      value={renderable.value}
+                      onBlur={e => {
+                        onChangeEntry(
+                          {
+                            entityId: renderable.entityId,
+                            entityName: renderable.entityName,
+                            spaceId: renderable.spaceId,
+                          },
+                          {
+                            type: 'EVENT',
+                            data: {
+                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                              payload: {
+                                renderable,
+                                value: {
+                                  type: 'TEXT',
+                                  value: e.currentTarget.value,
+                                },
+                              },
+                            },
+                          }
+                        );
+                      }}
+                    />
+                  );
+                case 'CHECKBOX': {
+                  const checked = getChecked(renderable.value);
+                  return (
+                    <Checkbox
+                      key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                      checked={checked}
+                      onChange={() => {
+                        onChangeEntry(
+                          {
+                            entityId: renderable.entityId,
+                            entityName: renderable.entityName,
+                            spaceId: renderable.spaceId,
+                          },
+                          {
+                            type: 'EVENT',
+                            data: {
+                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                              payload: {
+                                renderable,
+                                value: {
+                                  type: 'CHECKBOX',
+                                  value: !checked ? '1' : '0',
+                                },
+                              },
+                            },
+                          }
+                        );
+                      }}
+                    />
+                  );
+                }
+                case 'TIME':
+                  return (
+                    <DateField
+                      key={renderable.attributeId}
+                      isEditing={true}
+                      value={renderable.value}
+                      format={renderable.options?.format}
+                      onBlur={value => {
+                        onChangeEntry(
+                          {
+                            entityId: renderable.entityId,
+                            entityName: renderable.entityName,
+                            spaceId: renderable.spaceId,
+                          },
+                          {
+                            type: 'EVENT',
+                            data: {
+                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                              payload: {
+                                renderable,
+                                value: {
+                                  type: 'TIME',
+                                  value: value,
+                                },
+                              },
+                            },
+                          }
+                        );
+                      }}
+                    />
+                  );
+                case 'URL':
+                  return (
+                    <WebUrlField
+                      key={renderable.attributeId}
+                      placeholder="Add a URI"
+                      isEditing={true}
+                      spaceId={spaceId}
+                      value={renderable.value}
+                      onBlur={e => {
+                        onChangeEntry(
+                          {
+                            entityId: renderable.entityId,
+                            entityName: renderable.entityName,
+                            spaceId: renderable.spaceId,
+                          },
+                          {
+                            type: 'EVENT',
+                            data: {
+                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                              payload: {
+                                renderable,
+                                value: {
+                                  type: 'URL',
+                                  value: e.currentTarget.value,
+                                },
+                              },
+                            },
+                          }
+                        );
+                      }}
+                    />
+                  );
+              }
+            })}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

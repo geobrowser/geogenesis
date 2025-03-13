@@ -69,7 +69,7 @@ function ViewIcon({ view, color }: { view: DataBlockView; color: ColorName }) {
 type DataBlockViewDetails = { name: string; id: string; value: DataBlockView };
 
 const DATA_BLOCK_VIEWS: Array<DataBlockViewDetails> = [
-  { name: 'Table view', id: SystemIds.TABLE_VIEW, value: 'TABLE' },
+  { name: 'Table', id: SystemIds.TABLE_VIEW, value: 'TABLE' },
   { name: 'Gallery', id: SystemIds.GALLERY_VIEW, value: 'GALLERY' },
   { name: 'List', id: SystemIds.LIST_VIEW, value: 'LIST' },
 ];

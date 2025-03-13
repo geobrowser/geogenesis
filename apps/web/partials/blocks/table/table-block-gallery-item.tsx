@@ -4,11 +4,13 @@ import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { EditEvent, EditEventContext, editEvent } from '~/core/events/edit-events';
+import { PropertyId } from '~/core/hooks/use-properties';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId } from '~/core/io/schema';
-import { Cell } from '~/core/types';
+import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
+import { Divider } from '~/design-system/divider';
 import { ListImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -32,6 +34,7 @@ type Props = {
   rowEntityId: string;
   onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
   isPlaceholder: boolean;
+  properties?: Record<PropertyId, PropertySchema>;
 };
 
 export function TableBlockGalleryItem({
@@ -41,6 +44,7 @@ export function TableBlockGalleryItem({
   rowEntityId,
   onChangeEntry,
   isPlaceholder,
+  properties,
 }: Props) {
   const nameCell: Cell | undefined = columns[SystemIds.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
@@ -67,8 +71,7 @@ export function TableBlockGalleryItem({
     c =>
       c.slotId !== SystemIds.NAME_ATTRIBUTE &&
       c.slotId !== ContentIds.AVATAR_ATTRIBUTE &&
-      c.slotId !== SystemIds.COVER_ATTRIBUTE &&
-      c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
+      c.slotId !== SystemIds.COVER_ATTRIBUTE
   );
 
   if (isEditing) {
@@ -233,6 +236,22 @@ export function TableBlockGalleryItem({
             />
           )}
         </div>
+        {otherPropertyData.map(p => {
+          return (
+            <>
+              <Divider type="horizontal" style="dashed" />
+              <div key={p.slotId}>
+                <TableBlockPropertyField
+                  key={p.slotId}
+                  renderables={p.renderables}
+                  spaceId={currentSpaceId}
+                  entityId={rowEntityId}
+                  properties={properties}
+                />
+              </div>
+            </>
+          );
+        })}
       </div>
     );
   }
