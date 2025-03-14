@@ -348,6 +348,15 @@ export const TableBlock = ({ spaceId }: Props) => {
     );
   }
 
+  const filteredTypes: Array<string> = filterState
+    .filter(filter => filter.columnId === SystemIds.TYPES_ATTRIBUTE)
+    .map(filter => filter.value);
+
+  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, filteredTypes);
+
+  const renderPlusButtonAsLink = (source.type === 'GEO' || source.type === 'SPACES') && canEdit;
+  const renderPlusButtonAsInline = source.type === 'COLLECTION' && canEdit;
+
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
       <div className="mb-2 flex h-8 items-center justify-between">
@@ -361,7 +370,13 @@ export const TableBlock = ({ spaceId }: Props) => {
 
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
-          {canEdit && (
+          {renderPlusButtonAsLink && (
+            <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
+              <Create />
+            </Link>
+          )}
+
+          {renderPlusButtonAsInline && (
             <button onClick={onAddPlaceholder}>
               <Create />
             </button>
