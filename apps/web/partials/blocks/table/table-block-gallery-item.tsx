@@ -77,7 +77,7 @@ export function TableBlockGalleryItem({
   if (isEditing) {
     return (
       <div className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2">
-        <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
+        <div className="relative flex aspect-[2/1] w-full items-center justify-center overflow-clip rounded-lg bg-grey-01">
           {image ? (
             <NextImage
               src={getImagePath(image)}
