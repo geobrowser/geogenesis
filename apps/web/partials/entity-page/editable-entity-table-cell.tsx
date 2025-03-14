@@ -8,6 +8,7 @@ import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
+import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
@@ -201,14 +202,28 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 }
               />
             );
-          case 'CHECKBOX':
+          case 'CHECKBOX': {
+            const checked = getChecked(renderable.value);
+
             return (
-              <input
-                type="checkbox"
+              <Checkbox
                 key={`checkbox-${renderable.attributeId}-${renderable.value}`}
-                checked={renderable.value === '1'}
+                checked={checked}
+                onChange={() => {
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      renderable,
+                      value: {
+                        type: 'CHECKBOX',
+                        value: !checked ? '1' : '0',
+                      },
+                    },
+                  });
+                }}
               />
             );
+          }
           case 'TIME':
             return (
               <DateField
@@ -216,6 +231,18 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 isEditing={true}
                 value={renderable.value}
                 format={renderable.options?.format}
+                onBlur={value => {
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      renderable,
+                      value: {
+                        type: 'TIME',
+                        value: value,
+                      },
+                    },
+                  });
+                }}
               />
             );
           case 'URL':
@@ -226,6 +253,18 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 isEditing={true}
                 spaceId={spaceId}
                 value={renderable.value}
+                onBlur={e => {
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      renderable,
+                      value: {
+                        type: 'URL',
+                        value: e.currentTarget.value,
+                      },
+                    },
+                  });
+                }}
               />
             );
         }

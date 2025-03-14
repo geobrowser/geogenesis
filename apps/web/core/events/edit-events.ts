@@ -15,7 +15,7 @@ import {
 } from '~/core/types';
 
 import { StoreRelation } from '../database/types';
-import { removeRelation, upsertRelation, useWriteOps } from '../database/write';
+import { remove, removeRelation, upsert, upsertMany, upsertRelation, useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
 
 export type EditEvent =
@@ -92,13 +92,15 @@ interface EditApi {
   remove: ReturnType<typeof useWriteOps>['remove'];
 }
 
+export interface EditEventContext {
+  spaceId: string;
+  entityId: string;
+  entityName: string | null;
+}
+
 interface ListenerConfig {
   api: EditApi;
-  context: {
-    spaceId: string;
-    entityId: string;
-    entityName: string;
-  };
+  context: EditEventContext;
 }
 
 const listener =
@@ -305,4 +307,15 @@ export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
   }, [config, remove, upsert, upsertMany]);
 
   return send;
+}
+
+export function editEvent(config: OmitStrict<ListenerConfig, 'api'>) {
+  return listener({
+    ...config,
+    api: {
+      upsert: upsert,
+      remove: remove,
+      upsertMany: upsertMany,
+    },
+  });
 }
