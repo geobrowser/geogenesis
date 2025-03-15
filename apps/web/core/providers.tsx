@@ -10,6 +10,7 @@ import { Services } from './services';
 import { DiffProvider } from './state/diff-store';
 import { store } from './state/jotai-store';
 import { StatusBarContextProvider } from './state/status-bar-store';
+import { SyncEngineProvider } from './sync/use-sync-engine';
 import { WalletProvider } from './wallet';
 import { PrivyProvider } from './wallet/privy';
 
@@ -22,14 +23,16 @@ export function Providers({ children }: Props) {
     <PrivyProvider>
       <ReactQueryProvider>
         <JotaiProvider store={store}>
-          <WalletProvider>
-            <Services.Provider>
-              <StatusBarContextProvider>
-                <DiffProvider>{children}</DiffProvider>
-              </StatusBarContextProvider>
-            </Services.Provider>
-          </WalletProvider>
-          <ReactQueryDevtools initialIsOpen={false} />
+          <SyncEngineProvider>
+            <WalletProvider>
+              <Services.Provider>
+                <StatusBarContextProvider>
+                  <DiffProvider>{children}</DiffProvider>
+                </StatusBarContextProvider>
+              </Services.Provider>
+            </WalletProvider>
+            <ReactQueryDevtools initialIsOpen={false} />
+          </SyncEngineProvider>
         </JotaiProvider>
       </ReactQueryProvider>
     </PrivyProvider>

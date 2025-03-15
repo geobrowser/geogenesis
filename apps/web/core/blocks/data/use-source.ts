@@ -33,7 +33,6 @@ export function useSource() {
     removeSourceType({
       relations: blockEntity.relationsOut,
       spaceId: SpaceId(spaceId),
-      entityId: EntityId(entityId),
     });
     upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 

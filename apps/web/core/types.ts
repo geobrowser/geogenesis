@@ -169,6 +169,7 @@ export interface PropertySchema {
 
 export type Relation = {
   hasBeenPublished?: boolean;
+  isDeleted?: boolean;
   space: string;
   id: EntityId;
   index: string;

@@ -63,8 +63,8 @@ type GetSourceArgs = {
  * a fallback source with a type of Spaces containing the current space id.
  */
 export function getSource({ blockId, dataEntityRelations, currentSpaceId, filterState }: GetSourceArgs): Source {
-  const sourceType = dataEntityRelations.find(r => r.typeOf.id === EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE))?.toEntity
-    .id;
+  const sourceType = dataEntityRelations.find(r => r.typeOf.id === EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE))
+    ?.toEntity.id;
 
   const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_ATTRIBUTE);
 
@@ -114,23 +114,14 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
  * @param relations - The relations to delete as an array of {@link Relation}
  * @param spaceId - The space id as a {@link SpaceId}
  */
-export function removeSourceType({
-  relations,
-  spaceId,
-  entityId,
-}: {
-  relations: Relation[];
-  spaceId: SpaceId;
-  entityId: EntityId;
-}) {
+export function removeSourceType({ relations, spaceId }: { relations: Relation[]; spaceId: SpaceId }) {
   // Delete the existing source type relation. There should only be one source type
   // relation, but delete many just in case.
   const sourceTypeRelations = relations.filter(r => r.typeOf.id === EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE));
 
   for (const relation of sourceTypeRelations) {
     DB.removeRelation({
-      relationId: relation.id,
-      fromEntityId: entityId,
+      relation: relation,
       spaceId,
     });
   }
