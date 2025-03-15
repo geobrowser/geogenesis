@@ -56,11 +56,31 @@ export class GeoStore {
   }
 
   private syncEntities(entities: Entity[]) {
-    console.log('syncing entities', entities);
-
     for (const entity of entities) {
       this.entities.set(entity.id, entity);
+      this.triples.set(entity.id, entity.triples);
+
+      const newRelations: Relation[] = [];
+      const existingRelationIds = new Set(this.relations.get(entity.id)?.map(r => r.id) ?? []);
+
+      // @TODO: Need to filter out existing relations by id
+
+      for (const relation of entity.relationsOut) {
+        if (!existingRelationIds.has(relation.id)) {
+          newRelations.push(relation);
+        }
+      }
+
+      this.relations.set(entity.id, entity.relationsOut);
     }
+  }
+
+  static queryKey(id: string) {
+    return ['store', 'entity', id];
+  }
+
+  static queryKeys(ids: string[]) {
+    return ['store', 'entity', ids];
   }
 
   /**
@@ -236,7 +256,6 @@ export class GeoStore {
    * Add or update a triple with optimistic updates
    */
   public setTriple(triple: Triple): void {
-    console.log('triple', triple);
     const entityId = triple.entityId;
 
     // Create a composite key for the triple
@@ -315,8 +334,6 @@ export class GeoStore {
     });
 
     this.deletedRelations.add(relation.id);
-
-    console.log('deleted relations', relation);
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation });

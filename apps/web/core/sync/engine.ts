@@ -12,8 +12,6 @@ export class SyncEngine {
   private cache: QueryClient;
   private store: GeoStore;
 
-  // @TODO: Can use a better queue implementation like Effect/Queue
-  private queue = new AsyncQueue<GeoEvent>();
   private subs: (() => void)[] = [];
   private env = process.env.NODE_ENV;
 
@@ -134,56 +132,5 @@ export class SyncEngine {
     if (merged.length > 0) {
       this.stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged });
     }
-  }
-  // }
-}
-
-type QueueItem<T> = {
-  resolve: (value: T | PromiseLike<T>) => void;
-  reject: (reason?: any) => void;
-  promise: Promise<T>;
-};
-
-class AsyncQueue<T> {
-  private queue: QueueItem<T>[] = [];
-  private waiting: QueueItem<T>[] = [];
-
-  enqueue(item: T): void {
-    if (this.waiting.length > 0) {
-      const waiter = this.waiting.shift();
-      if (waiter) {
-        waiter.resolve(item);
-      }
-    } else {
-      let resolve: (value: T | PromiseLike<T>) => void;
-      let reject: (reason?: any) => void;
-      const promise = new Promise<T>((res, rej) => {
-        resolve = res;
-        reject = rej;
-      });
-      this.queue.push({ resolve: resolve!, reject: reject!, promise });
-    }
-  }
-
-  async dequeue(): Promise<T | undefined> {
-    if (this.queue.length > 0) {
-      const item = this.queue.shift();
-      if (item) {
-        return item.promise;
-      }
-    } else {
-      let resolve: (value: T | PromiseLike<T>) => void;
-      let reject: (reason?: any) => void;
-      const promise = new Promise<T>((res, rej) => {
-        resolve = res;
-        reject = rej;
-      });
-      this.waiting.push({ resolve: resolve!, reject: reject!, promise });
-      return promise;
-    }
-  }
-
-  get length(): number {
-    return this.queue.length;
   }
 }

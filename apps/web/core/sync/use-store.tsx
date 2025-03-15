@@ -1,6 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { useEffect, useMemo, useState } from 'react';
 
 import { Entity } from '../io/dto/entities';
+import { E } from './orm';
+import { GeoStore } from './store';
 import { GeoEventStream } from './stream';
 import { useSyncEngine } from './use-sync-engine';
 
@@ -9,15 +13,35 @@ type Options = {
   spaceId?: string;
 };
 
-// @TODO need to filter data here by space id as well
+// @TODO need to filter data here optionally by space id as well
 export function useQueryEntity({ id }: Options) {
+  const client = useQueryClient();
   const { store, stream } = useSyncEngine();
   const [entity, setEntity] = useState<Entity | undefined>(id ? store.getEntity(id) : undefined);
 
-  useMemo(() => {
+  const { isFetched } = useQuery({
+    queryKey: [...GeoStore.queryKey(id), entity],
+    queryFn: async () => {
+      // If the entity is in the store then it's already been synced and we can
+      // skip this work
+      if (!entity) {
+        const merged = await E.findOne({ id, store, cache: client });
+
+        if (merged) {
+          stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: [merged] });
+          return merged;
+        }
+      }
+
+      return null;
+    },
+  });
+
+  useEffect(() => {
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       if (event.entities.some(e => e.id === id)) {
-        setEntity(store.getEntity(id));
+        const entity = event.entities.find(e => e.id === id);
+        entity && setEntity(entity);
       }
     });
 
@@ -67,10 +91,11 @@ export function useQueryEntity({ id }: Options) {
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [id, stream, store]);
+  }, [id, store, stream]);
 
   return {
     entity,
+    isLoading: !isFetched,
   };
 }
 

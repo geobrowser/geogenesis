@@ -2,7 +2,7 @@
 
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { SyncEngineProvider, useSyncEngine } from '~/core/sync/use-sync-engine';
 
 export default function SyncPage() {
@@ -10,7 +10,6 @@ export default function SyncPage() {
     <SyncEngineProvider>
       <div className="space-y-8">
         <SingleEntityQueryComponent />
-        <MultipleEntityQueryComponentWithSpecificId />
       </div>
     </SyncEngineProvider>
   );
@@ -18,36 +17,32 @@ export default function SyncPage() {
 
 function SingleEntityQueryComponent() {
   const { store } = useSyncEngine();
-  const { entity } = useQueryEntity('entity-1');
+  const { entity, isLoading } = useQueryEntity({ id: 'EHoZ9qvSPmzxNmReVcCTSw' });
 
   const onClick = () => {
     store.setTriple({
-      space: 'space1',
-      entityId: 'entity-1',
-      attributeId: SystemIds.NAME_ATTRIBUTE,
-      value: { type: 'TEXT', value: 'New name' },
-      entityName: 'Company',
+      space: '25omwWh6HYgeRQKCaSpVpa',
+      entityId: 'EHoZ9qvSPmzxNmReVcCTSw',
+      attributeId: SystemIds.COVER_ATTRIBUTE,
+      value: { type: 'TEXT', value: 'Random text property' },
+      entityName: 'Geo',
       attributeName: 'Name',
     });
   };
 
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <div>
       <h1 className="text-lg">Single Entity Query</h1>
-      <button onClick={onClick}>Make name</button>
-      <p>{JSON.stringify(entity?.triples, null, 2)}</p>
-    </div>
-  );
-}
-
-function MultipleEntityQueryComponentWithSpecificId() {
-  const { entities } = useQueryEntities(['entity-2']);
-
-  return (
-    <div>
-      <h1 className="text-lg">Multiple Entity Query with Specific IDs</h1>
-
-      <p>{JSON.stringify(entities, null, 2)}</p>
+      <button onClick={onClick}>Make random text property</button>
+      <p>Name: {entity?.name}</p>
+      <p>Description: {entity?.description}</p>
+      <p>Random text property: {entity?.triples.find(t => t.attributeId === SystemIds.COVER_ATTRIBUTE)?.value.value}</p>
+      <p>Triples: {entity?.triples.length}</p>
+      <p>Relations: {entity?.relationsOut.length}</p>
     </div>
   );
 }

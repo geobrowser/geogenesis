@@ -24,9 +24,19 @@ function mergeRelations(localRelations: Relation[], remoteRelations: Relation[])
     // Only return initialRelations that haven't been deleted locally
     .filter(r => !deletedRelationIds.has(r.id));
 
+  const localRelationIds = new Set(localRelations.map(r => r.id));
+  const remotes: Relation[] = [];
+
+  // Filter out any remoet relations that are already stored locally
+  for (const remoteRelation of remoteRelationsThatWerentDeleted) {
+    if (!localRelationIds.has(remoteRelation.id)) {
+      remotes.push(remoteRelation);
+    }
+  }
+
   // @TODO: Merge local triples for updated (not created) relations. This is for things like
   // the index.
-  return [...localRelations, ...remoteRelationsThatWerentDeleted];
+  return [...localRelations, ...remotes];
 }
 
 /**
@@ -44,8 +54,6 @@ export class E {
     const remoteEntity = mergeWith;
     const localEntity = store.getEntity(id);
 
-    console.log('merged relations', { remoteEntity, localEntity });
-
     if (!localEntity && !remoteEntity) {
       return null;
     }
@@ -55,7 +63,7 @@ export class E {
     }
 
     if (!localEntity) {
-      return null;
+      return remoteEntity;
     }
 
     const mergedTriples = Triples.merge(
@@ -96,9 +104,11 @@ export class E {
 
   static async findOne({ id, store, cache }: { id: string; store: GeoStore; cache: QueryClient }) {
     const cachedEntity = await cache.fetchQuery({
-      queryKey: ['entity-for-merging', id],
+      queryKey: ['network', 'entity', id],
       queryFn: ({ signal }) => fetchEntity({ id, signal }),
     });
+
+    console.log('cached', cachedEntity);
 
     return this.merge({ id, store, mergeWith: cachedEntity });
   }
