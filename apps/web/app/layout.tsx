@@ -112,6 +112,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${calibre.variable}`}>
       <head>
+        <script crossOrigin="anonymous" src="//unpkg.com/react-scan/dist/auto.global.js" />
         <link rel="preload" as="image" href={DEFAULT_OPENGRAPH_IMAGE} />
       </head>
       <body>

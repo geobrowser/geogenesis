@@ -6,7 +6,10 @@ import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { useMemo } from 'react';
 
 import {
+  BaseRelationRenderableProperty,
+  ImageRelationRenderableProperty,
   OmitStrict,
+  Relation,
   RenderableEntityType,
   RenderableProperty,
   TripleRenderableProperty,
@@ -67,8 +70,7 @@ export type EditEvent =
   | {
       type: 'DELETE_RELATION';
       payload: {
-        relationId: string;
-        fromEntityId: string;
+        renderable: BaseRelationRenderableProperty | ImageRelationRenderableProperty;
       };
     }
 
@@ -203,8 +205,25 @@ const listener =
         // on the relation.
         if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
           return removeRelation({
-            relationId: EntityId(renderable.relationId),
-            fromEntityId: EntityId(renderable.entityId),
+            relation: {
+              id: EntityId(renderable.relationId),
+              space: context.spaceId,
+              index: INITIAL_RELATION_INDEX_VALUE,
+              typeOf: {
+                id: EntityId(renderable.attributeId),
+                name: renderable.attributeName,
+              },
+              fromEntity: {
+                id: EntityId(renderable.entityId),
+                name: renderable.entityName,
+              },
+              toEntity: {
+                id: EntityId(renderable.value),
+                name: renderable.valueName,
+                renderableType: 'RELATION',
+                value: renderable.value,
+              },
+            },
             spaceId: context.spaceId,
           });
         }
@@ -212,8 +231,25 @@ const listener =
         if (type === 'RELATION') {
           // Delete the previous triple and create a new relation entity
           return removeRelation({
-            relationId: EntityId(renderable.entityId),
-            fromEntityId: EntityId(renderable.entityId),
+            relation: {
+              id: EntityId(renderable.entityId),
+              space: context.spaceId,
+              index: INITIAL_RELATION_INDEX_VALUE,
+              typeOf: {
+                id: EntityId(renderable.attributeId),
+                name: renderable.attributeName,
+              },
+              fromEntity: {
+                id: EntityId(renderable.entityId),
+                name: renderable.entityName,
+              },
+              toEntity: {
+                id: EntityId(renderable.value),
+                name: null,
+                renderableType: 'RELATION',
+                value: renderable.value,
+              },
+            },
             spaceId: context.spaceId,
           });
         }
@@ -240,8 +276,25 @@ const listener =
 
         if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
           return removeRelation({
-            relationId: EntityId(renderable.relationId),
-            fromEntityId: EntityId(renderable.entityId),
+            relation: {
+              id: EntityId(renderable.relationId),
+              space: context.spaceId,
+              index: INITIAL_RELATION_INDEX_VALUE,
+              typeOf: {
+                id: EntityId(renderable.attributeId),
+                name: renderable.attributeName,
+              },
+              fromEntity: {
+                id: EntityId(renderable.entityId),
+                name: renderable.entityName,
+              },
+              toEntity: {
+                id: EntityId(renderable.value),
+                name: renderable.valueName,
+                renderableType: 'RELATION',
+                value: renderable.value,
+              },
+            },
             spaceId: context.spaceId,
           });
         }
@@ -280,10 +333,28 @@ const listener =
       }
 
       case 'DELETE_RELATION': {
-        const { relationId, fromEntityId } = event.payload;
+        const { renderable } = event.payload;
+
         return removeRelation({
-          relationId: EntityId(relationId),
-          fromEntityId: EntityId(fromEntityId),
+          relation: {
+            id: EntityId(renderable.relationId),
+            space: context.spaceId,
+            index: INITIAL_RELATION_INDEX_VALUE,
+            typeOf: {
+              id: EntityId(renderable.attributeId),
+              name: renderable.attributeName,
+            },
+            fromEntity: {
+              id: EntityId(renderable.entityId),
+              name: renderable.entityName,
+            },
+            toEntity: {
+              id: EntityId(renderable.value),
+              name: renderable.valueName,
+              renderableType: 'RELATION',
+              value: renderable.value,
+            },
+          },
           spaceId: context.spaceId,
         });
       }
