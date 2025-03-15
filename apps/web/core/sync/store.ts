@@ -9,16 +9,9 @@ type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
 /**
  * The GeoStore is a local cache of data representing entities in the application.
- * When users write local data it is written to the store. Additionally, in the
- * background, a sync engine listens for changes to entities locally and syncs
- * the changes with the remote source. These synced changes get written back to
- * the GeoStore asynchronously.
- *
- * There might be a period between writing to GeoStore and reading from it where
- * any synced data from remote has not populated the GeoStore yet. If you need
- * fully merged entity data immediately there's a separate API called <NAME>
- * which queries remote data and merges it with data in the store. Once querying
- * completes the GeoStore is updated with the merged data as well.
+ * When users write local data it is written to the store. In the background
+ * a sync engine listens for changes to entities and syncs with the remote source.
+ * These synced changes get written back to the GeoStore asynchronously.
  */
 export class GeoStore {
   // Core data storage

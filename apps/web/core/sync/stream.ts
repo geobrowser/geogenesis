@@ -1,11 +1,5 @@
-// Emitter should emit events for changes to entities, relations and triples.
 import { Entity } from '../io/dto/entities';
 import { Relation, Triple } from '../types';
-
-// Downstream subscribers can listen for events and do things:
-// 1. Create ops representing the changes
-// 2. Trigger React to re-render
-// 3. Persist ops in indexeddb
 
 const ENTITY_UPDATED = 'entity:updated' as const;
 const ENTITY_DELETED = 'entity:deleted' as const;
@@ -49,7 +43,17 @@ export type GeoEvent =
 type EventByType<T extends GeoEvent['type']> = Extract<GeoEvent, { type: T }>;
 
 /**
- * EventEmitter for state change notifications
+ * The GeoEventStream stores and emits events for all changes
+ * to entity data locally in the app.
+ *
+ * Downstream consumers of the stream can write their own logic
+ * to be triggered by the stream events.
+ *
+ * e.g.,
+ * 1. Create ops representing the changes
+ * 2. Trigger React to re-render
+ * 3. Persist ops in indexeddb
+ * 4. Sync local data with remote data
  */
 export class GeoEventStream {
   static ENTITY_UPDATED = ENTITY_UPDATED;
@@ -71,7 +75,7 @@ export class GeoEventStream {
       this.listeners[event] = [];
     }
 
-    // @ts-expect-error typemismatch
+    // @ts-expect-error need to use correct type with generic to narrow event data
     this.listeners[event].push(callback);
 
     // Return unsubscribe function
