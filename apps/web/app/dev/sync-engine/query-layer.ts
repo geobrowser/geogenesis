@@ -1,8 +1,8 @@
 import { Entity } from '~/core/io/dto/entities';
+import { GeoStore } from '~/core/sync/store';
 import { Relation, Triple } from '~/core/types';
 
 import { EntityId } from '../../../core/io/schema';
-import { EntityStore } from './sync-engine';
 
 const compareOperators = {
   string: {
@@ -27,7 +27,7 @@ const compareOperators = {
 /**
  * Types for query conditions
  */
-type StringCondition = string | { equals?: string; contains?: string; startsWith?: string; endsWith?: string };
+type StringCondition = { equals?: string; contains?: string; startsWith?: string; endsWith?: string; in?: string[] };
 
 type NumberCondition =
   | number
@@ -49,7 +49,7 @@ type RelationCondition = {
   space?: StringCondition;
 };
 
-type WhereCondition = {
+export type WhereCondition = {
   id?: StringCondition;
   name?: StringCondition;
   description?: StringCondition;
@@ -71,7 +71,7 @@ type SortBy = SortByField | { field: SortByField; direction: SortDirection };
  * EntityQuery class for building and executing entity queries
  */
 export class EntityQuery {
-  private store: EntityStore;
+  private store: GeoStore;
   private whereConditions: WhereCondition[] = [];
   private limitVal: number | undefined;
   private offsetVal: number = 0;
@@ -79,7 +79,7 @@ export class EntityQuery {
   private includeDeletedVal: boolean = false;
   private selectFields: string[] = [];
 
-  constructor(store: EntityStore) {
+  constructor(store: GeoStore) {
     this.store = store;
   }
 
@@ -200,9 +200,9 @@ export class EntityQuery {
   /**
    * Execute the query and return the results
    */
-  async execute(): Promise<Entity[]> {
+  execute(): Entity[] {
     // Get all entities from the store
-    const allEntities = this.store.getAllEntities();
+    const allEntities = this.store.getEntities();
 
     // Apply where conditions
     let filteredEntities = this.applyWhereConditions(allEntities);
@@ -222,7 +222,7 @@ export class EntityQuery {
       filteredEntities = this.applyFieldSelection(filteredEntities);
     }
 
-    return Promise.resolve(filteredEntities);
+    return filteredEntities;
   }
 
   /**
@@ -256,7 +256,9 @@ export class EntityQuery {
    * Get an entity by ID
    */
   async findById(id: EntityId): Promise<Entity | null> {
-    return this.whereId(id as string).findFirst();
+    return this.whereId({
+      equals: id,
+    }).findFirst();
   }
 
   /**
@@ -277,7 +279,7 @@ export class EntityQuery {
 
     return entities.filter(entity => {
       // Only include non-deleted entities unless includeDeleted is true
-      if (!this.includeDeletedVal && this.store.isDeleted(entity.id)) {
+      if (!this.includeDeletedVal && this.store.isEntityDeleted(entity.id)) {
         return false;
       }
 
@@ -489,6 +491,12 @@ export class EntityQuery {
       }
     }
 
+    if (condition.in !== undefined) {
+      if (!condition.in.includes(value)) {
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -644,9 +652,9 @@ export class EntityQuery {
  * Entity Query Builder factory
  */
 export class EntityQueryBuilder {
-  private store: EntityStore;
+  private store: GeoStore;
 
-  constructor(store: EntityStore) {
+  constructor(store: GeoStore) {
     this.store = store;
   }
 
@@ -660,7 +668,7 @@ export class EntityQueryBuilder {
   /**
    * Find all entities
    */
-  findAll(): Promise<Entity[]> {
+  findAll(): Entity[] {
     return this.query().execute();
   }
 
@@ -674,14 +682,14 @@ export class EntityQueryBuilder {
   /**
    * Find entities by name
    */
-  findByName(name: string): Promise<Entity[]> {
+  findByName(name: string): Entity[] {
     return this.query().whereName({ contains: name }).execute();
   }
 
   /**
    * Find entities by full-text search across name and description
    */
-  search(text: string): Promise<Entity[]> {
+  search(text: string): Entity[] {
     return this.query()
       .orWhere([
         { name: { contains: text } },
@@ -694,7 +702,7 @@ export class EntityQueryBuilder {
   /**
    * Find entities by type name
    */
-  findByType(typeName: string): Promise<Entity[]> {
+  findByType(typeName: string): Entity[] {
     return this.query()
       .whereType({ name: { contains: typeName } })
       .execute();
@@ -703,7 +711,7 @@ export class EntityQueryBuilder {
   /**
    * Find entities that have a specific property (triple)
    */
-  findByProperty(propertyName: string, value?: string): Promise<Entity[]> {
+  findByProperty(propertyName: string, value?: string): Entity[] {
     const condition: TripleCondition = { attributeName: { contains: propertyName } };
     if (value !== undefined) {
       condition.value = { contains: value };
@@ -714,16 +722,16 @@ export class EntityQueryBuilder {
   /**
    * Find entities that have a relation to another entity
    */
-  findByRelation(targetEntityId: EntityId): Promise<Entity[]> {
+  findByRelation(targetEntityId: EntityId): Entity[] {
     return this.query()
-      .whereRelation({ toEntity: { id: targetEntityId as string } })
+      .whereRelation({ toEntity: { id: { equals: targetEntityId } } })
       .execute();
   }
 
   /**
    * Find entities that have a specific relation type
    */
-  findByRelationType(relationTypeName: string): Promise<Entity[]> {
+  findByRelationType(relationTypeName: string): Entity[] {
     return this.query()
       .whereRelation({ typeOf: { name: { contains: relationTypeName } } })
       .execute();
@@ -733,7 +741,7 @@ export class EntityQueryBuilder {
 /**
  * Create a query builder for the given store
  */
-export function createQueryBuilder(store: EntityStore): EntityQueryBuilder {
+export function createQueryBuilder(store: GeoStore): EntityQueryBuilder {
   return new EntityQueryBuilder(store);
 }
 

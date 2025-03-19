@@ -2,12 +2,14 @@
 // triples, or relations contents.
 import { SystemIds } from '@graphprotocol/grc-20';
 import { QueryClient } from '@tanstack/react-query';
+import { WhereClause } from 'dexie';
 
 import { Triple } from '../database/Triple';
 import { readTypes } from '../database/entities';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
+import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { Relation } from '../types';
 import { Entities } from '../utils/entity';
 import { Triples } from '../utils/triples';
@@ -111,5 +113,32 @@ export class E {
     return this.merge({ id, store, mergeWith: cachedEntity });
   }
 
-  static async findMany(store: GeoStore, condition: any) {}
+  static async findMany(
+    store: GeoStore,
+    cache: QueryClient,
+    where?: {
+      id?: {
+        in?: string[];
+      };
+    }
+  ) {
+    if (!where?.id) {
+      return [];
+    }
+
+    if (!where?.id.in) {
+      return [];
+    }
+
+    const remoteEntities = await cache.fetchQuery({
+      queryKey: ['network', 'entities', where.id],
+      queryFn: ({ signal }) => fetchEntitiesBatch({ entityIds: where.id.in, signal }),
+    });
+
+    const entities = remoteEntities.map(entity => {
+      return this.merge({ id: entity.id, store, mergeWith: entity });
+    });
+
+    return entities.filter(e => e !== null);
+  }
 }

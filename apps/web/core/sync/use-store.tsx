@@ -7,17 +7,18 @@ import { E } from './orm';
 import { GeoStore } from './store';
 import { GeoEventStream } from './stream';
 import { useSyncEngine } from './use-sync-engine';
+import { WhereCondition } from '~/app/dev/sync-engine/query-layer';
 
-type Options = {
+type QueryEntityOptions = {
   id: string;
   spaceId?: string;
 };
 
 // @TODO need to filter data here optionally by space id as well
-export function useQueryEntity({ id }: Options) {
-  const client = useQueryClient();
+export function useQueryEntity({ id }: QueryEntityOptions) {
+  const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
-  const [entity, setEntity] = useState<Entity | undefined>(id ? store.getEntity(id) : undefined);
+  const [entity, setEntity] = useState<Entity | undefined>(store.getEntity(id));
 
   const { isFetched } = useQuery({
     queryKey: [...GeoStore.queryKey(id), entity],
@@ -25,7 +26,7 @@ export function useQueryEntity({ id }: Options) {
       // If the entity is in the store then it's already been synced and we can
       // skip this work
       if (!entity) {
-        const merged = await E.findOne({ id, store, cache: client });
+        const merged = await E.findOne({ id, store, cache });
 
         if (merged) {
           stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: [merged] });
@@ -33,7 +34,7 @@ export function useQueryEntity({ id }: Options) {
         }
       }
 
-      return null;
+      return entity;
     },
   });
 
@@ -99,15 +100,63 @@ export function useQueryEntity({ id }: Options) {
   };
 }
 
-export function useQueryEntities(ids?: string[]) {
-  const { store, stream } = useSyncEngine();
+type QueryEntitiesOptions = {
+  where: WhereCondition;
+};
+
+// @TODO: Filters/query language for syncing entities
+export function useQueryEntities({ where }: QueryEntitiesOptions) {
+  const cache = useQueryClient();
+  const { store, stream, query: queryInternal } = useSyncEngine();
+  const [hasRun, setHasRun] = useState(false);
   const [entities, setEntities] = useState<Record<string, Entity>>(
-    ids
-      ? Object.fromEntries(store.getEntities(ids).map(e => [e.id, e]))
-      : Object.fromEntries(store.getEntities().map(e => [e.id, e]))
+    Object.fromEntries(
+      queryInternal
+        .query()
+        .where(where)
+        .execute()
+        .map(e => [e.id, e])
+    )
   );
 
-  useMemo(() => {
+  const { isFetched } = useQuery({
+    queryKey: [...GeoStore.queryKeys(where.id?.in ?? []), hasRun],
+    queryFn: async () => {
+      if (!hasRun) {
+        const entities = await E.findMany(store, cache, where);
+        stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
+        setHasRun(true);
+        return entities;
+      }
+
+      return [];
+    },
+  });
+
+  useEffect(() => {
+    const ids = where.id?.in;
+
+    const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
+      const entitiesToUpdate = event.entities.filter(e => ids?.includes(e.id));
+      const changedEntities = event.entities.map(e => e.id);
+
+      const maybeRelationChanged = Object.values(entities).filter(e =>
+        e.relationsOut.some(r => changedEntities.includes(r.toEntity.id))
+      );
+
+      if (maybeRelationChanged.length > 0) {
+        const entities = maybeRelationChanged.map(e => store.getEntity(e.id)).filter(e => e !== undefined);
+        entitiesToUpdate.push(...entities);
+      }
+
+      if (entitiesToUpdate.length > 0) {
+        setEntities(prev => ({
+          ...prev,
+          ...Object.fromEntries(entitiesToUpdate.map(e => [e.id, e])),
+        }));
+      }
+    });
+
     const onEntityUpdatedSub = stream.on(GeoEventStream.ENTITY_UPDATED, event => {
       if (ids?.includes(event.entity.id)) {
         setEntities(prev => ({
@@ -158,16 +207,31 @@ export function useQueryEntities(ids?: string[]) {
     });
 
     const onTripleCreatedSub = stream.on(GeoEventStream.TRIPLES_CREATED, event => {
+      const entitiesToUpdate: Entity[] = [];
+
       if (ids?.includes(event.triple.entityId)) {
         const entity = store.getEntity(event.triple.entityId);
 
         if (entity) {
           entity.triples = [...entity.triples, event.triple];
-          setEntities(prev => ({
-            ...prev,
-            [event.triple.entityId]: entity,
-          }));
+          entitiesToUpdate.push(entity);
         }
+      }
+
+      const maybeRelationChanged = Object.values(entities).filter(e =>
+        e.relationsOut.some(r => r.toEntity.id === event.triple.entityId)
+      );
+
+      if (maybeRelationChanged.length > 0) {
+        const entities = maybeRelationChanged.map(e => store.getEntity(e.id)).filter(e => e !== undefined);
+        entitiesToUpdate.push(...entities);
+      }
+
+      if (entitiesToUpdate.length > 0) {
+        setEntities(prev => ({
+          ...prev,
+          ...Object.fromEntries(entitiesToUpdate.map(e => [e.id, e])),
+        }));
       }
     });
 
@@ -183,9 +247,23 @@ export function useQueryEntities(ids?: string[]) {
           }));
         }
       }
+
+      const maybeRelationChanged = Object.values(entities).filter(e =>
+        e.relationsOut.some(r => r.toEntity.id === event.triple.entityId)
+      );
+
+      if (maybeRelationChanged.length > 0) {
+        const entities = maybeRelationChanged.map(e => store.getEntity(e.id)).filter(e => e !== undefined);
+
+        setEntities(prev => ({
+          ...prev,
+          ...Object.fromEntries(entities.map(e => [e.id, e])),
+        }));
+      }
     });
 
     return () => {
+      onEntitySyncedSub();
       onEntityUpdatedSub();
       onEntityDeletedSub();
       onRelationCreatedSub();
@@ -193,9 +271,10 @@ export function useQueryEntities(ids?: string[]) {
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [ids, stream, store]);
+  }, [where, stream, store, entities]);
 
   return {
-    entities,
+    entities: Object.values(entities),
+    isLoading: !isFetched,
   };
 }

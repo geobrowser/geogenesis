@@ -73,7 +73,7 @@ export class GeoStore {
   }
 
   static queryKeys(ids: string[]) {
-    return ['store', 'entity', ids];
+    return ['store', 'entities', ids];
   }
 
   /**
@@ -98,20 +98,43 @@ export class GeoStore {
       return undefined;
     }
 
+    const name = triples.find(t => t.attributeId === SystemIds.NAME_ATTRIBUTE)?.value.value ?? null;
+    const description = triples.find(t => t.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE)?.value.value ?? null;
+
+    const relationsInStore = relations.map(r => {
+      const toEntityFromStore = this.getEntity(r.toEntity.id);
+
+      return {
+        ...r,
+        toEntity: toEntityFromStore
+          ? {
+              ...r.toEntity,
+              name: toEntityFromStore.name,
+              description: toEntityFromStore.description,
+            }
+          : r.toEntity,
+      };
+    });
+
     // Return fully resolved entity
     const resolvedEntity: Entity = {
       ...(entity
-        ? entity
+        ? {
+            ...entity,
+            name: name ?? entity.name,
+            description: description ?? entity.description,
+            relationsOut: relationsInStore.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
+          }
         : {
             id: EntityId(id),
-            name: triples.find(t => t.attributeId === SystemIds.NAME_ATTRIBUTE)?.value.value ?? null,
-            description: triples.find(t => t.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE)?.value.value ?? null,
+            name,
+            description,
             types: [],
             spaces: [],
             nameTripleSpaces: [],
           }),
       triples: triples.filter(t => (includeDeleted ? true : Boolean(t.isDeleted) === false)),
-      relationsOut: relations.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
+      relationsOut: relationsInStore.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
     };
 
     return resolvedEntity;
@@ -360,6 +383,52 @@ export class GeoStore {
     });
 
     return referencingEntities;
+  }
+
+  /**
+   * Update relations when a referenced entity changes
+   */
+  private async updateRelationReferences(id: EntityId): Promise<void> {
+    // Find all entities that reference this entity
+    const referencingEntityIds = this.findReferencingEntities(id);
+    if (referencingEntityIds.length === 0) return;
+
+    // Get the updated entity
+    const updatedEntity = this.getEntity(id);
+    if (!updatedEntity) return;
+
+    // For each referencing entity, update the relation
+    for (const parentId of referencingEntityIds) {
+      const relations = this.getResolvedRelations(parentId);
+      let hasChanges = false;
+
+      // Update relations that reference the changed entity
+      const updatedRelations = relations.map(relation => {
+        if (relation.toEntity.id === id) {
+          hasChanges = true;
+          // Update the toEntity reference with latest entity data
+          return {
+            ...relation,
+            toEntity: {
+              ...relation.toEntity,
+              name: updatedEntity.name,
+              // Update other fields as needed
+            },
+          };
+        }
+        return relation;
+      });
+
+      // Only update if there were changes
+      if (hasChanges) {
+        // Update each relation individually to maintain proper optimistic updates
+        updatedRelations.forEach(relation => {
+          if (relation.toEntity.id === id) {
+            this.setRelation(relation);
+          }
+        });
+      }
+    }
   }
 }
 
