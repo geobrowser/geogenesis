@@ -15,6 +15,7 @@ import { usePublish } from '~/core/hooks/use-publish';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Triples } from '~/core/utils/triples';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -48,6 +49,7 @@ type Proposal = {
 
 const ReviewChanges = () => {
   const { state } = useStatusBar();
+  const { store } = useSyncEngine();
   const [activeSpace, setActiveSpace] = useState<string>('');
   const { setIsReviewOpen } = useDiff();
 
@@ -293,6 +295,7 @@ const ReviewChanges = () => {
                 <SmallButton
                   onClick={() => {
                     DB.deleteAll(activeSpace);
+                    store.clear();
                   }}
                 >
                   Delete all
