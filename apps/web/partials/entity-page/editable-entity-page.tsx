@@ -533,14 +533,14 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                 placeholder="Add value..."
                 aria-label="text-field"
                 value={renderable.value}
-                onChange={e => {
+                onChange={value => {
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                     payload: {
                       renderable,
                       value: {
                         type: 'TEXT',
-                        value: e.target.value,
+                        value: value,
                       },
                     },
                   });

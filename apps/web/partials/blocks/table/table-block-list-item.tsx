@@ -215,7 +215,7 @@ export function TableBlockListItem({
                 )}
                 <PageStringField
                   placeholder="Add name..."
-                  onChange={e => {
+                  onChange={value => {
                     onChangeEntry(
                       {
                         entityId: rowEntityId,
@@ -236,7 +236,7 @@ export function TableBlockListItem({
                               type: 'TEXT',
                               value: name ?? '',
                             },
-                            value: { type: 'TEXT', value: e.currentTarget.value },
+                            value: { type: 'TEXT', value: value },
                           },
                         },
                       }
@@ -255,7 +255,7 @@ export function TableBlockListItem({
             <div className="text-metadata text-grey-04">Description</div>
             <PageStringField
               placeholder="Add description..."
-              onChange={e => {
+              onChange={value => {
                 onChangeEntry(
                   {
                     entityId: rowEntityId,
@@ -276,7 +276,7 @@ export function TableBlockListItem({
                           type: 'TEXT',
                           value: description ?? '',
                         },
-                        value: { type: 'TEXT', value: e.currentTarget.value },
+                        value: { type: 'TEXT', value: value },
                       },
                     },
                   }

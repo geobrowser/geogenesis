@@ -210,7 +210,7 @@ export function TableBlockGalleryItem({
                 )}
                 <PageStringField
                   placeholder="Add name..."
-                  onChange={e => {
+                  onChange={value => {
                     onChangeEntry(
                       {
                         entityId: rowEntityId,
@@ -231,7 +231,7 @@ export function TableBlockGalleryItem({
                               type: 'TEXT',
                               value: name ?? '',
                             },
-                            value: { type: 'TEXT', value: e.currentTarget.value },
+                            value: { type: 'TEXT', value },
                           },
                         },
                       }
