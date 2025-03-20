@@ -14,11 +14,11 @@ import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 
 interface DateFieldProps {
-  onBlur?: (date: string) => void;
+  onBlur?: ({ value, format }: { value: string; format?: string }) => void;
   variant?: 'body' | 'tableCell';
   value: string;
-  isEditing?: boolean;
   format?: string;
+  isEditing?: boolean;
 }
 
 const dateFieldStyles = cva(
@@ -39,22 +39,6 @@ const dateFieldStyles = cva(
     },
   }
 );
-
-const labelStyles = cva('text-footnote transition-colors duration-75 ease-in-out', {
-  variants: {
-    active: {
-      true: 'text-text',
-      false: 'text-grey-02',
-    },
-    error: {
-      true: 'text-red-01',
-    },
-  },
-  defaultVariants: {
-    active: false,
-    error: false,
-  },
-});
 
 const timeStyles = cva('m-0 w-[21px] bg-transparent p-0 tabular-nums placeholder:text-grey-02 focus:outline-none', {
   variants: {
@@ -82,7 +66,7 @@ export function DateField(props: DateFieldProps) {
     meridiem: initialMeridiem,
   } = GeoDate.fromISOStringUTC(props.value);
 
-  const formattedDate = GeoDate.format(props.value, props.format);
+  const formattedDate = props.value ? GeoDate.format(props.value, props.format) : null;
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
   const formattedInitialMonth = initialMonth === '' ? initialMonth : initialMonth.padStart(2, '0');
@@ -312,7 +296,7 @@ export function DateField(props: DateFieldProps) {
       });
 
       // Only create the triple if the form is valid
-      props.onBlur?.(isoString);
+      props.onBlur?.({ value: isoString, format: props.format });
     }
   };
 
@@ -331,139 +315,81 @@ export function DateField(props: DateFieldProps) {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex w-[164px] gap-3">
-          <div className="flex w-full flex-[2] flex-col">
-            {props.isEditing ? (
-              <input
-                data-testid="date-field-month"
-                value={month.value}
-                onChange={onMonthChange}
-                onBlur={() => onBlur(meridiem)}
-                placeholder="MM"
-                className={dateFieldStyles({
-                  variant: props.variant,
-                  error: !isValidMonth || !dateFormState.isValid,
-                })}
-              />
-            ) : (
-              <p
-                className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !dateFormState.isValid })}
-              >
-                {month.value}
-              </p>
-            )}
-            <span
-              className={labelStyles({ active: month.value !== '', error: !isValidMonth || !dateFormState.isValid })}
-            >
-              Month
-            </span>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex w-[136px] items-center gap-1">
+          <div className="flex flex-[6] flex-col">
+            <input
+              data-testid="date-field-year"
+              value={year.value}
+              onChange={onYearChange}
+              onBlur={() => onBlur(meridiem)}
+              placeholder="YYYY"
+              className={`${dateFieldStyles({ variant: props.variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
+            />
           </div>
 
-          <span className="w-full flex-[1] pt-[3px] text-grey-02">/</span>
+          <span className="size flex flex-[1] justify-center text-lg text-grey-02">/</span>
 
-          <div className="flex flex-[2] flex-col items-center">
-            {props.isEditing ? (
-              <input
-                data-testid="date-field-day"
-                value={day.value}
-                onChange={onDayChange}
-                onBlur={() => onBlur(meridiem)}
-                placeholder="DD"
-                className={dateFieldStyles({
-                  variant: props.variant,
-                  error: !isValidDay || !dateFormState.isValid,
-                })}
-              />
-            ) : (
-              <p
-                className={dateFieldStyles({
-                  variant: props.variant,
-                  error: !isValidDay || !dateFormState.isValid,
-                })}
-              >
-                {day.value}
-              </p>
-            )}
-            <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !dateFormState.isValid })}>
-              Day
-            </span>
+          <div className="flex flex-[4] flex-col">
+            <input
+              data-testid="date-field-month"
+              value={month.value}
+              onChange={onMonthChange}
+              onBlur={() => onBlur(meridiem)}
+              placeholder="MM"
+              className={dateFieldStyles({
+                variant: props.variant,
+                error: !isValidMonth || !dateFormState.isValid,
+              })}
+            />
           </div>
 
-          <span className="flex-[1] pt-[3px] text-grey-02">/</span>
+          <span className="size flex flex-[1] justify-center text-lg text-grey-02">/</span>
 
-          <div className="flex w-full flex-[4] flex-col items-center">
-            {props.isEditing ? (
-              <input
-                data-testid="date-field-year"
-                value={year.value}
-                onChange={onYearChange}
-                onBlur={() => onBlur(meridiem)}
-                placeholder="YYYY"
-                className={dateFieldStyles({ variant: props.variant, error: !isValidYear || !dateFormState.isValid })}
-              />
-            ) : (
-              <p className={dateFieldStyles({ variant: props.variant, error: !isValidYear || !dateFormState.isValid })}>
-                {year.value}
-              </p>
-            )}
-            <span className={labelStyles({ active: year.value !== '', error: !isValidYear || !dateFormState.isValid })}>
-              Year
-            </span>
+          <div className="flex flex-[4] flex-col">
+            <input
+              data-testid="date-field-day"
+              value={day.value}
+              onChange={onDayChange}
+              onBlur={() => onBlur(meridiem)}
+              placeholder="DD"
+              className={dateFieldStyles({
+                variant: props.variant,
+                error: !isValidDay || !dateFormState.isValid,
+              })}
+            />
           </div>
         </div>
-        <div className="flex items-center">
-          <Minus color="grey-03" />
-          <Spacer width={18} />
+        <div className="flex grow items-center">
+          <Minus color="grey-02" className="size-4" />
+          <Spacer width={14} />
           <div className="flex items-center gap-1">
-            {props.isEditing ? (
-              <>
-                <input
-                  data-testid="date-field-hour"
-                  value={hour.value}
-                  onChange={onHourChange}
-                  onBlur={() => onBlur(meridiem)}
-                  placeholder="00"
-                  className={timeStyles({ variant: props.variant, error: !isValidHour || !timeFormState.isValid })}
-                />
+            <input
+              data-testid="date-field-hour"
+              value={hour.value}
+              onChange={onHourChange}
+              onBlur={() => onBlur(meridiem)}
+              placeholder="00"
+              className={timeStyles({ variant: props.variant, error: !isValidHour || !timeFormState.isValid })}
+            />
 
-                <span>:</span>
-                <input
-                  data-testid="date-field-minute"
-                  value={minute.value}
-                  onChange={onMinuteChange}
-                  onBlur={() => onBlur(meridiem)}
-                  placeholder="00"
-                  className={timeStyles({ variant: props.variant, error: !isValidMinute || !timeFormState.isValid })}
-                />
-              </>
-            ) : (
-              <>
-                <p className={timeStyles({ variant: props.variant })}>{hour.value}</p>
-                <span>:</span>
-                <p className={timeStyles({ variant: props.variant })}>{minute.value}</p>
-              </>
-            )}
+            <span>:</span>
+            <input
+              data-testid="date-field-minute"
+              value={minute.value}
+              onChange={onMinuteChange}
+              onBlur={() => onBlur(meridiem)}
+              placeholder="00"
+              className={timeStyles({ variant: props.variant, error: !isValidMinute || !timeFormState.isValid })}
+            />
           </div>
 
-          {props.isEditing ? (
-            <>
-              <Spacer width={12} />
-              <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
-                <SmallButton
-                  onClick={() => (props.isEditing ? onToggleMeridiem() : undefined)}
-                  variant="secondary"
-                  className="whitespace-nowrap uppercase"
-                >
-                  {meridiem}
-                </SmallButton>
-              </motion.div>
-            </>
-          ) : (
-            <p className={`${timeStyles({ variant: props.variant })} w-[28px] whitespace-nowrap uppercase`}>
+          <Spacer width={12} />
+          <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
+            <SmallButton onClick={() => onToggleMeridiem()} variant="secondary" className="whitespace-nowrap uppercase">
               {meridiem}
-            </p>
-          )}
+            </SmallButton>
+          </motion.div>
         </div>
       </div>
 
@@ -548,6 +474,8 @@ export function DateField(props: DateFieldProps) {
           )}
         </div>
       </AnimatePresence>
+
+      <p className="text-sm text-grey-04">Browse format · {formattedDate}</p>
     </div>
   );
 }

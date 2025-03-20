@@ -5,7 +5,8 @@ import { atom } from 'jotai';
 
 import { EntityId } from '../io/schema';
 import { store } from '../state/jotai-store';
-import { OmitStrict } from '../types';
+import { store as geoStore } from '../sync/use-sync-engine';
+import { OmitStrict, Relation } from '../types';
 import { Relations } from '../utils/relations';
 import { Triple } from './Triple';
 import { mergeEntityAsync } from './entities';
@@ -51,17 +52,19 @@ type UpsertRelationArgs = {
 
 type DeleteRelationArgs = {
   type: 'DELETE_RELATION';
-  relationId: EntityId;
-  fromEntityId: EntityId;
+
+  relation: StoreRelation;
   spaceId: string;
 };
 
 export const upsertRelation = (args: OmitStrict<UpsertRelationArgs, 'type'>) => {
   writeRelation({ ...args, type: 'SET_RELATION' });
+  geoStore.setRelation(args.relation as Relation);
 };
 
 export const removeRelation = (args: OmitStrict<DeleteRelationArgs, 'type'>) => {
   writeRelation({ ...args, type: 'DELETE_RELATION' });
+  geoStore.deleteRelation(args.relation as Relation);
 };
 
 const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
@@ -95,14 +98,16 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
     return;
   }
 
-  const nonDeletedRelations = store.get(localRelationsAtom).filter(r => r.id !== args.relationId);
+  const relationId = args.relation.id;
+
+  const nonDeletedRelations = store.get(localRelationsAtom).filter(r => r.id !== relationId);
 
   store.set(localRelationsAtom, [
     ...nonDeletedRelations,
     // We can set a dummy relation here since we only care about the deleted state
     {
       space: args.spaceId,
-      id: args.relationId,
+      id: EntityId(relationId as string),
       index: INITIAL_RELATION_INDEX_VALUE,
       isDeleted: true,
       typeOf: {
@@ -110,11 +115,11 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
         name: null,
       },
       fromEntity: {
-        id: EntityId(args.fromEntityId),
+        id: EntityId(args.relation.fromEntity.id),
         name: null,
       },
       toEntity: {
-        id: EntityId(args.relationId),
+        id: EntityId(args.relation.id as string),
         name: null,
         renderableType: 'RELATION',
         value: '',
@@ -124,7 +129,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
   // @TODO: Delete all triples for this relationship
   // This is async but we aren't awaiting it so we'll see what happens I guess. Might want to
   // use effect or something to monitor this and de-color it.
-  deleteRelation(args.relationId, args.spaceId);
+  deleteRelation(args.relation.id as string, args.spaceId);
 };
 
 async function deleteRelation(relationId: string, spaceId: string) {
@@ -134,13 +139,12 @@ async function deleteRelation(relationId: string, spaceId: string) {
 }
 
 export async function removeEntity(entityId: string, spaceId: string) {
-  const { triples, relationsOut, id } = await mergeEntityAsync(EntityId(entityId));
+  const { triples, relationsOut } = await mergeEntityAsync(EntityId(entityId));
   removeMany(triples, spaceId);
 
   for (const relation of relationsOut) {
     removeRelation({
-      relationId: relation.id,
-      fromEntityId: id,
+      relation,
       spaceId,
     });
   }
@@ -149,6 +153,7 @@ export async function removeEntity(entityId: string, spaceId: string) {
 export const upsert = (op: UpsertOp, spaceId: string) => {
   const triple = Triple.make({ ...op, space: spaceId }, { hasBeenPublished: false, isDeleted: false });
   writeMany([triple]);
+  geoStore.setTriple(triple);
 };
 
 export const upsertMany = (ops: UpsertOp[], spaceId: string) => {
@@ -156,23 +161,28 @@ export const upsertMany = (ops: UpsertOp[], spaceId: string) => {
     return Triple.make({ ...op, space: spaceId }, { hasBeenPublished: false, isDeleted: false });
   });
   writeMany(triples);
+
+  for (const triple of triples) {
+    geoStore.setTriple(triple);
+  }
 };
 
 export const remove = (op: RemoveOp, spaceId: string) => {
   // We don't delete from our local store, but instead just set a tombstone
   // on the row. This is so we can still publish the changes as an op
-  writeMany([
-    Triple.make(
-      {
-        ...op,
-        attributeName: op.attributeName ?? null,
-        entityName: null,
-        space: spaceId,
-        value: op.value ?? { type: 'TEXT', value: '' },
-      },
-      { hasBeenPublished: false, isDeleted: true }
-    ),
-  ]);
+  const triple = Triple.make(
+    {
+      ...op,
+      attributeName: op.attributeName ?? null,
+      entityName: null,
+      space: spaceId,
+      value: op.value ?? { type: 'TEXT', value: '' },
+    },
+    { hasBeenPublished: false, isDeleted: true }
+  );
+
+  writeMany([triple]);
+  geoStore.deleteTriple(triple);
 };
 
 export const removeMany = (ops: RemoveOp[], spaceId: string) => {
@@ -192,6 +202,10 @@ export const removeMany = (ops: RemoveOp[], spaceId: string) => {
   // We don't delete from our local store, but instead just set a tombstone
   // on the row. This is so we can still publish the changes as an op
   writeMany(triples);
+
+  for (const triple of triples) {
+    geoStore.deleteTriple(triple);
+  }
 };
 
 export const restoreRelations = (relations: StoredRelation[]) => {

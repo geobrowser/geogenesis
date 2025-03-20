@@ -57,7 +57,7 @@ export function useView() {
 
     if (!isCurrentView) {
       if (viewRelation) {
-        DB.removeRelation({ relationId: viewRelation.id, spaceId, fromEntityId: EntityId(relationId) });
+        DB.removeRelation({ relation: viewRelation, spaceId });
       }
 
       const newRelation: StoreRelation = {
@@ -104,14 +104,14 @@ export function useView() {
     if (selector && newId) {
       if (selector === existingMapping) {
         if (shownColumnRelation) {
-          DB.removeRelation({ relationId: shownColumnRelation.id, fromEntityId: EntityId(relationId), spaceId });
+          DB.removeRelation({ relation: shownColumnRelation, spaceId });
         }
       } else {
         if (shownColumnRelation) {
           // @TODO: We should instead just upsert the new selector instead of removing and creating
           // a new relation. Main issue right now is that the block won't re-render if we use this
           // approach due to how the mappings are queried.
-          DB.removeRelation({ relationId: shownColumnRelation.id, fromEntityId: EntityId(relationId), spaceId });
+          DB.removeRelation({ relation: shownColumnRelation, spaceId });
         }
 
         DB.upsert(
@@ -184,7 +184,7 @@ export function useView() {
       });
     } else {
       if (shownColumnRelation) {
-        DB.removeRelation({ relationId: shownColumnRelation.id, fromEntityId: EntityId(relationId), spaceId });
+        DB.removeRelation({ relation: shownColumnRelation, spaceId });
       }
     }
   };

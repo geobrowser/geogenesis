@@ -1,3 +1,5 @@
+import equal from 'fast-deep-equal';
+
 import { Triple } from '~/core/types';
 
 import { TripleChangeValue } from './types';
@@ -8,10 +10,11 @@ export const AfterTripleDiff = {
       return null;
     }
 
-    if (afterValue.value !== beforeValue.value) {
+    if (afterValue.value !== beforeValue.value || !equal(afterValue.options, beforeValue.options)) {
       return {
         value: beforeValue.value,
         valueName: null,
+        options: beforeValue.options,
         type: 'UPDATE',
       };
     }
@@ -19,6 +22,7 @@ export const AfterTripleDiff = {
     return {
       value: beforeValue.value,
       valueName: null,
+      options: beforeValue.options,
       type: 'REMOVE',
     };
   },
@@ -27,14 +31,16 @@ export const AfterTripleDiff = {
       return {
         value: afterValue.value,
         valueName: null,
+        options: afterValue.options,
         type: 'ADD',
       };
     }
 
-    if (afterValue.value !== beforeValue.value) {
+    if (afterValue.value !== beforeValue.value || !equal(afterValue.options, beforeValue.options)) {
       return {
         value: afterValue.value,
         valueName: null,
+        options: afterValue.options,
         type: 'UPDATE',
       };
     }
@@ -42,6 +48,7 @@ export const AfterTripleDiff = {
     return {
       value: afterValue.value,
       valueName: null,
+      options: afterValue.options,
       type: 'ADD',
     };
   },
@@ -54,14 +61,16 @@ export const BeforeTripleDiff = {
       return {
         value: beforeValue.value,
         valueName: null,
+        options: beforeValue.options,
         type: 'REMOVE',
       };
     }
 
     // Values exist and aren't equal
-    if (beforeValue.value !== afterValue.value) {
+    if (beforeValue.value !== afterValue.value || !equal(beforeValue.options, afterValue.options)) {
       return {
         value: beforeValue.value,
+        options: beforeValue.options,
         valueName: null,
         type: 'UPDATE',
       };
@@ -71,6 +80,7 @@ export const BeforeTripleDiff = {
     return {
       value: afterValue.value,
       valueName: null,
+      options: afterValue.options,
       type: 'UPDATE',
     };
   },
@@ -79,16 +89,18 @@ export const BeforeTripleDiff = {
       return null;
     }
 
-    if (beforeValue.value !== afterValue.value) {
+    if (beforeValue.value !== afterValue.value || !equal(beforeValue.options, afterValue.options)) {
       return {
-        value: beforeValue.value,
+        value: afterValue.value,
+        options: afterValue.options,
         valueName: null,
         type: 'UPDATE',
       };
     }
 
     return {
-      value: beforeValue.value,
+      value: afterValue.value,
+      options: afterValue.options,
       valueName: null,
       type: 'UPDATE',
     };
@@ -112,9 +124,10 @@ export function getBeforeTripleChange(
     return null;
   }
 
-  if (value.value !== remoteValue.value) {
+  if (value.value !== remoteValue.value || !equal(value.options, remoteValue.options)) {
     return {
       value: remoteValue.value,
+      options: remoteValue.options,
       valueName: null,
       type: 'UPDATE',
     };
@@ -122,6 +135,7 @@ export function getBeforeTripleChange(
 
   return {
     value: remoteValue.value,
+    options: remoteValue.options,
     valueName: null,
     type: 'REMOVE',
   };
@@ -141,14 +155,16 @@ export function getAfterTripleChange(value: Triple['value'], remoteValue: Triple
   if (remoteValue === null) {
     return {
       value: value.value,
+      options: value.options,
       valueName: null,
       type: 'ADD',
     };
   }
 
-  if (value.value !== remoteValue.value) {
+  if (value.value !== remoteValue.value || !equal(value.options, remoteValue.options)) {
     return {
       value: value.value,
+      options: value.options,
       valueName: null,
       type: 'UPDATE',
     };
@@ -156,6 +172,7 @@ export function getAfterTripleChange(value: Triple['value'], remoteValue: Triple
 
   return {
     value: value.value,
+    options: value.options,
     valueName: null,
     type: 'ADD',
   };

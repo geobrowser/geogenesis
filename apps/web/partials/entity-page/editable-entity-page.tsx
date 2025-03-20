@@ -40,6 +40,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
+import { DateFormatDropdown } from './date-format-dropdown';
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
@@ -120,6 +121,26 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                 <div className="absolute right-0 top-6 flex items-center gap-1">
                   {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
                   <>
+                    {renderableType === 'TIME' && (
+                      <DateFormatDropdown
+                        value={firstRenderable.options?.format}
+                        onSelect={(format: string) => {
+                          send({
+                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                            payload: {
+                              renderable: firstRenderable,
+                              value: {
+                                value: firstRenderable.value,
+                                type: 'TIME',
+                                options: {
+                                  format,
+                                },
+                              },
+                            },
+                          });
+                        }}
+                      />
+                    )}
                     <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
 
                     {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
@@ -385,8 +406,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                 send({
                   type: 'DELETE_RELATION',
                   payload: {
-                    relationId: r.relationId,
-                    fromEntityId: id,
+                    renderable: r,
                   },
                 });
               }}
@@ -571,13 +591,16 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
           case 'TIME': {
             return (
               <DateField
-                onBlur={time =>
+                onBlur={({ value, format }) =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                     payload: {
                       value: {
-                        value: time,
+                        value,
                         type: 'TIME',
+                        options: {
+                          format,
+                        },
                       },
                       renderable,
                     },
