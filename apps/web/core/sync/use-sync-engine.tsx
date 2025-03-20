@@ -24,7 +24,6 @@ export const stream = new GeoEventStream();
 export const store = new GeoStore(stream);
 const query = new EntityQueryBuilder(store);
 export const engine = new SyncEngine(stream, queryClient, store);
-engine.start();
 
 export function SyncEngineProvider({ children }: { children: ReactNode }) {
   return <SyncEngineContext.Provider value={{ store, stream, query }}>{children}</SyncEngineContext.Provider>;

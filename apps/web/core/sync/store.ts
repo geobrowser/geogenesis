@@ -23,9 +23,7 @@ export class GeoStore {
   private deletedTriples: Set<string> = new Set();
 
   // Pending optimistic updates
-  // @TODO: These can probably just be a Set since we only ever store one
-  // pending change per triple/relation at a time.
-  //
+  // @TODO:
   // We don't need pending data since we don't actually _write_ anything
   // to the network, we only read and merge.
   private pendingTriples: Map<string, Map<string, Triple>> = new Map();
@@ -41,7 +39,7 @@ export class GeoStore {
 
     /**
      * The sync engine listens for events from the event stream. When it receives
-     * and event it queues it up in the background for syncing. Once syncing is
+     * an event it queues it up in the background for syncing. Once syncing is
      * complete it emits an event to the event stream to notify consumers that
      * syncing is complete.
      */
@@ -454,27 +452,3 @@ export class GeoStore {
     return referencingEntities;
   }
 }
-
-// const stream = new GeoEventStream();
-// const store = new GeoStore(stream);
-
-// stream.on('entity:updated', event => {
-//   console.log('entity:updated', event);
-// });
-
-// const engine = new SyncEngine(stream);
-// engine.start();
-
-// store.setTriple({
-//   space: 'space1',
-//   entityId: 'EHoZ9qvSPmzxNmReVcCTSw',
-//   attributeId: 'foundedYear',
-//   value: { type: 'TEXT', value: '2020' },
-//   entityName: 'Company',
-//   attributeName: 'Founded Year',
-// });
-
-// const entity = store.getEntity('EHoZ9qvSPmzxNmReVcCTSw');
-// console.log('entity', entity);
-
-// engine.stop();
