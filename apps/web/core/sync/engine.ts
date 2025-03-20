@@ -68,6 +68,13 @@ export class SyncEngine {
       this.processSyncQueue(event);
     });
 
+    const onEntitiesRevalidated = this.stream.on(GeoEventStream.CHANGES_CLEARED, event => {
+      if (this.env === 'development') {
+        console.log(`queueing sync after ${GeoEventStream.CHANGES_CLEARED}`, event);
+      }
+      this.processSyncQueue(event);
+    });
+
     this.subs = [
       onEntityUpdated,
       onTriplesUpdated,
@@ -75,6 +82,7 @@ export class SyncEngine {
       onEntityDeleted,
       onTriplesDeleted,
       onRelationsDeleted,
+      onEntitiesRevalidated,
     ];
   }
 
@@ -99,12 +107,12 @@ export class SyncEngine {
     const entityIds: string[] = [];
 
     switch (event.type) {
-      case 'entity:updated':
-      case 'entity:deleted':
+      case GeoEventStream.ENTITY_UPDATED:
+      case GeoEventStream.ENTITY_DELETED:
         entityIds.push(event.entity.id);
         break;
-      case 'triples:updated':
-      case 'triples:deleted': {
+      case GeoEventStream.TRIPLES_CREATED:
+      case GeoEventStream.TRIPLES_DELETED: {
         entityIds.push(event.triple.entityId);
 
         // Update any entities in the store that reference the entity where the triple is
@@ -114,8 +122,8 @@ export class SyncEngine {
         entityIds.push(...referencing);
         break;
       }
-      case 'relations:created':
-      case 'relations:deleted': {
+      case GeoEventStream.RELATION_CREATED:
+      case GeoEventStream.RELATION_DELETED: {
         entityIds.push(event.relation.fromEntity.id);
         entityIds.push(event.relation.toEntity.id);
         entityIds.push(event.relation.typeOf.id);
@@ -128,6 +136,9 @@ export class SyncEngine {
         entityIds.push(...referencing);
         break;
       }
+      case GeoEventStream.CHANGES_CLEARED:
+        entityIds.push(...event.entities.map(e => e.id));
+        break;
       default:
         break;
     }

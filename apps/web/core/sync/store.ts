@@ -74,6 +74,22 @@ export class GeoStore {
     return ['store', 'entities', ids];
   }
 
+  clear() {
+    const entitiesToSync = this.getEntities();
+
+    this.entities.clear();
+    this.triples.clear();
+    this.relations.clear();
+    this.deletedEntities.clear();
+    this.deletedRelations.clear();
+    this.deletedTriples.clear();
+    this.pendingTriples.clear();
+    this.pendingRelations.clear();
+    this.pendingEntityDeletes.clear();
+
+    this.stream.emit({ type: GeoEventStream.CHANGES_CLEARED, entities: entitiesToSync });
+  }
+
   /**
    * Get an entity by ID with full resolution of its relations
    */
@@ -268,6 +284,56 @@ export class GeoStore {
     // Add to pending changes
     this.pendingTriples.get(entityId)!.set(tripleKey, triple);
 
+    if (triple.attributeId === SystemIds.NAME_PROPERTY) {
+      // Optimistically set the name for the entity. This means we can
+      // immediately render the entity with the new name without waiting
+      // for syncing to finish.
+      const maybeEntity = this.entities.get(entityId);
+
+      if (!maybeEntity) {
+        this.entities.set(entityId, {
+          id: EntityId(entityId),
+          name: triple.value.value,
+          description: null,
+          types: [],
+          spaces: [],
+          nameTripleSpaces: [],
+          relationsOut: [],
+          triples: [],
+        });
+      } else {
+        this.entities.set(entityId, {
+          ...maybeEntity,
+          name: triple.value.value,
+        });
+      }
+    }
+
+    if (triple.attributeId === SystemIds.DESCRIPTION_PROPERTY) {
+      // Optimistically set the description for the entity. This means we can
+      // immediately render the entity with the new description without waiting
+      // for syncing to finish.
+      const maybeEntity = this.entities.get(entityId);
+
+      if (!maybeEntity) {
+        this.entities.set(entityId, {
+          id: EntityId(entityId),
+          name: null,
+          description: triple.value.value,
+          types: [],
+          spaces: [],
+          nameTripleSpaces: [],
+          relationsOut: [],
+          triples: [],
+        });
+      } else {
+        this.entities.set(entityId, {
+          ...maybeEntity,
+          description: triple.value.value,
+        });
+      }
+    }
+
     // Emit update event
     this.stream.emit({ type: GeoEventStream.TRIPLES_CREATED, triple });
   }
@@ -292,6 +358,26 @@ export class GeoStore {
     });
 
     this.deletedTriples.add(tripleKey);
+
+    if (triple.attributeId === SystemIds.NAME_PROPERTY) {
+      // Optimistically set the name for the entity. This means we can
+      // immediately render the entity with the new name without waiting
+      // for syncing to finish.
+      this.entities.set(entityId, {
+        ...this.entities.get(entityId),
+        name: null,
+      } as Entity);
+    }
+
+    if (triple.attributeId === SystemIds.DESCRIPTION_PROPERTY) {
+      // Optimistically set the description for the entity. This means we can
+      // immediately render the entity with the new description without waiting
+      // for syncing to finish.
+      this.entities.set(entityId, {
+        ...this.entities.get(entityId),
+        description: null,
+      } as Entity);
+    }
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.TRIPLES_DELETED, triple });
