@@ -56,8 +56,6 @@ export class GeoStore {
       const newRelations: Relation[] = [];
       const existingRelationIds = new Set(this.relations.get(entity.id)?.map(r => r.id) ?? []);
 
-      // @TODO: Need to filter out existing relations by id
-
       for (const relation of entity.relationsOut) {
         if (!existingRelationIds.has(relation.id)) {
           newRelations.push(relation);
@@ -101,21 +99,6 @@ export class GeoStore {
     const name = triples.find(t => t.attributeId === SystemIds.NAME_ATTRIBUTE)?.value.value ?? null;
     const description = triples.find(t => t.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE)?.value.value ?? null;
 
-    const relationsInStore = relations.map(r => {
-      const toEntityFromStore = this.getEntity(r.toEntity.id);
-
-      return {
-        ...r,
-        toEntity: toEntityFromStore
-          ? {
-              ...r.toEntity,
-              name: toEntityFromStore.name,
-              description: toEntityFromStore.description,
-            }
-          : r.toEntity,
-      };
-    });
-
     // Return fully resolved entity
     const resolvedEntity: Entity = {
       ...(entity
@@ -123,7 +106,7 @@ export class GeoStore {
             ...entity,
             name: name ?? entity.name,
             description: description ?? entity.description,
-            relationsOut: relationsInStore.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
+            relationsOut: relations.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
           }
         : {
             id: EntityId(id),
@@ -134,7 +117,7 @@ export class GeoStore {
             nameTripleSpaces: [],
           }),
       triples: triples.filter(t => (includeDeleted ? true : Boolean(t.isDeleted) === false)),
-      relationsOut: relationsInStore.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
+      relationsOut: relations.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
     };
 
     return resolvedEntity;
@@ -233,7 +216,7 @@ export class GeoStore {
   /**
    * Get all relations for an entity including optimistic updates
    */
-  public getResolvedRelations(entityId: string): Relation[] {
+  private getResolvedRelations(entityId: string): Relation[] {
     const baseRelations = this.getBaseRelations(entityId);
     const pendingRelationMap = this.pendingRelations.get(entityId);
 
@@ -383,52 +366,6 @@ export class GeoStore {
     });
 
     return referencingEntities;
-  }
-
-  /**
-   * Update relations when a referenced entity changes
-   */
-  private async updateRelationReferences(id: EntityId): Promise<void> {
-    // Find all entities that reference this entity
-    const referencingEntityIds = this.findReferencingEntities(id);
-    if (referencingEntityIds.length === 0) return;
-
-    // Get the updated entity
-    const updatedEntity = this.getEntity(id);
-    if (!updatedEntity) return;
-
-    // For each referencing entity, update the relation
-    for (const parentId of referencingEntityIds) {
-      const relations = this.getResolvedRelations(parentId);
-      let hasChanges = false;
-
-      // Update relations that reference the changed entity
-      const updatedRelations = relations.map(relation => {
-        if (relation.toEntity.id === id) {
-          hasChanges = true;
-          // Update the toEntity reference with latest entity data
-          return {
-            ...relation,
-            toEntity: {
-              ...relation.toEntity,
-              name: updatedEntity.name,
-              // Update other fields as needed
-            },
-          };
-        }
-        return relation;
-      });
-
-      // Only update if there were changes
-      if (hasChanges) {
-        // Update each relation individually to maintain proper optimistic updates
-        updatedRelations.forEach(relation => {
-          if (relation.toEntity.id === id) {
-            this.setRelation(relation);
-          }
-        });
-      }
-    }
   }
 }
 

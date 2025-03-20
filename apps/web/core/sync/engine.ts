@@ -104,16 +104,30 @@ export class SyncEngine {
         entityIds.push(event.entity.id);
         break;
       case 'triples:updated':
-      case 'triples:deleted':
+      case 'triples:deleted': {
         entityIds.push(event.triple.entityId);
+
+        // Update any entities in the store that reference the entity where the triple is
+        // being added. This is so we can sync fields that derive from triples like name,
+        // description, etc.
+        const referencing = this.store.findReferencingEntities(event.triple.entityId);
+        entityIds.push(...referencing);
         break;
+      }
       case 'relations:created':
-      case 'relations:deleted':
+      case 'relations:deleted': {
         entityIds.push(event.relation.fromEntity.id);
-        // entityIds.push(event.relation.toEntity.id);
-        // entityIds.push(event.relation.typeOf.id);
-        // entityIds.push(event.relation.id);
+        entityIds.push(event.relation.toEntity.id);
+        entityIds.push(event.relation.typeOf.id);
+        entityIds.push(event.relation.id);
+
+        // Update any entities in the store that reference the entity where the relation is
+        // being added. This is so we can sync fields that derive from relations like types,
+        // spaces, etc.
+        const referencing = this.store.findReferencingEntities(event.relation.fromEntity.id);
+        entityIds.push(...referencing);
         break;
+      }
       default:
         break;
     }
