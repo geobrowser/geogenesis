@@ -64,7 +64,7 @@ export const upsertRelation = (args: OmitStrict<UpsertRelationArgs, 'type'>) => 
 
 export const removeRelation = (args: OmitStrict<DeleteRelationArgs, 'type'>) => {
   writeRelation({ ...args, type: 'DELETE_RELATION' });
-  geoStore.setRelation(args.relation as Relation);
+  geoStore.deleteRelation(args.relation as Relation);
 };
 
 const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {

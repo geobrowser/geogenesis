@@ -42,13 +42,8 @@ function mergeRelations(localRelations: Relation[], remoteRelations: Relation[])
 
 /**
  * The Entity data model is in charge of querying and merging
- * data related to entities.
- *
- * @TODO Where do we make the network call? We can't assume
- * that we always have the fully resolved entity locally to
- * already include network data.
- *
- * @TODO When do we merge queried data vs written data?
+ * data related to entities at-hoc. There might be instances
+ * where we want to query (pull) data rather than sync it.
  */
 export class E {
   static merge({ id, store, mergeWith }: { id: string; store: GeoStore; mergeWith?: Entity | null }) {
