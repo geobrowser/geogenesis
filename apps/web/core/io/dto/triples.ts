@@ -23,6 +23,8 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
       return { type: 'URL', value: networkTriple.textValue };
     case 'NUMBER':
       return { type: 'NUMBER', value: networkTriple.textValue };
+    case 'POINT':
+      return { type: 'TEXT', value: networkTriple.textValue };
   }
 }
 
