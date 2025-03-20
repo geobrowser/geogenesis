@@ -2,7 +2,6 @@
 // triples, or relations contents.
 import { SystemIds } from '@graphprotocol/grc-20';
 import { QueryClient } from '@tanstack/react-query';
-import { WhereClause } from 'dexie';
 
 import { Triple } from '../database/Triple';
 import { readTypes } from '../database/entities';
@@ -116,27 +115,27 @@ export class E {
   static async findMany(
     store: GeoStore,
     cache: QueryClient,
-    where?: {
+    where: {
       id?: {
         in?: string[];
       };
     }
   ) {
-    if (!where?.id) {
+    if (!where.id || !where.id?.in) {
       return [];
     }
 
-    if (!where?.id.in) {
-      return [];
-    }
+    const entityIds = where.id.in;
 
     const remoteEntities = await cache.fetchQuery({
-      queryKey: ['network', 'entities', where.id],
-      queryFn: ({ signal }) => fetchEntitiesBatch({ entityIds: where.id.in, signal }),
+      queryKey: ['network', 'entities', entityIds],
+      queryFn: ({ signal }) => fetchEntitiesBatch({ entityIds, signal }),
     });
 
-    const entities = remoteEntities.map(entity => {
-      return this.merge({ id: entity.id, store, mergeWith: entity });
+    const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+
+    const entities = entityIds.map(entityId => {
+      return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
     });
 
     return entities.filter(e => e !== null);
