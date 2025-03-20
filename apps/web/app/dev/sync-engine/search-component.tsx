@@ -1,10 +1,10 @@
 import { useState } from 'react';
 
 import { Entity } from '~/core/io/dto/entities';
+import { GeoStore } from '~/core/sync/store';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import { createQueryBuilder } from './query-layer';
-import { EntityStore } from './sync-engine';
-import { useSyncEngine } from './use-sync-engine';
 
 // Different search modes
 type SearchMode = 'basic' | 'name' | 'description' | 'property' | 'relation' | 'type' | 'advanced';
@@ -486,7 +486,7 @@ function parseAdvancedQuery(query: string): AdvancedQueryPart[] {
 }
 
 // Execute advanced query
-async function executeAdvancedQuery(query: AdvancedQueryPart[], store: EntityStore): Promise<Entity[]> {
+async function executeAdvancedQuery(query: AdvancedQueryPart[], store: GeoStore): Promise<Entity[]> {
   const queryBuilder = createQueryBuilder(store);
   let baseQuery = queryBuilder.query();
 
