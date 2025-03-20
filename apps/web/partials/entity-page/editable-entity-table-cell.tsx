@@ -237,7 +237,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                       renderable,
                       value: {
                         type: 'TIME',
-                        value: value,
+                        value: value.value,
+                        options: {
+                          format: value.format,
+                        },
                       },
                     },
                   });

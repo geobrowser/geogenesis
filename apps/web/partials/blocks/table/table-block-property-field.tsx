@@ -179,7 +179,10 @@ export function TableBlockPropertyField(props: {
                                 renderable,
                                 value: {
                                   type: 'TIME',
-                                  value: value,
+                                  value: value.value,
+                                  options: {
+                                    format: value.format,
+                                  },
                                 },
                               },
                             },
@@ -394,8 +397,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                   send({
                     type: 'DELETE_RELATION',
                     payload: {
-                      relationId,
-                      fromEntityId: entityId,
+                      renderable: r,
                     },
                   });
                 }}
