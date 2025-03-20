@@ -1,10 +1,9 @@
 import { useState } from 'react';
 
 import { Entity } from '~/core/io/dto/entities';
+import { createQueryBuilder } from '~/core/sync/experimental_query-layer';
 import { GeoStore } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-
-import { createQueryBuilder } from './query-layer';
 
 // Different search modes
 type SearchMode = 'basic' | 'name' | 'description' | 'property' | 'relation' | 'type' | 'advanced';
