@@ -1,5 +1,3 @@
-// Code to sync remote and local
-// Queue for entities to sync
 import { QueryClient } from '@tanstack/react-query';
 
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
@@ -24,7 +22,6 @@ export class SyncEngine {
       if (this.env === 'development') {
         console.log(`queueing sync after ${GeoEventStream.ENTITY_UPDATED}`, event);
       }
-      // this.queue.enqueue(event);
       this.processSyncQueue(event);
     });
 
@@ -32,7 +29,6 @@ export class SyncEngine {
       if (this.env === 'development') {
         console.log(`queueing sync after ${GeoEventStream.TRIPLES_CREATED}`, event);
       }
-      // this.queue.enqueue(event);
       this.processSyncQueue(event);
     });
 
@@ -40,7 +36,6 @@ export class SyncEngine {
       if (this.env === 'development') {
         console.log(`queueing sync after ${GeoEventStream.RELATION_CREATED}`, event);
       }
-      // this.queue.enqueue(event);
       this.processSyncQueue(event);
     });
 
@@ -48,7 +43,6 @@ export class SyncEngine {
       if (this.env === 'development') {
         console.log(`queueing sync after ${GeoEventStream.ENTITY_DELETED}`, event);
       }
-      // this.queue.enqueue(event);
       this.processSyncQueue(event);
     });
 
@@ -56,7 +50,6 @@ export class SyncEngine {
       if (this.env === 'development') {
         console.log(`queueing sync after ${GeoEventStream.TRIPLES_DELETED}`, event);
       }
-      // this.queue.enqueue(event);
       this.processSyncQueue(event);
     });
 
@@ -64,7 +57,6 @@ export class SyncEngine {
       if (this.env === 'development') {
         console.log(`queueing sync after ${GeoEventStream.RELATION_DELETED}`, event);
       }
-      // this.queue.enqueue(event);
       this.processSyncQueue(event);
     });
 
@@ -86,13 +78,6 @@ export class SyncEngine {
     ];
   }
 
-  /**
-   * @TODO
-   * 1. When we change any data we also need to check if any relations pointing
-   *    to the changed entity needs to be updated.
-   * 2. When we change an entity that's also a relation we need to check if any
-   *    other entities that consume the relation need to be updated.
-   */
   public start() {
     // this.processSyncQueue();
   }
