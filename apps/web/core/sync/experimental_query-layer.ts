@@ -2,7 +2,7 @@ import { Entity } from '~/core/io/dto/entities';
 import { GeoStore } from '~/core/sync/store';
 import { Relation, Triple } from '~/core/types';
 
-import { EntityId } from '../../../core/io/schema';
+import { EntityId } from '../io/schema';
 
 const compareOperators = {
   string: {

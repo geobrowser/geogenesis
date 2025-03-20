@@ -2,9 +2,9 @@ import { ReactNode, createContext, useContext } from 'react';
 
 import { queryClient } from '../query-client';
 import { SyncEngine } from './engine';
+import { EntityQueryBuilder } from './experimental_query-layer';
 import { GeoStore } from './store';
 import { GeoEventStream } from './stream';
-import { EntityQueryBuilder } from '~/app/dev/sync-engine/query-layer';
 
 const SyncEngineContext = createContext<{
   stream: GeoEventStream;

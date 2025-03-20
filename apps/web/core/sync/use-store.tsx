@@ -1,13 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Entity } from '../io/dto/entities';
+import { WhereCondition } from './experimental_query-layer';
 import { E } from './orm';
 import { GeoStore } from './store';
 import { GeoEventStream } from './stream';
 import { useSyncEngine } from './use-sync-engine';
-import { WhereCondition } from '~/app/dev/sync-engine/query-layer';
 
 type QueryEntityOptions = {
   id: string;
