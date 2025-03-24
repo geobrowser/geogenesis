@@ -1,8 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { memo } from 'react';
-
-import { useEditEvents } from '~/core/events/edit-events';
 import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -27,25 +24,19 @@ interface Props {
   renderables: RenderableProperty[];
   filterSearchByTypes?: string[];
   onChangeEntry: onChangeEntryFn;
+  isPlaceholderRow: boolean;
 }
 
-export const EditableEntityTableCell = memo(function EditableEntityTableCell({
+export function EditableEntityTableCell({
   spaceId,
   entityId,
   attributeId,
   renderables,
   filterSearchByTypes,
   onChangeEntry,
+  isPlaceholderRow,
 }: Props) {
   const entityName = Entities.nameFromRenderable(renderables) ?? '';
-
-  const send = useEditEvents({
-    context: {
-      entityId: entityId,
-      spaceId,
-      entityName,
-    },
-  });
 
   const isNameCell = attributeId === SystemIds.NAME_ATTRIBUTE;
 
@@ -53,6 +44,46 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     // This should exist as there should be a placeholder that exists if no
     // "real" renderable for name exists yet.
     const renderable = renderables[0] as TripleRenderableProperty;
+
+    if (isPlaceholderRow) {
+      return (
+        <SelectEntity
+          // What actually happens here? We create a link to the entity for the source?
+          // If the entity already exists then it should be a text block instead of the
+          // search experience
+          onDone={result => {
+            onChangeEntry(
+              {
+                entityId: entityId,
+                entityName: entityName,
+                spaceId: spaceId,
+              },
+              {
+                type: 'FOC',
+                data: result,
+              }
+            );
+          }}
+          onCreateEntity={result => {
+            // This actually works quite differently than other creates since
+            // we want to use the existing placeholder entity id.
+            onChangeEntry(
+              {
+                entityId: entityId,
+                entityName: entityName,
+                spaceId: spaceId,
+              },
+              {
+                type: 'FOC',
+                data: result,
+              }
+            );
+          }}
+          spaceId={spaceId}
+          allowedTypes={[]}
+        />
+      );
+    }
 
     return (
       <TableStringField
@@ -367,4 +398,4 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       })}
     </div>
   );
-});
+}

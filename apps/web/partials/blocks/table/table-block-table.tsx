@@ -1,5 +1,3 @@
-'use client';
-
 import { SystemIds } from '@graphprotocol/grc-20';
 import {
   ColumnDef,
@@ -16,7 +14,6 @@ import { useAtomValue } from 'jotai';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { EntityId, SpaceId } from '~/core/io/schema';
@@ -100,10 +97,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const cellId = `${row.original.entityId}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
     const onChangeEntry = table.options.meta!.onChangeEntry;
-
-    // We know that cell is rendered as a React component by react-table
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { propertiesSchema } = useDataBlock();
+    const propertiesSchema = table.options.meta!.propertiesSchema;
 
     const cellData = getValue<Cell | undefined>();
 
@@ -126,17 +120,18 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         <EditableEntityTableCell
           renderables={renderables}
           attributeId={propertyId}
-          entityId={cellData.cellId}
+          entityId={row.original.entityId}
           spaceId={spaceId}
           filterSearchByTypes={filterableRelationType ? [filterableRelationType] : undefined}
           onChangeEntry={onChangeEntry}
+          isPlaceholderRow={Boolean(row.original.placeholder)}
         />
       );
     }
 
     return (
       <EntityTableCell
-        entityId={cellData.cellId}
+        entityId={row.original.entityId}
         columnId={propertyId}
         // Don't want to render placeholders in edit mode
         renderables={renderables.filter(r => r.placeholder !== true)}
@@ -150,13 +145,22 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 interface Props {
   space: string;
   properties: PropertySchema[];
+  propertiesSchema?: Record<PropertyId, PropertySchema>;
   rows: Row[];
   shownColumnIds: string[];
   placeholder: { text: string; image: string };
   onChangeEntry: onChangeEntryFn;
 }
 
-export const TableBlockTable = ({ rows, space, properties, shownColumnIds, placeholder, onChangeEntry }: Props) => {
+export const TableBlockTable = ({
+  rows,
+  space,
+  properties,
+  propertiesSchema,
+  shownColumnIds,
+  placeholder,
+  onChangeEntry,
+}: Props) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
@@ -179,6 +183,7 @@ export const TableBlockTable = ({ rows, space, properties, shownColumnIds, place
       space,
       isEditable: isEditing,
       onChangeEntry,
+      propertiesSchema,
     },
   });
 

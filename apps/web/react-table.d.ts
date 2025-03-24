@@ -1,5 +1,7 @@
 import '@tanstack/react-table';
 
+import { PropertyId } from './core/hooks/use-properties';
+import { PropertySchema } from './core/types';
 import { onChangeEntryFn } from './partials/blocks/table/change-entry';
 
 // We declare a new function that we will define and pass into the useTable hook.
@@ -11,5 +13,6 @@ declare module '@tanstack/react-table' {
     expandedCells: Record<string, boolean>;
     isEditable: boolean;
     onChangeEntry: onChangeEntryFn;
+    propertiesSchema: Record<PropertyId, PropertySchema> | undefined;
   }
 }
