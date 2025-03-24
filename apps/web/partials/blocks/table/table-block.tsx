@@ -280,6 +280,7 @@ export const TableBlock = ({ spaceId }: Props) => {
       rows={entries}
       placeholder={placeholder}
       shownColumnIds={shownColumnIds}
+      onChangeEntry={onChangeEntry}
     />
   );
 
