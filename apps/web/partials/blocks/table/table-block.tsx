@@ -17,7 +17,7 @@ import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
-import { EditEvent, EditEventContext, editEvent } from '~/core/events/edit-events';
+import { editEvent } from '~/core/events/edit-events';
 import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -39,6 +39,7 @@ import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
 
+import { onChangeEntryFn } from './change-entry';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
@@ -99,17 +100,6 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
   };
 }
 
-type ChangeEntryParams =
-  | {
-      type: 'EVENT';
-      data: EditEvent;
-    }
-  | {
-      // Find or Create
-      type: 'FOC';
-      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
-    };
-
 // @TODO: Maybe this can live in the useDataBlock hook? Probably want it to so
 // we can access it deeply in table cells, etc.
 //
@@ -132,7 +122,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       ? [makePlaceholderRow(nextEntityId, spaceId, properties), ...entries]
       : entries;
 
-  const onChangeEntry = (context: EditEventContext, event: ChangeEntryParams) => {
+  const onChangeEntry: onChangeEntryFn = (context, event) => {
     if (event.type === 'EVENT') {
       const send = editEvent({
         context,

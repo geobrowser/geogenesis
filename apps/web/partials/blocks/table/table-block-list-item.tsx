@@ -3,10 +3,8 @@ import NextImage from 'next/image';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { EditEvent, EditEventContext, editEvent } from '~/core/events/edit-events';
+import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
-import { SearchResult } from '~/core/io/dto/search';
-import { EntityId } from '~/core/io/schema';
 import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -16,17 +14,8 @@ import { CheckCircle } from '~/design-system/icons/check-circle';
 import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 
+import { onChangeEntryFn } from './change-entry';
 import { TableBlockPropertyField } from './table-block-property-field';
-
-type ChangeEntryParams =
-  | {
-      type: 'EVENT';
-      data: EditEvent;
-    }
-  | {
-      type: 'FOC';
-      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
-    };
 
 type Props = {
   columns: Record<string, Cell>;
@@ -34,7 +23,7 @@ type Props = {
   isEditing: boolean;
   rowEntityId: string;
   isPlaceholder: boolean;
-  onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
+  onChangeEntry: onChangeEntryFn;
   properties?: Record<PropertyId, PropertySchema>;
   // allowedTypes
 };

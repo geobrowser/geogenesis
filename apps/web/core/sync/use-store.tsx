@@ -1,4 +1,3 @@
-import { SystemIds } from '@graphprotocol/grc-20';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useEffect, useRef, useState } from 'react';
@@ -160,6 +159,12 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
       const entitiesToUpdate = event.entities.filter(e => ids?.includes(e.id));
       const changedEntities = event.entities.map(e => e.id);
 
+      /**
+       * If any relations of the subscribed entities changed we need to re-pull
+       * the entity to get the latest state of its relations. e.g., if Byron has
+       * Works at -> Geo and we change Geo to Geo, PBC., we need to re-pull Byron
+       * to get the latest name for Geo, PBC.
+       */
       const maybeRelationChanged = Object.values(entities).filter(e =>
         e.relationsOut.some(r => changedEntities.includes(r.toEntity.id))
       );
@@ -211,10 +216,6 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
       if (ids?.includes(event.relation.fromEntity.id)) {
         const entity = store.getEntity(event.relation.fromEntity.id);
-        console.log(
-          'event',
-          entity?.relationsOut.filter(r => r.typeOf.id === SystemIds.TYPES_PROPERTY)
-        );
 
         if (entity) {
           setEntities(prev => ({

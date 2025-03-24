@@ -1,8 +1,10 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
+import { readTypes } from '../database/entities';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { Relation, Triple } from '../types';
+import { Entities } from '../utils/entity';
 import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
@@ -101,23 +103,18 @@ export class GeoStore {
     const entity = this.entities.get(id);
 
     // Get triples including any pending optimistic updates
-    const triples = this.getResolvedTriples(id);
+    const triples = this.getResolvedTriples(id, options.includeDeleted);
 
     // Get relations including any pending optimistic updates
-    const relations = this.getResolvedRelations(id);
+    const relations = this.getResolvedRelations(id, options.includeDeleted);
 
     if (!entity && triples.length === 0 && relations.length === 0) {
       return undefined;
     }
 
-    const name = triples.find(t => t.attributeId === SystemIds.NAME_ATTRIBUTE)?.value.value ?? null;
-    const description = triples.find(t => t.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE)?.value.value ?? null;
-    const types = relations
-      .filter(r => r.typeOf.id === EntityId(SystemIds.TYPES_PROPERTY))
-      .map(r => ({
-        id: r.toEntity.id,
-        name: r.toEntity.name,
-      }));
+    const name = Entities.name(triples);
+    const description = Entities.description(triples);
+    const types = readTypes(relations);
 
     // Return fully resolved entity
     const resolvedEntity: Entity = {
@@ -195,7 +192,7 @@ export class GeoStore {
   /**
    * Get all triples for an entity including optimistic updates
    */
-  public getResolvedTriples(entityId: string): Triple[] {
+  public getResolvedTriples(entityId: string, includeDeleted = false): Triple[] {
     const baseTriples = this.getBaseTriples(entityId);
     const pendingTripleMap = this.pendingTriples.get(entityId);
 
@@ -217,7 +214,7 @@ export class GeoStore {
     // Apply pending triple changes
     pendingTripleMap.forEach(pendingTriple => {
       const key = getTripleKey(pendingTriple);
-      if (pendingTriple.isDeleted) {
+      if (pendingTriple.isDeleted && !includeDeleted) {
         tripleMap.delete(key);
       } else {
         tripleMap.set(key, pendingTriple);
@@ -237,7 +234,7 @@ export class GeoStore {
   /**
    * Get all relations for an entity including optimistic updates
    */
-  private getResolvedRelations(entityId: string): Relation[] {
+  private getResolvedRelations(entityId: string, includeDeleted = false): Relation[] {
     const baseRelations = this.getBaseRelations(entityId);
     const pendingRelationMap = this.pendingRelations.get(entityId);
 
@@ -255,7 +252,7 @@ export class GeoStore {
 
     // Apply pending relation changes
     pendingRelationMap.forEach(pendingRelation => {
-      if (pendingRelation.isDeleted) {
+      if (pendingRelation.isDeleted && !includeDeleted) {
         relationMap.delete(pendingRelation.id);
       } else {
         relationMap.set(pendingRelation.id, pendingRelation);

@@ -32,6 +32,7 @@ import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 
+import { onChangeEntryFn } from './change-entry';
 import { editingPropertiesAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
@@ -98,6 +99,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const space = table.options.meta!.space;
     const cellId = `${row.original.entityId}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
+    const onChangeEntry = table.options.meta!.onChangeEntry;
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -127,6 +129,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           entityId={cellData.cellId}
           spaceId={spaceId}
           filterSearchByTypes={filterableRelationType ? [filterableRelationType] : undefined}
+          onChangeEntry={onChangeEntry}
         />
       );
     }
@@ -150,9 +153,10 @@ interface Props {
   rows: Row[];
   shownColumnIds: string[];
   placeholder: { text: string; image: string };
+  onChangeEntry: onChangeEntryFn;
 }
 
-export const TableBlockTable = ({ rows, space, properties, shownColumnIds, placeholder }: Props) => {
+export const TableBlockTable = ({ rows, space, properties, shownColumnIds, placeholder, onChangeEntry }: Props) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
@@ -174,6 +178,7 @@ export const TableBlockTable = ({ rows, space, properties, shownColumnIds, place
       expandedCells,
       space,
       isEditable: isEditing,
+      onChangeEntry,
     },
   });
 

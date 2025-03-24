@@ -1,6 +1,3 @@
-// orm handles querying entities based on their base data,
-// triples, or relations contents.
-import { SystemIds } from '@graphprotocol/grc-20';
 import { QueryClient } from '@tanstack/react-query';
 
 import { Triple } from '../database/Triple';
@@ -13,9 +10,6 @@ import { Relation } from '../types';
 import { Entities } from '../utils/entity';
 import { Triples } from '../utils/triples';
 import { GeoStore } from './store';
-
-// orm should be in change of storing queries and consumers
-// and return any updated data to subscribes/query-ers
 
 function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
   const locallyDeletedRelations = localRelations.filter(r => r.isDeleted).map(r => r.id);
@@ -48,7 +42,9 @@ function mergeRelations(localRelations: Relation[], remoteRelations: Relation[])
 export class E {
   static merge({ id, store, mergeWith }: { id: string; store: GeoStore; mergeWith?: Entity | null }) {
     const remoteEntity = mergeWith;
-    const localEntity = store.getEntity(id);
+
+    // We need to include the deleted to correctly merge with remote data
+    const localEntity = store.getEntity(id, { includeDeleted: true });
 
     if (!localEntity && !remoteEntity) {
       return null;
@@ -72,23 +68,25 @@ export class E {
       remoteEntity.triples
     );
 
+    const triples = mergedTriples.filter(t => Boolean(t.isDeleted) === false);
     const mergedRelations = mergeRelations(localEntity.relationsOut, remoteEntity.relationsOut);
+    const relations = mergedRelations.filter(t => Boolean(t.isDeleted) === false);
 
     // Use the merged triples to derive the name instead of the remote entity
     // `name` property in case the name was deleted/changed locally.
-    const name = Entities.name(mergedTriples);
-    const description = Entities.description(mergedTriples);
-    const types = readTypes(mergedRelations);
+    const name = Entities.name(triples);
+    const description = Entities.description(triples);
+    const types = readTypes(relations);
 
     return {
       id: EntityId(id),
       name,
-      nameTripleSpaces: mergedTriples.filter(t => t.attributeId === SystemIds.NAME_ATTRIBUTE).map(t => t.space),
+      nameTripleSpaces: Entities.nameTriples(triples).map(t => t.space),
       spaces: [...(localEntity?.spaces ?? []), ...(remoteEntity?.spaces ?? [])],
       description,
       types,
-      triples: mergedTriples,
-      relationsOut: mergedRelations,
+      triples: triples,
+      relationsOut: relations,
       // @TODO: Spaces with metadata
       // @TODO: Schema? Adding schema here might result in infinite queries since we
       // if we called getEntity from within getEntity it would query infinitlely deep
