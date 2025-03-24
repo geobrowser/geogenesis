@@ -36,6 +36,28 @@ import { editingPropertiesAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
 
+const ColumnHeader = ({
+  column,
+  isEditMode,
+  spaceId,
+  isLastColumn,
+}: {
+  column: PropertySchema;
+  isEditMode: boolean;
+  spaceId: string;
+  isLastColumn: boolean;
+}) => {
+  const isNameColumn = column.id === EntityId(SystemIds.NAME_ATTRIBUTE);
+
+  return isEditMode && !isNameColumn ? (
+    <div className={cx(isLastColumn ? 'pr-12' : '')}>
+      <EditableEntityTableColumnHeader unpublishedColumns={[]} column={column} entityId={column.id} spaceId={spaceId} />
+    </div>
+  ) : (
+    <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
+  );
+};
+
 const formatColumns = (
   columns: PropertySchema[] = [],
   isEditMode: boolean,
@@ -44,8 +66,8 @@ const formatColumns = (
 ) => {
   const columnSize = 784 / columns.length;
 
-  return columns.map((column, i) =>
-    columnHelper.accessor(row => row.columns[column.id], {
+  return columns.map((column, i) => {
+    return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
         const isNameColumn = column.id === EntityId(SystemIds.NAME_ATTRIBUTE);
@@ -67,8 +89,8 @@ const formatColumns = (
         );
       },
       size: columnSize ? (columnSize < 150 ? 150 : columnSize) : 150,
-    })
-  );
+    });
+  });
 };
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
@@ -130,8 +152,7 @@ interface Props {
   placeholder: { text: string; image: string };
 }
 
-// eslint-disable-next-line react/display-name
-export const TableBlockTable = React.memo(({ rows, space, properties, shownColumnIds, placeholder }: Props) => {
+export const TableBlockTable = ({ rows, space, properties, shownColumnIds, placeholder }: Props) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
@@ -171,41 +192,54 @@ export const TableBlockTable = React.memo(({ rows, space, properties, shownColum
     );
   }
 
+  /**
+   * We don't use headers from the react table instance. There's a bug where
+   * on initial load of collections with additional properties, the content
+   * of the table won't render. The data _is_ there, but for some reason the
+   * table is stale and doesn't re-render with the appropriate data. Using our
+   * own header implementation seems to fix it for some reason.
+   */
+  const tableRows = table.getRowModel().rows;
+
   return (
     <div className="overflow-hidden rounded-lg border border-grey-02 p-0">
       <div className="overflow-x-scroll rounded-lg">
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>
-            {table.getHeaderGroups().map(headerGroup => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map(header => {
-                  const isShown = shownColumnIds.includes(header.id);
-                  const headerClassNames = isShown
-                    ? null
-                    : !isEditingColumns || !isEditing
-                      ? 'hidden'
-                      : '!bg-grey-01 !text-grey-03';
+            <tr>
+              {properties.map((column, i) => {
+                const isShown = shownColumnIds.includes(column.id);
+                const headerClassNames = isShown
+                  ? null
+                  : !isEditingColumns || !isEditing
+                    ? 'hidden'
+                    : '!bg-grey-01 !text-grey-03';
 
-                  return (
-                    <th
-                      key={header.id}
-                      className={cx(
-                        'group relative min-w-[250px] border-b border-grey-02 p-[10px] text-left',
-                        headerClassNames
-                      )}
-                    >
-                      <div className="flex h-full w-full items-center gap-[10px]">
-                        {isEditing && !isShown ? <EyeHide /> : null}
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
+                return (
+                  <th
+                    key={column.id}
+                    className={cx(
+                      'group relative min-w-[250px] border-b border-grey-02 p-[10px] text-left',
+                      headerClassNames
+                    )}
+                  >
+                    <div className="flex h-full w-full items-center gap-[10px]">
+                      {isEditing && !isShown ? <EyeHide /> : null}
+                      <ColumnHeader
+                        key={column.id}
+                        column={column}
+                        isEditMode={isEditing}
+                        isLastColumn={i === properties.length - 1}
+                        spaceId={space}
+                      />
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row, index: number) => {
+            {tableRows.map((row, index: number) => {
               const cells = row.getVisibleCells();
               const entityId = cells?.[0]?.getValue<Cell>()?.cellId;
 
@@ -213,10 +247,10 @@ export const TableBlockTable = React.memo(({ rows, space, properties, shownColum
                 <tr key={entityId ?? index} className="hover:bg-bg">
                   {cells.map(cell => {
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
-                    const firstTriple = cell.getValue<Cell>()?.renderables.find(r => r.type === 'TEXT');
+                    const firstRenderable = cell.getValue<Cell>()?.renderables[0];
 
-                    const isNameCell = Boolean(firstTriple?.attributeId === SystemIds.NAME_ATTRIBUTE);
-                    const isExpandable = firstTriple && firstTriple.type === 'TEXT';
+                    const isNameCell = Boolean(firstRenderable?.attributeId === SystemIds.NAME_ATTRIBUTE);
+                    const isExpandable = firstRenderable && firstRenderable.type === 'TEXT';
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     const href = NavUtils.toEntity(
@@ -227,7 +261,7 @@ export const TableBlockTable = React.memo(({ rows, space, properties, shownColum
 
                     return (
                       <TableCell
-                        key={cellId}
+                        key={`${cellId}-${index}-${row.original.entityId}`}
                         isLinkable={isNameCell && isEditing}
                         href={href}
                         isExpandable={isExpandable}
@@ -259,4 +293,4 @@ export const TableBlockTable = React.memo(({ rows, space, properties, shownColum
       </div>
     </div>
   );
-});
+};

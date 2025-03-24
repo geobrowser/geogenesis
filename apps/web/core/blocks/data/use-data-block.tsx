@@ -111,14 +111,8 @@ export function useDataBlock() {
         }
 
         if (source.type === 'COLLECTION') {
-          const data = yield* Effect.promise(() =>
-            mergeEntitiesAsync({
-              entityIds: collectionItems.map(c => c.id),
-              filterState,
-            })
-          );
-
-          return mappingToRows(data, shownColumnIds, collectionRelations, spaceId, propertiesSchema);
+          const result = mappingToRows(collectionItems, shownColumnIds, collectionRelations, spaceId, propertiesSchema);
+          return result;
         }
 
         if (source.type === 'RELATIONS') {

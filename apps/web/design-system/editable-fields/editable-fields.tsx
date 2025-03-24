@@ -100,7 +100,6 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
     <Textarea
       {...props}
       defaultValue={props.value}
-      // onBlur={e => props.onChange(e.currentTarget.value)}
       onChange={e => handleChange(e.currentTarget.value)}
       value={localValue}
       className={textareaStyles({ variant: props.variant })}

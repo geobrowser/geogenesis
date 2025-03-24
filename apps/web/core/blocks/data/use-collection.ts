@@ -12,11 +12,13 @@ export function useCollection() {
   const { entityId, spaceId } = useDataBlockInstance();
   const { source } = useSource();
 
+  // @TODO: This should use the sync engine
   const blockEntity = useEntity({
     spaceId: spaceId,
     id: EntityId(entityId),
   });
 
+  // @TODO: This should be from the sync engine
   const collectionItemsRelations = useRelations({
     mergeWith: blockEntity.relationsOut,
     selector: r => {
