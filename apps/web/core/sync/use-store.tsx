@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Entity } from '../io/dto/entities';
 import { WhereCondition } from './experimental_query-layer';
@@ -119,10 +119,20 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     )
   );
 
+  const prevWhere = useRef(where);
+
+  useEffect(() => {
+    // @TODO: We could hash this instead, but stringify works for now
+    if (JSON.stringify(prevWhere.current) !== JSON.stringify(where)) {
+      prevWhere.current = where;
+    }
+  }, [where]);
+
   const { isFetched } = useQuery({
-    queryKey: [...GeoStore.queryKeys(where.id?.in ?? []), hasRun],
+    queryKey: [...GeoStore.queryKeys(where.id?.in ?? []), hasRun, prevWhere.current],
     queryFn: async () => {
-      if (!hasRun) {
+      // @TODO: Rerun when query changes
+      if (!hasRun || JSON.stringify(prevWhere.current) !== JSON.stringify(where)) {
         const entities = await E.findMany(store, cache, where);
         stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
         setHasRun(true);
@@ -150,19 +160,14 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
       }
 
       if (entitiesToUpdate.length > 0) {
-        setEntities(prev => ({
-          ...prev,
-          ...Object.fromEntries(entitiesToUpdate.map(e => [e.id, e])),
-        }));
-      }
-    });
+        setEntities(prev => {
+          const validPrevEntities = Object.values(prev).filter(e => ids?.includes(e.id));
 
-    const onEntityUpdatedSub = stream.on(GeoEventStream.ENTITY_UPDATED, event => {
-      if (ids?.includes(event.entity.id)) {
-        setEntities(prev => ({
-          ...prev,
-          [event.entity.id]: event.entity,
-        }));
+          return {
+            ...Object.fromEntries(validPrevEntities.map(p => [p.id, p])),
+            ...Object.fromEntries(entitiesToUpdate.map(e => [e.id, e])),
+          };
+        });
       }
     });
 
@@ -264,7 +269,6 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
 
     return () => {
       onEntitySyncedSub();
-      onEntityUpdatedSub();
       onEntityDeletedSub();
       onRelationCreatedSub();
       onRelationDeletedSub();
