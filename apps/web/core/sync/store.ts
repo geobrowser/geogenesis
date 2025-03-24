@@ -112,12 +112,19 @@ export class GeoStore {
 
     const name = triples.find(t => t.attributeId === SystemIds.NAME_ATTRIBUTE)?.value.value ?? null;
     const description = triples.find(t => t.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE)?.value.value ?? null;
+    const types = relations
+      .filter(r => r.typeOf.id === EntityId(SystemIds.TYPES_PROPERTY))
+      .map(r => ({
+        id: r.toEntity.id,
+        name: r.toEntity.name,
+      }));
 
     // Return fully resolved entity
     const resolvedEntity: Entity = {
       ...(entity
         ? {
             ...entity,
+            types,
             name: name ?? entity.name,
             description: description ?? entity.description,
             relationsOut: relations.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
@@ -126,7 +133,7 @@ export class GeoStore {
             id: EntityId(id),
             name,
             description,
-            types: [],
+            types,
             spaces: [],
             nameTripleSpaces: [],
           }),

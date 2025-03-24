@@ -1,3 +1,4 @@
+import { SystemIds } from '@graphprotocol/grc-20';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useEffect, useRef, useState } from 'react';
@@ -110,6 +111,12 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
   const { store, stream, query: queryInternal } = useSyncEngine();
   const [hasRun, setHasRun] = useState(false);
   const [entities, setEntities] = useState<Record<string, Entity>>(
+    /**
+     * We set any local-store entities in state by default in order
+     * to render _something_ optimistically. In the useQuery below
+     * we check for any remote results of the filter condition and
+     * update the store asynchronously.
+     */
     Object.fromEntries(
       queryInternal
         .query()
@@ -128,10 +135,13 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     }
   }, [where]);
 
+  /**
+   * This query runs behind the scenes to sync any remote entities that match
+   * the filter condition and merge into the local store.
+   */
   const { isFetched } = useQuery({
     queryKey: [...GeoStore.queryKeys(where.id?.in ?? []), hasRun, prevWhere.current],
     queryFn: async () => {
-      // @TODO: Rerun when query changes
       if (!hasRun || JSON.stringify(prevWhere.current) !== JSON.stringify(where)) {
         const entities = await E.findMany(store, cache, where);
         stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
@@ -161,6 +171,10 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
 
       if (entitiesToUpdate.length > 0) {
         setEntities(prev => {
+          /**
+           * If there is a new query, we don't want to include already-stored
+           * entities in the new state unless they're valid for the new query
+           */
           const validPrevEntities = Object.values(prev).filter(e => ids?.includes(e.id));
 
           return {
@@ -186,8 +200,6 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
         const entity = store.getEntity(event.relation.fromEntity.id);
 
         if (entity) {
-          entity.relationsOut = [...entity.relationsOut, event.relation];
-
           setEntities(prev => ({
             ...prev,
             [event.relation.fromEntity.id]: entity,
@@ -199,10 +211,12 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
       if (ids?.includes(event.relation.fromEntity.id)) {
         const entity = store.getEntity(event.relation.fromEntity.id);
+        console.log(
+          'event',
+          entity?.relationsOut.filter(r => r.typeOf.id === SystemIds.TYPES_PROPERTY)
+        );
 
         if (entity) {
-          entity.relationsOut = entity.relationsOut.filter(r => r.id !== event.relation.id);
-
           setEntities(prev => ({
             ...prev,
             [event.relation.fromEntity.id]: entity,
@@ -218,7 +232,6 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
         const entity = store.getEntity(event.triple.entityId);
 
         if (entity) {
-          entity.triples = [...entity.triples, event.triple];
           entitiesToUpdate.push(entity);
         }
       }
@@ -241,15 +254,13 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     });
 
     const onTripleDeletedSub = stream.on(GeoEventStream.TRIPLES_DELETED, event => {
+      const entitiesToUpdate: Entity[] = [];
+
       if (event.triple.id && ids?.includes(event.triple.id)) {
         const entity = store.getEntity(event.triple.entityId);
 
         if (entity) {
-          entity.triples = entity.triples.filter(t => t.id !== event.triple.id);
-          setEntities(prev => ({
-            ...prev,
-            [event.triple.entityId]: entity,
-          }));
+          entitiesToUpdate.push(entity);
         }
       }
 
@@ -259,10 +270,13 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
 
       if (maybeRelationChanged.length > 0) {
         const entities = maybeRelationChanged.map(e => store.getEntity(e.id)).filter(e => e !== undefined);
+        entitiesToUpdate.push(...entities);
+      }
 
+      if (entitiesToUpdate.length > 0) {
         setEntities(prev => ({
           ...prev,
-          ...Object.fromEntries(entities.map(e => [e.id, e])),
+          ...Object.fromEntries(entitiesToUpdate.map(e => [e.id, e])),
         }));
       }
     });
