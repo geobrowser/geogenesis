@@ -110,7 +110,6 @@ type QueryEntitiesOptions = {
 export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream, query } = useSyncEngine();
-  const [hasRun, setHasRun] = useState(false);
   const [localEntities, setLocalEntities] = useState<Record<string, Entity>>(
     /**
      * We set any local-store entities in state by default in order
@@ -147,11 +146,9 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
    */
   const { isFetched } = useQuery({
     enabled,
-    queryKey: [...GeoStore.queryKeys(where), hasRun, prevWhere.current, first, skip],
+    queryKey: [...GeoStore.queryKeys(where), prevWhere.current, first, skip],
     queryFn: async () => {
-      console.log('running again');
       const entities = await E.findMany(store, cache, where, first, skip);
-      setHasRun(true);
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
       return entities;
     },
@@ -204,8 +201,6 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
       const maybeRelationChanged = Object.values(latestQueriedEntities).some(e =>
         e.relationsOut.some(r => syncedEntitiesIds.includes(r.toEntity.id))
       );
-
-      console.log('maybe relation changed?', maybeRelationChanged);
 
       if (maybeRelationChanged) {
         shouldUpdate = true;

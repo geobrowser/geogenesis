@@ -144,6 +144,24 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       relationsOut: relations.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
     };
 
+    const resolvedRelations = resolvedEntity.relationsOut.map(r => {
+      let maybeToEntity: Entity | null = null;
+
+      if (r.toEntity.id !== id) {
+        maybeToEntity = this.entities.get(r.toEntity.id) ?? null;
+      }
+
+      return {
+        ...r,
+        toEntity: {
+          ...r.toEntity,
+          name: maybeToEntity?.name ?? r.toEntity.name,
+        },
+      };
+    });
+
+    resolvedEntity.relationsOut = resolvedRelations;
+
     return resolvedEntity;
   }
 
@@ -263,18 +281,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       }
     });
 
-    const relations = Array.from(relationMap.values());
-    return relations.map(r => {
-      const maybeToEntity = this.getEntity(r.toEntity.id);
-
-      return {
-        ...r,
-        toEntity: {
-          ...r.toEntity,
-          name: maybeToEntity?.name ?? r.toEntity.name,
-        },
-      };
-    });
+    return Array.from(relationMap.values());
   }
 
   /**

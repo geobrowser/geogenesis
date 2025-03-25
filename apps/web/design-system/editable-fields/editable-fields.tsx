@@ -88,7 +88,7 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
   // Apply debounce effect
   const debouncedCallback = debounce((value: string) => {
     onChange(value);
-  }, 500);
+  }, 1000);
 
   // Handle input changes
   const handleChange = (value: string) => {
