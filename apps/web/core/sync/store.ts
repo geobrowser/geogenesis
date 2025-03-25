@@ -263,7 +263,18 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       }
     });
 
-    return Array.from(relationMap.values());
+    const relations = Array.from(relationMap.values());
+    return relations.map(r => {
+      const maybeToEntity = this.getEntity(r.toEntity.id);
+
+      return {
+        ...r,
+        toEntity: {
+          ...r.toEntity,
+          name: maybeToEntity?.name ?? r.toEntity.name,
+        },
+      };
+    });
   }
 
   /**

@@ -64,9 +64,10 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
   };
 
   for (const p of properties) {
-    if (p.id === EntityId(SystemIds.NAME_ATTRIBUTE)) {
-      continue;
-    }
+    // Why were we skipping the name attribute?
+    // if (p.id === EntityId(SystemIds.NAME_ATTRIBUTE)) {
+    //   continue;
+    // }
 
     const maybeColumn = columns[p.id];
 
@@ -340,14 +341,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     );
   }
 
-  const filteredTypes: Array<string> = filterState
-    .filter(filter => filter.columnId === SystemIds.TYPES_ATTRIBUTE)
-    .map(filter => filter.value);
-
-  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, filteredTypes);
-
-  const renderPlusButtonAsLink = (source.type === 'GEO' || source.type === 'SPACES') && canEdit;
-  const renderPlusButtonAsInline = source.type === 'COLLECTION' && canEdit;
+  const renderPlusButtonAsInline = source.type !== 'RELATIONS' && canEdit;
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
@@ -362,11 +356,6 @@ export const TableBlock = ({ spaceId }: Props) => {
 
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
-          {renderPlusButtonAsLink && (
-            <Link onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
-              <Create />
-            </Link>
-          )}
 
           {renderPlusButtonAsInline && (
             <button onClick={onAddPlaceholder}>

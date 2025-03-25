@@ -102,9 +102,12 @@ export function useQueryEntity({ id }: QueryEntityOptions) {
 
 type QueryEntitiesOptions = {
   where: WhereCondition;
+  enabled?: boolean;
+  first?: number;
+  skip?: number;
 };
 
-export function useQueryEntities({ where }: QueryEntitiesOptions) {
+export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream, query } = useSyncEngine();
   const [hasRun, setHasRun] = useState(false);
@@ -143,24 +146,24 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
    * use RQ's refetch function or add a polling/refetch interval.
    */
   const { isFetched } = useQuery({
-    queryKey: [...GeoStore.queryKeys(where), hasRun, prevWhere.current],
+    enabled,
+    queryKey: [...GeoStore.queryKeys(where), hasRun, prevWhere.current, first, skip],
     queryFn: async () => {
-      if (!hasRun || JSON.stringify(prevWhere.current) !== JSON.stringify(where)) {
-        const entities = await E.findMany(store, cache, where);
-        setHasRun(true);
-        stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
-        return entities;
-      }
-
-      return [];
+      console.log('running again');
+      const entities = await E.findMany(store, cache, where, first, skip);
+      setHasRun(true);
+      stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
+      return entities;
     },
   });
 
   useEffect(() => {
+    if (!enabled) return;
+
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       let shouldUpdate = false;
       const syncedEntitiesIds = event.entities.map(e => e.id);
-      const latestQueriedEntities = new EntityQuery(store).where(where).execute();
+      const latestQueriedEntities = new EntityQuery(store).where(where).limit(first).offset(skip).execute();
       const latestQueriedEntitiesIds = latestQueriedEntities.map(e => e.id);
 
       /**
@@ -202,6 +205,8 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
         e.relationsOut.some(r => syncedEntitiesIds.includes(r.toEntity.id))
       );
 
+      console.log('maybe relation changed?', maybeRelationChanged);
+
       if (maybeRelationChanged) {
         shouldUpdate = true;
       }
@@ -212,7 +217,7 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     });
 
     const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
-      const entities = new EntityQuery(store).where(where).execute();
+      const entities = new EntityQuery(store).where(where).limit(first).offset(skip).execute();
       const ids: string[] = entities.map(e => e.id);
 
       if (ids.includes(event.relation.fromEntity.id)) {
@@ -221,7 +226,7 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     });
 
     const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
-      const entities = new EntityQuery(store).where(where).execute();
+      const entities = new EntityQuery(store).where(where).limit(first).offset(skip).execute();
       const localEntitiesList = Object.values(localEntities);
 
       const previousListHasFromEntity = localEntitiesList.some(e => e.id === event.relation.fromEntity.id);
@@ -275,7 +280,7 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
       // If a triple is deleted and alters the result of this query then the triple's
       // entity won't show up in the query results.
       let shouldUpdate = false;
-      const entities = new EntityQuery(store).where(where).execute();
+      const entities = new EntityQuery(store).where(where).limit(first).offset(skip).execute();
       const localEntitiesList = Object.values(localEntities);
 
       const previousListHasChangedEntity = localEntitiesList.some(e => e.id === event.triple.entityId);
@@ -314,7 +319,7 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [where, stream, store, query, localEntities]);
+  }, [where, stream, store, query, localEntities, enabled, first, skip]);
 
   return {
     entities: Object.values(localEntities),

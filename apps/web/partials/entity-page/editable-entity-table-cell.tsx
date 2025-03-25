@@ -1,5 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
+import { useSource } from '~/core/blocks/data/use-source';
 import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -37,6 +38,7 @@ export function EditableEntityTableCell({
   isPlaceholderRow,
 }: Props) {
   const entityName = Entities.nameFromRenderable(renderables) ?? '';
+  const { source } = useSource();
 
   const isNameCell = attributeId === SystemIds.NAME_ATTRIBUTE;
 
@@ -45,13 +47,15 @@ export function EditableEntityTableCell({
     // "real" renderable for name exists yet.
     const renderable = renderables[0] as TripleRenderableProperty;
 
-    if (isPlaceholderRow) {
+    // We only allow FOC for collections.
+    if (isPlaceholderRow && source.type === 'COLLECTION') {
       return (
         <SelectEntity
           // What actually happens here? We create a link to the entity for the source?
           // If the entity already exists then it should be a text block instead of the
           // search experience
           onDone={result => {
+            // If the source type is query we shouldn't use FOC and instead just show the name
             onChangeEntry(
               {
                 entityId: entityId,
@@ -89,7 +93,7 @@ export function EditableEntityTableCell({
       <TableStringField
         placeholder="Entity name..."
         value={entityName}
-        onBlur={e =>
+        onBlur={e => {
           onChangeEntry(
             {
               entityId,
@@ -103,8 +107,8 @@ export function EditableEntityTableCell({
                 payload: { renderable, value: { type: 'TEXT', value: e.currentTarget.value } },
               },
             }
-          )
-        }
+          );
+        }}
       />
     );
   }

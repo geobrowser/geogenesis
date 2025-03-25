@@ -4,15 +4,17 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
+import { WhereCondition } from '~/core/sync/experimental_query-layer';
+import { useQueryEntities } from '~/core/sync/use-store';
+
 import { useEntity } from '../../database/entities';
 import { upsert } from '../../database/write';
-import { PropertyId, useProperties } from '../../hooks/use-properties';
-import { Entity } from '../../io/dto/entities';
+import { useProperties } from '../../hooks/use-properties';
 import { EntityId, SpaceId } from '../../io/schema';
 import { Cell, PropertySchema, Relation } from '../../types';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter } from './filters';
-import { MergeTableEntitiesArgs, mergeEntitiesAsync, mergeTableEntities } from './queries';
+import { MergeTableEntitiesArgs } from './queries';
 import { Source } from './source';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
@@ -25,19 +27,14 @@ import { useView } from './use-view';
 export const PAGE_SIZE = 9;
 
 interface RenderablesQueryKey {
-  pageNumber: number;
-  entityId: string;
-  filterState: Filter[];
   source: Source;
-  collectionItems: Entity[];
   mapping: Mapping;
   spaceId: string;
   sourceEntityRelations: Relation[];
-  properties?: Record<PropertyId, PropertySchema>;
 }
 
 const queryKeys = {
-  renderables: (args: RenderablesQueryKey) => ['blocks', 'data', 'renderables', args],
+  relationQuery: (args: RenderablesQueryKey) => ['blocks', 'data', 'renderables', args],
   columnsSchema: (columns?: PropertySchema[]) => ['blocks', 'data', 'columns-schema', columns],
 };
 
@@ -54,67 +51,38 @@ export function useDataBlock() {
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
   const { collectionItems, collectionRelations } = useCollection();
+
+  const where = filterStateToWhere(filterState);
+
+  // @TODO Need to be able to go from filter state to `where`
+  // @TODO: If where is empty then we need to be able to query all entities
+  // @TODO: Need to be able to do pagination
+  const { entities: queriedEntities, isLoading: isQueryEntitiesLoading } = useQueryEntities({
+    where: where,
+    enabled: source.type === 'SPACES' || source.type === 'GEO',
+    first: PAGE_SIZE + 1,
+    skip: pageNumber * PAGE_SIZE,
+  });
+
   // Use the mapping to get the potential renderable properties.
   const propertiesSchema = useProperties(shownColumnIds);
 
   const {
-    data: rows,
-    isLoading: isLoadingRenderables,
-    isFetched: isRenderablesFetched,
+    data: relationsMapping,
+    isLoading: isRelationDataLoading,
+    isFetched: isRelationDataFetched,
   } = useQuery({
     enabled: filterState !== undefined,
     placeholderData: keepPreviousData,
     // @TODO: Should re-run when the relations for the entity source changes
-    queryKey: queryKeys.renderables({
-      pageNumber,
-      entityId,
+    queryKey: queryKeys.relationQuery({
       source,
-      filterState,
       mapping,
       spaceId,
-      collectionItems,
       sourceEntityRelations: relationBlockSourceRelations,
-      properties: propertiesSchema,
     }),
     queryFn: async () => {
       const run = Effect.gen(function* () {
-        const params: MergeTableEntitiesArgs['options'] = {
-          first: PAGE_SIZE + 1,
-          skip: pageNumber * PAGE_SIZE,
-        };
-
-        /**
-         * Data blocks support several "query" modes which require fetching and aggregating
-         * different data in different ways. In order to simplify rendering we want to map
-         * the data from each of these modes into a unified format. This keeps the complexities
-         * of the query modes out of the UI/rendering code.
-         *
-         * For COLLECTION data blocks we read collection item relations directly from the data
-         * block itself.
-         *
-         * For ENTITIES data blocks, we read from a filter stored on the data block and make a
-         * dynamic query for any entities that match the filter.
-         *
-         * For RELATIONS data blocks, we start from a _specific_ entity and dynamically fetch
-         * specific data from that entity to render in the data block. e.g., I might want to
-         * render the name of the entity, the Spouse relation's to entity avatar, and the
-         * Spouse relation's description. This requires reading data from three different
-         * entities. In order to specify the specific data set, we use a mechanism called
-         * "Selectors." Selectors are a custom DSL for specifying which data to fetch from
-         * an entity. Selectors live on the "Properties" relation pointing from the Blocks
-         * relation pointing to the data block.
-         */
-        if (source.type === 'SPACES' || source.type === 'GEO') {
-          const data = yield* Effect.promise(() => mergeTableEntities({ options: params, filterState }));
-
-          return mappingToRows(data, shownColumnIds, [], spaceId, propertiesSchema);
-        }
-
-        if (source.type === 'COLLECTION') {
-          const result = mappingToRows(collectionItems, shownColumnIds, collectionRelations, spaceId, propertiesSchema);
-          return result;
-        }
-
         if (source.type === 'RELATIONS') {
           const data = yield* Effect.forEach(
             relationBlockSourceRelations,
@@ -150,6 +118,41 @@ export function useDataBlock() {
       return await Effect.runPromise(run);
     },
   });
+
+  /**
+   * Data blocks support several "query" modes which require fetching and aggregating
+   * different data in different ways. In order to simplify rendering we want to map
+   * the data from each of these modes into a unified format. This keeps the complexities
+   * of the query modes out of the UI/rendering code.
+   *
+   * For COLLECTION data blocks we read collection item relations directly from the data
+   * block itself.
+   *
+   * For ENTITIES data blocks, we read from a filter stored on the data block and make a
+   * dynamic query for any entities that match the filter.
+   *
+   * For RELATIONS data blocks, we start from a _specific_ entity and dynamically fetch
+   * specific data from that entity to render in the data block. e.g., I might want to
+   * render the name of the entity, the Spouse relation's to entity avatar, and the
+   * Spouse relation's description. This requires reading data from three different
+   * entities. In order to specify the specific data set, we use a mechanism called
+   * "Selectors." Selectors are a custom DSL for specifying which data to fetch from
+   * an entity. Selectors live on the "Properties" relation pointing from the Blocks
+   * relation pointing to the data block.
+   */
+  const rows = (() => {
+    if (source.type === 'COLLECTION') {
+      return mappingToRows(collectionItems, shownColumnIds, collectionRelations, spaceId, propertiesSchema);
+    }
+
+    if (source.type === 'GEO' || source.type === 'SPACES') {
+      return mappingToRows(queriedEntities, shownColumnIds, [], spaceId, propertiesSchema);
+    }
+
+    if (source.type === 'RELATIONS') {
+      return relationsMapping;
+    }
+  })();
 
   const setName = (newName: string) => {
     upsert(
@@ -193,13 +196,20 @@ export function useDataBlock() {
     // renderable fetched state for collection blocks.
     isLoading:
       source.type === 'COLLECTION'
-        ? isLoadingRenderables || isLoadingFilterState || isViewLoading || !isFilterStateFetched || !isViewFetched
-        : isLoadingRenderables ||
+        ? isRelationDataLoading ||
           isLoadingFilterState ||
           isViewLoading ||
           !isFilterStateFetched ||
-          !isRenderablesFetched ||
-          !isViewFetched,
+          !isViewFetched ||
+          isQueryEntitiesLoading
+        : isRelationDataLoading ||
+          isLoadingFilterState ||
+          isViewLoading ||
+          !isFilterStateFetched ||
+          !isRelationDataFetched ||
+          !isViewFetched ||
+          isQueryEntitiesLoading,
+
     name: blockEntity.name,
     setName,
   };
@@ -244,4 +254,46 @@ export function useDataBlockInstance() {
   }
 
   return context;
+}
+
+function filterStateToWhere(filterState: Filter[]): WhereCondition {
+  const where: WhereCondition = {};
+
+  for (const filter of filterState) {
+    if (filter.valueType === 'TEXT') {
+      if (!where.triples) {
+        where.triples = [];
+      }
+
+      where['triples'].push({
+        attributeId: {
+          equals: filter.columnId,
+        },
+        value: {
+          equals: filter.value,
+        },
+      });
+    }
+
+    if (filter.valueType === 'RELATION') {
+      if (!where.relations) {
+        where.relations = [];
+      }
+
+      where['relations'].push({
+        typeOf: {
+          id: {
+            equals: filter.columnId,
+          },
+        },
+        toEntity: {
+          id: {
+            equals: filter.value,
+          },
+        },
+      });
+    }
+  }
+
+  return where;
 }

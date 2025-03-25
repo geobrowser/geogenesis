@@ -109,7 +109,7 @@ export class E {
   }
 
   // @TODO: Pagination
-  static async findMany(store: GeoStore, cache: QueryClient, where: WhereCondition) {
+  static async findMany(store: GeoStore, cache: QueryClient, where: WhereCondition, first: number, skip: number) {
     if (where?.id?.in) {
       const entityIds = where.id.in;
 
@@ -171,7 +171,7 @@ export class E {
 
     const remoteEntities = await cache.fetchQuery({
       queryKey: ['network', 'entities', conditions],
-      queryFn: ({ signal }) => fetchTableRowEntities({ filter: filterString, signal }),
+      queryFn: ({ signal }) => fetchTableRowEntities({ filter: filterString, signal, first, skip }),
     });
 
     const localEntities = new EntityQuery(store).where(where).execute();
