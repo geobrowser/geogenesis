@@ -1,14 +1,17 @@
 import { QueryClient } from '@tanstack/react-query';
 
+import { Filter } from '../blocks/data/filters';
+import { queryStringFromFilters } from '../blocks/data/to-query-string';
 import { Triple } from '../database/Triple';
 import { readTypes } from '../database/entities';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
-import { fetchEntity } from '../io/subgraph';
+import { fetchEntity, fetchTableRowEntities } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { Relation } from '../types';
 import { Entities } from '../utils/entity';
 import { Triples } from '../utils/triples';
+import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
 
 function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
@@ -105,29 +108,79 @@ export class E {
     return this.merge({ id, store, mergeWith: cachedEntity });
   }
 
-  static async findMany(
-    store: GeoStore,
-    cache: QueryClient,
-    where: {
-      id?: {
-        in?: string[];
-      };
-    }
-  ) {
-    if (!where.id || !where.id?.in) {
-      return [];
+  // @TODO: Pagination
+  static async findMany(store: GeoStore, cache: QueryClient, where: WhereCondition) {
+    if (where?.id?.in) {
+      const entityIds = where.id.in;
+
+      const remoteEntities = await cache.fetchQuery({
+        queryKey: ['network', 'entities', entityIds],
+        queryFn: ({ signal }) => fetchEntitiesBatch({ entityIds, signal }),
+      });
+
+      const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+
+      const entities = entityIds.map(entityId => {
+        return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+      });
+
+      return entities.filter(e => e !== null);
     }
 
-    const entityIds = where.id.in;
+    const conditions: Filter[] = [];
+
+    if (where.relations) {
+      const relationConditions = where.relations
+        .map((r): Filter | null => {
+          if (r.typeOf?.id?.equals && r.toEntity?.id?.equals) {
+            return {
+              columnId: r.typeOf.id.equals,
+              value: r.toEntity.id.equals,
+              valueName: null,
+              valueType: 'RELATION',
+            };
+          }
+
+          return null;
+        })
+        .filter(f => f !== null);
+
+      conditions.push(...relationConditions);
+    }
+
+    if (where.triples) {
+      const tripleConditions = where.triples
+        .map((t): Filter | null => {
+          if (t.attributeId?.equals && t.value?.equals) {
+            return {
+              columnId: t.attributeId.equals,
+              value: t.value.equals.toString(),
+              valueName: null,
+              valueType: 'TEXT', // SUPPORT OTHER TYPES
+            };
+          }
+
+          return null;
+        })
+        .filter(f => f !== null);
+
+      conditions.push(...tripleConditions);
+    }
+
+    const filterString = queryStringFromFilters(conditions);
 
     const remoteEntities = await cache.fetchQuery({
-      queryKey: ['network', 'entities', entityIds],
-      queryFn: ({ signal }) => fetchEntitiesBatch({ entityIds, signal }),
+      queryKey: ['network', 'entities', conditions],
+      queryFn: ({ signal }) => fetchTableRowEntities({ filter: filterString, signal }),
     });
+
+    const localEntities = new EntityQuery(store).where(where).execute();
+
+    const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
 
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
-    const entities = entityIds.map(entityId => {
+    const entities = mergedIds.map(entityId => {
       return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
     });
 

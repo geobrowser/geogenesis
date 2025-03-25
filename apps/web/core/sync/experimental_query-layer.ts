@@ -29,11 +29,16 @@ const compareOperators = {
  */
 type StringCondition = { equals?: string; contains?: string; startsWith?: string; endsWith?: string; in?: string[] };
 
-type NumberCondition =
-  | number
-  | { equals?: number; gt?: number; gte?: number; lt?: number; lte?: number; between?: [number, number] };
+type NumberCondition = {
+  equals?: number;
+  gt?: number;
+  gte?: number;
+  lt?: number;
+  lte?: number;
+  between?: [number, number];
+};
 
-type BooleanCondition = boolean | { equals: boolean };
+type BooleanCondition = { equals: boolean };
 
 type TripleCondition = {
   attributeName?: StringCondition;
@@ -55,8 +60,8 @@ export type WhereCondition = {
   description?: StringCondition;
   types?: { id?: StringCondition; name?: StringCondition }[];
   spaces?: StringCondition[];
-  triples?: TripleCondition | TripleCondition[];
-  relations?: RelationCondition | RelationCondition[];
+  triples?: TripleCondition[];
+  relations?: RelationCondition[];
   OR?: WhereCondition[];
   AND?: WhereCondition[];
   NOT?: WhereCondition;
@@ -147,14 +152,14 @@ export class EntityQuery {
    * Filter by triple (property)
    */
   whereTriple(condition: TripleCondition): EntityQuery {
-    return this.where({ triples: condition });
+    return this.where({ triples: [condition] });
   }
 
   /**
    * Filter by relation
    */
   whereRelation(condition: RelationCondition): EntityQuery {
-    return this.where({ relations: condition });
+    return this.where({ relations: [condition] });
   }
 
   /**
@@ -694,7 +699,7 @@ export class EntityQueryBuilder {
       .orWhere([
         { name: { contains: text } },
         { description: { contains: text } },
-        { triples: { value: { contains: text } } },
+        { triples: [{ value: { contains: text } }] },
       ])
       .execute();
   }

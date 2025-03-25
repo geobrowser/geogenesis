@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import { Entity } from '../io/dto/entities';
-import { WhereCondition } from './experimental_query-layer';
+import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E } from './orm';
 import { GeoStore } from './store';
 import { GeoEventStream } from './stream';
@@ -107,7 +107,7 @@ type QueryEntitiesOptions = {
 // @TODO: Filters/query language for syncing entities
 export function useQueryEntities({ where }: QueryEntitiesOptions) {
   const cache = useQueryClient();
-  const { store, stream, query: queryInternal } = useSyncEngine();
+  const { store, stream, query } = useSyncEngine();
   const [hasRun, setHasRun] = useState(false);
   const [entities, setEntities] = useState<Record<string, Entity>>(
     /**
@@ -117,8 +117,7 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
      * update the store asynchronously.
      */
     Object.fromEntries(
-      queryInternal
-        .query()
+      query
         .where(where)
         .execute()
         .map(e => [e.id, e])
@@ -139,12 +138,13 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
    * the filter condition and merge into the local store.
    */
   const { isFetched } = useQuery({
-    queryKey: [...GeoStore.queryKeys(where.id?.in ?? []), hasRun, prevWhere.current],
+    queryKey: [...GeoStore.queryKeys(where), hasRun, prevWhere.current],
     queryFn: async () => {
       if (!hasRun || JSON.stringify(prevWhere.current) !== JSON.stringify(where)) {
         const entities = await E.findMany(store, cache, where);
-        stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
         setHasRun(true);
+        console.log('fetched entities', entities);
+        stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
         return entities;
       }
 
@@ -153,11 +153,25 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
   });
 
   useEffect(() => {
-    const ids = where.id?.in;
+    // @TODO: Handle other filters besides id->in
+    //
+    // We'll need a way to track which entities are returned from a filter so we
+    // know if any changes to those entities should update state.
+    //
+    // This tracked entity state might also change depending on if the state of
+    // an entity changes over time. e.g., you can add a type which means an entity
+    // should now be tracked.
+    //
+    // We also need to make sure we are storing the correct number of entities in
+    // the list in case of pagination.
+    const ids = where?.id?.in;
 
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
-      const entitiesToUpdate = event.entities.filter(e => ids?.includes(e.id));
+      const entitiesToUpdate: Entity[] = [];
       const changedEntities = event.entities.map(e => e.id);
+
+      const entities = new EntityQuery(store).where(where).execute();
+      entitiesToUpdate.push(...entities);
 
       /**
        * If any relations of the subscribed entities changed we need to re-pull
@@ -201,7 +215,10 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     });
 
     const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
-      if (ids?.includes(event.relation.fromEntity.id)) {
+      const entities = new EntityQuery(store).where(where).execute();
+      const ids: string[] = entities.map(e => e.id);
+
+      if (ids.includes(event.relation.fromEntity.id)) {
         const entity = store.getEntity(event.relation.fromEntity.id);
 
         if (entity) {
@@ -214,7 +231,10 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     });
 
     const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
-      if (ids?.includes(event.relation.fromEntity.id)) {
+      const entities = new EntityQuery(store).where(where).execute();
+      const ids: string[] = entities.map(e => e.id);
+
+      if (ids.includes(event.relation.fromEntity.id)) {
         const entity = store.getEntity(event.relation.fromEntity.id);
 
         if (entity) {
@@ -229,7 +249,10 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     const onTripleCreatedSub = stream.on(GeoEventStream.TRIPLES_CREATED, event => {
       const entitiesToUpdate: Entity[] = [];
 
-      if (ids?.includes(event.triple.entityId)) {
+      const entities = new EntityQuery(store).where(where).execute();
+      const ids: string[] = entities.map(e => e.id);
+
+      if (ids.includes(event.triple.entityId)) {
         const entity = store.getEntity(event.triple.entityId);
 
         if (entity) {
@@ -237,6 +260,13 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
         }
       }
 
+      /**
+       * If the changed triple is for one of the relations of the subscribed entities
+       * changed we need to re-pull the entity to get the latest state of its relation.
+       *
+       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
+       * re-pull Byron to get the latest name for Geo, PBC.
+       */
       const maybeRelationChanged = Object.values(entities).filter(e =>
         e.relationsOut.some(r => r.toEntity.id === event.triple.entityId)
       );
@@ -257,14 +287,25 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
     const onTripleDeletedSub = stream.on(GeoEventStream.TRIPLES_DELETED, event => {
       const entitiesToUpdate: Entity[] = [];
 
-      if (event.triple.id && ids?.includes(event.triple.id)) {
-        const entity = store.getEntity(event.triple.entityId);
+      const entities = new EntityQuery(store).where(where).execute();
+      console.log('entities', entities);
+      const ids: string[] = entities.map(e => e.id);
 
-        if (entity) {
-          entitiesToUpdate.push(entity);
-        }
-      }
+      // if (ids.includes(event.triple.entityId)) {
+      //   const entity = store.getEntity(event.triple.entityId);
 
+      //   if (entity) {
+      //     entitiesToUpdate.push(entity);
+      //   }
+      // }
+
+      /**
+       * If the changed triple is for one of the relations of the subscribed entities
+       * changed we need to re-pull the entity to get the latest state of its relation.
+       *
+       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
+       * re-pull Byron to get the latest name for Geo, PBC.
+       */
       const maybeRelationChanged = Object.values(entities).filter(e =>
         e.relationsOut.some(r => r.toEntity.id === event.triple.entityId)
       );
@@ -290,7 +331,7 @@ export function useQueryEntities({ where }: QueryEntitiesOptions) {
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [where, stream, store, entities]);
+  }, [where, stream, store, entities, query]);
 
   return {
     entities: Object.values(entities),

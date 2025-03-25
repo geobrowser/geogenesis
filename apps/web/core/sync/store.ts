@@ -5,6 +5,7 @@ import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { Relation, Triple } from '../types';
 import { Entities } from '../utils/entity';
+import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
@@ -70,8 +71,8 @@ export class GeoStore {
     return ['store', 'entity', id];
   }
 
-  static queryKeys(ids: string[]) {
-    return ['store', 'entities', ids];
+  static queryKeys(where: WhereCondition) {
+    return ['store', 'entities', where];
   }
 
   clear() {

@@ -18,7 +18,7 @@ export function useCollection() {
     id: EntityId(entityId),
   });
 
-  // @TODO: This should be from the sync engine
+  // @TODO: This should be from the sync engine.
   const collectionItemsRelations = useRelations({
     mergeWith: blockEntity.relationsOut,
     selector: r => {
