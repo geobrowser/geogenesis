@@ -12,12 +12,12 @@ const whereByron: WhereCondition = {
   triples: [
     {
       attributeId: { equals: SystemIds.NAME_PROPERTY },
-      value: { equals: 'Byron' },
+      value: { equals: 'Yaniv Tal' },
     },
   ],
 };
 
-const whereNik = {
+const whereNik: WhereCondition = {
   triples: [
     {
       attributeId: { equals: SystemIds.NAME_PROPERTY },
@@ -34,11 +34,11 @@ export default function Page() {
       attributeId: SystemIds.NAME_PROPERTY,
       entityId: ID.createEntityId(),
       attributeName: 'Name',
-      entityName: 'Byron',
-      space: '5',
+      entityName: 'Yaniv Tal',
+      space: ID.createEntityId(),
       value: {
         type: 'TEXT',
-        value: 'Byron',
+        value: 'Yaniv Tal',
       },
     });
   };
@@ -49,7 +49,7 @@ export default function Page() {
       entityId: ID.createEntityId(),
       attributeName: 'Name',
       entityName: 'Nik Graf',
-      space: '5',
+      space: ID.createEntityId(),
       value: {
         type: 'TEXT',
         value: 'Nik Graf',
@@ -59,9 +59,10 @@ export default function Page() {
 
   return (
     <div className="font-mono">
+      <button>Clear</button>
       <div className="flex w-full justify-between">
         <div>
-          <button onClick={makeAnotherByron}>Make entity to match Byron filter</button>
+          <button onClick={makeAnotherByron}>Make entity to match Yaniv filter</button>
           <Byron />
         </div>
         <div>
@@ -75,34 +76,12 @@ export default function Page() {
 }
 
 function Byron() {
+  const { store } = useSyncEngine();
   const { entities, isLoading } = useQueryEntities({
     where: whereByron,
   });
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
-  if (entities.length === 0) {
-    return <div>Nothing to show...</div>;
-  }
-
-  return (
-    <div>
-      {entities.map(e => (
-        <div key={e.id}>
-          {e.name} – {e.id}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Nik() {
-  const { store } = useSyncEngine();
-  const { entities, isLoading } = useQueryEntities({
-    where: whereNik,
-  });
+  console.log('Yaniv rendering');
 
   if (isLoading) {
     return <div>Loading...</div>;
@@ -116,7 +95,48 @@ function Nik() {
     store.deleteTriple({
       attributeName: null,
       entityName: null,
-      space: '5',
+      space: entity.spaces[0],
+      attributeId: SystemIds.NAME_PROPERTY,
+      entityId: entity.id,
+      value: {
+        type: 'TEXT',
+        value: '',
+      },
+    });
+  };
+
+  return (
+    <div>
+      {entities.map(e => (
+        <div onClick={() => onRemove(e)} key={e.id}>
+          {e.name} – {e.id}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Nik() {
+  const { store } = useSyncEngine();
+  const { entities, isLoading } = useQueryEntities({
+    where: whereNik,
+  });
+
+  console.log('Nik rendering');
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (entities.length === 0) {
+    return <div>Nothing to show...</div>;
+  }
+
+  const onRemove = (entity: Entity) => {
+    store.deleteTriple({
+      attributeName: null,
+      entityName: null,
+      space: entity.spaces[0],
       attributeId: SystemIds.NAME_PROPERTY,
       entityId: entity.id,
       value: {

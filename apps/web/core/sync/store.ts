@@ -1,6 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { readTypes } from '../database/entities';
+import { ID } from '../id';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { Relation, Triple } from '../types';
@@ -22,8 +23,6 @@ export class GeoStore {
   private triples: Map<string, Triple[]> = new Map();
   private relations: Map<string, Relation[]> = new Map();
   private deletedEntities: Set<string> = new Set();
-  private deletedRelations: Set<string> = new Set();
-  private deletedTriples: Set<string> = new Set();
 
   // Pending optimistic updates
   // @TODO:
@@ -65,6 +64,12 @@ export class GeoStore {
 
       this.relations.set(entity.id, entity.relationsOut);
     }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`
+Finished syncing entities to store. 
+Entity ids: ${entities.map(e => e.id).join(', ')}`);
+    }
   }
 
   static queryKey(id: string) {
@@ -82,8 +87,6 @@ export class GeoStore {
     this.triples.clear();
     this.relations.clear();
     this.deletedEntities.clear();
-    this.deletedRelations.clear();
-    this.deletedTriples.clear();
     this.pendingTriples.clear();
     this.pendingRelations.clear();
     this.pendingEntityDeletes.clear();
@@ -116,6 +119,7 @@ export class GeoStore {
     const name = Entities.name(triples);
     const description = Entities.description(triples);
     const types = readTypes(relations);
+    const spaces = Entities.spaces(triples, relations);
 
     // Return fully resolved entity
     const resolvedEntity: Entity = {
@@ -123,6 +127,7 @@ export class GeoStore {
         ? {
             ...entity,
             types,
+            spaces,
             name: name ?? entity.name,
             description: description ?? entity.description,
             relationsOut: relations.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
@@ -132,7 +137,7 @@ export class GeoStore {
             name,
             description,
             types,
-            spaces: [],
+            spaces,
             nameTripleSpaces: [],
           }),
       triples: triples.filter(t => (includeDeleted ? true : Boolean(t.isDeleted) === false)),
@@ -145,18 +150,11 @@ export class GeoStore {
   /**
    * Get multiple entities by ID with full resolution
    */
-  public getEntities(ids?: string[], options: ReadOptions = {}): Entity[] {
-    if (!ids) {
-      return Array.from(this.entities.keys())
-        .filter(id => (options.includeDeleted ? true : this.isEntityDeleted(id) === false))
-        .map(id => this.getEntity(id, options))
-        .filter(entity => entity !== undefined);
-    }
-
-    return ids
-      .map(id => this.getEntity(id))
-      .filter(entity => entity !== undefined)
-      .filter(entity => (options.includeDeleted ? true : this.isEntityDeleted(entity.id) === false));
+  public getEntities(options: ReadOptions = {}): Entity[] {
+    return Array.from(this.entities.keys())
+      .filter(id => (options.includeDeleted ? true : this.isEntityDeleted(id) === false))
+      .map(id => this.getEntity(id, options))
+      .filter(entity => entity !== undefined);
   }
 
   /**
@@ -205,7 +203,12 @@ export class GeoStore {
     const tripleMap = new Map<string, Triple>();
 
     // Function to generate a unique key for each triple
-    const getTripleKey = (triple: Triple): string => `${triple.entityId}-${triple.attributeId}-${triple.space}`;
+    const getTripleKey = (triple: Triple): string =>
+      ID.createTripleId({
+        attributeId: triple.attributeId,
+        entityId: triple.entityId,
+        space: triple.space,
+      });
 
     // Add base triples to the map
     baseTriples.forEach(triple => {
@@ -277,8 +280,11 @@ export class GeoStore {
     const entityId = triple.entityId;
 
     // Create a composite key for the triple
-    const tripleKey = `${triple.entityId}-${triple.attributeId}-${triple.space}`;
-
+    const tripleKey = ID.createTripleId({
+      attributeId: triple.attributeId,
+      entityId: triple.entityId,
+      space: triple.space,
+    });
     // Get or create the pending triples map for this entity
     if (!this.pendingTriples.has(entityId)) {
       this.pendingTriples.set(entityId, new Map());
@@ -291,7 +297,7 @@ export class GeoStore {
       // Optimistically set the name for the entity. This means we can
       // immediately render the entity with the new name without waiting
       // for syncing to finish.
-      const maybeEntity = this.entities.get(entityId);
+      const maybeEntity = this.getEntity(entityId);
 
       if (!maybeEntity) {
         this.entities.set(entityId, {
@@ -316,7 +322,7 @@ export class GeoStore {
       // Optimistically set the description for the entity. This means we can
       // immediately render the entity with the new description without waiting
       // for syncing to finish.
-      const maybeEntity = this.entities.get(entityId);
+      const maybeEntity = this.getEntity(entityId);
 
       if (!maybeEntity) {
         this.entities.set(entityId, {
@@ -347,7 +353,12 @@ export class GeoStore {
   public deleteTriple(triple: Triple): void {
     // Mark the triple as deleted in pending changes
     const entityId = triple.entityId;
-    const tripleKey = `${triple.entityId}-${triple.attributeId}-${triple.space}`;
+    const tripleKey = ID.createTripleId({
+      attributeId: triple.attributeId,
+      entityId: triple.entityId,
+      space: triple.space,
+    });
+    triple.isDeleted = true;
 
     // Get or create the pending triples map for this entity
     if (!this.pendingTriples.has(entityId)) {
@@ -355,12 +366,7 @@ export class GeoStore {
     }
 
     // Add a deleted version to pending changes
-    this.pendingTriples.get(entityId)!.set(tripleKey, {
-      ...triple,
-      isDeleted: true,
-    });
-
-    this.deletedTriples.add(tripleKey);
+    this.pendingTriples.get(entityId)!.set(tripleKey, triple);
 
     if (triple.attributeId === SystemIds.NAME_PROPERTY) {
       // Optimistically set the name for the entity. This means we can
@@ -397,6 +403,8 @@ export class GeoStore {
       this.pendingRelations.set(entityId, new Map());
     }
 
+    // @TODO: Optimistically set types
+
     // Add to pending changes
     this.pendingRelations.get(entityId)!.set(relation.id, relation);
 
@@ -409,19 +417,17 @@ export class GeoStore {
    */
   public deleteRelation(relation: Relation): void {
     const entityId = relation.fromEntity.id;
+    relation.isDeleted = true;
 
     // Get or create the pending relations map for this entity
     if (!this.pendingRelations.has(entityId)) {
       this.pendingRelations.set(entityId, new Map());
     }
 
-    // Add a deleted version to pending changes
-    this.pendingRelations.get(entityId)!.set(relation.id, {
-      ...relation,
-      isDeleted: true,
-    });
+    // @TODO: Optimistically set types
 
-    this.deletedRelations.add(relation.id);
+    // Add a deleted version to pending changes
+    this.pendingRelations.get(entityId)!.set(relation.id, relation);
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation });
