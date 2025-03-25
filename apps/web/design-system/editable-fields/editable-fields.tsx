@@ -1,4 +1,4 @@
-import { cva } from 'class-variance-authority';
+import { cva, cx } from 'class-variance-authority';
 import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
@@ -107,7 +107,7 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
   );
 }
 
-type ImageVariant = 'avatar' | 'banner' | 'table-cell' | 'default';
+type ImageVariant = 'avatar' | 'banner' | 'table-cell' | 'default' | 'gallery';
 
 interface ImageZoomProps {
   imageSrc: string;
@@ -129,6 +129,9 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
   'table-cell': {
     width: 60,
   },
+  gallery: {
+    height: 80,
+  },
 };
 
 export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
@@ -141,9 +144,21 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   );
 }
 
-export function ListImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+const blockImagePlaceholderImgs: Record<string, Record<'default' | 'hover', string>> = {
+  avatar: {
+    default: '/images/placeholders/Avatar_Default.svg',
+    hover: '/images/placeholders/Avatar_Hover.svg',
+  },
+  gallery: {
+    default: '/images/placeholders/Gallery_Default.svg',
+    hover: '/images/placeholders/Gallery_Hover.svg',
+  },
+};
+
+export function BlockImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
   const [isUploading, setIsUploading] = React.useState(false);
   const { ipfs } = Services.useServices();
+  const [hovered, setHovered] = React.useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputClick = () => {
@@ -163,23 +178,35 @@ export function ListImageField({ imageSrc, onImageChange, onImageRemove, variant
     }
   };
 
+  const placeholderImage = blockImagePlaceholderImgs[variant]?.[hovered ? 'hover' : 'default'] ?? undefined;
+
   return (
-    <div>
-      {imageSrc && (
-        <div className="pt-1">
+    <div
+      className={cx('flex h-full w-full place-items-center items-center', {
+        'cursor-pointer': !imageSrc,
+      })}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {imageSrc ? (
+        <div className="z-100 pt-1">
           <ImageZoom variant={variant} imageSrc={imageSrc} />
         </div>
-      )}
+      ) : null}
 
-      <div className="flex justify-center gap-2 pt-2">
+      <button className="absolute z-10 h-full w-full cursor-pointer" onClick={handleFileInputClick}>
+        <img src={placeholderImage} className="h-full w-full object-cover" />
+      </button>
+
+      <div className="z-100 flex h-full w-full items-center justify-center">
         {isUploading ? (
           <Dots />
         ) : (
           <label htmlFor="avatar-file">
-            <SquareButton onClick={handleFileInputClick} icon={<Upload />} />
+            <Upload color={hovered ? 'grey-04' : 'grey-02'} />
           </label>
         )}
-        {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash />} />}
+        {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash color={hovered ? 'grey-04' : 'grey-02'} />} />}
       </div>
 
       <input

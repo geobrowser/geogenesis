@@ -9,7 +9,7 @@ import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
-import { ListImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { SelectEntity } from '~/design-system/select-entity';
 
@@ -75,7 +75,8 @@ export function TableBlockGalleryItem({
               fill
             />
           ) : (
-            <ListImageField
+            <BlockImageField
+              variant="gallery"
               imageSrc={image ?? undefined}
               onImageChange={imageSrc => {
                 const { id: imageId, ops } = Image.make({ cid: imageSrc });
