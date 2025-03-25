@@ -304,56 +304,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     // Add to pending changes
     this.pendingTriples.get(entityId)!.set(tripleKey, triple);
 
-    if (triple.attributeId === SystemIds.NAME_PROPERTY) {
-      // Optimistically set the name for the entity. This means we can
-      // immediately render the entity with the new name without waiting
-      // for syncing to finish.
-      const maybeEntity = this.getEntity(entityId);
-
-      if (!maybeEntity) {
-        this.entities.set(entityId, {
-          id: EntityId(entityId),
-          name: triple.value.value,
-          description: null,
-          types: [],
-          spaces: [],
-          nameTripleSpaces: [],
-          relationsOut: [],
-          triples: [],
-        });
-      } else {
-        this.entities.set(entityId, {
-          ...maybeEntity,
-          name: triple.value.value,
-        });
-      }
-    }
-
-    if (triple.attributeId === SystemIds.DESCRIPTION_PROPERTY) {
-      // Optimistically set the description for the entity. This means we can
-      // immediately render the entity with the new description without waiting
-      // for syncing to finish.
-      const maybeEntity = this.getEntity(entityId);
-
-      if (!maybeEntity) {
-        this.entities.set(entityId, {
-          id: EntityId(entityId),
-          name: null,
-          description: triple.value.value,
-          types: [],
-          spaces: [],
-          nameTripleSpaces: [],
-          relationsOut: [],
-          triples: [],
-        });
-      } else {
-        this.entities.set(entityId, {
-          ...maybeEntity,
-          description: triple.value.value,
-        });
-      }
-    }
-
     // Emit update event
     this.stream.emit({ type: GeoEventStream.TRIPLES_CREATED, triple });
   }
@@ -378,26 +328,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     // Add a deleted version to pending changes
     this.pendingTriples.get(entityId)!.set(tripleKey, triple);
-
-    if (triple.attributeId === SystemIds.NAME_PROPERTY) {
-      // Optimistically set the name for the entity. This means we can
-      // immediately render the entity with the new name without waiting
-      // for syncing to finish.
-      this.entities.set(entityId, {
-        ...this.entities.get(entityId),
-        name: null,
-      } as Entity);
-    }
-
-    if (triple.attributeId === SystemIds.DESCRIPTION_PROPERTY) {
-      // Optimistically set the description for the entity. This means we can
-      // immediately render the entity with the new description without waiting
-      // for syncing to finish.
-      this.entities.set(entityId, {
-        ...this.entities.get(entityId),
-        description: null,
-      } as Entity);
-    }
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.TRIPLES_DELETED, triple });
