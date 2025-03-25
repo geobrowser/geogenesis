@@ -181,7 +181,8 @@ export function BlockImageField({ imageSrc, onImageChange, onImageRemove, varian
   const placeholderImage = blockImagePlaceholderImgs[variant]?.[hovered ? 'hover' : 'default'] ?? undefined;
 
   return (
-    <div
+    <button
+      onClick={handleFileInputClick}
       className={cx('flex h-full w-full place-items-center items-center', {
         'cursor-pointer': !imageSrc,
       })}
@@ -194,19 +195,19 @@ export function BlockImageField({ imageSrc, onImageChange, onImageRemove, varian
         </div>
       ) : null}
 
-      <button className="absolute z-10 h-full w-full cursor-pointer" onClick={handleFileInputClick}>
+      <div className="absolute z-10 h-full w-full">
         <img src={placeholderImage} className="h-full w-full object-cover" />
-      </button>
+      </div>
 
       <div className="z-100 flex h-full w-full items-center justify-center">
         {isUploading ? (
           <Dots />
         ) : (
-          <label htmlFor="avatar-file">
-            <Upload color={hovered ? 'grey-04' : 'grey-02'} />
+          <label htmlFor="avatar-file" className="cursor-pointer">
+            <Upload color={hovered ? 'grey-04' : 'grey-03'} />
           </label>
         )}
-        {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash color={hovered ? 'grey-04' : 'grey-02'} />} />}
+        {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash color={hovered ? 'grey-04' : 'grey-03'} />} />}
       </div>
 
       <input
@@ -217,7 +218,7 @@ export function BlockImageField({ imageSrc, onImageChange, onImageRemove, varian
         type="file"
         className="hidden"
       />
-    </div>
+    </button>
   );
 }
 
