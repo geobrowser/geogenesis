@@ -63,7 +63,7 @@ const formatColumns = (
   unpublishedColumns: PropertySchema[],
   spaceId: SpaceId
 ) => {
-  const columnSize = 784 / columns.length;
+  const columnSize = 880 / columns.length;
 
   return columns.map((column, i) =>
     columnHelper.accessor(row => row.columns[column.id], {
@@ -312,7 +312,7 @@ export const TableBlockTable = React.memo(
                 </thead>
                 <tbody>
                   {source.type === 'COLLECTION' && isEditable && (
-                    <TableCell width={784} isExpanded={false} toggleExpanded={() => {}} isShown>
+                    <TableCell width={880} isExpanded={false} toggleExpanded={() => {}} isShown>
                       <SelectEntity
                         spaceId={space}
                         onDone={onSelectCollectionItem}

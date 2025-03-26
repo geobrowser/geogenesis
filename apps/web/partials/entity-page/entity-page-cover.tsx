@@ -37,7 +37,7 @@ export const EntityPageCover = ({ avatarUrl: serverAvatarUrl, coverUrl: serverCo
         </div>
         {avatarUrl && (
           <div className="absolute bottom-0 left-0 right-0">
-            <div className="mx-auto w-full max-w-[784px]">
+            <div className="mx-auto w-full max-w-[880px]">
               <div className="relative h-[80px] w-[80px] translate-y-1/2 overflow-hidden rounded-lg border border-white bg-grey-01 shadow-lg">
                 <Image
                   src={getImagePath(avatarUrl)}
@@ -57,7 +57,7 @@ export const EntityPageCover = ({ avatarUrl: serverAvatarUrl, coverUrl: serverCo
 
   if (avatarUrl) {
     return (
-      <div className="mx-auto mb-10 w-[784px]">
+      <div className="mx-auto mb-10 w-[880px]">
         <div className="relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-grey-01 shadow-lg">
           <Image src={getImagePath(avatarUrl)} layout="fill" objectFit="cover" className="h-full w-full" alt="" />
         </div>

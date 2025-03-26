@@ -1,10 +1,12 @@
 export const EditorH1 = () => {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="18" viewBox="0 0 16 18" fill="none">
-      <path
-        d="M11.7628 0.900391V7.48839H4.25678V0.900391H0.800781V17.4784H4.25678V10.5124H11.7628V17.4784H15.2188V0.900391H11.7628Z"
-        fill="black"
-      />
+    <svg width="12" height="16" viewBox="0 0 12 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="2" height="16" rx="1" fill="#35363A" />
+      <rect width="2" height="16" rx="1" fill="black" fillOpacity="0.2" />
+      <rect x="2" y="7" width="8" height="2" fill="#35363A" />
+      <rect x="2" y="7" width="8" height="2" fill="black" fillOpacity="0.2" />
+      <rect x="10" width="2" height="16" rx="1" fill="#35363A" />
+      <rect x="10" width="2" height="16" rx="1" fill="black" fillOpacity="0.2" />
     </svg>
   );
 };

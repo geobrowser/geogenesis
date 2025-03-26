@@ -22,7 +22,12 @@ export const Truncate = ({
 
   return (
     <div
-      className={cx(shouldTruncate && clampClassName[maxLines], textStyles[variant], 'w-full leading-none', className)}
+      className={cx(
+        shouldTruncate && clampClassName[maxLines],
+        textStyles[variant],
+        'w-full overflow-x-hidden leading-none',
+        className
+      )}
       {...rest}
     />
   );

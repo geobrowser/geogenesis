@@ -12,10 +12,16 @@ export function Trash({ color }: Props) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
-        d="M3.15301 2.5H12.847C13.1513 2.5 13.385 2.76949 13.342 3.07071L11.6277 15.0707C11.5925 15.317 11.3815 15.5 11.1327 15.5H4.8673C4.61847 15.5 4.40751 15.317 4.37232 15.0707L2.65803 3.07071C2.615 2.76949 2.84873 2.5 3.15301 2.5Z"
+        d="M3.5 2.5H12.5V13C12.5 14.3807 11.3807 15.5 10 15.5H6C4.61929 15.5 3.5 14.3807 3.5 13V2.5Z"
         stroke={themeColor}
       />
-      <rect x="5.5" y="0.5" width="5" height="2" rx="0.5" stroke={themeColor} />
+      <rect x="9" y="5" width="1" height="8" rx="0.5" fill={themeColor} />
+      <rect x="6" y="5" width="1" height="8" rx="0.5" fill={themeColor} />
+      <rect x="1.5" y="2" width="13" height="1" rx="0.5" fill={themeColor} />
+      <path
+        d="M5 2.5L5.72361 1.05279C5.893 0.714002 6.23926 0.5 6.61803 0.5H9.38197C9.76074 0.5 10.107 0.714002 10.2764 1.05279L11 2.5"
+        stroke={themeColor}
+      />
     </svg>
   );
 }

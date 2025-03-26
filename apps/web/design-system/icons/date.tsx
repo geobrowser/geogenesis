@@ -10,13 +10,16 @@ export function Date({ color }: Props) {
   const themeColor = color ? colors.light[color] : 'currentColor';
 
   return (
-    <svg width="16" height="17" viewBox="0 0 16 17" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
-        d="M0.5 4.5C0.5 3.67157 1.17157 3 2 3H8H12H14C14.8284 3 15.5 3.67157 15.5 4.5V13.5C15.5 14.3284 14.8284 15 14 15H2C1.17157 15 0.5 14.3284 0.5 13.5V4.5Z"
+        d="M15.5 6V12C15.5 13.933 13.933 15.5 12 15.5H4C2.067 15.5 0.5 13.933 0.5 12V6C0.5 4.067 2.067 2.5 4 2.5H8H12C13.933 2.5 15.5 4.067 15.5 6Z"
         stroke={themeColor}
       />
-      <path d="M4.5 0.5V5.5" stroke={themeColor} />
-      <path d="M11.5 0.5V5.5" stroke={themeColor} />
+      <path d="M4 5C4 5.27614 4.22386 5.5 4.5 5.5C4.77614 5.5 5 5.27614 5 5H4ZM4 0V5H5V0H4Z" fill={themeColor} />
+      <path
+        d="M11 5C11 5.27614 11.2239 5.5 11.5 5.5C11.7761 5.5 12 5.27614 12 5H11ZM11 0V5H12V0H11Z"
+        fill={themeColor}
+      />
     </svg>
   );
 }
