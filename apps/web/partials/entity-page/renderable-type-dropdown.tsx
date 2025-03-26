@@ -13,7 +13,7 @@ import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
-import { RelationSmall } from '~/design-system/icons/relation-small';
+import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
 import { ColorName } from '~/design-system/theme/colors';
@@ -22,7 +22,7 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   TIME: Date,
   TEXT: Text,
   URL: Url,
-  RELATION: RelationSmall,
+  RELATION: Relation,
   IMAGE: Image,
   CHECKBOX: CheckboxChecked,
   NUMBER: Number,
@@ -46,16 +46,16 @@ export const RenderableTypeDropdown = ({ value, options }: Props) => {
       <DropdownPrimitive.Content
         align="end"
         sideOffset={2}
-        className="z-10 w-[160px] origin-top-right self-end overflow-hidden rounded-lg border border-grey-02 bg-white"
+        className="z-10 w-[160px] origin-top-right self-end overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
       >
-        <DropdownPrimitive.Group className="divide-y divide-grey-02 overflow-hidden rounded-lg">
+        <DropdownPrimitive.Group className="space-y-1 overflow-hidden rounded-lg p-1">
           {options.map((option, index) => (
             <DropdownPrimitive.Item
               key={`triple-type-dropdown-${index}`}
               onClick={option.onClick}
               className={cx(
-                'flex w-full select-none items-center justify-between px-3 py-2 text-button text-grey-04 last:border-b last:border-b-grey-02 hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
-                value === option.value && '!bg-bg !text-text'
+                'flex w-full select-none items-center justify-between rounded-md bg-white px-3 py-2.5 text-button text-text hover:cursor-pointer hover:bg-divider focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                value === option.value && '!bg-divider'
               )}
             >
               {option.label}

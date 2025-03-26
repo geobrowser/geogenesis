@@ -48,7 +48,7 @@ type Props = {
 export async function Component({ header, acceptedProposalsCount, proposalType, connectedAddress }: Props) {
   return (
     <>
-      <div className="mx-auto max-w-[784px]">
+      <div className="mx-auto max-w-[880px]">
         {header}
         <PersonalHomeNavigation />
         <PersonalHomeDashboard

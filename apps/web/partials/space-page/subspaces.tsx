@@ -39,13 +39,7 @@ export const Subspaces = ({ subspaces }: SubspacesProps) => {
                   alt=""
                 />
               </div>
-              <div className="mt-2 text-metadataMedium text-text">{subspace.spaceConfig?.name}</div>
-              {/* <div className="mt-1 flex items-center gap-1 text-smallButton text-grey-03">
-                <div className="scale-[0.8]">
-                  <Member />
-                </div>
-                <span>445</span>
-              </div> */}
+              <div className="mt-2 text-smallTitle font-medium text-text">{subspace.spaceConfig?.name}</div>
             </Link>
           );
         })}

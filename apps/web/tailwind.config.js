@@ -115,10 +115,10 @@ module.exports = {
       },
       fontSize: {
         mainPage: [
-          '2.75rem',
+          '3.25rem',
           {
-            lineHeight: '2.875rem',
-            letterSpacing: '0.37px',
+            lineHeight: '3.5rem',
+            letterSpacing: '-0.5px',
             fontWeight: '600',
           },
         ],
@@ -126,7 +126,7 @@ module.exports = {
           '2rem',
           {
             lineHeight: '2.5rem',
-            letterSpacing: '0.25px',
+            letterSpacing: '-.5px',
             fontWeight: '600',
           },
         ],
@@ -135,6 +135,7 @@ module.exports = {
           {
             lineHeight: '1.8125rem',
             fontWeight: '600',
+            letterSpacing: '-.25px',
           },
         ],
         cardEntityTitle: [
@@ -149,12 +150,14 @@ module.exports = {
           {
             lineHeight: '1.3125rem',
             fontWeight: '600',
+            letterSpacing: '-0.25px',
           },
         ],
         body: [
-          '1.1875rem',
+          '1.25rem',
           {
             lineHeight: '1.8125rem',
+            letterSpacing: '-0.08px',
             fontWeight: '400',
           },
         ],
