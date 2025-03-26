@@ -164,7 +164,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
         .where(where)
         .limit(first)
         .offset(skip)
-        .sortBy('id')
+        .sortBy('updatedAt')
         .execute();
       const latestQueriedEntitiesIds = latestQueriedEntities.map(e => e.id);
 

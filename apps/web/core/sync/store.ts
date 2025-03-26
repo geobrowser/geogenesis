@@ -1,5 +1,3 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-
 import { readTypes } from '../database/entities';
 import { ID } from '../id';
 import { Entity } from '../io/dto/entities';
