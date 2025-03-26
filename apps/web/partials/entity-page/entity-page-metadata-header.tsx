@@ -59,7 +59,7 @@ export function EntityPageMetadataHeader({ id, entityName, spaceId }: EntityPage
           </li>
         ))}
       </ul>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-5">
         <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
           {versions?.pages?.length === 0 && <HistoryEmpty />}
           {renderedVersions?.map((group, index) => (

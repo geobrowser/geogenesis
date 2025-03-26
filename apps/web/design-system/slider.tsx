@@ -106,7 +106,7 @@ const DesktopSlider = ({ label, children }: SliderProps) => {
   return (
     <>
       <div className="mb-2 flex h-8 items-center justify-between xl:hidden">
-        <h4 className="text-smallTitle">{label}</h4>
+        <h4 className="text-mediumTitle">{label}</h4>
         {slides.length > 1 && (
           <div className="flex items-center gap-5 text-text">
             <IconButton
