@@ -42,6 +42,8 @@ export default async function DefaultEntityPage({
   showHeader = true,
   notice = null,
 }: Props) {
+  const showSpacer = showCover || showHeading || showHeader;
+
   const props = await getData(params.id, params.entityId, searchParams?.edit === 'true' ? true : false);
 
   const avatarUrl = Entities.avatar(props.relationsOut) ?? props.serverAvatarUrl;
@@ -70,7 +72,7 @@ export default async function DefaultEntityPage({
             )}
           </div>
           {notice}
-          {!!notice && <Spacer height={40} />}
+          {(showSpacer || !!notice) && <Spacer height={40} />}
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
           <ToggleEntityPage {...props} />
           <AutomaticModeToggle />
