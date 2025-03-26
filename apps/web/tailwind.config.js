@@ -117,7 +117,7 @@ module.exports = {
         mainPage: [
           '3.25rem',
           {
-            lineHeight: '2.875rem',
+            lineHeight: '3.5rem',
             letterSpacing: '-0.5px',
             fontWeight: '600',
           },
