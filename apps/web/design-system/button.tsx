@@ -124,7 +124,7 @@ type IconButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   icon: React.ReactNode;
 };
 
-const iconButtonClassNames = cva('cursor-pointer border-none bg-white', {
+const iconButtonClassNames = cva('cursor-pointer border-none bg-white text-grey-04', {
   variants: {
     disabled: {
       true: 'cursor-pointer',

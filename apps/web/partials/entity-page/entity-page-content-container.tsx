@@ -7,5 +7,5 @@ type Props = {
 };
 
 export function EntityPageContentContainer({ children }: Props) {
-  return <div className="mx-auto w-full max-w-[784px]">{children}</div>;
+  return <div className="mx-auto w-full max-w-[880px]">{children}</div>;
 }

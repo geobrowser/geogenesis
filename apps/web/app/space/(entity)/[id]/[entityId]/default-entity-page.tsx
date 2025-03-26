@@ -65,10 +65,12 @@ export default async function DefaultEntityPage({
       >
         {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
         <EntityPageContentContainer>
-          {showHeading && <EntityPageHeading spaceId={props.spaceId} entityId={props.id} />}
-          {showHeader && (
-            <EntityPageMetadataHeader id={props.id} entityName={props.name ?? ''} spaceId={props.spaceId} />
-          )}
+          <div className="space-y-2">
+            {showHeading && <EntityPageHeading spaceId={props.spaceId} entityId={props.id} />}
+            {showHeader && (
+              <EntityPageMetadataHeader id={props.id} entityName={props.name ?? ''} spaceId={props.spaceId} />
+            )}
+          </div>
           {notice}
           {(showSpacer || !!notice) && <Spacer height={40} />}
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />

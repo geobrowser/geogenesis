@@ -80,33 +80,36 @@ export default async function Layout(props0: LayoutProps) {
       >
         <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
         <EntityPageContentContainer>
-          <EditableHeading spaceId={props.spaceId} entityId={props.id} />
-          <SpacePageMetadataHeader
-            typeNames={typeNames}
-            spaceId={props.spaceId}
-            spaceName={props.name ?? ''}
-            entityId={props.id}
-            addSubspaceComponent={
-              <AddSubspaceDialog
-                spaceId={spaceId}
-                trigger={
-                  <MenuItem>
-                    <Create />
-                    <p>Add subspace</p>
-                  </MenuItem>
-                }
-                subspaces={subspaces}
-                inflightSubspaces={inflightSubspaces}
-                spaceType={props.space.type}
-              />
-            }
-            membersComponent={
-              <React.Suspense fallback={<MembersSkeleton />}>
-                <SpaceEditors spaceId={spaceId} />
-                <SpaceMembers spaceId={spaceId} />
-              </React.Suspense>
-            }
-          />
+          <div className="space-y-2">
+            <EditableHeading spaceId={props.spaceId} entityId={props.id} />
+            <SpacePageMetadataHeader
+              typeNames={typeNames}
+              spaceId={props.spaceId}
+              spaceName={props.name ?? ''}
+              entityId={props.id}
+              addSubspaceComponent={
+                <AddSubspaceDialog
+                  spaceId={spaceId}
+                  trigger={
+                    <MenuItem>
+                      <Create />
+                      <p>Add subspace</p>
+                    </MenuItem>
+                  }
+                  subspaces={subspaces}
+                  inflightSubspaces={inflightSubspaces}
+                  spaceType={props.space.type}
+                />
+              }
+              membersComponent={
+                <React.Suspense fallback={<MembersSkeleton />}>
+                  <SpaceEditors spaceId={spaceId} />
+                  <SpaceMembers spaceId={spaceId} />
+                </React.Suspense>
+              }
+            />
+          </div>
+
           <Spacer height={40} />
           <React.Suspense fallback={null}>
             <TabGroup tabs={tabs} />

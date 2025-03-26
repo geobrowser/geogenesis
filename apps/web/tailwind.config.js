@@ -115,10 +115,10 @@ module.exports = {
       },
       fontSize: {
         mainPage: [
-          '2.75rem',
+          '3.25rem',
           {
             lineHeight: '2.875rem',
-            letterSpacing: '0.37px',
+            letterSpacing: '-0.5px',
             fontWeight: '600',
           },
         ],
@@ -149,6 +149,7 @@ module.exports = {
           {
             lineHeight: '1.3125rem',
             fontWeight: '600',
+            letterSpacing: '-0.25px',
           },
         ],
         body: [

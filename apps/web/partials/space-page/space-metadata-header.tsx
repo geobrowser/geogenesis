@@ -105,7 +105,7 @@ export function SpacePageMetadataHeader({
   const [isCreatingNewVersion, setIsCreatingNewVersion] = useState<boolean>(false);
 
   return (
-    <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-2 text-text">
+    <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-4 text-text">
       <div className="flex items-center gap-2">
         <span className="flex h-6 items-center rounded bg-text px-1.5 text-metadata text-white">Space</span>
         {additionalTypeChips}

@@ -127,8 +127,10 @@ export default async function ProfileLayout(props: Props) {
       >
         <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
         <EntityPageContentContainer>
-          <EditableHeading spaceId={params.id} entityId={entityId} />
-          <EntityPageMetadataHeader id={profile.id} entityName={profile.name ?? ''} spaceId={params.id} />
+          <div className="space-y-2">
+            <EditableHeading spaceId={params.id} entityId={entityId} />
+            <EntityPageMetadataHeader id={profile.id} entityName={profile.name ?? ''} spaceId={params.id} />
+          </div>
 
           <Spacer height={40} />
           <React.Suspense fallback={null}>
