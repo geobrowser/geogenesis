@@ -160,7 +160,12 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       let shouldUpdate = false;
       const syncedEntitiesIds = event.entities.map(e => e.id);
-      const latestQueriedEntities = new EntityQuery(store).where(where).limit(first).offset(skip).execute();
+      const latestQueriedEntities = new EntityQuery(store)
+        .where(where)
+        .limit(first)
+        .offset(skip)
+        .sortBy('id')
+        .execute();
       const latestQueriedEntitiesIds = latestQueriedEntities.map(e => e.id);
 
       /**
@@ -212,7 +217,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
     });
 
     const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
-      const entities = new EntityQuery(store).where(where).limit(first).offset(skip).execute();
+      const entities = new EntityQuery(store).where(where).limit(first).offset(skip).sortBy('id').execute();
       const ids: string[] = entities.map(e => e.id);
 
       if (ids.includes(event.relation.fromEntity.id)) {
@@ -221,7 +226,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
     });
 
     const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
-      const entities = new EntityQuery(store).where(where).limit(first).offset(skip).execute();
+      const entities = new EntityQuery(store).where(where).limit(first).offset(skip).sortBy('id').execute();
       const localEntitiesList = Object.values(localEntities);
 
       const previousListHasFromEntity = localEntitiesList.some(e => e.id === event.relation.fromEntity.id);
@@ -236,7 +241,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
     const onTripleCreatedSub = stream.on(GeoEventStream.TRIPLES_CREATED, event => {
       let shouldUpdate = false;
 
-      const entities = new EntityQuery(store).where(where).execute();
+      const entities = new EntityQuery(store).where(where).limit(first).offset(skip).sortBy('id').execute();
       const ids: string[] = entities.map(e => e.id);
 
       if (ids.includes(event.triple.entityId)) {
@@ -275,7 +280,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
       // If a triple is deleted and alters the result of this query then the triple's
       // entity won't show up in the query results.
       let shouldUpdate = false;
-      const entities = new EntityQuery(store).where(where).limit(first).offset(skip).execute();
+      const entities = new EntityQuery(store).where(where).limit(first).offset(skip).sortBy('id').execute();
       const localEntitiesList = Object.values(localEntities);
 
       const previousListHasChangedEntity = localEntitiesList.some(e => e.id === event.triple.entityId);
