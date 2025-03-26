@@ -37,7 +37,7 @@ export async function SpaceMembers({ spaceId }: Props) {
 
   if (isMember) {
     return (
-      <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button transition-colors duration-150 focus-within:border-text">
+      <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pl-1.5 pr-2 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
         <SpaceMembersPopover
           trigger={<SpaceMembersChip spaceId={spaceId} />}
           content={
@@ -66,7 +66,7 @@ export async function SpaceMembers({ spaceId }: Props) {
   }
 
   return (
-    <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button transition-colors duration-150 focus-within:border-text">
+    <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pl-1.5 pr-2 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
       <SpaceMembersPopover
         trigger={<SpaceMembersChip spaceId={spaceId} />}
         content={

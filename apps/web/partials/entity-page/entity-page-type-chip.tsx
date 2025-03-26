@@ -6,7 +6,7 @@ interface Props {
 
 export function EntityPageTypeChip({ type }: Props) {
   return (
-    <div className="flex h-6 items-center rounded-sm bg-divider px-[7px] py-px text-breadcrumb text-grey-04">
+    <div className="flex h-6 items-center rounded border border-grey-02 bg-white px-1.5 text-metadata text-text">
       {type.name ?? type.id}
     </div>
   );

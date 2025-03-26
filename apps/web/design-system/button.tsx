@@ -25,15 +25,14 @@ type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
 
 const buttonClassNames = (className = '') =>
   cva(
-    `relative inline-flex items-center justify-center rounded-sm border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none ${className}`,
-
+    `relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none ${className}`,
     {
       variants: {
         variant: {
           primary:
             'border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover',
           secondary:
-            'border-grey-02 bg-white !text-grey-04 shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text',
+            'border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text',
           tertiary: 'border-white bg-text text-white shadow-none',
           ghost:
             'border-transparent bg-white !text-grey-04 shadow-none hover:border-text hover:bg-bg hover:!text-text hover:shadow-button focus:border-text focus:shadow-inner-text',
@@ -47,7 +46,7 @@ const buttonClassNames = (className = '') =>
         },
         small: {
           false: 'gap-2 px-3 py-2 text-[1.0625rem] text-button leading-[1.125rem]',
-          true: 'gap-1.5 px-1.5 py-1 text-smallButton leading-none',
+          true: 'h-6 gap-1.5 px-1.5 !text-metadata leading-none text-text',
         },
         disabled: {
           true: 'cursor-pointer',

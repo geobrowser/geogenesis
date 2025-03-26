@@ -76,7 +76,10 @@ export function SpacePageMetadataHeader({
   const additionalTypeChips = typeNames
     .filter(t => t !== 'Space')
     .map((typeName, i) => (
-      <span key={i} className="flex h-6 items-center rounded-sm bg-divider px-1.5 text-breadcrumb text-grey-04">
+      <span
+        key={i}
+        className="flex h-6 items-center rounded border border-grey-02 bg-white px-1.5 text-metadata text-text"
+      >
         {typeName}
       </span>
     ));
@@ -104,7 +107,7 @@ export function SpacePageMetadataHeader({
   return (
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-2 text-text">
       <div className="flex items-center gap-2">
-        <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">Space</span>
+        <span className="flex h-6 items-center rounded bg-text px-1.5 text-metadata text-white">Space</span>
         {additionalTypeChips}
         {membersComponent}
       </div>
