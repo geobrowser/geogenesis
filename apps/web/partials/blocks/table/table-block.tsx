@@ -438,7 +438,7 @@ export const TableBlock = ({ spaceId }: Props) => {
   );
 };
 
-const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
+const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 880 / 3;
 
 type TableBlockPlaceholderProps = {
   className?: string;

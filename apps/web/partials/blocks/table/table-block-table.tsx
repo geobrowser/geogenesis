@@ -62,7 +62,7 @@ const formatColumns = (
   unpublishedColumns: PropertySchema[],
   spaceId: SpaceId
 ) => {
-  const columnSize = 784 / columns.length;
+  const columnSize = 880 / columns.length;
 
   return columns.map((column, i) => {
     return columnHelper.accessor(row => row.columns[column.id], {
