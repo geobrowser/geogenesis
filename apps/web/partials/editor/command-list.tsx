@@ -59,14 +59,23 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
             <button
               className={cx(
                 `item ${index === selectedIndex ? 'is-selected bg-grey-01' : ''}`,
-                'group flex w-full cursor-pointer items-center gap-2 rounded-md p-1 hover:bg-grey-01'
+                'group flex w-full cursor-pointer items-center gap-2 rounded-md p-1 transition-colors duration-100 hover:bg-grey-01'
               )}
               key={index}
               data-index={index}
               onMouseOver={() => setSelectedIndex(index)}
               onClick={() => command(items[selectedIndex])}
             >
-              <div className="group:hover:bg-grey-02 grid h-9 w-9 place-items-center rounded-sm bg-divider">{icon}</div>
+              <div
+                className={cx(
+                  'grid h-9 w-9 place-items-center rounded-sm bg-divider transition-colors duration-100 group-hover:bg-grey-02',
+                  {
+                    'bg-grey-02': index === selectedIndex,
+                  }
+                )}
+              >
+                {icon}
+              </div>
               <Text variant="metadataMedium">{title}</Text>
             </button>
           ))
