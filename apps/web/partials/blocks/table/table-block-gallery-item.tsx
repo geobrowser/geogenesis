@@ -36,11 +36,12 @@ export function TableBlockGalleryItem({
   properties,
 }: Props) {
   const nameCell: Cell | undefined = columns[SystemIds.NAME_ATTRIBUTE];
+  const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
   const maybeCoverData: Cell | undefined = columns[SystemIds.COVER_ATTRIBUTE];
 
   const { cellId, verified } = nameCell;
-  let { image, name } = nameCell;
+  let { image, name, description } = nameCell;
 
   const maybeNameInSpace = nameCell.renderables.find(
     r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
@@ -51,6 +52,18 @@ export function TableBlockGalleryItem({
 
   if (maybeName) {
     name = maybeName;
+  }
+
+  const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
+    r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE && r.spaceId === currentSpaceId
+  )?.value;
+
+  const maybeDescription =
+    maybeDescriptionInSpace ??
+    maybeDescriptionData?.renderables.find(r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE)?.value;
+
+  if (maybeDescription) {
+    description = maybeDescription;
   }
 
   const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === ContentIds.AVATAR_ATTRIBUTE)?.value;
@@ -70,6 +83,7 @@ export function TableBlockGalleryItem({
   const otherPropertyData = Object.values(columns).filter(
     c =>
       c.slotId !== SystemIds.NAME_ATTRIBUTE &&
+      c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE &&
       c.slotId !== ContentIds.AVATAR_ATTRIBUTE &&
       c.slotId !== SystemIds.COVER_ATTRIBUTE
   );
@@ -245,6 +259,42 @@ export function TableBlockGalleryItem({
               </div>
             )}
           </div>
+          <div>
+            <div className="text-metadata text-grey-04">Description</div>
+            <PageStringField
+              placeholder="Add description..."
+              onChange={value => {
+                onChangeEntry(
+                  {
+                    entityId: rowEntityId,
+                    entityName: name,
+                    spaceId: currentSpaceId,
+                  },
+                  {
+                    type: 'EVENT',
+                    data: {
+                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                      payload: {
+                        renderable: {
+                          attributeId: SystemIds.DESCRIPTION_ATTRIBUTE,
+                          entityId: rowEntityId,
+                          spaceId: currentSpaceId,
+                          attributeName: 'Description',
+                          entityName: name,
+                          type: 'TEXT',
+                          value: description ?? '',
+                        },
+                        value: { type: 'TEXT', value: value },
+                      },
+                    },
+                  }
+                );
+
+                return;
+              }}
+              value={description ?? ''}
+            />
+          </div>
           {otherPropertyData.map(p => {
             return (
               <>
@@ -280,7 +330,7 @@ export function TableBlockGalleryItem({
           fill
         />
       </div>
-      <div className="flex flex-col gap-3 px-1">
+      <div className="flex flex-col gap-2 px-1">
         <div className="flex items-center gap-2">
           {verified && (
             <div>
@@ -289,6 +339,9 @@ export function TableBlockGalleryItem({
           )}
           <div className="truncate text-smallTitle font-medium text-text">{name}</div>
         </div>
+        {description && (
+          <div className="mt-0.5 line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
+        )}
         {otherPropertyData.map(p => {
           return (
             <TableBlockPropertyField

@@ -255,7 +255,6 @@ export function TableBlockListItem({
             )}
           </div>
           <Divider type="horizontal" style="dashed" />
-          {/* @TODO: description should just be part of the otherPropertyData */}
           <div>
             <div className="text-metadata text-grey-04">Description</div>
             <PageStringField
