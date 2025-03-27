@@ -7,10 +7,8 @@ import * as React from 'react';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 
-import { useEntity } from '../../database/entities';
 import { upsert } from '../../database/write';
 import { useProperties } from '../../hooks/use-properties';
-import { EntityId, SpaceId } from '../../io/schema';
 import { Cell, PropertySchema, Relation } from '../../types';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter } from './filters';
@@ -53,9 +51,6 @@ export function useDataBlock() {
 
   const where = filterStateToWhere(filterState);
 
-  // @TODO Need to be able to go from filter state to `where`
-  // @TODO: If where is empty then we need to be able to query all entities
-  // @TODO: Need to be able to do pagination
   const { entities: queriedEntities, isLoading: isQueryEntitiesLoading } = useQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
