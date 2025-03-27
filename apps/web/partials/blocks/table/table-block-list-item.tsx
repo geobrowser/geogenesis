@@ -41,12 +41,27 @@ export function TableBlockListItem({
   const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
   const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_ATTRIBUTE];
 
-  const { cellId, name, verified } = nameCell;
-  let { description, image } = nameCell;
+  const { cellId, verified } = nameCell;
+  let { description, image, name } = nameCell;
 
-  const maybeDescription = maybeDescriptionData?.renderables.find(
-    r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE
+  const maybeNameInSpace = nameCell.renderables.find(
+    r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
   )?.value;
+
+  const maybeName =
+    maybeNameInSpace ?? nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE)?.value;
+
+  if (maybeName) {
+    name = maybeName;
+  }
+
+  const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
+    r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE && r.spaceId === currentSpaceId
+  )?.value;
+
+  const maybeDescription =
+    maybeDescriptionInSpace ??
+    maybeDescriptionData?.renderables.find(r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE)?.value;
 
   if (maybeDescription) {
     description = maybeDescription;

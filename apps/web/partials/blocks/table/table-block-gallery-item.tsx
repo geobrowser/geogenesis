@@ -39,8 +39,19 @@ export function TableBlockGalleryItem({
   const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
   const maybeCoverData: Cell | undefined = columns[SystemIds.COVER_ATTRIBUTE];
 
-  const { cellId, name, verified } = nameCell;
-  let { image } = nameCell;
+  const { cellId, verified } = nameCell;
+  let { image, name } = nameCell;
+
+  const maybeNameInSpace = nameCell.renderables.find(
+    r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
+  )?.value;
+
+  const maybeName =
+    maybeNameInSpace ?? nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE)?.value;
+
+  if (maybeName) {
+    name = maybeName;
+  }
 
   const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === ContentIds.AVATAR_ATTRIBUTE)?.value;
 

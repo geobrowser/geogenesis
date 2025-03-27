@@ -45,7 +45,11 @@ export function EditableEntityTableCell({
   if (isNameCell) {
     // This should exist as there should be a placeholder that exists if no
     // "real" renderable for name exists yet.
-    const renderable = renderables[0] as TripleRenderableProperty;
+    // /
+    // You might have multiple renderables across multiple spaces. In cases where we only render one,
+    // default to the one in the current space.
+    const renderableInSpace = renderables.find(r => r.spaceId === spaceId) as TripleRenderableProperty | undefined;
+    const renderable = renderableInSpace ?? (renderables[0] as TripleRenderableProperty);
 
     // We only allow FOC for collections.
     if (isPlaceholderRow && source.type === 'COLLECTION') {
