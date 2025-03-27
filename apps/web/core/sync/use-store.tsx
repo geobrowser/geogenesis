@@ -160,11 +160,12 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       let shouldUpdate = false;
       const syncedEntitiesIds = event.entities.map(e => e.id);
+
       const latestQueriedEntities = new EntityQuery(store)
         .where(where)
         .limit(first)
         .offset(skip)
-        .sortBy('updatedAt')
+        .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
       const latestQueriedEntitiesIds = latestQueriedEntities.map(e => e.id);
 

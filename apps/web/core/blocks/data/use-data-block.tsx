@@ -14,7 +14,6 @@ import { EntityId, SpaceId } from '../../io/schema';
 import { Cell, PropertySchema, Relation } from '../../types';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter } from './filters';
-import { MergeTableEntitiesArgs } from './queries';
 import { Source } from './source';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
@@ -63,6 +62,10 @@ export function useDataBlock() {
     first: PAGE_SIZE + 1,
     skip: pageNumber * PAGE_SIZE,
   });
+
+  if (blockEntity.id === 'GCaPqhJKFYuY1k6KUwynYU') {
+    console.log('data', { queriedEntities, where, filterState });
+  }
 
   // Use the mapping to get the potential renderable properties.
   const propertiesSchema = useProperties(shownColumnIds);
@@ -276,6 +279,11 @@ function filterStateToWhere(filterState: Filter[]): WhereCondition {
     }
 
     if (filter.valueType === 'RELATION') {
+      if (filter.columnId === SystemIds.SPACE_FILTER) {
+        where['spaces'] = [{ equals: filter.value }];
+        continue;
+      }
+
       if (!where.relations) {
         where.relations = [];
       }

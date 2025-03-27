@@ -1,3 +1,4 @@
+import { SystemIds } from '@graphprotocol/grc-20';
 import { QueryClient } from '@tanstack/react-query';
 
 import { Filter } from '../blocks/data/filters';
@@ -127,7 +128,7 @@ export class E {
       return entities.filter(e => e !== null);
     }
 
-    const conditions: Filter[] = [];
+    const filters: Filter[] = [];
 
     if (where.relations) {
       const relationConditions = where.relations
@@ -145,7 +146,7 @@ export class E {
         })
         .filter(f => f !== null);
 
-      conditions.push(...relationConditions);
+      filters.push(...relationConditions);
     }
 
     if (where.triples) {
@@ -164,13 +165,32 @@ export class E {
         })
         .filter(f => f !== null);
 
-      conditions.push(...tripleConditions);
+      filters.push(...tripleConditions);
     }
 
-    const filterString = queryStringFromFilters(conditions);
+    if (where.spaces) {
+      const relationConditions = where.spaces
+        .map((s): Filter | null => {
+          if (s.equals) {
+            return {
+              columnId: SystemIds.SPACE_FILTER,
+              value: s.equals,
+              valueName: null,
+              valueType: 'RELATION',
+            };
+          }
+
+          return null;
+        })
+        .filter(f => f !== null);
+
+      filters.push(...relationConditions);
+    }
+
+    const filterString = queryStringFromFilters(filters);
 
     const remoteEntities = await cache.fetchQuery({
-      queryKey: ['network', 'entities', conditions],
+      queryKey: ['network', 'entities', filters],
       queryFn: ({ signal }) => fetchTableRowEntities({ filter: filterString, signal, first, skip }),
     });
 
