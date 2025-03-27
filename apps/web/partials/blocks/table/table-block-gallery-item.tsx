@@ -324,7 +324,7 @@ export function TableBlockGalleryItem({
             return (
               <TableBlockPropertyField
                 key={p.slotId}
-                renderables={p.renderables}
+                renderables={p.renderables.filter(r => Boolean(r.placeholder) === false)}
                 spaceId={currentSpaceId}
                 entityId={cellId}
                 onChangeEntry={onChangeEntry}
