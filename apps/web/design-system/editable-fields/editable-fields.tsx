@@ -200,16 +200,16 @@ export function BlockImageField({ imageSrc, onImageChange, onImageRemove, varian
       onMouseLeave={() => setHovered(false)}
     >
       {imageSrc ? (
-        <div className="z-100 pt-1">
+        <div className="pt-1">
           <ImageZoom variant={variant} imageSrc={imageSrc} />
         </div>
       ) : null}
 
-      <div className="absolute z-10 h-full w-full">
+      <div className="absolute h-full w-full">
         <img src={placeholderImage} className="h-full w-full object-cover" />
       </div>
 
-      <div className="z-100 flex h-full w-full items-center justify-center">
+      <div className="z-10 flex h-full w-full items-center justify-center">
         {isUploading ? (
           <Dots />
         ) : (

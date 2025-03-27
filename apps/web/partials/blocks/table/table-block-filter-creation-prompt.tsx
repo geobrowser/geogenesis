@@ -226,7 +226,7 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
   };
 
   return (
-    <div className="flex items-center gap-1 px-2 pt-2">
+    <div className="z-1000 flex items-center gap-1 px-2 pt-2">
       <p>Entities</p>
       <button onClick={onToggleQueryMode}>
         <Toggle checked={queryMode === 'RELATIONS'} />
