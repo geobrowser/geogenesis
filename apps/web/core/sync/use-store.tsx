@@ -33,6 +33,7 @@ export function useQueryEntity({ id, spaceId }: QueryEntityOptions) {
 
       return null;
     },
+    staleTime: Infinity,
   });
 
   useEffect(() => {
