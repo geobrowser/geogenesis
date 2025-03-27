@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import * as React from 'react';
 
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
-import { useQueryEntities } from '~/core/sync/use-store';
+import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 
 import { useEntity } from '../../database/entities';
 import { upsert } from '../../database/write';
@@ -40,9 +40,9 @@ const queryKeys = {
 export function useDataBlock() {
   const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
 
-  const blockEntity = useEntity({
-    spaceId: SpaceId(spaceId),
-    id: EntityId(entityId),
+  const { entity, isLoading: isBlockEntityLoading } = useQueryEntity({
+    spaceId: spaceId,
+    id: entityId,
   });
 
   const { relationBlockSourceRelations } = useRelationsBlock();
@@ -196,12 +196,14 @@ export function useDataBlock() {
     isLoading:
       source.type === 'COLLECTION'
         ? isRelationDataLoading ||
+          isBlockEntityLoading ||
           isLoadingFilterState ||
           isViewLoading ||
           !isFilterStateFetched ||
           !isViewFetched ||
           isQueryEntitiesLoading
         : isRelationDataLoading ||
+          isBlockEntityLoading ||
           isLoadingFilterState ||
           isViewLoading ||
           !isFilterStateFetched ||
@@ -209,7 +211,7 @@ export function useDataBlock() {
           !isViewFetched ||
           isQueryEntitiesLoading,
 
-    name: blockEntity.name,
+    name: entity?.name ?? null,
     setName,
   };
 }

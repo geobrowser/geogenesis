@@ -14,41 +14,39 @@ type QueryEntityOptions = {
   spaceId?: string;
 };
 
-// @TODO need to filter data here optionally by space id as well
-export function useQueryEntity({ id }: QueryEntityOptions) {
+export function useQueryEntity({ id, spaceId }: QueryEntityOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
-  const [entity, setEntity] = useState<Entity | undefined>(store.getEntity(id));
+  const [entity, setEntity] = useState<Entity | undefined>(store.getEntity(id, { spaceId }));
 
   const { isFetched } = useQuery({
-    queryKey: [...GeoStore.queryKey(id), entity],
+    queryKey: [...GeoStore.queryKey(id)],
     queryFn: async () => {
       // If the entity is in the store then it's already been synced and we can
       // skip this work
-      if (!entity) {
-        const merged = await E.findOne({ id, store, cache });
+      const merged = await E.findOne({ id, store, cache });
 
-        if (merged) {
-          stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: [merged] });
-          return merged;
-        }
+      if (merged) {
+        stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: [merged] });
+        return merged;
       }
 
-      return entity;
+      return null;
     },
   });
 
   useEffect(() => {
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       if (event.entities.some(e => e.id === id)) {
-        const entity = event.entities.find(e => e.id === id);
+        const entity = store.getEntity(id, { spaceId });
         entity && setEntity(entity);
       }
     });
 
     const onEntityUpdatedSub = stream.on(GeoEventStream.ENTITY_UPDATED, event => {
       if (event.entity.id === id) {
-        setEntity(event.entity);
+        const entity = store.getEntity(id, { spaceId });
+        setEntity(entity);
       }
     });
 
@@ -60,26 +58,25 @@ export function useQueryEntity({ id }: QueryEntityOptions) {
 
     const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
       if (event.relation.fromEntity.id === id) {
-        setEntity(store.getEntity(id));
+        setEntity(store.getEntity(id, { spaceId }));
       }
     });
 
     const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
       if (event.relation.fromEntity.id === id) {
-        setEntity(store.getEntity(id));
+        setEntity(store.getEntity(id, { spaceId }));
       }
     });
 
     const onTripleCreatedSub = stream.on(GeoEventStream.TRIPLES_CREATED, event => {
       if (event.triple.entityId === id) {
-        const entity = store.getEntity(id);
-        setEntity(entity);
+        setEntity(store.getEntity(id, { spaceId }));
       }
     });
 
     const onTripleDeletedSub = stream.on(GeoEventStream.TRIPLES_DELETED, event => {
       if (event.triple.entityId === id) {
-        setEntity(store.getEntity(id));
+        setEntity(store.getEntity(id, { spaceId }));
       }
     });
 
@@ -92,7 +89,7 @@ export function useQueryEntity({ id }: QueryEntityOptions) {
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [id, store, stream]);
+  }, [id, store, stream, spaceId]);
 
   return {
     entity,
@@ -136,7 +133,6 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
     queryKey: [...GeoStore.queryKeys(where), prevWhere.current, first, skip],
     queryFn: async () => {
       const entities = await E.findMany(store, cache, where, first, skip);
-      console.log('entities', entities);
       setLocalEntities(entities);
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
       return entities;
