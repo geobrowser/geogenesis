@@ -83,10 +83,11 @@ export function TableBlockGalleryItem({
   const otherPropertyData = Object.values(columns).filter(
     c =>
       c.slotId !== SystemIds.NAME_ATTRIBUTE &&
-      c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE &&
       c.slotId !== ContentIds.AVATAR_ATTRIBUTE &&
       c.slotId !== SystemIds.COVER_ATTRIBUTE
   );
+
+  const propertyDataHasDescription = otherPropertyData.some(c => c.slotId === SystemIds.DESCRIPTION_ATTRIBUTE);
 
   if (isEditing) {
     return (
@@ -259,42 +260,7 @@ export function TableBlockGalleryItem({
               </div>
             )}
           </div>
-          <div>
-            <div className="text-metadata text-grey-04">Description</div>
-            <PageStringField
-              placeholder="Add description..."
-              onChange={value => {
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'EVENT',
-                    data: {
-                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                      payload: {
-                        renderable: {
-                          attributeId: SystemIds.DESCRIPTION_ATTRIBUTE,
-                          entityId: rowEntityId,
-                          spaceId: currentSpaceId,
-                          attributeName: 'Description',
-                          entityName: name,
-                          type: 'TEXT',
-                          value: description ?? '',
-                        },
-                        value: { type: 'TEXT', value: value },
-                      },
-                    },
-                  }
-                );
 
-                return;
-              }}
-              value={description ?? ''}
-            />
-          </div>
           {otherPropertyData.map(p => {
             return (
               <>
@@ -340,20 +306,24 @@ export function TableBlockGalleryItem({
             )}
             <div className="truncate text-smallTitle font-medium text-text">{name}</div>
           </div>
-          {description && <div className="line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>}
+          {description && propertyDataHasDescription && (
+            <div className="line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
+          )}
         </div>
 
-        {otherPropertyData.map(p => {
-          return (
-            <TableBlockPropertyField
-              key={p.slotId}
-              renderables={p.renderables}
-              spaceId={currentSpaceId}
-              entityId={cellId}
-              onChangeEntry={onChangeEntry}
-            />
-          );
-        })}
+        {otherPropertyData
+          .filter(p => p.slotId !== SystemIds.DESCRIPTION_PROPERTY)
+          .map(p => {
+            return (
+              <TableBlockPropertyField
+                key={p.slotId}
+                renderables={p.renderables}
+                spaceId={currentSpaceId}
+                entityId={cellId}
+                onChangeEntry={onChangeEntry}
+              />
+            );
+          })}
       </div>
     </Link>
   );
