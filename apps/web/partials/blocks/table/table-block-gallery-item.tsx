@@ -87,6 +87,13 @@ export function TableBlockGalleryItem({
       c.slotId !== SystemIds.COVER_ATTRIBUTE
   );
 
+  /**
+   * We render descriptions in a specific style, but want to treat whether to render the description
+   * at all the same way we treat any toggleable field.
+   *
+   * To do this we read description data from the row like every other optional data, but filter it
+   * out of rendering at read-time. Then we can render it it's unique way.
+   */
   const propertyDataHasDescription = otherPropertyData.some(c => c.slotId === SystemIds.DESCRIPTION_ATTRIBUTE);
 
   if (isEditing) {
