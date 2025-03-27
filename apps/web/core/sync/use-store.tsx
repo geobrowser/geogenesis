@@ -110,7 +110,7 @@ type QueryEntitiesOptions = {
 export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
-  const [localEntities, setLocalEntities] = useState<Record<string, Entity>>({});
+  const [localEntities, setLocalEntities] = useState<Entity[]>([]);
 
   const prevWhere = useRef(where);
 
@@ -136,6 +136,8 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
     queryKey: [...GeoStore.queryKeys(where), prevWhere.current, first, skip],
     queryFn: async () => {
       const entities = await E.findMany(store, cache, where, first, skip);
+      console.log('entities', entities);
+      setLocalEntities(entities);
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
       return entities;
     },
@@ -177,7 +179,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
        * updated local state. This happens because triple/relation events are optimistic
        * so run before syncing completes.
        */
-      const localEntitiesList = Object.values(localEntities);
+      const localEntitiesList = localEntities;
       const previousListHasEntity = localEntitiesList.some(e => syncedEntitiesIds.includes(e.id));
       const newListDoesNotHaveEntity = !latestQueriedEntities.some(e => syncedEntitiesIds.includes(e.id));
 
@@ -191,7 +193,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
        * Works at -> Geo and we change Geo to Geo, PBC., we need to re-pull Byron
        * to get the latest name for Geo, PBC.
        */
-      const maybeRelationChanged = Object.values(latestQueriedEntities).some(e =>
+      const maybeRelationChanged = latestQueriedEntities.some(e =>
         e.relationsOut.some(r => syncedEntitiesIds.includes(r.toEntity.id))
       );
 
@@ -200,7 +202,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
       }
 
       if (shouldUpdate) {
-        setLocalEntities(Object.fromEntries(latestQueriedEntities.map(e => [e.id, e])));
+        setLocalEntities(latestQueriedEntities);
       }
     });
 
@@ -214,7 +216,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
       const ids: string[] = entities.map(e => e.id);
 
       if (ids.includes(event.relation.fromEntity.id)) {
-        setLocalEntities(Object.fromEntries(entities.map(e => [e.id, e])));
+        setLocalEntities(entities);
       }
     });
 
@@ -225,14 +227,14 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
         .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
-      const localEntitiesList = Object.values(localEntities);
+      const localEntitiesList = localEntities;
 
       const previousListHasFromEntity = localEntitiesList.some(e => e.id === event.relation.fromEntity.id);
       const newListDoesNotHaveFromEntity = !entities.some(e => e.id === event.relation.fromEntity.id);
 
       // This means the queried list has changed as a result of the deleted relation
       if (previousListHasFromEntity && newListDoesNotHaveFromEntity) {
-        setLocalEntities(Object.fromEntries(entities.map(e => [e.id, e])));
+        setLocalEntities(entities);
       }
     });
 
@@ -258,7 +260,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationChanged = Object.values(entities).some(e =>
+      const maybeRelationChanged = entities.some(e =>
         e.relationsOut.some(r => r.toEntity.id === event.triple.entityId)
       );
 
@@ -267,7 +269,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
       }
 
       if (shouldUpdate) {
-        setLocalEntities(Object.fromEntries(entities.map(e => [e.id, e])));
+        setLocalEntities(entities);
       }
     });
 
@@ -289,7 +291,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
         .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
-      const localEntitiesList = Object.values(localEntities);
+      const localEntitiesList = localEntities;
 
       const previousListHasChangedEntity = localEntitiesList.some(e => e.id === event.triple.entityId);
       const newListDoesNotHaveChangedEntity = !entities.some(e => e.id === event.triple.entityId);
@@ -307,7 +309,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
        * re-pull Byron to get the latest name for Geo, PBC.
        */
 
-      const maybeRelationChanged = Object.values(entities).some(e =>
+      const maybeRelationChanged = entities.some(e =>
         e.relationsOut.some(r => r.toEntity.id === event.triple.entityId)
       );
 
@@ -316,7 +318,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
       }
 
       if (shouldUpdate) {
-        setLocalEntities(Object.fromEntries(entities.map(e => [e.id, e])));
+        setLocalEntities(entities);
       }
     });
 
@@ -330,7 +332,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
   }, [where, stream, store, localEntities, enabled, first, skip]);
 
   return {
-    entities: Object.values(localEntities),
-    isLoading: !isFetched,
+    entities: localEntities,
+    isLoading: !isFetched && enabled,
   };
 }
