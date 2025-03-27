@@ -63,10 +63,6 @@ export function useDataBlock() {
     skip: pageNumber * PAGE_SIZE,
   });
 
-  if (blockEntity.id === 'GCaPqhJKFYuY1k6KUwynYU') {
-    console.log('data', { queriedEntities, where, filterState });
-  }
-
   // Use the mapping to get the potential renderable properties.
   const propertiesSchema = useProperties(shownColumnIds);
 
