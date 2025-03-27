@@ -475,7 +475,9 @@ export class EntityQuery {
     }
 
     if (condition.equals !== undefined) {
-      if (!compareOperators.string.equals(value, condition.equals)) {
+      // @TODO For now we use startsWith as equals to match the previous behavior
+      // of filters
+      if (!compareOperators.string.startsWith(value, condition.equals)) {
         return false;
       }
     }
