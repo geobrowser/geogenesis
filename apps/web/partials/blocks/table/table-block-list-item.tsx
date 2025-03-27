@@ -315,46 +315,47 @@ export function TableBlockListItem({
   }
 
   return (
-    <div>
-      <Link href={href} className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
-        <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
-          <NextImage
-            src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
-            className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-            alt=""
-            fill
-          />
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            {verified && (
-              <div>
-                <CheckCircle />
-              </div>
-            )}
-            <div className="line-clamp-1 text-smallTitle font-medium text-text md:line-clamp-2">{name}</div>
-          </div>
-          {description && (
-            <div className="mt-0.5 line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
+    <Link
+      href={href}
+      className="group flex w-full max-w-full items-start justify-start gap-6 rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider"
+    >
+      <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
+        <NextImage
+          src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
+          className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+          alt=""
+          fill
+        />
+      </div>
+      <div>
+        <div className="flex items-center gap-2">
+          {verified && (
+            <div>
+              <CheckCircle />
+            </div>
           )}
-
-          {otherPropertyData.map(p => {
-            return (
-              <div key={`${p.slotId}-${cellId}`}>
-                <Spacer height={12} />
-                <TableBlockPropertyField
-                  key={p.slotId}
-                  renderables={p.renderables}
-                  spaceId={currentSpaceId}
-                  entityId={cellId}
-                  properties={properties}
-                  onChangeEntry={onChangeEntry}
-                />
-              </div>
-            );
-          })}
+          <div className="line-clamp-1 text-smallTitle font-medium text-text md:line-clamp-2">{name}</div>
         </div>
-      </Link>
-    </div>
+        {description && (
+          <div className="mt-0.5 line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
+        )}
+
+        {otherPropertyData.map(p => {
+          return (
+            <div key={`${p.slotId}-${cellId}`}>
+              <Spacer height={12} />
+              <TableBlockPropertyField
+                key={p.slotId}
+                renderables={p.renderables}
+                spaceId={currentSpaceId}
+                entityId={cellId}
+                properties={properties}
+                onChangeEntry={onChangeEntry}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </Link>
   );
 }
