@@ -85,7 +85,7 @@ export function TableBlockListItem({
 
   if (isEditing) {
     return (
-      <div className="group flex w-full max-w-full items-start justify-start gap-6 pr-6">
+      <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
         <div className="relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
           {image ? (
             <NextImage
