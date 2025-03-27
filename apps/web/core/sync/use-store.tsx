@@ -110,23 +110,7 @@ type QueryEntitiesOptions = {
 export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
-  const [localEntities, setLocalEntities] = useState<Record<string, Entity>>(() => {
-    /**
-     * We set any local-store entities in state by default in order
-     * to render _something_ optimistically. In the useQuery below
-     * we check for any remote results of the filter condition and
-     * update the store asynchronously.
-     */
-    return Object.fromEntries(
-      new EntityQuery(store)
-        .where(where)
-        .limit(first)
-        .offset(skip)
-        .sortBy({ field: 'updatedAt', direction: 'desc' })
-        .execute()
-        .map(e => [e.id, e])
-    );
-  });
+  const [localEntities, setLocalEntities] = useState<Record<string, Entity>>({});
 
   const prevWhere = useRef(where);
 
