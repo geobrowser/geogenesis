@@ -330,18 +330,19 @@ export function TableBlockGalleryItem({
           fill
         />
       </div>
-      <div className="flex flex-col gap-2 px-1">
-        <div className="flex items-center gap-2">
-          {verified && (
-            <div>
-              <CheckCircle />
-            </div>
-          )}
-          <div className="truncate text-smallTitle font-medium text-text">{name}</div>
+      <div className="flex flex-col gap-4 px-1">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            {verified && (
+              <div>
+                <CheckCircle />
+              </div>
+            )}
+            <div className="truncate text-smallTitle font-medium text-text">{name}</div>
+          </div>
+          {description && <div className="line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>}
         </div>
-        {description && (
-          <div className="mt-0.5 line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
-        )}
+
         {otherPropertyData.map(p => {
           return (
             <TableBlockPropertyField
