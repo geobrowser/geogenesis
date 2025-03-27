@@ -56,6 +56,8 @@ export function Navbar({ onSearchClick }: Props) {
             </a>
           )}
 
+          <p>TESTNET</p>
+
           <CreateSpaceDropdown />
 
           <button
