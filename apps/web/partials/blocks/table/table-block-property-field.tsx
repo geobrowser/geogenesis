@@ -102,7 +102,7 @@ export function TableBlockPropertyField(props: {
                       key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
                       placeholder="Add value..."
                       value={renderable.value}
-                      onBlur={e => {
+                      onChange={value => {
                         onChangeEntry(
                           {
                             entityId: renderable.entityId,
@@ -117,7 +117,7 @@ export function TableBlockPropertyField(props: {
                                 renderable,
                                 value: {
                                   type: 'TEXT',
-                                  value: e.currentTarget.value,
+                                  value: value,
                                 },
                               },
                             },

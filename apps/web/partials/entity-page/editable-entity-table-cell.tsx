@@ -97,7 +97,7 @@ export function EditableEntityTableCell({
       <TableStringField
         placeholder="Entity name..."
         value={entityName}
-        onBlur={e => {
+        onChange={value => {
           onChangeEntry(
             {
               entityId,
@@ -108,7 +108,7 @@ export function EditableEntityTableCell({
               type: 'EVENT',
               data: {
                 type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                payload: { renderable, value: { type: 'TEXT', value: e.currentTarget.value } },
+                payload: { renderable, value: { type: 'TEXT', value: value } },
               },
             }
           );
@@ -286,7 +286,7 @@ export function EditableEntityTableCell({
                 key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
                 placeholder="Add value..."
                 value={renderable.value}
-                onBlur={e =>
+                onChange={value =>
                   onChangeEntry(
                     {
                       entityId,
@@ -297,7 +297,7 @@ export function EditableEntityTableCell({
                       type: 'EVENT',
                       data: {
                         type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                        payload: { renderable, value: { type: 'TEXT', value: e.currentTarget.value } },
+                        payload: { renderable, value: { type: 'TEXT', value: value } },
                       },
                     }
                   )

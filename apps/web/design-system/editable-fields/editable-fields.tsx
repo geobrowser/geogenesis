@@ -34,31 +34,6 @@ const textareaStyles = cva(
   }
 );
 
-interface TableStringFieldProps {
-  onBlur: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  placeholder?: string;
-  value?: string;
-}
-
-export function TableStringField({ ...props }: TableStringFieldProps) {
-  const [localValue, setLocalValue] = React.useState(props.value || '');
-
-  useEffect(() => {
-    // Update local value if value prop changes from outside the component
-    setLocalValue(props.value || '');
-  }, [props.value]);
-
-  return (
-    <Textarea
-      {...props}
-      onBlur={props.onBlur}
-      onChange={e => setLocalValue(e.currentTarget.value)}
-      value={localValue}
-      className={textareaStyles({ variant: 'tableCell' })}
-    />
-  );
-}
-
 const debounce = <T extends (...args: any[]) => any>(fn: T, delay: number) => {
   let timer: number | null = null;
 
@@ -68,6 +43,42 @@ const debounce = <T extends (...args: any[]) => any>(fn: T, delay: number) => {
     timer = setTimeout(() => fn(...args), delay);
   };
 };
+
+interface TableStringFieldProps {
+  onChange: (value: string) => void;
+  placeholder?: string;
+  value?: string;
+}
+
+export function TableStringField({ ...props }: TableStringFieldProps) {
+  const [localValue, setLocalValue] = React.useState(props.value || '');
+  const { onChange } = props;
+
+  // Apply debounce effect
+  const debouncedCallback = debounce((value: string) => {
+    onChange(value);
+  }, 1000);
+
+  // Handle input changes
+  const handleChange = (value: string) => {
+    setLocalValue(value);
+    debouncedCallback(value);
+  };
+
+  useEffect(() => {
+    // Update local value if value prop changes from outside the component
+    setLocalValue(props.value || '');
+  }, [props.value]);
+
+  return (
+    <Textarea
+      {...props}
+      onChange={e => handleChange(e.currentTarget.value)}
+      value={localValue}
+      className={textareaStyles({ variant: 'tableCell' })}
+    />
+  );
+}
 
 interface PageStringFieldProps {
   onChange: (value: string) => void;
@@ -99,7 +110,6 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
   return (
     <Textarea
       {...props}
-      defaultValue={props.value}
       onChange={e => handleChange(e.currentTarget.value)}
       value={localValue}
       className={textareaStyles({ variant: props.variant })}
