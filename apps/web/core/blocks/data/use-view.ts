@@ -1,12 +1,12 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
-import { useEntity } from '~/core/database/entities';
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
 import { ID } from '~/core/id';
 import { Entity } from '~/core/io/dto/entities';
 import { EntityId, SpaceId } from '~/core/io/schema';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -22,28 +22,30 @@ type Column = {
 export function useView() {
   const { entityId, spaceId, relationId } = useDataBlockInstance();
 
-  const blockEntity = useEntity({
+  const { entity: blockEntity } = useQueryEntity({
     spaceId: SpaceId(spaceId),
     id: EntityId(entityId),
   });
 
-  const blockRelation = useEntity({
+  const { entity: blockRelation } = useQueryEntity({
     spaceId: SpaceId(spaceId),
     id: EntityId(relationId),
   });
 
-  const viewRelation = blockRelation.relationsOut.find(
+  const viewRelation = blockRelation?.relationsOut.find(
     relation => relation.typeOf.id === EntityId(SystemIds.VIEW_ATTRIBUTE)
   );
 
-  const shownColumnRelations = blockRelation.relationsOut.filter(
-    // We fall back to an old properties used to render shown columns.
-    relation =>
-      relation.typeOf.id === EntityId(SystemIds.SHOWN_COLUMNS) || relation.typeOf.id === EntityId(SystemIds.PROPERTIES)
-  );
+  const shownColumnRelations =
+    blockRelation?.relationsOut.filter(
+      // We fall back to an old properties used to render shown columns.
+      relation =>
+        relation.typeOf.id === EntityId(SystemIds.SHOWN_COLUMNS) ||
+        relation.typeOf.id === EntityId(SystemIds.PROPERTIES)
+    ) ?? [];
 
   const { mapping, isLoading, isFetched } = useMapping(
-    blockRelation.id,
+    entityId,
     shownColumnRelations.map(r => r.id)
   );
 
@@ -69,7 +71,7 @@ export function useView() {
         },
         fromEntity: {
           id: EntityId(relationId),
-          name: blockEntity.name,
+          name: blockEntity?.name ?? null,
         },
         toEntity: {
           id: EntityId(newView.id),
@@ -138,7 +140,7 @@ export function useView() {
           },
           fromEntity: {
             id: EntityId(relationId),
-            name: blockRelation.name,
+            name: blockRelation?.name ?? null,
           },
           toEntity: {
             id: EntityId(newColumn.id),
@@ -168,7 +170,7 @@ export function useView() {
         },
         fromEntity: {
           id: EntityId(relationId),
-          name: blockRelation.name,
+          name: blockRelation?.name ?? null,
         },
         toEntity: {
           id: EntityId(newColumn.id),
