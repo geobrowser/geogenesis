@@ -18,7 +18,7 @@ const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin
   // of -1px to compensate for this. This results in the correct line heights between both edit and
   // browse modes.
-  'm-0 -mb-[1px] w-full resize-none bg-transparent p-0 placeholder:text-grey-03 focus:outline-none',
+  'm-0 -mb-[1px] w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none',
   {
     variants: {
       variant: {
