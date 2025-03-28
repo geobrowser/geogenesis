@@ -1,11 +1,9 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { useEntity } from '~/core/database/entities';
 import { upsert } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { store } from '~/core/sync/use-sync-engine';
 
 import { Source, getSource, removeSourceType, upsertSourceType } from './source';
 import { useDataBlockInstance } from './use-data-block';
@@ -46,6 +44,7 @@ export function useSource() {
           ...maybeExistingRelationType,
           {
             columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+            columnName: 'From',
             valueType: 'RELATION',
             value: newSource.value,
             valueName: newSource.name,
@@ -106,7 +105,13 @@ export function useSource() {
       setFilterState(
         [
           ...filtersWithoutSpaces,
-          { columnId: SystemIds.SPACE_FILTER, valueType: 'RELATION', value: newSource.value[0], valueName: null },
+          {
+            columnId: SystemIds.SPACE_FILTER,
+            columnName: 'Space',
+            valueType: 'RELATION',
+            value: newSource.value[0],
+            valueName: null,
+          },
         ],
         newSource
       );

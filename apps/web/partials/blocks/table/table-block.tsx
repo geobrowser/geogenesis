@@ -230,46 +230,15 @@ export const TableBlock = ({ spaceId }: Props) => {
    * Name and Space are treated specially throughout this code path.
    */
   const filtersWithPropertyName = filterState.map(f => {
-    if (f.columnId === SystemIds.NAME_ATTRIBUTE) {
-      return {
-        ...f,
-        propertyName: 'Name',
-      };
-    }
-
-    if (f.columnId === SystemIds.TYPES_ATTRIBUTE) {
-      return {
-        ...f,
-        propertyName: 'Types',
-      };
-    }
-
     if (f.columnId === SystemIds.SPACE_FILTER) {
       return {
         ...f,
-        propertyName: 'Space',
+        columnName: 'Space',
         value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
       };
     }
 
-    if (f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE) {
-      return {
-        ...f,
-        propertyName: 'Relation type',
-      };
-    }
-
-    if (f.columnId === SystemIds.RELATION_FROM_ATTRIBUTE) {
-      return {
-        ...f,
-        propertyName: 'From',
-      };
-    }
-
-    return {
-      ...f,
-      propertyName: properties.find(c => c.id === f.columnId)?.name ?? '',
-    };
+    return f;
   });
 
   const hasPagination = hasPreviousPage || hasNextPage;

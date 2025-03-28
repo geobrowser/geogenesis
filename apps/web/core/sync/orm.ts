@@ -136,6 +136,7 @@ export class E {
           if (r.typeOf?.id?.equals && r.toEntity?.id?.equals) {
             return {
               columnId: r.typeOf.id.equals,
+              columnName: null,
               value: r.toEntity.id.equals,
               valueName: null,
               valueType: 'RELATION',
@@ -155,6 +156,7 @@ export class E {
           if (t.attributeId?.equals && t.value?.equals) {
             return {
               columnId: t.attributeId.equals,
+              columnName: null,
               value: t.value.equals.toString(),
               valueName: null,
               valueType: 'TEXT', // SUPPORT OTHER TYPES
@@ -174,6 +176,7 @@ export class E {
           if (s.equals) {
             return {
               columnId: SystemIds.SPACE_FILTER,
+              columnName: null,
               value: s.equals,
               valueName: null,
               valueType: 'RELATION',
