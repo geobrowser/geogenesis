@@ -6,6 +6,7 @@ import * as React from 'react';
 import { useEntity } from '~/core/database/entities';
 import { upsert } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
+import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Filter, fromGeoFilterState, toGeoFilterState } from './filters';
 import { mergeColumns } from './queries';
@@ -15,9 +16,9 @@ import { useDataBlockInstance } from './use-data-block';
 export function useFilters() {
   const { entityId, spaceId } = useDataBlockInstance();
 
-  const blockEntity = useEntity({
-    spaceId: SpaceId(spaceId),
-    id: EntityId(entityId),
+  const { entity: blockEntity } = useQueryEntity({
+    id: entityId,
+    spaceId,
   });
 
   const filterTriple = React.useMemo(() => {
@@ -68,7 +69,7 @@ export function useFilters() {
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
       const newFiltersString = newState.length === 0 ? '' : toGeoFilterState(newState, source);
 
-      const entityName = blockEntity.name ?? '';
+      const entityName = blockEntity?.name ?? '';
 
       return upsert(
         {
@@ -84,7 +85,7 @@ export function useFilters() {
         spaceId
       );
     },
-    [entityId, spaceId, blockEntity.name]
+    [entityId, spaceId, blockEntity?.name]
   );
 
   return {
