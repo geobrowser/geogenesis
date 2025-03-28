@@ -52,7 +52,7 @@ export class GeoStore {
       this.triples.set(entity.id, entity.triples);
 
       const newRelations: Relation[] = [];
-      const existingRelationIds = new Set(this.relations.get(entity.id)?.map(r => r.id) ?? []);
+      const existingRelationIds = new Set(this.getResolvedRelations(entity.id)?.map(r => r.id) ?? []);
 
       for (const relation of entity.relationsOut) {
         if (!existingRelationIds.has(relation.id)) {
@@ -60,7 +60,7 @@ export class GeoStore {
         }
       }
 
-      this.relations.set(entity.id, entity.relationsOut);
+      this.relations.set(entity.id, newRelations);
     }
 
     if (process.env.NODE_ENV === 'development') {
@@ -70,7 +70,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     }
   }
 
-  static queryKey(id: string) {
+  static queryKey(id?: string) {
     return ['store', 'entity', id];
   }
 
@@ -129,7 +129,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             spaces,
             name: name ?? entity.name,
             description: description ?? entity.description,
-            relationsOut: relations.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
           }
         : {
             id: EntityId(id),

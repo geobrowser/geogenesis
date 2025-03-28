@@ -10,20 +10,25 @@ import { GeoEventStream } from './stream';
 import { useSyncEngine } from './use-sync-engine';
 
 type QueryEntityOptions = {
-  id: string;
+  id?: string;
   spaceId?: string;
 };
 
 export function useQueryEntity({ id, spaceId }: QueryEntityOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
-  const [entity, setEntity] = useState<Entity | undefined>(store.getEntity(id, { spaceId }));
+  const [entity, setEntity] = useState<Entity | undefined>(id ? store.getEntity(id, { spaceId }) : undefined);
 
   const { isFetched } = useQuery({
-    queryKey: [...GeoStore.queryKey(id)],
+    enabled: !!id,
+    queryKey: GeoStore.queryKey(id),
     queryFn: async () => {
       // If the entity is in the store then it's already been synced and we can
       // skip this work
+      if (!id) {
+        return null;
+      }
+
       const merged = await E.findOne({ id, store, cache });
 
       if (merged) {
@@ -33,10 +38,13 @@ export function useQueryEntity({ id, spaceId }: QueryEntityOptions) {
 
       return null;
     },
-    staleTime: Infinity,
   });
 
   useEffect(() => {
+    if (!id) {
+      return;
+    }
+
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       if (event.entities.some(e => e.id === id)) {
         const entity = store.getEntity(id, { spaceId });
@@ -94,7 +102,7 @@ export function useQueryEntity({ id, spaceId }: QueryEntityOptions) {
 
   return {
     entity,
-    isLoading: !isFetched,
+    isLoading: !isFetched && !!id,
   };
 }
 

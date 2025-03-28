@@ -5,7 +5,7 @@ import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
 import { ID } from '~/core/id';
 import { Entity } from '~/core/io/dto/entities';
-import { EntityId, SpaceId } from '~/core/io/schema';
+import { EntityId } from '~/core/io/schema';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
@@ -23,13 +23,13 @@ export function useView() {
   const { entityId, spaceId, relationId } = useDataBlockInstance();
 
   const { entity: blockEntity } = useQueryEntity({
-    spaceId: SpaceId(spaceId),
-    id: EntityId(entityId),
+    spaceId: spaceId,
+    id: entityId,
   });
 
   const { entity: blockRelation } = useQueryEntity({
-    spaceId: SpaceId(spaceId),
-    id: EntityId(relationId),
+    spaceId: spaceId,
+    id: relationId,
   });
 
   const viewRelation = blockRelation?.relationsOut.find(

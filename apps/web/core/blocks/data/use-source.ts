@@ -1,9 +1,11 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
+import { useEntity } from '~/core/database/entities';
 import { upsert } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { store } from '~/core/sync/use-sync-engine';
 
 import { Source, getSource, removeSourceType, upsertSourceType } from './source';
 import { useDataBlockInstance } from './use-data-block';
@@ -18,8 +20,8 @@ export function useSource() {
   const { filterState, setFilterState } = useFilters();
 
   const { entity: blockEntity } = useQueryEntity({
-    spaceId: SpaceId(spaceId),
-    id: EntityId(entityId),
+    spaceId: spaceId,
+    id: entityId,
   });
 
   const source: Source = getSource({
