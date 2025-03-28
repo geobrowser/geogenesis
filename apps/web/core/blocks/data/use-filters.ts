@@ -3,9 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { useEntity } from '~/core/database/entities';
 import { upsert } from '~/core/database/write';
-import { EntityId, SpaceId } from '~/core/io/schema';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Filter, fromGeoFilterState, toGeoFilterState } from './filters';
