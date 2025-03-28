@@ -1,5 +1,6 @@
 import '@tanstack/react-table';
 
+import { Source } from './core/blocks/data/source';
 import { PropertyId } from './core/hooks/use-properties';
 import { PropertySchema } from './core/types';
 import { onChangeEntryFn } from './partials/blocks/table/change-entry';
@@ -14,5 +15,6 @@ declare module '@tanstack/react-table' {
     isEditable: boolean;
     onChangeEntry: onChangeEntryFn;
     propertiesSchema: Record<PropertyId, PropertySchema> | undefined;
+    source: Source;
   }
 }

@@ -1,6 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { useSource } from '~/core/blocks/data/use-source';
+import { Source } from '~/core/blocks/data/source';
 import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -26,6 +26,7 @@ interface Props {
   filterSearchByTypes?: string[];
   onChangeEntry: onChangeEntryFn;
   isPlaceholderRow: boolean;
+  source: Source;
 }
 
 export function EditableEntityTableCell({
@@ -36,9 +37,9 @@ export function EditableEntityTableCell({
   filterSearchByTypes,
   onChangeEntry,
   isPlaceholderRow,
+  source,
 }: Props) {
   const entityName = Entities.nameFromRenderable(renderables) ?? '';
-  const { source } = useSource();
 
   const isNameCell = attributeId === SystemIds.NAME_ATTRIBUTE;
 

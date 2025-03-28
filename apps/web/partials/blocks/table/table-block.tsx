@@ -276,6 +276,7 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   let EntriesComponent = (
     <TableBlockTable
+      source={source}
       space={spaceId}
       properties={properties}
       propertiesSchema={propertiesSchema}

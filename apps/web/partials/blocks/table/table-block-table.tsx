@@ -98,6 +98,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
     const onChangeEntry = table.options.meta!.onChangeEntry;
     const propertiesSchema = table.options.meta!.propertiesSchema;
+    const source = table.options.meta!.source;
 
     const cellData = getValue<Cell | undefined>();
 
@@ -118,6 +119,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     if (isEditable) {
       return (
         <EditableEntityTableCell
+          source={source}
           renderables={renderables}
           attributeId={propertyId}
           entityId={row.original.entityId}
@@ -150,6 +152,7 @@ interface Props {
   shownColumnIds: string[];
   placeholder: { text: string; image: string };
   onChangeEntry: onChangeEntryFn;
+  source: Source;
 }
 
 export const TableBlockTable = ({
@@ -160,6 +163,7 @@ export const TableBlockTable = ({
   shownColumnIds,
   placeholder,
   onChangeEntry,
+  source,
 }: Props) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
@@ -184,6 +188,7 @@ export const TableBlockTable = ({
       isEditable: isEditing,
       onChangeEntry,
       propertiesSchema,
+      source,
     },
   });
 
