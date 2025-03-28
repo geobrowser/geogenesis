@@ -47,7 +47,12 @@ export function useDataBlock() {
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
-  const { collectionItems, collectionRelations } = useCollection();
+  const {
+    collectionItems,
+    collectionRelations,
+    isFetched: isCollectionFetched,
+    isLoading: isCollectionLoading,
+  } = useCollection();
 
   const where = filterStateToWhere(filterState);
 
@@ -161,6 +166,22 @@ export function useDataBlock() {
     );
   };
 
+  let isLoading = true;
+  const isSharedDataLoading =
+    isBlockEntityLoading || isLoadingFilterState || !isFilterStateFetched || isViewLoading || !isViewFetched;
+
+  if (source.type === 'COLLECTION') {
+    isLoading = isCollectionLoading || !isCollectionFetched || isSharedDataLoading;
+  }
+
+  if (source.type === 'RELATIONS') {
+    isLoading = !isRelationDataFetched || isRelationDataLoading || isSharedDataLoading;
+  }
+
+  if (source.type === 'GEO' || source.type === 'SPACES') {
+    isLoading = isQueryEntitiesLoading || isSharedDataLoading;
+  }
+
   // @TODO: Returned data type should be a FSM depending on the source.type
   return {
     entityId,
@@ -176,35 +197,7 @@ export function useDataBlock() {
     hasPreviousPage: pageNumber > 0,
     setPage,
 
-    // We combine fetching state into loading state due to the transition from
-    // the server representation of our editor to the client representation. We
-    // don't want to transition from a loading state on the server to an empty
-    // state then back into a loading state. By adding the isFetched state we
-    // will stay in a placeholder state until we've fetched our queries at least
-    // one time.
-    //
-    // @NOTE there's an edge-case issue where collection queries respond to the
-    // loading states differently than the other types of queries. If we include
-    // the renderable fetched state collection blocks will jitter between loading
-    // and fetched states. Will fix this in the future, for now just discard the
-    // renderable fetched state for collection blocks.
-    isLoading:
-      source.type === 'COLLECTION'
-        ? isRelationDataLoading ||
-          isBlockEntityLoading ||
-          isLoadingFilterState ||
-          isViewLoading ||
-          !isFilterStateFetched ||
-          !isViewFetched ||
-          isQueryEntitiesLoading
-        : isRelationDataLoading ||
-          isBlockEntityLoading ||
-          isLoadingFilterState ||
-          isViewLoading ||
-          !isFilterStateFetched ||
-          !isRelationDataFetched ||
-          !isViewFetched ||
-          isQueryEntitiesLoading,
+    isLoading,
 
     name: entity?.name ?? null,
     setName,
