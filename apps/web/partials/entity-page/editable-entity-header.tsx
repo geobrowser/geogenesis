@@ -24,11 +24,11 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
     },
   });
 
-  const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const onNameChange = (value: string) => {
     send({
       type: 'EDIT_ENTITY_NAME',
       payload: {
-        name: e.target.value,
+        name: value,
       },
     });
   };

@@ -29,11 +29,16 @@ const compareOperators = {
  */
 type StringCondition = { equals?: string; contains?: string; startsWith?: string; endsWith?: string; in?: string[] };
 
-type NumberCondition =
-  | number
-  | { equals?: number; gt?: number; gte?: number; lt?: number; lte?: number; between?: [number, number] };
+type NumberCondition = {
+  equals?: number;
+  gt?: number;
+  gte?: number;
+  lt?: number;
+  lte?: number;
+  between?: [number, number];
+};
 
-type BooleanCondition = boolean | { equals: boolean };
+type BooleanCondition = { equals: boolean };
 
 type TripleCondition = {
   attributeName?: StringCondition;
@@ -55,8 +60,8 @@ export type WhereCondition = {
   description?: StringCondition;
   types?: { id?: StringCondition; name?: StringCondition }[];
   spaces?: StringCondition[];
-  triples?: TripleCondition | TripleCondition[];
-  relations?: RelationCondition | RelationCondition[];
+  triples?: TripleCondition[];
+  relations?: RelationCondition[];
   OR?: WhereCondition[];
   AND?: WhereCondition[];
   NOT?: WhereCondition;
@@ -87,7 +92,7 @@ export class EntityQuery {
    * Add a where condition to the query
    */
   where(condition: WhereCondition): EntityQuery {
-    this.whereConditions.push(condition);
+    this.whereConditions = [condition];
     return this;
   }
 
@@ -147,14 +152,14 @@ export class EntityQuery {
    * Filter by triple (property)
    */
   whereTriple(condition: TripleCondition): EntityQuery {
-    return this.where({ triples: condition });
+    return this.where({ triples: [condition] });
   }
 
   /**
    * Filter by relation
    */
   whereRelation(condition: RelationCondition): EntityQuery {
-    return this.where({ relations: condition });
+    return this.where({ relations: [condition] });
   }
 
   /**
@@ -228,16 +233,16 @@ export class EntityQuery {
   /**
    * Execute the query and return the first result or null
    */
-  async findFirst(): Promise<Entity | null> {
-    const results = await this.limit(1).execute();
+  findFirst(): Entity | null {
+    const results = this.limit(1).execute();
     return results.length > 0 ? results[0] : null;
   }
 
   /**
    * Execute the query and return a single result or throw an error if not found
    */
-  async findOne(): Promise<Entity> {
-    const entity = await this.findFirst();
+  findOne(): Entity {
+    const entity = this.findFirst();
     if (!entity) {
       throw new Error('Entity not found');
     }
@@ -247,15 +252,15 @@ export class EntityQuery {
   /**
    * Count the number of entities that match the query
    */
-  async count(): Promise<number> {
-    const results = await this.execute();
+  count(): number {
+    const results = this.execute();
     return results.length;
   }
 
   /**
    * Get an entity by ID
    */
-  async findById(id: EntityId): Promise<Entity | null> {
+  findById(id: EntityId): Entity | null {
     return this.whereId({
       equals: id,
     }).findFirst();
@@ -264,8 +269,8 @@ export class EntityQuery {
   /**
    * Check if any entities match the query
    */
-  async exists(): Promise<boolean> {
-    const count = await this.count();
+  exists(): boolean {
+    const count = this.count();
     return count > 0;
   }
 
@@ -327,7 +332,7 @@ export class EntityQuery {
   private matchesField(entity: Entity, field: string, condition: any): boolean {
     switch (field) {
       case 'id':
-        return this.matchesStringCondition(entity.id as string, condition);
+        return this.matchesStringCondition(entity.id, condition);
 
       case 'name':
         return this.matchesStringCondition(entity.name || '', condition);
@@ -337,7 +342,8 @@ export class EntityQuery {
 
       case 'spaces':
         if (Array.isArray(condition)) {
-          return condition.some(space => entity.spaces.includes(space));
+          const clause = condition as StringCondition[];
+          return clause.some(space => space.equals && entity.spaces.includes(space.equals));
         }
         return false;
 
@@ -345,7 +351,7 @@ export class EntityQuery {
         if (Array.isArray(condition)) {
           return condition.some(typeCondition => {
             return entity.types.some(entityType => {
-              if (typeCondition.id && !this.matchesStringCondition(entityType.id as string, typeCondition.id)) {
+              if (typeCondition.id && !this.matchesStringCondition(entityType.id, typeCondition.id)) {
                 return false;
               }
               if (typeCondition.name && !this.matchesStringCondition(entityType.name || '', typeCondition.name)) {
@@ -360,8 +366,9 @@ export class EntityQuery {
       case 'triples':
         return this.matchesTriples(entity.triples, condition);
 
-      case 'relations':
+      case 'relations': {
         return this.matchesRelations(entity.relationsOut, condition);
+      }
 
       default:
         return false;
@@ -427,7 +434,7 @@ export class EntityQuery {
   private matchesRelations(relations: Relation[], condition: RelationCondition | RelationCondition[]): boolean {
     const conditions = Array.isArray(condition) ? condition : [condition];
 
-    return conditions.some(cond => {
+    return conditions.every(cond => {
       return relations.some(relation => {
         // Check typeOf.id
         if (cond.typeOf?.id && !this.matchesStringCondition(relation.typeOf.id as string, cond.typeOf.id)) {
@@ -468,7 +475,9 @@ export class EntityQuery {
     }
 
     if (condition.equals !== undefined) {
-      if (!compareOperators.string.equals(value, condition.equals)) {
+      // @TODO For now we use startsWith as equals to match the previous behavior
+      // of filters
+      if (!compareOperators.string.startsWith(value, condition.equals)) {
         return false;
       }
     }
@@ -675,7 +684,7 @@ export class EntityQueryBuilder {
   /**
    * Find an entity by ID
    */
-  findById(id: EntityId): Promise<Entity | null> {
+  findById(id: EntityId): Entity | null {
     return this.query().findById(id);
   }
 
@@ -694,7 +703,7 @@ export class EntityQueryBuilder {
       .orWhere([
         { name: { contains: text } },
         { description: { contains: text } },
-        { triples: { value: { contains: text } } },
+        { triples: [{ value: { contains: text } }] },
       ])
       .execute();
   }

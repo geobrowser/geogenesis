@@ -52,7 +52,7 @@ export type GeoEvent =
     };
 
 // Extract event types that match a specific 'type' value
-type EventByType<T extends GeoEvent['type']> = Extract<GeoEvent, { type: T }>;
+export type GeoEventByType<T extends GeoEvent['type']> = Extract<GeoEvent, { type: T }>;
 
 /**
  * The GeoEventStream stores and emits events for all changes
@@ -83,7 +83,7 @@ export class GeoEventStream {
   // at any point in time.
   private events: GeoEvent[] = [];
 
-  public on<E extends GeoEvent['type']>(event: E, callback: (event: EventByType<E>) => void): () => void {
+  public on<E extends GeoEvent['type']>(event: E, callback: (event: GeoEventByType<E>) => void): () => void {
     if (!this.listeners[event]) {
       this.listeners[event] = [];
     }

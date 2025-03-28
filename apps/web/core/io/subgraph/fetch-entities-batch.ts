@@ -96,7 +96,7 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
           return [];
 
         default:
-          console.error(`${error._tag}: Unable to fetch entities, queryId: ${queryId}`);
+          console.error(`${error._tag}: Unable to fetch entities, queryId: ${queryId}. ${String(error)}`);
           return [];
       }
     }

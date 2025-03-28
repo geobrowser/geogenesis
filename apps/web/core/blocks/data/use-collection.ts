@@ -1,13 +1,8 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
-import * as React from 'react';
+import { EntityId } from '~/core/io/schema';
+import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 
-import { useEntity } from '~/core/database/entities';
-import { useRelations } from '~/core/database/relations';
-import { EntityId, SpaceId } from '~/core/io/schema';
-
-import { mergeEntitiesAsync } from './queries';
 import { useDataBlockInstance } from './use-data-block';
 import { useSource } from './use-source';
 
@@ -15,60 +10,48 @@ export function useCollection() {
   const { entityId, spaceId } = useDataBlockInstance();
   const { source } = useSource();
 
-  const blockEntity = useEntity({
-    spaceId: React.useMemo(() => SpaceId(spaceId), [spaceId]),
-    id: React.useMemo(() => EntityId(entityId), [entityId]),
+  const { entity: blockEntity } = useQueryEntity({
+    spaceId,
+    id: entityId,
+    enabled: source.type === 'COLLECTION',
   });
 
-  const collectionItemsRelations = useRelations(
-    React.useMemo(() => {
-      return {
-        mergeWith: blockEntity.relationsOut,
-        selector: r => {
-          if (source.type !== 'COLLECTION') return false;
+  const collectionItemsRelations =
+    source.type === 'COLLECTION'
+      ? (blockEntity?.relationsOut.filter(
+          r => r.fromEntity.id === source.value && r.typeOf.id === EntityId(SystemIds.COLLECTION_ITEM_RELATION_TYPE)
+        ) ?? [])
+      : [];
 
-          // Return all local relations pointing to the collection id in the source block
-          // @TODO(data blocks): Merge with any remote collection items
-          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SystemIds.COLLECTION_ITEM_RELATION_TYPE);
-        },
-      };
-    }, [blockEntity.relationsOut, source])
+  const orderedCollectionItems = collectionItemsRelations.sort((a, z) =>
+    a.index.toLowerCase().localeCompare(z.index.toLowerCase())
   );
 
-  const collectionItemIds = React.useMemo(
-    () => collectionItemsRelations?.map(c => c.toEntity.id) ?? [],
-    [collectionItemsRelations]
-  );
+  const collectionItemIds = orderedCollectionItems?.map(c => c.toEntity.id) ?? [];
+  const collectionRelationIds = orderedCollectionItems?.map(c => c.id) ?? [];
 
-  const collectionRelationIds = React.useMemo(
-    () => collectionItemsRelations?.map(c => c.id) ?? [],
-    [collectionItemsRelations]
-  );
+  const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
+    enabled: collectionItemIds !== null,
+    where: {
+      id: {
+        in: collectionItemIds,
+      },
+    },
+  });
 
-  const { data, isLoading, isFetched } = useQuery({
-    placeholderData: keepPreviousData,
-    enabled: collectionItemsRelations.length > 0,
-    queryKey: ['blocks', 'data', 'collection-items-and-relations', collectionItemIds, collectionRelationIds],
-    queryFn: async () => {
-      const [collectionItems, collectionRelations] = await Promise.all([
-        mergeEntitiesAsync({
-          entityIds: collectionItemIds,
-          filterState: [],
-        }),
-        mergeEntitiesAsync({
-          entityIds: collectionRelationIds,
-          filterState: [],
-        }),
-      ]);
-
-      return { collectionItems, collectionRelations };
+  const { entities: collectionRelations, isLoading: isCollectionRelationsLoading } = useQueryEntities({
+    enabled: collectionRelationIds !== null,
+    where: {
+      id: {
+        in: collectionRelationIds,
+      },
     },
   });
 
   return {
-    collectionItems: data?.collectionItems ?? [],
-    collectionRelations: data?.collectionRelations ?? [],
-    isLoading,
-    isFetched,
+    collectionItems,
+    collectionRelations,
+    isLoading: isCollectionItemsLoading || isCollectionRelationsLoading,
+    isFetched: !isCollectionItemsLoading && !isCollectionRelationsLoading,
   };
 }

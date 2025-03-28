@@ -81,6 +81,7 @@ export function TableBlockEditableFilters() {
         {
           valueType,
           columnId,
+          columnName: null,
           value,
           valueName,
         },

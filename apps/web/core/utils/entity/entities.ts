@@ -69,3 +69,17 @@ export function cover(relations?: Relation[]): string | null {
   if (!relations) return null;
   return relations.find(r => r.typeOf.id === EntityId(SystemIds.COVER_ATTRIBUTE))?.toEntity.value ?? null;
 }
+
+export function spaces(triples?: ITriple[], relations?: Relation[]): string[] {
+  const spaces: string[] = [];
+
+  for (const triple of triples ?? []) {
+    spaces.push(triple.space);
+  }
+
+  for (const relation of relations ?? []) {
+    spaces.push(relation.space);
+  }
+
+  return [...new Set(spaces)];
+}

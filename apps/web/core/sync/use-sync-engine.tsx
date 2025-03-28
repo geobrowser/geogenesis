@@ -2,14 +2,14 @@ import { ReactNode, createContext, useContext } from 'react';
 
 import { queryClient } from '../query-client';
 import { SyncEngine } from './engine';
-import { EntityQueryBuilder } from './experimental_query-layer';
+import { EntityQuery } from './experimental_query-layer';
 import { GeoStore } from './store';
 import { GeoEventStream } from './stream';
 
 const SyncEngineContext = createContext<{
   stream: GeoEventStream;
   store: GeoStore;
-  query: EntityQueryBuilder;
+  query: EntityQuery;
 } | null>(null);
 
 export function useSyncEngine() {
@@ -22,7 +22,7 @@ export function useSyncEngine() {
 
 export const stream = new GeoEventStream();
 export const store = new GeoStore(stream);
-const query = new EntityQueryBuilder(store);
+const query = new EntityQuery(store);
 export const engine = new SyncEngine(stream, queryClient, store);
 
 export function SyncEngineProvider({ children }: { children: ReactNode }) {

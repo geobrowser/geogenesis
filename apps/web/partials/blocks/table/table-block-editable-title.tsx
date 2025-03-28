@@ -29,7 +29,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   }, [name, isLoading]);
 
   return (
-    <div className="flex flex-grow items-center gap-2">
+    <div className="table-block-editable-title flex flex-grow items-center gap-2">
       {source.type === 'GEO' && (
         <img
           src={getImagePath(PLACEHOLDER_SPACE_IMAGE)}
@@ -86,6 +86,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
       <div className="relative z-0 w-full text-button text-text">
         {userCanEdit ? (
           <input
+            type="text"
             ref={inputRef}
             onBlur={e => setName(e.currentTarget.value)}
             defaultValue={name ?? undefined}

@@ -1,9 +1,9 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { useEntity } from '~/core/database/entities';
 import { upsert } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Source, getSource, removeSourceType, upsertSourceType } from './source';
 import { useDataBlockInstance } from './use-data-block';
@@ -15,23 +15,23 @@ export function useSource() {
   const { name: fromEntityName } = useEntityPageStore();
   const { shownColumnRelations, toggleProperty } = useView();
 
-  const blockEntity = useEntity({
-    spaceId: SpaceId(spaceId),
-    id: EntityId(entityId),
-  });
-
   const { filterState, setFilterState } = useFilters();
 
+  const { entity: blockEntity } = useQueryEntity({
+    spaceId: spaceId,
+    id: entityId,
+  });
+
   const source: Source = getSource({
-    blockId: blockEntity.id,
-    dataEntityRelations: blockEntity.relationsOut,
+    blockId: EntityId(entityId),
+    dataEntityRelations: blockEntity?.relationsOut ?? [],
     currentSpaceId: SpaceId(spaceId),
     filterState,
   });
 
   const setSource = (newSource: Source) => {
     removeSourceType({
-      relations: blockEntity.relationsOut,
+      relations: blockEntity?.relationsOut ?? [],
       spaceId: SpaceId(spaceId),
     });
     upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
@@ -44,6 +44,7 @@ export function useSource() {
           ...maybeExistingRelationType,
           {
             columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+            columnName: 'From',
             valueType: 'RELATION',
             value: newSource.value,
             valueName: newSource.name,
@@ -52,7 +53,7 @@ export function useSource() {
         newSource
       );
 
-      if (fromEntityName && blockEntity.name !== null) {
+      if (fromEntityName && blockEntity?.name !== undefined && blockEntity?.name !== null) {
         upsert(
           {
             attributeId: SystemIds.NAME_ATTRIBUTE,
@@ -104,7 +105,13 @@ export function useSource() {
       setFilterState(
         [
           ...filtersWithoutSpaces,
-          { columnId: SystemIds.SPACE_FILTER, valueType: 'RELATION', value: newSource.value[0], valueName: null },
+          {
+            columnId: SystemIds.SPACE_FILTER,
+            columnName: 'Space',
+            valueType: 'RELATION',
+            value: newSource.value[0],
+            valueName: null,
+          },
         ],
         newSource
       );

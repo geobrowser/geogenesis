@@ -12,6 +12,7 @@ import { Source } from './source';
 
 export type Filter = {
   columnId: string;
+  columnName: string | null;
   valueType: FilterableValueType;
   value: string;
   valueName: string | null;
@@ -156,6 +157,7 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
 
           return {
             columnId: SystemIds.SPACE_FILTER,
+            columnName: 'Space',
             valueType: 'RELATION',
             value: spaceId,
             valueName: spaceName,
@@ -197,6 +199,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
   if (!entity) {
     return {
       columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+      columnName: 'From',
       valueType: 'RELATION',
       value: entityId,
       valueName: null,
@@ -205,6 +208,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 
   return {
     columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+    columnName: 'From',
     valueType: 'RELATION',
     value: entityId,
     valueName: entity.name,
@@ -222,14 +226,17 @@ async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
 
     return {
       columnId: filter.attribute,
+      columnName: maybeAttributeEntity?.name ?? null,
       value: filter.is,
       valueName: valueEntity?.name ?? null,
       valueType: 'RELATION',
     };
   }
 
+  // @TODO: Can get property name here
   return {
     columnId: filter.attribute,
+    columnName: maybeAttributeEntity?.name ?? null,
     value: filter.is,
     valueName: null,
     valueType: VALUE_TYPES[(valueType ?? SystemIds.TEXT) as ValueTypeId] ?? SystemIds.TEXT,
