@@ -99,7 +99,7 @@ export function useQueryEntity({ id, spaceId, enabled = false }: QueryEntityOpti
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [id, store, stream, spaceId]);
+  }, [id, store, stream, spaceId, enabled]);
 
   return {
     entity,
