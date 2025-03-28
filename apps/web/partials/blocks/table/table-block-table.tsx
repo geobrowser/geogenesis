@@ -14,6 +14,7 @@ import { useAtomValue } from 'jotai';
 import * as React from 'react';
 import { useState } from 'react';
 
+import { Source } from '~/core/blocks/data/source';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { EntityId, SpaceId } from '~/core/io/schema';
