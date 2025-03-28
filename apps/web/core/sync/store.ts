@@ -51,16 +51,17 @@ export class GeoStore {
       this.entities.set(entity.id, entity);
       this.triples.set(entity.id, entity.triples);
 
-      const newRelations: Relation[] = [];
-      const existingRelationIds = new Set(this.getResolvedRelations(entity.id)?.map(r => r.id) ?? []);
+      // @TODO: Do we still need this? Or is merging handled correctly before syncing here?
+      // const newRelations: Relation[] = [];
+      // const existingRelationIds = new Set(this.getResolvedRelations(entity.id)?.map(r => r.id) ?? []);
 
-      for (const relation of entity.relationsOut) {
-        if (!existingRelationIds.has(relation.id)) {
-          newRelations.push(relation);
-        }
-      }
+      // for (const relation of entity.relationsOut) {
+      //   if (!existingRelationIds.has(relation.id)) {
+      //     newRelations.push(relation);
+      //   }
+      // }
 
-      this.relations.set(entity.id, newRelations);
+      this.relations.set(entity.id, entity.relationsOut);
     }
 
     if (process.env.NODE_ENV === 'development') {
