@@ -44,15 +44,33 @@ export function TableBlockListItem({
   const { cellId, verified } = nameCell;
   let { description, image, name } = nameCell;
 
-  const maybeNameInSpace = nameCell.renderables.find(
+  const maybeNameInSpaceRenderable = nameCell.renderables.find(
     r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
-  )?.value;
+  );
 
-  const maybeName =
-    maybeNameInSpace ?? nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE)?.value;
+  let maybeNameInSpace = maybeNameInSpaceRenderable?.value;
+
+  if (maybeNameInSpaceRenderable?.type === 'RELATION') {
+    maybeNameInSpace = maybeNameInSpaceRenderable?.valueName ?? maybeNameInSpace;
+  }
+
+  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE);
+
+  let maybeOtherName = maybeNameRenderable?.value;
+
+  if (maybeNameRenderable?.type === 'RELATION') {
+    maybeOtherName = maybeNameRenderable?.valueName ?? maybeNameInSpace;
+  }
+
+  const maybeName = maybeNameInSpace ?? maybeOtherName;
 
   if (maybeName) {
-    name = maybeName;
+    name = maybeOtherName ?? null;
+  }
+
+  if (rowEntityId === 'VbYuNDM2S9LKyij73Aj5CA') {
+    console.log('name', name, maybeNameInSpace, maybeOtherName);
+    console.log('nameCell', nameCell);
   }
 
   const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(

@@ -43,15 +43,28 @@ export function TableBlockGalleryItem({
   const { cellId, verified } = nameCell;
   let { image, name, description } = nameCell;
 
-  const maybeNameInSpace = nameCell.renderables.find(
+  const maybeNameInSpaceRenderable = nameCell.renderables.find(
     r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
-  )?.value;
+  );
 
-  const maybeName =
-    maybeNameInSpace ?? nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE)?.value;
+  let maybeNameInSpace = maybeNameInSpaceRenderable?.value;
+
+  if (maybeNameInSpaceRenderable?.type === 'RELATION') {
+    maybeNameInSpace = maybeNameInSpaceRenderable?.valueName ?? maybeNameInSpace;
+  }
+
+  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE);
+
+  let maybeOtherName = maybeNameRenderable?.value;
+
+  if (maybeNameRenderable?.type === 'RELATION') {
+    maybeOtherName = maybeNameRenderable?.valueName ?? maybeNameInSpace;
+  }
+
+  const maybeName = maybeNameInSpace ?? maybeOtherName;
 
   if (maybeName) {
-    name = maybeName;
+    name = maybeOtherName ?? null;
   }
 
   const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
