@@ -12,15 +12,16 @@ import { useSyncEngine } from './use-sync-engine';
 type QueryEntityOptions = {
   id?: string;
   spaceId?: string;
+  enabled?: boolean;
 };
 
-export function useQueryEntity({ id, spaceId }: QueryEntityOptions) {
+export function useQueryEntity({ id, spaceId, enabled = false }: QueryEntityOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
   const [entity, setEntity] = useState<Entity | undefined>(id ? store.getEntity(id, { spaceId }) : undefined);
 
   const { isFetched } = useQuery({
-    enabled: !!id,
+    enabled: !!id && enabled,
     queryKey: GeoStore.queryKey(id),
     queryFn: async () => {
       // If the entity is in the store then it's already been synced and we can
@@ -41,7 +42,7 @@ export function useQueryEntity({ id, spaceId }: QueryEntityOptions) {
   });
 
   useEffect(() => {
-    if (!id) {
+    if (!id || !enabled) {
       return;
     }
 
@@ -102,7 +103,7 @@ export function useQueryEntity({ id, spaceId }: QueryEntityOptions) {
 
   return {
     entity,
-    isLoading: !isFetched && !!id,
+    isLoading: !isFetched && !!id && enabled,
   };
 }
 
