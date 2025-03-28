@@ -15,7 +15,7 @@ type QueryEntityOptions = {
   enabled?: boolean;
 };
 
-export function useQueryEntity({ id, spaceId, enabled = false }: QueryEntityOptions) {
+export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
   const [entity, setEntity] = useState<Entity | undefined>(id ? store.getEntity(id, { spaceId }) : undefined);
