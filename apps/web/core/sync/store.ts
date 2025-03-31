@@ -128,6 +128,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             ...entity,
             types,
             spaces,
+            nameTripleSpaces: spaces,
             name: name ?? entity.name,
             description: description ?? entity.description,
           }
@@ -137,7 +138,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             description,
             types,
             spaces,
-            nameTripleSpaces: [],
+            nameTripleSpaces: spaces,
           }),
       triples: triples.filter(t => (includeDeleted ? true : Boolean(t.isDeleted) === false)),
       relationsOut: relations.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),

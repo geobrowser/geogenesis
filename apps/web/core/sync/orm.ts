@@ -4,16 +4,14 @@ import { dedupeWith } from 'effect/Array';
 
 import { Filter } from '../blocks/data/filters';
 import { queryStringFromFilters } from '../blocks/data/to-query-string';
-import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Triple } from '../database/Triple';
 import { readTypes } from '../database/entities';
 import { Entity } from '../io/dto/entities';
 import { SearchResult } from '../io/dto/search';
-import { SpaceConfigEntity } from '../io/dto/spaces';
 import { EntityId } from '../io/schema';
-import { fetchEntity, fetchResults, fetchTableRowEntities } from '../io/subgraph';
+import { fetchEntity, fetchResults, fetchSpaces, fetchTableRowEntities } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
-import { Relation } from '../types';
+import { OmitStrict, Relation } from '../types';
 import { Entities } from '../utils/entity';
 import { Triples } from '../utils/triples';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
@@ -235,7 +233,7 @@ export class E {
     filters: FuzzyFilter[];
     first: number;
     skip: number;
-  }) {
+  }): Promise<SearchResult[]> {
     const nameFilter = filters.find(f => f.type === 'NAME')?.value;
     const typeIdsFilters = filters.find(f => f.type === 'TYPES')?.value;
 
@@ -248,7 +246,7 @@ export class E {
 
     if (nameFilter) {
       where['name'] = {
-        equals: nameFilter,
+        fuzzy: nameFilter,
       };
     }
 
@@ -263,14 +261,38 @@ export class E {
     }
 
     const localEntities = new EntityQuery(store).where(where).execute();
+
     const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
-    const entities = mergedIds.map(entityId => {
+    const maybeEntities = mergedIds.map(entityId => {
       return mergeSearchResult({ id: entityId, store, mergeWith: remoteById.get(entityId) });
     });
 
-    return entities.filter(e => e !== null);
+    const entities = maybeEntities.filter(e => e !== null);
+
+    const spaceIds = [...new Set(entities.flatMap(e => e.spaces))];
+
+    const spaces = await cache.fetchQuery({
+      queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
+      queryFn: () =>
+        fetchSpaces({
+          spaceIds,
+        }),
+    });
+
+    const spacesById = Object.fromEntries(spaces.map(s => [s.id, s]));
+
+    return entities.map(e => {
+      return {
+        ...e,
+        spaces: e.spaces.map(s => {
+          const space = spacesById[s];
+
+          return space.spaceConfig;
+        }),
+      };
+    });
   }
 }
 
@@ -282,7 +304,7 @@ function mergeSearchResult({
   id: string;
   store: GeoStore;
   mergeWith?: SearchResult | null;
-}): SearchResult | null {
+}): (OmitStrict<SearchResult, 'spaces'> & { spaces: string[] }) | null {
   const remoteEntity = mergeWith;
 
   // We need to include the deleted to correctly merge with remote data
@@ -294,41 +316,15 @@ function mergeSearchResult({
 
   if (!remoteEntity) {
     // Should always be true because of above check
-    if (localEntity) {
-      const localSpaces = localEntity?.spaces.map(s => {
-        const maybeStoreEntity = store.getEntity(s);
-
-        if (maybeStoreEntity) {
-          return {
-            ...maybeStoreEntity,
-            image:
-              Entities.avatar(maybeStoreEntity.relationsOut) ??
-              Entities.cover(maybeStoreEntity.relationsOut) ??
-              PLACEHOLDER_SPACE_IMAGE,
-            spaceId: s,
-          };
-        }
-
-        return null;
-      });
-
-      return {
-        ...localEntity,
-        spaces: localSpaces.filter(s => s !== null),
-      };
-    }
-
-    return null;
+    return localEntity ?? null;
   }
 
   if (!localEntity) {
-    return remoteEntity;
+    return {
+      ...remoteEntity,
+      spaces: remoteEntity.spaces.map(s => s.spaceId),
+    };
   }
-
-  // @TODO:
-  // 1. Merge entities
-  // 2. Merge spaces. e.g., if local entity for a space exists, favor that over remote
-  //    entity for a space
 
   const triples = localEntity.triples.filter(t => Boolean(t.isDeleted) === false);
   const relations = localEntity.relationsOut.filter(t => Boolean(t.isDeleted) === false);
@@ -339,28 +335,11 @@ function mergeSearchResult({
   const description = Entities.description(triples) ?? remoteEntity.name;
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
 
-  const mergedSpaces: SpaceConfigEntity[] = remoteEntity.spaces.map(s => {
-    const maybeStoreEntity = store.getEntity(s.id);
-
-    if (maybeStoreEntity) {
-      return {
-        ...maybeStoreEntity,
-        image:
-          Entities.avatar(maybeStoreEntity.relationsOut) ??
-          Entities.cover(maybeStoreEntity.relationsOut) ??
-          PLACEHOLDER_SPACE_IMAGE,
-        spaceId: s.spaceId,
-      };
-    }
-
-    return s;
-  });
-
   return {
     id: EntityId(id),
     name,
     description,
-    spaces: mergedSpaces,
     types,
+    spaces: localEntity.spaces,
   };
 }

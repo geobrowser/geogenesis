@@ -27,7 +27,14 @@ const compareOperators = {
 /**
  * Types for query conditions
  */
-type StringCondition = { equals?: string; contains?: string; startsWith?: string; endsWith?: string; in?: string[] };
+type StringCondition = {
+  equals?: string;
+  fuzzy?: string;
+  contains?: string;
+  startsWith?: string;
+  endsWith?: string;
+  in?: string[];
+};
 
 type NumberCondition = {
   equals?: number;
@@ -478,6 +485,12 @@ export class EntityQuery {
       // @TODO For now we use startsWith as equals to match the previous behavior
       // of filters
       if (!compareOperators.string.startsWith(value, condition.equals)) {
+        return false;
+      }
+    }
+
+    if (condition.fuzzy !== undefined) {
+      if (!compareOperators.string.contains(value, condition.fuzzy)) {
         return false;
       }
     }

@@ -44,6 +44,7 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
             try: async () =>
               await mergeSearchResult({
                 id,
+                store,
               }),
             catch: error => {
               console.error('error', error);
