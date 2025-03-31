@@ -223,11 +223,21 @@ export class E {
     return entities.filter(e => e !== null);
   }
 
-  static async findFuzzy(store: GeoStore, cache: QueryClient, filters: FuzzyFilter[], first: number, skip: number) {
+  static async findFuzzy({
+    store,
+    cache,
+    filters,
+    first,
+    skip,
+  }: {
+    store: GeoStore;
+    cache: QueryClient;
+    filters: FuzzyFilter[];
+    first: number;
+    skip: number;
+  }) {
     const nameFilter = filters.find(f => f.type === 'NAME')?.value;
     const typeIdsFilters = filters.find(f => f.type === 'TYPES')?.value;
-
-    console.log('filters', filters);
 
     const remoteEntities = await cache.fetchQuery({
       queryKey: ['network', 'entities', 'fuzzy', filters],

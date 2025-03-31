@@ -73,10 +73,10 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
       const fetchResultsEffect = Effect.either(
         Effect.tryPromise({
           try: async () =>
-            await E.findFuzzy(
+            await E.findFuzzy({
               store,
               cache,
-              [
+              filters: [
                 {
                   type: 'NAME',
                   value: debouncedQuery,
@@ -86,9 +86,9 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
                   value: filterByTypes ?? [],
                 },
               ],
-              10,
-              0
-            ),
+              first: 10,
+              skip: 0,
+            }),
           catch: error => {
             console.error('error', error);
             return new Subgraph.Errors.AbortError();
@@ -118,8 +118,6 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
 
   const isQuerySyncing = query !== debouncedQuery;
   const shouldSuspend = isQuerySyncing || isLoading;
-
-  console.log('results', results);
 
   return {
     isEmpty: isArrayEmpty(results ?? []) && !isStringEmpty(query) && !shouldSuspend,
