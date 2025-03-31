@@ -20,6 +20,11 @@ const opsWithPersistence = () => {
     (async () => {
       const stored = await db.triples.toArray();
 
+      for (const triple of stored) {
+        if (triple.isDeleted) geoStore.deleteTriple(triple);
+        else geoStore.setTriple(triple);
+      }
+
       setValue(stored);
     })();
   };
@@ -33,6 +38,11 @@ const relationsWithPersistence = () => {
   baseAtom.onMount = setValue => {
     (async () => {
       const stored = await db.relations.toArray();
+
+      for (const relation of stored) {
+        if (relation.isDeleted) geoStore.deleteRelation(relation);
+        else geoStore.setRelation(relation);
+      }
 
       setValue(stored);
     })();
