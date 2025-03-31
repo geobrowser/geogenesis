@@ -1,82 +1,26 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { Array, Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { getEntities_experimental, mergeEntity, mergeEntityAsync } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
-import { Entity } from '~/core/io/dto/entities';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { EntityId } from '~/core/io/schema';
-import { fetchTableRowEntities } from '~/core/io/subgraph';
-import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { queryClient } from '~/core/query-client';
-import { OmitStrict, PropertySchema, Value } from '~/core/types';
-
-import { Filter } from './filters';
-import { queryStringFromFilters } from './to-query-string';
+import { PropertySchema } from '~/core/types';
 
 const queryKeys = {
-  remoteRows: (options: OmitStrict<Parameters<typeof fetchTableRowEntities>[0], 'filter'>, filterString: string) =>
-    ['blocks', 'data', 'query', 'rows', options, filterString] as const,
-  localRows: (entityIds: string[]) => ['blocks', 'data', 'query', 'rows', 'merging', entityIds] as const,
   columns: (typeIds: string[]) => ['blocks', 'data', 'query', 'columns', 'merging', typeIds] as const,
-  slots: (slotIds: string[]) => ['blocks', 'data', 'query', 'slots', 'merging', slotIds] as const,
-  remoteCollectionItems: (entityIds: string[], filterState: Filter[], filterString?: string) =>
-    ['blocks', 'data', 'collection', 'merging', entityIds, filterState, filterString] as const,
-  remoteEntities: (entityIds: string[]) => ['blocks', 'data', 'entity', 'merging', entityIds] as const,
 };
 
-export interface MergeTableEntitiesArgs {
-  filterState: Filter[];
-  options: {
-    first?: number;
-    skip?: number;
-  };
-}
-
 /**
- * Few things we need to support
- * 1. Just fetch remote entities
- * 2. Merge remote entities with local entities
- * 3. Filter them with a selector (either manual one or one derived from FilterState)
+ * Fetches the filterable fields for a data block depending on the applied
+ * type filters.
+ *
+ * This is effectively the schema for the types + their value types
+ *
+ * @TODO: This is fetched in other parts of the app. We should unify them into
+ * a single query.
  */
-async function mergeTableRowEntitiesAsync(
-  options: OmitStrict<Parameters<typeof fetchTableRowEntities>[0], 'filter'>,
-  filterState: Filter[]
-): Promise<Entity[]> {
-  const filterString = queryStringFromFilters(filterState);
-
-  const cachedEntities = await queryClient.fetchQuery({
-    queryKey: queryKeys.remoteRows(options, filterString),
-    queryFn: ({ signal }) => fetchTableRowEntities({ ...options, filter: filterString, signal }),
-  });
-
-  const remoteMergedEntities = cachedEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
-  const alreadyMergedEntitiesIds = new Set(remoteMergedEntities.map(e => e.id));
-
-  const localEntities = await getEntities_experimental();
-  const localOnlyEntitiesIds = filterLocalEntities(Object.values(localEntities), filterState)
-    .map(e => e.id)
-    // Filter out entities we've already merged so we don't fetch them again
-    .filter(id => !alreadyMergedEntitiesIds.has(id));
-
-  // If an entity exists locally and was given properties that now match it to
-  // the filters then we need to fetch its remote contents to make sure we have
-  // all the data needed to merge it with the local state, filter and render it.
-  // @TODO(performance): Batch instead of fetching an unknown number of them at once.
-  const localMergedEntities = await queryClient.fetchQuery({
-    queryKey: queryKeys.localRows(localOnlyEntitiesIds),
-    queryFn: () => Promise.all(localOnlyEntitiesIds.map(id => mergeEntityAsync(EntityId(id)))),
-  });
-
-  return [...localMergedEntities, ...remoteMergedEntities];
-}
-
-export async function mergeTableEntities({ options, filterState }: MergeTableEntitiesArgs) {
-  return await mergeTableRowEntitiesAsync(options, filterState);
-}
-
-export async function mergeColumns(typeIds: string[]): Promise<PropertySchema[]> {
+export async function mergeFilterableProperties(typeIds: string[]): Promise<PropertySchema[]> {
   const cachedColumns = await queryClient.fetchQuery({
     queryKey: queryKeys.columns(typeIds),
     queryFn: () => fetchColumns({ typeIds: typeIds }),
@@ -94,81 +38,4 @@ export async function mergeColumns(typeIds: string[]): Promise<PropertySchema[]>
   });
 
   return dedupeWith([...cachedColumns, ...localAttributesForSelectedType], (a, b) => a.id === b.id);
-}
-
-type CollectionItemArgs = {
-  entityIds: string[];
-  filterState: Filter[];
-};
-
-export async function mergeEntitiesAsync(args: CollectionItemArgs) {
-  const { entityIds, filterState } = args;
-
-  const filterString = queryStringFromFilters(filterState);
-
-  const cachedRemoteEntities = await queryClient.fetchQuery({
-    queryKey: queryKeys.remoteCollectionItems(entityIds, filterState, filterString),
-    queryFn: ({ signal }) => fetchEntitiesBatch({ entityIds, filterString, signal }),
-    staleTime: Duration.toMillis(Duration.seconds(20)),
-  });
-
-  const merged = cachedRemoteEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
-
-  const localEntities = await getEntities_experimental();
-  const relevantLocalEntities = Object.values(localEntities).filter(l => entityIds.includes(l.id));
-  const localOnlyEntityIds = Array.difference(
-    relevantLocalEntities.map(e => e.id),
-    merged.map(m => m.id)
-  );
-
-  const localOnlyEntities = localOnlyEntityIds
-    .map(entityId => {
-      return localEntities[entityId] ?? null;
-    })
-    .filter(e => e !== null);
-
-  const filteredLocal = filterLocalEntities(localOnlyEntities, filterState);
-
-  return [...filteredLocal, ...merged];
-}
-
-function filterValue(value: Value, valueToFilter: string) {
-  switch (value.type) {
-    case 'TEXT':
-      return value.value === valueToFilter;
-    case 'URL':
-      return value.value === valueToFilter;
-    default:
-      return false;
-  }
-}
-
-function filterLocalEntities(entities: Entity[], filterState: Filter[]) {
-  return entities.filter(entity => {
-    return filterState.every(filter => {
-      if (filter.columnId === SystemIds.SPACE_FILTER) {
-        const maybeTripleSpace = entity.triples.find(
-          t => t.attributeId === SystemIds.SPACE_FILTER && t.space === filter.value
-        );
-        const maybeRelationSpace = entity.relationsOut.find(r => r.space === filter.value);
-        return maybeTripleSpace || maybeRelationSpace;
-      }
-
-      if (filter.valueType === 'RELATION') {
-        return entity.relationsOut.some(r => r.typeOf.id === filter.columnId && r.toEntity.id === filter.value);
-      }
-
-      return entity.triples.some(triple => {
-        if (filter.columnId === SystemIds.SPACE_FILTER) {
-          // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
-          // attached to a triple in the data model. Once we represents entities across multiple spaces
-          // this filter likely won't make sense anymore.
-          // @TODO: We now store the entitySpaces on the entity itself
-          return triple.space.includes(filter.value);
-        }
-
-        return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
-      });
-    });
-  });
 }

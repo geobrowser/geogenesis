@@ -9,13 +9,13 @@ import Image from 'next/legacy/image';
 import * as React from 'react';
 
 import { generateSelector, getIsSelected } from '~/core/blocks/data/data-selectors';
-import { mergeEntitiesAsync } from '~/core/blocks/data/queries';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds, mergeEntityAsync } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';
+import { useQueryEntitiesAsync } from '~/core/sync/use-store';
 import { RenderableProperty } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { getImagePath } from '~/core/utils/utils';
@@ -210,6 +210,8 @@ type PropertySelectorProps = {
  * user can select Name, Description or Spouse.
  */
 function PropertySelector({ entityIds, where }: PropertySelectorProps) {
+  const findMany = useQueryEntitiesAsync();
+
   const { toggleProperty: setProperty, mapping } = useView();
 
   const { data: availableProperties, isLoading } = useQuery({
@@ -220,7 +222,13 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
         return [];
       }
 
-      const entities = await mergeEntitiesAsync({ entityIds, filterState: [] });
+      const entities = await findMany({
+        where: {
+          id: {
+            in: entityIds,
+          },
+        },
+      });
 
       const availableProperties = entities.flatMap(e => {
         return pipe(

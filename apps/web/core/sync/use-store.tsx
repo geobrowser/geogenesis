@@ -352,3 +352,16 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
     isLoading: !isFetched && enabled,
   };
 }
+
+interface FindManyParameters {
+  first?: number;
+  skip?: number;
+  where: WhereCondition;
+}
+
+export function useQueryEntitiesAsync() {
+  const cache = useQueryClient();
+  const { store } = useSyncEngine();
+
+  return (params: FindManyParameters) => E.findMany(store, cache, params.where, params.first ?? 9, params.skip ?? 0);
+}
