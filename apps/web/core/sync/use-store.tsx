@@ -140,7 +140,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
    */
   const { isFetched } = useQuery({
     enabled,
-    queryKey: [...GeoStore.queryKeys(where), prevWhere.current, first, skip],
+    queryKey: [...GeoStore.queryKeys(where), first, skip],
     queryFn: async () => {
       const entities = await E.findMany(store, cache, where, first, skip);
       setLocalEntities(entities);
@@ -163,6 +163,16 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
       const latestQueriedEntitiesIds = latestQueriedEntities.map(e => e.id);
+
+      /**
+       * If we end up with a filter that doesn't return any data then none of
+       * the below "validation" checks will ever pass. So we check here if we
+       * end up with an empty query result.
+       */
+      if (syncedEntitiesIds.length === 0 && latestQueriedEntitiesIds.length === 0) {
+        setLocalEntities([]);
+        return;
+      }
 
       /**
        * We only want to re-render consumers if the synced entities are relevant

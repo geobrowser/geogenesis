@@ -49,6 +49,8 @@ export function useView() {
     shownColumnRelations.map(r => r.id)
   );
 
+  // @TODO: We shouldn't need the name attribute here since it's automatically
+  // added in useMapping if it's not already part of the properties list.
   const shownColumnIds = [...Object.keys(mapping), SystemIds.NAME_ATTRIBUTE];
 
   const view = getView(viewRelation);

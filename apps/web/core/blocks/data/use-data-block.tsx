@@ -71,7 +71,7 @@ export function useDataBlock() {
     isLoading: isRelationDataLoading,
     isFetched: isRelationDataFetched,
   } = useQuery({
-    enabled: filterState !== undefined,
+    enabled: source.type === 'RELATIONS',
     placeholderData: keepPreviousData,
     // @TODO: Should re-run when the relations for the entity source changes
     queryKey: queryKeys.relationQuery({
