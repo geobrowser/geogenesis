@@ -1,13 +1,12 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { memo } from 'react';
-
-import { useEditEvents } from '~/core/events/edit-events';
+import { Source } from '~/core/blocks/data/source';
 import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
+import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
@@ -17,48 +16,104 @@ import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
+import { onChangeEntryFn } from '../blocks/table/change-entry';
+
 interface Props {
   entityId: string;
   attributeId: string;
   spaceId: string;
   renderables: RenderableProperty[];
   filterSearchByTypes?: string[];
+  onChangeEntry: onChangeEntryFn;
+  isPlaceholderRow: boolean;
+  source: Source;
 }
 
-export const EditableEntityTableCell = memo(function EditableEntityTableCell({
+export function EditableEntityTableCell({
   spaceId,
   entityId,
   attributeId,
   renderables,
   filterSearchByTypes,
+  onChangeEntry,
+  isPlaceholderRow,
+  source,
 }: Props) {
   const entityName = Entities.nameFromRenderable(renderables) ?? '';
-
-  const send = useEditEvents({
-    context: {
-      entityId: entityId,
-      spaceId,
-      entityName,
-    },
-  });
 
   const isNameCell = attributeId === SystemIds.NAME_ATTRIBUTE;
 
   if (isNameCell) {
     // This should exist as there should be a placeholder that exists if no
     // "real" renderable for name exists yet.
-    const renderable = renderables[0] as TripleRenderableProperty;
+    // /
+    // You might have multiple renderables across multiple spaces. In cases where we only render one,
+    // default to the one in the current space.
+    const renderableInSpace = renderables.find(r => r.spaceId === spaceId) as TripleRenderableProperty | undefined;
+    const renderable = renderableInSpace ?? (renderables[0] as TripleRenderableProperty);
+
+    // We only allow FOC for collections.
+    if (isPlaceholderRow && source.type === 'COLLECTION') {
+      return (
+        <SelectEntity
+          // What actually happens here? We create a link to the entity for the source?
+          // If the entity already exists then it should be a text block instead of the
+          // search experience
+          onDone={result => {
+            // If the source type is query we shouldn't use FOC and instead just show the name
+            onChangeEntry(
+              {
+                entityId: entityId,
+                entityName: entityName,
+                spaceId: spaceId,
+              },
+              {
+                type: 'FOC',
+                data: result,
+              }
+            );
+          }}
+          onCreateEntity={result => {
+            // This actually works quite differently than other creates since
+            // we want to use the existing placeholder entity id.
+            onChangeEntry(
+              {
+                entityId: entityId,
+                entityName: entityName,
+                spaceId: spaceId,
+              },
+              {
+                type: 'FOC',
+                data: result,
+              }
+            );
+          }}
+          spaceId={spaceId}
+          allowedTypes={[]}
+        />
+      );
+    }
 
     return (
       <TableStringField
         placeholder="Entity name..."
         value={entityName}
-        onBlur={e =>
-          send({
-            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-            payload: { renderable, value: { type: 'TEXT', value: e.currentTarget.value } },
-          })
-        }
+        onChange={value => {
+          onChangeEntry(
+            {
+              entityId,
+              spaceId: renderable.spaceId,
+              entityName,
+            },
+            {
+              type: 'EVENT',
+              data: {
+                type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                payload: { renderable, value: { type: 'TEXT', value: value } },
+              },
+            }
+          );
+        }}
       />
     );
   }
@@ -97,17 +152,27 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                   spaceId={spaceId}
                   allowedTypes={filterSearchByTypes}
                   onDone={result => {
-                    send({
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: entityId,
-                        fromEntityName: entityName,
-                        toEntityId: result.id,
-                        toEntityName: result.name,
-                        typeOfId: r.attributeId,
-                        typeOfName: r.attributeName,
+                    onChangeEntry(
+                      {
+                        entityId,
+                        entityName,
+                        spaceId: r.spaceId,
                       },
-                    });
+                      {
+                        type: 'EVENT',
+                        data: {
+                          type: 'UPSERT_RELATION',
+                          payload: {
+                            fromEntityId: entityId,
+                            fromEntityName: entityName,
+                            toEntityId: result.id,
+                            toEntityName: result.name,
+                            typeOfId: r.attributeId,
+                            typeOfName: r.attributeName,
+                          },
+                        },
+                      }
+                    );
                   }}
                   variant="fixed"
                 />
@@ -121,12 +186,22 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 <LinkableRelationChip
                   isEditing
                   onDelete={() => {
-                    send({
-                      type: 'DELETE_RELATION',
-                      payload: {
-                        renderable: r,
+                    onChangeEntry(
+                      {
+                        entityId,
+                        entityName,
+                        spaceId: r.spaceId,
                       },
-                    });
+                      {
+                        type: 'EVENT',
+                        data: {
+                          type: 'DELETE_RELATION',
+                          payload: {
+                            renderable: r,
+                          },
+                        },
+                      }
+                    );
                   }}
                   entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
                   relationHref={NavUtils.toEntity(spaceId, relationId)}
@@ -143,17 +218,27 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               trigger={<SquareButton icon={<Create />} />}
               allowedTypes={filterSearchByTypes}
               onDone={result => {
-                send({
-                  type: 'UPSERT_RELATION',
-                  payload: {
-                    fromEntityId: entityId,
-                    fromEntityName: entityName,
-                    toEntityId: result.id,
-                    toEntityName: result.name,
-                    typeOfId: typeOfId,
-                    typeOfName: typeOfName,
+                onChangeEntry(
+                  {
+                    entityId,
+                    entityName,
+                    spaceId: spaceId,
                   },
-                });
+                  {
+                    type: 'EVENT',
+                    data: {
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: entityId,
+                        fromEntityName: entityName,
+                        toEntityId: result.id,
+                        toEntityName: result.name,
+                        typeOfId: typeOfId,
+                        typeOfName: typeOfName,
+                      },
+                    },
+                  }
+                );
               }}
               spaceId={spaceId}
             />
@@ -173,16 +258,26 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
                 value={renderable.value}
                 onChange={value =>
-                  send({
-                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: {
-                      renderable,
-                      value: {
-                        type: 'NUMBER',
-                        value: value,
-                      },
+                  onChangeEntry(
+                    {
+                      entityId,
+                      entityName,
+                      spaceId: renderable.spaceId,
                     },
-                  })
+                    {
+                      type: 'EVENT',
+                      data: {
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'NUMBER',
+                            value: value,
+                          },
+                        },
+                      },
+                    }
+                  )
                 }
               />
             );
@@ -192,22 +287,56 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
                 placeholder="Add value..."
                 value={renderable.value}
-                onBlur={e =>
-                  send({
-                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: { renderable, value: { type: 'TEXT', value: e.currentTarget.value } },
-                  })
+                onChange={value =>
+                  onChangeEntry(
+                    {
+                      entityId,
+                      entityName,
+                      spaceId: renderable.spaceId,
+                    },
+                    {
+                      type: 'EVENT',
+                      data: {
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: { renderable, value: { type: 'TEXT', value: value } },
+                      },
+                    }
+                  )
                 }
               />
             );
-          case 'CHECKBOX':
+          case 'CHECKBOX': {
+            const checked = getChecked(renderable.value);
+
             return (
-              <input
-                type="checkbox"
+              <Checkbox
                 key={`checkbox-${renderable.attributeId}-${renderable.value}`}
-                checked={renderable.value === '1'}
+                checked={checked}
+                onChange={() => {
+                  onChangeEntry(
+                    {
+                      entityId,
+                      entityName,
+                      spaceId: renderable.spaceId,
+                    },
+                    {
+                      type: 'EVENT',
+                      data: {
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'CHECKBOX',
+                            value: !checked ? '1' : '0',
+                          },
+                        },
+                      },
+                    }
+                  );
+                }}
               />
             );
+          }
           case 'TIME':
             return (
               <DateField
@@ -215,6 +344,31 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 isEditing={true}
                 value={renderable.value}
                 format={renderable.options?.format}
+                onBlur={value => {
+                  onChangeEntry(
+                    {
+                      entityId,
+                      entityName,
+                      spaceId: renderable.spaceId,
+                    },
+                    {
+                      type: 'EVENT',
+                      data: {
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'TIME',
+                            value: value.value,
+                            options: {
+                              format: value.format,
+                            },
+                          },
+                        },
+                      },
+                    }
+                  );
+                }}
               />
             );
           case 'URL':
@@ -225,10 +379,32 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 isEditing={true}
                 spaceId={spaceId}
                 value={renderable.value}
+                onBlur={e => {
+                  onChangeEntry(
+                    {
+                      entityId,
+                      entityName,
+                      spaceId: renderable.spaceId,
+                    },
+                    {
+                      type: 'EVENT',
+                      data: {
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'URL',
+                            value: e.currentTarget.value,
+                          },
+                        },
+                      },
+                    }
+                  );
+                }}
               />
             );
         }
       })}
     </div>
   );
-});
+}

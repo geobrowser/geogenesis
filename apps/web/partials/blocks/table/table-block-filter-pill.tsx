@@ -18,13 +18,7 @@ function PublishedFilterIconFilled() {
   );
 }
 
-export function TableBlockFilterPill({
-  filter,
-  onDelete,
-}: {
-  filter: Filter & { propertyName: string };
-  onDelete: () => void;
-}) {
+export function TableBlockFilterPill({ filter, onDelete }: { filter: Filter; onDelete: () => void }) {
   const { editable } = useEditable();
   const value = filter.valueType === 'RELATION' ? filter.valueName : filter.value;
 
@@ -33,7 +27,7 @@ export function TableBlockFilterPill({
       {/* @TODO: Use avatar if the filter is not published */}
       <PublishedFilterIconFilled />
       <div className="flex items-center gap-1">
-        <span>{filter.propertyName} is</span>
+        <span>{filter.columnName} is</span>
         <span>·</span>
         <span>{value}</span>
       </div>

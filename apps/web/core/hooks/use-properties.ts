@@ -9,21 +9,13 @@ import { PropertySchema, ValueTypeId } from '../types';
 export type PropertyId = string & Brand.Brand<'PropertyId'>;
 export const PropertyId = Brand.nominal<PropertyId>();
 
-type UsePropertyValueTypes = {
-  properties: Map<PropertyId, PropertySchema>;
-};
-
-const initialData = new Map();
-
-export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
+export function useProperties(propertyIds: string[]): Record<PropertyId, PropertySchema> | undefined {
   const { data: properties } = useQuery({
     placeholderData: keepPreviousData,
-    initialData: initialData,
     enabled: propertyIds.length > 0,
-    queryKey: [{ key: 'properties', propertyIds }],
-    queryFn: async ({ queryKey }) => {
-      const [{ propertyIds }] = queryKey;
-
+    initialData: {},
+    queryKey: ['properties-schema', propertyIds],
+    queryFn: async () => {
       const properties = await fetchEntitiesBatch({ entityIds: propertyIds });
 
       const valueTypes = properties.map(a => {
@@ -49,13 +41,18 @@ export function useProperties(propertyIds: string[]): UsePropertyValueTypes {
         };
       });
 
-      return new Map<PropertyId, PropertySchema>(sortProperties(schema).map(s => [PropertyId(s.id), s]));
+      const sorted = sortProperties(schema);
+      const map: Record<PropertyId, PropertySchema> = {};
+
+      for (const p of sorted) {
+        map[PropertyId(p.id)] = p;
+      }
+
+      return map;
     },
   });
 
-  return {
-    properties: properties ?? initialData,
-  };
+  return properties;
 }
 
 function sortProperties(renderables: PropertySchema[]) {

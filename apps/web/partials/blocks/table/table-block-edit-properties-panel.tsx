@@ -286,7 +286,7 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
 
         return (
           <MenuItem key={p.id} onClick={() => onSelectProperty(p)}>
-            <div className="flex items-center justify-between">
+            <div className="flex w-full items-center justify-between">
               <span className="text-button text-grey-04">{p.name}</span>
               <Checkbox checked={isSelected} />
             </div>

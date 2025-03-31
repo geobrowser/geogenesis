@@ -21,11 +21,20 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
   const isNameCell = columnId === SystemIds.NAME_ATTRIBUTE;
 
   if (isNameCell) {
-    // the name might exist but be empty, fall back to the entity id in this case.
+    const maybeValueInSpace = renderables.find(
+      r => r.type === 'TEXT' && r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === space
+    )?.value;
+
+    // You might have multiple renderables across multiple spaces. In cases where we only render one,
+    // default to the one in the current space.
     const value =
+      maybeValueInSpace ??
       (renderables.find(r => r.type === 'TEXT' && r.attributeId === SystemIds.NAME_ATTRIBUTE)?.value as
         | string
-        | undefined) ?? entityId;
+        | undefined) ??
+      // the name might exist but be empty, fall back to the entity id in this case.
+      entityId;
+
     return <CellContent key={value} href={NavUtils.toEntity(space, entityId)} isExpanded={isExpanded} value={value} />;
   }
 

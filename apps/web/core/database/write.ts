@@ -6,7 +6,7 @@ import { atom } from 'jotai';
 import { EntityId } from '../io/schema';
 import { store } from '../state/jotai-store';
 import { store as geoStore } from '../sync/use-sync-engine';
-import { OmitStrict, Relation } from '../types';
+import { OmitStrict } from '../types';
 import { Relations } from '../utils/relations';
 import { Triple } from './Triple';
 import { mergeEntityAsync } from './entities';
@@ -19,6 +19,11 @@ const opsWithPersistence = () => {
   baseAtom.onMount = setValue => {
     (async () => {
       const stored = await db.triples.toArray();
+
+      for (const triple of stored) {
+        if (triple.isDeleted) geoStore.deleteTriple(triple);
+        else geoStore.setTriple(triple);
+      }
 
       setValue(stored);
     })();
@@ -33,6 +38,11 @@ const relationsWithPersistence = () => {
   baseAtom.onMount = setValue => {
     (async () => {
       const stored = await db.relations.toArray();
+
+      for (const relation of stored) {
+        if (relation.isDeleted) geoStore.deleteRelation(relation);
+        else geoStore.setRelation(relation);
+      }
 
       setValue(stored);
     })();
@@ -59,12 +69,10 @@ type DeleteRelationArgs = {
 
 export const upsertRelation = (args: OmitStrict<UpsertRelationArgs, 'type'>) => {
   writeRelation({ ...args, type: 'SET_RELATION' });
-  geoStore.setRelation(args.relation as Relation);
 };
 
 export const removeRelation = (args: OmitStrict<DeleteRelationArgs, 'type'>) => {
   writeRelation({ ...args, type: 'DELETE_RELATION' });
-  geoStore.deleteRelation(args.relation as Relation);
 };
 
 const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
@@ -81,6 +89,11 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
     });
 
     const relationId = EntityId(triples[0].entityId);
+
+    geoStore.setRelation({
+      ...args.relation,
+      id: relationId,
+    });
 
     const unchangedRelations = store.get(localRelationsAtom).filter(r => {
       return r.id !== relationId;
@@ -99,6 +112,11 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
   }
 
   const relationId = args.relation.id;
+
+  geoStore.deleteRelation({
+    ...args.relation,
+    id: EntityId(relationId as string), // we require a relation id to delete
+  });
 
   const nonDeletedRelations = store.get(localRelationsAtom).filter(r => r.id !== relationId);
 
