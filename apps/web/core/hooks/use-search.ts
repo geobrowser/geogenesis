@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Duration } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
@@ -12,7 +12,8 @@ import { EntityId } from '~/core/io/schema';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { mergeSearchResult } from '../database/result';
-import { mergeSearchResults } from '../database/results';
+import { E } from '../sync/orm';
+import { useSyncEngine } from '../sync/use-sync-engine';
 import { useDebouncedValue } from './use-debounced-value';
 
 interface SearchOptions {
@@ -20,15 +21,17 @@ interface SearchOptions {
 }
 
 export function useSearch({ filterByTypes }: SearchOptions = {}) {
+  const { store } = useSyncEngine();
+  const cache = useQueryClient();
   const [query, setQuery] = React.useState<string>('');
-  const debouncedQuery = useDebouncedValue(query);
+  const debouncedQuery = useDebouncedValue(query, 500);
 
   const maybeEntityId = debouncedQuery.trim();
 
   const { data: results, isLoading } = useQuery({
     enabled: debouncedQuery !== '',
     queryKey: ['search', debouncedQuery, filterByTypes],
-    queryFn: async ({ signal }) => {
+    queryFn: async () => {
       if (query.length === 0) return [];
 
       const isValidEntityId = validateEntityId(maybeEntityId);
@@ -70,8 +73,10 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
       const fetchResultsEffect = Effect.either(
         Effect.tryPromise({
           try: async () =>
-            await mergeSearchResults({
-              filters: [
+            await E.findFuzzy(
+              store,
+              cache,
+              [
                 {
                   type: 'NAME',
                   value: debouncedQuery,
@@ -81,9 +86,9 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
                   value: filterByTypes ?? [],
                 },
               ],
-              signal,
-              first: 10,
-            }),
+              10,
+              0
+            ),
           catch: error => {
             console.error('error', error);
             return new Subgraph.Errors.AbortError();
@@ -113,6 +118,8 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
 
   const isQuerySyncing = query !== debouncedQuery;
   const shouldSuspend = isQuerySyncing || isLoading;
+
+  console.log('results', results);
 
   return {
     isEmpty: isArrayEmpty(results ?? []) && !isStringEmpty(query) && !shouldSuspend,

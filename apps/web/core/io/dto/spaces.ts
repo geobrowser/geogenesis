@@ -8,6 +8,7 @@ import { VersionDto } from './versions';
 
 export type Space = {
   id: SpaceId;
+  entityId: EntityId;
   type: SpaceGovernanceType;
   editors: string[];
   members: string[];
@@ -29,6 +30,7 @@ export function SpaceDto(space: SubstreamSpace): Space {
 
   return {
     id: space.id,
+    entityId: spaceConfigEntity.id,
     type: space.type,
     editors: space.spaceEditors.nodes.map(editor => editor.accountId),
     members: space.spaceMembers.nodes.map(member => member.accountId),
