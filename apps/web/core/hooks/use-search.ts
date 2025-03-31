@@ -24,7 +24,7 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
   const [query, setQuery] = React.useState<string>('');
-  const debouncedQuery = useDebouncedValue(query, 500);
+  const debouncedQuery = useDebouncedValue(query);
 
   const maybeEntityId = debouncedQuery.trim();
 
@@ -116,7 +116,14 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
 
       return resultOrError.right;
     },
-    staleTime: Duration.toMillis(Duration.seconds(5)),
+    /**
+     * We don't want to return stale search results. Instead we just
+     * delete the cache after 15 seconds. Otherwise the query might
+     * return a results list that has stale data. This stale data
+     * might get revalidated behind the scenes resulting in layout
+     * shift or confusing results.
+     */
+    gcTime: Duration.toMillis(Duration.seconds(15)),
   });
 
   const isQuerySyncing = query !== debouncedQuery;
