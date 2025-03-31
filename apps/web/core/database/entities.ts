@@ -15,6 +15,8 @@ import { fetchEntity } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
 import { store } from '../state/jotai-store';
+import { E } from '../sync/orm';
+import { store as geoStore } from '../sync/use-sync-engine';
 import { PropertySchema, Relation, SpaceId, Triple, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
@@ -197,11 +199,16 @@ export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [
  * We expect that attributes are only defined via relations, not triples.
  */
 export async function getSchemaFromTypeIds(typesIds: string[]): Promise<PropertySchema[]> {
-  const schemaEntities = await Promise.all(
-    typesIds.map(typeId => {
-      // These are all cached in a network cache if they've been fetched before.
-      return mergeEntityAsync(EntityId(typeId));
-    })
+  const schemaEntities = await E.findMany(
+    geoStore,
+    queryClient,
+    {
+      id: {
+        in: typesIds,
+      },
+    },
+    100,
+    0
   );
 
   const schemaWithoutValueType = schemaEntities.flatMap((e): PropertySchema[] => {
@@ -219,7 +226,18 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
     }));
   });
 
-  const attributes = await Promise.all(schemaWithoutValueType.map(a => mergeEntityAsync(EntityId(a.id))));
+  const attributes = await E.findMany(
+    geoStore,
+    queryClient,
+    {
+      id: {
+        in: schemaWithoutValueType.map(a => a.id),
+      },
+    },
+    100,
+    0
+  );
+
   const valueTypes = attributes.map(a => {
     const valueTypeId = a.relationsOut.find(r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE))?.toEntity.id;
     return {

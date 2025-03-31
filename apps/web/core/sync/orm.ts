@@ -242,8 +242,6 @@ export class E {
       queryFn: ({ signal }) => fetchResults({ first, skip, query: nameFilter, typeIds: typeIdsFilter, signal }),
     });
 
-    console.log('where', where);
-
     const localEntities = new EntityQuery(store).where(where).execute();
 
     const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
