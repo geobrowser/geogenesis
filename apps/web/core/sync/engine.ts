@@ -137,7 +137,9 @@ export class SyncEngine {
       queryFn: () => fetchEntitiesBatch({ entityIds }),
     });
 
-    const merged = entities.map(e => E.merge({ id: e.id, store: this.store, mergeWith: e })).filter(e => e !== null);
+    const merged = entityIds
+      .map(e => E.merge({ id: e, store: this.store, mergeWith: entities.find(remoteEntity => remoteEntity.id === e) }))
+      .filter(e => e !== null);
 
     if (merged.length > 0) {
       this.stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged });

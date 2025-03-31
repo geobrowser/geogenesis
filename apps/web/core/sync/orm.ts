@@ -1,19 +1,31 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { QueryClient } from '@tanstack/react-query';
+import { dedupeWith } from 'effect/Array';
 
 import { Filter } from '../blocks/data/filters';
 import { queryStringFromFilters } from '../blocks/data/to-query-string';
 import { Triple } from '../database/Triple';
 import { readTypes } from '../database/entities';
 import { Entity } from '../io/dto/entities';
+import { SearchResult } from '../io/dto/search';
 import { EntityId } from '../io/schema';
-import { fetchEntity, fetchTableRowEntities } from '../io/subgraph';
+import { fetchEntity, fetchResults, fetchSpaces, fetchTableRowEntities } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
-import { Relation } from '../types';
+import { OmitStrict, Relation } from '../types';
 import { Entities } from '../utils/entity';
 import { Triples } from '../utils/triples';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
+
+type FuzzyFilter =
+  | {
+      type: 'NAME';
+      value: string;
+    }
+  | {
+      type: 'TYPES';
+      value: string[];
+    };
 
 function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
   const locallyDeletedRelations = localRelations.filter(r => r.isDeleted).map(r => r.id);
@@ -109,7 +121,6 @@ export class E {
     return this.merge({ id, store, mergeWith: cachedEntity });
   }
 
-  // @TODO: Pagination
   static async findMany(store: GeoStore, cache: QueryClient, where: WhereCondition, first: number, skip: number) {
     if (where?.id?.in) {
       const entityIds = where.id.in;
@@ -209,4 +220,110 @@ export class E {
 
     return entities.filter(e => e !== null);
   }
+
+  static async findFuzzy({
+    store,
+    cache,
+    where,
+    first,
+    skip,
+  }: {
+    store: GeoStore;
+    cache: QueryClient;
+    where: WhereCondition;
+    first: number;
+    skip: number;
+  }): Promise<SearchResult[]> {
+    const nameFilter = where.name?.fuzzy;
+    const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
+
+    const remoteEntities = await cache.fetchQuery({
+      queryKey: ['network', 'entities', 'fuzzy', where],
+      queryFn: ({ signal }) => fetchResults({ first, skip, query: nameFilter, typeIds: typeIdsFilter, signal }),
+    });
+
+    console.log('where', where);
+
+    const localEntities = new EntityQuery(store).where(where).execute();
+
+    const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
+    const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+
+    const maybeEntities = mergedIds.map(entityId => {
+      return mergeSearchResult({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+    });
+
+    const entities = maybeEntities.filter(e => e !== null);
+
+    const spaceIds = [...new Set(entities.flatMap(e => e.spaces))];
+
+    const spaces = await cache.fetchQuery({
+      queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
+      queryFn: () =>
+        fetchSpaces({
+          spaceIds,
+        }),
+    });
+
+    const spacesById = Object.fromEntries(spaces.map(s => [s.id, s]));
+
+    return entities.map(e => {
+      return {
+        ...e,
+        spaces: e.spaces.map(s => {
+          const space = spacesById[s];
+
+          return space.spaceConfig;
+        }),
+      };
+    });
+  }
+}
+
+function mergeSearchResult({
+  id,
+  store,
+  mergeWith,
+}: {
+  id: string;
+  store: GeoStore;
+  mergeWith?: SearchResult | null;
+}): (OmitStrict<SearchResult, 'spaces'> & { spaces: string[] }) | null {
+  const remoteEntity = mergeWith;
+
+  // We need to include the deleted to correctly merge with remote data
+  const localEntity = store.getEntity(id);
+
+  if (!localEntity && !remoteEntity) {
+    return null;
+  }
+
+  if (!remoteEntity) {
+    // Should always be true because of above check
+    return localEntity ?? null;
+  }
+
+  if (!localEntity) {
+    return {
+      ...remoteEntity,
+      spaces: remoteEntity.spaces.map(s => s.spaceId),
+    };
+  }
+
+  const triples = localEntity.triples.filter(t => Boolean(t.isDeleted) === false);
+  const relations = localEntity.relationsOut.filter(t => Boolean(t.isDeleted) === false);
+
+  // Use the merged triples to derive the name instead of the remote entity
+  // `name` property in case the name was deleted/changed locally.
+  const name = Entities.name(triples) ?? remoteEntity.name;
+  const description = Entities.description(triples) ?? remoteEntity.name;
+  const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
+
+  return {
+    id: EntityId(id),
+    name,
+    description,
+    types,
+    spaces: localEntity.spaces,
+  };
 }
