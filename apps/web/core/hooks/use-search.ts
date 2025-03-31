@@ -77,16 +77,18 @@ export function useSearch({ filterByTypes }: SearchOptions = {}) {
             await E.findFuzzy({
               store,
               cache,
-              filters: [
-                {
-                  type: 'NAME',
-                  value: debouncedQuery,
+              where: {
+                name: {
+                  fuzzy: debouncedQuery,
                 },
-                {
-                  type: 'TYPES',
-                  value: filterByTypes ?? [],
-                },
-              ],
+                types: filterByTypes?.map(t => {
+                  return {
+                    id: {
+                      equals: t,
+                    },
+                  };
+                }),
+              },
               first: 10,
               skip: 0,
             }),

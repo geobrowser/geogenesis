@@ -224,41 +224,25 @@ export class E {
   static async findFuzzy({
     store,
     cache,
-    filters,
+    where,
     first,
     skip,
   }: {
     store: GeoStore;
     cache: QueryClient;
-    filters: FuzzyFilter[];
+    where: WhereCondition;
     first: number;
     skip: number;
   }): Promise<SearchResult[]> {
-    const nameFilter = filters.find(f => f.type === 'NAME')?.value;
-    const typeIdsFilters = filters.find(f => f.type === 'TYPES')?.value;
+    const nameFilter = where.name?.fuzzy;
+    const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
     const remoteEntities = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', filters],
-      queryFn: ({ signal }) => fetchResults({ first, skip, query: nameFilter, typeIds: typeIdsFilters, signal }),
+      queryKey: ['network', 'entities', 'fuzzy', where],
+      queryFn: ({ signal }) => fetchResults({ first, skip, query: nameFilter, typeIds: typeIdsFilter, signal }),
     });
 
-    const where: WhereCondition = {};
-
-    if (nameFilter) {
-      where['name'] = {
-        fuzzy: nameFilter,
-      };
-    }
-
-    if (typeIdsFilters && typeIdsFilters.length > 0) {
-      where['types'] = typeIdsFilters.map(t => {
-        return {
-          id: {
-            equals: t,
-          },
-        };
-      });
-    }
+    console.log('where', where);
 
     const localEntities = new EntityQuery(store).where(where).execute();
 

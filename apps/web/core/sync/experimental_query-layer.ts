@@ -348,6 +348,10 @@ export class EntityQuery {
         return this.matchesStringCondition(entity.description || '', condition);
 
       case 'spaces':
+        if (condition === undefined) {
+          return true;
+        }
+
         if (Array.isArray(condition)) {
           const clause = condition as StringCondition[];
           return clause.some(space => space.equals && entity.spaces.includes(space.equals));
@@ -355,6 +359,10 @@ export class EntityQuery {
         return false;
 
       case 'types':
+        if (condition === undefined) {
+          return true;
+        }
+
         if (Array.isArray(condition)) {
           return condition.some(typeCondition => {
             return entity.types.some(entityType => {
