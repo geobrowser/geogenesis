@@ -142,29 +142,6 @@ export function mergeEntity({ id, mergeWith }: MergeEntityArgs): EntityWithSchem
   };
 }
 
-/**
- * Fetch an entity from the server and merge it with local triples and relations.
- *
- * There's lots of cases where we want to fetch an entity async for other work that
- * we're doing in the app. e.g., maybe we want to get all the schema for an entity,
- * or the rows in a table.
- *
- * In many of these cases we only need a subset of the entity, but it's the simplest
- * to just fetch the whole thing and put it in cache. The data we fetch for entities
- * is generally small enough where this isn't a big deal.
- *
- * @TODO:
- * Fetch by space id so we can scope the triples and relations to a specific space.
- */
-export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> {
-  const cachedEntity = await queryClient.fetchQuery({
-    queryKey: ['entity-for-merging', id],
-    queryFn: ({ signal }) => fetchEntity({ id, signal }),
-  });
-
-  return mergeEntity({ id, mergeWith: cachedEntity });
-}
-
 // Name, description, and types are always required for every entity even
 // if they aren't defined in the schema.
 export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [

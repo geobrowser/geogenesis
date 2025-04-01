@@ -365,3 +365,10 @@ export function useQueryEntitiesAsync() {
 
   return (params: FindManyParameters) => E.findMany(store, cache, params.where, params.first ?? 9, params.skip ?? 0);
 }
+
+export function useQueryEntityAsync() {
+  const cache = useQueryClient();
+  const { store } = useSyncEngine();
+
+  return (id: string) => E.findOne({ store, cache, id });
+}

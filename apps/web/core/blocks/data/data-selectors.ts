@@ -1,8 +1,9 @@
 import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 
-import { mergeEntityAsync } from '~/core/database/entities';
 import { Entity } from '~/core/io/dto/entities';
-import { EntityId } from '~/core/io/schema';
+import { queryClient } from '~/core/query-client';
+import { E } from '~/core/sync/orm';
+import { store } from '~/core/sync/use-sync-engine';
 import { RenderableProperty } from '~/core/types';
 
 export type TripleSegment = {
@@ -75,7 +76,7 @@ export async function mapSelectorLexiconToSourceEntity(
   lexicon: PathSegment[],
   startEntityId: string
 ): Promise<Entity[]> {
-  let input = await mergeEntityAsync(EntityId(startEntityId));
+  let input = await E.findOne({ id: startEntityId, cache: queryClient, store });
 
   for (const segment of lexicon) {
     if (segment.type === 'TRIPLE') {
@@ -85,40 +86,52 @@ export async function mapSelectorLexiconToSourceEntity(
     // @TODO: Need to handle if the entity is an image
     if (segment.type === 'RELATION') {
       if (segment.property === SystemIds.RELATION_TO_ATTRIBUTE) {
-        const newInputId = input.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)?.value.value;
+        const newInputId = input?.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)?.value.value;
 
         if (!newInputId) {
           continue;
         }
 
-        input = await mergeEntityAsync(EntityId(GraphUrl.toEntityId(newInputId as `graph://${string}`)));
+        input = await E.findOne({
+          id: GraphUrl.toEntityId(newInputId as `graph://${string}`),
+          cache: queryClient,
+          store,
+        });
 
         continue;
       }
 
       if (segment.property === SystemIds.RELATION_FROM_ATTRIBUTE) {
-        const newInputId = input.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE)?.value.value;
+        const newInputId = input?.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE)?.value.value;
 
         if (!newInputId) {
           continue;
         }
 
-        input = await mergeEntityAsync(EntityId(GraphUrl.toEntityId(newInputId as `graph://${string}`)));
+        input = await E.findOne({
+          id: GraphUrl.toEntityId(newInputId as `graph://${string}`),
+          cache: queryClient,
+          store,
+        });
 
         continue;
       }
 
-      const relations = input.relationsOut.filter(r => r.typeOf.id === segment.property);
+      const relations = input?.relationsOut.filter(r => r.typeOf.id === segment.property) ?? [];
 
       if (relations.length === 0) {
         return [];
       }
 
-      return await Promise.all(relations.map(r => mergeEntityAsync(EntityId(r.toEntity.id))));
+      return await E.findMany(store, queryClient, { id: { in: relations.map(r => r.toEntity.id) } }, 100, 0);
     }
   }
 
-  return [input];
+  if (input) {
+    return [input];
+  }
+
+  return [];
 }
 
 export function generateSelector(
