@@ -132,12 +132,14 @@ export class SyncEngine {
       return;
     }
 
+    const uniqueEntityIds = [...new Set(entityIds)];
+
     const entities = await this.cache.fetchQuery({
-      queryKey: ['entities-batch-sync', entityIds],
-      queryFn: () => fetchEntitiesBatch({ entityIds }),
+      queryKey: ['entities-batch-sync', uniqueEntityIds],
+      queryFn: () => fetchEntitiesBatch({ entityIds: uniqueEntityIds }),
     });
 
-    const merged = entityIds
+    const merged = uniqueEntityIds
       .map(e => E.merge({ id: e, store: this.store, mergeWith: entities.find(remoteEntity => remoteEntity.id === e) }))
       .filter(e => e !== null);
 

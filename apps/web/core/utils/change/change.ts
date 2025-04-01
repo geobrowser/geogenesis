@@ -568,7 +568,7 @@ export function aggregateChanges({
   return aggregatedChanges;
 }
 
-function isRealChange(
+export function isRealChange(
   before: TripleChangeValue | RelationChangeValue | null,
   after: TripleChangeValue | RelationChangeValue | null
 ) {

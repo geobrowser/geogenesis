@@ -95,6 +95,10 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
       id: relationId,
     });
 
+    for (const triple of triples) {
+      geoStore.setTriple(triple);
+    }
+
     const unchangedRelations = store.get(localRelationsAtom).filter(r => {
       return r.id !== relationId;
     });

@@ -56,11 +56,21 @@ function mergeRelations(localRelations: Relation[], remoteRelations: Relation[])
  * where we want to query (pull) data rather than sync it.
  */
 export class E {
-  static merge({ id, store, mergeWith }: { id: string; store: GeoStore; mergeWith?: Entity | null }) {
+  static merge({
+    id,
+    spaceId,
+    store,
+    mergeWith,
+  }: {
+    id: string;
+    spaceId?: string;
+    store: GeoStore;
+    mergeWith?: Entity | null;
+  }) {
     const remoteEntity = mergeWith;
 
     // We need to include the deleted to correctly merge with remote data
-    const localEntity = store.getEntity(id, { includeDeleted: true });
+    const localEntity = store.getEntity(id, { spaceId, includeDeleted: true });
 
     if (!localEntity && !remoteEntity) {
       return null;
@@ -84,9 +94,11 @@ export class E {
       remoteEntity.triples
     );
 
-    const triples = mergedTriples.filter(t => Boolean(t.isDeleted) === false);
+    const triples = mergedTriples.filter(t => (Boolean(t.isDeleted) === false && spaceId ? t.space === spaceId : true));
     const mergedRelations = mergeRelations(localEntity.relationsOut, remoteEntity.relationsOut);
-    const relations = mergedRelations.filter(t => Boolean(t.isDeleted) === false);
+    const relations = mergedRelations.filter(t =>
+      Boolean(t.isDeleted) === false && spaceId ? t.space === spaceId : true
+    );
 
     // Use the merged triples to derive the name instead of the remote entity
     // `name` property in case the name was deleted/changed locally.
@@ -112,13 +124,23 @@ export class E {
     };
   }
 
-  static async findOne({ id, store, cache }: { id: string; store: GeoStore; cache: QueryClient }) {
+  static async findOne({
+    id,
+    store,
+    spaceId,
+    cache,
+  }: {
+    id: string;
+    spaceId?: string;
+    store: GeoStore;
+    cache: QueryClient;
+  }) {
     const cachedEntity = await cache.fetchQuery({
-      queryKey: ['network', 'entity', id],
-      queryFn: ({ signal }) => fetchEntity({ id, signal }),
+      queryKey: ['network', 'entity', id, spaceId],
+      queryFn: ({ signal }) => fetchEntity({ id, signal, spaceId }),
     });
 
-    return this.merge({ id, store, mergeWith: cachedEntity });
+    return this.merge({ id, store, spaceId, mergeWith: cachedEntity });
   }
 
   static async findMany(store: GeoStore, cache: QueryClient, where: WhereCondition, first: number, skip: number) {

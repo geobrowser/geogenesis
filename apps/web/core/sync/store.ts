@@ -97,7 +97,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Get an entity by ID with full resolution of its relations
    */
   public getEntity(id: string, options: ReadOptions = {}): Entity | undefined {
-    const { includeDeleted = false } = options ?? {};
+    const { includeDeleted = false } = options;
 
     // Check if the entity is deleted
     if (this.isEntityDeleted(id) && !options.includeDeleted) return undefined;
@@ -115,7 +115,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       return undefined;
     }
 
-    // @TODO Need to favor name that's been updated most recently
     const name = Entities.name(triples);
     const description = Entities.description(triples);
     const types = readTypes(relations);
@@ -140,8 +139,12 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             spaces,
             nameTripleSpaces: spaces,
           }),
-      triples: triples.filter(t => (includeDeleted ? true : Boolean(t.isDeleted) === false)),
-      relationsOut: relations.filter(r => (includeDeleted ? true : Boolean(r.isDeleted) === false)),
+      triples: triples.filter(t =>
+        includeDeleted ? true : Boolean(t.isDeleted) === false && options.spaceId ? t.space === options.spaceId : true
+      ),
+      relationsOut: relations.filter(r =>
+        includeDeleted ? true : Boolean(r.isDeleted) === false && options.spaceId ? r.space === options.spaceId : true
+      ),
     };
 
     const resolvedRelations = resolvedEntity.relationsOut.map(r => {
