@@ -23,7 +23,7 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
 
   const referencedSpaces = dedupeWith(
     backlinks.flatMap(e => e.currentVersion.version.versionSpaces.nodes),
-    (a, z) => a === z
+    (a, z) => a.spaceId === z.spaceId
   );
   const spaces = await fetchSpacesById(referencedSpaces.map(s => s.spaceId));
 
@@ -69,6 +69,9 @@ const query = (entityId: string) => {
             some: {
               toEntity: { id: { equalTo: "${entityId}" } }
             }
+          }
+          name: {
+            isNull: false
           }
         }
       }
