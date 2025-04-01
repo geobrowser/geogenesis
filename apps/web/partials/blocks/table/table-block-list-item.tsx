@@ -99,7 +99,7 @@ export function TableBlockListItem({
   if (isEditing) {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
-        <div className="relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
+        <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
           {image ? (
             <NextImage
               src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
@@ -332,7 +332,7 @@ export function TableBlockListItem({
       href={href}
       className="group flex w-full max-w-full items-start justify-start gap-6 rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider"
     >
-      <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
+      <div className="relative h-16 w-16 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
         <NextImage
           src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
           className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"

@@ -131,10 +131,10 @@ module.exports = {
           },
         ],
         mediumTitle: [
-          '1.5rem',
+          '1.4rem',
           {
-            lineHeight: '1.8125rem',
-            fontWeight: '600',
+            lineHeight: '1.6rem',
+            fontWeight: '500',
             letterSpacing: '-.25px',
           },
         ],
