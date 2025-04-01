@@ -6,7 +6,6 @@ import { getTriples } from '~/core/database/triples';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { Entity } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
-import { useQueryEntitiesAsync } from '~/core/sync/use-store';
 import { Cell, PropertySchema, RenderableProperty, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
@@ -14,6 +13,7 @@ import { toRenderables } from '~/core/utils/to-renderables';
 import { makePlaceholderFromValueType } from '~/partials/blocks/table/utils';
 
 import { PathSegment } from './data-selectors';
+import { mergeEntitiesAsync } from './queries';
 
 /**
  * A mapping determines which data is rendered into which UI slots
@@ -58,8 +58,6 @@ export function useMapping(
   isLoading: boolean;
   isFetched: boolean;
 } {
-  const findMany = useQueryEntitiesAsync();
-
   const {
     data: mapping,
     isLoading,
@@ -70,7 +68,7 @@ export function useMapping(
     initialData,
     queryKey: ['mapping-shown-properties', blockRelationId, shownPropertyRelationEntityIds],
     queryFn: async () => {
-      const entities = await findMany({ where: { id: { in: shownPropertyRelationEntityIds } } });
+      const entities = await mergeEntitiesAsync({ entityIds: shownPropertyRelationEntityIds, filterState: [] });
 
       const mapping = entities.reduce<Mapping>((acc, entity) => {
         const key = entity.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)?.value.value;

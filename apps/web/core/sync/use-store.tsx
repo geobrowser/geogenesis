@@ -142,7 +142,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
     enabled,
     queryKey: [...GeoStore.queryKeys(where), first, skip],
     queryFn: async () => {
-      const entities = await E.findMany({ store, cache, where, first, skip });
+      const entities = await E.findMany(store, cache, where, first, skip);
       setLocalEntities(entities);
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
       return entities;
@@ -351,24 +351,4 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
     entities: localEntities,
     isLoading: !isFetched && enabled,
   };
-}
-
-interface FindManyParameters {
-  first?: number;
-  skip?: number;
-  where: WhereCondition;
-}
-
-export function useQueryEntitiesAsync() {
-  const cache = useQueryClient();
-  const { store } = useSyncEngine();
-
-  return ({ where, first = 9, skip = 0 }: FindManyParameters) => E.findMany({ store, cache, where, first, skip });
-}
-
-export function useQueryEntityAsync() {
-  const cache = useQueryClient();
-  const { store } = useSyncEngine();
-
-  return (id: string) => E.findOne({ store, cache, id });
 }

@@ -4,13 +4,12 @@ import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { atom } from 'jotai';
 
 import { EntityId } from '../io/schema';
-import { queryClient } from '../query-client';
 import { store } from '../state/jotai-store';
-import { E } from '../sync/orm';
 import { store as geoStore } from '../sync/use-sync-engine';
 import { OmitStrict } from '../types';
 import { Relations } from '../utils/relations';
 import { Triple } from './Triple';
+import { mergeEntityAsync } from './entities';
 import { db } from './indexeddb';
 import { RemoveOp, StoreRelation, StoredRelation, StoredTriple, UpsertOp } from './types';
 
@@ -153,32 +152,19 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
 
 async function deleteRelation(relationId: string, spaceId: string) {
   // @TODO we might need to delete any relations on a relation, too.
-  const entity = await E.findOne({ store: geoStore, cache: queryClient, id: relationId });
-
-  if (entity) {
-    removeMany(entity.triples, spaceId);
-
-    // for (const relation of entity.relationsOut) {
-    //   removeRelation({
-    //     relation,
-    //     spaceId,
-    //   });
-    // }
-  }
+  const { triples } = await mergeEntityAsync(EntityId(relationId));
+  removeMany(triples, spaceId);
 }
 
 export async function removeEntity(entityId: string, spaceId: string) {
-  const entity = await E.findOne({ store: geoStore, cache: queryClient, id: entityId });
+  const { triples, relationsOut } = await mergeEntityAsync(EntityId(entityId));
+  removeMany(triples, spaceId);
 
-  if (entity) {
-    removeMany(entity.triples, spaceId);
-
-    for (const relation of entity.relationsOut) {
-      removeRelation({
-        relation,
-        spaceId,
-      });
-    }
+  for (const relation of relationsOut) {
+    removeRelation({
+      relation,
+      spaceId,
+    });
   }
 }
 

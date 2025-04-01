@@ -2,11 +2,9 @@ import { Schema } from '@effect/schema';
 import { SystemIds } from '@graphprotocol/grc-20';
 import { Either } from 'effect';
 
+import { mergeEntityAsync } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';
 import { fetchSpace } from '~/core/io/subgraph';
-import { queryClient } from '~/core/query-client';
-import { E } from '~/core/sync/orm';
-import { store } from '~/core/sync/use-sync-engine';
 import { OmitStrict, ValueTypeId } from '~/core/types';
 import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
 
@@ -196,7 +194,7 @@ async function getSpaceName(spaceId: string) {
 }
 
 async function getResolvedEntity(entityId: string): Promise<Filter> {
-  const entity = await E.findOne({ store, cache: queryClient, id: entityId });
+  const entity = await mergeEntityAsync(EntityId(entityId));
 
   if (!entity) {
     return {
@@ -218,13 +216,13 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 }
 
 async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
-  const maybeAttributeEntity = await E.findOne({ store, cache: queryClient, id: filter.attribute });
-  const valueType = maybeAttributeEntity?.relationsOut.find(
+  const maybeAttributeEntity = await mergeEntityAsync(EntityId(filter.attribute));
+  const valueType = maybeAttributeEntity.relationsOut.find(
     r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE)
   )?.toEntity.id;
 
   if (valueType === EntityId(SystemIds.RELATION)) {
-    const valueEntity = await E.findOne({ store, cache: queryClient, id: filter.is });
+    const valueEntity = await mergeEntityAsync(EntityId(filter.is));
 
     return {
       columnId: filter.attribute,

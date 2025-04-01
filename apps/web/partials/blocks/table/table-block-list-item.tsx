@@ -68,6 +68,11 @@ export function TableBlockListItem({
     name = maybeOtherName ?? null;
   }
 
+  if (rowEntityId === 'VbYuNDM2S9LKyij73Aj5CA') {
+    console.log('name', name, maybeNameInSpace, maybeOtherName);
+    console.log('nameCell', nameCell);
+  }
+
   const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
     r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE && r.spaceId === currentSpaceId
   )?.value;

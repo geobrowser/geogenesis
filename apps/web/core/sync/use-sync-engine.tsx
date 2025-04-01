@@ -1,5 +1,3 @@
-'use client';
-
 import { ReactNode, createContext, useContext } from 'react';
 
 import { queryClient } from '../query-client';
