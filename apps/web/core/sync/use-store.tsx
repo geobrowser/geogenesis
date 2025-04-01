@@ -49,7 +49,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       if (event.entities.some(e => e.id === id)) {
         const entity = store.getEntity(id, { spaceId });
-        entity && setEntity(entity);
+        setEntity(entity);
       }
     });
 
