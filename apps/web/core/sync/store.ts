@@ -115,7 +115,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       return undefined;
     }
 
-    // @TODO Need to favor name that's been updated most recently
     const name = Entities.name(triples);
     const description = Entities.description(triples);
     const types = readTypes(relations);
