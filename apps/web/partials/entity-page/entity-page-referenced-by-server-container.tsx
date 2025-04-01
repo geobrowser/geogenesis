@@ -62,7 +62,7 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
 
 const query = (entityId: string) => {
   return `{
-    entities(filter: {
+    entities(first: 100 filter: {
       currentVersion: {
         version: {
           relationsByFromVersionId: {
