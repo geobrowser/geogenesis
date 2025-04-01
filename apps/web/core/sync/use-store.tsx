@@ -22,7 +22,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
 
   const { isFetched } = useQuery({
     enabled: !!id && enabled,
-    queryKey: [...GeoStore.queryKey(id), spaceId],
+    queryKey: [...GeoStore.queryKey(id)],
     queryFn: async () => {
       // If the entity is in the store then it's already been synced and we can
       // skip this work
@@ -30,7 +30,11 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
         return null;
       }
 
-      const merged = await E.findOne({ id, store, cache, spaceId });
+      /**
+       * We explicitly don't query by space id here and let the sync
+       * engine handle filtering it as the hook receives events
+       */
+      const merged = await E.findOne({ id, store, cache });
 
       if (merged) {
         stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: [merged] });

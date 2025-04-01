@@ -130,8 +130,6 @@ export class E {
       queryFn: ({ signal }) => fetchEntity({ id, signal, spaceId }),
     });
 
-    console.log('cached entity', cachedEntity, spaceId);
-
     return this.merge({ id, store, spaceId, mergeWith: cachedEntity });
   }
 
