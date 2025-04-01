@@ -5,9 +5,11 @@ import * as React from 'react';
 
 import { ID } from '~/core/id';
 
-import { mergeEntityAsync } from '../database/entities';
 import { upsertRelation } from '../database/write';
 import { EntityId } from '../io/schema';
+import { queryClient } from '../query-client';
+import { E } from '../sync/orm';
+import { store } from '../sync/use-sync-engine';
 
 export function useCreateEntityFromType(spaceId: string, typeIds: string[]) {
   const [nextEntityId, setNextEntityId] = React.useState(ID.createEntityId());
@@ -24,7 +26,17 @@ export function useCreateEntityFromType(spaceId: string, typeIds: string[]) {
 }
 
 async function addTypesToEntityId(entityId: string, spaceId: string, typeIds: string[]) {
-  const types = await Promise.all(typeIds.map(typeId => mergeEntityAsync(EntityId(typeId))));
+  const types = await E.findMany({
+    store,
+    cache: queryClient,
+    where: {
+      id: {
+        in: typeIds,
+      },
+    },
+    first: 100,
+    skip: 0,
+  });
 
   for (const type of types) {
     upsertRelation({

@@ -2,67 +2,41 @@
 
 import { SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Duration } from 'effect';
 import { dedupeWith } from 'effect/Array';
-import { atom, useAtomValue } from 'jotai';
-import { unwrap } from 'jotai/utils';
-
-import * as React from 'react';
 
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
-import { fetchEntity } from '../io/subgraph';
-import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
 import { queryClient } from '../query-client';
-import { store } from '../state/jotai-store';
+import { E } from '../sync/orm';
+import { useQueryEntity } from '../sync/use-store';
+import { store as geoStore } from '../sync/use-sync-engine';
 import { PropertySchema, Relation, SpaceId, Triple, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
-import { getRelations, useRelations } from './relations';
-import { getTriples, useTriples } from './triples';
-import { localOpsAtom, localRelationsAtom } from './write';
 
 export type EntityWithSchema = Entity & { schema: PropertySchema[] };
 
 type UseEntityOptions = {
   spaceId?: SpaceId;
   id: EntityId;
-  initialData?: { spaces: SpaceId[]; triples: Triple[]; relations: Relation[] };
+  initialData?: { spaces: SpaceId[]; triples: Triple[]; relationsOut: Relation[] };
 };
 
 export function useEntity(options: UseEntityOptions): EntityWithSchema {
   const { spaceId, id, initialData } = options;
 
-  const { data: remoteData } = useQuery({
-    enabled: !initialData && id !== '',
-    placeholderData: keepPreviousData,
-    queryKey: ['useEntity', spaceId, id, initialData],
-    initialData,
-    queryFn: async ({ signal }) => {
-      const entity = await fetchEntity({ spaceId, id, signal });
-
-      return {
-        spaces: entity?.spaces ?? [],
-        triples: entity?.triples ?? [],
-        relations: entity?.relationsOut ?? [],
-      };
-    },
+  const { entity } = useQueryEntity({
+    id: id,
+    spaceId: spaceId,
   });
 
   // If the caller passes in a set of data we use that for merging. If not,
   // we fetch the entity from the server and merge it with the local state.
-  const data = initialData ?? remoteData;
+  const data = entity ?? initialData;
 
-  const triples = useTriples({
-    mergeWith: data?.triples,
-    selector: spaceId ? t => t.entityId === id && t.space === spaceId : t => t.entityId === id,
-  });
+  const triples = data?.triples ?? [];
+  const relations = data?.relationsOut ?? [];
 
-  const relations = useRelations({
-    mergeWith: data?.relations,
-    selector: spaceId ? r => r.fromEntity.id === id && r.space === spaceId : r => r.fromEntity.id === id,
-  });
-
-  const name = Entities.name(triples);
+  const name = Entities.name(triples ?? []);
   const nameTripleSpaces = triples.filter(t => t.attributeId === SystemIds.NAME_ATTRIBUTE).map(t => t.space);
   const spaces = data?.spaces ?? [];
   const description = Entities.description(triples);
@@ -73,8 +47,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     queryKey: ['entity-schema-for-merging', id, types],
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      const typesIds = [...new Set(types.map(t => t.id))];
-      return await getSchemaFromTypeIds(typesIds);
+      return await getSchemaFromTypeIds(types.map(t => t.id));
     },
   });
 
@@ -89,78 +62,6 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     relationsOut: relations,
     types,
   };
-}
-
-interface MergeEntityArgs {
-  id: string;
-  mergeWith: Entity | null;
-}
-
-/**
- * Merge an entity from the server with the local state. There might be
- * a situation where we already have the entity data and need to merge it
- * with the local state. e.g., rendering a list of entities in a data list.
- *
- * This is different from the mergeEntityAsync which expects that it will
- * handle fetching the remote entity itself.
- */
-export function mergeEntity({ id, mergeWith }: MergeEntityArgs): EntityWithSchema {
-  const mergedTriples = getTriples({
-    mergeWith: mergeWith?.triples,
-    selector: t => t.entityId === id,
-  });
-
-  const mergedRelations = getRelations({
-    mergeWith: mergeWith?.relationsOut,
-    selector: r => r.fromEntity.id === id,
-  });
-
-  // Use the merged triples to derive the name instead of the remote entity
-  // `name` property in case the name was deleted/changed locally.
-  const name = Entities.name(mergedTriples);
-  const description = Entities.description(mergedTriples);
-  const types = readTypes(mergedRelations);
-
-  return {
-    id: EntityId(id),
-    name,
-    nameTripleSpaces: mergedTriples.filter(t => t.attributeId === SystemIds.NAME_ATTRIBUTE).map(t => t.space),
-    // @TODO add real merging logic
-    spaces: mergeWith?.spaces ?? [],
-    description,
-    types,
-    triples: mergedTriples,
-    relationsOut: mergedRelations,
-    // @TODO: Spaces with metadata
-    // @TODO: Schema? Adding schema here might result in infinite queries since we
-    // if we called getEntity from within getEntity it would query infinitlely deep
-    // until we hit some defined base-case. We could specify a max depth for the
-    // recursion so we only return the closest schema and not the whole chain.
-    schema: [],
-  };
-}
-
-/**
- * Fetch an entity from the server and merge it with local triples and relations.
- *
- * There's lots of cases where we want to fetch an entity async for other work that
- * we're doing in the app. e.g., maybe we want to get all the schema for an entity,
- * or the rows in a table.
- *
- * In many of these cases we only need a subset of the entity, but it's the simplest
- * to just fetch the whole thing and put it in cache. The data we fetch for entities
- * is generally small enough where this isn't a big deal.
- *
- * @TODO:
- * Fetch by space id so we can scope the triples and relations to a specific space.
- */
-export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> {
-  const cachedEntity = await queryClient.fetchQuery({
-    queryKey: ['entity-for-merging', id],
-    queryFn: ({ signal }) => fetchEntity({ id, signal }),
-  });
-
-  return mergeEntity({ id, mergeWith: cachedEntity });
 }
 
 // Name, description, and types are always required for every entity even
@@ -197,12 +98,19 @@ export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [
  * We expect that attributes are only defined via relations, not triples.
  */
 export async function getSchemaFromTypeIds(typesIds: string[]): Promise<PropertySchema[]> {
-  const schemaEntities = await Promise.all(
-    typesIds.map(typeId => {
-      // These are all cached in a network cache if they've been fetched before.
-      return mergeEntityAsync(EntityId(typeId));
-    })
-  );
+  const dedupedTypeIds = [...new Set(typesIds)];
+
+  const schemaEntities = await E.findMany({
+    store: geoStore,
+    cache: queryClient,
+    where: {
+      id: {
+        in: dedupedTypeIds,
+      },
+    },
+    first: 100,
+    skip: 0,
+  });
 
   const schemaWithoutValueType = schemaEntities.flatMap((e): PropertySchema[] => {
     const attributeRelations = e.relationsOut.filter(t => t.typeOf.id === EntityId(SystemIds.PROPERTIES));
@@ -219,7 +127,18 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
     }));
   });
 
-  const attributes = await Promise.all(schemaWithoutValueType.map(a => mergeEntityAsync(EntityId(a.id))));
+  const attributes = await E.findMany({
+    store: geoStore,
+    cache: queryClient,
+    where: {
+      id: {
+        in: schemaWithoutValueType.map(a => a.id),
+      },
+    },
+    first: 100,
+    skip: 0,
+  });
+
   const valueTypes = attributes.map(a => {
     const valueTypeId = a.relationsOut.find(r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE))?.toEntity.id;
     return {
@@ -283,52 +202,4 @@ export function readTypes(relations: Relation[]): { id: EntityId; name: string |
     }));
 
   return dedupeWith(typeIdsViaRelations, (a, b) => a.id === b.id);
-}
-
-const localEntitiesAtom = atom(async get => {
-  const tripleEntityIds = get(localOpsAtom).map(o => o.entityId);
-  const relationEntityIds = get(localRelationsAtom).map(r => r.fromEntity.id);
-
-  const changedEntities = [...new Set([...tripleEntityIds, ...relationEntityIds])];
-
-  const remoteVersionsOfEntities = await queryClient.fetchQuery({
-    queryKey: ['local-entities-merge-fetch', changedEntities],
-    queryFn: () => fetchEntitiesBatch({ entityIds: changedEntities }),
-    staleTime: Duration.toMillis(Duration.seconds(30)),
-  });
-
-  const merged = remoteVersionsOfEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
-
-  const localVersionsOfEntitiesNotAlreadyMerged = changedEntities
-    .filter(entityId => !merged.some(m => m.id === entityId))
-    .map(entityId => mergeEntity({ id: entityId, mergeWith: null }));
-
-  return groupEntitiesByEntityId([...localVersionsOfEntitiesNotAlreadyMerged, ...merged]);
-});
-
-function groupEntitiesByEntityId(entities: Entity[]) {
-  return entities.reduce<Record<EntityId, Entity>>((acc, entity) => {
-    const entityId = EntityId(entity.id);
-
-    if (!acc[entityId]) {
-      acc[entityId] = entity;
-    }
-
-    return acc;
-  }, {});
-}
-
-// @TODO Should useEntity just read from useEntities with an id? Do we need an optional
-// getter or something?
-export function useEntities_experimental() {
-  const memoizedAtom = React.useMemo(() => unwrap(localEntitiesAtom, prev => prev ?? {}), []);
-  return useAtomValue(memoizedAtom);
-}
-
-export async function getEntities_experimental() {
-  // @TODO For some reason using unwrap was returning {} for consumers of getEntities.
-  // Might have something to do with the first time being called so we are given the
-  // fallback?
-  // const atom = unwrap(localEntitiesAtom, prev => prev ?? {});
-  return store.get(localEntitiesAtom);
 }
