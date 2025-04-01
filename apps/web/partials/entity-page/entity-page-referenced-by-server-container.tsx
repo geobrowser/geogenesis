@@ -23,7 +23,7 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
 
   const referencedSpaces = dedupeWith(
     backlinks.flatMap(e => e.currentVersion.version.versionSpaces.nodes),
-    (a, z) => a === z
+    (a, z) => a.spaceId === z.spaceId
   );
   const spaces = await fetchSpacesById(referencedSpaces.map(s => s.spaceId));
 
@@ -62,13 +62,16 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
 
 const query = (entityId: string) => {
   return `{
-    entities(filter: {
+    entities(first: 100 filter: {
       currentVersion: {
         version: {
           relationsByFromVersionId: {
             some: {
               toEntity: { id: { equalTo: "${entityId}" } }
             }
+          }
+          name: {
+            isNull: false
           }
         }
       }
