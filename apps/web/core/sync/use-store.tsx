@@ -22,7 +22,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
 
   const { isFetched } = useQuery({
     enabled: !!id && enabled,
-    queryKey: GeoStore.queryKey(id),
+    queryKey: [...GeoStore.queryKey(id), spaceId],
     queryFn: async () => {
       // If the entity is in the store then it's already been synced and we can
       // skip this work
