@@ -7,6 +7,7 @@ import { atomFamily, selectAtom } from 'jotai/utils';
 import * as React from 'react';
 
 import { store } from '../state/jotai-store';
+import { useQueryEntity } from '../sync/use-store';
 import { Relation } from '../types';
 import { createRelationsAtom } from './atoms';
 

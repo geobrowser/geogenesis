@@ -4,13 +4,13 @@ import { pipe } from 'effect';
 
 import * as React from 'react';
 
-import { mergeEntitiesAsync } from '~/core/blocks/data/queries';
 import { EntityId } from '~/core/io/schema';
 
 import { sortRenderables } from '~/partials/entity-page/entity-page-utils';
 
 import { useTriples } from '../database/triples';
 import { useEntityPageStore } from '../state/entity-page-store/entity-store';
+import { useQueryEntitiesAsync } from '../sync/use-store';
 import { PropertySchema, RenderableProperty, Triple, ValueTypeId } from '../types';
 import { toRenderables } from '../utils/to-renderables';
 import { groupBy } from '../utils/utils';
@@ -28,6 +28,7 @@ import { useUserIsEditing } from './use-user-is-editing';
  * Schemas are derived from the entity's types and are also a form of placeholders.
  */
 export function useRenderables(serverTriples: Triple[], spaceId: string, isRelationPage?: boolean) {
+  const findMany = useQueryEntitiesAsync();
   const isEditing = useUserIsEditing(spaceId);
   const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
     usePlaceholderRenderables();
@@ -54,9 +55,12 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
   const { data: typePropertySchema } = useQuery({
     queryKey: ['type-property-schema', possibleTypeProperties.join('-')],
     queryFn: async () => {
-      const possibleTypePropertyAttributeEntities = await mergeEntitiesAsync({
-        entityIds: possibleTypeProperties,
-        filterState: [],
+      const possibleTypePropertyAttributeEntities = await findMany({
+        where: {
+          id: {
+            in: possibleTypeProperties,
+          },
+        },
       });
 
       const IS_TYPE_PROPERTY_ATTRIBUTE = 'T2TRBTBe5NS8vR94PLhzce';
@@ -74,9 +78,12 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
         .filter(triple => typeProperties.includes(EntityId(triple.attributeId)))
         .map(triple => GraphUrl.toEntityId(triple.value.value as `graph://${string}`));
 
-      const typePropertyValueEntities = await mergeEntitiesAsync({
-        entityIds: typePropertyValueEntityIds,
-        filterState: [],
+      const typePropertyValueEntities = await findMany({
+        where: {
+          id: {
+            in: typePropertyValueEntityIds,
+          },
+        },
       });
 
       const typePropertySchema = typePropertyValueEntities.flatMap(entity =>

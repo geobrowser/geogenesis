@@ -11,7 +11,7 @@ export function useEntityPageStore() {
   const { name, spaces, triples, relationsOut, schema, types } = useEntity({
     spaceId: SpaceId(spaceId),
     id: EntityId(id),
-    initialData: { spaces: initialSpaces, triples: initialTriples, relations: initialRelations },
+    initialData: { spaces: initialSpaces, triples: initialTriples, relationsOut: initialRelations },
   });
 
   return {
