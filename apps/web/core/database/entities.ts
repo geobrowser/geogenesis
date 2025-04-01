@@ -100,17 +100,17 @@ export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [
 export async function getSchemaFromTypeIds(typesIds: string[]): Promise<PropertySchema[]> {
   const dedupedTypeIds = [...new Set(typesIds)];
 
-  const schemaEntities = await E.findMany(
-    geoStore,
-    queryClient,
-    {
+  const schemaEntities = await E.findMany({
+    store: geoStore,
+    cache: queryClient,
+    where: {
       id: {
         in: dedupedTypeIds,
       },
     },
-    100,
-    0
-  );
+    first: 100,
+    skip: 0,
+  });
 
   const schemaWithoutValueType = schemaEntities.flatMap((e): PropertySchema[] => {
     const attributeRelations = e.relationsOut.filter(t => t.typeOf.id === EntityId(SystemIds.PROPERTIES));
@@ -127,17 +127,17 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
     }));
   });
 
-  const attributes = await E.findMany(
-    geoStore,
-    queryClient,
-    {
+  const attributes = await E.findMany({
+    store: geoStore,
+    cache: queryClient,
+    where: {
       id: {
         in: schemaWithoutValueType.map(a => a.id),
       },
     },
-    100,
-    0
-  );
+    first: 100,
+    skip: 0,
+  });
 
   const valueTypes = attributes.map(a => {
     const valueTypeId = a.relationsOut.find(r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE))?.toEntity.id;

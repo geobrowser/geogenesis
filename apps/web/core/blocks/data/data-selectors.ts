@@ -123,7 +123,13 @@ export async function mapSelectorLexiconToSourceEntity(
         return [];
       }
 
-      return await E.findMany(store, queryClient, { id: { in: relations.map(r => r.toEntity.id) } }, 100, 0);
+      return await E.findMany({
+        store,
+        cache: queryClient,
+        where: { id: { in: relations.map(r => r.toEntity.id) } },
+        first: 100,
+        skip: 0,
+      });
     }
   }
 

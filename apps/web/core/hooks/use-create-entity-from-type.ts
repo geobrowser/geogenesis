@@ -26,17 +26,17 @@ export function useCreateEntityFromType(spaceId: string, typeIds: string[]) {
 }
 
 async function addTypesToEntityId(entityId: string, spaceId: string, typeIds: string[]) {
-  const types = await E.findMany(
+  const types = await E.findMany({
     store,
-    queryClient,
-    {
+    cache: queryClient,
+    where: {
       id: {
         in: typeIds,
       },
     },
-    100,
-    0
-  );
+    first: 100,
+    skip: 0,
+  });
 
   for (const type of types) {
     upsertRelation({

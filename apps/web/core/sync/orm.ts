@@ -17,16 +17,6 @@ import { Triples } from '../utils/triples';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
 
-type FuzzyFilter =
-  | {
-      type: 'NAME';
-      value: string;
-    }
-  | {
-      type: 'TYPES';
-      value: string[];
-    };
-
 function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
   const locallyDeletedRelations = localRelations.filter(r => r.isDeleted).map(r => r.id);
 
@@ -121,7 +111,19 @@ export class E {
     return this.merge({ id, store, mergeWith: cachedEntity });
   }
 
-  static async findMany(store: GeoStore, cache: QueryClient, where: WhereCondition, first: number, skip: number) {
+  static async findMany({
+    store,
+    cache,
+    where,
+    first,
+    skip,
+  }: {
+    store: GeoStore;
+    cache: QueryClient;
+    where: WhereCondition;
+    first: number;
+    skip: number;
+  }) {
     if (where?.id?.in) {
       const entityIds = where.id.in;
 
