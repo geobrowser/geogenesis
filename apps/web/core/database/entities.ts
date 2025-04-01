@@ -6,57 +6,37 @@ import { dedupeWith } from 'effect/Array';
 
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
-import { fetchEntity } from '../io/subgraph';
 import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
+import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
 import { PropertySchema, Relation, SpaceId, Triple, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
-import { useRelations } from './relations';
-import { useTriples } from './triples';
 
 export type EntityWithSchema = Entity & { schema: PropertySchema[] };
 
 type UseEntityOptions = {
   spaceId?: SpaceId;
   id: EntityId;
-  initialData?: { spaces: SpaceId[]; triples: Triple[]; relations: Relation[] };
+  initialData?: { spaces: SpaceId[]; triples: Triple[]; relationsOut: Relation[] };
 };
 
 export function useEntity(options: UseEntityOptions): EntityWithSchema {
   const { spaceId, id, initialData } = options;
 
-  const { data: remoteData } = useQuery({
-    enabled: !initialData && id !== '',
-    placeholderData: keepPreviousData,
-    queryKey: ['useEntity', spaceId, id, initialData],
-    initialData,
-    queryFn: async ({ signal }) => {
-      const entity = await fetchEntity({ spaceId, id, signal });
-
-      return {
-        spaces: entity?.spaces ?? [],
-        triples: entity?.triples ?? [],
-        relations: entity?.relationsOut ?? [],
-      };
-    },
+  const { entity } = useQueryEntity({
+    id: id,
+    spaceId: spaceId,
   });
 
   // If the caller passes in a set of data we use that for merging. If not,
   // we fetch the entity from the server and merge it with the local state.
-  const data = initialData ?? remoteData;
+  const data = entity ?? initialData;
 
-  const triples = useTriples({
-    mergeWith: data?.triples,
-    selector: spaceId ? t => t.entityId === id && t.space === spaceId : t => t.entityId === id,
-  });
+  const triples = data?.triples ?? [];
+  const relations = data?.relationsOut ?? [];
 
-  const relations = useRelations({
-    mergeWith: data?.relations,
-    selector: spaceId ? r => r.fromEntity.id === id && r.space === spaceId : r => r.fromEntity.id === id,
-  });
-
-  const name = Entities.name(triples);
+  const name = Entities.name(triples ?? []);
   const nameTripleSpaces = triples.filter(t => t.attributeId === SystemIds.NAME_ATTRIBUTE).map(t => t.space);
   const spaces = data?.spaces ?? [];
   const description = Entities.description(triples);
@@ -67,8 +47,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     queryKey: ['entity-schema-for-merging', id, types],
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      const typesIds = [...new Set(types.map(t => t.id))];
-      return await getSchemaFromTypeIds(typesIds);
+      return await getSchemaFromTypeIds(types.map(t => t.id));
     },
   });
 
@@ -119,12 +98,14 @@ export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [
  * We expect that attributes are only defined via relations, not triples.
  */
 export async function getSchemaFromTypeIds(typesIds: string[]): Promise<PropertySchema[]> {
+  const dedupedTypeIds = [...new Set(typesIds)];
+
   const schemaEntities = await E.findMany(
     geoStore,
     queryClient,
     {
       id: {
-        in: typesIds,
+        in: dedupedTypeIds,
       },
     },
     100,
