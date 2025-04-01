@@ -3,11 +3,11 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { upsert } from '~/core/database/write';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Filter, fromGeoFilterState, toGeoFilterState } from './filters';
+import { mergeColumns } from './queries';
 import { Source } from './source';
 import { useDataBlockInstance } from './use-data-block';
 
@@ -56,7 +56,7 @@ export function useFilters() {
     queryKey: ['blocks', 'data', 'filterable-properties', filterState],
     queryFn: async () => {
       const typesInFilter = filterState?.filter(f => f.columnId === SystemIds.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
-      return await getSchemaFromTypeIds(typesInFilter);
+      return await mergeColumns(typesInFilter);
     },
   });
 

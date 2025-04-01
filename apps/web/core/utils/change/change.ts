@@ -2,7 +2,7 @@ import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { Effect, Record } from 'effect';
 import equal from 'fast-deep-equal';
 
-import { EntityWithSchema } from '~/core/database/entities';
+import { EntityWithSchema, mergeEntity } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import type { Entity } from '~/core/io/dto/entities';
@@ -10,8 +10,6 @@ import { Proposal } from '~/core/io/dto/proposals';
 import { fetchParentEntityId } from '~/core/io/fetch-parent-entity-id';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntitiesBatch, fetchEntitiesBatchCached } from '~/core/io/subgraph/fetch-entities-batch';
-import { E } from '~/core/sync/orm';
-import { store } from '~/core/sync/use-sync-engine';
 import type { Relation, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
@@ -82,9 +80,8 @@ export async function fromLocal(spaceId?: string) {
       });
 
       const mergedEntities = allEntities.map(e =>
-        E.merge({
+        mergeEntity({
           id: e.id,
-          store: store,
           mergeWith: e,
         })
       );
@@ -168,9 +165,8 @@ export async function fromLocal(spaceId?: string) {
       });
 
       const mergedParentEntities = allParentEntities.map(e =>
-        E.merge({
+        mergeEntity({
           id: e.id,
-          store: store,
           mergeWith: e,
         })
       );
