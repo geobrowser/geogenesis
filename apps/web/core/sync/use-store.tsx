@@ -30,7 +30,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
         return null;
       }
 
-      const merged = await E.findOne({ id, store, cache });
+      const merged = await E.findOne({ id, store, cache, spaceId });
 
       if (merged) {
         stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: [merged] });
