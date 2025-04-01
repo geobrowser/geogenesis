@@ -4,7 +4,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { ID } from '../id';
 import { fetchEntity } from '../io/subgraph';
 import { isRealChange } from '../utils/change/change';
-import { AfterTripleDiff } from '../utils/change/get-triple-change';
+import { AfterTripleDiff, BeforeTripleDiff } from '../utils/change/get-triple-change';
 import { GeoEvent, GeoEventStream } from './stream';
 
 // Store latest ops for a given entity by the space, triple id, or relation id
@@ -23,12 +23,12 @@ export class ChangeStream {
     this.cache = cache;
 
     const onTriplesUpdated = this.stream.on(GeoEventStream.TRIPLES_CREATED, event => {
-      console.log('Validating if triple change is real');
       this.processDiff(event);
     });
 
     const onTriplesDeleted = this.stream.on(GeoEventStream.TRIPLES_DELETED, event => {
       // Write to changes based on space id -> entity id -> triple id
+      this.processDiff(event);
     });
 
     const onRelationsCreated = this.stream.on(GeoEventStream.RELATION_CREATED, event => {
@@ -44,7 +44,8 @@ export class ChangeStream {
     let entityId: string | null = null;
 
     switch (event.type) {
-      case 'triples:updated': {
+      case 'triples:updated':
+      case 'triples:deleted': {
         entityId = event.triple.entityId;
         break;
       }
@@ -85,6 +86,30 @@ export class ChangeStream {
             },
           });
         } else {
+          this.tripleChanges.delete(newId);
+        }
+
+        break;
+      }
+      case 'triples:deleted': {
+        const newId = ID.createTripleId(event.triple);
+        const maybeRemoteTriple = entity?.triples.find(t => ID.createTripleId(t) === newId);
+
+        /**
+         * Keep track of any local changes that are different than data
+         * that exists remotely for the same property.
+         */
+        if (maybeRemoteTriple) {
+          this.tripleChanges.set(newId, {
+            type: 'DELETE_TRIPLE',
+            spaceId: event.triple.space,
+            triple: {
+              attribute: event.triple.attributeId,
+              entity: event.triple.entityId,
+            },
+          });
+        } else {
+          console.log('not real');
           this.tripleChanges.delete(newId);
         }
 
