@@ -30,7 +30,7 @@ import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
-  onDone: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
+  onDone?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
   onCreateEntity?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
   spaceId: string;
   allowedTypes?: string[];
@@ -117,21 +117,6 @@ export const SelectEntity = ({
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
 
-    // Create new entity with name and types
-    upsert(
-      {
-        entityId: newEntityId,
-        attributeId: SystemIds.NAME_ATTRIBUTE,
-        entityName: query,
-        attributeName: 'Name',
-        value: {
-          type: 'TEXT',
-          value: query,
-        },
-      },
-      spaceId
-    );
-
     // This component is used in many different use-cases across the system, so we
     // need to be able to pass in a callback. onCreateEntity is used to enable to
     // caller to add arbitrary data to an entity when it's created.
@@ -140,8 +125,23 @@ export const SelectEntity = ({
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
       onCreateEntity({ id: newEntityId, name: query });
+    } else {
+      // Create new entity with name and types using internal id
+      upsert(
+        {
+          entityId: newEntityId,
+          attributeId: SystemIds.NAME_ATTRIBUTE,
+          entityName: query,
+          attributeName: 'Name',
+          value: {
+            type: 'TEXT',
+            value: query,
+          },
+        },
+        spaceId
+      );
     }
-    onDone({ id: newEntityId, name: query });
+    onDone?.({ id: newEntityId, name: query });
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
@@ -193,12 +193,12 @@ export const SelectEntity = ({
                       <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
                         {!results?.length && isLoading && (
                           <div className="w-full bg-white px-3 py-2">
-                            <div className="text-resultTitle truncate text-text">Loading...</div>
+                            <div className="truncate text-resultTitle text-text">Loading...</div>
                           </div>
                         )}
                         {isEmpty ? (
                           <div className="w-full bg-white px-3 py-2">
-                            <div className="text-resultTitle truncate text-text">No results.</div>
+                            <div className="truncate text-resultTitle text-text">No results.</div>
                           </div>
                         ) : (
                           <div className="divide-y divide-divider bg-white">
@@ -208,7 +208,7 @@ export const SelectEntity = ({
                                   <button
                                     onClick={() => {
                                       setResult(null);
-                                      onDone({
+                                      onDone?.({
                                         id: result.id,
                                         name: result.name,
                                       });
@@ -219,7 +219,7 @@ export const SelectEntity = ({
                                     {isShowingIds && (
                                       <div className="mb-2 text-[0.6875rem] text-grey-04">ID · {result.id}</div>
                                     )}
-                                    <div className="text-resultTitle max-w-full truncate text-text">{result.name}</div>
+                                    <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
                                     <div className="mt-1.5 flex items-center gap-1.5">
                                       <div className="flex shrink-0 items-center gap-1">
                                         <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
@@ -308,7 +308,7 @@ export const SelectEntity = ({
                             <ArrowLeft color="grey-04" />
                           </button>
                         </div>
-                        <div className="text-resultTitle flex w-1/3 items-center justify-center p-2 text-center text-text">
+                        <div className="flex w-1/3 items-center justify-center p-2 text-center text-resultTitle text-text">
                           <span>Select space</span>
                         </div>
                         <div className="flex w-1/3 justify-end px-2">
@@ -330,7 +330,7 @@ export const SelectEntity = ({
                             key={index}
                             onClick={() => {
                               setResult(null);
-                              onDone({
+                              onDone?.({
                                 id: result.id,
                                 name: result.name,
                                 space: EntityId(space.spaceId),
@@ -345,7 +345,7 @@ export const SelectEntity = ({
                               </div>
                             </div>
                             <div>
-                              <div className="text-resultTitle truncate text-text">{space.name}</div>
+                              <div className="truncate text-resultTitle text-text">{space.name}</div>
                               <div className="mt-1.5">
                                 <Tag>Space</Tag>
                               </div>
