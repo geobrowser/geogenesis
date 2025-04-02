@@ -203,29 +203,14 @@ export function TableBlockGalleryItem({
             <div className="text-metadata text-grey-04">Name</div>
             {isPlaceholder ? (
               <SelectEntity
-                // What actually happens here? We create a link to the entity for the source?
-                // If the entity already exists then it should be a text block instead of the
-                // search experience
-                onDone={result => {
-                  onChangeEntry(
-                    {
-                      entityId: rowEntityId,
-                      entityName: name,
-                      spaceId: currentSpaceId,
-                    },
-                    {
-                      type: 'FOC',
-                      data: result,
-                    }
-                  );
-                }}
                 onCreateEntity={result => {
-                  // This actually works quite differently than other creates since
-                  // we want to use the existing placeholder entity id.
                   onChangeEntry(
                     {
+                      // This actually works quite differently than other creates since
+                      // we want to use the existing placeholder entity id instead of
+                      // the internal id from SelectEntity
                       entityId: rowEntityId,
-                      entityName: name,
+                      entityName: result.name,
                       spaceId: currentSpaceId,
                     },
                     {

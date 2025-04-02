@@ -154,7 +154,6 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
         }
 
         if (to !== null) {
-          // @TODO: relation block
           const id = ID.createEntityId();
 
           upsertCollectionItemRelation({
@@ -192,7 +191,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       setHasPlaceholderRow(false);
     }
 
-    createEntityWithTypes();
+    createEntityWithTypes(event.type === 'FOC' ? event.data.name : undefined);
   };
 
   const onAddPlaceholder = () => {
