@@ -1,16 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import {
-  ENTRYPOINT_ADDRESS_V07,
-  bundlerActions,
-  createSmartAccountClient,
-  walletClientToSmartAccountSigner,
-} from 'permissionless';
-import { signerToSafeSmartAccount } from 'permissionless/accounts';
-import { pimlicoBundlerActions, pimlicoPaymasterActions } from 'permissionless/actions/pimlico';
+import { createSmartAccountClient } from 'permissionless';
+import { toSafeSmartAccount } from 'permissionless/accounts';
+import { createPimlicoClient } from 'permissionless/clients/pimlico';
 import { useCookies } from 'react-cookie';
-import { createClient, createPublicClient, http } from 'viem';
+import { createPublicClient, http } from 'viem';
+import { entryPoint07Address } from 'viem/account-abstraction';
 
 import { useWalletClient } from 'wagmi';
 
@@ -37,35 +33,34 @@ export function useSmartAccount() {
         chain: GEOGENESIS,
       });
 
-      const signer = walletClientToSmartAccountSigner(walletClient);
-
-      const safeAccount = await signerToSafeSmartAccount(publicClient, {
-        signer: signer,
-        entryPoint: ENTRYPOINT_ADDRESS_V07,
-        safeVersion: '1.4.1',
+      const safeAccount = await toSafeSmartAccount({
+        client: publicClient,
+        owners: [walletClient],
+        entryPoint: {
+          version: '0.7',
+          address: entryPoint07Address,
+        },
+        version: '1.4.1',
       });
 
-      const bundlerClient = createClient({
+      const paymasterClient = createPimlicoClient({
         transport: bundlerTransport,
         chain: GEOGENESIS,
-      })
-        .extend(bundlerActions(ENTRYPOINT_ADDRESS_V07))
-        .extend(pimlicoBundlerActions(ENTRYPOINT_ADDRESS_V07));
-
-      const paymasterClient = createClient({
-        transport: bundlerTransport,
-        chain: GEOGENESIS,
-      }).extend(pimlicoPaymasterActions(ENTRYPOINT_ADDRESS_V07));
+        entryPoint: {
+          address: entryPoint07Address,
+          version: '0.7',
+        },
+      });
 
       const smartAccount = createSmartAccountClient({
         chain: GEOGENESIS,
         account: safeAccount,
+        paymaster: paymasterClient,
         bundlerTransport,
-        middleware: {
-          gasPrice: async () => {
-            return (await bundlerClient.getUserOperationGasPrice()).fast;
+        userOperation: {
+          estimateFeesPerGas: async () => {
+            return (await paymasterClient.getUserOperationGasPrice()).fast;
           },
-          sponsorUserOperation: paymasterClient.sponsorUserOperation,
         },
       });
 

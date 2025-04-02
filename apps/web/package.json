@@ -79,7 +79,7 @@
     "jotai": "^2.5.1",
     "lokijs": "^1.5.12",
     "next": "15.1.6",
-    "permissionless": "0.1.29",
+    "permissionless": "0.2.39",
     "pluralize": "^8.0.0",
     "react": "19.0.0",
     "react-cookie": "^7.1.4",
