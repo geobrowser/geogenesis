@@ -68,7 +68,7 @@ export const options: Record<AppEnv, AppConfig> = {
     rpc: variables.rpcEndpointTestnet!, // We know this is set when APP_ENV is set to testnet
     ipfs: IPFS_GATEWAY_PATH,
     api: 'https://geo-conduit.up.railway.app/graphql',
-    bundler: `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${variables.accountAbstractionApiKey}`,
+    bundler: `https://api.pimlico.io/v2/19411/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
 };
 

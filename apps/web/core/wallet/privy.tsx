@@ -4,6 +4,7 @@ import { PrivyProvider as Privy, PrivyClientConfig } from '@privy-io/react-auth'
 
 import * as React from 'react';
 
+import { Environment } from '../environment';
 import { GEOGENESIS } from './geo-chain';
 
 const config: PrivyClientConfig = {
@@ -21,7 +22,7 @@ const config: PrivyClientConfig = {
 
 export function PrivyProvider({ children }: { children: React.ReactNode }) {
   return (
-    <Privy appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!} config={config}>
+    <Privy appId={Environment.variables.privyAppId} config={config}>
       {children}
     </Privy>
   );
