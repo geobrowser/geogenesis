@@ -4,6 +4,10 @@ if (!APP_ENV) {
   throw new Error('NEXT_PUBLIC_APP_ENV is not set');
 }
 
+if (APP_ENV !== 'production' && APP_ENV !== 'testnet') {
+  throw new Error(`Invalid value for NEXT_PUBLIC_APP_ENV: ${APP_ENV}`);
+}
+
 // Not required, only set in test environments
 const TEST_ENV = process.env.NEXT_PUBLIC_IS_TEST_ENV;
 
@@ -17,6 +21,12 @@ const RPC_ENDPOINT = process.env.NEXT_PUBLIC_GEOGENESIS_RPC;
 
 if (!RPC_ENDPOINT) {
   throw new Error('NEXT_PUBLIC_GEOGENESIS_RPC is not set');
+}
+
+const RPC_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET;
+
+if (APP_ENV === 'testnet' && !RPC_ENDPOINT_TESTNET) {
+  throw new Error('NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET is not set. APP_ENV is currently set to testnet');
 }
 
 const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;

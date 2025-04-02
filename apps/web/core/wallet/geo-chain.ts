@@ -2,8 +2,11 @@ import { Chain } from 'viem';
 
 import { Environment } from '../environment';
 
+const id = Environment.options[Environment.variables.appEnv].chainId;
+const rpc = Environment.options[Environment.variables.appEnv].rpc;
+
 export const GEOGENESIS: Chain = {
-  id: Number(Environment.options.production.chainId),
+  id: Number(id),
   name: 'Geo Genesis',
   nativeCurrency: {
     name: 'Ethereum',
@@ -12,10 +15,10 @@ export const GEOGENESIS: Chain = {
   },
   rpcUrls: {
     default: {
-      http: [Environment.options.production.rpc],
+      http: [rpc],
     },
     public: {
-      http: [Environment.options.production.rpc],
+      http: [rpc],
     },
   },
 };
