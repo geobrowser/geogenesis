@@ -52,7 +52,7 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
             media={<img src="/post.png" alt="" className="h-24 w-auto object-contain" />}
             title={`Write and publish your first post`}
             action={
-              <SimpleButton onClick={onClick} href={NavUtils.toEntity(spaceId, nextEntityId)}>
+              <SimpleButton onClick={() => onClick()} href={NavUtils.toEntity(spaceId, nextEntityId)}>
                 Create post
               </SimpleButton>
             }
