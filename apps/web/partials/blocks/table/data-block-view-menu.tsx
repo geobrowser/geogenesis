@@ -9,6 +9,7 @@ import { useCallback } from 'react';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { DataBlockView, useView } from '~/core/blocks/data/use-view';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { BulletedListView } from '~/design-system/icons/bulleted-list-view';
 
 import { Check } from '~/design-system/icons/check';
 import { Close } from '~/design-system/icons/close';
@@ -43,7 +44,7 @@ export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuP
       <Dropdown.Portal>
         <Dropdown.Content
           sideOffset={8}
-          className="z-100 block !w-[140px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          className="z-100 block !w-[160px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           align="end"
         >
           {DATA_BLOCK_VIEWS.map(view => {
@@ -63,6 +64,8 @@ function ViewIcon({ view, color }: { view: DataBlockView; color: ColorName }) {
       return <ListView color={color} />;
     case 'GALLERY':
       return <GalleryView color={color} />;
+    case 'BULLETED_LIST':
+      return <BulletedListView color={color} />;
   }
 }
 
@@ -72,6 +75,7 @@ const DATA_BLOCK_VIEWS: Array<DataBlockViewDetails> = [
   { name: 'Table', id: SystemIds.TABLE_VIEW, value: 'TABLE' },
   { name: 'Gallery', id: SystemIds.GALLERY_VIEW, value: 'GALLERY' },
   { name: 'List', id: SystemIds.LIST_VIEW, value: 'LIST' },
+  { name: 'Bulleted List', id: SystemIds.BULLETED_LIST_VIEW, value: 'BULLETED_LIST' },
 ];
 
 type ToggleViewProps = {
@@ -93,7 +97,7 @@ const ToggleView = ({ activeView, view, isLoading }: ToggleViewProps) => {
       <button onClick={onToggleView} className="flex w-full items-center justify-between gap-2" disabled={isActive}>
         <div className="inline-flex items-center gap-2">
           <ViewIcon view={view.value} color="text" />
-          <span>{view.name}</span>
+          <span className="whitespace-nowrap">{view.name}</span>
         </div>
         {isActive ? <Check /> : null}
       </button>

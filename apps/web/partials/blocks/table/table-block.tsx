@@ -47,6 +47,7 @@ import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
 import { TableBlockGalleryItem } from './table-block-gallery-item';
 import { TableBlockListItem } from './table-block-list-item';
+import { TableBlockBulletedListItem } from './table-block-bulleted-list-item';
 import { TableBlockTable } from './table-block-table';
 
 interface Props {
@@ -261,6 +262,27 @@ export const TableBlock = ({ spaceId }: Props) => {
         {entries.map((row, index: number) => {
           return (
             <TableBlockListItem
+              isEditing={isEditing}
+              key={`${row.entityId}-${index}`}
+              columns={row.columns}
+              currentSpaceId={spaceId}
+              rowEntityId={row.entityId}
+              isPlaceholder={Boolean(row.placeholder)}
+              onChangeEntry={onChangeEntry}
+              properties={propertiesSchema}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (view === 'BULLETED_LIST') {
+    EntriesComponent = (
+      <div className="flex w-full flex-col">
+        {entries.map((row, index: number) => {
+          return (
+            <TableBlockBulletedListItem
               isEditing={isEditing}
               key={`${row.entityId}-${index}`}
               columns={row.columns}
