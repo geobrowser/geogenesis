@@ -1,4 +1,5 @@
 import { cva, cx } from 'class-variance-authority';
+import Image from 'next/image';
 import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
@@ -147,8 +148,16 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
 export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   return (
     <Zoom>
-      <div className="relative" style={imageStyles[variant]}>
-        <img src={getImagePath(imageSrc)} className="h-full rounded-lg object-cover" />
+      <div className="relative h-auto w-auto" style={imageStyles[variant]}>
+        <Image
+          alt=""
+          height={0}
+          width={0}
+          unoptimized
+          style={{ width: 'auto' }}
+          src={getImagePath(imageSrc)}
+          className="h-full rounded-lg object-cover"
+        />
       </div>
     </Zoom>
   );
