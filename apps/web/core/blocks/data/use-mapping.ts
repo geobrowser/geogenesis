@@ -161,8 +161,16 @@ export function mappingToRows(
           );
 
           if (collectionEntity) {
+            cell.collectionId = collectionEntity.id;
+
             const url = collectionEntity.triples.find(triple => triple.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)
               ?.value.value;
+
+            const relationId = collectionEntity.triples.find(
+              triple => triple.attributeId === SystemIds.RELATION_TO_ATTRIBUTE
+            )?.entityId;
+
+            cell.relationId = relationId;
 
             if (url?.startsWith('graph://')) {
               const spaceId = GraphUrl.toSpaceId(url as GraphUri);

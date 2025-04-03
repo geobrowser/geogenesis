@@ -21,11 +21,12 @@ import { EntityId, SpaceId } from '~/core/io/schema';
 import { Cell, PropertySchema, Row } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
-import { CheckCircle } from '~/design-system/icons/check-circle';
 import { EyeHide } from '~/design-system/icons/eye-hide';
+import { SelectEntity } from '~/design-system/select-entity';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
+import { TableBlockTableItem } from '~/partials/blocks/table/table-block-table-item';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
@@ -145,16 +146,24 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
   },
 };
 
-interface Props {
+type TableBlockTableProps = {
   space: string;
   properties: PropertySchema[];
   propertiesSchema?: Record<PropertyId, PropertySchema>;
   rows: Row[];
   shownColumnIds: string[];
-  placeholder: { text: string; image: string };
   onChangeEntry: onChangeEntryFn;
+  onLinkEntry: (
+    id: string,
+    to: {
+      id: EntityId;
+      name: string | null;
+      space?: EntityId;
+      verified?: boolean;
+    }
+  ) => void;
   source: Source;
-}
+};
 
 export const TableBlockTable = ({
   rows,
@@ -162,13 +171,13 @@ export const TableBlockTable = ({
   properties,
   propertiesSchema,
   shownColumnIds,
-  placeholder,
   onChangeEntry,
+  onLinkEntry,
   source,
-}: Props) => {
+}: TableBlockTableProps) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
-  const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
+  const [expandedCells] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({
     data: rows,
@@ -192,21 +201,6 @@ export const TableBlockTable = ({
       source,
     },
   });
-
-  const isEmpty = rows.length === 0;
-
-  if (isEmpty) {
-    return (
-      <div className="block rounded-lg bg-grey-01">
-        <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
-          <div>{placeholder.text}</div>
-          <div>
-            <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   /**
    * We don't use headers from the react table instance. There's a bug where
@@ -259,6 +253,44 @@ export const TableBlockTable = ({
               const cells = row.getVisibleCells();
               const entityId = cells?.[0]?.getValue<Cell>()?.cellId;
 
+              if (row.original.placeholder) {
+                return (
+                  <TableCell key={entityId ?? index} width={784} isShown>
+                    <SelectEntity
+                      spaceId={space}
+                      onDone={result => {
+                        onChangeEntry(
+                          {
+                            entityId,
+                            entityName: row.original.columns[SystemIds.NAME_ATTRIBUTE]?.name,
+                            spaceId: space,
+                          },
+                          {
+                            type: 'FOC',
+                            data: result,
+                          }
+                        );
+                      }}
+                      onCreateEntity={result => {
+                        // This actually works quite differently than other creates since
+                        // we want to use the existing placeholder entity id.
+                        onChangeEntry(
+                          {
+                            entityId,
+                            entityName: row.original.columns[SystemIds.NAME_ATTRIBUTE]?.name,
+                            spaceId: space,
+                          },
+                          {
+                            type: 'FOC',
+                            data: result,
+                          }
+                        );
+                      }}
+                    />
+                  </TableCell>
+                );
+              }
+
               return (
                 <tr key={entityId ?? index} className="hover:bg-bg">
                   {cells.map(cell => {
@@ -266,38 +298,38 @@ export const TableBlockTable = ({
                     const firstRenderable = cell.getValue<Cell>()?.renderables[0];
 
                     const isNameCell = Boolean(firstRenderable?.attributeId === SystemIds.NAME_ATTRIBUTE);
-                    const isExpandable = firstRenderable && firstRenderable.type === 'TEXT';
                     const isShown = shownColumnIds.includes(cell.column.id);
 
-                    const href = NavUtils.toEntity(
-                      isNameCell ? (row.original.columns[SystemIds.NAME_ATTRIBUTE]?.space ?? space) : space,
-                      entityId
-                    );
-                    const { verified } = row.original.columns[SystemIds.NAME_ATTRIBUTE];
+                    const nameCell = row.original.columns[SystemIds.NAME_ATTRIBUTE];
+                    const { name, verified } = nameCell;
+                    const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
 
                     return (
                       <TableCell
                         key={`${cellId}-${index}-${row.original.entityId}`}
                         isLinkable={isNameCell && isEditing}
                         href={href}
-                        isExpandable={isExpandable}
-                        isExpanded={expandedCells[cellId]}
                         width={cell.column.getSize()}
-                        toggleExpanded={() =>
-                          setExpandedCells(prev => ({
-                            ...prev,
-                            [cellId]: !prev[cellId],
-                          }))
-                        }
                         isShown={isShown}
                         isEditMode={isEditing}
                       >
-                        {isNameCell && verified && (
-                          <span>
-                            <CheckCircle color={isEditing ? 'text' : 'ctaPrimary'} />
-                          </span>
+                        {isNameCell ? (
+                          <TableBlockTableItem
+                            isEditing={isEditing}
+                            name={name}
+                            href={href}
+                            currentSpaceId={space}
+                            entityId={entityId}
+                            spaceId={nameCell?.space}
+                            verified={verified}
+                            collectionId={nameCell?.collectionId}
+                            relationId={nameCell?.relationId}
+                            onChangeEntry={onChangeEntry}
+                            onLinkEntry={onLinkEntry}
+                          />
+                        ) : (
+                          <>{flexRender(cell.column.columnDef.cell, cell.getContext())}</>
                         )}
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     );
                   })}

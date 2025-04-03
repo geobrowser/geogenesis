@@ -208,6 +208,8 @@ export type Cell = {
   space?: string;
   verified?: boolean;
   renderedPropertyId?: string;
+  collectionId?: string;
+  relationId?: string;
 };
 
 export type Row = {

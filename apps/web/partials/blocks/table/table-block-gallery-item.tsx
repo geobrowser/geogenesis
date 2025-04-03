@@ -9,11 +9,12 @@ import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
-import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { CheckCircle } from '~/design-system/icons/check-circle';
+import { BlockImageField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
 
-import { onChangeEntryFn } from './change-entry';
+import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { EditableTitle } from '~/partials/blocks/table/editable-title';
+
 import { TableBlockPropertyField } from './table-block-property-field';
 
 type Props = {
@@ -22,8 +23,10 @@ type Props = {
   isEditing: boolean;
   rowEntityId: string;
   onChangeEntry: onChangeEntryFn;
+  onLinkEntry: onLinkEntryFn;
   isPlaceholder: boolean;
   properties?: Record<PropertyId, PropertySchema>;
+  relationId?: string;
 };
 
 export function TableBlockGalleryItem({
@@ -32,8 +35,10 @@ export function TableBlockGalleryItem({
   isEditing,
   rowEntityId,
   onChangeEntry,
+  onLinkEntry,
   isPlaceholder,
   properties,
+  relationId,
 }: Props) {
   const nameCell: Cell | undefined = columns[SystemIds.NAME_ATTRIBUTE];
   const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_ATTRIBUTE];
@@ -223,46 +228,19 @@ export function TableBlockGalleryItem({
                 allowedTypes={[]}
               />
             ) : (
-              <div className="flex items-center gap-2">
-                {verified && (
-                  <span>
-                    <CheckCircle color={isEditing ? 'text' : 'ctaPrimary'} />
-                  </span>
-                )}
-                <PageStringField
-                  placeholder="Add name..."
-                  onChange={value => {
-                    onChangeEntry(
-                      {
-                        entityId: rowEntityId,
-                        entityName: name,
-                        spaceId: currentSpaceId,
-                      },
-                      {
-                        type: 'EVENT',
-                        data: {
-                          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                          payload: {
-                            renderable: {
-                              attributeId: SystemIds.NAME_ATTRIBUTE,
-                              entityId: rowEntityId,
-                              spaceId: currentSpaceId,
-                              attributeName: 'Name',
-                              entityName: name,
-                              type: 'TEXT',
-                              value: name ?? '',
-                            },
-                            value: { type: 'TEXT', value },
-                          },
-                        },
-                      }
-                    );
-
-                    return;
-                  }}
-                  value={name ?? ''}
-                />
-              </div>
+              <EditableTitle
+                view="GALLERY"
+                isEditing={true}
+                name={name}
+                href={href}
+                currentSpaceId={currentSpaceId}
+                entityId={rowEntityId}
+                spaceId={nameCell?.space}
+                relationId={relationId}
+                verified={verified}
+                onChangeEntry={onChangeEntry}
+                onLinkEntry={onLinkEntry}
+              />
             )}
           </div>
 
@@ -303,14 +281,19 @@ export function TableBlockGalleryItem({
       </div>
       <div className="flex flex-col gap-4 px-1">
         <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            {verified && (
-              <div>
-                <CheckCircle />
-              </div>
-            )}
-            <div className="truncate text-smallTitle font-medium text-text">{name}</div>
-          </div>
+          <EditableTitle
+            view="GALLERY"
+            isEditing={false}
+            name={name}
+            href={href}
+            currentSpaceId={currentSpaceId}
+            entityId={rowEntityId}
+            spaceId={nameCell?.space}
+            relationId={relationId}
+            verified={verified}
+            onChangeEntry={() => null}
+            onLinkEntry={() => null}
+          />
           {description && propertyDataHasDescription && (
             <div className="line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
           )}

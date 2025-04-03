@@ -48,6 +48,7 @@ export function useDataBlock() {
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
   const {
+    blockEntity,
     collectionItems,
     collectionRelations,
     isFetched: isCollectionFetched,
@@ -188,6 +189,7 @@ export function useDataBlock() {
     spaceId,
     relationId,
 
+    blockEntity,
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
     properties: propertiesSchema ? Object.values(propertiesSchema) : [],
     propertiesSchema,

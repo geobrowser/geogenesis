@@ -13,3 +13,13 @@ export type ChangeEntryParams =
     };
 
 export type onChangeEntryFn = (context: EditEventContext, event: ChangeEntryParams) => void;
+
+export type onLinkEntryFn = (
+  id: string,
+  to: {
+    id: EntityId;
+    name: string | null;
+    space?: EntityId;
+    verified?: boolean;
+  }
+) => void;
