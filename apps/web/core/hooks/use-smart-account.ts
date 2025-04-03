@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { createSmartAccountClient } from 'permissionless';
-import { toSafeSmartAccount, toSimpleSmartAccount } from 'permissionless/accounts';
+import { toSafeSmartAccount } from 'permissionless/accounts';
 import { createPimlicoClient } from 'permissionless/clients/pimlico';
 import { useCookies } from 'react-cookie';
 import { createPublicClient, http } from 'viem';
@@ -21,17 +21,16 @@ export function useSmartAccount() {
   const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
   const [cookies] = useCookies([WALLET_ADDRESS]);
 
-  const {
-    data: smartAccount,
-    isLoading,
-    failureCount,
-    failureReason,
-    status,
-  } = useQuery({
+  const { data: smartAccount, isLoading } = useQuery({
     queryKey: ['smart-account', walletClient?.account.address, cookies.walletAddress],
     queryFn: async () => {
       if (!walletClient) {
         return null;
+      }
+
+      if (Environment.variables.appEnv === 'testnet') {
+        console.log('using wallet client');
+        return walletClient;
       }
 
       const transport = http(Environment.getConfig().rpc);
@@ -42,31 +41,15 @@ export function useSmartAccount() {
         chain: GEOGENESIS,
       });
 
-      console.log('Environment.variables.appEnv', Environment.variables.appEnv);
-
-      const smartAccountImplementation =
-        // Environment.variables.appEnv === 'production';
-        // ? await toSafeSmartAccount({
-        //     client: publicClient,
-        //     owners: [walletClient],
-        //     entryPoint: {
-        //       version: '0.7',
-        //       address: ENTRY_POINT_07,
-        //     },
-        //     version: '1.4.1',
-        //   })
-        await toSimpleSmartAccount({
-          client: publicClient,
-          owner: walletClient,
-          factoryAddress: '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985',
-          entryPoint: {
-            version: '0.7',
-            address: ENTRY_POINT_07,
-          },
-        });
-
-      console.log('wallet client?', walletClient);
-      console.log('impl', smartAccountImplementation);
+      const smartAccountImplementation = await toSafeSmartAccount({
+        client: publicClient,
+        owners: [walletClient],
+        entryPoint: {
+          version: '0.7',
+          address: ENTRY_POINT_07,
+        },
+        version: '1.4.1',
+      });
 
       const paymasterClient = createPimlicoClient({
         transport: bundlerTransport,
@@ -99,7 +82,7 @@ export function useSmartAccount() {
     },
   });
 
-  console.log('???', { smartAccount, failureCount, failureReason, status });
+  console.log('smart account', smartAccount);
 
   return { smartAccount: smartAccount ?? null, isLoading: isLoading || isLoadingWallet };
 }

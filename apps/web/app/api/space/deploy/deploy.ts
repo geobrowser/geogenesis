@@ -48,7 +48,7 @@ const PLUGIN_SETUP_PROCESSOR_ADDRESS =
 const deployParams = {
   network: SupportedNetworks.LOCAL, // I don't think this matters but is required by Aragon SDK
   signer: signer,
-  web3Providers: new providers.JsonRpcProvider(Environment.variables.rpcEndpoint),
+  web3Providers: new providers.JsonRpcProvider(Environment.getConfig().rpc),
   DAOFactory: DAO_FACTORY_ADDRESS,
   ENSRegistry: ENS_REGISTRY,
 };
@@ -88,6 +88,8 @@ export function deploySpace(args: DeployArgs) {
     }
 
     const governanceType = getGovernanceTypeForSpaceType(args.type, args.governanceType);
+
+    console.log('initial', args.initialEditorAddress);
 
     yield* Effect.logInfo('Generating ops for space').pipe(Effect.annotateLogs({ type: args.type }));
     const ops = yield* Effect.tryPromise({
@@ -144,6 +146,8 @@ export function deploySpace(args: DeployArgs) {
       plugins,
     };
 
+    console.log('plugins', plugins);
+
     const deployStartTime = Date.now();
     yield* Effect.logInfo('Creating DAO');
 
@@ -166,7 +170,10 @@ export function deploySpace(args: DeployArgs) {
 
         return { dao, pluginAddresses };
       },
-      catch: e => new DeployDaoError(`Failed creating DAO: ${e}`),
+      catch: e => {
+        console.log('e', e);
+        new DeployDaoError(`Failed creating DAO: ${e}`);
+      },
     });
 
     const deployEndTime = Date.now() - deployStartTime;
@@ -358,6 +365,8 @@ async function* createDao(params: CreateGeoDaoParams, context: ContextParams) {
   if (!execPermissionFound) {
     throw new MissingExecPermissionError();
   }
+
+  console.log('plugin installation data', pluginInstallationData);
 
   // We use viem as we run into unexpected "unknown account" errors when using ethers to
   // write the tx using the geo signer.
