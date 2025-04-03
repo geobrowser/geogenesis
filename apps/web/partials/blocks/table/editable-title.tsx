@@ -74,7 +74,6 @@ export const EditableTitle = ({
     spaceId,
   });
 
-  // @TODO is this everything?
   const onDeleteEntry = async () => {
     if (blockEntity) {
       const blockRelation = blockEntity.relationsOut.find(r => r.toEntity.id === entityId);
@@ -84,24 +83,14 @@ export const EditableTitle = ({
       }
     }
 
-    if (collectionId) {
-      // const entity = await fetchEntity({ id: collectionId, spaceId: currentSpaceId });
-      const entity = collectionEntity;
-
-      if (entity) {
-        entity.triples.forEach(t => remove(t, t.space));
-        entity.relationsOut.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
-      }
+    if (collectionEntity) {
+      collectionEntity.triples.forEach(t => remove(t, t.space));
+      collectionEntity.relationsOut.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
     }
 
-    if (relationId) {
-      // const entity = await fetchEntity({ id: relationId, spaceId: currentSpaceId });
-      const entity = relationEntity;
-
-      if (entity) {
-        entity.triples.forEach(t => remove(t, t.space));
-        entity.relationsOut.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
-      }
+    if (relationEntity) {
+      relationEntity.triples.forEach(t => remove(t, t.space));
+      relationEntity.relationsOut.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
     }
   };
 
