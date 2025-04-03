@@ -31,7 +31,7 @@ import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 
-import { onChangeEntryFn } from './change-entry';
+import type { onChangeEntryFn, onLinkEntryFn } from './change-entry';
 import { editingPropertiesAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
@@ -153,15 +153,7 @@ type TableBlockTableProps = {
   rows: Row[];
   shownColumnIds: string[];
   onChangeEntry: onChangeEntryFn;
-  onLinkEntry: (
-    id: string,
-    to: {
-      id: EntityId;
-      name: string | null;
-      space?: EntityId;
-      verified?: boolean;
-    }
-  ) => void;
+  onLinkEntry: onLinkEntryFn;
   source: Source;
 };
 
