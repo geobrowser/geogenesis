@@ -136,8 +136,15 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       if (!maybeHasCollectionItem) {
         let to: (Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }) | null = null;
 
-        if (event.type === 'FOC') {
-          to = { ...event.data, id: nextEntityId };
+        if (event.type === 'Find') {
+          to = event.data;
+        }
+
+        if (event.type === 'Create') {
+          to = {
+            ...event.data,
+            id: nextEntityId,
+          };
         }
 
         if (event.type === 'EVENT') {
@@ -189,7 +196,12 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       setHasPlaceholderRow(false);
     }
 
-    createEntityWithTypes({ name: event.type === 'FOC' ? event.data.name : undefined, filters: filterState });
+    const maybeName = event.type === 'Create' || event.type === 'Find' ? event.data.name : undefined;
+
+    createEntityWithTypes({
+      name: maybeName,
+      filters: filterState,
+    });
   };
 
   const onAddPlaceholder = () => {

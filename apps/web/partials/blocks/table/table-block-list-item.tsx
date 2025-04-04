@@ -194,23 +194,45 @@ export function TableBlockListItem({
             {isPlaceholder && source.type === 'COLLECTION' ? (
               <SelectEntity
                 onCreateEntity={result => {
+                  // This actually works quite differently than other creates since
+                  // we want to use the existing placeholder entity id.
                   onChangeEntry(
                     {
-                      // This actually works quite differently than other creates since
-                      // we want to use the existing placeholder entity id instead of
-                      // the internal id from SelectEntity
                       entityId: rowEntityId,
                       entityName: result.name,
                       spaceId: currentSpaceId,
                     },
                     {
-                      type: 'FOC',
+                      type: 'Create',
+                      data: result,
+                    }
+                  );
+                }}
+                onDone={(result, fromCreateFn) => {
+                  if (fromCreateFn) {
+                    // We bail out in the case that we're receiving the onDone
+                    // callback from within the create entity function internal
+                    // to SelectEntity.
+                    return;
+                  }
+
+                  // This actually works quite differently than other creates since
+                  // we want to use the existing placeholder entity id.
+                  //
+                  // @TODO: When do we use the placeholder and when we use the real entity id?
+                  onChangeEntry(
+                    {
+                      entityId: rowEntityId,
+                      entityName: result.name,
+                      spaceId: currentSpaceId,
+                    },
+                    {
+                      type: 'Find',
                       data: result,
                     }
                   );
                 }}
                 spaceId={currentSpaceId}
-                allowedTypes={[]}
               />
             ) : (
               <div className="flex items-center gap-2">

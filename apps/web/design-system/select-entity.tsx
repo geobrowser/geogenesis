@@ -30,7 +30,16 @@ import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
-  onDone?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
+  onDone?: (
+    result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean },
+    // This is used to determine if the onDone is called from within the create function
+    // internal to SelectEntity. Some consumers in the codebase want to either listen to
+    // the onDone OR onCreateEntity callback but not both. This lets them bail out of
+    // onCreate if they need to.
+    //
+    // Not the best way to do this but the simplest for now to avoid breaking changes.
+    fromCreateFn?: boolean
+  ) => void;
   onCreateEntity?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
   spaceId: string;
   allowedTypes?: string[];

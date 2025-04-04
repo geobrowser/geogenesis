@@ -21,22 +21,14 @@ import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
-type ChangeEntryParams =
-  | {
-      type: 'EVENT';
-      data: EditEvent;
-    }
-  | {
-      type: 'FOC';
-      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
-    };
+import { onChangeEntryFn } from './change-entry';
 
 export function TableBlockPropertyField(props: {
   renderables: RenderableProperty[];
   spaceId: string;
   entityId: string;
   properties?: Record<PropertyId, PropertySchema>;
-  onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
+  onChangeEntry: onChangeEntryFn;
   source: Source;
 }) {
   const { renderables, spaceId, entityId, properties, onChangeEntry, source } = props;
