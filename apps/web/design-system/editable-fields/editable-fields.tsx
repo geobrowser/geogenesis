@@ -86,23 +86,50 @@ type PageStringFieldProps = {
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle';
   value?: string;
-  autoFocus?: boolean;
 };
 
-export function PageStringField({ autoFocus = false, ...props }: PageStringFieldProps) {
+export function PageStringField({ ...props }: PageStringFieldProps) {
+  const [localValue, setLocalValue] = React.useState(() => props.value || '');
+  const { onChange } = props;
+
+  useEffect(() => {
+    // Update local value if value prop changes from outside the component
+    setLocalValue(props.value || '');
+  }, [props.value]);
+
+  // Apply debounce effect
+  const debouncedCallback = debounce((value: string) => {
+    onChange(value);
+  }, 1000);
+
+  // Handle input changes
+  const handleChange = (value: string) => {
+    setLocalValue(value);
+    debouncedCallback(value);
+  };
+
+  return (
+    <Textarea
+      {...props}
+      value={localValue}
+      onChange={e => handleChange(e.currentTarget.value)}
+      className={textareaStyles({ variant: props.variant })}
+    />
+  );
+}
+
+export function FocusedStringField({ ...props }: PageStringFieldProps) {
   const [localValue, setLocalValue] = React.useState(() => props.value || '');
   const { onChange } = props;
 
   const ref = useRef<HTMLTextAreaElement>(null!);
 
   useEffectOnce(() => {
-    if (autoFocus) {
-      setTimeout(() => {
-        ref.current.focus();
-        const length = ref.current.value.length;
-        ref.current.setSelectionRange(length, length);
-      }, 200);
-    }
+    setTimeout(() => {
+      ref.current.focus();
+      const length = ref.current.value.length;
+      ref.current.setSelectionRange(length, length);
+    }, 200);
   });
 
   useEffect(() => {

@@ -15,7 +15,7 @@ import { EntityId } from '~/core/io/schema';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { FocusedStringField } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Menu } from '~/design-system/icons/menu';
@@ -275,13 +275,12 @@ const EditingTitle = ({
         view === 'GALLERY' && ''
       )}
     >
-      <PageStringField
+      <FocusedStringField
         placeholder="Entity name..."
         value={newName}
         onChange={string => {
           setNewName(string);
         }}
-        autoFocus
       />
     </div>
   );

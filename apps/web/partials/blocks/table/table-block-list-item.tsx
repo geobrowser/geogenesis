@@ -314,8 +314,8 @@ export function TableBlockListItem({
           spaceId={nameCell?.space}
           relationId={relationId}
           verified={verified}
-          onChangeEntry={() => null}
-          onLinkEntry={() => null}
+          onChangeEntry={onChangeEntry}
+          onLinkEntry={onLinkEntry}
         />
         {description && (
           <div className="mt-0.5 line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>

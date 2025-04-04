@@ -22,7 +22,6 @@ import { Cell, PropertySchema, Row } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
-import { SelectEntity } from '~/design-system/select-entity';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
@@ -152,6 +151,7 @@ type TableBlockTableProps = {
   propertiesSchema?: Record<PropertyId, PropertySchema>;
   rows: Row[];
   shownColumnIds: string[];
+  placeholder: { text: string; image: string };
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   source: Source;
@@ -163,6 +163,7 @@ export const TableBlockTable = ({
   properties,
   propertiesSchema,
   shownColumnIds,
+  placeholder,
   onChangeEntry,
   onLinkEntry,
   source,
@@ -193,6 +194,21 @@ export const TableBlockTable = ({
       source,
     },
   });
+
+  const isEmpty = rows.length === 0;
+
+  if (isEmpty) {
+    return (
+      <div className="block rounded-lg bg-grey-01">
+        <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
+          <div>{placeholder.text}</div>
+          <div>
+            <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   /**
    * We don't use headers from the react table instance. There's a bug where
@@ -244,44 +260,6 @@ export const TableBlockTable = ({
             {tableRows.map((row, index: number) => {
               const cells = row.getVisibleCells();
               const entityId = cells?.[0]?.getValue<Cell>()?.cellId;
-
-              if (row.original.placeholder) {
-                return (
-                  <TableCell key={entityId ?? index} width={784} isShown>
-                    <SelectEntity
-                      spaceId={space}
-                      onDone={result => {
-                        onChangeEntry(
-                          {
-                            entityId,
-                            entityName: row.original.columns[SystemIds.NAME_ATTRIBUTE]?.name,
-                            spaceId: space,
-                          },
-                          {
-                            type: 'FOC',
-                            data: result,
-                          }
-                        );
-                      }}
-                      onCreateEntity={result => {
-                        // This actually works quite differently than other creates since
-                        // we want to use the existing placeholder entity id.
-                        onChangeEntry(
-                          {
-                            entityId,
-                            entityName: row.original.columns[SystemIds.NAME_ATTRIBUTE]?.name,
-                            spaceId: space,
-                          },
-                          {
-                            type: 'FOC',
-                            data: result,
-                          }
-                        );
-                      }}
-                    />
-                  </TableCell>
-                );
-              }
 
               return (
                 <tr key={entityId ?? index} className="hover:bg-bg">
