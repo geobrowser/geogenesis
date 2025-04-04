@@ -137,7 +137,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
         let to: (Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }) | null = null;
 
         if (event.type === 'FOC') {
-          to = event.data;
+          to = { ...event.data, id: nextEntityId };
         }
 
         if (event.type === 'EVENT') {
@@ -148,6 +148,8 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
             verified: false,
           };
         }
+
+        console.log('to', { to, nextEntityId });
 
         if (to !== null) {
           const id = ID.createEntityId();

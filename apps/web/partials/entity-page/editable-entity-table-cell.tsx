@@ -72,7 +72,6 @@ export function EditableEntityTableCell({
             );
           }}
           spaceId={spaceId}
-          allowedTypes={[]}
         />
       );
     }
