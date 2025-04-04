@@ -117,7 +117,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const renderables = cellData.renderables;
 
-    if (isEditable) {
+    if (isEditable && source.type !== 'RELATIONS') {
       return (
         <EditableEntityTableCell
           source={source}

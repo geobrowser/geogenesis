@@ -2,6 +2,7 @@ import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
 import Link from 'next/link';
 
+import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
@@ -28,6 +29,7 @@ type Props = {
   onLinkEntry: onLinkEntryFn;
   properties?: Record<PropertyId, PropertySchema>;
   relationId?: string;
+  source: Source;
   // allowedTypes
 };
 
@@ -41,6 +43,7 @@ export function TableBlockListItem({
   onLinkEntry,
   properties,
   relationId,
+  source,
 }: Props) {
   const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
@@ -101,7 +104,7 @@ export function TableBlockListItem({
       c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
   );
 
-  if (isEditing) {
+  if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
         <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
@@ -193,26 +196,48 @@ export function TableBlockListItem({
         <div className="w-full space-y-4">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
-            {isPlaceholder ? (
+            {isPlaceholder && source.type === 'COLLECTION' ? (
               <SelectEntity
                 onCreateEntity={result => {
+                  // This actually works quite differently than other creates since
+                  // we want to use the existing placeholder entity id.
                   onChangeEntry(
                     {
-                      // This actually works quite differently than other creates since
-                      // we want to use the existing placeholder entity id instead of
-                      // the internal id from SelectEntity
                       entityId: rowEntityId,
                       entityName: result.name,
                       spaceId: currentSpaceId,
                     },
                     {
-                      type: 'FOC',
+                      type: 'Create',
+                      data: result,
+                    }
+                  );
+                }}
+                onDone={(result, fromCreateFn) => {
+                  if (fromCreateFn) {
+                    // We bail out in the case that we're receiving the onDone
+                    // callback from within the create entity function internal
+                    // to SelectEntity.
+                    return;
+                  }
+
+                  // This actually works quite differently than other creates since
+                  // we want to use the existing placeholder entity id.
+                  //
+                  // @TODO: When do we use the placeholder and when we use the real entity id?
+                  onChangeEntry(
+                    {
+                      entityId: rowEntityId,
+                      entityName: result.name,
+                      spaceId: currentSpaceId,
+                    },
+                    {
+                      type: 'Find',
                       data: result,
                     }
                   );
                 }}
                 spaceId={currentSpaceId}
-                allowedTypes={[]}
               />
             ) : (
               <EditableTitle
@@ -280,6 +305,7 @@ export function TableBlockListItem({
                     entityId={rowEntityId}
                     properties={properties}
                     onChangeEntry={onChangeEntry}
+                    source={source}
                   />
                 </div>
               </>
@@ -332,6 +358,7 @@ export function TableBlockListItem({
                 entityId={cellId}
                 properties={properties}
                 onChangeEntry={onChangeEntry}
+                source={source}
               />
             </div>
           );

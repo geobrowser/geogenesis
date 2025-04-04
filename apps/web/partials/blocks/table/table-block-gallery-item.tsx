@@ -2,6 +2,7 @@ import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
 import Link from 'next/link';
 
+import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
@@ -27,6 +28,7 @@ type Props = {
   isPlaceholder: boolean;
   properties?: Record<PropertyId, PropertySchema>;
   relationId?: string;
+  source: Source;
 };
 
 export function TableBlockGalleryItem({
@@ -39,6 +41,7 @@ export function TableBlockGalleryItem({
   isPlaceholder,
   properties,
   relationId,
+  source,
 }: Props) {
   const nameCell: Cell | undefined = columns[SystemIds.NAME_ATTRIBUTE];
   const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_ATTRIBUTE];
@@ -114,7 +117,7 @@ export function TableBlockGalleryItem({
    */
   const propertyDataHasDescription = otherPropertyData.some(c => c.slotId === SystemIds.DESCRIPTION_ATTRIBUTE);
 
-  if (isEditing) {
+  if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2">
         <div className="relative flex aspect-[2/1] w-full items-center justify-center overflow-clip rounded-lg bg-grey-01">
@@ -206,26 +209,48 @@ export function TableBlockGalleryItem({
         <div className="flex flex-col gap-3 px-1">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
-            {isPlaceholder ? (
+            {isPlaceholder && source.type === 'COLLECTION' ? (
               <SelectEntity
                 onCreateEntity={result => {
+                  // This actually works quite differently than other creates since
+                  // we want to use the existing placeholder entity id.
                   onChangeEntry(
                     {
-                      // This actually works quite differently than other creates since
-                      // we want to use the existing placeholder entity id instead of
-                      // the internal id from SelectEntity
                       entityId: rowEntityId,
                       entityName: result.name,
                       spaceId: currentSpaceId,
                     },
                     {
-                      type: 'FOC',
+                      type: 'Create',
+                      data: result,
+                    }
+                  );
+                }}
+                onDone={(result, fromCreateFn) => {
+                  if (fromCreateFn) {
+                    // We bail out in the case that we're receiving the onDone
+                    // callback from within the create entity function internal
+                    // to SelectEntity.
+                    return;
+                  }
+
+                  // This actually works quite differently than other creates since
+                  // we want to use the existing placeholder entity id.
+                  //
+                  // @TODO: When do we use the placeholder and when we use the real entity id?
+                  onChangeEntry(
+                    {
+                      entityId: rowEntityId,
+                      entityName: result.name,
+                      spaceId: currentSpaceId,
+                    },
+                    {
+                      type: 'Find',
                       data: result,
                     }
                   );
                 }}
                 spaceId={currentSpaceId}
-                allowedTypes={[]}
               />
             ) : (
               <EditableTitle
@@ -256,6 +281,7 @@ export function TableBlockGalleryItem({
                     entityId={rowEntityId}
                     properties={properties}
                     onChangeEntry={onChangeEntry}
+                    source={source}
                   />
                 </div>
               </>
@@ -309,6 +335,7 @@ export function TableBlockGalleryItem({
                 spaceId={currentSpaceId}
                 entityId={cellId}
                 onChangeEntry={onChangeEntry}
+                source={source}
               />
             );
           })}
