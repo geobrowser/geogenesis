@@ -47,7 +47,7 @@ export function upsertCollectionItemRelation({
 type UpsertSourceSpaceCollectionItemArgs = {
   collectionItemId: EntityId;
   spaceId: SpaceId;
-  sourceSpaceId: string;
+  sourceSpaceId?: string;
   toId: EntityId;
 };
 
@@ -65,7 +65,7 @@ export function upsertSourceSpaceOnCollectionItem({
       entityName: null,
       value: {
         type: 'URL',
-        value: GraphUrl.fromEntityId(toId, { spaceId: sourceSpaceId }),
+        value: sourceSpaceId ? GraphUrl.fromEntityId(toId, { spaceId: sourceSpaceId }) : GraphUrl.fromEntityId(toId),
       },
     },
     spaceId
@@ -75,11 +75,13 @@ export function upsertSourceSpaceOnCollectionItem({
 type UpsertVerifiedSourceCollectionItemArgs = {
   collectionItemId: EntityId;
   spaceId: SpaceId;
+  verified?: boolean;
 };
 
 export function upsertVerifiedSourceOnCollectionItem({
   collectionItemId,
   spaceId,
+  verified = true,
 }: UpsertVerifiedSourceCollectionItemArgs) {
   DB.upsert(
     {
@@ -89,7 +91,7 @@ export function upsertVerifiedSourceOnCollectionItem({
       entityName: null,
       value: {
         type: 'CHECKBOX',
-        value: '1',
+        value: verified ? '1' : '0',
       },
     },
     spaceId

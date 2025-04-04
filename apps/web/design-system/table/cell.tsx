@@ -8,8 +8,6 @@ import * as React from 'react';
 import { SquareButton } from '~/design-system/button';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { ContractSmall } from '../icons/contract-small';
-import { ExpandSmall } from '../icons/expand-small';
 import { RightArrowLongSmall } from '../icons/right-arrow-long-small';
 import { editingPropertiesAtom } from '~/atoms';
 
@@ -17,25 +15,12 @@ interface Props {
   href?: string;
   children: React.ReactNode;
   width: number;
-  isExpandable?: boolean;
   isLinkable?: boolean;
-  isExpanded: boolean;
-  toggleExpanded: () => void;
   isShown?: boolean;
   isEditMode?: boolean;
 }
 
-export function TableCell({
-  children,
-  width,
-  isExpandable,
-  isLinkable,
-  href,
-  toggleExpanded,
-  isExpanded,
-  isShown,
-  isEditMode,
-}: Props) {
+export function TableCell({ children, width, isLinkable, href, isShown, isEditMode }: Props) {
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [isHovered, setIsHovered] = React.useState(false);
 
@@ -56,9 +41,6 @@ export function TableCell({
         <div className="flex items-center gap-2">{children}</div>
         {isHovered && (
           <div className="absolute right-0 top-0 z-10 flex items-center gap-1">
-            {isExpandable && (
-              <SquareButton onClick={toggleExpanded} icon={isExpanded ? <ContractSmall /> : <ExpandSmall />} />
-            )}
             {isLinkable && href && (
               <Link href={href}>
                 <SquareButton icon={<RightArrowLongSmall />} />
