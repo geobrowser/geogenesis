@@ -35,7 +35,13 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
       // the name might exist but be empty, fall back to the entity id in this case.
       entityId;
 
-    return <CellContent key={value} href={NavUtils.toEntity(space, entityId)} isExpanded={isExpanded} value={value} />;
+      <CellContent
+        key={value !== '' ? value : entityId}
+        href={NavUtils.toEntity(space, entityId)}
+        isExpanded={isExpanded}
+        value={value !== '' ? value : entityId}
+      />
+    );
   }
 
   return (
