@@ -207,7 +207,7 @@ export function useView() {
   };
 }
 
-export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY';
+export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY' | 'BULLETED_LIST';
 
 const getView = (viewRelation: Relation | undefined): DataBlockView => {
   let view: DataBlockView = 'TABLE';
@@ -222,6 +222,9 @@ const getView = (viewRelation: Relation | undefined): DataBlockView => {
         break;
       case SystemIds.GALLERY_VIEW:
         view = 'GALLERY';
+        break;
+      case SystemIds.BULLETED_LIST_VIEW:
+        view = 'BULLETED_LIST';
         break;
       default:
         // We default to TABLE above
@@ -265,4 +268,8 @@ const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string 
     text: 'Add a gallery card',
     image: '/gallery.png',
   },
+  BULLETED_LIST: {
+    text: 'Add a bullet list item',
+    image: '/list.png',
+  }
 };
