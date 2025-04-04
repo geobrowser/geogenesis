@@ -18,7 +18,7 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { editEvent } from '~/core/events/edit-events';
-import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
+import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -112,11 +112,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
   const { setEditable } = useEditable();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
 
-  const filteredTypes: Array<string> = filterState
-    .filter(filter => filter.columnId === SystemIds.TYPES_ATTRIBUTE)
-    .map(filter => filter.value);
-
-  const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityFromType(spaceId, filteredTypes);
+  const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
 
   const renderedEntries =
     hasPlaceholderRow && isEditing && !entries.find(e => e.entityId === nextEntityId)
@@ -191,7 +187,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       setHasPlaceholderRow(false);
     }
 
-    createEntityWithTypes(event.type === 'FOC' ? event.data.name : undefined);
+    createEntityWithTypes({ name: event.type === 'FOC' ? event.data.name : undefined, filters: filterState });
   };
 
   const onAddPlaceholder = () => {
