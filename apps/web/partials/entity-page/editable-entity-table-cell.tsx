@@ -56,23 +56,6 @@ export function EditableEntityTableCell({
     if (isPlaceholderRow && source.type === 'COLLECTION') {
       return (
         <SelectEntity
-          // What actually happens here? We create a link to the entity for the source?
-          // If the entity already exists then it should be a text block instead of the
-          // search experience
-          onDone={result => {
-            // If the source type is query we shouldn't use FOC and instead just show the name
-            onChangeEntry(
-              {
-                entityId: entityId,
-                entityName: entityName,
-                spaceId: spaceId,
-              },
-              {
-                type: 'FOC',
-                data: result,
-              }
-            );
-          }}
           onCreateEntity={result => {
             // This actually works quite differently than other creates since
             // we want to use the existing placeholder entity id.
