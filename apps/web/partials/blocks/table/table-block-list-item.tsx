@@ -191,7 +191,7 @@ export function TableBlockListItem({
         <div className="w-full space-y-4">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
-            {isPlaceholder ? (
+            {isPlaceholder && source.type === 'COLLECTION' ? (
               <SelectEntity
                 onCreateEntity={result => {
                   onChangeEntry(

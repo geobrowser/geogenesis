@@ -204,7 +204,7 @@ export function TableBlockGalleryItem({
         <div className="flex flex-col gap-3 px-1">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
-            {isPlaceholder ? (
+            {isPlaceholder && source.type === 'COLLECTION' ? (
               <SelectEntity
                 onCreateEntity={result => {
                   onChangeEntry(
