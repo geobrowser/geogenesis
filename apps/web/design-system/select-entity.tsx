@@ -150,7 +150,7 @@ export const SelectEntity = ({
         spaceId
       );
     }
-    onDone?.({ id: newEntityId, name: query });
+    onDone?.({ id: newEntityId, name: query }, true);
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
