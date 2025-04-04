@@ -11,7 +11,7 @@ import { useCallback } from 'react';
 
 import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
+import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -33,7 +33,7 @@ type SpaceNoticesProps = {
 export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
   const { isEditor } = useAccessControl(spaceId);
   const isEditing = useUserIsEditing(spaceId);
-  const { nextEntityId, onClick } = useCreateEntityFromType(spaceId, [SystemIds.POST_TYPE]);
+  const { nextEntityId, onClick } = useCreateEntityWithFilters(spaceId);
 
   if (spaceType === 'person') {
     if (isEditor) {
@@ -52,7 +52,22 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
             media={<img src="/post.png" alt="" className="h-24 w-auto object-contain" />}
             title={`Write and publish your first post`}
             action={
-              <SimpleButton onClick={() => onClick()} href={NavUtils.toEntity(spaceId, nextEntityId)}>
+              <SimpleButton
+                onClick={() =>
+                  onClick({
+                    filters: [
+                      {
+                        columnId: SystemIds.TYPES_PROPERTY,
+                        columnName: 'Types',
+                        value: SystemIds.POST_TYPE,
+                        valueName: 'Post',
+                        valueType: 'RELATION',
+                      },
+                    ],
+                  })
+                }
+                href={NavUtils.toEntity(spaceId, nextEntityId)}
+              >
                 Create post
               </SimpleButton>
             }
