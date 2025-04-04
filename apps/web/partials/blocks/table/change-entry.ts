@@ -8,7 +8,11 @@ export type ChangeEntryParams =
       data: EditEvent;
     }
   | {
-      type: 'FOC';
+      type: 'Create';
+      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
+    }
+  | {
+      type: 'Find';
       data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
     };
 

@@ -136,8 +136,15 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       if (!maybeHasCollectionItem) {
         let to: (Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }) | null = null;
 
-        if (event.type === 'FOC') {
+        if (event.type === 'Find') {
           to = event.data;
+        }
+
+        if (event.type === 'Create') {
+          to = {
+            ...event.data,
+            id: nextEntityId,
+          };
         }
 
         if (event.type === 'EVENT') {
@@ -187,7 +194,20 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       setHasPlaceholderRow(false);
     }
 
-    createEntityWithTypes({ name: event.type === 'FOC' ? event.data.name : undefined, filters: filterState });
+    /**
+     * We only create new entities during Find or Create. Find or Create is
+     * currently only available for Collections. We should only create new
+     * entities when we are creating. If we are finding then the entity
+     * already exists.
+     */
+    if (event.type !== 'Find') {
+      const maybeName = event.type === 'Create' ? event.data.name : undefined;
+
+      createEntityWithTypes({
+        name: maybeName,
+        filters: filterState,
+      });
+    }
   };
 
   const onAddPlaceholder = () => {
