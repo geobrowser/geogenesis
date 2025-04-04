@@ -2,6 +2,7 @@ import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
 import Link from 'next/link';
 
+import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
@@ -25,6 +26,7 @@ type Props = {
   isPlaceholder: boolean;
   onChangeEntry: onChangeEntryFn;
   properties?: Record<PropertyId, PropertySchema>;
+  source: Source;
   // allowedTypes
 };
 
@@ -36,6 +38,7 @@ export function TableBlockListItem({
   isPlaceholder,
   onChangeEntry,
   properties,
+  source,
 }: Props) {
   const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
@@ -96,7 +99,7 @@ export function TableBlockListItem({
       c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
   );
 
-  if (isEditing) {
+  if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
         <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
@@ -302,6 +305,7 @@ export function TableBlockListItem({
                     entityId={rowEntityId}
                     properties={properties}
                     onChangeEntry={onChangeEntry}
+                    source={source}
                   />
                 </div>
               </>
@@ -349,6 +353,7 @@ export function TableBlockListItem({
                 entityId={cellId}
                 properties={properties}
                 onChangeEntry={onChangeEntry}
+                source={source}
               />
             </div>
           );
