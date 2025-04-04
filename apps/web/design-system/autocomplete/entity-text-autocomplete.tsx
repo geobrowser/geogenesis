@@ -118,7 +118,7 @@ export function EntityTextAutocomplete({
         onChange={e => onQueryChange(e.target.value)}
         placeholder={placeholder}
         className={cx(
-          'relative z-10 m-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none',
+          'relative z-10 m-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none',
           className
         )}
       />
