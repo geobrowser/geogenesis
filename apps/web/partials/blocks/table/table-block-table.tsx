@@ -283,7 +283,7 @@ export const TableBlockTable = ({
                         isShown={isShown}
                         isEditMode={isEditing}
                       >
-                        {isNameCell ? (
+                        {isNameCell && !row.original.placeholder ? (
                           <TableBlockTableItem
                             isEditing={isEditing}
                             name={name}

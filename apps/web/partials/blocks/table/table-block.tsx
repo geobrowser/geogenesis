@@ -286,8 +286,8 @@ export const TableBlock = ({ spaceId }: Props) => {
       properties={properties}
       propertiesSchema={propertiesSchema}
       rows={entries}
-      shownColumnIds={shownColumnIds}
       placeholder={placeholder}
+      shownColumnIds={shownColumnIds}
       onChangeEntry={onChangeEntry}
       onLinkEntry={onLinkEntry}
     />

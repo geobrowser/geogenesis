@@ -49,7 +49,6 @@ export function useCollection() {
   });
 
   return {
-    blockEntity,
     collectionItems,
     collectionRelations,
     isLoading: isCollectionItemsLoading || isCollectionRelationsLoading,
