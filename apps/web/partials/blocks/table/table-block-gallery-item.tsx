@@ -2,6 +2,7 @@ import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
 import Link from 'next/link';
 
+import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
@@ -24,6 +25,7 @@ type Props = {
   onChangeEntry: onChangeEntryFn;
   isPlaceholder: boolean;
   properties?: Record<PropertyId, PropertySchema>;
+  source: Source;
 };
 
 export function TableBlockGalleryItem({
@@ -34,6 +36,7 @@ export function TableBlockGalleryItem({
   onChangeEntry,
   isPlaceholder,
   properties,
+  source,
 }: Props) {
   const nameCell: Cell | undefined = columns[SystemIds.NAME_ATTRIBUTE];
   const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_ATTRIBUTE];
@@ -109,7 +112,7 @@ export function TableBlockGalleryItem({
    */
   const propertyDataHasDescription = otherPropertyData.some(c => c.slotId === SystemIds.DESCRIPTION_ATTRIBUTE);
 
-  if (isEditing) {
+  if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2">
         <div className="relative flex aspect-[2/1] w-full items-center justify-center overflow-clip rounded-lg bg-grey-01">
@@ -278,6 +281,7 @@ export function TableBlockGalleryItem({
                     entityId={rowEntityId}
                     properties={properties}
                     onChangeEntry={onChangeEntry}
+                    source={source}
                   />
                 </div>
               </>
@@ -326,6 +330,7 @@ export function TableBlockGalleryItem({
                 spaceId={currentSpaceId}
                 entityId={cellId}
                 onChangeEntry={onChangeEntry}
+                source={source}
               />
             );
           })}

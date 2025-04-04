@@ -269,6 +269,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               isPlaceholder={Boolean(row.placeholder)}
               onChangeEntry={onChangeEntry}
               properties={propertiesSchema}
+              source={source}
             />
           );
         })}
@@ -290,6 +291,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               onChangeEntry={onChangeEntry}
               isPlaceholder={Boolean(row.placeholder)}
               properties={propertiesSchema}
+              source={source}
             />
           );
         })}
