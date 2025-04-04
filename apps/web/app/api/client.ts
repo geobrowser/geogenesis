@@ -7,17 +7,19 @@ import { walletClientToSigner } from '~/core/wallet/wallet-client-to-signer';
 
 import { ServerEnvironment } from './environment';
 
+const config = Environment.getConfig();
+
 const geoAccount = privateKeyToAccount(ServerEnvironment.geoPk as `0x${string}`);
 
 export const walletClient = createWalletClient({
   account: geoAccount,
   chain: GEOGENESIS,
-  transport: http(Environment.variables.rpcEndpoint, { batch: true }),
+  transport: http(config.rpc, { batch: true }),
 });
 
 export const publicClient = createPublicClient({
   chain: GEOGENESIS,
-  transport: http(Environment.variables.rpcEndpoint, { batch: true }),
+  transport: http(config.rpc, { batch: true }),
 });
 
 export const signer = walletClientToSigner(walletClient);

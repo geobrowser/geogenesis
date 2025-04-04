@@ -1,5 +1,6 @@
 import cx from 'classnames';
 
+import { Environment } from '~/core/environment';
 import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -55,6 +56,8 @@ export function Navbar({ onSearchClick }: Props) {
               Early access
             </a>
           )}
+
+          {Environment.variables.appEnv === 'testnet' && <p>TESTNET</p>}
 
           <CreateSpaceDropdown />
 

@@ -1,11 +1,10 @@
 import { Base58 } from '@graphprotocol/grc-20';
-import { SystemIds } from '@graphprotocol/grc-20';
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
-import { IPFS_GATEWAY_READ_PATH } from '~/core/constants';
+import { IPFS_GATEWAY_READ_PATH, ROOT_SPACE_ID } from '~/core/constants';
 import { EntityId } from '~/core/io/schema';
 
 import { Entity } from '../io/dto/entities';
@@ -23,7 +22,7 @@ export const NavUtils = {
   toRoot: () => '/root',
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
-  toSpace: (spaceId: string) => (spaceId === SystemIds.ROOT_SPACE_ID ? `/root` : `/space/${spaceId}`),
+  toSpace: (spaceId: string) => (spaceId === ROOT_SPACE_ID ? `/root` : `/space/${spaceId}`),
   toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
   toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
     return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;

@@ -13,7 +13,10 @@ import { Button } from '~/design-system/button';
 
 import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
+import { Environment } from '../environment';
 import { GEOGENESIS } from './geo-chain';
+
+const environmentConfig = Environment.getConfig();
 
 const realWalletConfig = createConfig({
   chains: [GEOGENESIS],
@@ -21,7 +24,7 @@ const realWalletConfig = createConfig({
   // extensions within the browser.
   multiInjectedProviderDiscovery: true,
   transports: {
-    [GEOGENESIS.id]: http(process.env.NEXT_PUBLIC_GEOGENESIS_RPC!),
+    [GEOGENESIS.id]: http(environmentConfig.rpc),
   },
   ssr: true,
   connectors: [
@@ -33,7 +36,7 @@ const realWalletConfig = createConfig({
     }),
     walletConnect({
       showQrModal: true,
-      projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+      projectId: Environment.variables.walletConnectProjectId,
       metadata: {
         name: 'Geo Genesis',
         description: "Browse and organize the world's public knowledge and information in a decentralized way.",
@@ -66,7 +69,7 @@ const mockConfig = createConfig({
   ],
 });
 
-const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
+const isTestEnv = Environment.variables.isTestEnv === true;
 const config = isTestEnv ? mockConfig : realWalletConfig;
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
