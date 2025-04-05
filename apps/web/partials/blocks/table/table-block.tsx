@@ -192,21 +192,23 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
     if (context.entityId === nextEntityId) {
       setHasPlaceholderRow(false);
-    }
 
-    /**
-     * We only create new entities during Find or Create. Find or Create is
-     * currently only available for Collections. We should only create new
-     * entities when we are creating. If we are finding then the entity
-     * already exists.
-     */
-    if (event.type !== 'Find') {
-      const maybeName = event.type === 'Create' ? event.data.name : undefined;
+      /**
+       * We only create new entities during Find or Create and when creating
+       * from a placeholder.
+       *
+       * Find or Create is currently only available for Collections. We should
+       * only create new entities when we are creating. If we are finding then
+       * the entity already exists.
+       */
+      if (event.type !== 'Find') {
+        const maybeName = event.type === 'Create' ? event.data.name : undefined;
 
-      createEntityWithTypes({
-        name: maybeName,
-        filters: filterState,
-      });
+        createEntityWithTypes({
+          name: maybeName,
+          filters: filterState,
+        });
+      }
     }
   };
 
