@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { GeoNumber, NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -69,12 +69,25 @@ function TriplesGroup({
             <div className="flex flex-wrap gap-2">
               {triples.map(renderable => {
                 switch (renderable.type) {
-                  case 'TEXT':
-                  case 'NUMBER':
+                  case 'TEXT': {
                     return (
                       <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
                         {renderable.value}
                       </Text>
+                    );
+                  }
+                  case 'NUMBER':
+                    return (
+                      <div>
+                        <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
+                          {renderable.value}
+                        </Text>
+                        {renderable.options?.format && (
+                          <p className="text-sm text-grey-04">
+                            Browse format · {GeoNumber.format(renderable.value, renderable.options?.format)}
+                          </p>
+                        )}
+                      </div>
                     );
                   case 'CHECKBOX': {
                     const checked = getChecked(renderable.value);
