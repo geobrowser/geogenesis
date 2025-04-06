@@ -121,29 +121,26 @@ const BackButton = ({ onClick }: { onClick: (e: React.MouseEvent) => void }) => 
   );
 };
 
-const NumberFormatView = ({ formatOptions, value }: { formatOptions?: NumberFormatOption[]; value?: string }) => {
-  console.log({ value });
-  return (
-    <>
-      {formatOptions?.map(({ isSelected, label, onClick, value: formatValue }, index) => (
-        <DropdownPrimitive.Item
-          key={`format-option-${index}`}
-          onClick={onClick}
-          className={cx(
-            'flex w-full select-none items-center justify-between px-3 py-2 text-button  hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
-            isSelected && '!bg-grey-01'
-          )}
-        >
-          <div className="flex flex-col gap-[2px]">
-            <p className="text-button font-medium">{label}</p>
-            <p className="text-metadata">{GeoNumber.format(value || '1234.56', formatValue)}</p>
-          </div>
-          {isSelected && <Check color="grey-04" />}
-        </DropdownPrimitive.Item>
-      ))}
-    </>
-  );
-};
+const NumberFormatView = ({ formatOptions, value }: { formatOptions?: NumberFormatOption[]; value?: string }) => (
+  <>
+    {formatOptions?.map(({ isSelected, label, onClick, value: formatValue }, index) => (
+      <DropdownPrimitive.Item
+        key={`format-option-${index}`}
+        onClick={onClick}
+        className={cx(
+          'flex w-full select-none items-center justify-between px-3 py-2 text-button  hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+          isSelected && '!bg-grey-01'
+        )}
+      >
+        <div className="flex flex-col gap-[2px]">
+          <p className="text-button font-medium">{label}</p>
+          <p className="text-metadata">{GeoNumber.format(value || '1234.56', formatValue)}</p>
+        </div>
+        {isSelected && <Check color="grey-04" />}
+      </DropdownPrimitive.Item>
+    ))}
+  </>
+);
 
 const numberFormatOptions = {
   Precise: 'precision-unlimited',
