@@ -144,6 +144,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                     )}
                     {renderableType === 'NUMBER' && (
                       <NumberOptionsDropdown
+                        value={firstRenderable.value}
                         format={firstRenderable.options?.format}
                         onSelect={(format: string) => {
                           send({

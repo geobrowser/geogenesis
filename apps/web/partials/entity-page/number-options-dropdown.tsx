@@ -23,37 +23,55 @@ interface Props {
 
 interface SubmenuOptionProps {
   label: string;
+  format?: string;
   onClick: (e: React.MouseEvent) => void;
   isSelected?: boolean;
   hasSubmenu?: boolean;
   className?: string;
-  value?: string;
   options?: NumberFormatOption[];
 }
 
 const SubmenuOption: React.FC<SubmenuOptionProps> = ({
   label,
+  format,
   onClick,
   isSelected,
   hasSubmenu = false,
   className,
-  value,
-}) => (
-  <DropdownPrimitive.Item
-    onClick={onClick}
-    className={cx(
-      'flex w-full select-none items-center justify-between px-3 py-[10px] hover:cursor-pointer hover:!bg-bg focus:outline-none',
-      isSelected && '!bg-grey-01 !text-text',
-      className
-    )}
-  >
-    <div className={cx('flex flex-col gap-[2px]', isSelected && 'rounded-md')}>
-      <p className="text-button font-medium">{label}</p>
-      <p className="text-metadata">{value}</p>
-    </div>
-    {hasSubmenu ? <ChevronRight color="grey-04" /> : isSelected ? <Check color="grey-04" /> : null}
-  </DropdownPrimitive.Item>
-);
+}) => {
+  const getFormatLabel = React.useCallback((formatString: string | undefined) => {
+    if (!formatString || formatString === undefined) return 'Unspecified';
+
+    for (const [key, value] of Object.entries(numberFormatOptions)) {
+      if (value === formatString) return key;
+    }
+
+    for (const [key, value] of Object.entries(percentageFormatOptions)) {
+      if (value === formatString) return key;
+    }
+
+    return 'Custom';
+  }, []);
+
+  const formatLabel = getFormatLabel(format);
+
+  return (
+    <DropdownPrimitive.Item
+      onClick={onClick}
+      className={cx(
+        'flex w-full select-none items-center justify-between px-3 py-[10px] hover:cursor-pointer hover:!bg-bg focus:outline-none',
+        isSelected && '!bg-grey-01 !text-text',
+        className
+      )}
+    >
+      <div className={cx('flex flex-col gap-[2px]', isSelected && 'rounded-md')}>
+        <p className="text-button font-medium">{label}</p>
+        <p className="text-metadata">{formatLabel}</p>
+      </div>
+      {hasSubmenu ? <ChevronRight color="grey-04" /> : isSelected ? <Check color="grey-04" /> : null}
+    </DropdownPrimitive.Item>
+  );
+};
 
 const PercentageToggle = ({
   currentType,
@@ -103,26 +121,29 @@ const BackButton = ({ onClick }: { onClick: (e: React.MouseEvent) => void }) => 
   );
 };
 
-const NumberFormatView = ({ formatOptions, value }: { formatOptions?: NumberFormatOption[]; value?: string }) => (
-  <>
-    {formatOptions?.map(({ isSelected, label, onClick, value: formatValue }, index) => (
-      <DropdownPrimitive.Item
-        key={`format-option-${index}`}
-        onClick={onClick}
-        className={cx(
-          'flex w-full select-none items-center justify-between px-3 py-2 text-button  hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
-          isSelected && '!bg-grey-01'
-        )}
-      >
-        <div className="flex flex-col gap-[2px]">
-          <p className="text-button font-medium">{label}</p>
-          <p className="text-metadata">{GeoNumber.format(value || '1234.56', formatValue)}</p>
-        </div>
-        {isSelected && <Check color="grey-04" />}
-      </DropdownPrimitive.Item>
-    ))}
-  </>
-);
+const NumberFormatView = ({ formatOptions, value }: { formatOptions?: NumberFormatOption[]; value?: string }) => {
+  console.log({ value });
+  return (
+    <>
+      {formatOptions?.map(({ isSelected, label, onClick, value: formatValue }, index) => (
+        <DropdownPrimitive.Item
+          key={`format-option-${index}`}
+          onClick={onClick}
+          className={cx(
+            'flex w-full select-none items-center justify-between px-3 py-2 text-button  hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+            isSelected && '!bg-grey-01'
+          )}
+        >
+          <div className="flex flex-col gap-[2px]">
+            <p className="text-button font-medium">{label}</p>
+            <p className="text-metadata">{GeoNumber.format(value || '1234.56', formatValue)}</p>
+          </div>
+          {isSelected && <Check color="grey-04" />}
+        </DropdownPrimitive.Item>
+      ))}
+    </>
+  );
+};
 
 const numberFormatOptions = {
   Precise: 'precision-unlimited',
@@ -151,24 +172,30 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
     format.includes('percent') ? 'percentage' : 'number'
   );
 
-  const handleBack = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (viewHistory.length > 1) {
-      setViewHistory(prev => prev.slice(0, -1));
-    } else {
-      setIsOpen(false);
-    }
-  };
+  const handleBack = React.useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (viewHistory.length > 1) {
+        setViewHistory(prev => prev.slice(0, -1));
+      } else {
+        setIsOpen(false);
+      }
+    },
+    [viewHistory, setIsOpen, setViewHistory]
+  );
 
-  const handleNavigate = (e: React.MouseEvent, view: NumberTypeSubmenuView) => {
-    e.preventDefault();
-    setViewHistory(prev => [...prev, view]);
-  };
+  const handleNavigate = React.useCallback(
+    (e: React.MouseEvent, view: NumberTypeSubmenuView) => {
+      e.preventDefault();
+      setViewHistory(prev => [...prev, view]);
+    },
+    [setViewHistory]
+  );
 
   const toggleIsOpen = React.useCallback(() => {
     setIsOpen(prev => !prev);
     setViewHistory(['number-options']);
-  }, []);
+  }, [setIsOpen, setViewHistory]);
 
   const formatOptions = React.useMemo(() => {
     const options = selectedNumberType === 'percentage' ? percentageFormatOptions : numberFormatOptions;
@@ -181,7 +208,7 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
     }));
   }, [selectedNumberType, format, onSelect]);
 
-  const renderContent = () => {
+  const renderContent = React.useCallback(() => {
     switch (currentView) {
       case 'number-format':
         return (
@@ -200,13 +227,13 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
               label="Format"
               onClick={e => handleNavigate(e, 'number-format')}
               hasSubmenu
-              value={value}
+              format={format}
               options={formatOptions}
             />
           </>
         );
     }
-  };
+  }, [currentView, formatOptions, selectedNumberType, format, value, handleBack, handleNavigate]);
 
   return (
     <DropdownPrimitive.Root open={isOpen} onOpenChange={toggleIsOpen}>
