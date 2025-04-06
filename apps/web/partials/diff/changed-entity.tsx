@@ -334,7 +334,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                     {changes.map(c => {
                       return (
                         <NumberDiff
-                          key={`${attributeId}-after-${c.before?.value}`}
+                          key={`${attributeId}-after-${c.after?.value}`}
                           before={c.before as TripleChangeValue | null}
                           after={c.after as TripleChangeValue | null}
                           mode="after"
