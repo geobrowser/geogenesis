@@ -85,6 +85,7 @@ type SubstreamUrlValue = Schema.Schema.Type<typeof SubstreamUrlValue>;
 const SubstreamNumberValue = Schema.Struct({
   valueType: Schema.Literal('NUMBER'),
   textValue: Schema.String,
+  formatOption: Schema.NullOr(Schema.String),
 });
 
 type SubstreamNumberValue = Schema.Schema.Type<typeof SubstreamNumberValue>;
