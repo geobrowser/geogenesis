@@ -58,9 +58,6 @@ export const SelectSpace = ({
 
   const result = results?.[0];
 
-  // @TODO remove console.info for result
-  console.info('result', result);
-
   const { data: spaceVersions, isLoading: isSpaceVersionsLoading } = useQuery({
     enabled: !!query && !!result?.spaces && result.spaces.length > 0,
     queryKey: ['space-versions', query, result?.spaces],
