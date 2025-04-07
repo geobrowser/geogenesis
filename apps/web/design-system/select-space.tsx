@@ -71,9 +71,6 @@ export const SelectSpace = ({
     },
   });
 
-  // @TODO remove console.info for spaceVersions
-  console.info('spaceVersions', spaceVersions);
-
   const isLoading = isResultLoading || isSpaceVersionsLoading;
 
   return (
