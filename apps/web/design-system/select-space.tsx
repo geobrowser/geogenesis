@@ -4,7 +4,8 @@ import cx from 'classnames';
 
 import * as React from 'react';
 
-import { useResult } from '~/core/hooks/use-result';
+import { useEffectOnce } from '~/core/hooks/use-effect-once';
+import { useSearch } from '~/core/hooks/use-search';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { getImagePath } from '~/core/utils/utils';
@@ -49,11 +50,20 @@ export const SelectSpace = ({
   variant = 'floating',
   containerClassName = '',
 }: SelectSpaceProps) => {
-  const { isLoading: isResultLoading, result } = useResult(EntityId(entityId));
+  const { isLoading: isResultLoading, query, onQueryChange, results } = useSearch();
+
+  useEffectOnce(() => {
+    onQueryChange(EntityId(entityId));
+  });
+
+  const result = results?.[0];
+
+  // @TODO remove console.info for result
+  console.info('result', result);
 
   const { data: spaceVersions, isLoading: isSpaceVersionsLoading } = useQuery({
-    enabled: result?.spaces && result.spaces.length > 0,
-    queryKey: ['space-versions', result?.spaces],
+    enabled: !!query && !!result?.spaces && result.spaces.length > 0,
+    queryKey: ['space-versions', query, result?.spaces],
     queryFn: async () => {
       return await Promise.all(
         (result?.spaces ?? []).map(async space => {
@@ -63,6 +73,9 @@ export const SelectSpace = ({
       );
     },
   });
+
+  // @TODO remove console.info for spaceVersions
+  console.info('spaceVersions', spaceVersions);
 
   const isLoading = isResultLoading || isSpaceVersionsLoading;
 
@@ -118,7 +131,7 @@ export const SelectSpace = ({
                   {spaceVersions?.map((spaceVersion, index) => {
                     const { space, entity } = spaceVersion;
 
-                    if (!space || !entity) return null;
+                    if (!space) return null;
 
                     const isSelected = spaceId === space.spaceId;
 
@@ -152,7 +165,7 @@ export const SelectSpace = ({
                                 </div>
                                 <span className="text-[0.875rem] text-text">{space.name}</span>
                               </div>
-                              {entity.types.length > 0 && (
+                              {entity && entity.types.length > 0 && (
                                 <>
                                   <div className="shrink-0">
                                     <svg
@@ -177,7 +190,9 @@ export const SelectSpace = ({
                             {result.description && (
                               <>
                                 <Truncate maxLines={3} shouldTruncate variant="footnote" className="mt-2">
-                                  <p className="!text-[0.75rem] leading-[1.2] text-grey-04">{entity.description}</p>
+                                  <p className="!text-[0.75rem] leading-[1.2] text-grey-04">
+                                    {entity?.description ?? result.description}
+                                  </p>
                                 </Truncate>
                               </>
                             )}
