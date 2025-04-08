@@ -18,7 +18,7 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { editEvent } from '~/core/events/edit-events';
-import { useCreateEntityFromType } from '~/core/hooks/use-create-entity-from-type';
+import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -113,11 +113,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
   const { setEditable } = useEditable();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
 
-  const filteredTypes: Array<string> = filterState
-    .filter(filter => filter.columnId === SystemIds.TYPES_ATTRIBUTE)
-    .map(filter => filter.value);
-
-  const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityFromType(spaceId, filteredTypes);
+  const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
 
   const renderedEntries =
     hasPlaceholderRow && isEditing && !entries.find(e => e.entityId === nextEntityId)
@@ -141,8 +137,15 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       if (!maybeHasCollectionItem) {
         let to: (Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }) | null = null;
 
-        if (event.type === 'FOC') {
+        if (event.type === 'Find') {
           to = event.data;
+        }
+
+        if (event.type === 'Create') {
+          to = {
+            ...event.data,
+            id: nextEntityId,
+          };
         }
 
         if (event.type === 'EVENT') {
@@ -190,9 +193,24 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
     if (context.entityId === nextEntityId) {
       setHasPlaceholderRow(false);
-    }
 
-    createEntityWithTypes(event.type === 'FOC' ? event.data.name : undefined);
+      /**
+       * We only create new entities during Find or Create and when creating
+       * from a placeholder.
+       *
+       * Find or Create is currently only available for Collections. We should
+       * only create new entities when we are creating. If we are finding then
+       * the entity already exists.
+       */
+      if (event.type !== 'Find') {
+        const maybeName = event.type === 'Create' ? event.data.name : undefined;
+
+        createEntityWithTypes({
+          name: maybeName,
+          filters: filterState,
+        });
+      }
+    }
   };
 
   const onAddPlaceholder = () => {
@@ -270,6 +288,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               isPlaceholder={Boolean(row.placeholder)}
               onChangeEntry={onChangeEntry}
               properties={propertiesSchema}
+              source={source}
             />
           );
         })}
@@ -312,6 +331,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               onChangeEntry={onChangeEntry}
               isPlaceholder={Boolean(row.placeholder)}
               properties={propertiesSchema}
+              source={source}
             />
           );
         })}

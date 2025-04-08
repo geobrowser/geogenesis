@@ -56,23 +56,6 @@ export function EditableEntityTableCell({
     if (isPlaceholderRow && source.type === 'COLLECTION') {
       return (
         <SelectEntity
-          // What actually happens here? We create a link to the entity for the source?
-          // If the entity already exists then it should be a text block instead of the
-          // search experience
-          onDone={result => {
-            // If the source type is query we shouldn't use FOC and instead just show the name
-            onChangeEntry(
-              {
-                entityId: entityId,
-                entityName: entityName,
-                spaceId: spaceId,
-              },
-              {
-                type: 'FOC',
-                data: result,
-              }
-            );
-          }}
           onCreateEntity={result => {
             // This actually works quite differently than other creates since
             // we want to use the existing placeholder entity id.
@@ -83,13 +66,36 @@ export function EditableEntityTableCell({
                 spaceId: spaceId,
               },
               {
-                type: 'FOC',
+                type: 'Create',
+                data: result,
+              }
+            );
+          }}
+          onDone={(result, fromCreateFn) => {
+            if (fromCreateFn) {
+              // We bail out in the case that we're receiving the onDone
+              // callback from within the create entity function internal
+              // to SelectEntity.
+              return;
+            }
+
+            // This actually works quite differently than other creates since
+            // we want to use the existing placeholder entity id.
+            //
+            // @TODO: When do we use the placeholder and when we use the real entity id?
+            onChangeEntry(
+              {
+                entityId: entityId,
+                entityName: entityName,
+                spaceId: spaceId,
+              },
+              {
+                type: 'Find',
                 data: result,
               }
             );
           }}
           spaceId={spaceId}
-          allowedTypes={[]}
         />
       );
     }

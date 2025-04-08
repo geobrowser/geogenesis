@@ -20,7 +20,10 @@ function getFetchResultsQuery(query: string | undefined, typeIds?: string[], fir
       : // Filter out block entities by default
         `versionTypes: { every: { type: { entityId: { notIn: ["${SystemIds.TEXT_BLOCK}", "${SystemIds.DATA_BLOCK}", "${SystemIds.IMAGE_BLOCK}", "${SystemIds.PAGE_TYPE}"] } } } }`;
 
-  const constructedWhere = `{${typeIdsString} }`;
+  const constructedWhere = `{
+  name: {
+    isNull: false
+  } ${typeIdsString} }`;
 
   return `query {
     searchEntitiesFuzzy(searchTerm: ${JSON.stringify(query?.split(' ').join('&'))}, filter: {

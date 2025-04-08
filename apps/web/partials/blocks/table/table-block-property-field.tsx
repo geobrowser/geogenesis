@@ -1,5 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
+import { Source } from '~/core/blocks/data/source';
 import { EditEvent, EditEventContext, editEvent, useEditEvents } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -20,27 +21,20 @@ import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
-type ChangeEntryParams =
-  | {
-      type: 'EVENT';
-      data: EditEvent;
-    }
-  | {
-      type: 'FOC';
-      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
-    };
+import { onChangeEntryFn } from './change-entry';
 
 export function TableBlockPropertyField(props: {
   renderables: RenderableProperty[];
   spaceId: string;
   entityId: string;
   properties?: Record<PropertyId, PropertySchema>;
-  onChangeEntry: (context: EditEventContext, event: ChangeEntryParams) => void;
+  onChangeEntry: onChangeEntryFn;
+  source: Source;
 }) {
-  const { renderables, spaceId, entityId, properties, onChangeEntry } = props;
+  const { renderables, spaceId, entityId, properties, onChangeEntry, source } = props;
   const isEditing = useUserIsEditing(props.spaceId);
 
-  if (isEditing) {
+  if (isEditing && source.type !== 'RELATIONS') {
     const firstRenderable = renderables[0] as RenderableProperty | undefined;
     const isRelation = firstRenderable?.type === 'RELATION' || firstRenderable?.type === 'IMAGE';
 
