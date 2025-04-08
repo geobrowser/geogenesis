@@ -270,7 +270,7 @@ const getDynamicTabs = (spaceId: string, tabEntities: EntityType[]) => {
   return tabs;
 };
 
-const getTabSlug = (label: string) => {
+export const getTabSlug = (label: string) => {
   return label
     .replace(/[^a-zA-Z0-9\s]/g, '')
     .replace(/\s+/g, '-')
