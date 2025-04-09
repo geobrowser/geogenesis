@@ -42,6 +42,7 @@ import { Text } from '~/design-system/text';
 
 import { DateFormatDropdown } from './date-format-dropdown';
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
+import { NumberOptionsDropdown } from './number-options-dropdown';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
@@ -132,6 +133,27 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                               value: {
                                 value: firstRenderable.value,
                                 type: 'TIME',
+                                options: {
+                                  format,
+                                },
+                              },
+                            },
+                          });
+                        }}
+                      />
+                    )}
+                    {renderableType === 'NUMBER' && (
+                      <NumberOptionsDropdown
+                        value={firstRenderable.value}
+                        format={firstRenderable.options?.format}
+                        onSelect={(format: string) => {
+                          send({
+                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                            payload: {
+                              renderable: firstRenderable,
+                              value: {
+                                value: firstRenderable.value,
+                                type: 'NUMBER',
                                 options: {
                                   format,
                                 },
@@ -552,6 +574,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
             return (
               <NumberField
                 value={renderable.value}
+                format={renderable.options?.format}
                 onChange={value =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
@@ -560,6 +583,9 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                       value: {
                         type: 'NUMBER',
                         value: value,
+                        options: {
+                          format: renderable.options?.format,
+                        },
                       },
                     },
                   })
