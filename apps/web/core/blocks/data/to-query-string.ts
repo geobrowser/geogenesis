@@ -4,7 +4,9 @@ import { OmitStrict } from '~/core/types';
 
 import { Filter } from './filters';
 
-export function queryStringFromFilters(filters: OmitStrict<Filter, 'valueName'>[]): string {
+export function queryStringFromFilters(
+  filters: OmitStrict<Filter, 'valueName' | 'columnName' | 'relationValueTypes'>[]
+): string {
   if (filters.length === 0) return '';
 
   const filtersAsStrings = filters

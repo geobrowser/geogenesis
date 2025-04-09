@@ -33,9 +33,8 @@ describe('migration utils', () => {
     const triple = makeStubTripleWithStringValue('https://www.google.com');
     const migratedTriple = migrateStringTripleToUrlTriple(triple);
     expect(migratedTriple?.value).toMatchObject({
-      type: 'url',
+      type: 'URL',
       value: 'https://www.google.com',
-      id: 's~https://www.google.com',
     });
   });
 
@@ -49,9 +48,8 @@ describe('migration utils', () => {
     const triple = makeStubTripleWithDateValue('2020-01-01T00:00:00.000Z');
     const migratedTriple = migrateDateTripleToStringTriple(triple);
     expect(migratedTriple?.value).toMatchObject({
-      type: 'string',
+      type: 'TEXT',
       value: '1/1/2020',
-      id: 'd~2020-01-01T00:00:00.000Z',
     });
   });
 
@@ -59,9 +57,8 @@ describe('migration utils', () => {
     const triple = makeStubTripleWithUrlValue('https://www.google.com');
     const migratedTriple = migrateUrlTripleToStringTriple(triple);
     expect(migratedTriple?.value).toMatchObject({
-      type: 'string',
+      type: 'TEXT',
       value: 'https://www.google.com',
-      id: 'u~https://www.google.com',
     });
   });
 });
