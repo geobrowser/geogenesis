@@ -171,18 +171,22 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
           // Callers can optionally pass a selected entity in the case of Find or Create
           // to set the collection. We allow setting any data or using FOC.
-          upsertSourceSpaceOnCollectionItem({
-            collectionItemId: EntityId(id),
-            toId: EntityId(to.id),
-            spaceId: SpaceId(spaceId),
-            sourceSpaceId: to.space,
-          });
+          if (to.space) {
+            upsertSourceSpaceOnCollectionItem({
+              collectionItemId: EntityId(id),
+              toId: EntityId(to.id),
+              spaceId: SpaceId(spaceId),
+              sourceSpaceId: to.space,
+            });
+          }
 
-          upsertVerifiedSourceOnCollectionItem({
-            collectionItemId: EntityId(id),
-            spaceId: SpaceId(spaceId),
-            verified: to.space && to.verified ? true : false,
-          });
+          if (to.space && to.verified) {
+            upsertVerifiedSourceOnCollectionItem({
+              collectionItemId: EntityId(id),
+              spaceId: SpaceId(spaceId),
+              verified: true,
+            });
+          }
         }
       }
     }
