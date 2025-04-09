@@ -6,8 +6,6 @@ import * as React from 'react';
 import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
-import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
-import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
@@ -53,11 +51,7 @@ export default async function Layout(props0: LayoutProps) {
 
   const spaceId = params.id;
 
-  const [props, subspaces, inflightSubspaces] = await Promise.all([
-    getData(spaceId),
-    fetchSubspacesBySpaceId(spaceId),
-    fetchInFlightSubspaceProposalsForSpaceId(spaceId),
-  ]);
+  const props = await getData(spaceId);
   const coverUrl = Entities.cover(props.relationsOut);
 
   const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
@@ -96,8 +90,6 @@ export default async function Layout(props0: LayoutProps) {
                       <p>Add subspace</p>
                     </MenuItem>
                   }
-                  subspaces={subspaces}
-                  inflightSubspaces={inflightSubspaces}
                   spaceType={props.space.type}
                 />
               }
