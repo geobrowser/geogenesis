@@ -13,6 +13,8 @@ import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useRemoveSubspace } from '~/core/hooks/use-remove-subspace';
 import { Subspace, SubspaceDto } from '~/core/io/dto/subspaces';
 import { SubstreamSubspace } from '~/core/io/schema';
+import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
+import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { getSpaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SpaceGovernanceType } from '~/core/types';
@@ -29,18 +31,31 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface Props {
   spaceType: SpaceGovernanceType;
-  subspaces: Subspace[];
-  inflightSubspaces: Subspace[];
   spaceId: string;
   trigger: React.ReactNode;
 }
 
-export function AddSubspaceDialog({ trigger, spaceType, spaceId, subspaces, inflightSubspaces }: Props) {
+export function AddSubspaceDialog({ trigger, spaceType, spaceId }: Props) {
+  const { data: subspaces } = useQuery({
+    queryKey: ['subspaces', spaceId],
+    queryFn: () => fetchSubspacesBySpaceId(spaceId),
+  });
+
+  const { data: inflightSubspaces } = useQuery({
+    queryKey: ['inflight-subspaces', spaceId],
+    queryFn: () => fetchInFlightSubspaceProposalsForSpaceId(spaceId),
+  });
+
   return (
     <Dialog
       trigger={trigger}
       content={
-        <Content spaceType={spaceType} subspaces={subspaces} spaceId={spaceId} inflightSubspaces={inflightSubspaces} />
+        <Content
+          spaceType={spaceType}
+          subspaces={subspaces ?? []}
+          spaceId={spaceId}
+          inflightSubspaces={inflightSubspaces ?? []}
+        />
       }
       header={<h1 className="text-smallTitle">Subspaces</h1>}
     />

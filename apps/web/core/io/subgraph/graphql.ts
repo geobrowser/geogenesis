@@ -34,16 +34,12 @@ export function graphql<T>({ endpoint, query, signal, tag }: GraphqlConfig) {
         return new AbortError();
       }
 
-      return new HttpError();
+      return new HttpError(String(e));
     },
   });
 
   return Effect.gen(function* () {
     const response = yield* graphqlFetchEffect;
-
-    if (response.status !== 200) {
-      yield* Effect.fail(new HttpError());
-    }
 
     const json = yield* Effect.tryPromise({
       try: () => response.json() as Promise<GraphqlResponse<T>>,

@@ -33,8 +33,8 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     query: getFetchSpaceQuery(options.id),
   });
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* () {
+    const resultOrError = yield* Effect.either(graphqlFetchEffect);
 
     if (Either.isLeft(resultOrError)) {
       const error = resultOrError.left;
