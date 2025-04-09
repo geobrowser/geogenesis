@@ -55,7 +55,7 @@ export default async function Layout(props0: LayoutProps) {
   const coverUrl = Entities.cover(props.relationsOut);
 
   const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
-  const tabs = await buildTabsForSpacePage(props.tabEntities, props.space.spaceConfig?.types ?? [], params);
+  const tabs = buildTabsForSpacePage(props.tabEntities, props.space.spaceConfig?.types ?? [], params);
 
   return (
     <EntityStoreProvider

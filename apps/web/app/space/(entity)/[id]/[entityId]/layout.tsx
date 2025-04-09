@@ -5,8 +5,8 @@ import * as React from 'react';
 import { Metadata } from 'next';
 
 import { Entity } from '~/core/io/dto/entities';
-import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId, TypeId } from '~/core/io/schema';
+import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Relation } from '~/core/types';
@@ -185,18 +185,14 @@ async function getProfilePage(entityId: string): Promise<
     };
   }
 
-  const blockIds = person?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
-    ?.map(r => r.toEntity.id);
-
-  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+  const blockRelations = person?.relationsOut.filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS));
+  const blockIds = blockRelations?.map(r => r.toEntity.id);
+  const blocks = blockIds ? await fetchEntitiesBatch({ entityIds: blockIds }) : [];
 
   return {
     ...person,
     avatarUrl: Entities.avatar(person.relationsOut),
     coverUrl: Entities.cover(person.relationsOut),
-
-    relationsOut: [],
     blockRelations: person.relationsOut,
     blocks,
   };
