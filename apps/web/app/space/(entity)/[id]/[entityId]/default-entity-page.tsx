@@ -5,7 +5,6 @@ import { ErrorBoundary } from 'react-error-boundary';
 import * as React from 'react';
 
 import { EntityId } from '~/core/io/schema';
-import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
@@ -24,7 +23,7 @@ import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-met
 import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
-import { cachedFetchEntity } from './cached-fetch-entity';
+import { cachedFetchEntitiesBatch, cachedFetchEntity } from './cached-fetch-entity';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -116,7 +115,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
 
   const blockRelations = entity?.relationsOut.filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS));
   const blockIds = blockRelations?.map(r => r.toEntity.id);
-  const blocks = blockIds ? await fetchEntitiesBatch({ entityIds: blockIds }) : [];
+  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
     triples: entity?.triples ?? [],

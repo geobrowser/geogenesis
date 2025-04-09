@@ -84,7 +84,7 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchEntitiesBatch. queryId: ${queryId}
+            `Encountered runtime graphql error in fetchEntitiesBatch.
             queryString: ${query(entityIds)}
             `,
             error.message
@@ -93,7 +93,7 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
           return [];
 
         default:
-          console.error(`${error._tag}: Unable to fetch entities, queryId: ${queryId}. ${String(error)}`);
+          console.error(`${error._tag}: Unable to fetch entities. ${String(error)}`);
           return [];
       }
     }

@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
-import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
@@ -25,6 +24,7 @@ import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
+import { cachedFetchEntitiesBatch } from '../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from './cached-fetch-space';
 
 type LayoutProps = {
@@ -146,7 +146,7 @@ const getData = async (spaceId: string) => {
         .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
         ?.map(r => r.toEntity.id);
 
-      const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
       return blocks;
     })
   );
@@ -164,7 +164,7 @@ const getData = async (spaceId: string) => {
     .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
     ?.map(r => r.toEntity.id);
 
-  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
     triples: entity.triples,
