@@ -310,6 +310,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               isPlaceholder={Boolean(row.placeholder)}
               onChangeEntry={onChangeEntry}
               properties={propertiesSchema}
+              source={source}
             />
           );
         })}

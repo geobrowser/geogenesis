@@ -1,6 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import Link from 'next/link';
 
+import { Source } from '~/core/blocks/data/source';
 import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { Cell, PropertySchema } from '~/core/types';
@@ -20,6 +21,7 @@ type Props = {
   isPlaceholder: boolean;
   onChangeEntry: onChangeEntryFn;
   properties?: Record<PropertyId, PropertySchema>;
+  source: Source;
 };
 
 export function TableBlockBulletedListItem({
@@ -29,6 +31,7 @@ export function TableBlockBulletedListItem({
   rowEntityId,
   isPlaceholder,
   onChangeEntry,
+  source,
 }: Props) {
   const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
   const { cellId, verified } = nameCell;
@@ -60,12 +63,12 @@ export function TableBlockBulletedListItem({
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
-  if (isEditing) {
+  if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full items-center gap-2 py-0.5 px-1">
         <div className="flex-shrink-0 text-xl leading-none text-text">•</div>
         <div className="w-full">
-          {isPlaceholder ? (
+          {isPlaceholder && source.type === 'COLLECTION' ? (
             <SelectEntity
               onCreateEntity={result => {
                 onChangeEntry(
@@ -75,14 +78,35 @@ export function TableBlockBulletedListItem({
                     spaceId: currentSpaceId,
                   },
                   {
-                    type: 'FOC',
+                    type: 'Create',
+                    data: result,
+                  }
+                );
+              }}
+              onDone={(result, fromCreateFn) => {
+                if (fromCreateFn) {
+                  // We bail out in the case that we're receiving the onDone
+                  // callback from within the create entity function internal
+                  // to SelectEntity.
+                  return;
+                }
+
+                // This actually works quite differently than other creates since
+                // we want to use the existing placeholder entity id.
+                onChangeEntry(
+                  {
+                    entityId: rowEntityId,
+                    entityName: result.name,
+                    spaceId: currentSpaceId,
+                  },
+                  {
+                    type: 'Find',
                     data: result,
                   }
                 );
               }}
               spaceId={currentSpaceId}
-              allowedTypes={[]}
-            />
+                          />
           ) : (
             <div className="flex items-center gap-2">
               {verified && (
