@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       '~': path.resolve(__dirname, './'),
     },
+    environment: 'jsdom',
     env: {
       NEXT_PUBLIC_APP_ENV: 'production',
       NEXT_PUBLIC_PRIVY_APP_ID: 'a',
@@ -14,6 +15,6 @@ export default defineConfig({
       NEXT_PUBLIC_PIMLICO_API_KEY: 'a',
       NEXT_PUBLIC_ONBOARD_FLAG: 'a',
       NEXT_PUBLIC_ONBOARD_CODE: 'a',
-    }
+    },
   },
 });

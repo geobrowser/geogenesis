@@ -43,26 +43,29 @@ describe('prepareTriplesForPublishing', () => {
   it('maps created data to create ops', () => {
     const result = prepareTriplesForPublishing([TRIPLE], [RELATION], TRIPLE.space);
 
-    expect(result).toEqual([
-      Relation.make({
-        relationId: RELATION.id,
-        fromId: RELATION.fromEntity.id,
-        relationTypeId: RELATION.typeOf.id,
-        toId: RELATION.toEntity.id,
-        position: RELATION.index,
-      }),
-      {
-        type: 'SET_TRIPLE',
-        triple: {
-          entity: TRIPLE.entityId,
-          attribute: TRIPLE.attributeId,
-          value: {
-            type: TRIPLE.value.type,
-            value: TRIPLE.value.value,
+    expect(result).toEqual({
+      opsToPublish: [
+        Relation.make({
+          relationId: RELATION.id,
+          fromId: RELATION.fromEntity.id,
+          relationTypeId: RELATION.typeOf.id,
+          toId: RELATION.toEntity.id,
+          position: RELATION.index,
+        }),
+        {
+          type: 'SET_TRIPLE',
+          triple: {
+            entity: TRIPLE.entityId,
+            attribute: TRIPLE.attributeId,
+            value: {
+              type: TRIPLE.value.type,
+              value: TRIPLE.value.value,
+            },
           },
         },
-      },
-    ]);
+      ],
+      relationTriples: [],
+    });
   });
 
   it('maps deleted data to delete ops', () => {
@@ -71,21 +74,24 @@ describe('prepareTriplesForPublishing', () => {
       [{ ...RELATION, isDeleted: true }],
       TRIPLE.space
     );
-    expect(result).toEqual([
-      {
-        type: 'DELETE_RELATION',
-        relation: {
-          id: RELATION.id,
+    expect(result).toEqual({
+      opsToPublish: [
+        {
+          relation: {
+            id: '1234',
+          },
+          type: 'DELETE_RELATION',
         },
-      },
-      {
-        type: 'DELETE_TRIPLE',
-        triple: {
-          entity: TRIPLE.entityId,
-          attribute: TRIPLE.attributeId,
+        {
+          triple: {
+            attribute: 'test-attribute',
+            entity: 'test-entity',
+          },
+          type: 'DELETE_TRIPLE',
         },
-      },
-    ]);
+      ],
+      relationTriples: [],
+    });
   });
 
   it('filters ops from different space', () => {
