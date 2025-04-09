@@ -1,6 +1,5 @@
 import { Schema } from '@effect/schema';
 import { Effect, Either } from 'effect';
-import { v4 } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { queryClient } from '~/core/query-client';
@@ -64,8 +63,6 @@ type FetchEntitiesBatchOptions = {
 
 export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Promise<Entity[]> {
   const { spaceId, entityIds, filterString, signal } = options;
-
-  const queryId = v4();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,

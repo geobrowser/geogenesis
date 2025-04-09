@@ -1,7 +1,6 @@
 import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { Entity } from '~/core/io/dto/entities';
@@ -35,7 +34,6 @@ interface NetworkResult {
 }
 
 export async function fetchEntity(options: FetchEntityOptions): Promise<Entity | null> {
-  const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
@@ -58,9 +56,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${endpoint} id: ${
-              options.id
-            }
+            `Encountered runtime graphql error in fetchEntity. endpoint: ${endpoint} id: ${options.id}
 
             queryString: ${getFetchEntityQuery(options.id)}
             `,
@@ -72,7 +68,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${endpoint} id: ${options.id}`
+            `${error._tag}: Unable to fetch entity, endpoint: ${endpoint} id: ${options.id}. ${error.message}`
           );
           return {
             entity: null,
