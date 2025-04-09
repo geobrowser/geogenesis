@@ -1,6 +1,5 @@
 import { Schema } from '@effect/schema';
 import { Effect, Either } from 'effect';
-import { v4 } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { queryClient } from '~/core/query-client';
@@ -65,8 +64,6 @@ type FetchEntitiesBatchOptions = {
 export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Promise<Entity[]> {
   const { spaceId, entityIds, filterString, signal } = options;
 
-  const queryId = v4();
-
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
     query: query(entityIds, filterString, spaceId),
@@ -87,7 +84,7 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchEntitiesBatch. queryId: ${queryId}
+            `Encountered runtime graphql error in fetchEntitiesBatch.
             queryString: ${query(entityIds)}
             `,
             error.message
@@ -96,7 +93,7 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
           return [];
 
         default:
-          console.error(`${error._tag}: Unable to fetch entities, queryId: ${queryId}. ${String(error)}`);
+          console.error(`${error._tag}: Unable to fetch entities. ${String(error)}`);
           return [];
       }
     }

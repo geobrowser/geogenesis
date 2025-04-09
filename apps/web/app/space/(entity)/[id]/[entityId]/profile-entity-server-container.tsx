@@ -4,7 +4,6 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
-import { Subgraph } from '~/core/io';
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
@@ -13,6 +12,7 @@ import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 
 import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 
+import { cachedFetchEntity } from './cached-fetch-entity';
 import { ProfilePageComponent } from './profile-entity-page';
 
 interface Props {
@@ -24,7 +24,7 @@ export async function ProfileEntityServerContainer({ params }: Props) {
   const entityId = params.entityId;
 
   const [person, profile] = await Promise.all([
-    Subgraph.fetchEntity({ spaceId, id: entityId }),
+    cachedFetchEntity(entityId, spaceId),
     fetchOnchainProfileByEntityId(entityId),
   ]);
 
