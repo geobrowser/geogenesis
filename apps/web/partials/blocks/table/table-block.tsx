@@ -220,7 +220,8 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       name: string | null;
       space?: EntityId;
       verified?: boolean;
-    }
+    },
+    currentlyVerified?: boolean
   ) => {
     upsertSourceSpaceOnCollectionItem({
       collectionItemId: EntityId(id),
@@ -229,11 +230,19 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       sourceSpaceId: to.space,
     });
 
-    upsertVerifiedSourceOnCollectionItem({
-      collectionItemId: EntityId(id),
-      spaceId: SpaceId(spaceId),
-      verified: to.space && to.verified ? true : false,
-    });
+    if (to.space && to.verified) {
+      upsertVerifiedSourceOnCollectionItem({
+        collectionItemId: EntityId(id),
+        spaceId: SpaceId(spaceId),
+        verified: true,
+      });
+    } else if (to.space && !to.verified && currentlyVerified) {
+      upsertVerifiedSourceOnCollectionItem({
+        collectionItemId: EntityId(id),
+        spaceId: SpaceId(spaceId),
+        verified: false,
+      });
+    }
   };
 
   const onAddPlaceholder = () => {

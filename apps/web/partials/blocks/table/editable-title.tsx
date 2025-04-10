@@ -163,7 +163,7 @@ export const EditableTitle = ({
                         onDone={result => {
                           if (!relationId) return;
 
-                          onLinkEntry(relationId, result);
+                          onLinkEntry(relationId, result, verified);
                         }}
                         trigger={
                           <button className="inline-flex items-center p-1">

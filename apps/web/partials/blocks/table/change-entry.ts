@@ -25,5 +25,6 @@ export type onLinkEntryFn = (
     name: string | null;
     space?: EntityId;
     verified?: boolean;
-  }
+  },
+  currentlyVerified?: boolean
 ) => void;
