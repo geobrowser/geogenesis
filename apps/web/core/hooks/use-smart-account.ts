@@ -14,6 +14,9 @@ import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { Environment } from '../environment';
 import { GEOGENESIS } from '../wallet/geo-chain';
 
+const ENTRY_POINT_07 =
+  Environment.variables.appEnv === 'production' ? entryPoint07Address : '0xEB0a534440145D5A3aa512352FDDCf85453182b9';
+
 export function useSmartAccount() {
   const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
   const [cookies] = useCookies([WALLET_ADDRESS]);
@@ -25,7 +28,12 @@ export function useSmartAccount() {
         return null;
       }
 
-      const transport = http(process.env.NEXT_PUBLIC_GEOGENESIS_RPC!);
+      if (Environment.variables.appEnv === 'testnet') {
+        console.log('using wallet client');
+        return walletClient;
+      }
+
+      const transport = http(Environment.getConfig().rpc);
       const bundlerTransport = http(Environment.getConfig().bundler);
 
       const publicClient = createPublicClient({
@@ -33,12 +41,12 @@ export function useSmartAccount() {
         chain: GEOGENESIS,
       });
 
-      const safeAccount = await toSafeSmartAccount({
+      const smartAccountImplementation = await toSafeSmartAccount({
         client: publicClient,
         owners: [walletClient],
         entryPoint: {
           version: '0.7',
-          address: entryPoint07Address,
+          address: ENTRY_POINT_07,
         },
         version: '1.4.1',
       });
@@ -47,14 +55,14 @@ export function useSmartAccount() {
         transport: bundlerTransport,
         chain: GEOGENESIS,
         entryPoint: {
-          address: entryPoint07Address,
+          address: ENTRY_POINT_07,
           version: '0.7',
         },
       });
 
       const smartAccount = createSmartAccountClient({
         chain: GEOGENESIS,
-        account: safeAccount,
+        account: smartAccountImplementation,
         paymaster: paymasterClient,
         bundlerTransport,
         userOperation: {
@@ -73,6 +81,8 @@ export function useSmartAccount() {
       return smartAccount;
     },
   });
+
+  console.log('smart account', smartAccount);
 
   return { smartAccount: smartAccount ?? null, isLoading: isLoading || isLoadingWallet };
 }

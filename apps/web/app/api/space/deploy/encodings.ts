@@ -1,13 +1,25 @@
 import { CreateDaoParams } from '@aragon/sdk-client';
 import { VotingMode } from '@graphprotocol/grc-20';
-import {
-  MAINNET
-} from '@graphprotocol/grc-20/contracts';
+import { MAINNET, TESTNET } from '@graphprotocol/grc-20/contracts';
 import { ethers } from 'ethers';
 import { encodeAbiParameters } from 'viem';
 
 import { ZERO_ADDRESS } from '~/core/constants';
+import { Environment } from '~/core/environment';
 import { OmitStrict } from '~/core/types';
+
+const SPACE_PLUGIN_REPO_ADDRESS =
+  Environment.variables.appEnv === 'production' ? MAINNET.SPACE_PLUGIN_REPO_ADDRESS : TESTNET.SPACE_PLUGIN_REPO_ADDRESS;
+
+const PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS =
+  Environment.variables.appEnv === 'production'
+    ? MAINNET.PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS
+    : TESTNET.PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS;
+
+const GOVERNANCE_PLUGIN_REPO_ADDRESS =
+  Environment.variables.appEnv === 'production'
+    ? MAINNET.GOVERNANCE_PLUGIN_REPO_ADDRESS
+    : TESTNET.GOVERNANCE_PLUGIN_REPO_ADDRESS;
 
 // Using viem for the dao creation requires a slightly different encoding state for our plugins.
 // When using ethers the type for `data` is expected to be a Uint8Array, but when using viem and
@@ -61,7 +73,7 @@ export function getSpacePluginInstallItem({
   ]);
 
   return {
-    id: MAINNET.SPACE_PLUGIN_REPO_ADDRESS  as `0x${string}`,
+    id: SPACE_PLUGIN_REPO_ADDRESS as `0x${string}`,
     data: encodedParams,
   };
 }
@@ -85,7 +97,7 @@ export function getPersonalSpaceGovernancePluginInstallItem({
   const encodedParams = encodeAbiParameters(prepareInstallationInputs, [initialEditor]);
 
   return {
-    id: MAINNET.PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS as `0x${string}`,
+    id: PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS as `0x${string}`,
     data: encodedParams,
   };
 }
@@ -149,7 +161,7 @@ export function getGovernancePluginInstallItem(params: {
   ]);
 
   return {
-    id: MAINNET.GOVERNANCE_PLUGIN_REPO_ADDRESS as `0x${string}`,
+    id: GOVERNANCE_PLUGIN_REPO_ADDRESS as `0x${string}`,
     data: encodedParams,
   };
 }

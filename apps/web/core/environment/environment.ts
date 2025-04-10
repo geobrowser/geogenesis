@@ -1,4 +1,3 @@
-import { IPFS_GATEWAY_PATH } from '../constants';
 import { AppEnv } from '../types';
 import {
   ACCOUNT_ABSTRACTION_API_KEY,
@@ -7,11 +6,14 @@ import {
   ONBOARD_FLAG,
   PRIVY_APP_ID,
   RPC_ENDPOINT,
+  RPC_ENDPOINT_TESTNET,
   TEST_ENV,
   WALLETCONNECT_PROJECT_ID,
 } from './config';
 
-type SupportedChainId = '31337' | '80451';
+const IPFS_GATEWAY_PATH = 'https://node.lighthouse.storage';
+
+type SupportedChainId = '31337' | '80451' | '19411';
 
 export type AppConfig = {
   chainId: SupportedChainId;
@@ -22,10 +24,11 @@ export type AppConfig = {
 };
 
 type IVars = Readonly<{
-  appEnv: string;
+  appEnv: AppEnv;
   walletConnectProjectId: string;
   privyAppId: string;
   rpcEndpoint: string;
+  rpcEndpointTestnet?: string;
   accountAbstractionApiKey: string;
   isTestEnv: boolean;
   onboardFlag: string;
@@ -33,10 +36,11 @@ type IVars = Readonly<{
 }>;
 
 export const variables: IVars = {
-  appEnv: APP_ENV!,
+  appEnv: APP_ENV! as AppEnv,
   isTestEnv: TEST_ENV === 'true',
   privyAppId: PRIVY_APP_ID!,
   rpcEndpoint: RPC_ENDPOINT!,
+  rpcEndpointTestnet: RPC_ENDPOINT_TESTNET,
   walletConnectProjectId: WALLETCONNECT_PROJECT_ID!,
   accountAbstractionApiKey: ACCOUNT_ABSTRACTION_API_KEY!,
   onboardFlag: ONBOARD_FLAG!,
@@ -61,11 +65,11 @@ export const options: Record<AppEnv, AppConfig> = {
     bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   testnet: {
-    chainId: '80451',
-    rpc: variables.rpcEndpoint,
+    chainId: '19411',
+    rpc: variables.rpcEndpointTestnet!, // We know this is set when APP_ENV is set to testnet
     ipfs: IPFS_GATEWAY_PATH,
     api: 'https://geo-conduit.up.railway.app/graphql',
-    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
+    bundler: `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
 };
 
