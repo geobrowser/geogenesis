@@ -12,6 +12,7 @@ import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
+import { getTabSlug } from '~/core/utils/utils';
 
 import { Create } from '~/design-system/icons/create';
 import { MenuItem } from '~/design-system/menu';
@@ -268,13 +269,6 @@ const getDynamicTabs = (spaceId: string, tabEntities: EntityType[]) => {
   });
 
   return tabs;
-};
-
-export const getTabSlug = (label: string) => {
-  return label
-    .replace(/[^a-zA-Z0-9\s]/g, '')
-    .replace(/\s+/g, '-')
-    .toLowerCase();
 };
 
 const dynamicTabSequence = [

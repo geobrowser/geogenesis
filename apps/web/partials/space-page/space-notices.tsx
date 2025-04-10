@@ -20,6 +20,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { EntityId } from '~/core/io/schema';
 import { useTabId } from '~/core/state/editor/use-editor';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { getTabSlug } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { ClientOnly } from '~/design-system/client-only';
@@ -28,7 +29,6 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { SelectEntity } from '~/design-system/select-entity';
 
-import { getTabSlug } from '~/app/space/[id]/layout';
 import { SpacePageType } from '~/app/space/[id]/page';
 import type { SpaceData } from '~/app/space/[id]/spaces/page';
 import { dismissedNoticesAtom } from '~/atoms';
