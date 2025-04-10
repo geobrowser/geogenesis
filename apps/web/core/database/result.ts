@@ -43,7 +43,9 @@ export async function mergeSearchResult(args: FetchResultOptions) {
 
   const localEntitySpacesBySpaceId = Object.fromEntries(localEntitySpaces.map(s => [s.id, s.spaceConfig]));
 
-  if (localEntity && merged) {
+  const hasLocalEntitySpaces = Object.keys(localEntitySpacesBySpaceId).length !== 0;
+
+  if (localEntity && merged && hasLocalEntitySpaces) {
     merged = {
       ...merged,
       spaces: localEntity.nameTripleSpaces
