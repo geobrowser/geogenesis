@@ -11,6 +11,7 @@ import { EntityChange } from './types';
 function makeStubEntity(tripleFn?: () => Triple, relationFn?: () => Relation): Entity {
   return {
     id: EntityId('1'),
+    spaces: [],
     types: [],
     description: null,
     name: 'Entity Name from Test',
@@ -68,6 +69,7 @@ function makeStubTimeTriple(value: string): Triple {
 function makeStubRelation(value: string): Relation {
   return {
     id: EntityId('1-1'),
+    space: 'relation-space-from-test',
     index: PositionRange.FIRST,
     fromEntity: {
       id: EntityId('1'),
@@ -95,6 +97,9 @@ describe('Change', () => {
       spaceId: undefined,
       afterEntities: [after],
       beforeEntities: [before],
+      afterBlocks: [],
+      beforeBlocks: [],
+      parentEntityIds: {},
     });
 
     const expected: EntityChange[] = [
@@ -102,6 +107,7 @@ describe('Change', () => {
         id: EntityId('1'),
         name: 'Entity Name from Test',
         blockChanges: [],
+        avatar: null,
         changes: [
           {
             type: 'TEXT',
@@ -113,11 +119,13 @@ describe('Change', () => {
               type: 'UPDATE',
               valueName: null,
               value: 'text-value-2-from-test',
+              options: undefined,
             },
             before: {
               type: 'UPDATE',
               valueName: null,
               value: 'text-value-1-from-test',
+              options: undefined,
             },
           },
         ],
@@ -135,6 +143,9 @@ describe('Change', () => {
       spaceId: undefined,
       afterEntities: [after],
       beforeEntities: [before],
+      afterBlocks: [],
+      beforeBlocks: [],
+      parentEntityIds: {},
     });
 
     const expected: EntityChange[] = [
@@ -143,6 +154,7 @@ describe('Change', () => {
         name: 'Entity Name from Test',
         blockChanges: [],
         changes: [],
+        avatar: null,
       },
     ];
 
@@ -157,11 +169,15 @@ describe('Change', () => {
       spaceId: undefined,
       afterEntities: [after],
       beforeEntities: [before],
+      afterBlocks: [],
+      beforeBlocks: [],
+      parentEntityIds: {},
     });
 
     const expected: EntityChange[] = [
       {
         id: EntityId('1'),
+        avatar: null,
         name: 'Entity Name from Test',
         blockChanges: [],
         changes: [
@@ -175,11 +191,13 @@ describe('Change', () => {
               type: 'UPDATE',
               valueName: null,
               value: 'uri-value-2-from-test',
+              options: undefined,
             },
             before: {
               type: 'UPDATE',
               valueName: null,
               value: 'uri-value-1-from-test',
+              options: undefined,
             },
           },
         ],
@@ -197,11 +215,15 @@ describe('Change', () => {
       spaceId: undefined,
       afterEntities: [after],
       beforeEntities: [before],
+      afterBlocks: [],
+      beforeBlocks: [],
+      parentEntityIds: {},
     });
 
     const expected: EntityChange[] = [
       {
         id: EntityId('1'),
+        avatar: null,
         name: 'Entity Name from Test',
         blockChanges: [],
         changes: [],
@@ -219,11 +241,15 @@ describe('Change', () => {
       spaceId: undefined,
       afterEntities: [after],
       beforeEntities: [before],
+      afterBlocks: [],
+      beforeBlocks: [],
+      parentEntityIds: {},
     });
 
     const expected: EntityChange[] = [
       {
         id: EntityId('1'),
+        avatar: null,
         name: 'Entity Name from Test',
         blockChanges: [],
         changes: [
@@ -237,11 +263,13 @@ describe('Change', () => {
               type: 'UPDATE',
               valueName: null,
               value: 'time-value-2-from-test',
+              options: undefined,
             },
             before: {
               type: 'UPDATE',
               valueName: null,
               value: 'time-value-1-from-test',
+              options: undefined,
             },
           },
         ],
@@ -259,11 +287,15 @@ describe('Change', () => {
       spaceId: undefined,
       afterEntities: [after],
       beforeEntities: [before],
+      afterBlocks: [],
+      beforeBlocks: [],
+      parentEntityIds: {},
     });
 
     const expected: EntityChange[] = [
       {
         id: EntityId('1'),
+        avatar: null,
         name: 'Entity Name from Test',
         blockChanges: [],
         changes: [],
@@ -281,11 +313,15 @@ describe('Change', () => {
       spaceId: undefined,
       afterEntities: [after],
       beforeEntities: [before],
+      afterBlocks: [],
+      beforeBlocks: [],
+      parentEntityIds: {},
     });
 
     const expected: EntityChange[] = [
       {
         id: EntityId('1'),
+        avatar: null,
         name: 'Entity Name from Test',
         blockChanges: [],
         changes: [
@@ -321,11 +357,15 @@ describe('Change', () => {
       spaceId: undefined,
       afterEntities: [after],
       beforeEntities: [before],
+      afterBlocks: [],
+      beforeBlocks: [],
+      parentEntityIds: {},
     });
 
     const expected: EntityChange[] = [
       {
         id: EntityId('1'),
+        avatar: null,
         name: 'Entity Name from Test',
         blockChanges: [],
         changes: [],

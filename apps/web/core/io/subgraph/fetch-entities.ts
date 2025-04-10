@@ -2,7 +2,6 @@ import { Schema } from '@effect/schema';
 import { SystemIds } from '@graphprotocol/grc-20';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
@@ -75,7 +74,6 @@ interface NetworkResult {
 }
 
 export async function fetchEntities(options: FetchEntitiesOptions): Promise<Entity[]> {
-  const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
   const fieldFilters = Object.fromEntries(options.filter.map(clause => [clause.field, clause.value])) as Record<
@@ -120,7 +118,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchEntities. queryId: ${queryId} ryString: ${getFetchEntitiesQuery(
+            `Encountered runtime graphql error in fetchEntities. queryString: ${getFetchEntitiesQuery(
               options.query,
               entityOfWhere,
               options.typeIds,
@@ -137,7 +135,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch entities, queryId: ${queryId}query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
+            `${error._tag}: Unable to fetch entities, query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}. ${error.message}`
           );
           return {
             entities: { nodes: [] },

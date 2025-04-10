@@ -392,3 +392,10 @@ export const validateEntityId = (maybeEntityId: EntityId | string | null | undef
 };
 
 const VALID_ENTITY_ID_LENGTHS = [21, 22];
+
+export const getTabSlug = (label: string) => {
+  return label
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .toLowerCase();
+};

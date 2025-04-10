@@ -201,7 +201,7 @@ export const useTabId = () => {
 
   if (!validateEntityId(maybeTabId)) return null;
 
-  const tabId = EntityId(maybeTabId as string);
+  const tabId: EntityId = EntityId(maybeTabId as string);
 
   return tabId;
 };
