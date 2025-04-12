@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { IPFS_GATEWAY_READ_PATH } from '../constants';
 import { GeoDate, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl } from './utils';
 
 describe('GeoDate', () => {
@@ -19,8 +20,9 @@ describe('GeoDate', () => {
       day: '16',
       month: '12',
       year: '1990',
-      hour: '0', // should also convert to 12 hour time
+      hour: '12', // should also convert to 12 hour time
       minute: '0',
+      meridiem: 'am',
     });
 
     expect(GeoDate.fromISOStringUTC('1990-12-16T12:30:00.000+00:00')).toEqual({
@@ -29,6 +31,7 @@ describe('GeoDate', () => {
       year: '1990',
       hour: '12',
       minute: '30',
+      meridiem: 'pm',
     });
   });
 
@@ -56,9 +59,7 @@ describe('GeoDate', () => {
 
 describe('getImagePath', () => {
   it('an IPFS pre-fixed string returns the Geo IPFS gateway path', () => {
-    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(
-      'https://api.thegraph.com/ipfs/api/v0/cat?arg=QmBananaSandwich'
-    );
+    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(`${IPFS_GATEWAY_READ_PATH}QmBananaSandwich`);
   });
 
   it('an HTTP pre-fixed string returns the same string', () => {
@@ -76,7 +77,7 @@ describe('getImageHash', () => {
   });
 
   it('an HTTP path returns the IPFS hash', () => {
-    expect(getImageHash('https://api.thegraph.com/ipfs/api/v0/cat?arg=QmBananaSandwich')).toBe('QmBananaSandwich');
+    expect(getImageHash(`${IPFS_GATEWAY_READ_PATH}QmBananaSandwich`)).toBe('QmBananaSandwich');
   });
 
   it('a non-HTTP and non-IPFS path returns the same string', () => {

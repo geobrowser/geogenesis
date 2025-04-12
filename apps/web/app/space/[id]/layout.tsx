@@ -3,15 +3,13 @@ import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
-import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
-import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
-import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
+import { getTabSlug } from '~/core/utils/utils';
 
 import { Create } from '~/design-system/icons/create';
 import { MenuItem } from '~/design-system/menu';
@@ -27,6 +25,7 @@ import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
+import { cachedFetchEntitiesBatch } from '../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from './cached-fetch-space';
 
 type LayoutProps = {
@@ -53,15 +52,11 @@ export default async function Layout(props0: LayoutProps) {
 
   const spaceId = params.id;
 
-  const [props, subspaces, inflightSubspaces] = await Promise.all([
-    getData(spaceId),
-    fetchSubspacesBySpaceId(spaceId),
-    fetchInFlightSubspaceProposalsForSpaceId(spaceId),
-  ]);
+  const props = await getData(spaceId);
   const coverUrl = Entities.cover(props.relationsOut);
 
   const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
-  const tabs = await buildTabsForSpacePage(props.tabEntities, props.space.spaceConfig?.types ?? [], params);
+  const tabs = buildTabsForSpacePage(props.tabEntities, props.space.spaceConfig?.types ?? [], params);
 
   return (
     <EntityStoreProvider
@@ -96,8 +91,6 @@ export default async function Layout(props0: LayoutProps) {
                       <p>Add subspace</p>
                     </MenuItem>
                   }
-                  subspaces={subspaces}
-                  inflightSubspaces={inflightSubspaces}
                   spaceType={props.space.type}
                 />
               }
@@ -154,7 +147,7 @@ const getData = async (spaceId: string) => {
         .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
         ?.map(r => r.toEntity.id);
 
-      const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
       return blocks;
     })
   );
@@ -172,7 +165,7 @@ const getData = async (spaceId: string) => {
     .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
     ?.map(r => r.toEntity.id);
 
-  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
     triples: entity.triples,
@@ -268,13 +261,6 @@ const getDynamicTabs = (spaceId: string, tabEntities: EntityType[]) => {
   });
 
   return tabs;
-};
-
-const getTabSlug = (label: string) => {
-  return label
-    .replace(/[^a-zA-Z0-9\s]/g, '')
-    .replace(/\s+/g, '-')
-    .toLowerCase();
 };
 
 const dynamicTabSequence = [
