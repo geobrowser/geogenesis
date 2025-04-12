@@ -78,6 +78,7 @@
     "immer": "^9.0.16",
     "jotai": "^2.5.1",
     "lokijs": "^1.5.12",
+    "mapbox-gl": "^3.11.0",
     "next": "15.1.6",
     "permissionless": "0.2.39",
     "pluralize": "^8.0.0",

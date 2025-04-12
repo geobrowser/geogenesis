@@ -27,6 +27,8 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
       return 'RELATION';
     case SystemIds.IMAGE:
       return 'IMAGE';
+    case SystemIds.POINT:
+      return 'POINT';
     default:
       return 'TEXT';
   }
@@ -134,7 +136,7 @@ export const getRenderableTypeSelectorOptions = (
           <IconWrapper>
             <Date />
           </IconWrapper>
-          <p>Date & time</p>
+          <p>Date & time </p>
         </div>
       ),
       value: 'TIME' as const,
@@ -214,6 +216,28 @@ export const getRenderableTypeSelectorOptions = (
           value: '',
           relationId: '',
           valueName: null,
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        }),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <IconWrapper>
+            <Relation />
+          </IconWrapper>
+          <p>Point</p>
+        </div>
+      ),
+      value: 'POINT' as const,
+      onClick: () =>
+        onSelect({
+          type: 'POINT',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
           spaceId: renderable.spaceId,
           placeholder: true,
         }),

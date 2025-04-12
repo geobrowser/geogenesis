@@ -26,6 +26,7 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   IMAGE: Image,
   CHECKBOX: CheckboxChecked,
   NUMBER: Number,
+  POINT: Relation,
 };
 
 interface Props {

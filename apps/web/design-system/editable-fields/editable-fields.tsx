@@ -1,4 +1,5 @@
 import { cva, cx } from 'class-variance-authority';
+import mapboxgl from 'mapbox-gl';
 import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
@@ -85,6 +86,14 @@ interface PageStringFieldProps {
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle';
   value?: string;
+}
+
+interface PageGeoLocationFieldProps {
+  onChange: (value: string, isBrowseMode: string) => void;
+  placeholder?: string;
+  variant?: 'mainPage' | 'body' | 'smallTitle';
+  value?: string;
+  isBrowseMode?: string;
 }
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
@@ -340,3 +349,161 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
     </div>
   );
 }
+
+export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) {
+  const [localValue, setLocalValue] = React.useState(props.value || '');
+  const [browserMode, setBrowseMode] = React.useState(
+    props.isBrowseMode === undefined ? true : props.isBrowseMode === 'MAP'
+  );
+  const [pointValues, setPointsValues] = React.useState({
+    latitude: props.value?.split(',')[0]?.replaceAll(' ', '') || '',
+    longitude: props.value?.split(',')[1]?.replaceAll(' ', '') || '',
+  });
+
+  const validNumberPattern = /^-?\d*\.?\d*$/;
+
+  const handlePointValueChange = (label: string, newValue: string) => {
+    console.log(`newValue ${label}`, newValue);
+    if (newValue === '' || validNumberPattern.test(newValue)) {
+      setPointsValues(prev => ({
+        ...prev,
+        [label]: newValue,
+      }));
+    } else {
+      console.log('Invalid input');
+    }
+  };
+
+  useEffect(() => {
+    setLocalValue(`${pointValues.latitude} , ${pointValues.longitude}`);
+    debouncedCallback(`${pointValues.latitude} , ${pointValues.longitude}`);
+  }, [pointValues, browserMode]);
+
+  const { onChange } = props;
+
+  useEffect(() => {
+    // Update local value if value prop changes from outside the component
+    setLocalValue(props.value || '');
+  }, [props.value]);
+
+  // Apply debounce effect
+  const debouncedCallback = debounce((value: string) => {
+    onChange(value, browserMode ? 'MAP' : '');
+  }, 1000);
+
+  // Handle browse mode toggle
+  const handleBrowseMode = () => {
+    setBrowseMode(prev => !prev);
+  };
+
+  return (
+    <div className="flex w-full flex-col gap-4">
+      <div className="mt-[3px] flex w-full justify-between  leading-[29px]">
+        <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2">
+            <label className="text-[19px] text-bodySemibold font-normal text-text">Latitude</label>
+            <span className="w-[11px] border-t border-t-[#606060]"></span>
+            <Textarea
+              {...props}
+              onChange={e => handlePointValueChange('latitude', e.currentTarget.value)}
+              value={pointValues.latitude}
+              className={`${textareaStyles({ variant: props.variant })} max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[19px] text-bodySemibold font-normal text-text">Longitude</label>
+            <span className="w-[11px] border-t border-t-[#606060]"></span>
+            <Textarea
+              {...props}
+              onChange={e => handlePointValueChange('longitude', e.currentTarget.value)}
+              value={pointValues.longitude}
+              className={`${textareaStyles({ variant: props.variant })} max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
+            />
+          </div>
+        </div>
+        <div className="flex h-7 items-center gap-[6px]">
+          {/* Toggle */}
+          <div className="relative h-3 w-5 cursor-pointer rounded-lg bg-black" onClick={handleBrowseMode}>
+            <div
+              className={`absolute top-[1px] h-[10px] w-[10px] rounded-full bg-white transition-all duration-300 ease-in-out ${browserMode ? 'right-[1px]' : 'right-[9px]'}`}
+            ></div>
+          </div>
+          <span className="text-[1rem] font-normal leading-5 text-grey-04">Show map in browse mode</span>
+        </div>
+      </div>
+      <MapPlaceHolder
+        browseMode={browserMode}
+        latitude={parseFloat(pointValues.latitude) || 0}
+        longitude={parseFloat(pointValues.longitude) || 0}
+      />
+    </div>
+  );
+}
+
+export const MapPlaceHolder = ({
+  browseMode,
+  latitude,
+  longitude,
+}: {
+  browseMode: boolean;
+  latitude?: number;
+  longitude?: number;
+}) => {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markerRef = useRef<mapboxgl.Marker | null>(null);
+
+  console.log('MapPlaceHolder', { browseMode, latitude, longitude });
+
+  // Initialize map when component mounts
+  useEffect(() => {
+    if (!browseMode || !mapContainerRef.current) return;
+
+    mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
+
+    const defaultLat = latitude ?? 40;
+    const defaultLng = longitude ?? -74.5;
+
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: 'mapbox://styles/mapbox/streets-v11',
+      center: [defaultLng, defaultLat],
+      zoom: 9,
+    });
+
+    // Add marker to the map
+    const marker = new mapboxgl.Marker().setLngLat([defaultLng, defaultLat]).addTo(map);
+
+    mapRef.current = map;
+    markerRef.current = marker;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+  }, [browseMode, latitude, longitude]);
+
+  // Update map when coordinates change
+  useEffect(() => {
+    if (!mapRef.current || !markerRef.current) return;
+
+    const validLat = latitude !== undefined && !isNaN(latitude);
+    const validLng = longitude !== undefined && !isNaN(longitude);
+
+    if (validLat && validLng) {
+      mapRef.current.setCenter([longitude, latitude]);
+      markerRef.current.setLngLat([longitude, latitude]);
+    }
+  }, [latitude, longitude]);
+
+  return (
+    <div
+      className={`w-full rounded transition-all duration-200 ease-in-out ${
+        browseMode ? 'h-[200px]' : 'h-0 overflow-hidden opacity-0'
+      }`}
+    >
+      {browseMode ? <div ref={mapContainerRef} className="h-full w-full rounded" /> : null}
+    </div>
+  );
+};

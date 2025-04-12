@@ -8,6 +8,7 @@ export const VALUE_TYPE_IDS: Record<TripleValueType, ValueTypeId> = {
   URL: SystemIds.URL,
   CHECKBOX: SystemIds.CHECKBOX,
   NUMBER: SystemIds.NUMBER,
+  POINT: SystemIds.POINT,
 };
 
 export type FilterableValueType = TripleValueType | 'RELATION' | 'IMAGE';

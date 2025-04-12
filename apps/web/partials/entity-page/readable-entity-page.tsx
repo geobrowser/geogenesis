@@ -1,3 +1,5 @@
+import { cons } from 'effect/List';
+
 import * as React from 'react';
 
 import { useRelationship } from '~/core/hooks/use-relationship';
@@ -8,6 +10,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
+import { MapPlaceHolder } from '~/design-system/editable-fields/editable-fields';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -73,9 +76,41 @@ function TriplesGroup({
                   case 'NUMBER':
                     return (
                       <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-                        {renderable.value}
+                        {/* TO DO replace hardcoded attributeId */}
+                        {t.attributeId === 'GSA7HUQwsUbMJQ2RDGNi2W' ? `(${renderable.value})` : `${renderable.value}`}
                       </Text>
                     );
+                  case 'POINT':
+                    if (renderable.attributeId === 'GSA7HUQwsUbMJQ2RDGNi2W') {
+                      // Parse the coordinates from the value string
+                      const coordParts = renderable.value.split(',').map(part => part.trim());
+                      const pointLat = parseFloat(coordParts[0]);
+                      const pointLon = parseFloat(coordParts[1]);
+
+                      console.log(renderable);
+
+                      return (
+                        <div className="flex w-full flex-col gap-2">
+                          <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
+                            ({renderable.value})
+                          </Text>
+                          <MapPlaceHolder
+                            browseMode={renderable.options?.format === 'MAP'}
+                            latitude={!isNaN(pointLat) ? pointLat : undefined}
+                            longitude={!isNaN(pointLon) ? pointLon : undefined}
+                          />
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div className="flex w-full flex-col gap-2">
+                          <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
+                            ({renderable.value})
+                          </Text>
+                        </div>
+                      );
+                    }
+
                   case 'CHECKBOX': {
                     const checked = getChecked(renderable.value);
 

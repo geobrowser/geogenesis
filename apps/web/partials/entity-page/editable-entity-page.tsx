@@ -30,7 +30,12 @@ import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import {
+  GeoLocationPointFields,
+  ImageZoom,
+  PageImageField,
+  PageStringField,
+} from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
@@ -86,13 +91,14 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                 if (!firstRenderable.placeholder) {
                   send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
                 }
+
                 addPlaceholderRenderable(placeholderRenderable);
               },
               send
             );
 
             return (
-              <div key={`${id}-${attributeId}`} className="relative break-words">
+              <div key={`${id}-${attributeId}`} className="relative  break-words">
                 <EditableAttribute
                   renderable={firstRenderable}
                   onChange={() => {
@@ -118,7 +124,9 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                   <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
                 )}
 
-                <div className="absolute right-0 top-6 flex items-center gap-1">
+                <div
+                  className={`absolute right-0 flex items-center gap-1 ${firstRenderable.attributeId === 'GSA7HUQwsUbMJQ2RDGNi2W' && renderableType === 'POINT' ? 'top-0' : 'top-6'}`}
+                >
                   {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
                   <>
                     {renderableType === 'TIME' && (
@@ -527,25 +535,27 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
         switch (renderable.type) {
           case 'TEXT': {
             return (
-              <PageStringField
-                key={renderable.attributeId}
-                variant="body"
-                placeholder="Add value..."
-                aria-label="text-field"
-                value={renderable.value}
-                onChange={value => {
-                  send({
-                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: {
-                      renderable,
-                      value: {
-                        type: 'TEXT',
-                        value: value,
+              <>
+                <PageStringField
+                  key={renderable.attributeId}
+                  variant="body"
+                  placeholder="Add value..."
+                  aria-label="text-field"
+                  value={renderable.value}
+                  onChange={value => {
+                    send({
+                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                      payload: {
+                        renderable,
+                        value: {
+                          type: 'TEXT',
+                          value: value,
+                        },
                       },
-                    },
-                  });
-                }}
-              />
+                    });
+                  }}
+                />
+              </>
             );
           }
           case 'NUMBER':
@@ -635,6 +645,59 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                 }
                 value={renderable.value}
               />
+            );
+          }
+
+          case 'POINT': {
+            return (
+              <>
+                {/* TO DO replace hardcoded attributeId */}
+                {renderable.attributeId === 'GSA7HUQwsUbMJQ2RDGNi2W' && renderable.type === 'POINT' ? (
+                  <GeoLocationPointFields
+                    key={renderable.attributeId}
+                    variant="body"
+                    placeholder="Add value..."
+                    aria-label="text-field"
+                    value={renderable.value}
+                    isBrowseMode={renderable.options?.format}
+                    onChange={(value, isBrowseMode) => {
+                      send({
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'POINT',
+                            value: value,
+                            options: {
+                              format: isBrowseMode,
+                            },
+                          },
+                        },
+                      });
+                    }}
+                  />
+                ) : (
+                  <PageStringField
+                    key={renderable.attributeId}
+                    variant="body"
+                    placeholder="Add value..."
+                    aria-label="text-field"
+                    value={renderable.value}
+                    onChange={value => {
+                      send({
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'POINT',
+                            value: value,
+                          },
+                        },
+                      });
+                    }}
+                  />
+                )}
+              </>
             );
           }
         }
