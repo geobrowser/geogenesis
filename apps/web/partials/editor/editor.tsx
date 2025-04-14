@@ -26,12 +26,7 @@ interface Props {
   spacePage?: boolean;
 }
 
-export const Editor = React.memo(function Editor({
-  shouldHandleOwnSpacing,
-  spaceId,
-  placeholder = null,
-  spacePage = false,
-}: Props) {
+export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   const { upsertEditorState, editorJson, blockIds } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
 
@@ -90,7 +85,7 @@ export const Editor = React.memo(function Editor({
       </div>
     </LayoutGroup>
   );
-});
+}
 
 /**
  * Sets up listeners to intercept clicks on links on entity pages and redirect them to the
