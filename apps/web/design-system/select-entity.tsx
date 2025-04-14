@@ -110,11 +110,11 @@ export const SelectEntity = ({
 
   const [result, setResult] = useState<SearchResult | null>(null);
 
-  const [allowedTypes, setAllowedTypes] = useState<RelationValueType[] | undefined>(() => relationValueTypes);
+  const [allowedTypes, setAllowedTypes] = useState<RelationValueType[]>(() => relationValueTypes ?? []);
   const isAdvanced = relationValueTypes && relationValueTypes.length > 0;
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
 
-  const filterByTypes = allowedTypes?.map(r => r.typeId);
+  const filterByTypes = allowedTypes.length > 0 ? allowedTypes.map(r => r.typeId) : undefined;
 
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
     filterByTypes,
@@ -246,11 +246,9 @@ export const SelectEntity = ({
                                         key={allowedType.typeId}
                                         relationValueType={allowedType}
                                         onDelete={() =>
-                                          setAllowedTypes(
-                                            allowedTypes.length === 1
-                                              ? undefined
-                                              : [...allowedTypes.filter(r => r.typeId !== allowedType.typeId)]
-                                          )
+                                          setAllowedTypes([
+                                            ...allowedTypes.filter(r => r.typeId !== allowedType.typeId),
+                                          ])
                                         }
                                       />
                                     );
