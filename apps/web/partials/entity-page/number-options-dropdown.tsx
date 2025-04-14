@@ -91,6 +91,7 @@ const PercentageToggle = ({
   return (
     <DropdownPrimitive.Item
       className="flex h-[28px] w-full select-none gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04  hover:!bg-bg focus:outline-none"
+      // Suppress default to prevent the dropdown from closing when clicking the percentage toggle
       onClick={suppressDefault}
     >
       <div className="flex w-full items-center justify-between">
