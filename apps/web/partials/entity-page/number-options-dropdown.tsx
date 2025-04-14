@@ -206,6 +206,12 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
     }));
   }, [selectedNumberType, format, onSelect]);
 
+  const togglePercentage = React.useCallback(() => {
+    const newNumberType = selectedNumberType === 'percentage' ? 'number' : 'percentage';
+    setSelectedNumberType(newNumberType);
+    onSelect(newNumberType === 'percentage' ? percentageFormatOptions.Precise : numberFormatOptions.Precise);
+  }, [setSelectedNumberType, selectedNumberType, onSelect]);
+
   const renderContent = React.useCallback(() => {
     switch (currentView) {
       case 'number-format':
@@ -220,7 +226,7 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
       default:
         return (
           <>
-            <PercentageToggle currentType={selectedNumberType} onToggle={setSelectedNumberType} />
+            <PercentageToggle currentType={selectedNumberType} onToggle={togglePercentage} />
             <SubmenuOption
               label="Format"
               onClick={e => handleNavigate(e, 'number-format')}
@@ -231,7 +237,7 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
           </>
         );
     }
-  }, [currentView, formatOptions, selectedNumberType, format, value, handleBack, handleNavigate]);
+  }, [currentView, formatOptions, selectedNumberType, format, value, handleBack, handleNavigate, togglePercentage]);
 
   return (
     <DropdownPrimitive.Root open={isOpen} onOpenChange={toggleIsOpen}>
