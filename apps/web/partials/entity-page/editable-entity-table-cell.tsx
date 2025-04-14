@@ -266,6 +266,7 @@ export function EditableEntityTableCell({
               <NumberField
                 key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
                 value={renderable.value}
+                format={renderable.options?.format}
                 onChange={value =>
                   onChangeEntry(
                     {
@@ -282,6 +283,9 @@ export function EditableEntityTableCell({
                           value: {
                             type: 'NUMBER',
                             value: value,
+                            options: {
+                              format: renderable.options?.format,
+                            },
                           },
                         },
                       },
