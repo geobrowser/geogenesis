@@ -22,7 +22,11 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
     case 'URL':
       return { type: 'URL', value: networkTriple.textValue };
     case 'NUMBER':
-      return { type: 'NUMBER', value: networkTriple.textValue };
+      return {
+        type: 'NUMBER',
+        value: networkTriple.textValue,
+        options: { format: networkTriple.formatOption || undefined },
+      };
   }
 }
 
