@@ -2,6 +2,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import { Source } from '~/core/blocks/data/source';
 import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
+import type { RelationValueType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -23,7 +24,7 @@ interface Props {
   attributeId: string;
   spaceId: string;
   renderables: RenderableProperty[];
-  filterSearchByTypes?: string[];
+  filterSearchByTypes?: RelationValueType[];
   onChangeEntry: onChangeEntryFn;
   isPlaceholderRow: boolean;
   source: Source;
@@ -155,8 +156,9 @@ export function EditableEntityTableCell({
             return (
               <div key={`${r.entityId}-${r.attributeId}-${r.value}`} data-testid="select-entity" className="w-full">
                 <SelectEntity
+                  key={JSON.stringify(filterSearchByTypes)}
                   spaceId={spaceId}
-                  allowedTypes={filterSearchByTypes}
+                  relationValueTypes={filterSearchByTypes}
                   onDone={result => {
                     onChangeEntry(
                       {
@@ -221,8 +223,9 @@ export function EditableEntityTableCell({
         {!hasPlaceholders && (
           <div className="mt-1">
             <SelectEntityAsPopover
+              key={JSON.stringify(filterSearchByTypes)}
               trigger={<SquareButton icon={<Create />} />}
-              allowedTypes={filterSearchByTypes}
+              relationValueTypes={filterSearchByTypes}
               onDone={result => {
                 onChangeEntry(
                   {

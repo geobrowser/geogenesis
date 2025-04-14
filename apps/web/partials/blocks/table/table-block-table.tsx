@@ -109,7 +109,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     if (!cellData) return null;
 
     const maybePropertiesSchema = propertiesSchema?.[PropertyId(cellData.slotId)];
-    const filterableRelationType = maybePropertiesSchema?.relationValueTypeId;
+    const filterableRelationTypeId = maybePropertiesSchema?.relationValueTypeId;
+    const filterableRelationTypeName = maybePropertiesSchema?.relationValueTypeName;
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
     const isNameCell = propertyId === SystemIds.NAME_ATTRIBUTE;
@@ -125,7 +126,16 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           attributeId={propertyId}
           entityId={row.original.entityId}
           spaceId={spaceId}
-          filterSearchByTypes={filterableRelationType ? [filterableRelationType] : undefined}
+          filterSearchByTypes={
+            filterableRelationTypeId
+              ? [
+                  {
+                    typeId: filterableRelationTypeId,
+                    typeName: filterableRelationTypeName ?? null,
+                  },
+                ]
+              : undefined
+          }
           onChangeEntry={onChangeEntry}
           isPlaceholderRow={Boolean(row.original.placeholder)}
         />
