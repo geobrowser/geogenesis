@@ -5,6 +5,7 @@ import Textarea from 'react-textarea-autosize';
 import * as React from 'react';
 import { ChangeEvent, useEffect, useRef } from 'react';
 
+import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { Services } from '~/core/services';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -80,15 +81,15 @@ export function TableStringField({ ...props }: TableStringFieldProps) {
   );
 }
 
-interface PageStringFieldProps {
+type PageStringFieldProps = {
   onChange: (value: string) => void;
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle';
   value?: string;
-}
+};
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
-  const [localValue, setLocalValue] = React.useState(props.value || '');
+  const [localValue, setLocalValue] = React.useState(() => props.value || '');
   const { onChange } = props;
 
   useEffect(() => {
@@ -110,8 +111,49 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
   return (
     <Textarea
       {...props}
-      onChange={e => handleChange(e.currentTarget.value)}
       value={localValue}
+      onChange={e => handleChange(e.currentTarget.value)}
+      className={textareaStyles({ variant: props.variant })}
+    />
+  );
+}
+
+export function FocusedStringField({ ...props }: PageStringFieldProps) {
+  const [localValue, setLocalValue] = React.useState(() => props.value || '');
+  const { onChange } = props;
+
+  const ref = useRef<HTMLTextAreaElement>(null!);
+
+  useEffectOnce(() => {
+    setTimeout(() => {
+      ref.current.focus();
+      const length = ref.current.value.length;
+      ref.current.setSelectionRange(length, length);
+    }, 200);
+  });
+
+  useEffect(() => {
+    // Update local value if value prop changes from outside the component
+    setLocalValue(props.value || '');
+  }, [props.value]);
+
+  // Apply debounce effect
+  const debouncedCallback = debounce((value: string) => {
+    onChange(value);
+  }, 1000);
+
+  // Handle input changes
+  const handleChange = (value: string) => {
+    setLocalValue(value);
+    debouncedCallback(value);
+  };
+
+  return (
+    <Textarea
+      {...props}
+      ref={ref}
+      value={localValue}
+      onChange={e => handleChange(e.currentTarget.value)}
       className={textareaStyles({ variant: props.variant })}
     />
   );

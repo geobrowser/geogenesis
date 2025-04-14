@@ -188,6 +188,7 @@ export function useDataBlock() {
     spaceId,
     relationId,
 
+    blockEntity: entity,
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
     properties: propertiesSchema ? Object.values(propertiesSchema) : [],
     propertiesSchema,
