@@ -80,13 +80,8 @@ function TriplesGroup({
                     return (
                       <div>
                         <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-                          {renderable.value}
+                          {GeoNumber.format(renderable.value, renderable.options?.format)}
                         </Text>
-                        {renderable.options?.format && (
-                          <p className="text-sm text-grey-04">
-                            Browse format · {GeoNumber.format(renderable.value, renderable.options?.format)}
-                          </p>
-                        )}
                       </div>
                     );
                   case 'CHECKBOX': {
