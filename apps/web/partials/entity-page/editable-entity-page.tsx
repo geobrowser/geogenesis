@@ -261,7 +261,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
   const property = properties?.[typeOfId];
-  const filterByTypes = property?.relationValueTypes?.map(r => r.typeId);
+  const relationValueTypes = property?.relationValueTypes;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -337,8 +337,9 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
           return (
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
+                key={JSON.stringify(relationValueTypes)}
                 spaceId={spaceId}
-                allowedTypes={filterByTypes ? filterByTypes : undefined}
+                relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
                 onCreateEntity={result => {
                   if (property?.relationValueTypeId) {
                     send({
@@ -443,8 +444,9 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
       {!hasPlaceholders && typeOfRenderableType === 'RELATION' && (
         <div className="mt-1">
           <SelectEntityAsPopover
+            key={JSON.stringify(relationValueTypes)}
             trigger={<SquareButton icon={<Create />} />}
-            allowedTypes={filterByTypes ? filterByTypes : undefined}
+            relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
               if (property?.relationValueTypeId) {
                 send({
