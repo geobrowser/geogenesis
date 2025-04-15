@@ -88,7 +88,6 @@ export const EditableTitle = ({
     initialValue: name ?? '',
   });
 
-  // const [newName, setNewName] = useState<string>(() => name ?? '');
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
