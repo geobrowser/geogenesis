@@ -9,7 +9,6 @@ import {
   BaseRelationRenderableProperty,
   ImageRelationRenderableProperty,
   OmitStrict,
-  Relation,
   RenderableEntityType,
   RenderableProperty,
   TripleRenderableProperty,
