@@ -20,8 +20,7 @@ export function RelationDtoLive(relation: SubstreamRelationLive) {
   return {
     space: relation.spaceId,
     id: relation.entityId,
-    // index: getIndexFromRelationEntity(relation),
-    index: relation.index,
+    index: getIndexFromRelationEntity(relation),
     typeOf: {
       id: relation.typeOf.currentVersion.version.entityId,
       name: relation.typeOf.currentVersion.version.name,
@@ -60,8 +59,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
   return {
     space: relation.spaceId,
     id: relation.entityId,
-    // index: getIndexFromRelationEntity(relation),
-    index: relation.index,
+    index: getIndexFromRelationEntity(relation),
     typeOf: {
       id: relation.typeOfVersion.entityId,
       name: relation.typeOfVersion.name,
