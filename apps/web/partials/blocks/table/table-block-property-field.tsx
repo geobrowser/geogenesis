@@ -310,7 +310,14 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
   const typeOfName = firstRenderable.attributeName;
 
   const property = properties?.[PropertyId(typeOfId)];
-  const filterSearchByTypes = property?.relationValueTypeId ? [property.relationValueTypeId] : [];
+  const filterSearchByTypes = property?.relationValueTypeId
+    ? [
+        {
+          typeId: property.relationValueTypeId,
+          typeName: property?.relationValueTypeName ?? null,
+        },
+      ]
+    : [];
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -346,8 +353,9 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
           return (
             <div key={`${r.entityId}-${r.attributeId}-${r.value}`} data-testid="select-entity" className="w-full">
               <SelectEntity
+                key={JSON.stringify(filterSearchByTypes)}
                 spaceId={spaceId}
-                allowedTypes={filterSearchByTypes}
+                relationValueTypes={filterSearchByTypes}
                 onCreateEntity={result => {
                   if (property?.relationValueTypeId) {
                     send({
@@ -408,7 +416,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
         <div className="mt-1">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
-            allowedTypes={filterSearchByTypes}
+            relationValueTypes={filterSearchByTypes}
             onCreateEntity={result => {
               if (property?.relationValueTypeId) {
                 send({

@@ -14,9 +14,13 @@ import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId } from '~/core/io/schema';
+import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
+import { IconButton } from '~/design-system/button';
+import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { TopRanked } from '~/design-system/icons/top-ranked';
 import { Tag } from '~/design-system/tag';
 import { Toggle } from '~/design-system/toggle';
@@ -42,7 +46,7 @@ type SelectEntityProps = {
   ) => void;
   onCreateEntity?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
   spaceId: string;
-  allowedTypes?: string[];
+  relationValueTypes?: RelationValueType[];
   placeholder?: string;
   containerClassName?: string;
   inputClassName?: string;
@@ -94,7 +98,7 @@ export const SelectEntity = ({
   onDone,
   onCreateEntity,
   spaceId,
-  allowedTypes,
+  relationValueTypes,
   placeholder = 'Find or create...',
   width = 'clamped',
   variant = 'fixed',
@@ -106,8 +110,14 @@ export const SelectEntity = ({
 
   const [result, setResult] = useState<SearchResult | null>(null);
 
+  const [allowedTypes, setAllowedTypes] = useState<RelationValueType[]>(() => relationValueTypes ?? []);
+  const isAdvanced = relationValueTypes && relationValueTypes.length > 0;
+  const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
+
+  const filterByTypes = allowedTypes.length > 0 ? allowedTypes.map(r => r.typeId) : undefined;
+
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
-    filterByTypes: allowedTypes,
+    filterByTypes,
   });
 
   if (query === '' && result !== null) {
@@ -118,6 +128,10 @@ export const SelectEntity = ({
 
   const handleShowIds = () => {
     setIsShowingIds(!isShowingIds);
+  };
+
+  const handleShowAdvanced = () => {
+    setIsShowingAdvanced(!isShowingAdvanced);
   };
 
   const [, setToast] = useToast();
@@ -197,6 +211,58 @@ export const SelectEntity = ({
                     withSearchIcon && 'rounded-t-none'
                   )}
                 >
+                  {isAdvanced && (
+                    <div className="w-full">
+                      <button
+                        onClick={handleShowAdvanced}
+                        className="flex w-full justify-end border-b border-grey-02 px-2 py-1"
+                      >
+                        <div className="inline-flex items-center gap-1">
+                          <span className="text-[0.6875rem] text-grey-04">Advanced</span>
+                          <span
+                            className={cx('transition duration-300 ease-in-out', isShowingAdvanced && 'scale-y-[-1]')}
+                          >
+                            <ChevronDownSmall color="grey-04" />
+                          </span>
+                        </div>
+                      </button>
+                      <ResizableContainer>
+                        {isShowingAdvanced && (
+                          <div className="border-b border-grey-02 px-4 py-2">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="text-[0.875rem] text-grey-04">Applied</span>
+                              </div>
+                              {/* <div>
+                              <button className="text-[0.875rem] text-ctaHover">+ Add filter</button>
+                            </div> */}
+                            </div>
+                            <div className="mt-1 flex w-full flex-wrap gap-1 text-black">
+                              {allowedTypes && allowedTypes.length > 0 ? (
+                                <>
+                                  {allowedTypes.map(allowedType => {
+                                    return (
+                                      <ValueTypePill
+                                        key={allowedType.typeId}
+                                        relationValueType={allowedType}
+                                        onDelete={() =>
+                                          setAllowedTypes([
+                                            ...allowedTypes.filter(r => r.typeId !== allowedType.typeId),
+                                          ])
+                                        }
+                                      />
+                                    );
+                                  })}
+                                </>
+                              ) : (
+                                <div>No filters applied</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </ResizableContainer>
+                    </div>
+                  )}
                   {!result ? (
                     <ResizableContainer>
                       <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
@@ -381,6 +447,33 @@ export const SelectEntity = ({
           </Popover.Portal>
         )}
       </Popover.Root>
+    </div>
+  );
+};
+
+const ValueTypePill = ({
+  relationValueType,
+  onDelete,
+}: {
+  relationValueType: RelationValueType;
+  onDelete: () => void;
+}) => {
+  return (
+    <div className="flex h-6 items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M2.73511 0.5H9.26489C10.0543 0.5 10.5325 1.37186 10.1081 2.03755L7.76692 5.71008C7.51097 6.11158 7.375 6.57782 7.375 7.05396V10.125C7.375 10.8844 6.75939 11.5 6 11.5C5.24061 11.5 4.625 10.8844 4.625 10.125V7.05396C4.625 6.57782 4.48903 6.11158 4.23308 5.71008L1.89187 2.03755C1.46751 1.37186 1.94565 0.5 2.73511 0.5Z"
+          fill="#606060"
+          stroke="#606060"
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="flex items-center gap-1">
+        <span>Relation value type is</span>
+        <span>·</span>
+        <span>{relationValueType.typeName}</span>
+      </div>
+      <IconButton icon={<CheckCloseSmall />} color="grey-04" onClick={onDelete} />
     </div>
   );
 };

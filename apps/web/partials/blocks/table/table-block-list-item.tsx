@@ -11,11 +11,12 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { CheckCircle } from '~/design-system/icons/check-circle';
 import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 
-import { onChangeEntryFn } from './change-entry';
+import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { EditableTitle } from '~/partials/blocks/table/editable-title';
+
 import { TableBlockPropertyField } from './table-block-property-field';
 
 type Props = {
@@ -25,7 +26,9 @@ type Props = {
   rowEntityId: string;
   isPlaceholder: boolean;
   onChangeEntry: onChangeEntryFn;
+  onLinkEntry: onLinkEntryFn;
   properties?: Record<PropertyId, PropertySchema>;
+  relationId?: string;
   source: Source;
   // allowedTypes
 };
@@ -37,7 +40,9 @@ export function TableBlockListItem({
   rowEntityId,
   isPlaceholder,
   onChangeEntry,
+  onLinkEntry,
   properties,
+  relationId,
   source,
 }: Props) {
   const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
@@ -235,46 +240,19 @@ export function TableBlockListItem({
                 spaceId={currentSpaceId}
               />
             ) : (
-              <div className="flex items-center gap-2">
-                {verified && (
-                  <span>
-                    <CheckCircle color={isEditing ? 'text' : 'ctaPrimary'} />
-                  </span>
-                )}
-                <PageStringField
-                  placeholder="Add name..."
-                  onChange={value => {
-                    onChangeEntry(
-                      {
-                        entityId: rowEntityId,
-                        entityName: name,
-                        spaceId: currentSpaceId,
-                      },
-                      {
-                        type: 'EVENT',
-                        data: {
-                          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                          payload: {
-                            renderable: {
-                              attributeId: SystemIds.NAME_ATTRIBUTE,
-                              entityId: rowEntityId,
-                              spaceId: currentSpaceId,
-                              attributeName: 'Name',
-                              entityName: name,
-                              type: 'TEXT',
-                              value: name ?? '',
-                            },
-                            value: { type: 'TEXT', value: value },
-                          },
-                        },
-                      }
-                    );
-
-                    return;
-                  }}
-                  value={name ?? ''}
-                />
-              </div>
+              <EditableTitle
+                view="LIST"
+                isEditing={true}
+                name={name}
+                href={href}
+                currentSpaceId={currentSpaceId}
+                entityId={rowEntityId}
+                spaceId={nameCell?.space}
+                relationId={relationId}
+                verified={verified}
+                onChangeEntry={onChangeEntry}
+                onLinkEntry={onLinkEntry}
+              />
             )}
           </div>
           <Divider type="horizontal" style="dashed" />
@@ -352,14 +330,19 @@ export function TableBlockListItem({
         />
       </div>
       <div>
-        <div className="flex items-center gap-2">
-          {verified && (
-            <div>
-              <CheckCircle />
-            </div>
-          )}
-          <div className="line-clamp-1 text-smallTitle font-medium text-text md:line-clamp-2">{name}</div>
-        </div>
+        <EditableTitle
+          view="LIST"
+          isEditing={false}
+          name={name}
+          href={href}
+          currentSpaceId={currentSpaceId}
+          entityId={rowEntityId}
+          spaceId={nameCell?.space}
+          relationId={relationId}
+          verified={verified}
+          onChangeEntry={onChangeEntry}
+          onLinkEntry={onLinkEntry}
+        />
         {description && (
           <div className="mt-0.5 line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
         )}
