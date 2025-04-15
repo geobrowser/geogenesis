@@ -8,7 +8,7 @@ import { useRef, useState } from 'react';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
 import { removeRelation, useWriteOps } from '~/core/database/write';
-import { useDebouncedValueWithSideEffect } from '~/core/hooks/use-debounced-value';
+import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
@@ -56,7 +56,7 @@ export const EditableTitle = ({
   onChangeEntry,
   onLinkEntry,
 }: EditableTitleProps) => {
-  const { value: newName, onChange: setNewName } = useDebouncedValueWithSideEffect({
+  const { value: newName, onChange: setNewName } = useOptimisticValueWithSideEffect({
     callback: value => {
       onChangeEntry(
         {

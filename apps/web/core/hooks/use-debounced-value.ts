@@ -26,7 +26,16 @@ const debounce = <T extends (...args: any[]) => any>(fn: T, delay: number) => {
   };
 };
 
-export function useDebouncedValueWithSideEffect<T>({
+/**
+ * Keeps a local version of the initial value. This local version
+ * is updated optimistically. Accepts a callback that executes
+ * with a debounced delay.
+ *
+ * One common usecase is to keep local state for an input. After
+ * a debounced delay this local state is synced with an external
+ * store like the Geo KG.
+ */
+export function useOptimisticValueWithSideEffect<T>({
   callback,
   delay,
   initialValue,
