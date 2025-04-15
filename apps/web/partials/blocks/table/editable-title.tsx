@@ -3,18 +3,19 @@ import * as Popover from '@radix-ui/react-popover';
 import cx from 'classnames';
 import Image from 'next/image';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
 import { removeRelation, useWriteOps } from '~/core/database/write';
+import { useDebouncedValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 
-import { FocusedStringField, debounce } from '~/design-system/editable-fields/editable-fields';
+import { FocusedStringField } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Menu } from '~/design-system/icons/menu';
@@ -55,7 +56,39 @@ export const EditableTitle = ({
   onChangeEntry,
   onLinkEntry,
 }: EditableTitleProps) => {
-  const [newName, setNewName] = useState<string>(() => name ?? '');
+  const { value: newName, onChange: setNewName } = useDebouncedValueWithSideEffect({
+    callback: value => {
+      onChangeEntry(
+        {
+          entityId,
+          entityName: value,
+          spaceId: currentSpaceId,
+        },
+        {
+          type: 'EVENT',
+          data: {
+            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+            payload: {
+              renderable: {
+                attributeId: SystemIds.NAME_ATTRIBUTE,
+                entityId,
+                spaceId: currentSpaceId,
+                attributeName: 'Name',
+                entityName: name,
+                type: 'TEXT',
+                value: name ?? '',
+              },
+              value: { type: 'TEXT', value },
+            },
+          },
+        }
+      );
+    },
+    delay: 1000,
+    initialValue: name ?? '',
+  });
+
+  // const [newName, setNewName] = useState<string>(() => name ?? '');
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
@@ -73,48 +106,6 @@ export const EditableTitle = ({
     id: relationId,
     spaceId,
   });
-
-  // If the name is changed externally we need to update the local state here.
-  // Since the knowledge graph is highly relational it can often happen where
-  // the same entity is rendered in multiple places on the same page, so changing
-  // that entity anywhere should update it everywhere.
-  useEffect(() => {
-    setNewName(name ?? '');
-  }, [name]);
-
-  // Debounce any changes so we can apply it onChange instead of onBlur
-  const debouncedCallback = debounce((value: string) => {
-    onChangeEntry(
-      {
-        entityId,
-        entityName: value,
-        spaceId: currentSpaceId,
-      },
-      {
-        type: 'EVENT',
-        data: {
-          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-          payload: {
-            renderable: {
-              attributeId: SystemIds.NAME_ATTRIBUTE,
-              entityId,
-              spaceId: currentSpaceId,
-              attributeName: 'Name',
-              entityName: name,
-              type: 'TEXT',
-              value: name ?? '',
-            },
-            value: { type: 'TEXT', value },
-          },
-        },
-      }
-    );
-  }, 1000);
-
-  const handleChange = (value: string) => {
-    setNewName(value);
-    debouncedCallback(value);
-  };
 
   const onDeleteEntry = async () => {
     if (blockEntity) {
@@ -243,7 +234,7 @@ export const EditableTitle = ({
             view={view}
             name={name ?? ''}
             newName={newName}
-            setNewName={handleChange}
+            setNewName={setNewName}
             entityId={entityId}
             currentSpaceId={currentSpaceId}
             onChangeEntry={onChangeEntry}
