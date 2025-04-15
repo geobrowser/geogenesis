@@ -449,7 +449,6 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
         f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
       );
 
-      console.log('members added', data);
       yield* _(handleMemberAdded(data, block));
     }
 

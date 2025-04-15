@@ -57,13 +57,6 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
       }
     });
 
-    const onEntityUpdatedSub = stream.on(GeoEventStream.ENTITY_UPDATED, event => {
-      if (event.entity.id === id) {
-        const entity = store.getEntity(id, { spaceId });
-        setEntity(entity);
-      }
-    });
-
     const onEntityDeletedSub = stream.on(GeoEventStream.ENTITY_DELETED, event => {
       if (event.entity.id === id) {
         setEntity(undefined);
@@ -83,27 +76,76 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
     });
 
     const onTripleCreatedSub = stream.on(GeoEventStream.TRIPLES_CREATED, event => {
+      let shouldUpdate = false;
+
       if (event.triple.entityId === id) {
+        shouldUpdate = true;
+      }
+
+      /**
+       * If the changed triple is for one of the relations of the subscribed entities
+       * changed we need to re-pull the entity to get the latest state of its relation.
+       *
+       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
+       * re-pull Byron to get the latest name for Geo, PBC.
+       */
+      const maybeRelationToChanged = entity?.relationsOut.some(r => r.toEntity.id === event.triple.entityId);
+
+      if (maybeRelationToChanged) {
+        shouldUpdate = true;
+      }
+
+      const maybeRelationEntityChanged = entity?.relationsOut.some(r => r.id === event.triple.entityId);
+
+      if (maybeRelationEntityChanged) {
+        shouldUpdate = true;
+      }
+
+      if (shouldUpdate) {
         setEntity(store.getEntity(id, { spaceId }));
       }
     });
 
     const onTripleDeletedSub = stream.on(GeoEventStream.TRIPLES_DELETED, event => {
+      let shouldUpdate = false;
+
       if (event.triple.entityId === id) {
+        shouldUpdate = true;
+      }
+
+      /**
+       * If the changed triple is for one of the relations of the subscribed entities
+       * changed we need to re-pull the entity to get the latest state of its relation.
+       *
+       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
+       * re-pull Byron to get the latest name for Geo, PBC.
+       */
+      const maybeRelationToChanged = entity?.relationsOut.some(r => r.toEntity.id === event.triple.entityId);
+
+      if (maybeRelationToChanged) {
+        shouldUpdate = true;
+      }
+
+      const maybeRelationEntityChanged = entity?.relationsOut.some(r => r.id === event.triple.entityId);
+
+      if (maybeRelationEntityChanged) {
+        shouldUpdate = true;
+      }
+
+      if (shouldUpdate) {
         setEntity(store.getEntity(id, { spaceId }));
       }
     });
 
     return () => {
       onEntitySyncedSub();
-      onEntityUpdatedSub();
       onEntityDeletedSub();
       onRelationCreatedSub();
       onRelationDeletedSub();
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [id, store, stream, spaceId, enabled]);
+  }, [id, store, stream, spaceId, enabled, entity]);
 
   return {
     entity,
@@ -280,11 +322,17 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationChanged = entities.some(e =>
+      const maybeRelationToChanged = entities.some(e =>
         e.relationsOut.some(r => r.toEntity.id === event.triple.entityId)
       );
 
-      if (maybeRelationChanged) {
+      if (maybeRelationToChanged) {
+        shouldUpdate = true;
+      }
+
+      const maybeRelationEntityChanged = entities.some(e => e.relationsOut.some(r => r.id === event.triple.entityId));
+
+      if (maybeRelationEntityChanged) {
         shouldUpdate = true;
       }
 
@@ -334,6 +382,12 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
       );
 
       if (maybeRelationChanged) {
+        shouldUpdate = true;
+      }
+
+      const maybeRelationEntityChanged = entities.some(e => e.relationsOut.some(r => r.id === event.triple.entityId));
+
+      if (maybeRelationEntityChanged) {
         shouldUpdate = true;
       }
 

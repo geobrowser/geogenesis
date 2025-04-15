@@ -20,6 +20,7 @@ export function RelationDtoLive(relation: SubstreamRelationLive) {
   return {
     space: relation.spaceId,
     id: relation.entityId,
+    // index: getIndexFromRelationEntity(relation),
     index: relation.index,
     typeOf: {
       id: relation.typeOf.currentVersion.version.entityId,
@@ -38,7 +39,8 @@ export function RelationDtoLive(relation: SubstreamRelationLive) {
       // render it depending on their use case.
       renderableType,
       // Right now we only support images and entity ids as the value of the To entity.
-      value: renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : relation.toEntity.currentVersion.version.entityId,
+      value:
+        renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toEntity.currentVersion.version.entityId,
     },
   };
 }
@@ -58,6 +60,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
   return {
     space: relation.spaceId,
     id: relation.entityId,
+    // index: getIndexFromRelationEntity(relation),
     index: relation.index,
     typeOf: {
       id: relation.typeOfVersion.entityId,
@@ -76,7 +79,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
       // render it depending on their use case.
       renderableType,
       // Right now we only support images and entity ids as the value of the To entity.
-      value: renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : relation.toVersion.entityId,
+      value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toVersion.entityId,
     },
   };
 }
@@ -97,4 +100,16 @@ function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
   }
 
   return 'RELATION';
+}
+
+function getIndexFromRelationEntity(relation: SubstreamRelationLive | SubstreamRelationHistorical): string {
+  const maybeIndexTriple = relation.entity.currentVersion.version.triples.nodes.find(
+    t => t.attributeVersion.entityId === EntityId(SystemIds.RELATION_INDEX) && t.valueType === 'TEXT'
+  );
+
+  if (!maybeIndexTriple) {
+    return '';
+  }
+
+  return TripleDto(maybeIndexTriple).value.value;
 }
