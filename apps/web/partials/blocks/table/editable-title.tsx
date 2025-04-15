@@ -3,8 +3,7 @@ import * as Popover from '@radix-ui/react-popover';
 import cx from 'classnames';
 import Image from 'next/image';
 
-import { useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
@@ -15,7 +14,7 @@ import { EntityId } from '~/core/io/schema';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 
-import { FocusedStringField } from '~/design-system/editable-fields/editable-fields';
+import { FocusedStringField, debounce } from '~/design-system/editable-fields/editable-fields';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Menu } from '~/design-system/icons/menu';
@@ -69,10 +68,53 @@ export const EditableTitle = ({
     id: collectionId,
     spaceId,
   });
+
   const { entity: relationEntity } = useQueryEntity({
     id: relationId,
     spaceId,
   });
+
+  // If the name is changed externally we need to update the local state here.
+  // Since the knowledge graph is highly relational it can often happen where
+  // the same entity is rendered in multiple places on the same page, so changing
+  // that entity anywhere should update it everywhere.
+  useEffect(() => {
+    setNewName(name ?? '');
+  }, [name]);
+
+  // Debounce any changes so we can apply it onChange instead of onBlur
+  const debouncedCallback = debounce((value: string) => {
+    onChangeEntry(
+      {
+        entityId,
+        entityName: value,
+        spaceId: currentSpaceId,
+      },
+      {
+        type: 'EVENT',
+        data: {
+          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+          payload: {
+            renderable: {
+              attributeId: SystemIds.NAME_ATTRIBUTE,
+              entityId,
+              spaceId: currentSpaceId,
+              attributeName: 'Name',
+              entityName: name,
+              type: 'TEXT',
+              value: name ?? '',
+            },
+            value: { type: 'TEXT', value },
+          },
+        },
+      }
+    );
+  }, 1000);
+
+  const handleChange = (value: string) => {
+    setNewName(value);
+    debouncedCallback(value);
+  };
 
   const onDeleteEntry = async () => {
     if (blockEntity) {
@@ -201,7 +243,7 @@ export const EditableTitle = ({
             view={view}
             name={name ?? ''}
             newName={newName}
-            setNewName={setNewName}
+            setNewName={handleChange}
             entityId={entityId}
             currentSpaceId={currentSpaceId}
             onChangeEntry={onChangeEntry}
@@ -217,7 +259,7 @@ type EditingTitleProps = {
   view: DataBlockView;
   name: string;
   newName: string;
-  setNewName: Dispatch<SetStateAction<string>>;
+  setNewName: (value: string) => void;
   currentSpaceId: string;
   entityId: string;
   onChangeEntry: onChangeEntryFn;

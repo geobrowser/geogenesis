@@ -35,7 +35,7 @@ const textareaStyles = cva(
   }
 );
 
-const debounce = <T extends (...args: any[]) => any>(fn: T, delay: number) => {
+export const debounce = <T extends (...args: any[]) => any>(fn: T, delay: number) => {
   let timer: number | null = null;
 
   return (...args: Parameters<T>) => {
