@@ -11,7 +11,7 @@ export class Entities {
         const chunk = entities.slice(i, i + CHUNK_SIZE);
         await db
           .upsert('entities', chunk, db.constraint('entities_pkey'), {
-            updateColumns: ['updated_at', 'updated_at_block', 'created_by_id'],
+            updateColumns: ['name', 'search_vector', 'updated_at', 'updated_at_block', 'created_by_id'],
           })
           .run(pool);
       }
@@ -22,7 +22,7 @@ export class Entities {
     return await db
       .upsert('entities', entities, db.constraint('entities_pkey'), {
         updateColumns: ['updated_at', 'updated_at_block'],
-        noNullUpdateColumns: ['updated_at', 'updated_at_block', 'created_by_id'],
+        noNullUpdateColumns: ['name', 'search_vector', 'updated_at', 'updated_at_block', 'created_by_id'],
       })
       .run(pool);
   }
