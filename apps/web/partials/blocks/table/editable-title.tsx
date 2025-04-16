@@ -146,7 +146,7 @@ export const EditableTitle = ({
                 href={href}
                 className={cx(
                   'truncate',
-                  view === 'TABLE' && 'text-tableCell text-ctaHover',
+                  view === 'TABLE' && 'text-tableCell text-ctaHover hover:underline',
                   view === 'LIST' && 'text-smallTitle font-medium text-text',
                   view === 'GALLERY' && 'text-smallTitle font-medium text-text'
                 )}
