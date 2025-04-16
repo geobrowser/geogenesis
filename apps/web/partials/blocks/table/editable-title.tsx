@@ -4,11 +4,11 @@ import cx from 'classnames';
 import Image from 'next/image';
 
 import { useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
 import { removeRelation, useWriteOps } from '~/core/database/write';
+import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
@@ -56,7 +56,38 @@ export const EditableTitle = ({
   onChangeEntry,
   onLinkEntry,
 }: EditableTitleProps) => {
-  const [newName, setNewName] = useState<string>(() => name ?? '');
+  const { value: newName, onChange: setNewName } = useOptimisticValueWithSideEffect({
+    callback: value => {
+      onChangeEntry(
+        {
+          entityId,
+          entityName: value,
+          spaceId: currentSpaceId,
+        },
+        {
+          type: 'EVENT',
+          data: {
+            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+            payload: {
+              renderable: {
+                attributeId: SystemIds.NAME_ATTRIBUTE,
+                entityId,
+                spaceId: currentSpaceId,
+                attributeName: 'Name',
+                entityName: name,
+                type: 'TEXT',
+                value: name ?? '',
+              },
+              value: { type: 'TEXT', value },
+            },
+          },
+        }
+      );
+    },
+    delay: 1000,
+    initialValue: name ?? '',
+  });
+
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
@@ -69,6 +100,7 @@ export const EditableTitle = ({
     id: collectionId,
     spaceId,
   });
+
   const { entity: relationEntity } = useQueryEntity({
     id: relationId,
     spaceId,
@@ -114,7 +146,7 @@ export const EditableTitle = ({
                 href={href}
                 className={cx(
                   'truncate',
-                  view === 'TABLE' && 'text-tableCell text-ctaHover',
+                  view === 'TABLE' && 'text-tableCell text-ctaHover hover:underline',
                   view === 'LIST' && 'text-smallTitle font-medium text-text',
                   view === 'GALLERY' && 'text-smallTitle font-medium text-text'
                 )}
@@ -217,7 +249,7 @@ type EditingTitleProps = {
   view: DataBlockView;
   name: string;
   newName: string;
-  setNewName: Dispatch<SetStateAction<string>>;
+  setNewName: (value: string) => void;
   currentSpaceId: string;
   entityId: string;
   onChangeEntry: onChangeEntryFn;
