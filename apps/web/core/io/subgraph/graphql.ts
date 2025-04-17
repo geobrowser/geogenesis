@@ -30,6 +30,7 @@ export function graphql<T>({ endpoint, query, signal }: GraphqlConfig) {
           return new AbortError();
         }
 
+        console.error('Unknown error fetching GraphQL endpoint', endpoint, String(e));
         return new HttpError(String(e));
       },
     });
