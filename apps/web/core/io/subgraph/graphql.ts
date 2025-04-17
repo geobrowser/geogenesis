@@ -5,7 +5,6 @@ import { AbortError, GraphqlRuntimeError, HttpError, JsonParseError } from './er
 interface GraphqlConfig {
   endpoint: string;
   query: string;
-  tag?: string;
   signal?: AbortController['signal'];
 }
 
@@ -14,32 +13,26 @@ interface GraphqlResponse<T> {
   errors: unknown[];
 }
 
-export function graphql<T>({ endpoint, query, signal, tag }: GraphqlConfig) {
-  const graphqlFetchEffect = Effect.tryPromise({
-    try: () =>
-      fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query }),
-        signal,
-        next: {
-          revalidate: 0,
-          tags: tag ? [tag] : undefined,
-        },
-      }),
-    catch: e => {
-      if (e instanceof Error && e.name === 'AbortError') {
-        return new AbortError();
-      }
-
-      return new HttpError(String(e));
-    },
-  });
-
+export function graphql<T>({ endpoint, query, signal }: GraphqlConfig) {
   return Effect.gen(function* () {
-    const response = yield* graphqlFetchEffect;
+    const response = yield* Effect.tryPromise({
+      try: () =>
+        fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query }),
+          signal,
+        }),
+      catch: e => {
+        if (e instanceof Error && e.name === 'AbortError') {
+          return new AbortError();
+        }
+
+        return new HttpError(String(e));
+      },
+    });
 
     const json = yield* Effect.tryPromise({
       try: () => response.json() as Promise<GraphqlResponse<T>>,
