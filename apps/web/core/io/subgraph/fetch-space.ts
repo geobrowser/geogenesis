@@ -49,7 +49,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
 
             queryString: ${getFetchSpaceQuery(options.id)}
             `,
-            error.message
+            String(error)
           );
 
           return {
@@ -58,7 +58,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch space, spaceId: ${options.id} endpoint: ${endpoint}. ${error.message}`
+            `${error._tag}: Unable to fetch space, spaceId: ${options.id} endpoint: ${endpoint}. ${String(error)}`
           );
 
           return {
