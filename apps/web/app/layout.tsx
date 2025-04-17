@@ -1,6 +1,5 @@
 import localFont from 'next/font/local';
 import 'react-medium-image-zoom/dist/styles.css';
-import 'mapbox-gl/dist/mapbox-gl.css';
 
 import * as React from 'react';
 

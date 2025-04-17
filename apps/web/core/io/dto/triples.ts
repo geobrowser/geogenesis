@@ -6,6 +6,8 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
   switch (networkTriple.valueType) {
     case 'TEXT':
       return { type: 'TEXT', value: networkTriple.textValue };
+    case 'POINT':
+      return { type: 'POINT', value: networkTriple.textValue };
     case 'CHECKBOX':
       return { type: 'CHECKBOX', value: networkTriple.booleanValue ? '1' : '0' };
     case 'TIME':

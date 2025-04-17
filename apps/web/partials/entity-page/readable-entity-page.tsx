@@ -10,7 +10,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { MapPlaceHolder } from '~/design-system/editable-fields/editable-fields';
+import { Map } from '~/design-system/map';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -94,7 +94,7 @@ function TriplesGroup({
                           <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
                             ({renderable.value})
                           </Text>
-                          <MapPlaceHolder
+                          <Map
                             browseMode={renderable.options?.format === 'MAP'}
                             latitude={!isNaN(pointLat) ? pointLat : undefined}
                             longitude={!isNaN(pointLon) ? pointLon : undefined}

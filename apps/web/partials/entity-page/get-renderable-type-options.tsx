@@ -11,6 +11,7 @@ import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
+import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Url } from '~/design-system/icons/url';
 
 export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
@@ -224,7 +225,7 @@ export const getRenderableTypeSelectorOptions = (
       label: (
         <div className="flex items-center gap-2">
           <IconWrapper>
-            <Relation />
+            <GeoLocation />
           </IconWrapper>
           <p>Point</p>
         </div>
