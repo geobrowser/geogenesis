@@ -89,7 +89,7 @@ export class GeoNumber {
 }
 
 export class GeoDate {
-  static defaultFormat = 'h:mmaaa, EEEE, MMMM d, yyyy';
+  static defaultFormat = 'MMM d, yyyy - h:mmaaa';
 
   /**
    * We return blocktime from the subgraph for createdAt and updatedAt fields.
