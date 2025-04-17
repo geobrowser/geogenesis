@@ -7,6 +7,7 @@ import { useRef, useState } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
+import { EM_SPACE } from '~/core/constants';
 import { removeRelation, useWriteOps } from '~/core/database/write';
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
@@ -151,7 +152,7 @@ export const EditableTitle = ({
                   view === 'GALLERY' && 'text-smallTitle font-medium text-text'
                 )}
               >
-                {newName}
+                {newName || PLACEHOLDER}
               </Link>
             ) : (
               <button
@@ -163,7 +164,7 @@ export const EditableTitle = ({
                   view === 'GALLERY' && 'text-body text-text'
                 )}
               >
-                {newName}
+                {newName || PLACEHOLDER}
               </button>
             )}
             {verified && (
@@ -229,16 +230,7 @@ export const EditableTitle = ({
             )}
           </>
         ) : (
-          <EditingTitle
-            view={view}
-            name={name ?? ''}
-            newName={newName}
-            setNewName={setNewName}
-            entityId={entityId}
-            currentSpaceId={currentSpaceId}
-            onChangeEntry={onChangeEntry}
-            onDone={() => setIsEditingTitle(false)}
-          />
+          <EditingTitle view={view} newName={newName} setNewName={setNewName} onDone={() => setIsEditingTitle(false)} />
         )}
       </div>
     </div>
@@ -247,53 +239,15 @@ export const EditableTitle = ({
 
 type EditingTitleProps = {
   view: DataBlockView;
-  name: string;
   newName: string;
   setNewName: (value: string) => void;
-  currentSpaceId: string;
-  entityId: string;
-  onChangeEntry: onChangeEntryFn;
   onDone: () => void;
 };
 
-const EditingTitle = ({
-  view,
-  name,
-  newName,
-  setNewName,
-  currentSpaceId,
-  entityId,
-  onChangeEntry,
-  onDone,
-}: EditingTitleProps) => {
+const EditingTitle = ({ view, newName, setNewName, onDone }: EditingTitleProps) => {
   const ref = useRef(null);
 
   useOnClickOutside(() => {
-    onChangeEntry(
-      {
-        entityId,
-        entityName: name,
-        spaceId: currentSpaceId,
-      },
-      {
-        type: 'EVENT',
-        data: {
-          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-          payload: {
-            renderable: {
-              attributeId: SystemIds.NAME_ATTRIBUTE,
-              entityId,
-              spaceId: currentSpaceId,
-              attributeName: 'Name',
-              entityName: name,
-              type: 'TEXT',
-              value: name ?? '',
-            },
-            value: { type: 'TEXT', value: newName },
-          },
-        },
-      }
-    );
     onDone();
   }, ref);
 
@@ -317,3 +271,8 @@ const EditingTitle = ({
     </div>
   );
 };
+
+const PLACEHOLDER = `${new Array(5)
+  .fill(0)
+  .map(() => EM_SPACE)
+  .join('')}`;
