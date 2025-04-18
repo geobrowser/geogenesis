@@ -6,7 +6,7 @@ import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-val
 import { Map } from '../map';
 import { cva } from 'class-variance-authority';
 
-const DISAPLY_MAP_FORMAT_OPTION = 'EARTH COORDINATES';
+const DISPLAY_MAP_FORMAT_OPTION = 'EARTH COORDINATES';
 
 const textareaStyles = cva(
   'm-0 -mb-[1px] w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none',
@@ -82,7 +82,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
 
   // Handle map visibility toggle
   const handleShowMapToggle = () => {
-    const newFormat = localFormat === DISAPLY_MAP_FORMAT_OPTION ? '' : DISAPLY_MAP_FORMAT_OPTION;
+    const newFormat = localFormat === DISPLAY_MAP_FORMAT_OPTION ? '' : DISPLAY_MAP_FORMAT_OPTION;
     setLocalFormat(newFormat);
     // Notify parent of format change immediately
     props.onChange(localValue, newFormat);
@@ -117,14 +117,14 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
           {/* Toggle */}
           <div className="relative h-3 w-5 cursor-pointer rounded-lg bg-black" onClick={handleShowMapToggle}>
             <div
-              className={`absolute top-[1px] h-[10px] w-[10px] rounded-full bg-white transition-all duration-300 ease-in-out ${localFormat === DISAPLY_MAP_FORMAT_OPTION ? 'right-[1px]' : 'right-[9px]'}`}
+              className={`absolute top-[1px] h-[10px] w-[10px] rounded-full bg-white transition-all duration-300 ease-in-out ${localFormat === DISPLAY_MAP_FORMAT_OPTION ? 'right-[1px]' : 'right-[9px]'}`}
             ></div>
           </div>
           <span className="text-[1rem] font-normal leading-5 text-grey-04">Show map in browse mode</span>
         </div>
       </div>
       <Map
-        showMap={localFormat === DISAPLY_MAP_FORMAT_OPTION}
+        showMap={localFormat === DISPLAY_MAP_FORMAT_OPTION}
         latitude={parseFloat(pointValues.latitude) || 0}
         longitude={parseFloat(pointValues.longitude) || 0}
       />
