@@ -99,7 +99,7 @@ export async function fetchPreviousVersionByCreatedAt(args: FetchVersionsArgs) {
   return Either.match(decoded, {
     onLeft: error => {
       console.error(
-        `Could not decode version with id ${latestVersion.id} and entityId ${latestVersion.entityId} less than ${
+        `FetchPreviousVersionByCreatedAt: Could not decode version with id ${latestVersion.id} and entityId ${latestVersion.entityId} less than ${
           args.createdAt
         }. ${String(error)}`
       );
