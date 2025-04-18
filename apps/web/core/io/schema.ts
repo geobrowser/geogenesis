@@ -164,13 +164,15 @@ const SubstreamRelationHistorical = Schema.Struct({
   spaceId: Schema.String,
   entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
   entity: Schema.Struct({
-    currentVersion: Schema.Struct({
-      version: Schema.Struct({
-        triples: Schema.Struct({
-          nodes: Schema.Array(SubstreamTriple),
+    currentVersion: Schema.NullOr(
+      Schema.Struct({
+        version: Schema.Struct({
+          triples: Schema.Struct({
+            nodes: Schema.Array(SubstreamTriple),
+          }),
         }),
-      }),
-    }),
+      })
+    ),
   }),
   index: Schema.String,
   typeOfVersion: Schema.Struct({
