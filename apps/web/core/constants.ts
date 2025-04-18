@@ -1,3 +1,4 @@
+export const EM_SPACE = '\u2003';
 export const ZERO_WIDTH_SPACE = '\u200b';
 export const ALL_SPACES_IMAGE = 'ipfs://QmQXJYrbJJZcukgkzk8C71nQL1V8ND9TQjrtP4sKWjYPFH';
 export const DEFAULT_OPENGRAPH_IMAGE = 'https://www.geobrowser.io/static/geo-social-image-v2.png';
