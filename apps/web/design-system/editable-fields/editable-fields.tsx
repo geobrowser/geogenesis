@@ -93,7 +93,7 @@ interface PageGeoLocationFieldProps {
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle';
   value?: string;
-  isBrowseMode?: string;
+  format?: string;
 }
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
@@ -352,9 +352,7 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
 
 export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) {
   const [localValue, setLocalValue] = React.useState(props.value || '');
-  const [browserMode, setBrowseMode] = React.useState(
-    props.isBrowseMode === undefined ? true : props.isBrowseMode === 'MAP'
-  );
+  const [localFormat, setLocalFormat] = React.useState(props.format || '');
   const [pointValues, setPointsValues] = React.useState({
     latitude: props.value?.split(',')[0]?.replaceAll(' ', '') || '',
     longitude: props.value?.split(',')[1]?.replaceAll(' ', '') || '',
@@ -375,24 +373,31 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
 
   useEffect(() => {
     setLocalValue(`${pointValues.latitude},${pointValues.longitude}`);
-    debouncedCallback(`${pointValues.latitude},${pointValues.longitude}`);
-  }, [pointValues, browserMode]);
+    debouncedCallback(`${pointValues.latitude},${pointValues.longitude}`, localFormat);
+  }, [pointValues, localFormat]);
 
   const { onChange } = props;
 
   useEffect(() => {
     // Update local value if value prop changes from outside the component
     setLocalValue(props.value || '');
-  }, [props.value]);
+    setLocalFormat(props.format || '');
+    console.log('props.value', props.value);
+    console.log('props.format', props.format);
+  }, [props.value, props.format]);
 
   // Apply debounce effect
-  const debouncedCallback = debounce((value: string) => {
-    onChange(value, browserMode ? 'MAP' : '');
+  const debouncedCallback = debounce((value: string, format: string) => {
+    onChange(value, format);
   }, 1000);
 
-  // Handle browse mode toggle
-  const handleBrowseMode = () => {
-    setBrowseMode(prev => !prev);
+  // Handle map visibility toggle
+  const handleShowMapToggle = () => {
+    if (localFormat === 'EARTH COORDINATES') {
+      setLocalFormat('');
+    } else {
+      setLocalFormat('EARTH COORDINATES');
+    }
   };
 
   return (
@@ -422,16 +427,16 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
         </div>
         <div className="flex h-7 items-center gap-[6px]">
           {/* Toggle */}
-          <div className="relative h-3 w-5 cursor-pointer rounded-lg bg-black" onClick={handleBrowseMode}>
+          <div className="relative h-3 w-5 cursor-pointer rounded-lg bg-black" onClick={handleShowMapToggle}>
             <div
-              className={`absolute top-[1px] h-[10px] w-[10px] rounded-full bg-white transition-all duration-300 ease-in-out ${browserMode ? 'right-[1px]' : 'right-[9px]'}`}
+              className={`absolute top-[1px] h-[10px] w-[10px] rounded-full bg-white transition-all duration-300 ease-in-out ${localFormat === 'EARTH COORDINATES' ? 'right-[1px]' : 'right-[9px]'}`}
             ></div>
           </div>
           <span className="text-[1rem] font-normal leading-5 text-grey-04">Show map in browse mode</span>
         </div>
       </div>
       <Map
-        browseMode={browserMode}
+        showMap={localFormat === 'EARTH COORDINATES'}
         latitude={parseFloat(pointValues.latitude) || 0}
         longitude={parseFloat(pointValues.longitude) || 0}
       />

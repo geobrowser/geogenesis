@@ -15,6 +15,7 @@ import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 interface Props {
   triples: Triple[];
@@ -76,12 +77,12 @@ function TriplesGroup({
                   case 'NUMBER':
                     return (
                       <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-                        {/* TO DO replace hardcoded attributeId */}
-                        {t.attributeId === 'GSA7HUQwsUbMJQ2RDGNi2W' ? `(${renderable.value})` : `${renderable.value}`}
+                        {renderable.value}
                       </Text>
                     );
                   case 'POINT':
-                    if (renderable.attributeId === 'GSA7HUQwsUbMJQ2RDGNi2W') {
+                    console.log('renderable POINT', renderable);
+                    if (renderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY) {
                       // Parse the coordinates from the value string
                       const coordParts = renderable.value.split(',').map(part => part.trim());
                       const pointLat = parseFloat(coordParts[0]);
@@ -95,7 +96,7 @@ function TriplesGroup({
                             ({renderable.value})
                           </Text>
                           <Map
-                            browseMode={renderable.options?.format === 'MAP'}
+                            showMap={renderable.options?.format === 'EARTH COORDINATES'}
                             latitude={!isNaN(pointLat) ? pointLat : undefined}
                             longitude={!isNaN(pointLon) ? pointLon : undefined}
                           />

@@ -125,7 +125,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                 )}
 
                 <div
-                  className={`absolute right-0 flex items-center gap-1 ${firstRenderable.attributeId === 'GSA7HUQwsUbMJQ2RDGNi2W' && renderableType === 'POINT' ? 'top-0' : 'top-6'}`}
+                  className={`absolute right-0 flex items-center gap-1 ${firstRenderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY && renderableType === 'POINT' ? 'top-0' : 'top-6'}`}
                 >
                   {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
                   <>
@@ -649,18 +649,18 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
           }
 
           case 'POINT': {
+            console.log('renderable point', renderable);
             return (
               <>
-                {/* TO DO replace hardcoded attributeId */}
-                {renderable.attributeId === 'GSA7HUQwsUbMJQ2RDGNi2W' && renderable.type === 'POINT' ? (
+                {renderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY && renderable.type === 'POINT' ? (
                   <GeoLocationPointFields
                     key={renderable.attributeId}
                     variant="body"
                     placeholder="Add value..."
                     aria-label="text-field"
                     value={renderable.value}
-                    isBrowseMode={renderable.options?.format}
-                    onChange={(value, isBrowseMode) => {
+                    format={renderable.options?.format}
+                    onChange={(value, format) => {
                       send({
                         type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                         payload: {
@@ -669,7 +669,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                             type: 'POINT',
                             value: value,
                             options: {
-                              format: isBrowseMode,
+                              format,
                             },
                           },
                         },

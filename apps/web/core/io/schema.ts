@@ -65,6 +65,7 @@ type SubstreamTextValue = Schema.Schema.Type<typeof SubstreamTextValue>;
 const SubstreamPointValue = Schema.Struct({
   valueType: Schema.Literal('POINT'),
   textValue: Schema.String,
+  formatOption: Schema.NullOr(Schema.String),
 });
 
 type SubstreamPointValue = Schema.Schema.Type<typeof SubstreamPointValue>;
