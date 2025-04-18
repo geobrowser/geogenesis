@@ -2,7 +2,6 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
-import { PLACEHOLDER_TEXT } from '~/core/constants';
 
 import { InlinePageStringField } from '~/design-system/editable-fields/editable-fields';
 
@@ -43,6 +42,7 @@ export const TableBlockTableItem = ({
       <>
         {source.type !== 'COLLECTION' ? (
           <InlinePageStringField
+            variant="tableCell"
             placeholder="Entity name..."
             value={name ?? ''}
             onChange={value => {
@@ -88,6 +88,7 @@ export const TableBlockTableItem = ({
             onLinkEntry={onLinkEntry}
           >
             <InlinePageStringField
+              variant="tableCell"
               placeholder="Entity name..."
               value={name ?? ''}
               onChange={value => {
@@ -128,7 +129,7 @@ export const TableBlockTableItem = ({
     <>
       {source.type !== 'COLLECTION' ? (
         <Link href={href} className="truncate text-tableCell text-ctaHover hover:underline">
-          {name || PLACEHOLDER_TEXT}
+          {name || entityId}
         </Link>
       ) : (
         <CollectionMetadata
@@ -145,7 +146,7 @@ export const TableBlockTableItem = ({
           onLinkEntry={onLinkEntry}
         >
           <Link href={href} className="truncate text-tableCell text-ctaHover hover:underline">
-            {name || PLACEHOLDER_TEXT}
+            {name || entityId}
           </Link>
         </CollectionMetadata>
       )}

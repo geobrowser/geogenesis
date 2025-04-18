@@ -36,20 +36,6 @@ const textareaStyles = cva(
   }
 );
 
-const inputStyles = cva('m-0 *:bg-transparent *:p-0 *:text-body *:outline-none *:placeholder:text-grey-03', {
-  variants: {
-    variant: {
-      mainPage: 'text-mainPage',
-      body: 'text-body',
-      tableCell: 'text-tableCell',
-      smallTitle: 'text-smallTitle',
-    },
-  },
-  defaultVariants: {
-    variant: 'body',
-  },
-});
-
 interface TableStringFieldProps {
   onChange: (value: string) => void;
   placeholder?: string;
@@ -76,7 +62,7 @@ export function TableStringField({ ...props }: TableStringFieldProps) {
 type PageStringFieldProps = {
   onChange: (value: string) => void;
   placeholder?: string;
-  variant?: 'mainPage' | 'body' | 'smallTitle';
+  variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
   value?: string;
 };
 
@@ -100,9 +86,23 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
 type InlinePageStringFieldProps = {
   onChange: (value: string) => void;
   placeholder?: string;
-  variant?: 'mainPage' | 'body' | 'smallTitle';
+  variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
   value?: string;
 };
+
+const inlineInputStyles = cva('*:m-0 *:!-mr-0.5 *:bg-transparent *:p-0 *:outline-none *:placeholder:text-grey-03', {
+  variants: {
+    variant: {
+      mainPage: '*:text-mainPage',
+      body: '*:text-body',
+      tableCell: '*:text-tableCell',
+      smallTitle: '*:text-smallTitle',
+    },
+  },
+  defaultVariants: {
+    variant: 'body',
+  },
+});
 
 export const InlinePageStringField = (props: InlinePageStringFieldProps) => {
   const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
@@ -116,7 +116,7 @@ export const InlinePageStringField = (props: InlinePageStringFieldProps) => {
       {...props}
       value={localValue}
       onChange={e => setLocalValue(e.currentTarget.value)}
-      className={inputStyles({ variant: props.variant })}
+      className={inlineInputStyles({ variant: props.variant })}
       injectStyles={false}
     />
   );

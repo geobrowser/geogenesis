@@ -3,7 +3,7 @@ import NextImage from 'next/image';
 import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
-import { PLACEHOLDER_SPACE_IMAGE, PLACEHOLDER_TEXT } from '~/core/constants';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { Cell, PropertySchema } from '~/core/types';
@@ -402,7 +402,7 @@ export function TableBlockListItem({
       <div>
         {source.type !== 'COLLECTION' ? (
           <Link href={href} className="truncate text-smallTitle font-medium text-text">
-            {name || PLACEHOLDER_TEXT}
+            {name || rowEntityId}
           </Link>
         ) : (
           <CollectionMetadata
@@ -418,7 +418,7 @@ export function TableBlockListItem({
             onLinkEntry={onLinkEntry}
           >
             <Link href={href} className="truncate text-smallTitle font-medium text-text">
-              {name || PLACEHOLDER_TEXT}
+              {name || rowEntityId}
             </Link>
           </CollectionMetadata>
         )}

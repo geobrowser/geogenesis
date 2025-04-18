@@ -3,7 +3,7 @@ import NextImage from 'next/image';
 import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
-import { PLACEHOLDER_SPACE_IMAGE, PLACEHOLDER_TEXT } from '~/core/constants';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { Cell, PropertySchema } from '~/core/types';
@@ -377,7 +377,7 @@ export function TableBlockGalleryItem({
         <div className="flex flex-col gap-2">
           {source.type !== 'COLLECTION' ? (
             <Link href={href} className="truncate text-smallTitle font-medium text-text">
-              {name || PLACEHOLDER_TEXT}
+              {name || rowEntityId}
             </Link>
           ) : (
             <CollectionMetadata
@@ -394,7 +394,7 @@ export function TableBlockGalleryItem({
               onLinkEntry={onLinkEntry}
             >
               <Link href={href} className="truncate text-smallTitle font-medium text-text">
-                {name || PLACEHOLDER_TEXT}
+                {name || rowEntityId}
               </Link>
             </CollectionMetadata>
           )}
