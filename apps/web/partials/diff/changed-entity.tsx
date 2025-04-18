@@ -542,7 +542,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">
                   <div className="text-bodySemibold capitalize">{name}</div>
-                  <div className="truncate text-ctaPrimary no-underline">
+                  <div className="truncate text-wrap text-ctaPrimary no-underline">
                     {changes.map(c => {
                       const checkedBefore = c.before ? c.before.value : '';
                       const checkedAfter = c.after ? c.after.value : '';
@@ -564,7 +564,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                 <div className="group relative flex-1 border border-grey-02 p-4">
                   {renderAttributeStagingComponent?.(attributeId)}
                   <div className="text-bodySemibold capitalize">{name}</div>
-                  <div className="truncate text-ctaPrimary no-underline">
+                  <div className="truncate text-wrap text-ctaPrimary no-underline">
                     {changes.map(c => {
                       const checkedBefore = c.before ? c.before.value : '';
                       const checkedAfter = c.after ? c.after.value : '';
