@@ -306,6 +306,7 @@ export const TableBlockTable = ({
                             relationId={nameCell?.relationId}
                             onChangeEntry={onChangeEntry}
                             onLinkEntry={onLinkEntry}
+                            source={source}
                           />
                         ) : (
                           <>{flexRender(cell.column.columnDef.cell, cell.getContext())}</>
