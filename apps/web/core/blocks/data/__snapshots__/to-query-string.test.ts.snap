@@ -1,0 +1,25 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`to-query-string > Builds a graphql query from table block filters for the postgraphile-based substreams API 1`] = `"triples: { some: { attributeId: { equalTo: "type" }, textValue: { equalToInsensitive: "Value 1"} } }"`;
+
+exports[`to-query-string > Builds a graphql query from table block filters for the postgraphile-based substreams API 2`] = `
+"relationsByFromVersionId: {
+                some: {
+                  typeOf: { id: { equalTo: "type" } }
+                  toEntity: { id: { equalTo: "id 1" } }
+                }
+              }"
+`;
+
+exports[`to-query-string > Builds a graphql query from table block filters for the postgraphile-based substreams API 3`] = `"name: { startsWithInsensitive: "id 1" }"`;
+
+exports[`to-query-string > Builds a graphql query from table block filters for the postgraphile-based substreams API 4`] = `
+"and: [{ triples: { some: { attributeId: { equalTo: "type" }, textValue: { equalToInsensitive: "Value 1"} } } }, { relationsByFromVersionId: {
+                some: {
+                  typeOf: { id: { equalTo: "type" } }
+                  toEntity: { id: { equalTo: "id 1" } }
+                }
+              } }, { name: { startsWithInsensitive: "id 1" } }]"
+`;
+
+exports[`to-query-string > Builds a graphql query from table block filters for the postgraphile-based substreams API 5`] = `"triples: { some: { attributeId: { equalTo: "JiFmyuFYeoiRSiY286m7A2" }, textValue: { equalToInsensitive: "0x0000000000000000000000000000000000000000"} } }"`;

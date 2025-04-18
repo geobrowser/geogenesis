@@ -5,7 +5,6 @@ import * as React from 'react';
 import { Metadata } from 'next';
 
 import { Entity } from '~/core/io/dto/entities';
-import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId, TypeId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -22,7 +21,7 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 
 import { cachedFetchEntityType } from './cached-entity-type';
-import { cachedFetchEntity } from './cached-fetch-entity';
+import { cachedFetchEntitiesBatch, cachedFetchEntity } from './cached-fetch-entity';
 
 const TABS = ['Overview', 'Activity'] as const;
 
@@ -185,18 +184,14 @@ async function getProfilePage(entityId: string): Promise<
     };
   }
 
-  const blockIds = person?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
-    ?.map(r => r.toEntity.id);
-
-  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+  const blockRelations = person?.relationsOut.filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS));
+  const blockIds = blockRelations?.map(r => r.toEntity.id);
+  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
     ...person,
     avatarUrl: Entities.avatar(person.relationsOut),
     coverUrl: Entities.cover(person.relationsOut),
-
-    relationsOut: [],
     blockRelations: person.relationsOut,
     blocks,
   };

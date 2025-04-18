@@ -3,8 +3,10 @@ import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
 import * as React from 'react';
-import { ChangeEvent, useEffect, useRef } from 'react';
+import { ChangeEvent, useRef } from 'react';
 
+import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
+import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { Services } from '~/core/services';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -35,16 +37,6 @@ const textareaStyles = cva(
   }
 );
 
-const debounce = <T extends (...args: any[]) => any>(fn: T, delay: number) => {
-  let timer: number | null = null;
-
-  return (...args: Parameters<T>) => {
-    if (timer) clearTimeout(timer);
-    // @ts-expect-error incorrect type
-    timer = setTimeout(() => fn(...args), delay);
-  };
-};
-
 interface TableStringFieldProps {
   onChange: (value: string) => void;
   placeholder?: string;
@@ -52,41 +44,28 @@ interface TableStringFieldProps {
 }
 
 export function TableStringField({ ...props }: TableStringFieldProps) {
-  const [localValue, setLocalValue] = React.useState(props.value || '');
-  const { onChange } = props;
-
-  // Apply debounce effect
-  const debouncedCallback = debounce((value: string) => {
-    onChange(value);
-  }, 1000);
-
-  // Handle input changes
-  const handleChange = (value: string) => {
-    setLocalValue(value);
-    debouncedCallback(value);
-  };
-
-  useEffect(() => {
-    // Update local value if value prop changes from outside the component
-    setLocalValue(props.value || '');
-  }, [props.value]);
+  const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
+    callback: props.onChange,
+    delay: 1000,
+    initialValue: props.value || '',
+  });
 
   return (
     <Textarea
       {...props}
-      onChange={e => handleChange(e.currentTarget.value)}
+      onChange={e => setLocalValue(e.currentTarget.value)}
       value={localValue}
       className={textareaStyles({ variant: 'tableCell' })}
     />
   );
 }
 
-interface PageStringFieldProps {
+type PageStringFieldProps = {
   onChange: (value: string) => void;
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle';
   value?: string;
-}
+};
 
 interface PageGeoLocationFieldProps {
   onChange: (value: string, isBrowseMode: string) => void;
@@ -97,30 +76,45 @@ interface PageGeoLocationFieldProps {
 }
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
-  const [localValue, setLocalValue] = React.useState(props.value || '');
-  const { onChange } = props;
-
-  useEffect(() => {
-    // Update local value if value prop changes from outside the component
-    setLocalValue(props.value || '');
-  }, [props.value]);
-
-  // Apply debounce effect
-  const debouncedCallback = debounce((value: string) => {
-    onChange(value);
-  }, 1000);
-
-  // Handle input changes
-  const handleChange = (value: string) => {
-    setLocalValue(value);
-    debouncedCallback(value);
-  };
+  const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
+    callback: props.onChange,
+    delay: 1000,
+    initialValue: props.value || '',
+  });
 
   return (
     <Textarea
       {...props}
-      onChange={e => handleChange(e.currentTarget.value)}
       value={localValue}
+      onChange={e => setLocalValue(e.currentTarget.value)}
+      className={textareaStyles({ variant: props.variant })}
+    />
+  );
+}
+
+export function FocusedStringField({ ...props }: PageStringFieldProps) {
+  const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
+    callback: props.onChange,
+    delay: 1000,
+    initialValue: props.value || '',
+  });
+
+  const ref = useRef<HTMLTextAreaElement>(null!);
+
+  useEffectOnce(() => {
+    setTimeout(() => {
+      ref.current.focus();
+      const length = ref.current.value.length;
+      ref.current.setSelectionRange(length, length);
+    }, 200);
+  });
+
+  return (
+    <Textarea
+      {...props}
+      ref={ref}
+      value={localValue}
+      onChange={e => setLocalValue(e.currentTarget.value)}
       className={textareaStyles({ variant: props.variant })}
     />
   );

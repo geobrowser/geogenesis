@@ -28,6 +28,7 @@ export const DateFormatDropdown = ({ value = GeoDate.defaultFormat, onSelect }: 
       'h:mmaaa, MMM d, yyyy',
       'h:mmaaa, MMM d, yy',
       'EEEE, MMMM d, yyyy',
+      'MMM d, yyyy - h:mmaaa',
       'MMMM d, yyyy',
       'MMM d, yyyy',
       'MMM d, yy',

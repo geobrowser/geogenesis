@@ -1,6 +1,65 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoDate, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl } from './utils';
+import { IPFS_GATEWAY_READ_PATH } from '../constants';
+import { GeoDate, GeoNumber, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl } from './utils';
+
+describe('GeoNumber', () => {
+  let consoleErrorSpy: any;
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should format a number using the default format', () => {
+    const result = GeoNumber.format(1234.56);
+    expect(result).toBe('1,234.56');
+  });
+
+  it('should format a string number using the default format', () => {
+    const result = GeoNumber.format('1234.56');
+    expect(result).toBe('1,234.56');
+  });
+
+  it('should format a number using a rounded format', () => {
+    const result = GeoNumber.format(1234.56, 'precision-integer');
+    expect(result).toBe('1,235');
+  });
+
+  it('should format a number using a percentage format', () => {
+    const result = GeoNumber.format(1234.56, 'measure-unit/percent precision-unlimited');
+    expect(result).toBe('1,234.56%');
+  });
+
+  it('should format a number using a rounded percentage format', () => {
+    const result = GeoNumber.format(1234.56, 'measure-unit/percent precision-integer');
+    expect(result).toBe('1,235%');
+  });
+
+  it('should handle format pattern with :: prefix', () => {
+    const result = GeoNumber.format(1234.56, '::precision-integer');
+    expect(result).toBe('1,235');
+  });
+
+  it('should return the undefined value when value is undefined', () => {
+    expect(GeoNumber.format(undefined)).toEqual(undefined);
+  });
+
+  it('should handle NaN values', () => {
+    const result = GeoNumber.format(NaN);
+    expect(result).toBe(NaN);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+
+  it('should handle invalid string values', () => {
+    const result = GeoNumber.format('not-a-number');
+    expect(result).toBe('not-a-number');
+    expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+});
 
 describe('GeoDate', () => {
   it('converts day, month, year, hour, minute to ISO string at UTC time', () => {
@@ -19,8 +78,9 @@ describe('GeoDate', () => {
       day: '16',
       month: '12',
       year: '1990',
-      hour: '0', // should also convert to 12 hour time
+      hour: '12', // should also convert to 12 hour time
       minute: '0',
+      meridiem: 'am',
     });
 
     expect(GeoDate.fromISOStringUTC('1990-12-16T12:30:00.000+00:00')).toEqual({
@@ -29,6 +89,7 @@ describe('GeoDate', () => {
       year: '1990',
       hour: '12',
       minute: '30',
+      meridiem: 'pm',
     });
   });
 
@@ -56,9 +117,7 @@ describe('GeoDate', () => {
 
 describe('getImagePath', () => {
   it('an IPFS pre-fixed string returns the Geo IPFS gateway path', () => {
-    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(
-      'https://api.thegraph.com/ipfs/api/v0/cat?arg=QmBananaSandwich'
-    );
+    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(`${IPFS_GATEWAY_READ_PATH}QmBananaSandwich`);
   });
 
   it('an HTTP pre-fixed string returns the same string', () => {
@@ -76,7 +135,7 @@ describe('getImageHash', () => {
   });
 
   it('an HTTP path returns the IPFS hash', () => {
-    expect(getImageHash('https://api.thegraph.com/ipfs/api/v0/cat?arg=QmBananaSandwich')).toBe('QmBananaSandwich');
+    expect(getImageHash(`${IPFS_GATEWAY_READ_PATH}QmBananaSandwich`)).toBe('QmBananaSandwich');
   });
 
   it('a non-HTTP and non-IPFS path returns the same string', () => {

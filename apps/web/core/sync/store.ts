@@ -1,3 +1,5 @@
+import { SystemIds } from '@graphprotocol/grc-20';
+
 import { readTypes } from '../database/entities';
 import { ID } from '../id';
 import { Entity } from '../io/dto/entities';
@@ -149,13 +151,18 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     const resolvedRelations = resolvedEntity.relationsOut.map(r => {
       let maybeToEntity: Entity | null = null;
+      let maybeRelationEntity: Entity | null = null;
 
       if (r.toEntity.id !== id) {
         maybeToEntity = this.entities.get(r.toEntity.id) ?? null;
+        maybeRelationEntity = this.entities.get(r.id) ?? null;
       }
 
       return {
         ...r,
+        index:
+          maybeRelationEntity?.triples.find(t => t.attributeId === EntityId(SystemIds.RELATION_INDEX))?.value.value ??
+          r.index,
         toEntity: {
           ...r.toEntity,
           name: maybeToEntity?.name ?? r.toEntity.name,

@@ -171,7 +171,7 @@ export interface PropertySchema {
   relationValueTypeId?: EntityId;
   relationValueTypeName?: string | null;
   homeSpace?: string;
-  relationValueTypes?: { typeId: EntityId; typeName: string | null }[];
+  relationValueTypes?: RelationValueType[];
 }
 
 export type Relation = {
@@ -215,6 +215,8 @@ export type Cell = {
   space?: string;
   verified?: boolean;
   renderedPropertyId?: string;
+  collectionId?: string;
+  relationId?: string;
 };
 
 export type Row = {
@@ -241,7 +243,7 @@ export type AppEnv = 'development' | 'testnet' | 'production';
 export type RelationValueType = {
   typeId: string;
   typeName: string | null;
-  spaceIdOfAttribute: string;
+  spaceIdOfAttribute?: string;
 };
 
 export type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
