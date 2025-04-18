@@ -88,6 +88,42 @@ export class GeoNumber {
   }
 }
 
+export class GeoPoint {
+  /**
+   * Parses coordinates from a string format like "lat, lon" into separate latitude and longitude values
+   * @param value - String containing latitude and longitude separated by a comma
+   * @returns An object with parsed latitude and longitude values, or undefined if parsing fails
+   */
+  static parseCoordinates(value?: string): { latitude: number; longitude: number } | undefined {
+    if (!value) return undefined;
+    
+    try {
+      const coordParts = value.split(',').map(part => part.trim());
+      if (coordParts.length !== 2) return undefined;
+      
+      const latitude = parseFloat(coordParts[0]);
+      const longitude = parseFloat(coordParts[1]);
+      
+      if (isNaN(latitude) || isNaN(longitude)) return undefined;
+      
+      return { latitude, longitude };
+    } catch (e) {
+      console.error(`Unable to parse coordinates: "${value}"`);
+      return undefined;
+    }
+  }
+  
+  /**
+   * Formats coordinates as a string
+   * @param latitude - Latitude value
+   * @param longitude - Longitude value
+   * @returns Formatted coordinate string
+   */
+  static formatCoordinates(latitude: number, longitude: number): string {
+    return `${latitude}, ${longitude}`;
+  }
+}
+
 export class GeoDate {
   static defaultFormat = 'MMM d, yyyy - h:mmaaa';
 

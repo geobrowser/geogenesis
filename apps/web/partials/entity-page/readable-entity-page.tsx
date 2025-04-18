@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
-import { GeoNumber, NavUtils, getImagePath } from '~/core/utils/utils';
+import { GeoNumber, NavUtils, getImagePath, GeoPoint } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -81,24 +81,20 @@ function TriplesGroup({
                     );
                   }
                   case 'POINT': {
-                    console.log('renderable POINT', renderable);
                     if (renderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY) {
-                      // Parse the coordinates from the value string
-                      const coordParts = renderable.value.split(',').map(part => part.trim());
-                      const pointLat = parseFloat(coordParts[0]);
-                      const pointLon = parseFloat(coordParts[1]);
-
-                      console.log(renderable);
-
+                      // Parse the coordinates using the GeoPoint utility
+                      const coordinates = GeoPoint.parseCoordinates(renderable.value);
                       return (
-                        <div className="flex w-full flex-col gap-2">
-                          <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
+                        <div 
+                          key={`string-${renderable.attributeId}-${renderable.value}`}
+                          className="flex w-full flex-col gap-2">
+                          <Text as="p">
                             ({renderable.value})
                           </Text>
                           <Map
                             showMap={renderable.options?.format === 'EARTH COORDINATES'}
-                            latitude={!isNaN(pointLat) ? pointLat : undefined}
-                            longitude={!isNaN(pointLon) ? pointLon : undefined}
+                            latitude={coordinates?.latitude}
+                            longitude={coordinates?.longitude}
                           />
                         </div>
                       );

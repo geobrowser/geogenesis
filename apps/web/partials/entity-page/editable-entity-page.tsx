@@ -23,7 +23,7 @@ import {
   TripleRenderableProperty,
 } from '~/core/types';
 import { Triple as ITriple } from '~/core/types';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath, GeoPoint } from '~/core/utils/utils';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { SquareButton } from '~/design-system/button';
@@ -31,11 +31,11 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import {
-  GeoLocationPointFields,
   ImageZoom,
   PageImageField,
   PageStringField,
 } from '~/design-system/editable-fields/editable-fields';
+import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
@@ -677,7 +677,6 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
           }
 
           case 'POINT': {
-            console.log('renderable point', renderable);
             return (
               <>
                 {renderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY && renderable.type === 'POINT' ? (

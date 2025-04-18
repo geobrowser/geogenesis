@@ -3,7 +3,7 @@ import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
 import * as React from 'react';
-import { ChangeEvent, useRef } from 'react';
+import { ChangeEvent, useRef, useEffect } from 'react';
 
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useEffectOnce } from '~/core/hooks/use-effect-once';
@@ -15,7 +15,6 @@ import { SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '../dots';
 import { Trash } from '../icons/trash';
 import { Upload } from '../icons/upload';
-import { Map } from '../map';
 
 const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin
@@ -339,100 +338,6 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
         onChange={handleChange}
         type="file"
         className="hidden"
-      />
-    </div>
-  );
-}
-
-export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) {
-  const [localValue, setLocalValue] = React.useState(props.value || '');
-  const [localFormat, setLocalFormat] = React.useState(props.format || '');
-  const [pointValues, setPointsValues] = React.useState({
-    latitude: props.value?.split(',')[0]?.replaceAll(' ', '') || '',
-    longitude: props.value?.split(',')[1]?.replaceAll(' ', '') || '',
-  });
-
-  const validNumberPattern = /^-?\d*\.?\d*$/;
-
-  const handlePointValueChange = (label: string, newValue: string) => {
-    if (newValue === '' || validNumberPattern.test(newValue)) {
-      setPointsValues(prev => ({
-        ...prev,
-        [label]: newValue,
-      }));
-    } else {
-      console.error('Invalid input');
-    }
-  };
-
-  useEffect(() => {
-    setLocalValue(`${pointValues.latitude},${pointValues.longitude}`);
-    debouncedCallback(`${pointValues.latitude},${pointValues.longitude}`, localFormat);
-  }, [pointValues, localFormat]);
-
-  const { onChange } = props;
-
-  useEffect(() => {
-    // Update local value if value prop changes from outside the component
-    setLocalValue(props.value || '');
-    setLocalFormat(props.format || '');
-    console.log('props.value', props.value);
-    console.log('props.format', props.format);
-  }, [props.value, props.format]);
-
-  // Apply debounce effect
-  const debouncedCallback = debounce((value: string, format: string) => {
-    onChange(value, format);
-  }, 1000);
-
-  // Handle map visibility toggle
-  const handleShowMapToggle = () => {
-    if (localFormat === 'EARTH COORDINATES') {
-      setLocalFormat('');
-    } else {
-      setLocalFormat('EARTH COORDINATES');
-    }
-  };
-
-  return (
-    <div className="flex w-full flex-col gap-4">
-      <div className="mt-[3px] flex w-full justify-between  leading-[29px]">
-        <div className="flex items-center gap-5">
-          <div className="flex items-center gap-2">
-            <label className="text-[19px] text-bodySemibold font-normal text-text">Latitude</label>
-            <span className="w-[11px] border-t border-t-[#606060]"></span>
-            <Textarea
-              {...props}
-              onChange={e => handlePointValueChange('latitude', e.currentTarget.value)}
-              value={pointValues.latitude}
-              className={`${textareaStyles({ variant: props.variant })} max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-[19px] text-bodySemibold font-normal text-text">Longitude</label>
-            <span className="w-[11px] border-t border-t-[#606060]"></span>
-            <Textarea
-              {...props}
-              onChange={e => handlePointValueChange('longitude', e.currentTarget.value)}
-              value={pointValues.longitude}
-              className={`${textareaStyles({ variant: props.variant })} max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
-            />
-          </div>
-        </div>
-        <div className="flex h-7 items-center gap-[6px]">
-          {/* Toggle */}
-          <div className="relative h-3 w-5 cursor-pointer rounded-lg bg-black" onClick={handleShowMapToggle}>
-            <div
-              className={`absolute top-[1px] h-[10px] w-[10px] rounded-full bg-white transition-all duration-300 ease-in-out ${localFormat === 'EARTH COORDINATES' ? 'right-[1px]' : 'right-[9px]'}`}
-            ></div>
-          </div>
-          <span className="text-[1rem] font-normal leading-5 text-grey-04">Show map in browse mode</span>
-        </div>
-      </div>
-      <Map
-        showMap={localFormat === 'EARTH COORDINATES'}
-        latitude={parseFloat(pointValues.latitude) || 0}
-        longitude={parseFloat(pointValues.longitude) || 0}
       />
     </div>
   );
