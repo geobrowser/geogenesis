@@ -101,12 +101,14 @@ function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
 }
 
 function getIndexFromRelationEntity(relation: SubstreamRelationLive | SubstreamRelationHistorical): string {
-  const maybeIndexTriple = relation.entity.currentVersion.version.triples.nodes.find(
+  // @TODO: We don't have a good way to get the version that a given relation belongs to. This might be fixed
+  // when we migrate to the newer relation data model and new versioning model
+  const maybeIndexTriple = relation.entity.currentVersion?.version.triples.nodes.find(
     t => t.attributeVersion.entityId === EntityId(SystemIds.RELATION_INDEX) && t.valueType === 'TEXT'
   );
 
   if (!maybeIndexTriple) {
-    return '';
+    return relation.index;
   }
 
   return TripleDto(maybeIndexTriple).value.value;
