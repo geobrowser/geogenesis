@@ -84,12 +84,8 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
         </div>
       )}
       {changes.length > 0 && (
-        <div className="mt-2">
-          <ChangedAttribute
-            renderAttributeStagingComponent={renderAttributeStagingComponent}
-            key={`${change.id}-${change.id}`}
-            changes={changes}
-          />
+        <div className="mt-2" key={change.id}>
+          <ChangedAttribute renderAttributeStagingComponent={renderAttributeStagingComponent} changes={changes} />
         </div>
       )}
     </div>
@@ -430,7 +426,13 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                   <div className="text-bodySemibold capitalize">{name}</div>
                   <div className="flex flex-wrap gap-2">
                     {changes.map(c => {
-                      return c.before && <Chip status={c.before.type}>{c.before.valueName ?? c.before.value}</Chip>;
+                      if (c.before === null) return null;
+
+                      return (
+                        <Chip key={`${c.attribute.id}-${c.before.value}`} status={c.before.type}>
+                          {c.before.valueName ?? c.before.value}
+                        </Chip>
+                      );
                     })}
                   </div>
                 </div>
@@ -442,7 +444,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                       if (c.after === null) return null;
 
                       return (
-                        <Chip key={c.after.value} status={c.after.type}>
+                        <Chip key={`${c.attribute.id}-${c.after.value}`} status={c.after.type}>
                           {c.after.valueName ?? c.after.value}
                         </Chip>
                       );
