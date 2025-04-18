@@ -106,7 +106,7 @@ export function useSpacesQuery() {
           return null;
         },
         onRight: space => {
-          return SpaceMetadataDto(space.id, space.spacesMetadatum.version);
+          return SpaceMetadataDto(space.id, space.spacesMetadatum?.version);
         },
       });
     })

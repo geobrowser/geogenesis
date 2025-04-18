@@ -109,7 +109,7 @@ export async function fetchSpacesWhereMember(address?: string): Promise<SpaceWhe
 
 const SpaceWhereMemberSchema = Schema.Struct({
   id: Schema.String,
-  spacesMetadatum: Schema.Struct({ version: SubstreamVersion }),
+  spacesMetadatum: Schema.NullOr(Schema.Struct({ version: SubstreamVersion })),
 });
 
 type SpaceWhereMemberSchema = Schema.Schema.Type<typeof SpaceWhereMemberSchema>;
@@ -120,7 +120,7 @@ type SpaceWhereMember = {
 };
 
 function SpaceWhereMemberDto(space: SpaceWhereMemberSchema) {
-  const spaceConfigWithImage = SpaceMetadataDto(space.id, space.spacesMetadatum.version);
+  const spaceConfigWithImage = SpaceMetadataDto(space.id, space.spacesMetadatum?.version);
 
   return {
     id: space.id,
