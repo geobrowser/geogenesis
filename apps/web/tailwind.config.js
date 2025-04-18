@@ -83,6 +83,9 @@ module.exports = {
         'slide-down': 'slideDown 300ms ease-in-out',
         'slide-up': 'slideUp 300ms ease-in-out',
       },
+      backgroundImage: {
+        'cover-default': "url('/images/placeholders/Cover_Default.svg')",
+      },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0' },

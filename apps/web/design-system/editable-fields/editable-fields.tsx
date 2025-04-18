@@ -8,6 +8,7 @@ import { ChangeEvent, useRef } from 'react';
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { Services } from '~/core/services';
+import type { Triple } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
@@ -139,6 +140,7 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
 };
 
 export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
+  console.log(imageSrc);
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>

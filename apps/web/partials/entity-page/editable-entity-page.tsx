@@ -92,6 +92,11 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
               send
             );
 
+            // Hide cover property, as user can upload cover using upload icon on top placeholder
+            if (renderableType === 'IMAGE' && firstRenderable.attributeId === '7YHk6qYkNDaAtNb8GwmysF') {
+              return null;
+            }
+
             return (
               <div key={`${id}-${attributeId}`} className="relative break-words">
                 <EditableAttribute

@@ -2,25 +2,42 @@
 
 import cx from 'classnames';
 import Image from 'next/legacy/image';
+import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
 
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
+
+import EditableCoverAvatarHeader from './editable-entity-cover-avatar-header';
 
 type EntityPageCoverProps = {
   avatarUrl: string | null;
   coverUrl: string | null;
+  triples?: Triple[];
 };
 
-export const EntityPageCover = ({ avatarUrl: serverAvatarUrl, coverUrl: serverCoverUrl }: EntityPageCoverProps) => {
-  const { relations } = useEntityPageStore();
+export const EntityPageCover = ({
+  avatarUrl: serverAvatarUrl,
+  coverUrl: serverCoverUrl,
+  triples,
+}: EntityPageCoverProps) => {
+  const { relations, spaceId } = useEntityPageStore();
+
+  const path = usePathname();
+
+  const editable = useUserIsEditing(spaceId);
 
   const avatarUrl = Entities.avatar(relations) ?? serverAvatarUrl;
   const coverUrl = Entities.cover(relations) ?? serverCoverUrl;
 
-  if (!coverUrl && !avatarUrl) return null;
+  // Do not show this placeholder on personal space page
+  // In future maybe create another component for personal space page
+  if (!coverUrl && editable && path !== `/space/${spaceId}`)
+    return <EditableCoverAvatarHeader avatarUrl={avatarUrl} triples={triples} />;
 
   if (coverUrl) {
     return (
