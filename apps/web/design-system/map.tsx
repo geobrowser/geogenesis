@@ -23,7 +23,7 @@ export const Map = ({
 
   // Initialize map when component mounts
   useEffect(() => {
-    if (!showMap || !mapContainerRef.current) return;
+    if (!showMap || !mapContainerRef.current || mapRef.current) return;
 
     const loadMapbox = async () => {
       // Dynamically import mapbox only when needed
