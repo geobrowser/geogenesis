@@ -176,13 +176,15 @@ const SubstreamRelationHistorical = Schema.Struct({
   spaceId: Schema.String,
   entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
   entity: Schema.Struct({
-    currentVersion: Schema.Struct({
-      version: Schema.Struct({
-        triples: Schema.Struct({
-          nodes: Schema.Array(SubstreamTriple),
+    currentVersion: Schema.NullOr(
+      Schema.Struct({
+        version: Schema.Struct({
+          triples: Schema.Struct({
+            nodes: Schema.Array(SubstreamTriple),
+          }),
         }),
-      }),
-    }),
+      })
+    ),
   }),
   index: Schema.String,
   typeOfVersion: Schema.Struct({
@@ -396,9 +398,11 @@ export type SubstreamEntityHistorical = Schema.Schema.Type<typeof SubstreamEntit
 export const SubstreamSpace = Schema.extend(
   SubstreamSpaceWithoutMetadata,
   Schema.Struct({
-    spacesMetadatum: Schema.Struct({
-      version: SubstreamVersion,
-    }),
+    spacesMetadatum: Schema.NullOr(
+      Schema.Struct({
+        version: SubstreamVersion,
+      })
+    ),
   })
 );
 
@@ -418,9 +422,11 @@ export const SubstreamSubspace = Schema.extend(
     spaceMembers: Schema.Struct({
       totalCount: Schema.Number,
     }),
-    spacesMetadatum: Schema.Struct({
-      version: SubstreamVersion,
-    }),
+    spacesMetadatum: Schema.NullOr(
+      Schema.Struct({
+        version: SubstreamVersion,
+      })
+    ),
   })
 );
 
@@ -473,9 +479,11 @@ export type SubstreamVote = Schema.Schema.Type<typeof SubstreamVote>;
 
 export const SubstreamSpaceEntityConfig = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(SpaceId)),
-  spacesMetadatum: Schema.Struct({
-    version: SubstreamVersion,
-  }),
+  spacesMetadatum: Schema.NullOr(
+    Schema.Struct({
+      version: SubstreamVersion,
+    })
+  ),
 });
 
 export type SubstreamSpaceConfigEntityConfig = Schema.Schema.Type<typeof SubstreamSpaceEntityConfig>;
