@@ -85,6 +85,9 @@ module.exports = {
       },
       backgroundImage: {
         'cover-default': "url('/images/placeholders/Cover_Default.svg')",
+        'cover-hover': "url('/images/placeholders/Cover_Hover.svg')",
+        'avatar-default': "url('/images/placeholders/Avatar_Default.svg')",
+        'avatar-hover': "url('/images/placeholders/Avatar_Hover.svg')",
       },
       keyframes: {
         fadeIn: {

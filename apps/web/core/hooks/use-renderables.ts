@@ -134,6 +134,7 @@ function usePlaceholderRenderables() {
   const [placeholderRenderables, setPlaceholderRenderables] = React.useState<RenderableProperty[]>([]);
 
   const onAddPlaceholderRenderable = (renderable: RenderableProperty) => {
+    console.log(renderable);
     const newPlaceholders = placeholderRenderables.filter(r => r.attributeId !== renderable.attributeId);
     setPlaceholderRenderables([...newPlaceholders, renderable]);
   };

@@ -36,8 +36,8 @@ export const EntityPageCover = ({
 
   // Do not show this placeholder on personal space page
   // In future maybe create another component for personal space page
-  if (!coverUrl && editable && path !== `/space/${spaceId}`)
-    return <EditableCoverAvatarHeader avatarUrl={avatarUrl} triples={triples} />;
+  if (editable && path !== `/space/${spaceId}`)
+    return <EditableCoverAvatarHeader avatarUrl={avatarUrl} triples={triples} coverUrl={coverUrl} />;
 
   if (coverUrl) {
     return (
