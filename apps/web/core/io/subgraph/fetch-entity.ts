@@ -68,7 +68,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch entity, endpoint: ${endpoint} id: ${options.id}. ${error.message}`
+            `${error._tag}: Unable to fetch entity, endpoint: ${endpoint} id: ${options.id}. ${String(error.message)}`
           );
           return {
             entity: null,

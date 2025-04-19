@@ -179,13 +179,14 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
               spaceId: SpaceId(spaceId),
               sourceSpaceId: to.space,
             });
+          }
 
-            if (to.verified) {
-              upsertVerifiedSourceOnCollectionItem({
-                collectionItemId: EntityId(id),
-                spaceId: SpaceId(spaceId),
-              });
-            }
+          if (to.space && to.verified) {
+            upsertVerifiedSourceOnCollectionItem({
+              collectionItemId: EntityId(id),
+              spaceId: SpaceId(spaceId),
+              verified: true,
+            });
           }
         }
       }
@@ -213,6 +214,38 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
     }
   };
 
+  const onLinkEntry = (
+    id: string,
+    to: {
+      id: EntityId;
+      name: string | null;
+      space?: EntityId;
+      verified?: boolean;
+    },
+    currentlyVerified?: boolean
+  ) => {
+    upsertSourceSpaceOnCollectionItem({
+      collectionItemId: EntityId(id),
+      toId: EntityId(to.id),
+      spaceId: SpaceId(spaceId),
+      sourceSpaceId: to.space,
+    });
+
+    if (to.space && to.verified) {
+      upsertVerifiedSourceOnCollectionItem({
+        collectionItemId: EntityId(id),
+        spaceId: SpaceId(spaceId),
+        verified: true,
+      });
+    } else if (to.space && !to.verified && currentlyVerified) {
+      upsertVerifiedSourceOnCollectionItem({
+        collectionItemId: EntityId(id),
+        spaceId: SpaceId(spaceId),
+        verified: false,
+      });
+    }
+  };
+
   const onAddPlaceholder = () => {
     setEditable(true);
     setHasPlaceholderRow(true);
@@ -222,6 +255,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
     entries: renderedEntries,
     onAddPlaceholder,
     onChangeEntry,
+    onLinkEntry,
   };
 }
 
@@ -235,7 +269,7 @@ export const TableBlock = ({ spaceId }: Props) => {
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
-  const { entries, onAddPlaceholder, onChangeEntry } = useEntries(rows, properties, spaceId, filterState);
+  const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry } = useEntries(rows, properties, spaceId, filterState);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -271,6 +305,7 @@ export const TableBlock = ({ spaceId }: Props) => {
       placeholder={placeholder}
       shownColumnIds={shownColumnIds}
       onChangeEntry={onChangeEntry}
+      onLinkEntry={onLinkEntry}
     />
   );
 
@@ -287,7 +322,9 @@ export const TableBlock = ({ spaceId }: Props) => {
               rowEntityId={row.entityId}
               isPlaceholder={Boolean(row.placeholder)}
               onChangeEntry={onChangeEntry}
+              onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
+              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
               source={source}
             />
           );
@@ -330,8 +367,10 @@ export const TableBlock = ({ spaceId }: Props) => {
               columns={row.columns}
               currentSpaceId={spaceId}
               onChangeEntry={onChangeEntry}
+              onLinkEntry={onLinkEntry}
               isPlaceholder={Boolean(row.placeholder)}
               properties={propertiesSchema}
+              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
               source={source}
             />
           );
@@ -340,7 +379,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     );
   }
 
-  if (entries.length === 0) {
+  if (source.type !== 'COLLECTION' && entries.length === 0) {
     EntriesComponent = (
       <div className="block rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">

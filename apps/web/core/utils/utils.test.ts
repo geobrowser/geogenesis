@@ -1,7 +1,65 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IPFS_GATEWAY_READ_PATH } from '../constants';
-import { GeoDate, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl } from './utils';
+import { GeoDate, GeoNumber, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl } from './utils';
+
+describe('GeoNumber', () => {
+  let consoleErrorSpy: any;
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should format a number using the default format', () => {
+    const result = GeoNumber.format(1234.56);
+    expect(result).toBe('1,234.56');
+  });
+
+  it('should format a string number using the default format', () => {
+    const result = GeoNumber.format('1234.56');
+    expect(result).toBe('1,234.56');
+  });
+
+  it('should format a number using a rounded format', () => {
+    const result = GeoNumber.format(1234.56, 'precision-integer');
+    expect(result).toBe('1,235');
+  });
+
+  it('should format a number using a percentage format', () => {
+    const result = GeoNumber.format(1234.56, 'measure-unit/percent precision-unlimited');
+    expect(result).toBe('1,234.56%');
+  });
+
+  it('should format a number using a rounded percentage format', () => {
+    const result = GeoNumber.format(1234.56, 'measure-unit/percent precision-integer');
+    expect(result).toBe('1,235%');
+  });
+
+  it('should handle format pattern with :: prefix', () => {
+    const result = GeoNumber.format(1234.56, '::precision-integer');
+    expect(result).toBe('1,235');
+  });
+
+  it('should return the undefined value when value is undefined', () => {
+    expect(GeoNumber.format(undefined)).toEqual(undefined);
+  });
+
+  it('should handle NaN values', () => {
+    const result = GeoNumber.format(NaN);
+    expect(result).toBe(NaN);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+
+  it('should handle invalid string values', () => {
+    const result = GeoNumber.format('not-a-number');
+    expect(result).toBe('not-a-number');
+    expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+});
 
 describe('GeoDate', () => {
   it('converts day, month, year, hour, minute to ISO string at UTC time', () => {

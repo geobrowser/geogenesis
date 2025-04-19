@@ -2,6 +2,7 @@ import { Base58 } from '@graphprotocol/grc-20';
 import { SystemIds } from '@graphprotocol/grc-20';
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
+import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
@@ -64,8 +65,31 @@ export function formatShortAddress(address: string): string {
   return address.slice(0, 8) + '...' + address.slice(-6);
 }
 
+export class GeoNumber {
+  static defaultFormat = 'precision-unlimited';
+
+  static format(value?: string | number, formatPattern?: string, locale = 'en') {
+    try {
+      const numericValue = typeof value === 'string' ? parseFloat(value) : value;
+
+      if (numericValue === undefined || isNaN(numericValue)) {
+        throw new Error('Invalid number');
+      }
+
+      const formatToUse = formatPattern || GeoNumber.defaultFormat;
+      const intlMessageFormat = formatToUse.startsWith('::') ? formatToUse : `::${formatToUse}`;
+
+      const message = new IntlMessageFormat(`{value, number, ${intlMessageFormat}}`, locale);
+      return message.format({ value: numericValue });
+    } catch (e) {
+      console.error(`Unable to format number: "${value}" with format: "${formatPattern}".`);
+      return value;
+    }
+  }
+}
+
 export class GeoDate {
-  static defaultFormat = 'h:mmaaa, EEEE, MMMM d, yyyy';
+  static defaultFormat = 'MMM d, yyyy - h:mmaaa';
 
   /**
    * We return blocktime from the subgraph for createdAt and updatedAt fields.

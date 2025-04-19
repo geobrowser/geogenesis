@@ -42,6 +42,7 @@ import { Text } from '~/design-system/text';
 
 import { DateFormatDropdown } from './date-format-dropdown';
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
+import { NumberOptionsDropdown } from './number-options-dropdown';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
@@ -132,6 +133,27 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                               value: {
                                 value: firstRenderable.value,
                                 type: 'TIME',
+                                options: {
+                                  format,
+                                },
+                              },
+                            },
+                          });
+                        }}
+                      />
+                    )}
+                    {renderableType === 'NUMBER' && (
+                      <NumberOptionsDropdown
+                        value={firstRenderable.value}
+                        format={firstRenderable.options?.format}
+                        onSelect={(format: string) => {
+                          send({
+                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                            payload: {
+                              renderable: firstRenderable,
+                              value: {
+                                value: firstRenderable.value,
+                                type: 'NUMBER',
                                 options: {
                                   format,
                                 },
@@ -239,7 +261,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
   const property = properties?.[typeOfId];
-  const filterByTypes = property?.relationValueTypes?.map(r => r.typeId);
+  const relationValueTypes = property?.relationValueTypes;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -315,8 +337,9 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
           return (
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
+                key={JSON.stringify(relationValueTypes)}
                 spaceId={spaceId}
-                allowedTypes={filterByTypes ? filterByTypes : undefined}
+                relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
                 onCreateEntity={result => {
                   if (property?.relationValueTypeId) {
                     send({
@@ -421,8 +444,9 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
       {!hasPlaceholders && typeOfRenderableType === 'RELATION' && (
         <div className="mt-1">
           <SelectEntityAsPopover
+            key={JSON.stringify(relationValueTypes)}
             trigger={<SquareButton icon={<Create />} />}
-            allowedTypes={filterByTypes ? filterByTypes : undefined}
+            relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
               if (property?.relationValueTypeId) {
                 send({
@@ -552,6 +576,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
             return (
               <NumberField
                 value={renderable.value}
+                format={renderable.options?.format}
                 onChange={value =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
@@ -560,6 +585,9 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                       value: {
                         type: 'NUMBER',
                         value: value,
+                        options: {
+                          format: renderable.options?.format,
+                        },
                       },
                     },
                   })

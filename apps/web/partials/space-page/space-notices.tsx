@@ -236,7 +236,7 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
           router.push(destination);
         }}
         spaceId={spaceId}
-        allowedTypes={[SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE]}
+        relationValueTypes={projectValueTypes}
         inputClassName="!py-[3.5px]"
         variant="floating"
         width="full"
@@ -245,6 +245,17 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
     </div>
   );
 };
+
+const projectValueTypes = [
+  {
+    typeId: SystemIds.SPACE_TYPE,
+    typeName: 'Space',
+  },
+  {
+    typeId: SystemIds.PROJECT_TYPE,
+    typeName: 'Project',
+  },
+];
 
 const spaces: SpaceData[] = [
   {

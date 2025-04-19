@@ -126,7 +126,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
               options.skip
             )}
           `,
-            error.message
+            String(error.message)
           );
 
           return {
@@ -135,7 +135,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch entities, query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}. ${error.message}`
+            `${error._tag}: Unable to fetch entities, query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}. ${String(error.message)}`
           );
           return {
             entities: { nodes: [] },
