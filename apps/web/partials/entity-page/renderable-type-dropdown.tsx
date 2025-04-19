@@ -15,6 +15,7 @@ import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
+import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Url } from '~/design-system/icons/url';
 import { ColorName } from '~/design-system/theme/colors';
 
@@ -26,6 +27,7 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   IMAGE: Image,
   CHECKBOX: CheckboxChecked,
   NUMBER: Number,
+  POINT: GeoLocation,
 };
 
 interface Props {

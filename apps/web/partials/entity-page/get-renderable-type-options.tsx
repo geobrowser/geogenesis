@@ -11,6 +11,7 @@ import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
+import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Url } from '~/design-system/icons/url';
 
 export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
@@ -27,6 +28,8 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
       return 'RELATION';
     case SystemIds.IMAGE:
       return 'IMAGE';
+    case SystemIds.POINT:
+      return 'POINT';
     default:
       return 'TEXT';
   }
@@ -214,6 +217,28 @@ export const getRenderableTypeSelectorOptions = (
           value: '',
           relationId: '',
           valueName: null,
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        }),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <IconWrapper>
+            <GeoLocation />
+          </IconWrapper>
+          <p>Point</p>
+        </div>
+      ),
+      value: 'POINT' as const,
+      onClick: () =>
+        onSelect({
+          type: 'POINT',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
           spaceId: renderable.spaceId,
           placeholder: true,
         }),
