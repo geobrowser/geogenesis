@@ -23,7 +23,7 @@ import {
   TripleRenderableProperty,
 } from '~/core/types';
 import { Triple as ITriple } from '~/core/types';
-import { NavUtils, getImagePath, GeoPoint } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { SquareButton } from '~/design-system/button';
@@ -124,7 +124,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                 ) : (
                   <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
                 )}
-
+                {/* We need to pin to top for Geo Location to prevent covering the display toggle */}
                 <div
                   className={`absolute right-0 flex items-center gap-1 ${firstRenderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY && renderableType === 'POINT' ? 'top-0' : 'top-6'}`}
                 >
@@ -559,27 +559,25 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
         switch (renderable.type) {
           case 'TEXT': {
             return (
-              <>
-                <PageStringField
-                  key={renderable.attributeId}
-                  variant="body"
-                  placeholder="Add value..."
-                  aria-label="text-field"
-                  value={renderable.value}
-                  onChange={value => {
-                    send({
-                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                      payload: {
-                        renderable,
-                        value: {
-                          type: 'TEXT',
-                          value: value,
-                        },
+              <PageStringField
+                key={renderable.attributeId}
+                variant="body"
+                placeholder="Add value..."
+                aria-label="text-field"
+                value={renderable.value}
+                onChange={value => {
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      renderable,
+                      value: {
+                        type: 'TEXT',
+                        value: value,
                       },
-                    });
-                  }}
-                />
-              </>
+                    },
+                  });
+                }}
+              />
             );
           }
           case 'NUMBER':

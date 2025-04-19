@@ -94,22 +94,22 @@ export class GeoPoint {
    * @param value - String containing latitude and longitude separated by a comma
    * @returns An object with parsed latitude and longitude values, or undefined if parsing fails
    */
-  static parseCoordinates(value?: string): { latitude: number; longitude: number } | undefined {
-    if (!value) return undefined;
+  static parseCoordinates(value?: string): { latitude: number; longitude: number } | null {
+    if (!value) return null;
     
     try {
       const coordParts = value.split(',').map(part => part.trim());
-      if (coordParts.length !== 2) return undefined;
+      if (coordParts.length !== 2) return null;
       
       const latitude = parseFloat(coordParts[0]);
       const longitude = parseFloat(coordParts[1]);
       
-      if (isNaN(latitude) || isNaN(longitude)) return undefined;
+      if (isNaN(latitude) || isNaN(longitude)) return null;
       
       return { latitude, longitude };
     } catch (e) {
       console.error(`Unable to parse coordinates: "${value}"`);
-      return undefined;
+      return null;
     }
   }
   

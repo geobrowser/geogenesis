@@ -1,5 +1,3 @@
-import { cons } from 'effect/List';
-
 import * as React from 'react';
 
 import { useRelationship } from '~/core/hooks/use-relationship';

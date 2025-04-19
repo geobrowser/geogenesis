@@ -137,7 +137,7 @@ export const getRenderableTypeSelectorOptions = (
           <IconWrapper>
             <Date />
           </IconWrapper>
-          <p>Date & time </p>
+          <p>Date & time</p>
         </div>
       ),
       value: 'TIME' as const,

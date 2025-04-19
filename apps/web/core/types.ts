@@ -10,7 +10,6 @@ export type ValueType =
   | 'URL'
   | 'TIME'
   | 'NUMBER'
-  // | GEO_LOCATION
   | 'CHECKBOX'
   | 'POINT';
 

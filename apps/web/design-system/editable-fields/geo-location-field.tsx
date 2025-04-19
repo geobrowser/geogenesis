@@ -5,6 +5,7 @@ import Textarea from 'react-textarea-autosize';
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { Map } from '../map';
 import { cva } from 'class-variance-authority';
+import { GeoPoint } from '~/core/utils/utils';
 
 const DISPLAY_MAP_FORMAT_OPTION = 'EARTH COORDINATES';
 
@@ -42,9 +43,12 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
     initialValue: props.value || '',
   });
   
-  const [pointValues, setPointsValues] = React.useState({
-    latitude: props.value?.split(',')[0]?.replaceAll(' ', '') || '',
-    longitude: props.value?.split(',')[1]?.replaceAll(' ', '') || '',
+  const [pointValues, setPointsValues] = React.useState(() => {
+    const coordinates = GeoPoint.parseCoordinates(props.value);
+    return {
+      latitude: coordinates?.latitude.toString() || '',
+      longitude: coordinates?.longitude.toString() || '',
+    };
   });
 
   const validNumberPattern = /^-?\d*\.?\d*$/;
@@ -56,20 +60,24 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
         [label]: newValue,
       };
       setPointsValues(updatedPoints);
-      setLocalValue(`${updatedPoints.latitude},${updatedPoints.longitude}`);
+      const lat = parseFloat(updatedPoints.latitude) || 0;
+      const lon = parseFloat(updatedPoints.longitude) || 0;
+      setLocalValue(GeoPoint.formatCoordinates(lat, lon));
     } else {
-      console.error('Invalid input');
+      console.error(`Invalid ${label} input: "${newValue}". Coordinate values must be numeric.`);
     }
   };
 
   // Update point values when props.value changes from outside
   useEffect(() => {
     if (props.value && props.value !== localValue) {
-      const parts = props.value.split(',');
-      setPointsValues({
-        latitude: parts[0]?.replaceAll(' ', '') || '',
-        longitude: parts[1]?.replaceAll(' ', '') || '',
-      });
+      const coordinates = GeoPoint.parseCoordinates(props.value);
+      if (coordinates) {
+        setPointsValues({
+          latitude: coordinates.latitude.toString(),
+          longitude: coordinates.longitude.toString(),
+        });
+      }
     }
   }, [props.value]);
 
