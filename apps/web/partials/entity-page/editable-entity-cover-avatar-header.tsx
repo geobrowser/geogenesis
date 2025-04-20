@@ -201,14 +201,16 @@ const AvatarCoverInput = ({
         )}
         <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center gap-[6px]">
           {!imgUrl ? (
-            <SquareButton onClick={openInput} icon={<Upload color="grey-04" />} />
+            <button onClick={openInput}>
+              <Upload color={hovered ? 'text' : 'grey-03'} />
+            </button>
           ) : (
             <>
               {hovered && (
                 <>
-                  <SquareButton onClick={openInput} icon={<Upload color="grey-04" />} />
+                  <SquareButton onClick={openInput} icon={<Upload color="grey-03" />} />
 
-                  {imgUrl && <SquareButton onClick={deleteProperty} icon={<Trash color="grey-04" />} />}
+                  {imgUrl && <SquareButton onClick={deleteProperty} icon={<Trash color="grey-03" />} />}
                 </>
               )}
             </>

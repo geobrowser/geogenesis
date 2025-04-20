@@ -69,8 +69,6 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     },
   });
 
-  console.log(renderablesGroupedByAttributeId);
-
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
   return (
@@ -94,10 +92,11 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
               send
             );
 
-            // Hide cover property, as user can upload cover using upload icon on top placeholder
+            // Hide cover/avatar property, as user can upload cover using upload icon on top placeholder
             if (
               (renderableType === 'IMAGE' && firstRenderable.attributeId === '7YHk6qYkNDaAtNb8GwmysF') ||
-              (renderableType === 'IMAGE' && firstRenderable.attributeId === '399xP4sGWSoepxeEnp3UdR')
+              (renderableType === 'IMAGE' && firstRenderable.attributeId === '399xP4sGWSoepxeEnp3UdR') ||
+              (renderableType === 'RELATION' && firstRenderable.attributeId === 'Jfmby78N4BCseZinBmdVov')
             ) {
               return null;
             }
@@ -255,7 +254,7 @@ type RelationsGroupProps = {
   properties?: Record<string, PropertySchema>;
 };
 
-function RelationsGroup({ relations, properties }: RelationsGroupProps) {
+export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
 
   const send = useEditEvents({
