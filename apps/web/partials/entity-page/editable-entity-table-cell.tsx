@@ -1,7 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { Source } from '~/core/blocks/data/source';
-import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
+import { RelationRenderableProperty, RenderableProperty } from '~/core/types';
 import type { RelationValueType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -10,6 +10,7 @@ import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
+import { InlinePageStringField } from '~/design-system/editable-fields/editable-fields';
 import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
@@ -17,27 +18,42 @@ import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
-import { onChangeEntryFn } from '../blocks/table/change-entry';
+import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 
-interface Props {
+type Props = {
   entityId: string;
-  attributeId: string;
   spaceId: string;
+  attributeId: string;
   renderables: RenderableProperty[];
   filterSearchByTypes?: RelationValueType[];
-  onChangeEntry: onChangeEntryFn;
   isPlaceholderRow: boolean;
+  name: string | null;
+  href: string;
+  currentSpaceId: string;
+  collectionId?: string;
+  relationId?: string;
+  verified?: boolean;
+  onChangeEntry: onChangeEntryFn;
+  onLinkEntry: onLinkEntryFn;
   source: Source;
-}
+};
 
 export function EditableEntityTableCell({
-  spaceId,
   entityId,
+  spaceId,
   attributeId,
   renderables,
   filterSearchByTypes,
-  onChangeEntry,
   isPlaceholderRow,
+  name,
+  href,
+  currentSpaceId,
+  collectionId,
+  relationId,
+  verified,
+  onChangeEntry,
+  onLinkEntry,
   source,
 }: Props) {
   const entityName = Entities.nameFromRenderable(renderables) ?? '';
@@ -45,14 +61,6 @@ export function EditableEntityTableCell({
   const isNameCell = attributeId === SystemIds.NAME_ATTRIBUTE;
 
   if (isNameCell) {
-    // This should exist as there should be a placeholder that exists if no
-    // "real" renderable for name exists yet.
-    // /
-    // You might have multiple renderables across multiple spaces. In cases where we only render one,
-    // default to the one in the current space.
-    const renderableInSpace = renderables.find(r => r.spaceId === spaceId) as TripleRenderableProperty | undefined;
-    const renderable = renderableInSpace ?? (renderables[0] as TripleRenderableProperty);
-
     // We only allow FOC for collections.
     if (isPlaceholderRow && source.type === 'COLLECTION') {
       return (
@@ -102,26 +110,89 @@ export function EditableEntityTableCell({
     }
 
     return (
-      <TableStringField
-        placeholder="Entity name..."
-        value={entityName}
-        onChange={value => {
-          onChangeEntry(
-            {
-              entityId,
-              spaceId: renderable.spaceId,
-              entityName,
-            },
-            {
-              type: 'EVENT',
-              data: {
-                type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                payload: { renderable, value: { type: 'TEXT', value: value } },
-              },
-            }
-          );
-        }}
-      />
+      <>
+        {source.type !== 'COLLECTION' ? (
+          <InlinePageStringField
+            variant="tableCell"
+            placeholder="Entity name..."
+            value={name ?? ''}
+            onChange={value => {
+              onChangeEntry(
+                {
+                  entityId,
+                  entityName: value,
+                  spaceId: currentSpaceId,
+                },
+                {
+                  type: 'EVENT',
+                  data: {
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      renderable: {
+                        attributeId: SystemIds.NAME_ATTRIBUTE,
+                        entityId,
+                        spaceId: currentSpaceId,
+                        attributeName: 'Name',
+                        entityName: name,
+                        type: 'TEXT',
+                        value: name ?? '',
+                      },
+                      value: { type: 'TEXT', value },
+                    },
+                  },
+                }
+              );
+            }}
+          />
+        ) : (
+          <CollectionMetadata
+            view="TABLE"
+            isEditing={true}
+            name={name}
+            href={href}
+            currentSpaceId={currentSpaceId}
+            entityId={entityId}
+            spaceId={spaceId}
+            collectionId={collectionId}
+            relationId={relationId}
+            verified={verified}
+            onLinkEntry={onLinkEntry}
+          >
+            <InlinePageStringField
+              variant="tableCell"
+              placeholder="Entity name..."
+              value={name ?? ''}
+              onChange={value => {
+                onChangeEntry(
+                  {
+                    entityId,
+                    entityName: value,
+                    spaceId: currentSpaceId,
+                  },
+                  {
+                    type: 'EVENT',
+                    data: {
+                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                      payload: {
+                        renderable: {
+                          attributeId: SystemIds.NAME_ATTRIBUTE,
+                          entityId,
+                          spaceId: currentSpaceId,
+                          attributeName: 'Name',
+                          entityName: name,
+                          type: 'TEXT',
+                          value: name ?? '',
+                        },
+                        value: { type: 'TEXT', value },
+                      },
+                    },
+                  }
+                );
+              }}
+            />
+          </CollectionMetadata>
+        )}
+      </>
     );
   }
 

@@ -25,7 +25,6 @@ import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
-import { TableBlockTableItem } from '~/partials/blocks/table/table-block-table-item';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
@@ -98,6 +97,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const cellId = `${row.original.entityId}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
     const onChangeEntry = table.options.meta!.onChangeEntry;
+    const onLinkEntry = table.options.meta!.onLinkEntry;
     const propertiesSchema = table.options.meta!.propertiesSchema;
     const source = table.options.meta!.source;
 
@@ -118,14 +118,23 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const renderables = cellData.renderables;
 
+    const entityId = row.original.entityId;
+    const nameCell = row.original.columns[SystemIds.NAME_ATTRIBUTE];
+
+    const name = nameCell?.name;
+    const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
+    const verified = nameCell?.verified;
+    const collectionId = nameCell?.collectionId;
+    const relationId = nameCell?.relationId;
+
     if (isEditable && source.type !== 'RELATIONS') {
       return (
         <EditableEntityTableCell
-          source={source}
-          renderables={renderables}
-          attributeId={propertyId}
-          entityId={row.original.entityId}
+          key={entityId}
+          entityId={entityId}
           spaceId={spaceId}
+          attributeId={propertyId}
+          renderables={renderables}
           filterSearchByTypes={
             filterableRelationTypeId
               ? [
@@ -136,20 +145,37 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
                 ]
               : undefined
           }
-          onChangeEntry={onChangeEntry}
           isPlaceholderRow={Boolean(row.original.placeholder)}
+          name={name}
+          href={href}
+          currentSpaceId={space}
+          collectionId={collectionId}
+          relationId={relationId}
+          verified={verified}
+          onChangeEntry={onChangeEntry}
+          onLinkEntry={onLinkEntry}
+          source={source}
         />
       );
     }
 
     return (
       <EntityTableCell
-        entityId={row.original.entityId}
+        key={entityId}
+        entityId={entityId}
+        spaceId={spaceId}
         columnId={propertyId}
         // Don't want to render placeholders in edit mode
         renderables={renderables.filter(r => r.placeholder !== true)}
-        space={spaceId}
         isExpanded={isExpanded}
+        name={name}
+        href={href}
+        currentSpaceId={space}
+        collectionId={collectionId}
+        relationId={relationId}
+        verified={verified}
+        onLinkEntry={onLinkEntry}
+        source={source}
       />
     );
   },
@@ -200,6 +226,7 @@ export const TableBlockTable = ({
       space,
       isEditable: isEditing,
       onChangeEntry,
+      onLinkEntry,
       propertiesSchema,
       source,
     },
@@ -281,7 +308,6 @@ export const TableBlockTable = ({
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     const nameCell = row.original.columns[SystemIds.NAME_ATTRIBUTE];
-                    const { name, verified } = nameCell;
                     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
 
                     return (
@@ -293,24 +319,7 @@ export const TableBlockTable = ({
                         isShown={isShown}
                         isEditMode={isEditing}
                       >
-                        {isNameCell && !row.original.placeholder ? (
-                          <TableBlockTableItem
-                            isEditing={isEditing}
-                            name={name}
-                            href={href}
-                            currentSpaceId={space}
-                            entityId={entityId}
-                            spaceId={nameCell?.space}
-                            verified={verified}
-                            collectionId={nameCell?.collectionId}
-                            relationId={nameCell?.relationId}
-                            onChangeEntry={onChangeEntry}
-                            onLinkEntry={onLinkEntry}
-                            source={source}
-                          />
-                        ) : (
-                          <>{flexRender(cell.column.columnDef.cell, cell.getContext())}</>
-                        )}
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     );
                   })}
