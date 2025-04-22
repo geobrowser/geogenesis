@@ -41,7 +41,7 @@ export function graphql<T>({ endpoint, query, signal }: GraphqlConfig) {
         catch: () => new JsonParseError(),
       });
 
-      if (json.errors?.length > 0) {
+      if (json.errors && json.errors.length > 0) {
         const message = json.errors[0].message;
 
         // For some reason this error happens only in production and only rarely.
