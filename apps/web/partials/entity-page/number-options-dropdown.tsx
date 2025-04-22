@@ -135,7 +135,6 @@ const NumberFormatView = ({ formatOptions, value }: { formatOptions?: NumberForm
 );
 
 const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; onSelect: (unitId: string) => void }) => {
-  const [inputValue, setInputValue] = React.useState('');
   const [filteredEntities, setFilteredEntities] = React.useState<
     { name: string | null; symbol?: string; sign?: string; id: string }[]
   >([]);
@@ -164,13 +163,8 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     );
   }, [searchResults, entities]);
 
-  React.useEffect(() => {
-    setInputValue(query);
-  }, [query]);
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.currentTarget.value;
-    setInputValue(newValue);
     onQueryChange(newValue);
   };
 
@@ -203,14 +197,14 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     [type, cryptoCurrencies, fiatCurrencies]
   );
 
-  const currencies = inputValue.length > 0 ? filteredEntities : defaultCurrencies;
+  const currencies = query.length > 0 ? filteredEntities : defaultCurrencies;
 
   const isEmpty = currencies.length === 0;
 
   return (
     <>
       <div className="p-1">
-        <Input value={inputValue} onChange={handleInputChange} withSearchIcon />
+        <Input value={query} onChange={handleInputChange} withSearchIcon />
       </div>
       <div className="mx-1 rounded-[6px] bg-grey-01 px-3 py-1 text-footnoteMedium">{title}</div>
       <div className="p-1">
