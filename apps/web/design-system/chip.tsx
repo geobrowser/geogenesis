@@ -52,7 +52,7 @@ interface LinkableRelationChipProps {
 }
 
 const linkableRelationChipStyles = cva(
-  'group inline-flex items-center break-words rounded border border-grey-02 bg-white py-0.5 pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  'py-0.25 group inline-flex items-center break-words rounded border border-grey-02 bg-white pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
       shouldClamp: {
@@ -187,10 +187,10 @@ export function LinkableRelationChip({
           <Tooltip.Portal>
             <Tooltip.Content
               sideOffset={0}
-              className={relationChipPopoverStyles({
+              className={`z-[30] ${relationChipPopoverStyles({
                 isDeleteHovered,
                 isRelationHovered,
-              })}
+              })}`}
             >
               <Link
                 href={relationHref}

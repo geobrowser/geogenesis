@@ -273,7 +273,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const relationValueTypes = property?.relationValueTypes;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="box-border flex flex-wrap items-center gap-1">
       {relations.map(r => {
         const relationId = r.relationId;
         const relationName = r.valueName;
@@ -432,7 +432,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
         }
 
         return (
-          <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
+          <div key={`relation-${relationId}-${relationValue}`}>
             <LinkableRelationChip
               isEditing
               onDelete={() => {
@@ -452,7 +452,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
         );
       })}
       {!hasPlaceholders && typeOfRenderableType === 'RELATION' && (
-        <div className="mt-1">
+        <div>
           <SelectEntityAsPopover
             key={JSON.stringify(relationValueTypes)}
             trigger={<SquareButton icon={<Create />} />}

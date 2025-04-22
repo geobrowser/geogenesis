@@ -18,6 +18,7 @@ import { Spacer } from '~/design-system/spacer';
 import { TabGroup } from '~/design-system/tab-group';
 
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { AddSubspaceDialog } from '~/partials/space-page/add-subspace-dialog';
@@ -76,12 +77,10 @@ export default async function Layout(props0: LayoutProps) {
         <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
         <EntityPageContentContainer>
           <div className="space-y-2">
-            <EditableHeading spaceId={props.spaceId} entityId={props.id} />
-            <SpacePageMetadataHeader
-              typeNames={typeNames}
+            <EditableSpaceHeading
               spaceId={props.spaceId}
-              spaceName={props.name ?? ''}
               entityId={props.id}
+              spaceName={props.name ?? ''}
               addSubspaceComponent={
                 <AddSubspaceDialog
                   spaceId={spaceId}
@@ -94,6 +93,11 @@ export default async function Layout(props0: LayoutProps) {
                   spaceType={props.space.type}
                 />
               }
+            />
+            <SpacePageMetadataHeader
+              typeNames={typeNames}
+              spaceId={props.spaceId}
+              entityId={props.id}
               membersComponent={
                 <React.Suspense fallback={<MembersSkeleton />}>
                   <SpaceEditors spaceId={spaceId} />

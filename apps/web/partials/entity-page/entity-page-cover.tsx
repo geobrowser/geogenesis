@@ -2,7 +2,6 @@
 
 import cx from 'classnames';
 import Image from 'next/legacy/image';
-import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -27,17 +26,12 @@ export const EntityPageCover = ({
 }: EntityPageCoverProps) => {
   const { relations, spaceId } = useEntityPageStore();
 
-  const path = usePathname();
-
   const editable = useUserIsEditing(spaceId);
 
   const avatarUrl = Entities.avatar(relations) ?? serverAvatarUrl;
   const coverUrl = Entities.cover(relations) ?? serverCoverUrl;
 
-  // Do not show this placeholder on personal space page
-  // In future maybe create another component for personal space page
-  if (editable && path !== `/space/${spaceId}`)
-    return <EditableCoverAvatarHeader avatarUrl={avatarUrl} triples={triples} coverUrl={coverUrl} />;
+  if (editable) return <EditableCoverAvatarHeader avatarUrl={avatarUrl} triples={triples} coverUrl={coverUrl} />;
 
   if (coverUrl) {
     return (
