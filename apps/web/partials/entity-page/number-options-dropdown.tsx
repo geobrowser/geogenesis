@@ -180,14 +180,14 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
   const fiatCurrencies = React.useMemo(
     () => [
       {
-        name: 'Pound Sterling',
-        symbol: 'GBP',
-        id: 'KSeVvJLfx8LZb36CfYMti5',
-      },
-      {
         name: 'United States Dollar',
         symbol: 'USD',
         id: '2eGL8drmSYAqLoetcx3yR1',
+      },
+      {
+        name: 'Pound Sterling',
+        symbol: 'GBP',
+        id: 'KSeVvJLfx8LZb36CfYMti5',
       },
       {
         name: 'Euro',
