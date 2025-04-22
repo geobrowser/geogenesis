@@ -146,7 +146,8 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                       <NumberOptionsDropdown
                         value={firstRenderable.value}
                         format={firstRenderable.options?.format}
-                        onSelect={(format: string) => {
+                        unitId={firstRenderable.options?.unit}
+                        send={({ format, unitId }) => {
                           send({
                             type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                             payload: {
@@ -156,6 +157,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                                 type: 'NUMBER',
                                 options: {
                                   format,
+                                  unit: unitId,
                                 },
                               },
                             },
@@ -579,6 +581,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                 isEditing={true}
                 value={renderable.value}
                 format={renderable.options?.format}
+                unitId={renderable.options?.unit}
                 onChange={value =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
@@ -589,6 +592,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                         value: value,
                         options: {
                           format: renderable.options?.format,
+                          unit: renderable.options?.unit,
                         },
                       },
                     },

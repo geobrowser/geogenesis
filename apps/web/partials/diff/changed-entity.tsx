@@ -10,6 +10,7 @@ import Image from 'next/image';
 
 import * as React from 'react';
 
+import { useQueryEntity } from '~/core/sync/use-store';
 import { BlockChange, EntityChange, RenderableChange, TripleChangeValue } from '~/core/utils/change/types';
 import { GeoDate, GeoNumber, getImagePath, groupBy } from '~/core/utils/utils';
 
@@ -600,8 +601,24 @@ interface NumberDiffProps {
 
 const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
   const hasFormatChanged = before?.options?.format !== after?.options?.format;
-  const formattedNumberBefore = before?.value ? GeoNumber.format(before.value, before?.options?.format) : null;
-  const formattedNumberAfter = after?.value ? GeoNumber.format(after.value, after?.options?.format) : null;
+
+  const { entity: beforeUnitEntity } = useQueryEntity({ id: before?.options?.unit });
+  const { entity: afterUnitEntity } = useQueryEntity({ id: after?.options?.unit });
+
+  const [currencySignBefore, currencySignAfter] = React.useMemo(
+    () => [
+      beforeUnitEntity?.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value,
+      afterUnitEntity?.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value,
+    ],
+    [beforeUnitEntity, afterUnitEntity]
+  );
+
+  const formattedNumberBefore = before?.value
+    ? GeoNumber.format(before.value, before?.options?.format, currencySignBefore)
+    : null;
+  const formattedNumberAfter = after?.value
+    ? GeoNumber.format(after.value, after?.options?.format, currencySignAfter)
+    : null;
 
   const [formattedNumber, rawNumber, highlightClassName] =
     mode === 'before'

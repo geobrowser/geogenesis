@@ -68,7 +68,7 @@ export function formatShortAddress(address: string): string {
 export class GeoNumber {
   static defaultFormat = 'precision-unlimited';
 
-  static format(value?: string | number, formatPattern?: string, locale = 'en') {
+  static format(value?: string | number, formatPattern?: string, currencySymbol: string = '', locale = 'en') {
     try {
       const numericValue = typeof value === 'string' ? parseFloat(value) : value;
 
@@ -80,7 +80,7 @@ export class GeoNumber {
       const intlMessageFormat = formatToUse.startsWith('::') ? formatToUse : `::${formatToUse}`;
 
       const message = new IntlMessageFormat(`{value, number, ${intlMessageFormat}}`, locale);
-      return message.format({ value: numericValue });
+      return `${currencySymbol}${message.format({ value: numericValue })}`;
     } catch (e) {
       console.error(`Unable to format number: "${value}" with format: "${formatPattern}".`);
       return value;

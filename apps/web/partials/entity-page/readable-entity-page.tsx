@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { GeoNumber, NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -49,6 +50,17 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
   );
 }
 
+const ReadableNumberField = ({ value, format, unitId }: { value: string; format?: string; unitId?: string }) => {
+  const { entity } = useQueryEntity({ id: unitId });
+
+  const currencySign = React.useMemo(
+    () => entity?.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value,
+    [entity]
+  );
+
+  return <Text as="p">{GeoNumber.format(value, format, currencySign)}</Text>;
+};
+
 function TriplesGroup({
   entityId,
   triples,
@@ -78,11 +90,11 @@ function TriplesGroup({
                   }
                   case 'NUMBER':
                     return (
-                      <div>
-                        <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-                          {GeoNumber.format(renderable.value, renderable.options?.format)}
-                        </Text>
-                      </div>
+                      <ReadableNumberField
+                        value={renderable.value}
+                        format={renderable.options?.format}
+                        unitId={renderable.options?.unit}
+                      />
                     );
                   case 'CHECKBOX': {
                     const checked = getChecked(renderable.value);
