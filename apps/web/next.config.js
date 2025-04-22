@@ -30,12 +30,7 @@ const nextConfig = {
         destination: '/root',
         permanent: false,
       },
-      // Redirect stale polygon requests to /root
-      {
-        source: '/space/0x:path*',
-        destination: '/root',
-        permanent: false, // Use true for permanent (308) redirects, false for temporary (307)
-      },
+
       {
         // governing public knowledge
         source: '/space/0x2B5357e08aE291848Ff467eB1a8239d2e392bef5/c714d348-c4a5-44be-bd3c-fe56f241b0eb',
@@ -77,7 +72,12 @@ const nextConfig = {
         source: '/',
         destination: 'https://geo.framer.website/',
       },
-
+      // Redirect stale polygon requests to /root
+      {
+        source: '/space/0x:path*',
+        destination: '/root',
+        permanent: false, // Use true for permanent (308) redirects, false for temporary (307)
+      },
       {
         source: '/ending-homelessness',
         destination: 'https://geo.framer.website/ending-homelessness',
