@@ -72,12 +72,6 @@ const nextConfig = {
         source: '/',
         destination: 'https://geo.framer.website/',
       },
-      // Redirect stale polygon requests to /root
-      {
-        source: '/space/0x:path*',
-        destination: '/root',
-        permanent: false, // Use true for permanent (308) redirects, false for temporary (307)
-      },
       {
         source: '/ending-homelessness',
         destination: 'https://geo.framer.website/ending-homelessness',
