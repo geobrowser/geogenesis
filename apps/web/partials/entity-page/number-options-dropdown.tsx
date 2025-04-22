@@ -318,7 +318,6 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
   }, [setSelectedNumberType, selectedNumberType, send, unitId]);
 
   const removeUnitId = React.useCallback(() => {
-    console.log('removeUnitId', unitId);
     send({
       format,
       unitId: undefined,
