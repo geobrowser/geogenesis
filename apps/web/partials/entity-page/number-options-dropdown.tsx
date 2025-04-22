@@ -286,9 +286,9 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
 
   React.useEffect(() => {
     setSelectedCurrencySymbol(
-      entity?.triples.find(t => t.attributeId === 'NMCZXJNatQS59U31sZKmMn')?.value?.value || null
+      (unitId && entity?.triples.find(t => t.attributeId === 'NMCZXJNatQS59U31sZKmMn')?.value?.value) || null
     );
-  }, [entity]);
+  }, [unitId, entity]);
 
   const handleBack = React.useCallback(
     (e: React.MouseEvent) => {
@@ -335,6 +335,14 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
     });
   }, [setSelectedNumberType, selectedNumberType, send, unitId]);
 
+  const removeUnitId = React.useCallback(() => {
+    console.log('removeUnitId', unitId);
+    send({
+      format,
+      unitId: undefined,
+    });
+  }, [send, format]);
+
   const getFormatLabel = React.useCallback((formatString: string | undefined) => {
     if (!formatString || formatString === undefined) return 'Unspecified';
 
@@ -376,6 +384,7 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
               hasSubmenu
               options={formatOptions}
             />
+            <SubmenuOption label="Unspecified" onClick={removeUnitId} options={formatOptions} isSelected={!unitId} />
           </>
         );
 

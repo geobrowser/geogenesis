@@ -607,10 +607,12 @@ const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
 
   const [currencySignBefore, currencySignAfter] = React.useMemo(
     () => [
-      beforeUnitEntity?.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value,
-      afterUnitEntity?.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value,
+      before?.options?.unit &&
+        beforeUnitEntity?.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value,
+      after?.options?.unit &&
+        afterUnitEntity?.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value,
     ],
-    [beforeUnitEntity, afterUnitEntity]
+    [before, beforeUnitEntity, after, afterUnitEntity]
   );
 
   const formattedNumberBefore = before?.value
