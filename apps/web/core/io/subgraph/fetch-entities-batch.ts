@@ -93,7 +93,7 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
           return [];
 
         default:
-          console.error(`${error._tag}: Unable to fetch entities. ${String(error)}`);
+          console.error(`${error._tag}: Unable to fetch entities batch. ${String(error)}`);
           return [];
       }
     }
