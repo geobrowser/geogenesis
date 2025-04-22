@@ -4,8 +4,6 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
-import { Subgraph } from '~/core/io';
-import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -24,6 +22,8 @@ import { EntityPageHeading } from '~/partials/entity-page/entity-page-heading';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+
+import { cachedFetchEntitiesBatch, cachedFetchEntity } from './cached-fetch-entity';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -65,10 +65,12 @@ export default async function DefaultEntityPage({
       >
         {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
         <EntityPageContentContainer>
-          {showHeading && <EntityPageHeading spaceId={props.spaceId} entityId={props.id} />}
-          {showHeader && (
-            <EntityPageMetadataHeader id={props.id} entityName={props.name ?? ''} spaceId={props.spaceId} />
-          )}
+          <div className="space-y-2">
+            {showHeading && <EntityPageHeading spaceId={props.spaceId} entityId={props.id} />}
+            {showHeader && (
+              <EntityPageMetadataHeader id={props.id} entityName={props.name ?? ''} spaceId={props.spaceId} />
+            )}
+          </div>
           {notice}
           {(showSpacer || !!notice) && <Spacer height={40} />}
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
@@ -91,34 +93,29 @@ export default async function DefaultEntityPage({
 }
 
 const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
-  const entity = await Subgraph.fetchEntity({ spaceId, id: entityId });
+  const entity = await cachedFetchEntity(entityId, spaceId);
   const nameTripleSpace = entity?.nameTripleSpaces?.[0];
   const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && nameTripleSpace) {
     console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
-
     return redirect(NavUtils.toSpace(spaceId));
   }
 
   // Redirect from an invalid space to a valid one
   if (entity && !spaces.includes(spaceId) && !preventRedirect) {
     const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
-
     console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
-
     return redirect(NavUtils.toEntity(newSpaceId, entityId));
   }
 
   const serverAvatarUrl = Entities.avatar(entity?.relationsOut);
   const serverCoverUrl = Entities.cover(entity?.relationsOut);
 
-  const blockIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
-    ?.map(r => r.toEntity.id);
-
-  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+  const blockRelations = entity?.relationsOut.filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS));
+  const blockIds = blockRelations?.map(r => r.toEntity.id);
+  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
     triples: entity?.triples ?? [],
@@ -133,7 +130,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     types: entity?.types ?? [],
 
     // For entity page editor
-    blockRelations: entity?.relationsOut ?? [],
+    blockRelations: blockRelations ?? [],
     blocks,
   };
 };

@@ -1,6 +1,5 @@
 import { Schema } from '@effect/schema';
 import { Effect, Either } from 'effect';
-import { v4 } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { queryClient } from '~/core/query-client';
@@ -65,16 +64,14 @@ type FetchEntitiesBatchOptions = {
 export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Promise<Entity[]> {
   const { spaceId, entityIds, filterString, signal } = options;
 
-  const queryId = v4();
-
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
     query: query(entityIds, filterString, spaceId),
     signal,
   });
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* () {
+    const resultOrError = yield* Effect.either(graphqlFetchEffect);
 
     if (Either.isLeft(resultOrError)) {
       const error = resultOrError.left;
@@ -87,7 +84,7 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchEntitiesBatch. queryId: ${queryId}
+            `Encountered runtime graphql error in fetchEntitiesBatch.
             queryString: ${query(entityIds)}
             `,
             error.message
@@ -96,7 +93,7 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
           return [];
 
         default:
-          console.error(`${error._tag}: Unable to fetch entities, queryId: ${queryId}`);
+          console.error(`${error._tag}: Unable to fetch entities batch. ${String(error)}`);
           return [];
       }
     }
@@ -112,7 +109,6 @@ export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Pr
 
       return Either.match(decodedSpace, {
         onLeft: () => {
-          // console.error(`Unable to decode collection item entity ${e.id} with error ${error}`);
           return null;
         },
         onRight: substreamEntity => {

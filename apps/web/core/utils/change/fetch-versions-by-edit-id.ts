@@ -88,7 +88,9 @@ export async function fetchVersionsByEditId(args: FetchVersionsArgs) {
 
       return Either.match(decoded, {
         onLeft: error => {
-          console.error(`Could not decode version with id ${v.id} and entityId ${v.entityId}. ${String(error)}`);
+          console.error(
+            `FetchVersionsByEditId: Could not decode version with id ${v.id} and entityId ${v.entityId}. ${String(error)}`
+          );
           return null;
         },
         onRight: result => {

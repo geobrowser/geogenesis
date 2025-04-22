@@ -27,17 +27,20 @@ describe('filters', () => {
       {
         columnId: SystemIds.SPACE_FILTER,
         value: '0x0000000000000000000000000000000000000000',
+        columnName: 'Space',
         valueType: 'RELATION',
         valueName: null,
       },
       {
         columnId: SystemIds.TYPES_ATTRIBUTE,
+        columnName: 'Types',
         value: SystemIds.SCHEMA_TYPE,
         valueType: 'RELATION',
         valueName: 'Type',
       },
       {
         columnId: SystemIds.NAME_ATTRIBUTE,
+        columnName: 'Name',
         value: 'name',
         valueType: 'TEXT',
         valueName: null,

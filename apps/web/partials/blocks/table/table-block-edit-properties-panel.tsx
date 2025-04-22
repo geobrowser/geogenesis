@@ -9,13 +9,13 @@ import Image from 'next/legacy/image';
 import * as React from 'react';
 
 import { generateSelector, getIsSelected } from '~/core/blocks/data/data-selectors';
-import { mergeEntitiesAsync } from '~/core/blocks/data/queries';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { getSchemaFromTypeIds, mergeEntityAsync } from '~/core/database/entities';
+import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';
+import { useQueryEntitiesAsync, useQueryEntityAsync } from '~/core/sync/use-store';
 import { RenderableProperty } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { getImagePath } from '~/core/utils/utils';
@@ -52,6 +52,7 @@ export function TableBlockEditPropertiesPanel() {
 function RelationsPropertySelector() {
   const { source } = useSource();
   const { filterState } = useFilters();
+  const findOne = useQueryEntityAsync();
 
   const [selectedEntities, setSelectedEntities] = React.useState<{
     type: 'TO' | 'FROM' | 'SOURCE';
@@ -66,7 +67,7 @@ function RelationsPropertySelector() {
         return null;
       }
 
-      return await mergeEntityAsync(EntityId(source.value));
+      return await findOne(source.value);
     },
   });
 
@@ -210,6 +211,8 @@ type PropertySelectorProps = {
  * user can select Name, Description or Spouse.
  */
 function PropertySelector({ entityIds, where }: PropertySelectorProps) {
+  const findMany = useQueryEntitiesAsync();
+
   const { toggleProperty: setProperty, mapping } = useView();
 
   const { data: availableProperties, isLoading } = useQuery({
@@ -220,7 +223,13 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
         return [];
       }
 
-      const entities = await mergeEntitiesAsync({ entityIds, filterState: [] });
+      const entities = await findMany({
+        where: {
+          id: {
+            in: entityIds,
+          },
+        },
+      });
 
       const availableProperties = entities.flatMap(e => {
         return pipe(
@@ -286,7 +295,7 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
 
         return (
           <MenuItem key={p.id} onClick={() => onSelectProperty(p)}>
-            <div className="flex items-center justify-between">
+            <div className="flex w-full items-center justify-between">
               <span className="text-button text-grey-04">{p.name}</span>
               <Checkbox checked={isSelected} />
             </div>

@@ -60,6 +60,17 @@ export const relationFragmentHistorical = `
   id
   spaceId
   entityId
+  entity {
+    currentVersion {
+      version {
+        triples {
+          nodes {
+            ${tripleFragment}
+          }
+        }
+      }
+    }
+  }
   index
   typeOfVersion {
     id
@@ -88,6 +99,17 @@ export const relationFragmentLive = `
   id
   spaceId
   entityId
+  entity {
+    currentVersion {
+      version {
+        triples {
+          nodes {
+            ${tripleFragment}
+          }
+        }
+      }
+    }
+  }
   index
   typeOf {
     currentVersion {

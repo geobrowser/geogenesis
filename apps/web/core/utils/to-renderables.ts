@@ -38,8 +38,6 @@ export function toRenderables({
 
   // Make some placeholder triples derived from the schema. We later hide and show these depending
   // on if the entity has filled these fields or not.
-  // @TODO: We need to know the schema value type to know the type of renderable we need
-  // to show. We can default to TEXT for now.
   const schemaRenderables = (schema ?? [])
     .filter(renderable => !attributesWithAValue.has(renderable.id) && !placeholders.has(renderable.id))
     .map((s): TripleRenderableProperty | RelationRenderableProperty => {
@@ -91,7 +89,7 @@ export function toRenderables({
       entityName: t.entityName,
       attributeId: t.attributeId,
       attributeName: t.attributeName,
-      spaceId,
+      spaceId: t.space,
       value: t.value.value,
       options: t.value.options,
     };
@@ -104,11 +102,11 @@ export function toRenderables({
     .map((r): RelationRenderableProperty => {
       return {
         type: r.toEntity.renderableType as RelationRenderableProperty['type'], // We filter out data and text relations above
-        entityId: r.id,
+        entityId: entityId,
         entityName: null,
         attributeId: r.typeOf.id,
         attributeName: r.typeOf.name,
-        spaceId,
+        spaceId: r.space,
         relationId: r.id,
         value: r.toEntity.value, // This is either the image URL or the entity ID
         valueName: r.toEntity.name,

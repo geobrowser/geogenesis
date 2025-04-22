@@ -9,29 +9,25 @@ function PublishedFilterIconFilled() {
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
-        d="M9.12976 0L2.87024 0C1.6588 0 0.947091 1.36185 1.63876 2.35643L4.45525 6.40634C4.48438 6.44823 4.5 6.49804 4.5 6.54907L4.5 10.5C4.5 11.3284 5.17157 12 6 12C6.82843 12 7.5 11.3284 7.5 10.5L7.5 6.54907C7.5 6.49804 7.51562 6.44823 7.54475 6.40634L10.3612 2.35642C11.0529 1.36185 10.3412 0 9.12976 0Z"
-        fill={colors.light['text']}
+        d="M2.73511 0.5H9.26489C10.0543 0.5 10.5325 1.37186 10.1081 2.03755L7.76692 5.71008C7.51097 6.11158 7.375 6.57782 7.375 7.05396V10.125C7.375 10.8844 6.75939 11.5 6 11.5C5.24061 11.5 4.625 10.8844 4.625 10.125V7.05396C4.625 6.57782 4.48903 6.11158 4.23308 5.71008L1.89187 2.03755C1.46751 1.37186 1.94565 0.5 2.73511 0.5Z"
+        fill={colors['light'].text}
+        stroke={colors['light'].text}
+        strokeLinecap="round"
       />
     </svg>
   );
 }
 
-export function TableBlockFilterPill({
-  filter,
-  onDelete,
-}: {
-  filter: Filter & { propertyName: string };
-  onDelete: () => void;
-}) {
+export function TableBlockFilterPill({ filter, onDelete }: { filter: Filter; onDelete: () => void }) {
   const { editable } = useEditable();
   const value = filter.valueType === 'RELATION' ? filter.valueName : filter.value;
 
   return (
-    <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
+    <div className="flex h-6 items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
       {/* @TODO: Use avatar if the filter is not published */}
       <PublishedFilterIconFilled />
       <div className="flex items-center gap-1">
-        <span>{filter.propertyName} is</span>
+        <span>{filter.columnName} is</span>
         <span>·</span>
         <span>{value}</span>
       </div>

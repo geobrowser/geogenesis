@@ -10,8 +10,8 @@ import Image from 'next/image';
 
 import * as React from 'react';
 
-import { BlockChange, EntityChange, RenderableChange } from '~/core/utils/change/types';
-import { GeoDate, getImagePath, groupBy } from '~/core/utils/utils';
+import { BlockChange, EntityChange, RenderableChange, TripleChangeValue } from '~/core/utils/change/types';
+import { GeoDate, GeoNumber, getImagePath, groupBy } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { Minus } from '~/design-system/icons/minus';
@@ -84,12 +84,8 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
         </div>
       )}
       {changes.length > 0 && (
-        <div className="mt-2">
-          <ChangedAttribute
-            renderAttributeStagingComponent={renderAttributeStagingComponent}
-            key={`${change.id}-${change.id}`}
-            changes={changes}
-          />
+        <div className="mt-2" key={change.id}>
+          <ChangedAttribute renderAttributeStagingComponent={renderAttributeStagingComponent} changes={changes} />
         </div>
       )}
     </div>
@@ -309,7 +305,43 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
         const name = attributeName ?? attributeId;
 
         switch (changeType) {
-          case 'NUMBER':
+          case 'NUMBER': {
+            return (
+              <div key={index} className="-mt-px flex gap-16">
+                <div className="flex-1 border border-grey-02 p-4">
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="break-all text-body">
+                    {changes.map(c => {
+                      return (
+                        <NumberDiff
+                          key={`${attributeId}-before-${c.before?.value}`}
+                          before={c.before as TripleChangeValue | null}
+                          after={c.after as TripleChangeValue | null}
+                          mode="before"
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="group relative max-w-full flex-1 border border-grey-02 p-4">
+                  {renderAttributeStagingComponent?.(attributeId)}
+                  <div className="text-bodySemibold capitalize">{name}</div>
+                  <div className="break-all text-body">
+                    {changes.map(c => {
+                      return (
+                        <NumberDiff
+                          key={`${attributeId}-after-${c.after?.value}`}
+                          before={c.before as TripleChangeValue | null}
+                          after={c.after as TripleChangeValue | null}
+                          mode="after"
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          }
           case 'TEXT': {
             return (
               <div key={index} className="-mt-px flex gap-16">
@@ -394,7 +426,13 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                   <div className="text-bodySemibold capitalize">{name}</div>
                   <div className="flex flex-wrap gap-2">
                     {changes.map(c => {
-                      return c.before && <Chip status={c.before.type}>{c.before.valueName ?? c.before.value}</Chip>;
+                      if (c.before === null) return null;
+
+                      return (
+                        <Chip key={`${c.attribute.id}-${c.before.value}`} status={c.before.type}>
+                          {c.before.valueName ?? c.before.value}
+                        </Chip>
+                      );
                     })}
                   </div>
                 </div>
@@ -406,7 +444,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                       if (c.after === null) return null;
 
                       return (
-                        <Chip key={c.after.value} status={c.after.type}>
+                        <Chip key={`${c.attribute.id}-${c.after.value}`} status={c.after.type}>
                           {c.after.valueName ?? c.after.value}
                         </Chip>
                       );
@@ -467,7 +505,13 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                     {changes.map(c => {
                       const { before, after } = c;
                       return (
-                        before && <DateTimeDiff mode="before" before={before.value} after={after?.value ?? null} />
+                        before && (
+                          <DateTimeDiff
+                            mode="before"
+                            before={before as TripleChangeValue}
+                            after={after as TripleChangeValue}
+                          />
+                        )
                       );
                     })}
                   </div>
@@ -478,7 +522,15 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                   <div className="text-body">
                     {changes.map(c => {
                       const { before, after } = c;
-                      return after && <DateTimeDiff mode="after" before={before?.value ?? null} after={after.value} />;
+                      return (
+                        after && (
+                          <DateTimeDiff
+                            mode="after"
+                            before={before as TripleChangeValue}
+                            after={after as TripleChangeValue}
+                          />
+                        )
+                      );
                     })}
                   </div>
                 </div>
@@ -490,7 +542,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">
                   <div className="text-bodySemibold capitalize">{name}</div>
-                  <div className="truncate text-ctaPrimary no-underline">
+                  <div className="truncate text-wrap text-ctaPrimary no-underline">
                     {changes.map(c => {
                       const checkedBefore = c.before ? c.before.value : '';
                       const checkedAfter = c.after ? c.after.value : '';
@@ -512,7 +564,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                 <div className="group relative flex-1 border border-grey-02 p-4">
                   {renderAttributeStagingComponent?.(attributeId)}
                   <div className="text-bodySemibold capitalize">{name}</div>
-                  <div className="truncate text-ctaPrimary no-underline">
+                  <div className="truncate text-wrap text-ctaPrimary no-underline">
                     {changes.map(c => {
                       const checkedBefore = c.before ? c.before.value : '';
                       const checkedAfter = c.after ? c.after.value : '';
@@ -540,10 +592,38 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
   );
 };
 
+interface NumberDiffProps {
+  before: TripleChangeValue | null;
+  after: TripleChangeValue | null;
+  mode: 'before' | 'after';
+}
+
+const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
+  const hasFormatChanged = before?.options?.format !== after?.options?.format;
+  const formattedNumberBefore = before?.value ? GeoNumber.format(before.value, before?.options?.format) : null;
+  const formattedNumberAfter = after?.value ? GeoNumber.format(after.value, after?.options?.format) : null;
+
+  const [formattedNumber, rawNumber, highlightClassName] =
+    mode === 'before'
+      ? [formattedNumberBefore, before?.value, 'rounded bg-errorTertiary']
+      : [formattedNumberAfter, after?.value, 'rounded bg-successTertiary'];
+
+  return (
+    <>
+      <span className={highlightClassName}>{rawNumber}</span>
+      {hasFormatChanged && formattedNumber && (
+        <p className="py-2 text-sm text-grey-04">
+          Browse format · <span className={highlightClassName}>{formattedNumber}</span>
+        </p>
+      )}
+    </>
+  );
+};
+
 type DateTimeProps = {
   mode: 'before' | 'after';
-  before: string | null;
-  after: string | null;
+  before: TripleChangeValue | null;
+  after: TripleChangeValue | null;
 };
 
 type DateTimeType = {
@@ -556,65 +636,81 @@ type DateTimeType = {
 };
 
 export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
-  const beforeDateTime = before ? GeoDate.fromISOStringUTC(before) : null;
-  const afterDateTime = after ? GeoDate.fromISOStringUTC(after) : null;
+  const beforeDateTime = before?.value ? GeoDate.fromISOStringUTC(before.value) : null;
+  const afterDateTime = after?.value ? GeoDate.fromISOStringUTC(after.value) : null;
 
-  const renderedDateTime: DateTimeType = (mode === 'before' ? beforeDateTime : afterDateTime) as DateTimeType;
+  const formattedDateBefore = before?.value ? GeoDate.format(before.value, before?.options?.format) : null;
+  const formattedDateAfter = after?.value ? GeoDate.format(after.value, after?.options?.format) : null;
+
+  const renderedDateTime: DateTimeType | null = (
+    mode === 'before' ? beforeDateTime : afterDateTime
+  ) as DateTimeType | null;
   const highlightClassName = mode === 'before' ? 'rounded bg-errorTertiary' : 'bg-successTertiary rounded';
 
+  const hasFormatChanged = before?.options?.format !== after?.options?.format;
+  const formattedDate = mode === 'before' ? formattedDateBefore : formattedDateAfter;
+  const formattedDateHighlightClassName = hasFormatChanged ? highlightClassName : '';
+
+  if (!renderedDateTime) return null;
+
   return (
-    <div className="flex items-start gap-4">
-      <div className="flex w-[164px] gap-3">
-        <div className="flex w-full flex-[2] flex-col">
-          <p className={cx(beforeDateTime?.month !== afterDateTime?.month && highlightClassName, dateFieldClassNames)}>
-            {renderedDateTime.month.padStart(2, '0')}
-          </p>
-          <span className={labelClassNames}>Month</span>
+    <>
+      <div className="flex items-start gap-4">
+        <div className="flex w-[164px] items-center gap-3">
+          <div className="flex w-full flex-[4] flex-col items-center">
+            <p className={cx(beforeDateTime?.year !== afterDateTime?.year && highlightClassName, dateFieldClassNames)}>
+              {renderedDateTime.year}
+            </p>
+          </div>
+          <span className="flex flex-[1] items-center text-grey-02">/</span>
+          <div className="flex w-full flex-[2] flex-col">
+            <p
+              className={cx(beforeDateTime?.month !== afterDateTime?.month && highlightClassName, dateFieldClassNames)}
+            >
+              {renderedDateTime.month.padStart(2, '0')}
+            </p>
+          </div>
+          <span className="w-full flex-[1] text-grey-02">/</span>
+          <div className="flex flex-[2] flex-col items-center">
+            <p className={cx(beforeDateTime?.day !== afterDateTime?.day && highlightClassName, dateFieldClassNames)}>
+              {renderedDateTime.day.padStart(2, '0')}
+            </p>
+          </div>
         </div>
-        <span className="w-full flex-[1] pt-[3px] text-grey-02">/</span>
-        <div className="flex flex-[2] flex-col items-center">
-          <p className={cx(beforeDateTime?.day !== afterDateTime?.day && highlightClassName, dateFieldClassNames)}>
-            {renderedDateTime.day.padStart(2, '0')}
+        <div className="flex items-center">
+          <Minus color="grey-03" />
+          <Spacer width={18} />
+          <div className="flex items-center gap-1">
+            <p className={cx(beforeDateTime?.hour !== afterDateTime?.hour && highlightClassName, timeClassNames)}>
+              {renderedDateTime.hour.padStart(2, '0')}
+            </p>
+            <span>:</span>
+            <p className={cx(beforeDateTime?.minute !== afterDateTime?.minute && highlightClassName, timeClassNames)}>
+              {renderedDateTime.minute.padStart(2, '0')}
+            </p>
+          </div>
+          <p
+            className={cx(
+              (!before?.value || !after?.value || beforeDateTime?.meridiem !== afterDateTime?.meridiem) &&
+                highlightClassName,
+              'w-[32px] text-center uppercase',
+              timeClassNames
+            )}
+          >
+            {renderedDateTime.meridiem}
           </p>
-          <span className={labelClassNames}>Day</span>
-        </div>
-        <span className="flex-[1] pt-[3px] text-grey-02">/</span>
-        <div className="flex w-full flex-[4] flex-col items-center">
-          <p className={cx(beforeDateTime?.year !== afterDateTime?.year && highlightClassName, dateFieldClassNames)}>
-            {renderedDateTime.year}
-          </p>
-          <span className={labelClassNames}>Year</span>
         </div>
       </div>
-      <div className="flex items-center">
-        <Minus color="grey-03" />
-        <Spacer width={18} />
-        <div className="flex items-center gap-1">
-          <p className={cx(beforeDateTime?.hour !== afterDateTime?.hour && highlightClassName, timeClassNames)}>
-            {renderedDateTime.hour.padStart(2, '0')}
-          </p>
-          <span>:</span>
-          <p className={cx(beforeDateTime?.minute !== afterDateTime?.minute && highlightClassName, timeClassNames)}>
-            {renderedDateTime.minute.padStart(2, '0')}
-          </p>
-        </div>
-        <p
-          className={cx(
-            (!before || !after || Number(beforeDateTime?.hour) < 12 !== Number(afterDateTime?.hour) < 12) &&
-              highlightClassName,
-            'uppercase',
-            timeClassNames
-          )}
-        >
-          {renderedDateTime.meridiem}
+      {hasFormatChanged && formattedDate && (
+        <p className="py-2 text-sm text-grey-04">
+          Browse format · <span className={formattedDateHighlightClassName}>{formattedDate}</span>
         </p>
-      </div>
-    </div>
+      )}
+    </>
   );
 };
 
 const dateFieldClassNames = `w-full text-center text-body tabular-nums`;
-const labelClassNames = `text-footnote text-grey-04`;
 const timeClassNames = `w-[21px] tabular-nums p-0 m-0 text-body`;
 
 type ChipProps = {

@@ -4,17 +4,16 @@ import { SearchResult } from '../io/dto/search';
 import { EntityId } from '../io/schema';
 import { fetchResult, fetchSpaces } from '../io/subgraph';
 import { queryClient } from '../query-client';
-import { getEntities_experimental } from './entities';
+import { GeoStore } from '../sync/store';
 
 export interface FetchResultOptions {
   id: EntityId;
+  store: GeoStore;
   signal?: AbortController['signal'];
 }
 
 export async function mergeSearchResult(args: FetchResultOptions) {
-  const localEntities = await getEntities_experimental();
-
-  const localOnlyEntitiesSet = new Set(Object.values(localEntities).map(e => e.id));
+  const localEntity = args.store.getEntity(args.id);
 
   const cachedRemoteResult = await queryClient.fetchQuery({
     queryKey: ['merge-search-result', args],
@@ -26,21 +25,15 @@ export async function mergeSearchResult(args: FetchResultOptions) {
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
 
-  const maybeLocalVersionExists = localOnlyEntitiesSet.has(args.id);
-
   let merged = cachedRemoteResult
-    ? maybeLocalVersionExists
-      ? { ...localEntities[args.id], spaces: cachedRemoteResult.spaces }
+    ? localEntity
+      ? { ...localEntity, spaces: cachedRemoteResult.spaces }
       : cachedRemoteResult
-    : maybeLocalVersionExists
-      ? localEntities[args.id]
+    : localEntity
+      ? localEntity
       : null;
 
-  const localOnlyEntitySpaceIds = !cachedRemoteResult
-    ? maybeLocalVersionExists
-      ? localEntities[args.id].nameTripleSpaces
-      : []
-    : [];
+  const localOnlyEntitySpaceIds = !cachedRemoteResult ? (localEntity ? localEntity.nameTripleSpaces : []) : [];
 
   const localEntitySpaces = await queryClient.fetchQuery({
     queryKey: ['merge-local-entity-spaces', localOnlyEntitySpaceIds],
@@ -50,10 +43,12 @@ export async function mergeSearchResult(args: FetchResultOptions) {
 
   const localEntitySpacesBySpaceId = Object.fromEntries(localEntitySpaces.map(s => [s.id, s.spaceConfig]));
 
-  if (maybeLocalVersionExists && merged) {
+  const hasLocalEntitySpaces = Object.keys(localEntitySpacesBySpaceId).length !== 0;
+
+  if (localEntity && merged && hasLocalEntitySpaces) {
     merged = {
       ...merged,
-      spaces: localEntities[args.id].nameTripleSpaces
+      spaces: localEntity.nameTripleSpaces
         .map(spaceId => {
           return localEntitySpacesBySpaceId[spaceId] ?? null;
         })

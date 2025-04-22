@@ -20,10 +20,13 @@ function getFetchResultsQuery(query: string | undefined, typeIds?: string[], fir
       : // Filter out block entities by default
         `versionTypes: { every: { type: { entityId: { notIn: ["${SystemIds.TEXT_BLOCK}", "${SystemIds.DATA_BLOCK}", "${SystemIds.IMAGE_BLOCK}", "${SystemIds.PAGE_TYPE}"] } } } }`;
 
-  const constructedWhere = `{name: {startsWithInsensitive: ${JSON.stringify(query)}} ${typeIdsString} }`;
+  const constructedWhere = `{
+  name: {
+    isNull: false
+  } ${typeIdsString} }`;
 
   return `query {
-    entities(filter: {
+    searchEntitiesFuzzy(searchTerm: ${JSON.stringify(query?.split(' ').join('&'))}, filter: {
         currentVersion: {
           version: ${constructedWhere}
         }
@@ -51,7 +54,7 @@ export interface FetchResultsOptions {
 }
 
 interface NetworkResult {
-  entities: { nodes: SubstreamSearchResult[] };
+  searchEntitiesFuzzy: { nodes: SubstreamSearchResult[] };
 }
 
 export async function fetchResults(options: FetchResultsOptions): Promise<SearchResult[]> {
@@ -89,7 +92,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
           );
 
           return {
-            entities: { nodes: [] },
+            searchEntitiesFuzzy: { nodes: [] },
           };
 
         default:
@@ -97,7 +100,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
             `${error._tag}: Unable to fetch results, queryId: ${queryId}query: ${options.query} skip: ${options.skip} first: ${options.first}`
           );
           return {
-            entities: { nodes: [] },
+            searchEntitiesFuzzy: { nodes: [] },
           };
       }
     }
@@ -105,9 +108,9 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
     return resultOrError.right;
   });
 
-  const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const { searchEntitiesFuzzy } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  return entities.nodes
+  return searchEntitiesFuzzy.nodes
     .map(result => {
       const decodedResult = Schema.decodeEither(SubstreamSearchResult)(result);
 

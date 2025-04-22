@@ -55,7 +55,7 @@ function DataNodeComponent({ node }: NodeViewRendererProps) {
 
   return (
     <NodeViewWrapper>
-      <div contentEditable="false">
+      <div contentEditable="false" className="data-node">
         <DataNodeChildren spaceId={spaceId} entityId={id} relationId={relation?.relationId ?? ''} />
       </div>
     </NodeViewWrapper>

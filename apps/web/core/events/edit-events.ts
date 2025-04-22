@@ -6,6 +6,8 @@ import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { useMemo } from 'react';
 
 import {
+  BaseRelationRenderableProperty,
+  ImageRelationRenderableProperty,
   OmitStrict,
   RenderableEntityType,
   RenderableProperty,
@@ -15,7 +17,7 @@ import {
 } from '~/core/types';
 
 import { StoreRelation } from '../database/types';
-import { removeRelation, upsertRelation, useWriteOps } from '../database/write';
+import { remove, removeRelation, upsert, upsertMany, upsertRelation, useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
 
 export type EditEvent =
@@ -67,8 +69,7 @@ export type EditEvent =
   | {
       type: 'DELETE_RELATION';
       payload: {
-        relationId: string;
-        fromEntityId: string;
+        renderable: BaseRelationRenderableProperty | ImageRelationRenderableProperty;
       };
     }
 
@@ -92,13 +93,15 @@ interface EditApi {
   remove: ReturnType<typeof useWriteOps>['remove'];
 }
 
+export interface EditEventContext {
+  spaceId: string;
+  entityId: string;
+  entityName: string | null;
+}
+
 interface ListenerConfig {
   api: EditApi;
-  context: {
-    spaceId: string;
-    entityId: string;
-    entityName: string;
-  };
+  context: EditEventContext;
 }
 
 const listener =
@@ -203,8 +206,25 @@ const listener =
         // on the relation.
         if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
           return removeRelation({
-            relationId: EntityId(renderable.relationId),
-            fromEntityId: EntityId(renderable.entityId),
+            relation: {
+              id: EntityId(renderable.relationId),
+              space: context.spaceId,
+              index: INITIAL_RELATION_INDEX_VALUE,
+              typeOf: {
+                id: EntityId(renderable.attributeId),
+                name: renderable.attributeName,
+              },
+              fromEntity: {
+                id: EntityId(renderable.entityId),
+                name: renderable.entityName,
+              },
+              toEntity: {
+                id: EntityId(renderable.value),
+                name: renderable.valueName,
+                renderableType: 'RELATION',
+                value: renderable.value,
+              },
+            },
             spaceId: context.spaceId,
           });
         }
@@ -212,8 +232,25 @@ const listener =
         if (type === 'RELATION') {
           // Delete the previous triple and create a new relation entity
           return removeRelation({
-            relationId: EntityId(renderable.entityId),
-            fromEntityId: EntityId(renderable.entityId),
+            relation: {
+              id: EntityId(renderable.entityId),
+              space: context.spaceId,
+              index: INITIAL_RELATION_INDEX_VALUE,
+              typeOf: {
+                id: EntityId(renderable.attributeId),
+                name: renderable.attributeName,
+              },
+              fromEntity: {
+                id: EntityId(renderable.entityId),
+                name: renderable.entityName,
+              },
+              toEntity: {
+                id: EntityId(renderable.value),
+                name: null,
+                renderableType: 'RELATION',
+                value: renderable.value,
+              },
+            },
             spaceId: context.spaceId,
           });
         }
@@ -240,8 +277,25 @@ const listener =
 
         if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
           return removeRelation({
-            relationId: EntityId(renderable.relationId),
-            fromEntityId: EntityId(renderable.entityId),
+            relation: {
+              id: EntityId(renderable.relationId),
+              space: context.spaceId,
+              index: INITIAL_RELATION_INDEX_VALUE,
+              typeOf: {
+                id: EntityId(renderable.attributeId),
+                name: renderable.attributeName,
+              },
+              fromEntity: {
+                id: EntityId(renderable.entityId),
+                name: renderable.entityName,
+              },
+              toEntity: {
+                id: EntityId(renderable.value),
+                name: renderable.valueName,
+                renderableType: 'RELATION',
+                value: renderable.value,
+              },
+            },
             spaceId: context.spaceId,
           });
         }
@@ -280,10 +334,28 @@ const listener =
       }
 
       case 'DELETE_RELATION': {
-        const { relationId, fromEntityId } = event.payload;
+        const { renderable } = event.payload;
+
         return removeRelation({
-          relationId: EntityId(relationId),
-          fromEntityId: EntityId(fromEntityId),
+          relation: {
+            id: EntityId(renderable.relationId),
+            space: context.spaceId,
+            index: INITIAL_RELATION_INDEX_VALUE,
+            typeOf: {
+              id: EntityId(renderable.attributeId),
+              name: renderable.attributeName,
+            },
+            fromEntity: {
+              id: EntityId(renderable.entityId),
+              name: renderable.entityName,
+            },
+            toEntity: {
+              id: EntityId(renderable.value),
+              name: renderable.valueName,
+              renderableType: 'RELATION',
+              value: renderable.value,
+            },
+          },
           spaceId: context.spaceId,
         });
       }
@@ -305,4 +377,15 @@ export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
   }, [config, remove, upsert, upsertMany]);
 
   return send;
+}
+
+export function editEvent(config: OmitStrict<ListenerConfig, 'api'>) {
+  return listener({
+    ...config,
+    api: {
+      upsert: upsert,
+      remove: remove,
+      upsertMany: upsertMany,
+    },
+  });
 }

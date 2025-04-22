@@ -92,7 +92,7 @@ export async function fetchHistoricalVersionsBatch(args: FetchVersionsArgs) {
       return Either.match(decoded, {
         onLeft: error => {
           console.error(
-            `Could not decode version with id ${networkVersion.id} and entityId ${networkVersion.entityId}. ${String(
+            `FetchVersionsBatch: Could not decode version with id ${networkVersion.id} and entityId ${networkVersion.entityId}. ${String(
               error
             )}`
           );

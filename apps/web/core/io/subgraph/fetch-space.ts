@@ -1,7 +1,6 @@
 import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 
@@ -25,7 +24,6 @@ type NetworkResult = {
 };
 
 export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | null> {
-  const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
@@ -33,8 +31,8 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     query: getFetchSpaceQuery(options.id),
   });
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* () {
+    const resultOrError = yield* Effect.either(graphqlFetchEffect);
 
     if (Either.isLeft(resultOrError)) {
       const error = resultOrError.left;
@@ -47,13 +45,11 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchSpace. queryId: ${queryId} spaceId: ${
-              options.id
-            } endpoint: ${endpoint}
+            `Encountered runtime graphql error in fetchSpace. spaceId: ${options.id} endpoint: ${endpoint}
 
             queryString: ${getFetchSpaceQuery(options.id)}
             `,
-            error.message
+            String(error)
           );
 
           return {
@@ -62,7 +58,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch space, queryId: ${queryId} spaceId: ${options.id} endpoint: ${endpoint}`
+            `${error._tag}: Unable to fetch space, spaceId: ${options.id} endpoint: ${endpoint}. ${String(error)}`
           );
 
           return {
@@ -75,6 +71,10 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+
+  if (!result) {
+    return null;
+  }
 
   if (!result.space) {
     return null;

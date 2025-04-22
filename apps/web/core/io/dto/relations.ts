@@ -20,7 +20,7 @@ export function RelationDtoLive(relation: SubstreamRelationLive) {
   return {
     space: relation.spaceId,
     id: relation.entityId,
-    index: relation.index,
+    index: getIndexFromRelationEntity(relation),
     typeOf: {
       id: relation.typeOf.currentVersion.version.entityId,
       name: relation.typeOf.currentVersion.version.name,
@@ -38,7 +38,8 @@ export function RelationDtoLive(relation: SubstreamRelationLive) {
       // render it depending on their use case.
       renderableType,
       // Right now we only support images and entity ids as the value of the To entity.
-      value: renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : relation.toEntity.currentVersion.version.entityId,
+      value:
+        renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toEntity.currentVersion.version.entityId,
     },
   };
 }
@@ -58,7 +59,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
   return {
     space: relation.spaceId,
     id: relation.entityId,
-    index: relation.index,
+    index: getIndexFromRelationEntity(relation),
     typeOf: {
       id: relation.typeOfVersion.entityId,
       name: relation.typeOfVersion.name,
@@ -76,7 +77,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
       // render it depending on their use case.
       renderableType,
       // Right now we only support images and entity ids as the value of the To entity.
-      value: renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : relation.toVersion.entityId,
+      value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toVersion.entityId,
     },
   };
 }
@@ -97,4 +98,18 @@ function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
   }
 
   return 'RELATION';
+}
+
+function getIndexFromRelationEntity(relation: SubstreamRelationLive | SubstreamRelationHistorical): string {
+  // @TODO: We don't have a good way to get the version that a given relation belongs to. This might be fixed
+  // when we migrate to the newer relation data model and new versioning model
+  const maybeIndexTriple = relation.entity.currentVersion?.version.triples.nodes.find(
+    t => t.attributeVersion.entityId === EntityId(SystemIds.RELATION_INDEX) && t.valueType === 'TEXT'
+  );
+
+  if (!maybeIndexTriple) {
+    return relation.index;
+  }
+
+  return TripleDto(maybeIndexTriple).value.value;
 }

@@ -111,7 +111,6 @@ function makeNewBlockRelation({
 }
 
 interface UpsertBlocksRelationsArgs {
-  entityId: string;
   nextBlocks: { id: string; type: Content['type'] }[];
   addedBlocks: { id: string; value: string }[];
   movedBlocks: { id: string; value: string }[];
@@ -124,7 +123,6 @@ interface UpsertBlocksRelationsArgs {
 // Helper function to create or update the block IDs on an entity
 // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
 const makeBlocksRelations = async ({
-  entityId,
   nextBlocks,
   blockRelations,
   spaceId,
@@ -166,8 +164,7 @@ const makeBlocksRelations = async ({
   for (const relation of relationIdsForRemovedBlocks) {
     // @TODO(performance) removeMany
     DB.removeRelation({
-      relationId: relation.relationId,
-      fromEntityId: EntityId(entityId),
+      relation: relation,
       spaceId,
     });
   }
@@ -177,8 +174,7 @@ const makeBlocksRelations = async ({
 
     if (relationForMovedBlock) {
       DB.removeRelation({
-        relationId: relationForMovedBlock?.relationId,
-        fromEntityId: EntityId(entityId),
+        relation: relationForMovedBlock,
         spaceId,
       });
     }
@@ -205,7 +201,7 @@ export const useTabId = () => {
 
   if (!validateEntityId(maybeTabId)) return null;
 
-  const tabId = EntityId(maybeTabId as string);
+  const tabId: EntityId = EntityId(maybeTabId as string);
 
   return tabId;
 };
@@ -427,7 +423,6 @@ export function useEditorStore() {
       }
 
       makeBlocksRelations({
-        entityId: activeEntityId,
         nextBlocks: newBlocks,
         addedBlocks: addedBlocks.map(block => {
           const imageHash = getImageHash(block.attrs?.src ?? '');

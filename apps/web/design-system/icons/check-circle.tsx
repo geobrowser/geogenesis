@@ -10,9 +10,11 @@ export function CheckCircle({ color }: Props) {
   const themeColor = color ? colors.light[color] : 'currentColor';
 
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="7" cy="7" r="6.25" stroke={themeColor} strokeWidth="1.5" />
-      <path d="M4 7L6 9L10 5" stroke={themeColor} strokeWidth="1.5" strokeLinecap="round" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0.5" y="0.5" width="15" height="15" rx="7.5" stroke={themeColor} />
+      <rect x="0.5" y="0.5" width="15" height="15" rx="7.5" stroke={themeColor} />
+      <path d="M3.5 8L6.5 11L12.5 5" stroke={themeColor} />
+      <path d="M3.5 8L6.5 11L12.5 5" stroke={themeColor} />
     </svg>
   );
 }

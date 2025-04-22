@@ -1,3 +1,5 @@
+import { TripleValueOptions } from '@graphprotocol/grc-20';
+
 import { EntityId } from '~/core/io/schema';
 
 import { BaseRelationRenderableProperty, ImageRelationRenderableProperty, NativeRenderableProperty } from '../../types';
@@ -33,6 +35,7 @@ export type TripleChangeValue = {
   // mostly to make discriminated unions easier to handle at consumers by matching
   // the same shape as RelationValueChange
   valueName: null;
+  options?: TripleValueOptions;
 } & ChangeType;
 
 type Attribute = {

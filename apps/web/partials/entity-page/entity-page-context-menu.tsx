@@ -42,7 +42,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
 
   const onDelete = () => {
     triples.forEach(t => remove(t, t.space));
-    relations.forEach(r => removeRelation({ fromEntityId: r.fromEntity.id, relationId: r.id, spaceId }));
+    relations.forEach(r => removeRelation({ relation: r, spaceId }));
     setIsMenuOpen(false);
   };
 

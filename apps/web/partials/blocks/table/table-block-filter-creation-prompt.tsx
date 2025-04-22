@@ -226,7 +226,7 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
   };
 
   return (
-    <div className="flex items-center gap-1 px-2 pt-2">
+    <div className="z-1000 flex items-center gap-1 px-2 pt-2">
       <p>Entities</p>
       <button onClick={onToggleQueryMode}>
         <Toggle checked={queryMode === 'RELATIONS'} />
@@ -354,6 +354,8 @@ function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
   const onSelectSpaceValue = (space: { id: string; name: string | null }) =>
     dispatch({ type: 'selectSpaceValue', payload: { id: space.id, name: space.name } });
 
+  const selectedOption = options.find(o => o.columnId === state.selectedColumn);
+
   return (
     <div className="flex items-center justify-center gap-3 px-2">
       <>
@@ -371,9 +373,11 @@ function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
               selectedValue={getFilterValueName(state.value) ?? ''}
               onSelect={onSelectSpaceValue}
             />
-          ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'RELATION' ? (
+          ) : selectedOption?.valueType === 'RELATION' ? (
             <TableBlockEntityFilterInput
-              // filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
+              filterByTypes={
+                selectedOption.relationValueTypes ? selectedOption.relationValueTypes.map(r => r.typeId) : undefined
+              }
               selectedValue={getFilterValueName(state.value) ?? ''}
               onSelect={onSelectEntityValue}
             />
@@ -403,6 +407,7 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
   const onSetRelationType = (entity: { id: string; name: string | null }) => {
     setRelationType({
       columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+      columnName: 'From',
       value: entity.id,
       valueName: entity.name,
       valueType: 'RELATION',
@@ -415,6 +420,7 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
         ...withoutRelationType,
         {
           columnId: SystemIds.RELATION_TYPE_ATTRIBUTE,
+          columnName: null,
           value: entity.id,
           valueName: entity.name,
           valueType: 'RELATION',

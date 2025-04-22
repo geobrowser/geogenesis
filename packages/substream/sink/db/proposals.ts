@@ -77,11 +77,9 @@ export class Proposals {
     return await db
       .update(
         'proposals',
-        { status: 'accepted' },
+        { status: 'accepted', executed_at: block.blockNumber, executed_at_block: block.timestamp },
         {
           id: deriveProposalId({ onchainProposalId, pluginAddress: getChecksumAddress(pluginAddress) }),
-          executed_at_block: block.blockNumber,
-          executed_at: block.timestamp,
         }
       )
       .run(pool);

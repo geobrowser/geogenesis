@@ -16,9 +16,7 @@ interface FetchVersionsArgs {
   signal?: AbortSignal;
 }
 
-const PAGE_SIZE = 5;
-
-const query = (entityId: string, page = 0) => {
+const query = (entityId: string) => {
   return `query {
     versions(filter: { entityId: {equalTo: ${JSON.stringify(entityId)}}} orderBy: CREATED_AT_DESC) {
       nodes {

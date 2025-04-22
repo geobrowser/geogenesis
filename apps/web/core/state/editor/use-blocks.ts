@@ -4,7 +4,7 @@ import { useRelations } from '~/core/database/relations';
 import { EntityId, TypeId } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
 
-export type RelationWithBlock = {
+export type RelationWithBlock = Relation & {
   relationId: EntityId;
   typeOfId: TypeId;
   index: string;
@@ -35,6 +35,7 @@ export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation
 
 function relationToRelationWithBlock(r: Relation): RelationWithBlock {
   return {
+    ...r,
     typeOfId: TypeId(r.typeOf.id),
     index: r.index,
     block: {

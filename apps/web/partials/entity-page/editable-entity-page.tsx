@@ -40,7 +40,9 @@ import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
+import { DateFormatDropdown } from './date-format-dropdown';
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
+import { NumberOptionsDropdown } from './number-options-dropdown';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
@@ -67,7 +69,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     },
   });
 
-  const { properties } = useProperties(Object.keys(renderablesGroupedByAttributeId));
+  const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
   return (
     <>
@@ -120,6 +122,47 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                 <div className="absolute right-0 top-6 flex items-center gap-1">
                   {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
                   <>
+                    {renderableType === 'TIME' && (
+                      <DateFormatDropdown
+                        value={firstRenderable.options?.format}
+                        onSelect={(format: string) => {
+                          send({
+                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                            payload: {
+                              renderable: firstRenderable,
+                              value: {
+                                value: firstRenderable.value,
+                                type: 'TIME',
+                                options: {
+                                  format,
+                                },
+                              },
+                            },
+                          });
+                        }}
+                      />
+                    )}
+                    {renderableType === 'NUMBER' && (
+                      <NumberOptionsDropdown
+                        value={firstRenderable.value}
+                        format={firstRenderable.options?.format}
+                        onSelect={(format: string) => {
+                          send({
+                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                            payload: {
+                              renderable: firstRenderable,
+                              value: {
+                                value: firstRenderable.value,
+                                type: 'NUMBER',
+                                options: {
+                                  format,
+                                },
+                              },
+                            },
+                          });
+                        }}
+                      />
+                    )}
                     <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
 
                     {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
@@ -199,7 +242,7 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
 
 type RelationsGroupProps = {
   relations: RelationRenderableProperty[];
-  properties: Map<string, PropertySchema>;
+  properties?: Record<string, PropertySchema>;
 };
 
 function RelationsGroup({ relations, properties }: RelationsGroupProps) {
@@ -217,8 +260,8 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const typeOfId = relations[0].attributeId;
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
-  const property = properties.get(typeOfId);
-  const filterByType = property?.relationValueTypeId;
+  const property = properties?.[typeOfId];
+  const relationValueTypes = property?.relationValueTypes;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -294,8 +337,9 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
           return (
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
+                key={JSON.stringify(relationValueTypes)}
                 spaceId={spaceId}
-                allowedTypes={filterByType ? [filterByType] : undefined}
+                relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
                 onCreateEntity={result => {
                   if (property?.relationValueTypeId) {
                     send({
@@ -385,8 +429,7 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                 send({
                   type: 'DELETE_RELATION',
                   payload: {
-                    relationId: r.relationId,
-                    fromEntityId: id,
+                    renderable: r,
                   },
                 });
               }}
@@ -401,8 +444,9 @@ function RelationsGroup({ relations, properties }: RelationsGroupProps) {
       {!hasPlaceholders && typeOfRenderableType === 'RELATION' && (
         <div className="mt-1">
           <SelectEntityAsPopover
+            key={JSON.stringify(relationValueTypes)}
             trigger={<SquareButton icon={<Create />} />}
-            allowedTypes={filterByType ? [filterByType] : undefined}
+            relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
               if (property?.relationValueTypeId) {
                 send({
@@ -513,14 +557,14 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                 placeholder="Add value..."
                 aria-label="text-field"
                 value={renderable.value}
-                onChange={e => {
+                onChange={value => {
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                     payload: {
                       renderable,
                       value: {
                         type: 'TEXT',
-                        value: e.target.value,
+                        value: value,
                       },
                     },
                   });
@@ -532,6 +576,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
             return (
               <NumberField
                 value={renderable.value}
+                format={renderable.options?.format}
                 onChange={value =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
@@ -540,6 +585,9 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                       value: {
                         type: 'NUMBER',
                         value: value,
+                        options: {
+                          format: renderable.options?.format,
+                        },
                       },
                     },
                   })
@@ -571,13 +619,16 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
           case 'TIME': {
             return (
               <DateField
-                onBlur={time =>
+                onBlur={({ value, format }) =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                     payload: {
                       value: {
-                        value: time,
+                        value,
                         type: 'TIME',
+                        options: {
+                          format,
+                        },
                       },
                       renderable,
                     },

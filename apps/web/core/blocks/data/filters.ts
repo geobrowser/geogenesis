@@ -2,19 +2,24 @@ import { Schema } from '@effect/schema';
 import { SystemIds } from '@graphprotocol/grc-20';
 import { Either } from 'effect';
 
-import { mergeEntityAsync } from '~/core/database/entities';
 import { EntityId } from '~/core/io/schema';
 import { fetchSpace } from '~/core/io/subgraph';
+import { queryClient } from '~/core/query-client';
+import { E } from '~/core/sync/orm';
+import { store } from '~/core/sync/use-sync-engine';
 import { OmitStrict, ValueTypeId } from '~/core/types';
+import type { RelationValueType } from '~/core/types';
 import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
 
 import { Source } from './source';
 
 export type Filter = {
   columnId: string;
+  columnName: string | null;
   valueType: FilterableValueType;
   value: string;
   valueName: string | null;
+  relationValueTypes?: RelationValueType[];
 };
 
 /**
@@ -155,6 +160,7 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
 
           return {
             columnId: SystemIds.SPACE_FILTER,
+            columnName: 'Space',
             valueType: 'RELATION',
             value: spaceId,
             valueName: spaceName,
@@ -191,11 +197,12 @@ async function getSpaceName(spaceId: string) {
 }
 
 async function getResolvedEntity(entityId: string): Promise<Filter> {
-  const entity = await mergeEntityAsync(EntityId(entityId));
+  const entity = await E.findOne({ store, cache: queryClient, id: entityId });
 
   if (!entity) {
     return {
       columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+      columnName: 'From',
       valueType: 'RELATION',
       value: entityId,
       valueName: null,
@@ -204,6 +211,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 
   return {
     columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+    columnName: 'From',
     valueType: 'RELATION',
     value: entityId,
     valueName: entity.name,
@@ -211,23 +219,27 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 }
 
 async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
-  const maybeAttributeEntity = await mergeEntityAsync(EntityId(filter.attribute));
-  const valueType = maybeAttributeEntity.relationsOut.find(r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE))
-    ?.toEntity.id;
+  const maybeAttributeEntity = await E.findOne({ store, cache: queryClient, id: filter.attribute });
+  const valueType = maybeAttributeEntity?.relationsOut.find(
+    r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE)
+  )?.toEntity.id;
 
   if (valueType === EntityId(SystemIds.RELATION)) {
-    const valueEntity = await mergeEntityAsync(EntityId(filter.is));
+    const valueEntity = await E.findOne({ store, cache: queryClient, id: filter.is });
 
     return {
       columnId: filter.attribute,
+      columnName: maybeAttributeEntity?.name ?? null,
       value: filter.is,
       valueName: valueEntity?.name ?? null,
       valueType: 'RELATION',
     };
   }
 
+  // @TODO: Can get property name here
   return {
     columnId: filter.attribute,
+    columnName: maybeAttributeEntity?.name ?? null,
     value: filter.is,
     valueName: null,
     valueType: VALUE_TYPES[(valueType ?? SystemIds.TEXT) as ValueTypeId] ?? SystemIds.TEXT,

@@ -164,10 +164,12 @@ export interface PropertySchema {
   relationValueTypeId?: EntityId;
   relationValueTypeName?: string | null;
   homeSpace?: string;
+  relationValueTypes?: RelationValueType[];
 }
 
 export type Relation = {
   hasBeenPublished?: boolean;
+  isDeleted?: boolean;
   space: string;
   id: EntityId;
   index: string;
@@ -206,10 +208,16 @@ export type Cell = {
   space?: string;
   verified?: boolean;
   renderedPropertyId?: string;
+  collectionId?: string;
+  relationId?: string;
 };
 
 export type Row = {
   entityId: string;
+  // There's a UX where users can press a + button to create a new row. This
+  // new row doesn't have any data and isn't associated with an entity until
+  // the association is made by adding real data or selecting an existing entity.
+  placeholder?: boolean;
   // attributeId -> Cell
   columns: Record<string, Cell>;
 };
@@ -228,7 +236,7 @@ export type AppEnv = 'development' | 'testnet' | 'production';
 export type RelationValueType = {
   typeId: string;
   typeName: string | null;
-  spaceIdOfAttribute: string;
+  spaceIdOfAttribute?: string;
 };
 
 export type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
