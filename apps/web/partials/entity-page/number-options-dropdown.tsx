@@ -174,26 +174,8 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     onQueryChange(newValue);
   };
 
-  const cryptoCurrencies = React.useMemo(
-    () => [
-      {
-        name: 'Bitcoin',
-        symbol: 'BTC',
-        id: 'EWCAJP9TQoZ3EhcwyRg7mk',
-      },
-      {
-        name: 'Ethereum',
-        symbol: 'ETH',
-        id: 'EWCAJP9TQoZ3EhcwyRg7mk',
-      },
-      {
-        name: 'Tether',
-        symbol: 'USDT',
-        id: 'EWCAJP9TQoZ3EhcwyRg7mk',
-      },
-    ],
-    []
-  );
+  // @TODO: Fill in, once we have entities for crypto currencies with Cryptocurrency type
+  const cryptoCurrencies = React.useMemo(() => [], []);
 
   const fiatCurrencies = React.useMemo(
     () => [
@@ -378,12 +360,13 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
               hasSubmenu
               options={formatOptions}
             />
-            <SubmenuOption
+            {/* @TODO: Uncomment, once we have entities for crypto currencies with Cryptocurrency type */}
+            {/* <SubmenuOption
               label="Cryptocurrency"
               onClick={e => handleNavigate(e, 'currency-crypto')}
               hasSubmenu
               options={formatOptions}
-            />
+            /> */}
             <SubmenuOption label="Unspecified" onClick={removeUnitId} options={formatOptions} isSelected={!unitId} />
           </>
         );
