@@ -8,7 +8,7 @@ import { createSink, createStream } from '@substreams/sink';
 import { Data, Duration, Effect, Either, Logger, Redacted, Stream } from 'effect';
 
 import { Db } from '../db/db';
-import { users } from '../db/schema';
+import { events } from '../db/schema';
 import { MANIFEST } from '~/sink/constants/constants';
 import { Environment } from '~/sink/environment';
 import { LoggerLive, getConfiguredLogLevel, withRequestId } from '~/sink/logs';
@@ -123,10 +123,27 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     yield* Effect.logInfo(message.clock?.number.toString());
     const db = yield* Db;
 
+    const mapOutput = message.output?.mapOutput;
+
+    if (!mapOutput || mapOutput?.value?.byteLength === 0) {
+      return false;
+    }
+
+    const unpackedOutput = mapOutput.unpack(registry);
+    const jsonOutput = unpackedOutput?.toJson({ typeRegistry: registry });
+
+    if (jsonOutput === undefined) {
+      yield* Effect.logError('No output');
+      return false;
+    }
+
     yield* db.use(client =>
       client
-        .insert(users)
-        .values({ id: Number(message.clock?.number) ?? 0 })
+        .insert(events)
+        .values({
+          type: 'add_edit',
+          eventJson: jsonOutput,
+        })
         .execute()
     );
 
