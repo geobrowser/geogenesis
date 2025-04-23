@@ -136,10 +136,6 @@ const NumberFormatView = ({ formatOptions, value }: { formatOptions?: NumberForm
 );
 
 const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; onSelect: (unitId: string) => void }) => {
-  const [filteredEntities, setFilteredEntities] = React.useState<
-    { name: string | null; symbol?: string; sign?: string; id: string }[]
-  >([]);
-
   const {
     query,
     onQueryChange,
@@ -153,16 +149,16 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     where: { id: { in: searchResults.map(result => result.id) } },
   });
 
-  React.useEffect(() => {
-    setFilteredEntities(
+  const filteredEntities = React.useMemo(
+    () =>
       entities.map(entity => ({
         name: entity.name,
         symbol: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value,
         sign: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
         id: entity.id,
-      }))
-    );
-  }, [searchResults, entities]);
+      })),
+    [entities]
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.currentTarget.value;
@@ -200,7 +196,10 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
 
   const currencies = query.length > 0 ? filteredEntities : defaultCurrencies;
 
-  const isEmpty = currencies.length === 0;
+  const isSearchComplete = !isSearchLoading && query.length > 0;
+  const hasResults = searchResults.length > 0;
+  const isLoading = isSearchLoading || isEntitiesLoading;
+  const shouldShowNoResults = isSearchComplete && !hasResults && !isLoading;
 
   return (
     <>
@@ -208,12 +207,12 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
         <Input value={query} onChange={handleInputChange} withSearchIcon />
       </div>
       <div className="mx-1 rounded-[6px] bg-grey-01 px-3 py-1 text-footnoteMedium">{title}</div>
-      <div className="p-1">
-        {isSearchLoading || isEntitiesLoading ? (
+      <div className="min-h-[44px] p-1">
+        {isLoading ? (
           <div className="flex h-full items-center justify-center py-2">
             <Spinner />
           </div>
-        ) : isEmpty ? (
+        ) : shouldShowNoResults ? (
           <div className="w-full bg-white px-3 py-2">
             <div className="truncate text-resultTitle text-text">No results.</div>
           </div>
