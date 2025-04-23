@@ -20,6 +20,7 @@ import { Spacer } from '~/design-system/spacer';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { getName } from '~/partials/blocks/table/utils';
 
 import { TableBlockPropertyField } from './table-block-property-field';
 
@@ -53,31 +54,9 @@ export function TableBlockListItem({
   const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_ATTRIBUTE];
 
   const { cellId, verified } = nameCell;
-  let { description, image, name } = nameCell;
+  let { description, image } = nameCell;
 
-  const maybeNameInSpaceRenderable = nameCell.renderables.find(
-    r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
-  );
-
-  let maybeNameInSpace = maybeNameInSpaceRenderable?.value;
-
-  if (maybeNameInSpaceRenderable?.type === 'RELATION') {
-    maybeNameInSpace = maybeNameInSpaceRenderable?.valueName ?? maybeNameInSpace;
-  }
-
-  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE);
-
-  let maybeOtherName = maybeNameRenderable?.value;
-
-  if (maybeNameRenderable?.type === 'RELATION') {
-    maybeOtherName = maybeNameRenderable?.valueName ?? maybeNameInSpace;
-  }
-
-  const maybeName = maybeNameInSpace ?? maybeOtherName;
-
-  if (maybeName) {
-    name = maybeOtherName ?? null;
-  }
+  const name = getName(nameCell, currentSpaceId);
 
   const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
     r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE && r.spaceId === currentSpaceId
