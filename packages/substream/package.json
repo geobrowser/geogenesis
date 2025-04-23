@@ -6,7 +6,7 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "src"
+    "core"
   ],
   "license": "MIT OR Apache-2.0",
   "scripts": {
@@ -15,6 +15,7 @@
     "nuke-public": "tsx ./sink/utils/executeSql.ts ./sink/sql/nukePublic.sql",
     "zapatos": "pnpm dotenv -e .env -- npx zapatos",
     "start": "pnpm dotenv -e .env -- node dist/index.js",
+    "start:new": "pnpm dotenv -e .env -- npx tsx core/bin.ts",
     "initialize": "./sink/sql/init-all.sh && pnpm zapatos",
     "test": "vitest"
   },
@@ -24,18 +25,20 @@
     "@bufbuild/protoc-gen-es": "^1.9.0",
     "@connectrpc/connect": "^1.3.0",
     "@connectrpc/connect-node": "^1.3.0",
-    "@effect/schema": "^0.63.0",
+    "@effect/cli": "^0.59.12",
+    "@effect/platform-node": "^0.77.0",
+    "@effect/schema": "^0.75.5",
     "@graphprotocol/grc-20": "^0.9.4",
     "@sentry/node": "^7.112.2",
     "@std/csv": "npm:@jsr/std__csv@^1.0.5",
-    "@substreams/core": "^0.16.0",
-    "@substreams/manifest": "^0.15.0",
+    "@substreams/core": "^0.17.0",
+    "@substreams/manifest": "^0.16.0",
     "@substreams/node": "^0.6.2",
-    "@substreams/sink": "^0.14.0",
+    "@substreams/sink": "^0.14.1",
     "@types/md5": "^2.3.5",
     "commander": "latest",
     "dotenv": "latest",
-    "effect": "^2.4.19",
+    "effect": "^3.14.12",
     "fast-check": "3.13.2",
     "fflate": "^0.8.2",
     "md5": "^2.3.0",

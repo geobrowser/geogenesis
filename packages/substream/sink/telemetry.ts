@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/node';
-import { Context, Effect, Secret } from 'effect';
+import { Context, Effect, Redacted } from 'effect';
 
 import { Environment, EnvironmentLive } from './environment';
 
@@ -10,7 +10,7 @@ interface ITelemetry {
 
 export class Telemetry extends Context.Tag('Telemetry')<Telemetry, ITelemetry>() {}
 
-const make = Effect.gen(function* (_) {
+export const make = Effect.gen(function* (_) {
   const environment = yield* _(Environment);
 
   if (!environment.telemetryUrl) {
@@ -18,7 +18,7 @@ const make = Effect.gen(function* (_) {
   } else {
     console.log('Initializing telemetry using provided telemetry url.');
     Sentry.init({
-      dsn: Secret.value(environment.telemetryUrl),
+      dsn: Redacted.value(environment.telemetryUrl),
 
       // We recommend adjusting this value in production, or using tracesSampler
       // for finer control
