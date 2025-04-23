@@ -608,9 +608,9 @@ const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
   const [currencySignBefore, currencySignAfter] = React.useMemo(
     () => [
       before?.options?.unit &&
-        beforeUnitEntity?.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value,
+        beforeUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
       after?.options?.unit &&
-        afterUnitEntity?.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value,
+        afterUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
     ],
     [before, beforeUnitEntity, after, afterUnitEntity]
   );

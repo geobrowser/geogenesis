@@ -1,3 +1,4 @@
+import { SystemIds } from '@graphprotocol/grc-20';
 import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
@@ -46,7 +47,7 @@ export function NumberField({
   const { entity } = useQueryEntity({ id: unitId });
 
   const currencySign = React.useMemo(
-    () => unitId && entity?.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value,
+    () => unitId && entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
     [unitId, entity]
   );
 

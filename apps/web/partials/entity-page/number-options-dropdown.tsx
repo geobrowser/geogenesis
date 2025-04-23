@@ -1,5 +1,6 @@
 'use client';
 
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 
@@ -145,7 +146,7 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     isLoading: isSearchLoading,
     results: searchResults,
   } = useSearch({
-    filterByTypes: ['K6kJ6TTwwCcc3Dfdtbradv'], // Attribute Id for type currency
+    filterByTypes: [SystemIds.CURRENCY_ATTRIBUTE],
   });
 
   const { entities, isLoading: isEntitiesLoading } = useQueryEntities({
@@ -156,8 +157,8 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     setFilteredEntities(
       entities.map(entity => ({
         name: entity.name,
-        symbol: entity.triples.find(t => t.attributeId === 'NMCZXJNatQS59U31sZKmMn')?.value?.value, // Attribute Id for symbol
-        sign: entity.triples.find(t => t.attributeId === 'Tt2mYqE1kJTRLt2iLQjATb')?.value?.value, // Attribute Id for sign
+        symbol: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value,
+        sign: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
         id: entity.id,
       }))
     );
@@ -262,7 +263,7 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
 
   React.useEffect(() => {
     setSelectedCurrencySymbol(
-      (unitId && entity?.triples.find(t => t.attributeId === 'NMCZXJNatQS59U31sZKmMn')?.value?.value) || null
+      (unitId && entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value) || null
     );
   }, [unitId, entity]);
 
