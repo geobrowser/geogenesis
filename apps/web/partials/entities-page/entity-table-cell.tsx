@@ -53,7 +53,7 @@ export const EntityTableCell = ({
     return (
       <Fragment key={entityId}>
         {source.type !== 'COLLECTION' ? (
-          <Link href={href} className="truncate text-tableCell text-ctaHover hover:underline">
+          <Link href={href} className="text-tableCell text-ctaHover hover:underline">
             {name || entityId}
           </Link>
         ) : (
@@ -70,7 +70,7 @@ export const EntityTableCell = ({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <Link href={href} className="truncate text-tableCell text-ctaHover hover:underline">
+            <Link href={href} className="text-tableCell text-ctaHover hover:underline">
               {name || entityId}
             </Link>
           </CollectionMetadata>
