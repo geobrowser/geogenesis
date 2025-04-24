@@ -173,17 +173,17 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
       {
         name: 'United States Dollar',
         symbol: 'USD',
-        id: '2eGL8drmSYAqLoetcx3yR1',
+        id: SystemIds.CURRENCY_USD_ATTRIBUTE,
       },
       {
         name: 'Pound Sterling',
         symbol: 'GBP',
-        id: 'KSeVvJLfx8LZb36CfYMti5',
+        id: SystemIds.CURRENCY_GBP_ATTRIBUTE,
       },
       {
         name: 'Euro',
         symbol: 'EUR',
-        id: 'EWCAJP9TQoZ3EhcwyRg7mk',
+        id: SystemIds.CURRENCY_EUR_ATTRIBUTE,
       },
     ],
     []
