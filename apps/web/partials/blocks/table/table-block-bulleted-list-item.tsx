@@ -152,10 +152,7 @@ export function TableBlockBulletedListItem({
   }
 
   return (
-    <Link
-      href={href}
-      className="group relative flex w-full gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider"
-    >
+    <Link href={href} className="group relative flex w-full gap-2 rounded-md px-1 py-0.5">
       <div className="mt-1 flex-shrink-0 text-xl leading-none text-text">•</div>
       <div className="flex items-center gap-2">
         {verified && (
@@ -163,7 +160,7 @@ export function TableBlockBulletedListItem({
             <CheckCircle />
           </div>
         )}
-        <div className="text-body text-text">{name}</div>
+        <div className="text-body transition duration-100 hover:underline">{name}</div>
       </div>
     </Link>
   );
