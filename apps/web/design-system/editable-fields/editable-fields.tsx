@@ -90,19 +90,22 @@ type InlinePageStringFieldProps = {
   value?: string;
 };
 
-const inlineInputStyles = cva('*:m-0 *:!-mr-0.5 *:bg-transparent *:p-0 *:outline-none *:placeholder:text-grey-03', {
-  variants: {
-    variant: {
-      mainPage: '*:text-mainPage',
-      body: '*:text-body',
-      tableCell: '*:text-tableCell',
-      smallTitle: '*:text-smallTitle',
+const inlineInputStyles = cva(
+  'max-w-full *:m-0 *:!-mr-0.5 *:max-w-full *:bg-transparent *:p-0 *:outline-none *:placeholder:text-grey-03',
+  {
+    variants: {
+      variant: {
+        mainPage: '*:text-mainPage',
+        body: '*:text-body',
+        tableCell: '*:text-tableCell',
+        smallTitle: '*:text-smallTitle',
+      },
     },
-  },
-  defaultVariants: {
-    variant: 'body',
-  },
-});
+    defaultVariants: {
+      variant: 'body',
+    },
+  }
+);
 
 export const InlinePageStringField = (props: InlinePageStringFieldProps) => {
   const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
