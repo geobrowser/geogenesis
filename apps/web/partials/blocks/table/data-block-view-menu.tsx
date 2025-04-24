@@ -9,8 +9,8 @@ import { useCallback } from 'react';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { DataBlockView, useView } from '~/core/blocks/data/use-view';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { BulletedListView } from '~/design-system/icons/bulleted-list-view';
 
+import { BulletedListView } from '~/design-system/icons/bulleted-list-view';
 import { Check } from '~/design-system/icons/check';
 import { Close } from '~/design-system/icons/close';
 import { GalleryView } from '~/design-system/icons/gallery-view';
@@ -75,7 +75,7 @@ const DATA_BLOCK_VIEWS: Array<DataBlockViewDetails> = [
   { name: 'Table', id: SystemIds.TABLE_VIEW, value: 'TABLE' },
   { name: 'Gallery', id: SystemIds.GALLERY_VIEW, value: 'GALLERY' },
   { name: 'List', id: SystemIds.LIST_VIEW, value: 'LIST' },
-  { name: 'Bulleted List', id: SystemIds.BULLETED_LIST_VIEW, value: 'BULLETED_LIST' },
+  { name: 'Bullet List', id: SystemIds.BULLETED_LIST_VIEW, value: 'BULLETED_LIST' },
 ];
 
 type ToggleViewProps = {

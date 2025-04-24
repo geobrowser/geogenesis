@@ -2,13 +2,12 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
-import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
-import { CheckCircle } from '~/design-system/icons/check-circle';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { CheckCircle } from '~/design-system/icons/check-circle';
 import { SelectEntity } from '~/design-system/select-entity';
 
 import { onChangeEntryFn } from './change-entry';
@@ -65,8 +64,8 @@ export function TableBlockBulletedListItem({
 
   if (isEditing && source.type !== 'RELATIONS') {
     return (
-      <div className="group flex w-full items-center gap-2 py-0.5 px-1">
-        <div className="flex-shrink-0 text-xl leading-none text-text">•</div>
+      <div className="group flex w-full gap-2 px-1 py-0.5">
+        <div className="mt-1 flex-shrink-0 text-xl leading-none text-text">•</div>
         <div className="w-full">
           {isPlaceholder && source.type === 'COLLECTION' ? (
             <SelectEntity
@@ -106,7 +105,7 @@ export function TableBlockBulletedListItem({
                 );
               }}
               spaceId={currentSpaceId}
-                          />
+            />
           ) : (
             <div className="flex items-center gap-2">
               {verified && (
@@ -155,16 +154,16 @@ export function TableBlockBulletedListItem({
   return (
     <Link
       href={href}
-      className="group flex w-full items-center gap-2 rounded-md py-0.5 px-1 transition duration-200 hover:bg-divider"
+      className="group relative flex w-full gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider"
     >
-      <div className="flex-shrink-0 text-xl leading-none text-text">•</div>
+      <div className="mt-1 flex-shrink-0 text-xl leading-none text-text">•</div>
       <div className="flex items-center gap-2">
         {verified && (
           <div>
             <CheckCircle />
           </div>
         )}
-        <div className="line-clamp-1 text-body font-medium text-text">{name}</div>
+        <div className="text-body text-text">{name}</div>
       </div>
     </Link>
   );
