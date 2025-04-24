@@ -1,5 +1,9 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import Link from 'next/link';
 
+import { Fragment } from 'react';
+
+import { Source } from '~/core/blocks/data/source';
 import { RenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -9,39 +13,69 @@ import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CellContent } from '~/design-system/table/cell-content';
 
-interface Props {
+import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+
+type Props = {
   entityId: string;
+  spaceId: string;
   columnId: string;
   renderables: RenderableProperty[];
-  space: string;
   isExpanded: boolean;
-}
+  name: string | null;
+  href: string;
+  currentSpaceId: string;
+  collectionId?: string;
+  relationId?: string;
+  verified?: boolean;
+  onLinkEntry: onLinkEntryFn;
+  source: Source;
+};
 
-export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpanded }: Props) => {
+export const EntityTableCell = ({
+  entityId,
+  spaceId,
+  columnId,
+  renderables,
+  isExpanded,
+  name,
+  href,
+  currentSpaceId,
+  collectionId,
+  relationId,
+  verified,
+  onLinkEntry,
+  source,
+}: Props) => {
   const isNameCell = columnId === SystemIds.NAME_ATTRIBUTE;
 
   if (isNameCell) {
-    const maybeValueInSpace = renderables.find(
-      r => r.type === 'TEXT' && r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === space
-    )?.value;
-
-    // You might have multiple renderables across multiple spaces. In cases where we only render one,
-    // default to the one in the current space.
-    const value =
-      maybeValueInSpace ??
-      (renderables.find(r => r.type === 'TEXT' && r.attributeId === SystemIds.NAME_ATTRIBUTE)?.value as
-        | string
-        | undefined) ??
-      // the name might exist but be empty, fall back to the entity id in this case.
-      entityId;
-
     return (
-      <CellContent
-        key={value !== '' ? value : entityId}
-        href={NavUtils.toEntity(space, entityId)}
-        isExpanded={isExpanded}
-        value={value !== '' ? value : entityId}
-      />
+      <Fragment key={entityId}>
+        {source.type !== 'COLLECTION' ? (
+          <Link href={href} className="text-tableCell text-ctaHover hover:underline">
+            {name || entityId}
+          </Link>
+        ) : (
+          <CollectionMetadata
+            view="TABLE"
+            isEditing={false}
+            name={name}
+            href={href}
+            currentSpaceId={currentSpaceId}
+            entityId={entityId}
+            spaceId={spaceId}
+            collectionId={collectionId}
+            relationId={relationId}
+            verified={verified}
+            onLinkEntry={onLinkEntry}
+          >
+            <Link href={href} className="text-tableCell text-ctaHover hover:underline">
+              {name || entityId}
+            </Link>
+          </CollectionMetadata>
+        )}
+      </Fragment>
     );
   }
 
@@ -78,7 +112,7 @@ export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpa
               variant="tableCell"
               isEditing={false}
               key={renderable.value}
-              spaceId={space}
+              spaceId={spaceId}
               value={renderable.value}
             />
           );
