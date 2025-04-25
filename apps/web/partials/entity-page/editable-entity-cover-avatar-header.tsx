@@ -174,6 +174,7 @@ const AvatarCoverInput = ({
   };
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    console.log('here');
     if (imgUrl) {
       deleteProperty();
     }
@@ -181,6 +182,7 @@ const AvatarCoverInput = ({
       const file = e.target.files[0];
       const imageSrc = await ipfs.uploadFile(file);
       onImageChange(imageSrc);
+      e.target.value = '';
     }
   };
 
