@@ -541,10 +541,10 @@ importers:
         version: 1.21.4(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
       vite:
         specifier: ^5.2.11
-        version: 5.4.14(@types/node@22.14.1)
+        version: 5.4.14(@types/node@22.15.2)
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@22.14.1)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+        version: 1.6.0(@types/node@22.15.2)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
     devDependencies:
       '@bufbuild/buf':
         specifier: ^1.31.0
@@ -585,6 +585,9 @@ importers:
       '@graphprotocol/grc-20':
         specifier: ^0.9.4
         version: 0.9.4(bufferutil@4.0.9)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
       '@sentry/node':
         specifier: ^7.112.2
         version: 7.120.3
@@ -657,7 +660,7 @@ importers:
         version: 4.3.0(prettier@3.4.2)
       '@types/node':
         specifier: latest
-        version: 22.14.1
+        version: 22.15.2
       '@types/pg':
         specifier: ^8.10.9
         version: 8.11.11
@@ -699,10 +702,10 @@ importers:
         version: 5.7.3
       vite:
         specifier: ^5.2.10
-        version: 5.4.14(@types/node@22.14.1)
+        version: 5.4.14(@types/node@22.15.2)
       vitest:
         specifier: ^1.5.2
-        version: 1.6.0(@types/node@22.14.1)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+        version: 1.6.0(@types/node@22.15.2)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
 
 packages:
 
@@ -2279,6 +2282,10 @@ packages:
     resolution: {integrity: sha512-B8XBPsn4vT/KJAGqDzbwztd+6Yte3P4V7iafm24bxgDe/mlRuK6xmWPuCNrKt2vDafZ8MfJLlchDG/vYafQEjQ==}
     engines: {node: ^14.21.3 || >=16}
 
+  '@noble/hashes@1.8.0':
+    resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
+    engines: {node: ^14.21.3 || >=16}
+
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
     engines: {node: '>= 8'}
@@ -3653,8 +3660,8 @@ packages:
   '@types/node@20.17.16':
     resolution: {integrity: sha512-vOTpLduLkZXePLxHiHsBLp98mHGnl8RptV4YAO3HfKO5UHjDvySGbxKtpYfy8Sx5+WKcgc45qNreJJRVM3L6mw==}
 
-  '@types/node@22.14.1':
-    resolution: {integrity: sha512-u0HuPQwe/dHrItgHHpmw3N2fYCR6x4ivMNbPHRkBVP4CvN+kiRrKHWk3i8tXiO/joPwXLMYvF9TTF0eqgHIuOw==}
+  '@types/node@22.15.2':
+    resolution: {integrity: sha512-uKXqKN9beGoMdBfcaTY1ecwz6ctxuJAcUlwE55938g0ZJ8lRxwAZqRz2AJ4pzpt5dHdTPMB863UZ0ESiFUcP7A==}
 
   '@types/pg@8.11.11':
     resolution: {integrity: sha512-kGT1qKM8wJQ5qlawUrEkXgvMSXoV213KfMGXcwfDwUIfUHXqXYXOfS1nE1LINRJVVVx5wCm70XnFlMHaIcQAfw==}
@@ -10698,6 +10705,8 @@ snapshots:
 
   '@noble/hashes@1.7.1': {}
 
+  '@noble/hashes@1.8.0': {}
+
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
       '@nodelib/fs.stat': 2.0.5
@@ -12180,13 +12189,13 @@ snapshots:
     dependencies:
       undici-types: 6.19.8
 
-  '@types/node@22.14.1':
+  '@types/node@22.15.2':
     dependencies:
       undici-types: 6.21.0
 
   '@types/pg@8.11.11':
     dependencies:
-      '@types/node': 20.17.16
+      '@types/node': 22.15.2
       pg-protocol: 1.7.0
       pg-types: 4.0.2
 
@@ -12256,7 +12265,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 22.14.1
+      '@types/node': 20.17.16
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -17991,13 +18000,13 @@ snapshots:
       - utf-8-validate
       - zod
 
-  vite-node@1.6.0(@types/node@22.14.1):
+  vite-node@1.6.0(@types/node@22.15.2):
     dependencies:
       cac: 6.7.14
       debug: 4.4.0
       pathe: 1.1.2
       picocolors: 1.1.1
-      vite: 5.4.14(@types/node@22.14.1)
+      vite: 5.4.14(@types/node@22.15.2)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -18040,13 +18049,13 @@ snapshots:
       '@types/node': 17.0.45
       fsevents: 2.3.3
 
-  vite@5.4.14(@types/node@22.14.1):
+  vite@5.4.14(@types/node@22.15.2):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.5.1
       rollup: 4.32.1
     optionalDependencies:
-      '@types/node': 22.14.1
+      '@types/node': 22.15.2
       fsevents: 2.3.3
 
   vite@6.2.5(@types/node@17.0.45)(jiti@1.21.7)(tsx@4.19.2)(yaml@2.7.0):
@@ -18061,7 +18070,7 @@ snapshots:
       tsx: 4.19.2
       yaml: 2.7.0
 
-  vitest@1.6.0(@types/node@22.14.1)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
+  vitest@1.6.0(@types/node@22.15.2)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
     dependencies:
       '@vitest/expect': 1.6.0
       '@vitest/runner': 1.6.0
@@ -18080,11 +18089,11 @@ snapshots:
       strip-literal: 2.1.1
       tinybench: 2.9.0
       tinypool: 0.8.4
-      vite: 5.4.14(@types/node@22.14.1)
-      vite-node: 1.6.0(@types/node@22.14.1)
+      vite: 5.4.14(@types/node@22.15.2)
+      vite-node: 1.6.0(@types/node@22.15.2)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 22.14.1
+      '@types/node': 22.15.2
       jsdom: 20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - less
