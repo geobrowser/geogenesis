@@ -585,6 +585,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
           case 'NUMBER':
             return (
               <NumberField
+                key={renderable.attributeId}
                 value={renderable.value}
                 format={renderable.options?.format}
                 onChange={value =>
@@ -629,6 +630,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
           case 'TIME': {
             return (
               <DateField
+                key={renderable.attributeId}
                 onBlur={({ value, format }) =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
@@ -644,7 +646,6 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                     },
                   })
                 }
-                key={renderable.attributeId}
                 isEditing={true}
                 value={renderable.value}
                 format={renderable.options?.format}

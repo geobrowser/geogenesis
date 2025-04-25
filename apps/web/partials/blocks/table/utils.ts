@@ -1,6 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { RenderableProperty, ValueTypeId } from '~/core/types';
+import { Cell, RenderableProperty, ValueTypeId } from '~/core/types';
 
 interface MakePlaceholderFromValueTypeArgs {
   valueType: ValueTypeId;
@@ -64,3 +64,32 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
       };
   }
 }
+
+export const getName = (nameCell: Cell, currentSpaceId: string) => {
+  let name = nameCell?.name;
+  const maybeNameInSpaceRenderable = nameCell.renderables.find(
+    r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
+  );
+
+  let maybeNameInSpace = maybeNameInSpaceRenderable?.value;
+
+  if (maybeNameInSpaceRenderable?.type === 'RELATION') {
+    maybeNameInSpace = maybeNameInSpaceRenderable?.valueName ?? maybeNameInSpace;
+  }
+
+  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE);
+
+  let maybeOtherName = maybeNameRenderable?.value;
+
+  if (maybeNameRenderable?.type === 'RELATION') {
+    maybeOtherName = maybeNameRenderable?.valueName ?? maybeNameInSpace;
+  }
+
+  const maybeName = maybeNameInSpace ?? maybeOtherName;
+
+  if (maybeName) {
+    name = maybeName ?? null;
+  }
+
+  return name;
+};
