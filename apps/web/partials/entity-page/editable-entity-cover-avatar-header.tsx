@@ -1,6 +1,6 @@
 'use client';
 
-import { Image } from '@graphprotocol/grc-20';
+import { Image, SystemIds } from '@graphprotocol/grc-20';
 import LegacyImage from 'next/legacy/image';
 
 import { ChangeEvent, useRef } from 'react';
@@ -21,6 +21,8 @@ import { SquareButton } from '~/design-system/button';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
+const AVATAR_PROPERTY_ID = '399xP4sGWSoepxeEnp3UdR';
+
 const EditableCoverAvatarHeader = ({
   avatarUrl,
   triples,
@@ -31,40 +33,35 @@ const EditableCoverAvatarHeader = ({
   coverUrl: string | null;
 }) => {
   const { spaceId, id } = useEntityPageStore();
-
   const entityId = id;
-
   const [isRelationPage] = useRelationship(entityId, spaceId);
-
   const editable = useUserIsEditing(spaceId);
-
   const { renderablesGroupedByAttributeId } = useRenderables(triples ?? [], spaceId, isRelationPage);
-
-  //Avatar values
-  const typeOfId = '399xP4sGWSoepxeEnp3UdR';
-  const typeOfName = 'Avatar';
 
   const coverAvatarRenderable = Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
     const firstRenderable = renderables[0];
     const renderableType = firstRenderable.type;
 
     if (
-      (renderableType === 'IMAGE' && firstRenderable.attributeId === '7YHk6qYkNDaAtNb8GwmysF') ||
-      (renderableType === 'IMAGE' && firstRenderable.attributeId === '399xP4sGWSoepxeEnp3UdR')
+      (renderableType === 'IMAGE' && firstRenderable.attributeId === SystemIds.COVER_PROPERTY) ||
+      (renderableType === 'IMAGE' && firstRenderable.attributeId === AVATAR_PROPERTY_ID)
     ) {
       return firstRenderable;
     }
   });
 
-  const coverRenderable = coverAvatarRenderable.find(r => r?.attributeId === '7YHk6qYkNDaAtNb8GwmysF');
-  const avatarRenderable = coverAvatarRenderable.find(r => r?.attributeId === '399xP4sGWSoepxeEnp3UdR');
+  const coverRenderable = coverAvatarRenderable.find(r => r?.attributeId === SystemIds.COVER_PROPERTY);
+  const avatarRenderable = coverAvatarRenderable.find(r => r?.attributeId === AVATAR_PROPERTY_ID);
 
   return (
-    <div className={`relative mb-20 min-h-[7.5rem] w-full max-w-[1192px] ${coverUrl ? 'h-[320px]' : ''}`}>
+    <div className={`${coverRenderable 
+      ? `relative ${(avatarUrl || editable) ? 'mb-20' : 'mb-8'} -mt-6 w-full max-w-[1192px] ${coverUrl ? 'h-80' : 'h-32'}` 
+      : `mx-auto ${avatarUrl || editable ? 'mb-16' : 'mb-0'} w-[880px] ${avatarUrl ? 'h-10' : ''}`}`}
+    >
       {coverRenderable && (
         <div
           key={`cover-${coverRenderable.attributeId}`}
-          className="absolute left-1/2 top-0 flex h-full w-full max-w-[1192px] -translate-x-1/2 transform items-center justify-center rounded-lg bg-cover-default bg-cover transition-all duration-200 ease-in-out hover:bg-cover-hover "
+          className="absolute left-1/2 top-0 flex h-full w-full max-w-[1192px] -translate-x-1/2 transform items-center justify-center rounded-lg bg-no-repeat bg-center transition-all duration-200 ease-in-out"
         >
           <AvatarCoverInput
             typeOfId={coverRenderable.attributeId}
@@ -77,11 +74,13 @@ const EditableCoverAvatarHeader = ({
       )}
       {/* Avatar placeholder */}
       {editable || avatarUrl ? (
-        <div className="absolute -bottom-10 left-[157px] flex h-20 w-20 items-center justify-center rounded-lg ">
-          <div className="flex h-full w-full items-center justify-center rounded-lg transition-all duration-200 ease-in-out">
+        <div className={`${coverRenderable 
+          ? 'absolute bottom-[-40px] mx-auto w-full max-w-[880px] left-0 right-0 flex justify-start' 
+          : 'w-full max-w-[880px] mx-auto flex justify-start'}`}>
+          <div className="flex h-20 w-20 items-center justify-center rounded-lg transition-all duration-200 ease-in-out">
             <AvatarCoverInput
-              typeOfId={typeOfId}
-              typeOfName={typeOfName}
+              typeOfId={AVATAR_PROPERTY_ID}
+              typeOfName={'Avatar'}
               inputId="avatar-input"
               firstRenderable={avatarRenderable ?? null}
               imgUrl={avatarUrl}
@@ -115,6 +114,7 @@ const AvatarCoverInput = ({
   const { ipfs } = Services.useServices();
 
   const editable = useUserIsEditing(spaceId);
+  const isCover = typeOfName === 'Cover';
 
   const send = useEditEvents({
     context: {
@@ -127,6 +127,9 @@ const AvatarCoverInput = ({
   const onImageChange = (imageSrc: string) => {
     const { id: imageId, ops } = Image.make({ cid: imageSrc });
     const [createRelationOp, setTripleOp] = ops;
+
+    console.log('createRelationOp', createRelationOp);
+    console.log('setTripleOp', setTripleOp);
 
     if (createRelationOp.type === 'CREATE_RELATION') {
       send({
@@ -174,7 +177,6 @@ const AvatarCoverInput = ({
   };
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    console.log('here');
     if (imgUrl) {
       deleteProperty();
     }
@@ -201,17 +203,24 @@ const AvatarCoverInput = ({
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className={`relative h-full w-full rounded-lg ${typeOfName === 'Cover' ? 'bg-cover-default hover:bg-cover-hover' : imgUrl ? '' : 'bg-avatar-default bg-cover hover:bg-avatar-hover'}`}
+        className={`relative h-full w-full rounded-lg ${typeOfName === 'Cover' 
+          ? 'bg-cover-default hover:bg-cover-hover bg-no-repeat bg-center' 
+          : imgUrl 
+            ? 'bg-transparent relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-grey-01 shadow-lg' 
+            : 'bg-avatar-default bg-no-repeat bg-center hover:bg-avatar-hover h-[80px] w-[80px]'
+        }`}
       >
         {imgUrl && (
           <LegacyImage
             layout="fill"
             src={getImagePath(imgUrl)}
-            className="h-full w-full rounded-lg border border-white object-cover shadow-dropdown "
+            className="h-full w-full rounded-lg border border-white object-cover bg-transparent"
           />
         )}
         {editable && (
-          <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center gap-[6px]">
+          <div className={`absolute flex items-center justify-center gap-[6px] ${
+            isCover ? 'top-4 right-4' : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transform'
+          }`}>
             {!imgUrl ? (
               <button onClick={openInput}>
                 <Upload color={hovered ? 'text' : 'grey-03'} />
