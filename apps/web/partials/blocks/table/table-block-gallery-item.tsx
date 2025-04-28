@@ -10,11 +10,12 @@ import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
-import { BlockImageField } from '~/design-system/editable-fields/editable-fields';
+import { BlockImageField, InlinePageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
-import { EditableTitle } from '~/partials/blocks/table/editable-title';
+import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { getName } from '~/partials/blocks/table/utils';
 
 import { TableBlockPropertyField } from './table-block-property-field';
 
@@ -49,31 +50,9 @@ export function TableBlockGalleryItem({
   const maybeCoverData: Cell | undefined = columns[SystemIds.COVER_ATTRIBUTE];
 
   const { cellId, verified } = nameCell;
-  let { image, name, description } = nameCell;
+  let { image, description } = nameCell;
 
-  const maybeNameInSpaceRenderable = nameCell.renderables.find(
-    r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
-  );
-
-  let maybeNameInSpace = maybeNameInSpaceRenderable?.value;
-
-  if (maybeNameInSpaceRenderable?.type === 'RELATION') {
-    maybeNameInSpace = maybeNameInSpaceRenderable?.valueName ?? maybeNameInSpace;
-  }
-
-  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE);
-
-  let maybeOtherName = maybeNameRenderable?.value;
-
-  if (maybeNameRenderable?.type === 'RELATION') {
-    maybeOtherName = maybeNameRenderable?.valueName ?? maybeNameInSpace;
-  }
-
-  const maybeName = maybeNameInSpace ?? maybeOtherName;
-
-  if (maybeName) {
-    name = maybeOtherName ?? null;
-  }
+  const name = getName(nameCell, currentSpaceId);
 
   const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
     r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE && r.spaceId === currentSpaceId
@@ -253,19 +232,87 @@ export function TableBlockGalleryItem({
                 spaceId={currentSpaceId}
               />
             ) : (
-              <EditableTitle
-                view="GALLERY"
-                isEditing={true}
-                name={name}
-                href={href}
-                currentSpaceId={currentSpaceId}
-                entityId={rowEntityId}
-                spaceId={nameCell?.space}
-                relationId={relationId}
-                verified={verified}
-                onChangeEntry={onChangeEntry}
-                onLinkEntry={onLinkEntry}
-              />
+              <>
+                {source.type !== 'COLLECTION' ? (
+                  <InlinePageStringField
+                    placeholder="Entity name..."
+                    value={name ?? ''}
+                    onChange={value => {
+                      onChangeEntry(
+                        {
+                          entityId: rowEntityId,
+                          entityName: value,
+                          spaceId: currentSpaceId,
+                        },
+                        {
+                          type: 'EVENT',
+                          data: {
+                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                            payload: {
+                              renderable: {
+                                attributeId: SystemIds.NAME_ATTRIBUTE,
+                                entityId: rowEntityId,
+                                spaceId: currentSpaceId,
+                                attributeName: 'Name',
+                                entityName: name,
+                                type: 'TEXT',
+                                value: name ?? '',
+                              },
+                              value: { type: 'TEXT', value },
+                            },
+                          },
+                        }
+                      );
+                    }}
+                  />
+                ) : (
+                  <CollectionMetadata
+                    view="GALLERY"
+                    isEditing={true}
+                    name={name}
+                    href={href}
+                    currentSpaceId={currentSpaceId}
+                    entityId={rowEntityId}
+                    spaceId={nameCell?.space}
+                    collectionId={nameCell?.collectionId}
+                    relationId={relationId}
+                    verified={verified}
+                    onLinkEntry={onLinkEntry}
+                  >
+                    <InlinePageStringField
+                      placeholder="Entity name..."
+                      value={name ?? ''}
+                      onChange={value => {
+                        onChangeEntry(
+                          {
+                            entityId: rowEntityId,
+                            entityName: value,
+                            spaceId: currentSpaceId,
+                          },
+                          {
+                            type: 'EVENT',
+                            data: {
+                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                              payload: {
+                                renderable: {
+                                  attributeId: SystemIds.NAME_ATTRIBUTE,
+                                  entityId: rowEntityId,
+                                  spaceId: currentSpaceId,
+                                  attributeName: 'Name',
+                                  entityName: name,
+                                  type: 'TEXT',
+                                  value: name ?? '',
+                                },
+                                value: { type: 'TEXT', value },
+                              },
+                            },
+                          }
+                        );
+                      }}
+                    />
+                  </CollectionMetadata>
+                )}
+              </>
             )}
           </div>
 
@@ -307,19 +354,29 @@ export function TableBlockGalleryItem({
       </div>
       <div className="flex flex-col gap-4 px-1">
         <div className="flex flex-col gap-2">
-          <EditableTitle
-            view="GALLERY"
-            isEditing={false}
-            name={name}
-            href={href}
-            currentSpaceId={currentSpaceId}
-            entityId={rowEntityId}
-            spaceId={nameCell?.space}
-            relationId={relationId}
-            verified={verified}
-            onChangeEntry={onChangeEntry}
-            onLinkEntry={onLinkEntry}
-          />
+          {source.type !== 'COLLECTION' ? (
+            <Link href={href} className="truncate text-smallTitle font-medium text-text">
+              {name || rowEntityId}
+            </Link>
+          ) : (
+            <CollectionMetadata
+              view="GALLERY"
+              isEditing={false}
+              name={name}
+              href={href}
+              currentSpaceId={currentSpaceId}
+              entityId={rowEntityId}
+              spaceId={nameCell?.space}
+              collectionId={nameCell?.collectionId}
+              relationId={relationId}
+              verified={verified}
+              onLinkEntry={onLinkEntry}
+            >
+              <Link href={href} className="truncate text-smallTitle font-medium text-text">
+                {name || rowEntityId}
+              </Link>
+            </CollectionMetadata>
+          )}
           {description && propertyDataHasDescription && (
             <div className="line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
           )}

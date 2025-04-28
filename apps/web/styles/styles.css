@@ -88,6 +88,10 @@ textarea::placeholder {
   opacity: 0.75;
 }
 
+input::-ms-clear {
+  display: none;
+}
+
 .not-editable .is-empty {
   @apply !invisible;
 }

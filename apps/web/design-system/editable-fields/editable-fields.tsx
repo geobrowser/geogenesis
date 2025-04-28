@@ -1,4 +1,5 @@
 import { cva, cx } from 'class-variance-authority';
+import ReactInputAutosize from 'react-input-autosize';
 import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
@@ -6,7 +7,6 @@ import * as React from 'react';
 import { ChangeEvent, useRef, useEffect } from 'react';
 
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
-import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { Services } from '~/core/services';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -20,7 +20,7 @@ const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin
   // of -1px to compensate for this. This results in the correct line heights between both edit and
   // browse modes. This only affects the editable title of entity pages.
-  'm-0 -mb-[1px] w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none',
+  'm-0 w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none',
   {
     variants: {
       variant: {
@@ -62,7 +62,7 @@ export function TableStringField({ ...props }: TableStringFieldProps) {
 type PageStringFieldProps = {
   onChange: (value: string) => void;
   placeholder?: string;
-  variant?: 'mainPage' | 'body' | 'smallTitle';
+  variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
   value?: string;
 };
 
@@ -91,33 +91,47 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
   );
 }
 
-export function FocusedStringField({ ...props }: PageStringFieldProps) {
+type InlinePageStringFieldProps = {
+  onChange: (value: string) => void;
+  placeholder?: string;
+  variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
+  value?: string;
+};
+
+const inlineInputStyles = cva(
+  'max-w-full *:m-0 *:!-mr-0.5 *:max-w-full *:bg-transparent *:p-0 *:outline-none *:placeholder:text-grey-03',
+  {
+    variants: {
+      variant: {
+        mainPage: '*:text-mainPage',
+        body: '*:text-body',
+        tableCell: '*:text-tableCell',
+        smallTitle: '*:text-smallTitle',
+      },
+    },
+    defaultVariants: {
+      variant: 'body',
+    },
+  }
+);
+
+export const InlinePageStringField = (props: InlinePageStringFieldProps) => {
   const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
     callback: props.onChange,
     delay: 1000,
     initialValue: props.value || '',
   });
 
-  const ref = useRef<HTMLTextAreaElement>(null!);
-
-  useEffectOnce(() => {
-    setTimeout(() => {
-      ref.current.focus();
-      const length = ref.current.value.length;
-      ref.current.setSelectionRange(length, length);
-    }, 200);
-  });
-
   return (
-    <Textarea
+    <ReactInputAutosize
       {...props}
-      ref={ref}
       value={localValue}
       onChange={e => setLocalValue(e.currentTarget.value)}
-      className={textareaStyles({ variant: props.variant })}
+      className={inlineInputStyles({ variant: props.variant })}
+      injectStyles={false}
     />
   );
-}
+};
 
 type ImageVariant = 'avatar' | 'banner' | 'table-cell' | 'default' | 'gallery';
 
