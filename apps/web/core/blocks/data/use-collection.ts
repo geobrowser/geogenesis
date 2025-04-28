@@ -23,12 +23,12 @@ export function useCollection() {
         ) ?? [])
       : [];
 
-  const orderedCollectionItems = collectionItemsRelations.sort((a, z) =>
+  const orderedCollectionItemRelations = collectionItemsRelations.sort((a, z) =>
     a.index.toLowerCase().localeCompare(z.index.toLowerCase())
   );
 
-  const collectionItemIds = orderedCollectionItems?.map(c => c.toEntity.id) ?? [];
-  const collectionRelationIds = orderedCollectionItems?.map(c => c.id) ?? [];
+  const collectionItemIds = orderedCollectionItemRelations?.map(c => c.toEntity.id) ?? [];
+  const collectionRelationIds = orderedCollectionItemRelations?.map(c => c.id) ?? [];
 
   const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
     enabled: collectionItemIds !== null,
@@ -48,8 +48,23 @@ export function useCollection() {
     },
   });
 
+  /**
+   * There's currently no guarantee of ordering when using the `id: { in: [...]}`
+   * query in the sync engine. Here we use the ordered relations list as the source
+   * of truth for ordering to return the collection item entities in the correct order.
+   */
+  const collectionItemsMap = new Map(collectionItems.map(item => [item.id, item]));
+
+  const orderedCollectionItems = orderedCollectionItemRelations
+    .map(relation => {
+      const entity = collectionItemsMap.get(relation.toEntity.id);
+
+      return entity;
+    })
+    .filter(item => item !== undefined);
+
   return {
-    collectionItems,
+    collectionItems: orderedCollectionItems,
     collectionRelations,
     isLoading: isCollectionItemsLoading || isCollectionRelationsLoading,
     isFetched: !isCollectionItemsLoading && !isCollectionRelationsLoading,
