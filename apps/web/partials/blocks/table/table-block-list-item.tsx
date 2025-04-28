@@ -380,7 +380,7 @@ export function TableBlockListItem({
       </div>
       <div>
         {source.type !== 'COLLECTION' ? (
-          <Link href={href} className="truncate text-smallTitle font-medium text-text">
+          <Link href={href} className="text-smallTitle font-medium text-text">
             {name || rowEntityId}
           </Link>
         ) : (
@@ -396,7 +396,7 @@ export function TableBlockListItem({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <Link href={href} className="truncate text-smallTitle font-medium text-text">
+            <Link href={href} className="text-smallTitle font-medium text-text">
               {name || rowEntityId}
             </Link>
           </CollectionMetadata>
