@@ -4,7 +4,7 @@ import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
 import * as React from 'react';
-import { ChangeEvent, useRef, useEffect } from 'react';
+import { ChangeEvent, useRef } from 'react';
 
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { Services } from '~/core/services';
@@ -65,14 +65,6 @@ type PageStringFieldProps = {
   variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
   value?: string;
 };
-
-interface PageGeoLocationFieldProps {
-  onChange: (value: string, isBrowseMode: string) => void;
-  placeholder?: string;
-  variant?: 'mainPage' | 'body' | 'smallTitle';
-  value?: string;
-  format?: string;
-}
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
   const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
