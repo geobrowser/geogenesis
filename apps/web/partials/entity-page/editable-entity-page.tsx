@@ -1,6 +1,6 @@
 'use client';
 
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { Image } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
@@ -92,11 +92,12 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
               send
             );
 
-            // Hide cover/avatar property, as user can upload cover using upload icon on top placeholder
+            // Hide cover/avatar/types property, user can upload cover using upload icon on top placeholder
+            // and add types inline using the + button
             if (
-              (renderableType === 'IMAGE' && firstRenderable.attributeId === '7YHk6qYkNDaAtNb8GwmysF') ||
-              (renderableType === 'IMAGE' && firstRenderable.attributeId === '399xP4sGWSoepxeEnp3UdR') ||
-              (renderableType === 'RELATION' && firstRenderable.attributeId === 'Jfmby78N4BCseZinBmdVov')
+              (renderableType === 'IMAGE' && firstRenderable.attributeId === SystemIds.COVER_PROPERTY) ||
+              (renderableType === 'IMAGE' && firstRenderable.attributeId === ContentIds.AVATAR_PROPERTY) ||
+              (renderableType === 'RELATION' && firstRenderable.attributeId === SystemIds.TYPES_PROPERTY)
             ) {
               return null;
             }

@@ -48,9 +48,6 @@ const EditableCoverAvatarHeader = ({
     }
   });
 
-  console.log('EditableCoverAvatarHeader triples', triples);
-  console.log('EditableCoverAvatarHeader renderablesGroupedByAttributeId', renderablesGroupedByAttributeId);
-
   const coverRenderable = coverAvatarRenderable.find(r => r?.attributeId === SystemIds.COVER_PROPERTY);
   const avatarRenderable = coverAvatarRenderable.find(r => r?.attributeId === ContentIds.AVATAR_PROPERTY);
   
