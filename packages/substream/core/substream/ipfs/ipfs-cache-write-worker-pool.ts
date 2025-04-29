@@ -3,16 +3,16 @@ import { Context, Effect, Queue } from 'effect';
 import { IpfsCache } from './ipfs-cache';
 import type { IpfsCacheQueueItem } from './types';
 
-interface IpfsCacheControlPlaneImpl {
+interface IpfsCacheWriteWorkerPoolImpl {
   start(queue: Queue.Queue<IpfsCacheQueueItem>): Effect.Effect<void, never, IpfsCache>;
 }
 
-export class IpfsCacheControlPlane extends Context.Tag('IpfsCacheControlPlane')<
-  IpfsCacheControlPlane,
-  IpfsCacheControlPlaneImpl
+export class IpfsCacheWriteWorkerPool extends Context.Tag('IpfsCacheWriteWorkerPool')<
+  IpfsCacheWriteWorkerPool,
+  IpfsCacheWriteWorkerPoolImpl
 >() {}
 
-export const IpfsControlPlaneLive = IpfsCacheControlPlane.of({
+export const IpfsCacheWriteWorkerPoolLive = IpfsCacheWriteWorkerPool.of({
   start: (queue: Queue.Queue<IpfsCacheQueueItem>) =>
     Effect.gen(function* () {
       const runQueue = Effect.gen(function* () {

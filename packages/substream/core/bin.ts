@@ -6,7 +6,7 @@ import { Effect, Layer } from 'effect';
 import { Db, make as makeDb } from './db/db';
 import { runStream } from './substream';
 import { IpfsCache, make as makeIpfsCache } from './substream/ipfs/ipfs-cache';
-import { IpfsCacheControlPlane, IpfsControlPlaneLive } from './substream/ipfs/ipfs-cache-control-plane';
+import { IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive } from './substream/ipfs/ipfs-cache-write-worker-pool';
 import { Environment, make as makeEnvironment } from '~/sink/environment';
 import { Telemetry, make as makeTelemetry } from '~/sink/telemetry';
 
@@ -21,7 +21,7 @@ const environmentLayer = Layer.effect(Environment, makeEnvironment);
 const telemetryLayer = Layer.effect(Telemetry, makeTelemetry).pipe(Layer.provide(environmentLayer));
 const dbLayer = Layer.effect(Db, makeDb).pipe(Layer.provide(environmentLayer));
 const ipfsCacheLayer = Layer.effect(IpfsCache, makeIpfsCache).pipe(Layer.provide(dbLayer));
-const ipfsCacheControlPlaneLayer = Layer.succeed(IpfsCacheControlPlane, IpfsControlPlaneLive);
+const ipfsCacheControlPlaneLayer = Layer.succeed(IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive);
 
 const layers = Layer.mergeAll(
   NodeContext.layer,

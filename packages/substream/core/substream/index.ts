@@ -7,7 +7,7 @@ import { createSink, createStream } from '@substreams/sink';
 import { Data, Duration, Effect, Either, Logger, Queue, Redacted, Schema, Stream } from 'effect';
 
 import type { BlockEvent } from '../types';
-import { IpfsCacheControlPlane } from './ipfs/ipfs-cache-control-plane';
+import { IpfsCacheWriteWorkerPool } from './ipfs/ipfs-cache-write-worker-pool';
 import type { IpfsCacheQueueItem } from './ipfs/types';
 import { EditPublishedEvent } from './parser';
 import { MANIFEST } from '~/sink/constants/constants';
@@ -151,12 +151,15 @@ export function runStream({ startBlockNumber }: StreamConfig) {
       },
     });
 
-    // @TODO 1) start IPFS Cache Service
-    // @TODO 2) start linear substream processor (depends on 1)
+    /**
+     * Start the IPFS read-ahead process. This process listens to
+     * the substream and processes the edits-published events. It
+     * adds these events to a queue which get read by the
+     * IpfsCacheControlPlane.
+     */
+    const workerPool = yield* IpfsCacheWriteWorkerPool;
+    yield* workerPool.start(ipfsQueue);
     yield* Stream.run(stream, ipfsCacheSink);
-
-    const ipfsCacheControlPlane = yield* IpfsCacheControlPlane;
-    yield* ipfsCacheControlPlane.start(ipfsQueue);
 
     return yield* Stream.run(stream, linearSink);
   });
