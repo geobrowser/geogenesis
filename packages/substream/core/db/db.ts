@@ -2,7 +2,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Context, Data, Effect, Redacted } from 'effect';
 
-import { users } from './schema';
+import { ipfsCache } from './schema';
 import { Environment } from '~/sink/environment';
 
 export class DbError extends Data.TaggedError('DbError')<{
@@ -16,7 +16,7 @@ const createDb = (connectionString: string) =>
       connectionString: connectionString,
     },
     schema: {
-      users,
+      ipfsCache,
     },
   });
 
@@ -36,17 +36,16 @@ export const make = Effect.gen(function* () {
       return Effect.gen(function* () {
         const result = yield* Effect.try({
           try: () => fn(db),
-          catch: error => new DbError({ message: 'Synchronous error in Db.use', cause: error }),
+          catch: error => new DbError({ message: `Synchronous error in Db.use ${String(error)}`, cause: error }),
         });
 
         if (result instanceof Promise) {
-          console.log('is promise');
           return yield* Effect.tryPromise({
             try: () => result,
-            catch: e =>
+            catch: error =>
               new DbError({
-                cause: e,
-                message: 'Asyncronous error in `Db.use`',
+                cause: error,
+                message: `Asynchronous error in Db.use ${String(error)}`,
               }),
           });
         } else {

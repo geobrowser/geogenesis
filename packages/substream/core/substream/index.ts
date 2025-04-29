@@ -1,14 +1,15 @@
-import type { IMessageTypeRegistry } from '@bufbuild/protobuf';
+import type { JsonValue } from '@bufbuild/protobuf';
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { Id } from '@graphprotocol/grc-20';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
-import type { BlockScopedData } from '@substreams/core/proto';
 import { readPackageFromFile } from '@substreams/manifest';
 import { createSink, createStream } from '@substreams/sink';
-import { Data, Duration, Effect, Either, Logger, Redacted, Stream } from 'effect';
+import { Data, Duration, Effect, Either, Logger, Queue, Redacted, Schema, Stream } from 'effect';
 
-import { Db } from '../db/db';
-import { events } from '../db/schema';
+import type { BlockEvent } from '../types';
+import { IpfsCacheControlPlane } from './ipfs/ipfs-cache-control-plane';
+import type { IpfsCacheQueueItem } from './ipfs/types';
+import { EditPublishedEvent } from './parser';
 import { MANIFEST } from '~/sink/constants/constants';
 import { Environment } from '~/sink/environment';
 import { LoggerLive, getConfiguredLogLevel, withRequestId } from '~/sink/logs';
@@ -55,7 +56,23 @@ export function runStream({ startBlockNumber }: StreamConfig) {
       maxRetrySeconds: 600, // 10 minutes.
     });
 
-    const sink = createSink({
+    const ipfsQueue = yield* Queue.unbounded<IpfsCacheQueueItem>();
+
+    const ipfsCacheSink = createSink({
+      handleBlockScopedData: message => {
+        return Effect.gen(function* () {
+          yield* Effect.void;
+        });
+      },
+      handleBlockUndoSignal: message => {
+        return Effect.gen(function* () {
+          const blockNumber = Number(message.lastValidBlock?.number.toString());
+          yield* Effect.logInfo('Undo ipfsCacheSink');
+        });
+      },
+    });
+
+    const linearSink = createSink({
       handleBlockScopedData: message => {
         return Effect.gen(function* (_) {
           const start = Date.now();
@@ -64,11 +81,31 @@ export function runStream({ startBlockNumber }: StreamConfig) {
           const telemetry = yield* _(Telemetry);
           const logLevel = yield* _(getConfiguredLogLevel);
 
+          const mapOutput = message.output?.mapOutput;
+
+          if (!mapOutput || mapOutput?.value?.byteLength === 0) {
+            return false;
+          }
+
+          const unpackedOutput = mapOutput.unpack(registry);
+          const jsonOutput = unpackedOutput?.toJson({ typeRegistry: registry });
+
+          if (jsonOutput === undefined) {
+            yield* Effect.logError('No output');
+            return;
+          }
+
+          const block: BlockEvent = {
+            cursor: message.cursor,
+            number: blockNumber,
+            timestamp: message.clock?.timestamp?.seconds.toString() ?? Date.now().toString(),
+          };
+
           // If we get an unrecoverable error (how do we define those)
           // then we don't want to exit the entire handler though, and
           // continue if possible.
           const result = yield* _(
-            handleMessage(message, registry).pipe(
+            handleMessage(jsonOutput, block).pipe(
               withRequestId(requestId),
               // Limit the maximum time a block takes to index to 5 minutes
               Effect.timeout(Duration.minutes(5))
@@ -114,39 +151,33 @@ export function runStream({ startBlockNumber }: StreamConfig) {
       },
     });
 
-    return yield* Stream.run(stream, sink);
+    // @TODO 1) start IPFS Cache Service
+    // @TODO 2) start linear substream processor (depends on 1)
+    yield* Stream.run(stream, ipfsCacheSink);
+
+    const ipfsCacheControlPlane = yield* IpfsCacheControlPlane;
+    yield* ipfsCacheControlPlane.start(ipfsQueue);
+
+    return yield* Stream.run(stream, linearSink);
   });
 }
 
-function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry) {
+// @TODO: Deterministic simulation testing
+export function handleMessage(output: JsonValue, block: BlockEvent) {
   return Effect.gen(function* () {
-    yield* Effect.logInfo(message.clock?.number.toString());
-    const db = yield* Db;
-
-    const mapOutput = message.output?.mapOutput;
-
-    if (!mapOutput || mapOutput?.value?.byteLength === 0) {
-      return false;
-    }
-
-    const unpackedOutput = mapOutput.unpack(registry);
-    const jsonOutput = unpackedOutput?.toJson({ typeRegistry: registry });
-
-    if (jsonOutput === undefined) {
-      yield* Effect.logError('No output');
-      return false;
-    }
-
-    yield* db.use(client =>
-      client
-        .insert(events)
-        .values({
-          type: 'add_edit',
-          eventJson: jsonOutput,
-        })
-        .execute()
-    );
-
-    return true;
+    const events = parseOutputToEvent(output);
+    return yield* Effect.succeed(events.length > 0);
   });
+}
+
+// @TODO: Test
+function parseOutputToEvent(output: JsonValue) {
+  const eventsInBlock: EditPublishedEvent[] = [];
+  const maybeEditPublishedEvent = Schema.decodeUnknownEither(EditPublishedEvent)(output);
+
+  if (Either.isRight(maybeEditPublishedEvent)) {
+    eventsInBlock.push(maybeEditPublishedEvent.right);
+  }
+
+  return eventsInBlock;
 }
