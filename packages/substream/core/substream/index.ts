@@ -11,7 +11,7 @@ import { IpfsCache } from './ipfs/ipfs-cache';
 import { IpfsCacheWriteWorkerPool } from './ipfs/ipfs-cache-write-worker-pool';
 import type { IpfsCacheQueueItem } from './ipfs/types';
 import { EditPublishedEvent } from './parser';
-import { MANIFEST, US_LAW_SPACE } from '~/sink/constants/constants';
+import { MANIFEST } from '~/sink/constants/constants';
 import { Environment } from '~/sink/environment';
 import { LoggerLive, getConfiguredLogLevel, withRequestId } from '~/sink/logs';
 import { Telemetry } from '~/sink/telemetry';
