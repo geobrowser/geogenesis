@@ -7,6 +7,7 @@ import { createSink, createStream } from '@substreams/sink';
 import { Data, Duration, Effect, Either, Logger, Queue, Redacted, Schema, Stream } from 'effect';
 
 import type { BlockEvent } from '../types';
+import { IpfsCache } from './ipfs/ipfs-cache';
 import { IpfsCacheWriteWorkerPool } from './ipfs/ipfs-cache-write-worker-pool';
 import type { IpfsCacheQueueItem } from './ipfs/types';
 import { EditPublishedEvent } from './parser';
@@ -41,14 +42,29 @@ export function runStream({ startBlockNumber }: StreamConfig) {
 
     const registry = createRegistry(substreamPackage);
 
-    const transport = createGrpcTransport({
+    const ipfsTransport = createGrpcTransport({
       baseUrl: environment.endpoint,
       httpVersion: '2',
       interceptors: [createAuthInterceptor(token)],
     });
 
-    const stream = createStream({
-      connectTransport: transport,
+    const linearTransport = createGrpcTransport({
+      baseUrl: environment.endpoint,
+      httpVersion: '2',
+      interceptors: [createAuthInterceptor(token)],
+    });
+
+    const ipfsStream = createStream({
+      connectTransport: ipfsTransport,
+      substreamPackage,
+      outputModule: 'geo_out',
+      productionMode: true,
+      startBlockNum: startBlockNumber,
+      maxRetrySeconds: 600, // 10 minutes.
+    });
+
+    const linearStream = createStream({
+      connectTransport: linearTransport,
       substreamPackage,
       outputModule: 'geo_out',
       productionMode: true,
@@ -61,6 +77,30 @@ export function runStream({ startBlockNumber }: StreamConfig) {
     const ipfsCacheSink = createSink({
       handleBlockScopedData: message => {
         return Effect.gen(function* () {
+          const requestId = Id.generate();
+          const blockNumber = Number(message.clock?.number.toString());
+          const mapOutput = message.output?.mapOutput;
+
+          if (!mapOutput || mapOutput?.value?.byteLength === 0) {
+            return false;
+          }
+
+          const unpackedOutput = mapOutput.unpack(registry);
+          const jsonOutput = unpackedOutput?.toJson({ typeRegistry: registry });
+
+          if (jsonOutput === undefined) {
+            yield* Effect.logError('No output');
+            return;
+          }
+
+          const block: BlockEvent = {
+            cursor: message.cursor,
+            number: blockNumber,
+            timestamp: message.clock?.timestamp?.seconds.toString() ?? Date.now().toString(),
+          };
+
+          const result = yield* handleIpfsMessage(jsonOutput, ipfsQueue, block).pipe(withRequestId(requestId));
+
           yield* Effect.void;
         });
       },
@@ -105,7 +145,7 @@ export function runStream({ startBlockNumber }: StreamConfig) {
           // then we don't want to exit the entire handler though, and
           // continue if possible.
           const result = yield* _(
-            handleMessage(jsonOutput, block).pipe(
+            handleLinearMessage(jsonOutput, block).pipe(
               withRequestId(requestId),
               // Limit the maximum time a block takes to index to 5 minutes
               Effect.timeout(Duration.minutes(5))
@@ -129,17 +169,16 @@ export function runStream({ startBlockNumber }: StreamConfig) {
           const hasValidEvent = result.right;
 
           if (hasValidEvent) {
+            const end = Date.now();
+
             yield* _(
-              Effect.logInfo(`[BLOCK] Ended ${blockNumber}`).pipe(
+              Effect.logInfo(`[LINEAR STREAM][BLOCK] Ended ${blockNumber} in ${end - start}ms`).pipe(
                 withRequestId(requestId),
                 Logger.withMinimumLogLevel(logLevel),
                 Effect.provide(LoggerLive)
               )
             );
           }
-
-          const end = Date.now();
-          yield* Effect.logInfo(`[BLOCK] Ended ${blockNumber} in ${end - start}ms`);
         });
       },
 
@@ -159,17 +198,54 @@ export function runStream({ startBlockNumber }: StreamConfig) {
      */
     const workerPool = yield* IpfsCacheWriteWorkerPool;
     yield* workerPool.start(ipfsQueue);
-    yield* Stream.run(stream, ipfsCacheSink);
 
-    return yield* Stream.run(stream, linearSink);
+    yield* Effect.all([Stream.run(ipfsStream, ipfsCacheSink), Stream.run(linearStream, linearSink)], {
+      concurrency: 2,
+    });
   });
 }
 
 // @TODO: Deterministic simulation testing
-export function handleMessage(output: JsonValue, block: BlockEvent) {
+export function handleLinearMessage(output: JsonValue, block: BlockEvent) {
+  return Effect.gen(function* () {
+    const ipfsCache = yield* IpfsCache;
+    const events = parseOutputToEvent(output);
+
+    yield* Effect.logInfo(`[LINEAR STREAM] Processing ${events.length} events for block ${block.number}`);
+
+    const data = yield* Effect.forEach(
+      events,
+      e =>
+        Effect.gen(function* () {
+          return yield* Effect.forEach(e.editsPublished, e => ipfsCache.get(e.contentUri));
+        }),
+      {
+        concurrency: 50,
+      }
+    );
+
+    yield* Effect.logInfo(`[LINEAR STREAM] IPFS Data: ${JSON.stringify(data, null, 2)}`);
+
+    return events.length > 0;
+  });
+}
+
+// @TODO: Test
+export function handleIpfsMessage(output: JsonValue, queue: Queue.Queue<IpfsCacheQueueItem>, block: BlockEvent) {
   return Effect.gen(function* () {
     const events = parseOutputToEvent(output);
-    return yield* Effect.succeed(events.length > 0);
+
+    yield* Effect.logInfo(`[IPFS STREAM] Processing ${events.length} events for block ${block.number}`);
+
+    for (const event of events) {
+      // @TODO: Will need to eventually parse by the event type
+      const item: IpfsCacheQueueItem = {
+        block,
+        editsPublished: event.editsPublished,
+      };
+
+      yield* Queue.offer(queue, item);
+    }
   });
 }
 

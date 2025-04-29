@@ -1,5 +1,6 @@
 import { Edit } from '@graphprotocol/grc-20/proto';
-import { Context, Duration, Effect, Either, Schedule } from 'effect';
+import { eq } from 'drizzle-orm';
+import { Context, Data, Duration, Effect, Either, Schedule } from 'effect';
 
 import { type DecodedEdit, type EditPublishedEvent, ZodEdit } from '../parser';
 import { Db, DbError } from '~/core/db/db';
@@ -11,11 +12,11 @@ interface IpfsCacheImpl {
   fetch(
     uri: string
   ): Effect.Effect<Buffer | null, FailedFetchingIpfsContentError | UnableToParseJsonError | UnknownContentTypeError>;
-  // get(uri: string): Effect.Effect<EditPublishedEvent | null>;
   put(
     events: EditPublishedEvent['editsPublished'],
     block: BlockEvent
   ): Effect.Effect<void, FailedFetchingIpfsContentError | UnableToParseJsonError | UnknownContentTypeError | DbError>;
+  get(uri: string): Effect.Effect<DecodedEdit, CouldNotFindIpfsCacheItemError | DbError, Db>;
 }
 
 export class IpfsCache extends Context.Tag('IpfsCache')<IpfsCache, IpfsCacheImpl>() {}
@@ -31,6 +32,11 @@ class UnableToParseJsonError extends Error {
 class UnknownContentTypeError extends Error {
   _tag: 'UnknownContentTypeError' = 'UnknownContentTypeError';
 }
+
+class CouldNotFindIpfsCacheItemError extends Data.TaggedError('CouldNotFindIpfsCacheItemError')<{
+  cause?: unknown;
+  message?: string;
+}> {}
 
 export const make = Effect.gen(function* () {
   const db = yield* Db;
@@ -76,20 +82,48 @@ export const make = Effect.gen(function* () {
         const end = Date.now();
         const duration = end - now;
 
-        yield* Effect.logInfo(`Finished processing IPFS cache for block ${block.number} Took ${duration}ms`);
-
         yield* db.use(client =>
-          client.insert(ipfsCache).values(
-            result.map(r => {
-              return {
-                uri: r.uri,
-                json: r.contents,
-                isErrored: r.isErrored,
-              };
-            })
-          )
+          client
+            .insert(ipfsCache)
+            .values(
+              result.map(r => {
+                return {
+                  uri: r.uri,
+                  json: r.contents,
+                  isErrored: r.isErrored,
+                };
+              })
+            )
+            .execute()
+        );
+
+        yield* Effect.logInfo(
+          `Finished processing ${result.length} IPFS cache items for block ${block.number}. Duration: ${duration}ms`
         );
       }),
+    get: uri =>
+      Effect.gen(function* () {
+        const db = yield* Db;
+
+        const result = yield* db.use(client =>
+          client.query.ipfsCache.findFirst({ where: eq(ipfsCache.uri, uri) }).execute()
+        );
+
+        if (!result) {
+          return yield* new CouldNotFindIpfsCacheItemError({
+            message: `Could not find IPFS cache item for uri ${uri}`,
+          });
+        }
+
+        return result.json as DecodedEdit;
+      }).pipe(
+        Effect.retry({
+          schedule: Schedule.exponential(50).pipe(
+            Schedule.jittered,
+            Schedule.tapOutput(() => Effect.logInfo('[LINEAR STREAM] Retrying IPFS cache item fetch'))
+          ),
+        })
+      ),
   });
 });
 

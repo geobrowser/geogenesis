@@ -17,13 +17,12 @@ export const IpfsCacheWriteWorkerPoolLive = IpfsCacheWriteWorkerPool.of({
     Effect.gen(function* () {
       const runQueue = Effect.gen(function* () {
         const ipfsCache = yield* IpfsCache;
-
-        yield* Effect.logInfo('Starting queue processing');
         const chainEvent = yield* Queue.take(queue);
         yield* ipfsCache.put(chainEvent.editsPublished, chainEvent.block);
       });
 
       const workerPool = Effect.gen(function* () {
+        yield* Effect.logInfo('Starting queue processing');
         const workers = yield* Effect.forEach(
           Array.from({ length: 10 }),
           () => Effect.fork(runQueue.pipe(Effect.forever)),
