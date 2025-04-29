@@ -85,7 +85,7 @@ type SquareButtonProps = React.ComponentPropsWithoutRef<'button'> & {
 };
 
 const squareButtonClassNames = cva(
-  'relative box-border flex h-[1.375rem] w-[1.375rem] items-center justify-center rounded border bg-white text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
+  'relative box-border flex h-6 w-6 items-center justify-center rounded border bg-white text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
   {
     variants: {
       isActive: {
