@@ -15,7 +15,7 @@ export class IpfsCacheWriteWorkerPool extends Context.Tag('IpfsCacheWriteWorkerP
 export const IpfsCacheWriteWorkerPoolLive = IpfsCacheWriteWorkerPool.of({
   start: (queue: Queue.Queue<IpfsCacheQueueItem>) =>
     Effect.gen(function* () {
-      const runQueue = Effect.gen(function* () {
+      const processQueueItem = Effect.gen(function* () {
         const ipfsCache = yield* IpfsCache;
         const chainEvent = yield* Queue.take(queue);
         yield* ipfsCache.put(chainEvent.editsPublished, chainEvent.block);
@@ -25,7 +25,7 @@ export const IpfsCacheWriteWorkerPoolLive = IpfsCacheWriteWorkerPool.of({
         yield* Effect.logInfo('Starting queue processing');
         const workers = yield* Effect.forEach(
           Array.from({ length: 10 }),
-          () => Effect.fork(runQueue.pipe(Effect.forever)),
+          () => processQueueItem.pipe(Effect.forever, Effect.fork),
           {
             concurrency: 10,
           }

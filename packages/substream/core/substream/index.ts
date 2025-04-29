@@ -190,12 +190,6 @@ export function runStream({ startBlockNumber }: StreamConfig) {
       },
     });
 
-    /**
-     * Start the IPFS read-ahead process. This process listens to
-     * the substream and processes the edits-published events. It
-     * adds these events to a queue which get read by the
-     * IpfsCacheControlPlane.
-     */
     const workerPool = yield* IpfsCacheWriteWorkerPool;
     yield* workerPool.start(ipfsQueue);
 
