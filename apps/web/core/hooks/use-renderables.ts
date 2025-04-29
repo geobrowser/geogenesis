@@ -143,7 +143,6 @@ function usePlaceholderRenderables(entityId: EntityId) {
   const [placeholderRenderables, setPlaceholderRenderables] = useAtom(placeholderRenderablesAtomFamily(entityId));
 
   const onAddPlaceholderRenderable = (renderable: RenderableProperty) => {
-    console.log(renderable);
     const newPlaceholders = placeholderRenderables.filter(r => r.attributeId !== renderable.attributeId);
     setPlaceholderRenderables([...newPlaceholders, renderable]);
   };

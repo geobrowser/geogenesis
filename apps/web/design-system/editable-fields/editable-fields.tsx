@@ -154,7 +154,6 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
 };
 
 export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
-  console.log(imageSrc);
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>

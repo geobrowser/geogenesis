@@ -285,7 +285,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             <div key={`relation-upload-image-${relationId}`}>
               <PageImageField
                 onImageChange={imageSrc => {
-                  console.log('here image');
                   const { id: imageId, ops } = Image.make({ cid: imageSrc });
                   const [createRelationOp, setTripleOp] = ops;
 

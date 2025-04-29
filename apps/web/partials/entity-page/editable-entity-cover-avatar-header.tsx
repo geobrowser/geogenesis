@@ -132,9 +132,6 @@ const AvatarCoverInput = ({
     const { id: imageId, ops } = Image.make({ cid: imageSrc });
     const [createRelationOp, setTripleOp] = ops;
 
-    console.log('createRelationOp', createRelationOp);
-    console.log('setTripleOp', setTripleOp);
-
     if (createRelationOp.type === 'CREATE_RELATION') {
       send({
         type: 'UPSERT_RELATION',
