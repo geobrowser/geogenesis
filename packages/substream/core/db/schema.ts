@@ -3,7 +3,7 @@ import { boolean, jsonb, pgTable, serial, text } from 'drizzle-orm/pg-core';
 
 export const ipfsCache = pgTable('ipfs_cache', {
   id: serial(),
-  json: jsonb().notNull(),
+  json: jsonb(),
   uri: text().notNull().unique(),
   /**
    * Sometimes an IPFS fetch can fail for multiple reasons. Primarily

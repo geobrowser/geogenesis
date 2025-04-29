@@ -70,7 +70,7 @@ export const make = Effect.gen(function* () {
                 dao: e.daoAddress,
                 plugin: e.pluginAddress,
                 contents: decoded,
-                isErrored: contents === null,
+                isErrored: decoded === null,
               };
             });
           },
@@ -110,6 +110,7 @@ export const make = Effect.gen(function* () {
         );
 
         if (!result) {
+          yield* Effect.logError(`Could not find IPFS cache item for uri ${uri}. ${String(result)}`);
           return yield* new CouldNotFindIpfsCacheItemError({
             message: `Could not find IPFS cache item for uri ${uri}`,
           });

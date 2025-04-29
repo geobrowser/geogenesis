@@ -218,7 +218,7 @@ export function handleLinearMessage(output: JsonValue, block: BlockEvent) {
       }
     );
 
-    yield* Effect.logInfo(`[LINEAR STREAM] IPFS Data: ${JSON.stringify(data, null, 2)}`);
+    yield* Effect.logInfo(`[LINEAR STREAM] IPFS Data: ${JSON.stringify(data, null, 2)}. Block: ${block.number}`);
 
     return events.length > 0;
   });

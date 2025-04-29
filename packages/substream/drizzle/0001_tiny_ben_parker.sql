@@ -1,0 +1,1 @@
+ALTER TABLE "ipfs_cache" ALTER COLUMN "json" DROP NOT NULL;

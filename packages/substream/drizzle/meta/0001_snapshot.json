@@ -1,0 +1,65 @@
+{
+  "id": "b58298b8-a1fe-4e36-a73b-c707cafa4121",
+  "prevId": "51103812-1d65-4665-8abc-1824f5393b5d",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.ipfs_cache": {
+      "name": "ipfs_cache",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "json": {
+          "name": "json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uri": {
+          "name": "uri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "isErrored": {
+          "name": "isErrored",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ipfs_cache_uri_unique": {
+          "name": "ipfs_cache_uri_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "uri"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
