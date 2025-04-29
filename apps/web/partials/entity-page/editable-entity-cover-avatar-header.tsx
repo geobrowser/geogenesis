@@ -1,6 +1,6 @@
 'use client';
 
-import { Image, SystemIds } from '@graphprotocol/grc-20';
+import { Image, SystemIds, ContentIds } from '@graphprotocol/grc-20';
 import LegacyImage from 'next/legacy/image';
 
 import { ChangeEvent, useRef } from 'react';
@@ -20,8 +20,6 @@ import { getImagePath } from '~/core/utils/utils';
 import { SquareButton } from '~/design-system/button';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
-
-const AVATAR_PROPERTY_ID = '399xP4sGWSoepxeEnp3UdR';
 
 const EditableCoverAvatarHeader = ({
   avatarUrl,
@@ -44,19 +42,25 @@ const EditableCoverAvatarHeader = ({
 
     if (
       (renderableType === 'IMAGE' && firstRenderable.attributeId === SystemIds.COVER_PROPERTY) ||
-      (renderableType === 'IMAGE' && firstRenderable.attributeId === AVATAR_PROPERTY_ID)
+      (renderableType === 'IMAGE' && firstRenderable.attributeId === ContentIds.AVATAR_PROPERTY)
     ) {
       return firstRenderable;
     }
   });
 
+  console.log('EditableCoverAvatarHeader triples', triples);
+  console.log('EditableCoverAvatarHeader renderablesGroupedByAttributeId', renderablesGroupedByAttributeId);
+
   const coverRenderable = coverAvatarRenderable.find(r => r?.attributeId === SystemIds.COVER_PROPERTY);
-  const avatarRenderable = coverAvatarRenderable.find(r => r?.attributeId === AVATAR_PROPERTY_ID);
+  const avatarRenderable = coverAvatarRenderable.find(r => r?.attributeId === ContentIds.AVATAR_PROPERTY);
+  
+  // Only show avatar when there's an actual avatar or user is in edit mode
+  const showAvatar = avatarUrl || (editable && avatarRenderable);
 
   return (
     <div className={`${coverRenderable 
-      ? `relative ${(avatarUrl || editable) ? 'mb-20' : 'mb-8'} -mt-6 w-full max-w-[1192px] ${coverUrl ? 'h-80' : 'h-32'}` 
-      : `mx-auto ${avatarUrl || editable ? 'mb-16' : 'mb-0'} w-[880px] ${avatarUrl ? 'h-10' : ''}`}`}
+      ? `relative ${showAvatar ? 'mb-20' : 'mb-8'} -mt-6 w-full max-w-[1192px] ${coverUrl ? 'h-80' : 'h-32'}` 
+      : `mx-auto ${showAvatar ? 'mb-16' : 'mb-0'} w-[880px] ${avatarUrl ? 'h-10' : ''}`}`}
     >
       {coverRenderable && (
         <div
@@ -72,14 +76,14 @@ const EditableCoverAvatarHeader = ({
           />
         </div>
       )}
-      {/* Avatar placeholder */}
-      {editable || avatarUrl ? (
+      {/* Avatar placeholder - only show when there's an avatar or in edit mode with renderable */}
+      {showAvatar && (
         <div className={`${coverRenderable 
           ? 'absolute bottom-[-40px] mx-auto w-full max-w-[880px] left-0 right-0 flex justify-start' 
           : 'w-full max-w-[880px] mx-auto flex justify-start'}`}>
           <div className="flex h-20 w-20 items-center justify-center rounded-lg transition-all duration-200 ease-in-out">
             <AvatarCoverInput
-              typeOfId={AVATAR_PROPERTY_ID}
+              typeOfId={ContentIds.AVATAR_PROPERTY}
               typeOfName={'Avatar'}
               inputId="avatar-input"
               firstRenderable={avatarRenderable ?? null}
@@ -87,7 +91,7 @@ const EditableCoverAvatarHeader = ({
             />
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 };

@@ -1,3 +1,4 @@
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 
 import { useRelationship } from '~/core/hooks/use-relationship';
@@ -126,9 +127,11 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
   const attributeName = relations[0].attributeName;
   const spaceId = relations[0].spaceId;
 
+  // hide cover and avatar properties
+  // they are already rendered in the avatar cover component
   if (
-    (attributeId === '7YHk6qYkNDaAtNb8GwmysF') ||
-    (attributeId === '399xP4sGWSoepxeEnp3UdR')
+    (attributeId === SystemIds.COVER_PROPERTY) ||
+    (attributeId === ContentIds.AVATAR_PROPERTY)
   ) {
     return null;
   }
