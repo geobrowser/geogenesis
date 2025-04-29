@@ -12,6 +12,13 @@ export const ipfsCache = pgTable('ipfs_cache', {
    * has the IPFS CID, but was unable to parse it.
    */
   isErrored: boolean().default(false),
+  block: text().notNull(),
 });
 
 export type IpfsCacheItem = InferSelectModel<typeof ipfsCache>;
+
+export const entities = pgTable('entities', {
+  id: text().primaryKey(),
+});
+
+export type DbEntity = InferSelectModel<typeof entities>;

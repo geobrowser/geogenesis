@@ -11,7 +11,7 @@ import { IpfsCache } from './ipfs/ipfs-cache';
 import { IpfsCacheWriteWorkerPool } from './ipfs/ipfs-cache-write-worker-pool';
 import type { IpfsCacheQueueItem } from './ipfs/types';
 import { EditPublishedEvent } from './parser';
-import { MANIFEST } from '~/sink/constants/constants';
+import { MANIFEST, US_LAW_SPACE } from '~/sink/constants/constants';
 import { Environment } from '~/sink/environment';
 import { LoggerLive, getConfiguredLogLevel, withRequestId } from '~/sink/logs';
 import { Telemetry } from '~/sink/telemetry';
@@ -211,14 +211,25 @@ export function handleLinearMessage(output: JsonValue, block: BlockEvent) {
       events,
       e =>
         Effect.gen(function* () {
-          return yield* Effect.forEach(e.editsPublished, e => ipfsCache.get(e.contentUri));
+          return yield* Effect.forEach(e.editsPublished, e => {
+            return Effect.gen(function* () {
+              const now = Date.now();
+              const decoded = yield* ipfsCache.get(e.contentUri);
+              const end = Date.now();
+              const duration = end - now;
+
+              yield* Effect.logInfo(
+                `[LINEAR STREAM] Fetched IPFS data from cache in ${duration}ms. Block: ${block.number}`
+              );
+
+              return decoded;
+            });
+          });
         }),
       {
         concurrency: 50,
       }
     );
-
-    yield* Effect.logInfo(`[LINEAR STREAM] IPFS Data: ${JSON.stringify(data, null, 2)}. Block: ${block.number}`);
 
     return events.length > 0;
   });
@@ -249,7 +260,14 @@ function parseOutputToEvent(output: JsonValue) {
   const maybeEditPublishedEvent = Schema.decodeUnknownEither(EditPublishedEvent)(output);
 
   if (Either.isRight(maybeEditPublishedEvent)) {
-    eventsInBlock.push(maybeEditPublishedEvent.right);
+    // Ignore the US law space for now
+    // const editsPublished = maybeEditPublishedEvent.right.editsPublished.filter(
+    //   e => e.daoAddress !== US_LAW_SPACE.daoAddress
+    // );
+
+    eventsInBlock.push({
+      editsPublished: maybeEditPublishedEvent.right.editsPublished,
+    });
   }
 
   return eventsInBlock;

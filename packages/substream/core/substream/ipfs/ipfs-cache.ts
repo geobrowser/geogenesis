@@ -46,11 +46,21 @@ export const make = Effect.gen(function* () {
     put: (events, block) =>
       Effect.gen(function* () {
         const now = Date.now();
+        yield* Effect.logInfo(`[IPFS STREAM][CACHE] Processing ${events.length} items for block ${block.number}`);
 
         const result = yield* Effect.forEach(
           events,
           e => {
             return Effect.gen(function* () {
+              const alreadyExists = yield* db.use(client =>
+                client.query.ipfsCache.findFirst({ where: eq(ipfsCache.uri, e.contentUri) }).execute()
+              );
+
+              if (alreadyExists) {
+                yield* Effect.logInfo(`[IPFS STREAM][CACHE] Item with uri ${e.contentUri} already exists, skipping`);
+                return null;
+              }
+
               const contents = yield* fetchIpfsContent(e.contentUri);
 
               if (contents === null) {
@@ -58,6 +68,7 @@ export const make = Effect.gen(function* () {
                   uri: e.contentUri,
                   dao: e.daoAddress,
                   plugin: e.pluginAddress,
+                  block: block.number,
                   contents: null,
                   isErrored: true,
                 };
@@ -69,6 +80,7 @@ export const make = Effect.gen(function* () {
                 uri: e.contentUri,
                 dao: e.daoAddress,
                 plugin: e.pluginAddress,
+                block: block.number,
                 contents: decoded,
                 isErrored: decoded === null,
               };
@@ -82,14 +94,24 @@ export const make = Effect.gen(function* () {
         const end = Date.now();
         const duration = end - now;
 
+        const unwrittenResults = result.filter(r => r !== null);
+
+        if (unwrittenResults.length === 0) {
+          yield* Effect.logInfo(
+            `[IPFS STREAM][CACHE] No unwritten results for block ${block.number}. Duration: ${duration}ms`
+          );
+          return;
+        }
+
         yield* db.use(client =>
           client
             .insert(ipfsCache)
             .values(
-              result.map(r => {
+              unwrittenResults.map(r => {
                 return {
                   uri: r.uri,
                   json: r.contents,
+                  block: r.block.toString(),
                   isErrored: r.isErrored,
                 };
               })
@@ -98,7 +120,7 @@ export const make = Effect.gen(function* () {
         );
 
         yield* Effect.logInfo(
-          `Finished processing ${result.length} IPFS cache items for block ${block.number}. Duration: ${duration}ms`
+          `[IPFS STREAM][CACHE] Finished processing ${result.length} items for block ${block.number}. Duration: ${duration}ms`
         );
       }),
     get: uri =>
@@ -110,9 +132,8 @@ export const make = Effect.gen(function* () {
         );
 
         if (!result) {
-          yield* Effect.logError(`Could not find IPFS cache item for uri ${uri}. ${String(result)}`);
           return yield* new CouldNotFindIpfsCacheItemError({
-            message: `Could not find IPFS cache item for uri ${uri}`,
+            message: `[LINEAR STREAM][CACHE] Could not find cache item for uri ${uri}`,
           });
         }
 
@@ -121,7 +142,7 @@ export const make = Effect.gen(function* () {
         Effect.retry({
           schedule: Schedule.exponential(50).pipe(
             Schedule.jittered,
-            Schedule.tapOutput(() => Effect.logInfo('[LINEAR STREAM] Retrying IPFS cache item fetch'))
+            Schedule.tapOutput(() => Effect.logInfo('[LINEAR STREAM][CACHE] Retrying cache item fetch'))
           ),
         })
       ),
