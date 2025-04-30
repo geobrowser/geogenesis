@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
-import { ipfsCache } from './storage/schema';
-import { Storage, make } from './storage/storage';
+import { ipfsCache } from './services/storage/schema';
+import { Storage, make } from './services/storage/storage';
 import { Environment, make as makeEnvironment } from '~/core/environment';
 
 const reset = Effect.gen(function* () {

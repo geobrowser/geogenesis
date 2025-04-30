@@ -3,8 +3,8 @@ import { eq } from 'drizzle-orm';
 import { Context, Data, Duration, Effect, Either, Schedule } from 'effect';
 
 import { type DecodedEdit, type EditPublishedEvent, ZodEdit } from '../parser';
-import { ipfsCache } from '~/core/storage/schema';
-import { Storage } from '~/core/storage/storage';
+import { ipfsCache } from '~/core/services/storage/schema';
+import { Storage } from '~/core/services/storage/storage';
 import type { BlockEvent } from '~/core/types';
 import { IPFS_GATEWAY } from '~/sink/constants/constants';
 

@@ -4,7 +4,7 @@ import { NodeContext, NodeRuntime } from '@effect/platform-node';
 import { Effect, Layer } from 'effect';
 
 import { Environment, make as makeEnvironment } from './environment';
-import { Storage, make as makeDb } from './storage/storage';
+import { Storage, make as makeStorage } from './services/storage/storage';
 import { runCache } from './substream/cache-stream';
 import { runStream } from './substream/indexer-stream';
 import { IpfsCache, make as makeIpfsCache } from './substream/ipfs/ipfs-cache';
@@ -24,15 +24,15 @@ const cli = Command.run(base, {
 
 const EnvironmentLayer = Layer.effect(Environment, makeEnvironment);
 const TelemetryLayer = Layer.effect(Telemetry, makeTelemetry).pipe(Layer.provide(EnvironmentLayer));
-const DbLayer = Layer.effect(Storage, makeDb).pipe(Layer.provide(EnvironmentLayer));
-const CacheLayer = Layer.effect(IpfsCache, makeIpfsCache).pipe(Layer.provide(DbLayer));
+const StorageLayer = Layer.effect(Storage, makeStorage).pipe(Layer.provide(EnvironmentLayer));
+const CacheLayer = Layer.effect(IpfsCache, makeIpfsCache).pipe(Layer.provide(StorageLayer));
 const CacheWorkerLayer = Layer.succeed(IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive);
 
 const layers = Layer.mergeAll(
   NodeContext.layer,
   TelemetryLayer,
   EnvironmentLayer,
-  DbLayer,
+  StorageLayer,
   CacheLayer,
   CacheWorkerLayer
 );
