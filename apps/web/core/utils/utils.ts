@@ -90,6 +90,7 @@ export class GeoNumber {
 
 export class GeoDate {
   static defaultFormat = 'MMM d, yyyy - h:mmaaa';
+  static intervalDelimiter = '/';
 
   /**
    * We return blocktime from the subgraph for createdAt and updatedAt fields.
@@ -207,13 +208,46 @@ export class GeoDate {
     }
   };
 
+  static toggleDateInterval = (dateIsoString?: string): string => {
+    if (!dateIsoString) {
+      return '';
+    }
+
+    if (this.isDateInterval(dateIsoString)) {
+      const [startDateString] = dateIsoString.split(this.intervalDelimiter).map(d => d.trim());
+      return startDateString;
+    }
+    return `${dateIsoString}${this.intervalDelimiter}${dateIsoString}`;
+  };
+
+  static isDateInterval = (dateString?: string): boolean => {
+    if (!dateString) {
+      return false;
+    }
+
+    return dateString.includes(this.intervalDelimiter);
+  };
+
   static format = (dateIsoString: string, displayFormat?: string) => {
     try {
       const validatedFormat = this.validateFormat(displayFormat);
+
+      if (this.isDateInterval(dateIsoString)) {
+        const [startDateString, endDateString] = dateIsoString.split(this.intervalDelimiter).map(d => d.trim());
+
+        const startDate = parseISO(startDateString);
+        const endDate = parseISO(endDateString);
+
+        const formattedStartDate = formatInTimeZone(startDate, 'UTC', validatedFormat);
+        const formattedEndDate = formatInTimeZone(endDate, 'UTC', validatedFormat);
+
+        return `${formattedStartDate} — ${formattedEndDate}`;
+      }
+
       const date = parseISO(dateIsoString);
       return formatInTimeZone(date, 'UTC', validatedFormat);
     } catch (e) {
-      console.error(`Unable to format date: "${dateIsoString}" with format: "${displayFormat}".`);
+      console.error(`Unable to format date: "${dateIsoString}" with format: "${displayFormat}".`, e);
       return dateIsoString;
     }
   };

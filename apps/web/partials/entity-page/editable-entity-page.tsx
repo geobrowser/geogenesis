@@ -124,14 +124,15 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                   <>
                     {renderableType === 'TIME' && (
                       <DateFormatDropdown
-                        value={firstRenderable.options?.format}
-                        onSelect={(format: string) => {
+                        value={firstRenderable.value}
+                        format={firstRenderable.options?.format}
+                        onSelect={(value?: string, format?: string) => {
                           send({
                             type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                             payload: {
                               renderable: firstRenderable,
                               value: {
-                                value: firstRenderable.value,
+                                value: value ?? firstRenderable.value,
                                 type: 'TIME',
                                 options: {
                                   format,
