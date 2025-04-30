@@ -473,6 +473,7 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
 export function DateField({ value, format, isEditing, variant, onBlur }: DateFieldProps) {
   const isDateInterval = React.useMemo(() => GeoDate.isDateInterval(value), [value]);
+  const [intervalError, setIntervalError] = React.useState<string | null>(null);
 
   const [startDate, endDate] = React.useMemo(() => {
     if (isDateInterval && value) {
@@ -484,14 +485,31 @@ export function DateField({ value, format, isEditing, variant, onBlur }: DateFie
 
   const formattedDate = value ? GeoDate.format(value, format) : null;
 
+  const validateDateInterval = React.useCallback((start: string, end: string): boolean => {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    if (startDate > endDate) {
+      setIntervalError('End date cannot be before start date');
+      return false;
+    }
+
+    setIntervalError(null);
+    return true;
+  }, []);
+
   const handleStartDateChange = (newStartDate: string) => {
     if (!onBlur) return;
 
     if (isDateInterval) {
-      onBlur({
-        value: `${newStartDate}${GeoDate.intervalDelimiter}${endDate}`,
-        format: format,
-      });
+      const isValid = validateDateInterval(newStartDate, endDate);
+
+      if (isValid) {
+        onBlur({
+          value: `${newStartDate}${GeoDate.intervalDelimiter}${endDate}`,
+          format: format,
+        });
+      }
     } else {
       onBlur({
         value: newStartDate,
@@ -503,10 +521,14 @@ export function DateField({ value, format, isEditing, variant, onBlur }: DateFie
   const handleEndDateChange = (newEndDate: string) => {
     if (!onBlur || !isDateInterval) return;
 
-    onBlur({
-      value: `${startDate}${GeoDate.intervalDelimiter}${newEndDate}`,
-      format: format,
-    });
+    const isValid = validateDateInterval(startDate, newEndDate);
+
+    if (isValid) {
+      onBlur({
+        value: `${startDate}${GeoDate.intervalDelimiter}${newEndDate}`,
+        format: format,
+      });
+    }
   };
 
   if (!isEditing)
@@ -518,7 +540,7 @@ export function DateField({ value, format, isEditing, variant, onBlur }: DateFie
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex flex-row items-center gap-4">
+      <div className="flex flex-row items-start gap-4">
         <DateInput variant={variant} initialDate={startDate} onDateChange={handleStartDateChange} />
 
         {isDateInterval && (
@@ -528,6 +550,22 @@ export function DateField({ value, format, isEditing, variant, onBlur }: DateFie
           </>
         )}
       </div>
+
+      <AnimatePresence mode="wait">
+        <div className="overflow-hidden">
+          {intervalError && (
+            <motion.p
+              className="text-smallButton text-red-01"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15, bounce: 0.2 }}
+            >
+              {intervalError}
+            </motion.p>
+          )}
+        </div>
+      </AnimatePresence>
 
       <p className="text-sm text-grey-04">Browse format · {formattedDate}</p>
     </div>
