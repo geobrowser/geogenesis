@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { Command, Options } from '@effect/cli';
+import { Command } from '@effect/cli';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
-import { Array, Console, Effect, Layer, Option } from 'effect';
+import { Effect, Layer } from 'effect';
 
 import { Environment, make as makeEnvironment } from './environment';
 import { Storage, make as makeDb } from './storage/storage';
@@ -11,19 +11,7 @@ import { IpfsCache, make as makeIpfsCache } from './substream/ipfs/ipfs-cache';
 import { IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive } from './substream/ipfs/ipfs-cache-write-worker-pool';
 import { Telemetry, make as makeTelemetry } from '~/sink/telemetry';
 
-const configs = Options.keyValueMap('c').pipe(Options.optional);
-
-const run = Command.make('run', { configs }, ({ configs }) =>
-  Option.match(configs, {
-    onNone: () => Console.log('Running indexer'),
-    onSome: configs => {
-      const keyValuePairs = Array.fromIterable(configs)
-        .map(([key, value]) => `${key}=${value}`)
-        .join(', ');
-      return Console.log(`Running indexer with the following configs: ${keyValuePairs}`);
-    },
-  })
-);
+const run = Command.make('run', {}, () => Effect.void);
 
 const index = Command.make('index', {}, () => runStream({ startBlockNumber: 881 }));
 const cache = Command.make('cache', {}, () => runCache({ startBlockNumber: 881 }));
