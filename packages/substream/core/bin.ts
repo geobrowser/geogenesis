@@ -1,35 +1,55 @@
 #!/usr/bin/env node
-import { Command } from '@effect/cli';
+import { Command, Options } from '@effect/cli';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
-import { Effect, Layer } from 'effect';
+import { Array, Console, Effect, Layer, Option } from 'effect';
 
 import { Db, make as makeDb } from './db/db';
-import { runStream } from './substream';
+import { runCache } from './substream/cache';
 import { IpfsCache, make as makeIpfsCache } from './substream/ipfs/ipfs-cache';
 import { IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive } from './substream/ipfs/ipfs-cache-write-worker-pool';
+import { runStream } from './substream/writer';
 import { Environment, make as makeEnvironment } from '~/sink/environment';
 import { Telemetry, make as makeTelemetry } from '~/sink/telemetry';
 
-const run = Command.make('run', {}, () => runStream({ startBlockNumber: 881 }));
+const configs = Options.keyValueMap('c').pipe(Options.optional);
 
-const cli = Command.run(run, {
-  name: 'Knowledge graph indexer',
+const run = Command.make('run', { configs }, ({ configs }) =>
+  Option.match(configs, {
+    onNone: () => Console.log('Running indexer'),
+    onSome: configs => {
+      const keyValuePairs = Array.fromIterable(configs)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(', ');
+      return Console.log(`Running indexer with the following configs: ${keyValuePairs}`);
+    },
+  })
+);
+
+const index = Command.make('index', {}, () => runStream({ startBlockNumber: 881 }));
+const cache = Command.make('cache', {}, () => runCache({ startBlockNumber: 881 }));
+
+const base = run.pipe(Command.withSubcommands([index, cache]));
+const cli = Command.run(base, {
+  name: 'Knowledge Graph indexer',
   version: '0.0.1',
 });
 
-const environmentLayer = Layer.effect(Environment, makeEnvironment);
-const telemetryLayer = Layer.effect(Telemetry, makeTelemetry).pipe(Layer.provide(environmentLayer));
-const dbLayer = Layer.effect(Db, makeDb).pipe(Layer.provide(environmentLayer));
-const ipfsCacheLayer = Layer.effect(IpfsCache, makeIpfsCache).pipe(Layer.provide(dbLayer));
-const ipfsCacheControlPlaneLayer = Layer.succeed(IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive);
+const EnvironmentLayer = Layer.effect(Environment, makeEnvironment);
+const TelemetryLayer = Layer.effect(Telemetry, makeTelemetry).pipe(Layer.provide(EnvironmentLayer));
+const DbLayer = Layer.effect(Db, makeDb).pipe(Layer.provide(EnvironmentLayer));
+const CacheLayer = Layer.effect(IpfsCache, makeIpfsCache).pipe(Layer.provide(DbLayer));
+const CacheWorkerLayer = Layer.succeed(IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive);
 
 const layers = Layer.mergeAll(
   NodeContext.layer,
-  telemetryLayer,
-  environmentLayer,
-  dbLayer,
-  ipfsCacheLayer,
-  ipfsCacheControlPlaneLayer
+  TelemetryLayer,
+  EnvironmentLayer,
+  DbLayer,
+  CacheLayer,
+  CacheWorkerLayer
 );
 
+/**
+ * Separate commands for indexer vs cacher
+ */
 cli(process.argv).pipe(Effect.provide(layers), NodeRuntime.runMain);

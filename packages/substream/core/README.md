@@ -6,15 +6,16 @@ The code in /core relates to the rewrite of the data service to a more modular, 
 4. Versioning system (not calling it an indexer): Does what #3 does, but also handles the job of maintaining historical versions of entities/spaces over time.
 
 [ ] Biome
-[ ] Cursor + block number
+[ ] Cursor + block number for both IPFS stream + Linear/Ordered stream
 [ ] Otel
-[ ] DB Schema using drizzle
+[X] DB Schema using drizzle
 [ ] Substream consumer independent from other systems
 
     - should partition events by space
     - should handle parallelizing reading the events by space
     - should handle parallelizing fetching IPFS contents by space
 
+[ ] IPFS stream replication/backup
 [ ] Update contract events to emit all the data we need and avoid lookups
 [ ] Governance system
 [ ] Write mock data that we can use to test governance system

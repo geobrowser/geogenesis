@@ -15,7 +15,8 @@
     "nuke-public": "tsx ./sink/utils/executeSql.ts ./sink/sql/nukePublic.sql",
     "zapatos": "pnpm dotenv -e .env -- npx zapatos",
     "start": "pnpm dotenv -e .env -- node dist/index.js",
-    "start:new": "pnpm dotenv -e .env -- npx tsx core/bin.ts",
+    "start:cache": "pnpm dotenv -e .env -- npx tsx core/bin.ts cache",
+    "start:indexer": "pnpm dotenv -e .env -- npx tsx core/bin.ts index",
     "initialize": "./sink/sql/init-all.sh && pnpm zapatos",
     "test": "vitest"
   },
