@@ -49,7 +49,4 @@ const layers = Layer.mergeAll(
   CacheWorkerLayer
 );
 
-/**
- * Separate commands for indexer vs cacher
- */
 cli(process.argv).pipe(Effect.provide(layers), NodeRuntime.runMain);
