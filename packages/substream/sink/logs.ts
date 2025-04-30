@@ -1,6 +1,6 @@
 import { Effect, LogLevel, Logger } from 'effect';
 
-import { Environment } from './environment';
+import { Environment } from '../core/environment';
 
 export const getConfiguredLogLevel = Effect.gen(function* (_) {
   const environment = yield* _(Environment);

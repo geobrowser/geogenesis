@@ -3,12 +3,12 @@ import { Command, Options } from '@effect/cli';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
 import { Array, Console, Effect, Layer, Option } from 'effect';
 
+import { Environment, make as makeEnvironment } from './environment';
 import { Storage, make as makeDb } from './storage/storage';
-import { runCache } from './substream/cache';
+import { runCache } from './substream/cache-stream';
+import { runStream } from './substream/indexer-stream';
 import { IpfsCache, make as makeIpfsCache } from './substream/ipfs/ipfs-cache';
 import { IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive } from './substream/ipfs/ipfs-cache-write-worker-pool';
-import { runStream } from './substream/writer';
-import { Environment, make as makeEnvironment } from '~/sink/environment';
 import { Telemetry, make as makeTelemetry } from '~/sink/telemetry';
 
 const configs = Options.keyValueMap('c').pipe(Options.optional);

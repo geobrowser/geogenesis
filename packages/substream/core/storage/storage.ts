@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Context, Data, Effect, Redacted } from 'effect';
 
 import { entities, ipfsCache } from './schema';
-import { Environment } from '~/sink/environment';
+import { Environment } from '~/core/environment';
 
 export class StorageError extends Data.TaggedError('StorageError')<{
   cause?: unknown;

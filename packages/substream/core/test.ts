@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import { events } from './storage/schema';
 import { Storage, make } from './storage/storage';
-import { Environment, make as makeEnvironment } from '~/sink/environment';
+import { Environment, make as makeEnvironment } from '~/core/environment';
 
 const test = Effect.gen(function* () {
   const db = yield* Storage;

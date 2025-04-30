@@ -9,8 +9,8 @@ import type { BlockEvent } from '../types';
 import { IpfsCacheWriteWorkerPool } from './ipfs/ipfs-cache-write-worker-pool';
 import type { IpfsCacheQueueItem } from './ipfs/types';
 import { parseOutputToEvent } from './substream-output';
+import { Environment } from '~/core/environment';
 import { MANIFEST } from '~/sink/constants/constants';
-import { Environment } from '~/sink/environment';
 
 class InvalidPackageError extends Data.TaggedError('InvalidPackageError')<{
   cause?: unknown;

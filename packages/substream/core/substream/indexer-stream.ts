@@ -8,8 +8,8 @@ import { Data, Duration, Effect, Either, Logger, Redacted, Stream } from 'effect
 import type { BlockEvent } from '../types';
 import { IpfsCache } from './ipfs/ipfs-cache';
 import { parseOutputToEvent } from './substream-output';
+import { Environment } from '~/core/environment';
 import { MANIFEST } from '~/sink/constants/constants';
-import { Environment } from '~/sink/environment';
 import { LoggerLive, getConfiguredLogLevel } from '~/sink/logs';
 import { Telemetry } from '~/sink/telemetry';
 
