@@ -21,19 +21,27 @@ interface IpfsCacheImpl {
 
 export class IpfsCache extends Context.Tag('IpfsCache')<IpfsCache, IpfsCacheImpl>() {}
 
-class FailedFetchingIpfsContentError extends Error {
-  _tag: 'FailedFetchingIpfsContentError' = 'FailedFetchingIpfsContentError';
-}
+class FailedFetchingIpfsContentError extends Data.TaggedError('FailedFetchingIpfsContentError')<{
+  cause?: unknown;
+  message?: string;
+}> {}
 
-class UnableToParseJsonError extends Error {
-  _tag: 'UnableToParseJsonError' = 'UnableToParseJsonError';
-}
+class UnableToParseJsonError extends Data.TaggedError('UnableToParseJsonError')<{
+  cause?: unknown;
+  message?: string;
+}> {}
 
-class UnknownContentTypeError extends Error {
-  _tag: 'UnknownContentTypeError' = 'UnknownContentTypeError';
-}
+class UnknownContentTypeError extends Data.TaggedError('UnknownContentTypeError')<{
+  cause?: unknown;
+  message?: string;
+}> {}
 
 class CacheMissError extends Data.TaggedError('CacheMissError')<{
+  cause?: unknown;
+  message?: string;
+}> {}
+
+class CacheWriteError extends Data.TaggedError('CacheMissError')<{
   cause?: unknown;
   message?: string;
 }> {}
@@ -124,7 +132,7 @@ export const make = Effect.gen(function* () {
           )
           .pipe(
             Effect.mapError(
-              e => new CacheMissError({ message: `[IPFS STREAM][CACHE] Error writing to cache: ${String(e)}` })
+              e => new CacheWriteError({ message: `[IPFS STREAM][CACHE] Error writing to cache: ${String(e)}` })
             )
           );
 
@@ -140,7 +148,10 @@ export const make = Effect.gen(function* () {
           .use(client => client.query.ipfsCache.findFirst({ where: eq(ipfsCache.uri, uri) }).execute())
           .pipe(
             Effect.mapError(
-              e => new CacheMissError({ message: `[IPFS STREAM][CACHE] Error writing to cache: ${String(e)}` })
+              e =>
+                new CacheMissError({
+                  message: `[IPFS STREAM][CACHE] Error reading cache. ${String(e)}`,
+                })
             )
           );
 
@@ -170,9 +181,9 @@ export function fetchIpfsContent(
       yield* Effect.logError(
         `Encountered unknown content type when decoding content hash ${uri}. IPFS CIDs should start with ipfs://`
       );
-      yield* Effect.fail(new UnknownContentTypeError(`Unknown content type when decoding content hash ${uri}`));
-
-      return null;
+      return yield* Effect.fail(
+        new UnknownContentTypeError({ message: `Unknown content type when decoding content hash ${uri}` })
+      );
     }
 
     const ipfsFetchEffect = Effect.tryPromise({
@@ -187,7 +198,9 @@ export function fetchIpfsContent(
         });
       },
       catch: error => {
-        return new FailedFetchingIpfsContentError(`Failed fetching IPFS content from uri ${uri}. ${String(error)}`);
+        return new FailedFetchingIpfsContentError({
+          message: `Failed fetching IPFS content from uri ${uri}. ${String(error)}`,
+        });
       },
     });
 
@@ -205,8 +218,9 @@ export function fetchIpfsContent(
 
     if (Either.isLeft(result)) {
       yield* Effect.logError(`Couldn't fetch IPFS content from uri, ${result.left.message}`);
-      yield* Effect.fail(new FailedFetchingIpfsContentError(`Unable to fetch IPFS content from uri ${uri}`));
-      return null;
+      return yield* Effect.fail(
+        new FailedFetchingIpfsContentError({ message: `Unable to fetch IPFS content from uri ${uri}` })
+      );
     }
 
     const response = result.right;
@@ -217,7 +231,9 @@ export function fetchIpfsContent(
         return Buffer.from(buffer);
       },
       catch: error =>
-        new UnableToParseJsonError(`Unable to parse JSON when reading content from uri ${uri}. ${String(error)}`),
+        new UnableToParseJsonError({
+          message: `Unable to parse JSON when reading content from uri ${uri}. ${String(error)}`,
+        }),
     });
   });
 }
