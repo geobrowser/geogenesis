@@ -17,16 +17,14 @@ import { Trash } from '../icons/trash';
 import { Upload } from '../icons/upload';
 
 const textareaStyles = cva(
-  // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin
-  // of -1px to compensate for this. This results in the correct line heights between both edit and
-  // browse modes. This only affects the editable title of entity pages.
+  // The react-textarea-autosize library miscalculates the height. We add a negative margin to compensate for this. This results in the correct line heights between both edit and browse modes. This only affects the editable titles of entity pages and editable titles of data blocks
   'm-0 w-full resize-none bg-transparent p-0 placeholder:text-grey-03 focus:outline-none',
   {
     variants: {
       variant: {
-        mainPage: 'text-mainPage',
-        body: 'text-body',
-        tableCell: '-mb-0 text-tableCell',
+        mainPage: 'mb-[-1px] text-mainPage',
+        body: 'mb-[-6.5px] text-body',
+        tableCell: 'mb-[-3.5px] text-tableCell',
         smallTitle: 'text-smallTitle',
       },
     },

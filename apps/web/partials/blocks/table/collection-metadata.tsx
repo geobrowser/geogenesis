@@ -116,7 +116,7 @@ export const CollectionMetadata = ({
             {name}
           </span>
           {verified && (
-            <span className="inline-block pl-2">
+            <span className="inline-block pl-2 pt-0.5">
               <CheckCircle color={isEditing || view !== 'TABLE' ? 'text' : 'ctaHover'} />
             </span>
           )}
