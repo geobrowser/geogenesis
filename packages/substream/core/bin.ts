@@ -3,7 +3,8 @@ import { Command } from '@effect/cli';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
 import { Effect, Layer } from 'effect';
 
-import { Environment, make as makeEnvironment } from './environment';
+import { EntityStorage, make as makeEntityStorage } from './kg/entity-storage';
+import { Environment, make as makeEnvironment } from './services/environment';
 import { Storage, make as makeStorage } from './services/storage/storage';
 import { runCache } from './substream/cache-stream';
 import { runStream } from './substream/indexer-stream';
@@ -27,6 +28,7 @@ const TelemetryLayer = Layer.effect(Telemetry, makeTelemetry).pipe(Layer.provide
 const StorageLayer = Layer.effect(Storage, makeStorage).pipe(Layer.provide(EnvironmentLayer));
 const CacheLayer = Layer.effect(IpfsCache, makeIpfsCache).pipe(Layer.provide(StorageLayer));
 const CacheWorkerLayer = Layer.succeed(IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive);
+const EntityStorageLayer = Layer.effect(EntityStorage, makeEntityStorage).pipe(Layer.provide(StorageLayer));
 
 const layers = Layer.mergeAll(
   NodeContext.layer,
@@ -34,7 +36,8 @@ const layers = Layer.mergeAll(
   EnvironmentLayer,
   StorageLayer,
   CacheLayer,
-  CacheWorkerLayer
+  CacheWorkerLayer,
+  EntityStorageLayer
 );
 
 cli(process.argv).pipe(Effect.provide(layers), NodeRuntime.runMain);

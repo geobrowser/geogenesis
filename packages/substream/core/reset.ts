@@ -1,13 +1,14 @@
 import { Effect } from 'effect';
 
-import { ipfsCache } from './services/storage/schema';
+import { entities } from './services/storage/schema';
 import { Storage, make } from './services/storage/storage';
-import { Environment, make as makeEnvironment } from '~/core/environment';
+import { Environment, make as makeEnvironment } from '~/core/services/environment';
 
 const reset = Effect.gen(function* () {
   const db = yield* Storage;
 
-  const result = yield* db.use(async client => await client.delete(ipfsCache).execute());
+  // const result = yield* db.use(async client => await client.delete(ipfsCache).execute());
+  const result = yield* db.use(async client => await client.delete(entities).execute());
 
   console.log('Result:', result);
 }).pipe(Effect.provideServiceEffect(Storage, make));

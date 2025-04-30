@@ -3,14 +3,14 @@ import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { createSink, createStream } from '@substreams/sink';
-import { Data, Duration, Effect, Either, Logger, Redacted, Stream } from 'effect';
+import { Data, Duration, Effect, Either, Redacted, Stream } from 'effect';
 
+import { EntityStorage, EntityStorageMapper } from '../kg/entity-storage';
 import type { BlockEvent } from '../types';
 import { IpfsCache } from './ipfs/ipfs-cache';
 import { parseOutputToEvent } from './substream-output';
-import { Environment } from '~/core/environment';
+import { Environment } from '~/core/services/environment';
 import { MANIFEST } from '~/sink/constants/constants';
-import { LoggerLive, getConfiguredLogLevel } from '~/sink/logs';
 import { Telemetry } from '~/sink/telemetry';
 
 class InvalidPackageError extends Data.TaggedError('InvalidPackageError')<{
@@ -60,7 +60,6 @@ export function runStream({ startBlockNumber }: StreamConfig) {
           const start = Date.now();
           const blockNumber = Number(message.clock?.number.toString());
           const telemetry = yield* Telemetry;
-          const logLevel = yield* getConfiguredLogLevel;
 
           const mapOutput = message.output?.mapOutput;
 
@@ -110,10 +109,7 @@ export function runStream({ startBlockNumber }: StreamConfig) {
           if (hasValidEvent) {
             const end = Date.now();
 
-            yield* Effect.logInfo(`[LINEAR STREAM][BLOCK] Ended ${blockNumber} in ${end - start}ms`).pipe(
-              Logger.withMinimumLogLevel(logLevel),
-              Effect.provide(LoggerLive)
-            );
+            yield* Effect.logInfo(`[LINEAR STREAM][BLOCK] Ended ${blockNumber} in ${end - start}ms`);
           }
         });
       },
@@ -156,6 +152,40 @@ export function handleLinearMessage(output: JsonValue, block: BlockEvent) {
               return decoded;
             });
           });
+        }),
+      {
+        concurrency: 50,
+      }
+    );
+
+    const entityStorage = yield* EntityStorage;
+
+    yield* Effect.forEach(
+      data,
+      d =>
+        Effect.gen(function* () {
+          yield* Effect.forEach(
+            d,
+            e => {
+              return Effect.gen(function* () {
+                const now = Date.now();
+
+                if (e.isError) {
+                  yield* Effect.logError(`[LINEAR STREAM][ENTITY] IPFS hash errored during resolution. Skipping.`);
+                  return;
+                }
+
+                const mapped = EntityStorageMapper.toEntityStorage(e.edit?.ops ?? [], block);
+                yield* entityStorage.insert(mapped, block);
+
+                const end = Date.now();
+                const duration = end - now;
+
+                yield* Effect.logInfo(`[LINEAR STREAM][ENTITY] Inserted ${mapped.length} items in ${duration}ms.`);
+              });
+            },
+            { concurrency: 50 }
+          );
         }),
       {
         concurrency: 50,

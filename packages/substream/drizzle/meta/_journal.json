@@ -36,6 +36,27 @@
       "when": 1745966675454,
       "tag": "0004_salty_mojo",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1746037947763,
+      "tag": "0005_new_makkari",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1746040549107,
+      "tag": "0006_young_crusher_hogan",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1746041726102,
+      "tag": "0007_safe_hemingway",
+      "breakpoints": true
     }
   ]
 }

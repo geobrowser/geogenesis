@@ -1,13 +1,5 @@
-import type {
-  ChainAddEditorProposal,
-  ChainAddMemberProposal,
-  ChainAddSubspaceProposal,
-  ChainEditProposal,
-  ChainRemoveEditorProposal,
-  ChainRemoveMemberProposal,
-  ChainRemoveSubspaceProposal,
-} from './events/schema/proposal';
-import type { ZodOp } from './proto/schema';
+import type { ChainEditProposal } from '../../sink/events/schema/proposal';
+import type { ZodOp } from '../substream/parser';
 
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
@@ -107,7 +99,7 @@ export type ImportFileOp = {
  * an entity has triples from multiple spaces we need to keep the space_id of the original
  * triple instead of changing it to the space id of the edit being processed.
  */
-export type Op = SetTripleOp | DeleteTripleOp | CreateRelationOp | DeleteRelationOp;
+export type Op = SetTripleOp | DeleteTripleOp | CreateRelationOp | DeleteRelationOp | ImportFileOp;
 
 export type Edit = {
   name: string;
@@ -119,17 +111,17 @@ export type Edit = {
 
 export type SinkProposal = { space: string; name: string; onchainProposalId: string };
 export type SinkEditProposal = ChainEditProposal & { type: 'ADD_EDIT'; ops: Op[] } & SinkProposal;
-export type SinkAddMemberProposal = ChainAddMemberProposal & { type: 'ADD_MEMBER' } & SinkProposal;
-export type SinkRemoveMemberProposal = ChainRemoveMemberProposal & { type: 'REMOVE_MEMBER' } & SinkProposal;
-export type SinkAddEditorProposal = ChainAddEditorProposal & { type: 'ADD_EDITOR' } & SinkProposal;
-export type SinkRemoveEditorProposal = ChainRemoveEditorProposal & { type: 'REMOVE_EDITOR' } & SinkProposal;
-export type SinkAddSubspaceProposal = ChainAddSubspaceProposal & { type: 'ADD_SUBSPACE' } & SinkProposal;
-export type SinkRemoveSubspaceProposal = ChainRemoveSubspaceProposal & {
-  type: 'REMOVE_SUBSPACE';
-} & SinkProposal;
+// export type SinkAddMemberProposal = ChainAddMemberProposal & { type: 'ADD_MEMBER' } & SinkProposal;
+// export type SinkRemoveMemberProposal = ChainRemoveMemberProposal & { type: 'REMOVE_MEMBER' } & SinkProposal;
+// export type SinkAddEditorProposal = ChainAddEditorProposal & { type: 'ADD_EDITOR' } & SinkProposal;
+// export type SinkRemoveEditorProposal = ChainRemoveEditorProposal & { type: 'REMOVE_EDITOR' } & SinkProposal;
+// export type SinkAddSubspaceProposal = ChainAddSubspaceProposal & { type: 'ADD_SUBSPACE' } & SinkProposal;
+// export type SinkRemoveSubspaceProposal = ChainRemoveSubspaceProposal & {
+//   type: 'REMOVE_SUBSPACE';
+// } & SinkProposal;
 
-export type SinkMembershipProposal = SinkAddMemberProposal | SinkRemoveMemberProposal;
-export type SinkEditorshipProposal = SinkAddEditorProposal | SinkRemoveEditorProposal;
-export type SinkSubspaceProposal = SinkAddSubspaceProposal | SinkRemoveSubspaceProposal;
+// export type SinkMembershipProposal = SinkAddMemberProposal | SinkRemoveMemberProposal;
+// export type SinkEditorshipProposal = SinkAddEditorProposal | SinkRemoveEditorProposal;
+// export type SinkSubspaceProposal = SinkAddSubspaceProposal | SinkRemoveSubspaceProposal;
 
 export type IntermediateSinkEditProposal = OmitStrict<SinkEditProposal, 'ops'> & { ops: ZodOp[] };

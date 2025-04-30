@@ -1,0 +1,1 @@
+ALTER TABLE "ipfs_cache" ADD COLUMN "space" text NOT NULL;

@@ -1,6 +1,6 @@
 import type * as S from 'zapatos/schema';
 
-import type { BlockEvent, DeleteTripleOp, SetTripleOp, ValueType } from '../types';
+import type { BlockEvent, DeleteTripleOp, SetTripleOp, ValueType } from '../../core/kg/types';
 
 /**
  * @NOTE that we currently merge ops from previous versions of entities into new versions. If

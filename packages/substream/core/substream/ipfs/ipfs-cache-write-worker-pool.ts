@@ -3,13 +3,13 @@ import { Context, Effect, Queue } from 'effect';
 import { IpfsCache } from './ipfs-cache';
 import type { IpfsCacheQueueItem } from './types';
 
-interface IpfsCacheWriteWorkerPoolImpl {
+interface IpfsCacheWriteWorkerPoolShape {
   start(queue: Queue.Queue<IpfsCacheQueueItem>): Effect.Effect<void, never, IpfsCache>;
 }
 
 export class IpfsCacheWriteWorkerPool extends Context.Tag('IpfsCacheWriteWorkerPool')<
   IpfsCacheWriteWorkerPool,
-  IpfsCacheWriteWorkerPoolImpl
+  IpfsCacheWriteWorkerPoolShape
 >() {}
 
 export const IpfsCacheWriteWorkerPoolLive = IpfsCacheWriteWorkerPool.of({
@@ -28,10 +28,10 @@ export const IpfsCacheWriteWorkerPoolLive = IpfsCacheWriteWorkerPool.of({
         yield* Effect.logInfo('[IPFS WORKER POOL] Starting queue processing');
 
         const workers = yield* Effect.forEach(
-          Array.from({ length: 10 }),
+          Array.from({ length: 20 }),
           () => Effect.fork(processQueueItem.pipe(Effect.forever)),
           {
-            concurrency: 10,
+            concurrency: 20,
           }
         );
 

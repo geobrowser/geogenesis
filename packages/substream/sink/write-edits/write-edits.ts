@@ -3,9 +3,9 @@ import { Data, Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
+import type { BlockEvent, CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SetTripleOp } from '../../core/kg/types';
 import { CurrentVersions, Entities, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
-import type { BlockEvent, CreateRelationOp, DeleteRelationOp, DeleteTripleOp, SetTripleOp } from '../types';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
 import { aggregateRelations } from './relations/aggregate-relations';
 import { writeTriples } from './write-triples';

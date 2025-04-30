@@ -2,7 +2,7 @@ import { getChecksumAddress } from '@graphprotocol/grc-20';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
-import type { BlockEvent } from '../types';
+import type { BlockEvent } from '../../core/kg/types';
 import { deriveProposalId } from '../utils/id';
 import { pool } from '../utils/pool';
 import { CHUNK_SIZE } from './constants';

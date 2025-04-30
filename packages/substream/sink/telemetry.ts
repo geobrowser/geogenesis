@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/node';
 import { Context, Effect, Redacted } from 'effect';
 
-import { Environment, EnvironmentLive } from '../core/environment';
+import { Environment, EnvironmentLive } from '../core/services/environment';
 
 interface ITelemetry {
   captureException: (error: unknown) => void;

@@ -1,14 +1,17 @@
+import { NetworkIds } from '@graphprotocol/grc-20';
 import { Edit } from '@graphprotocol/grc-20/proto';
 import { eq } from 'drizzle-orm';
 import { Context, Data, Duration, Effect, Either, Schedule } from 'effect';
+import { isError } from 'effect/Predicate';
 
 import { type DecodedEdit, type EditPublishedEvent, ZodEdit } from '../parser';
+import { deriveSpaceId } from '../utils';
 import { ipfsCache } from '~/core/services/storage/schema';
 import { Storage } from '~/core/services/storage/storage';
 import type { BlockEvent } from '~/core/types';
 import { IPFS_GATEWAY } from '~/sink/constants/constants';
 
-interface IpfsCacheImpl {
+interface IpfsCacheShape {
   put(
     events: EditPublishedEvent['editsPublished'],
     block: BlockEvent
@@ -16,10 +19,12 @@ interface IpfsCacheImpl {
     void,
     FailedFetchingIpfsContentError | UnableToParseJsonError | UnknownContentTypeError | CacheMissError
   >;
-  get(uri: string): Effect.Effect<DecodedEdit, CacheMissError, Storage>;
+  get(
+    uri: string
+  ): Effect.Effect<{ spaceId: string; edit: DecodedEdit | null; isError: boolean }, CacheMissError, Storage>;
 }
 
-export class IpfsCache extends Context.Tag('IpfsCache')<IpfsCache, IpfsCacheImpl>() {}
+export class IpfsCache extends Context.Tag('IpfsCache')<IpfsCache, IpfsCacheShape>() {}
 
 class FailedFetchingIpfsContentError extends Data.TaggedError('FailedFetchingIpfsContentError')<{
   cause?: unknown;
@@ -47,7 +52,7 @@ class CacheWriteError extends Data.TaggedError('CacheMissError')<{
 }> {}
 
 export const make = Effect.gen(function* () {
-  const db = yield* Storage;
+  const storage = yield* Storage;
 
   return IpfsCache.of({
     put: (events, block) =>
@@ -59,7 +64,7 @@ export const make = Effect.gen(function* () {
           events,
           e => {
             return Effect.gen(function* () {
-              const alreadyExists = yield* db
+              const alreadyExists = yield* storage
                 .use(client => client.query.ipfsCache.findFirst({ where: eq(ipfsCache.uri, e.contentUri) }).execute())
                 .pipe(
                   Effect.mapError(
@@ -114,7 +119,7 @@ export const make = Effect.gen(function* () {
           return;
         }
 
-        yield* db
+        yield* storage
           .use(client =>
             client
               .insert(ipfsCache)
@@ -125,6 +130,7 @@ export const make = Effect.gen(function* () {
                     json: r.contents,
                     block: r.block.toString(),
                     isErrored: r.isErrored,
+                    space: deriveSpaceId({ network: NetworkIds.GEO, address: r.dao }),
                   };
                 })
               )
@@ -161,7 +167,7 @@ export const make = Effect.gen(function* () {
           });
         }
 
-        return result.json as DecodedEdit;
+        return { spaceId: result.space, edit: result.json as DecodedEdit, isError: result.isErrored };
       }).pipe(
         Effect.retry({
           schedule: Schedule.exponential(50).pipe(

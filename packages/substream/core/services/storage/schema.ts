@@ -11,14 +11,19 @@ export const ipfsCache = pgTable('ipfs_cache', {
    * an incorrect format. We need to signal to consumers that the cache
    * has the IPFS CID, but was unable to parse it.
    */
-  isErrored: boolean().default(false),
+  isErrored: boolean().notNull().default(false),
   block: text().notNull(),
+  space: text().notNull(),
 });
 
 export type IpfsCacheItem = InferSelectModel<typeof ipfsCache>;
 
 export const entities = pgTable('entities', {
   id: text().primaryKey(),
+  createdAt: text().notNull(),
+  createdAtBlock: text().notNull(),
+  updatedAt: text().notNull(),
+  updatedAtBlock: text().notNull(),
 });
 
 export type DbEntity = InferSelectModel<typeof entities>;
