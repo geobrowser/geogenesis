@@ -3,20 +3,20 @@ import { eq } from 'drizzle-orm';
 import { Context, Data, Duration, Effect, Either, Schedule } from 'effect';
 
 import { type DecodedEdit, type EditPublishedEvent, ZodEdit } from '../parser';
-import { Db, DbError } from '~/core/db/db';
-import { ipfsCache } from '~/core/db/schema';
+import { ipfsCache } from '~/core/storage/schema';
+import { Storage } from '~/core/storage/storage';
 import type { BlockEvent } from '~/core/types';
 import { IPFS_GATEWAY } from '~/sink/constants/constants';
 
 interface IpfsCacheImpl {
-  fetch(
-    uri: string
-  ): Effect.Effect<Buffer | null, FailedFetchingIpfsContentError | UnableToParseJsonError | UnknownContentTypeError>;
   put(
     events: EditPublishedEvent['editsPublished'],
     block: BlockEvent
-  ): Effect.Effect<void, FailedFetchingIpfsContentError | UnableToParseJsonError | UnknownContentTypeError | DbError>;
-  get(uri: string): Effect.Effect<DecodedEdit, CouldNotFindIpfsCacheItemError | DbError, Db>;
+  ): Effect.Effect<
+    void,
+    FailedFetchingIpfsContentError | UnableToParseJsonError | UnknownContentTypeError | CacheMissError
+  >;
+  get(uri: string): Effect.Effect<DecodedEdit, CacheMissError, Storage>;
 }
 
 export class IpfsCache extends Context.Tag('IpfsCache')<IpfsCache, IpfsCacheImpl>() {}
@@ -33,16 +33,15 @@ class UnknownContentTypeError extends Error {
   _tag: 'UnknownContentTypeError' = 'UnknownContentTypeError';
 }
 
-class CouldNotFindIpfsCacheItemError extends Data.TaggedError('CouldNotFindIpfsCacheItemError')<{
+class CacheMissError extends Data.TaggedError('CacheMissError')<{
   cause?: unknown;
   message?: string;
 }> {}
 
 export const make = Effect.gen(function* () {
-  const db = yield* Db;
+  const db = yield* Storage;
 
   return IpfsCache.of({
-    fetch: uri => fetchIpfsContent(uri),
     put: (events, block) =>
       Effect.gen(function* () {
         const now = Date.now();
@@ -52,12 +51,16 @@ export const make = Effect.gen(function* () {
           events,
           e => {
             return Effect.gen(function* () {
-              const alreadyExists = yield* db.use(client =>
-                client.query.ipfsCache.findFirst({ where: eq(ipfsCache.uri, e.contentUri) }).execute()
-              );
+              const alreadyExists = yield* db
+                .use(client => client.query.ipfsCache.findFirst({ where: eq(ipfsCache.uri, e.contentUri) }).execute())
+                .pipe(
+                  Effect.mapError(
+                    e => new CacheMissError({ message: `[IPFS STREAM][CACHE] Error checking cache: ${String(e)}` })
+                  )
+                );
 
               if (alreadyExists) {
-                yield* Effect.logInfo(`[IPFS STREAM][CACHE] Item with uri ${e.contentUri} already exists, skipping`);
+                yield* Effect.logDebug(`[IPFS STREAM][CACHE] Item with uri ${e.contentUri} already exists, skipping`);
                 return null;
               }
 
@@ -97,27 +100,33 @@ export const make = Effect.gen(function* () {
         const unwrittenResults = result.filter(r => r !== null);
 
         if (unwrittenResults.length === 0) {
-          yield* Effect.logInfo(
+          yield* Effect.logDebug(
             `[IPFS STREAM][CACHE] No unwritten results for block ${block.number}. Duration: ${duration}ms`
           );
           return;
         }
 
-        yield* db.use(client =>
-          client
-            .insert(ipfsCache)
-            .values(
-              unwrittenResults.map(r => {
-                return {
-                  uri: r.uri,
-                  json: r.contents,
-                  block: r.block.toString(),
-                  isErrored: r.isErrored,
-                };
-              })
+        yield* db
+          .use(client =>
+            client
+              .insert(ipfsCache)
+              .values(
+                unwrittenResults.map(r => {
+                  return {
+                    uri: r.uri,
+                    json: r.contents,
+                    block: r.block.toString(),
+                    isErrored: r.isErrored,
+                  };
+                })
+              )
+              .execute()
+          )
+          .pipe(
+            Effect.mapError(
+              e => new CacheMissError({ message: `[IPFS STREAM][CACHE] Error writing to cache: ${String(e)}` })
             )
-            .execute()
-        );
+          );
 
         yield* Effect.logInfo(
           `[IPFS STREAM][CACHE] Finished processing ${result.length} items for block ${block.number}. Duration: ${duration}ms`
@@ -125,14 +134,18 @@ export const make = Effect.gen(function* () {
       }),
     get: uri =>
       Effect.gen(function* () {
-        const db = yield* Db;
+        const db = yield* Storage;
 
-        const result = yield* db.use(client =>
-          client.query.ipfsCache.findFirst({ where: eq(ipfsCache.uri, uri) }).execute()
-        );
+        const result = yield* db
+          .use(client => client.query.ipfsCache.findFirst({ where: eq(ipfsCache.uri, uri) }).execute())
+          .pipe(
+            Effect.mapError(
+              e => new CacheMissError({ message: `[IPFS STREAM][CACHE] Error writing to cache: ${String(e)}` })
+            )
+          );
 
         if (!result) {
-          return yield* new CouldNotFindIpfsCacheItemError({
+          return yield* new CacheMissError({
             message: `[LINEAR STREAM][CACHE] Could not find cache item for uri ${uri}`,
           });
         }

@@ -3,12 +3,12 @@ import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { createSink, createStream } from '@substreams/sink';
-import { Data, Effect, Either, Queue, Redacted, Schema, Stream } from 'effect';
+import { Data, Effect, Queue, Redacted, Stream } from 'effect';
 
 import type { BlockEvent } from '../types';
 import { IpfsCacheWriteWorkerPool } from './ipfs/ipfs-cache-write-worker-pool';
 import type { IpfsCacheQueueItem } from './ipfs/types';
-import { EditPublishedEvent } from './parser';
+import { parseOutputToEvent } from './substream-output';
 import { MANIFEST } from '~/sink/constants/constants';
 import { Environment } from '~/sink/environment';
 
@@ -114,23 +114,4 @@ export function handleIpfsMessage(output: JsonValue, queue: Queue.Queue<IpfsCach
       yield* Queue.offer(queue, item);
     }
   });
-}
-
-// @TODO: Test
-function parseOutputToEvent(output: JsonValue) {
-  const eventsInBlock: EditPublishedEvent[] = [];
-  const maybeEditPublishedEvent = Schema.decodeUnknownEither(EditPublishedEvent)(output);
-
-  if (Either.isRight(maybeEditPublishedEvent)) {
-    // Ignore the US law space for now
-    // const editsPublished = maybeEditPublishedEvent.right.editsPublished.filter(
-    //   e => e.daoAddress !== US_LAW_SPACE.daoAddress
-    // );
-
-    eventsInBlock.push({
-      editsPublished: maybeEditPublishedEvent.right.editsPublished,
-    });
-  }
-
-  return eventsInBlock;
 }

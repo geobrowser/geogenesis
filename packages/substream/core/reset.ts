@@ -1,15 +1,15 @@
 import { Effect } from 'effect';
 
-import { Db, make } from './db/db';
-import { ipfsCache } from './db/schema';
+import { ipfsCache } from './storage/schema';
+import { Storage, make } from './storage/storage';
 import { Environment, make as makeEnvironment } from '~/sink/environment';
 
 const reset = Effect.gen(function* () {
-  const db = yield* Db;
+  const db = yield* Storage;
 
   const result = yield* db.use(async client => await client.delete(ipfsCache).execute());
 
   console.log('Result:', result);
-}).pipe(Effect.provideServiceEffect(Db, make));
+}).pipe(Effect.provideServiceEffect(Storage, make));
 
 Effect.runPromise(reset.pipe(Effect.provideServiceEffect(Environment, makeEnvironment)));

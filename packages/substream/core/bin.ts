@@ -3,7 +3,7 @@ import { Command, Options } from '@effect/cli';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
 import { Array, Console, Effect, Layer, Option } from 'effect';
 
-import { Db, make as makeDb } from './db/db';
+import { Storage, make as makeDb } from './storage/storage';
 import { runCache } from './substream/cache';
 import { IpfsCache, make as makeIpfsCache } from './substream/ipfs/ipfs-cache';
 import { IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive } from './substream/ipfs/ipfs-cache-write-worker-pool';
@@ -36,7 +36,7 @@ const cli = Command.run(base, {
 
 const EnvironmentLayer = Layer.effect(Environment, makeEnvironment);
 const TelemetryLayer = Layer.effect(Telemetry, makeTelemetry).pipe(Layer.provide(EnvironmentLayer));
-const DbLayer = Layer.effect(Db, makeDb).pipe(Layer.provide(EnvironmentLayer));
+const DbLayer = Layer.effect(Storage, makeDb).pipe(Layer.provide(EnvironmentLayer));
 const CacheLayer = Layer.effect(IpfsCache, makeIpfsCache).pipe(Layer.provide(DbLayer));
 const CacheWorkerLayer = Layer.succeed(IpfsCacheWriteWorkerPool, IpfsCacheWriteWorkerPoolLive);
 

@@ -3,11 +3,11 @@ import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { createSink, createStream } from '@substreams/sink';
-import { Data, Duration, Effect, Either, Logger, Redacted, Schema, Stream } from 'effect';
+import { Data, Duration, Effect, Either, Logger, Redacted, Stream } from 'effect';
 
 import type { BlockEvent } from '../types';
 import { IpfsCache } from './ipfs/ipfs-cache';
-import { EditPublishedEvent } from './parser';
+import { parseOutputToEvent } from './substream-output';
 import { MANIFEST } from '~/sink/constants/constants';
 import { Environment } from '~/sink/environment';
 import { LoggerLive, getConfiguredLogLevel } from '~/sink/logs';
@@ -164,23 +164,4 @@ export function handleLinearMessage(output: JsonValue, block: BlockEvent) {
 
     return events.length > 0;
   });
-}
-
-// @TODO: Test
-function parseOutputToEvent(output: JsonValue) {
-  const eventsInBlock: EditPublishedEvent[] = [];
-  const maybeEditPublishedEvent = Schema.decodeUnknownEither(EditPublishedEvent)(output);
-
-  if (Either.isRight(maybeEditPublishedEvent)) {
-    // Ignore the US law space for now
-    // const editsPublished = maybeEditPublishedEvent.right.editsPublished.filter(
-    //   e => e.daoAddress !== US_LAW_SPACE.daoAddress
-    // );
-
-    eventsInBlock.push({
-      editsPublished: maybeEditPublishedEvent.right.editsPublished,
-    });
-  }
-
-  return eventsInBlock;
 }

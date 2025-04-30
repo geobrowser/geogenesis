@@ -1,11 +1,10 @@
-// Make sure to install the 'pg' package
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Context, Data, Effect, Redacted } from 'effect';
 
-import { ipfsCache } from './schema';
+import { entities, ipfsCache } from './schema';
 import { Environment } from '~/sink/environment';
 
-export class DbError extends Data.TaggedError('DbError')<{
+export class StorageError extends Data.TaggedError('StorageError')<{
   cause?: unknown;
   message?: string;
 }> {}
@@ -17,33 +16,34 @@ const createDb = (connectionString: string) =>
     },
     schema: {
       ipfsCache,
+      entities,
     },
   });
 
-interface DbImpl {
-  use: <T>(fn: (client: ReturnType<typeof createDb>) => T) => Effect.Effect<Awaited<T>, DbError, never>;
+interface StorageShape {
+  use: <T>(fn: (client: ReturnType<typeof createDb>) => T) => Effect.Effect<Awaited<T>, StorageError, never>;
 }
 
-export class Db extends Context.Tag('Db')<Db, DbImpl>() {}
+export class Storage extends Context.Tag('Storage')<Storage, StorageShape>() {}
 
 export const make = Effect.gen(function* () {
   const environment = yield* Environment;
 
   const db = createDb(Redacted.value(environment.databaseUrl));
 
-  return Db.of({
+  return Storage.of({
     use: fn => {
       return Effect.gen(function* () {
         const result = yield* Effect.try({
           try: () => fn(db),
-          catch: error => new DbError({ message: `Synchronous error in Db.use ${String(error)}`, cause: error }),
+          catch: error => new StorageError({ message: `Synchronous error in Db.use ${String(error)}`, cause: error }),
         });
 
         if (result instanceof Promise) {
           return yield* Effect.tryPromise({
             try: () => result,
             catch: error =>
-              new DbError({
+              new StorageError({
                 cause: error,
                 message: `Asynchronous error in Db.use ${String(error)}`,
               }),
