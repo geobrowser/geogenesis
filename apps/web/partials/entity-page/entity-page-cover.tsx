@@ -6,7 +6,7 @@ import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store'
 import { Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import EditableCoverAvatarHeader from './editable-entity-cover-avatar-header';
+import { EditableCoverAvatarHeader } from './editable-entity-cover-avatar-header';
 
 type EntityPageCoverProps = {
   avatarUrl: string | null;

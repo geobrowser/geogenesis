@@ -34,8 +34,6 @@ export function EditableHeading({
   const { name } = useEntityPageStore();
   const isEditing = useUserIsEditing(spaceId);
 
-  //
-
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 
   const {
@@ -60,8 +58,6 @@ export function EditableHeading({
 
   const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
   const showMore = !isOnePage && !isLastPage;
-
-  //
 
   const send = useEditEvents({
     context: {

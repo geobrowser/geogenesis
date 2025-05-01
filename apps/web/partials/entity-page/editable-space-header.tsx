@@ -49,8 +49,6 @@ export function EditableSpaceHeading({
   const { name } = useEntityPageStore();
   const isEditing = useUserIsEditing(spaceId);
 
-  //
-
   const path = usePathname();
   const isSpacePage = path === `/space/${spaceId}`;
 
@@ -99,9 +97,7 @@ export function EditableSpaceHeading({
       console.error('Failed to copy entity ID in: ', entityId);
     }
   };
-
-  //
-
+  
   const send = useEditEvents({
     context: {
       entityId,

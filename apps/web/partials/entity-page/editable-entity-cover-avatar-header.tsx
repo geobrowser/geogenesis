@@ -21,7 +21,7 @@ import { SquareButton } from '~/design-system/button';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
-const EditableCoverAvatarHeader = ({
+export const EditableCoverAvatarHeader = ({
   avatarUrl,
   triples,
   coverUrl,
@@ -93,8 +93,6 @@ const EditableCoverAvatarHeader = ({
   );
 };
 
-export default EditableCoverAvatarHeader;
-
 const AvatarCoverInput = ({
   typeOfId,
   typeOfName,
@@ -115,7 +113,7 @@ const AvatarCoverInput = ({
   const { ipfs } = Services.useServices();
 
   const editable = useUserIsEditing(spaceId);
-  const isCover = typeOfName === 'Cover';
+  const isCover = typeOfId === SystemIds.COVER_PROPERTY;
 
   const send = useEditEvents({
     context: {

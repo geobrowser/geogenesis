@@ -12,6 +12,7 @@ import { RelationRenderableProperty } from '~/core/types';
 import { Create } from '~/design-system/icons/create';
 
 import { RelationsGroup } from './editable-entity-page';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -38,27 +39,19 @@ export function EntityPageMetadataHeader({ id, entityName, spaceId }: EntityPage
     const firstRenderable = renderables[0];
     const renderableType = firstRenderable.type;
 
-    if (renderableType === 'RELATION' && firstRenderable.attributeId === 'Jfmby78N4BCseZinBmdVov') {
+    if (renderableType === 'RELATION' && firstRenderable.attributeId === SystemIds.TYPES_PROPERTY) {
       return renderables;
     }
   });
 
-  const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.attributeId === 'Jfmby78N4BCseZinBmdVov'));
+  const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.attributeId === SystemIds.TYPES_PROPERTY));
 
   return (
     <div className="flex items-center justify-between text-text">
-      {/* <ul className="flex items-center gap-1">
-            {types.map(t => (
-              <li key={t.id}>
-                <EntityPageTypeChip type={t} />
-              </li>
-            ))}
-      </ul> */}
       {editable && (
         <div>
           {(typesRenderableObj && types.length > 0) || (addTypeState && types.length === 0) ? (
             <RelationsGroup
-              key="Jfmby78N4BCseZinBmdVov"
               relations={typesRenderableObj as RelationRenderableProperty[]}
               properties={properties}
             />
