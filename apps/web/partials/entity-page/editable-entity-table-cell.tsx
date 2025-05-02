@@ -10,7 +10,7 @@ import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { InlinePageStringField } from '~/design-system/editable-fields/editable-fields';
+import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
@@ -112,7 +112,7 @@ export function EditableEntityTableCell({
     return (
       <>
         {source.type !== 'COLLECTION' ? (
-          <InlinePageStringField
+          <PageStringField
             variant="tableCell"
             placeholder="Entity name..."
             value={name ?? ''}
@@ -158,7 +158,7 @@ export function EditableEntityTableCell({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <InlinePageStringField
+            <PageStringField
               variant="tableCell"
               placeholder="Entity name..."
               value={name ?? ''}
