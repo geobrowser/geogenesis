@@ -208,7 +208,10 @@ const AvatarCoverInput = ({
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className={`relative h-full w-full rounded-lg ${
+        onClick={() => {
+          if (!imgUrl) openInput();
+        }}
+        className={`relative h-full w-full rounded-lg ${!imgUrl && 'cursor-pointer'} ${
           isCover
             ? 'bg-cover-default bg-center bg-no-repeat hover:bg-cover-hover'
             : imgUrl
@@ -228,12 +231,8 @@ const AvatarCoverInput = ({
             className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center gap-[6px]`}
           >
             {!imgUrl ? (
-              <button
-                onMouseEnter={() => setHoveredIcon('Upload')}
-                onMouseLeave={() => setHoveredIcon('')}
-                onClick={openInput}
-              >
-                <Upload color={hoveredIcon === 'Upload' ? undefined : 'grey-04'} />
+              <button onMouseEnter={() => setHoveredIcon('Upload')} onMouseLeave={() => setHoveredIcon('')}>
+                <Upload color={hovered ? undefined : 'grey-03'} />
               </button>
             ) : (
               <>
