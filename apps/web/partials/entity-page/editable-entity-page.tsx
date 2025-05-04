@@ -23,10 +23,11 @@ import {
   TripleRenderableProperty,
 } from '~/core/types';
 import { Triple as ITriple } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
-import { SquareButton } from '~/design-system/button';
+import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
@@ -36,7 +37,6 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
@@ -59,7 +59,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
 
   const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
     useRenderables(serverTriples, spaceId, isRelationPage);
-  const { name } = useEntityPageStore();
+  const { name, relations, types } = useEntityPageStore();
 
   const send = useEditEvents({
     context: {
@@ -69,146 +69,153 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     },
   });
 
+  const coverUrl = Entities.cover(relations);
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
+  // Show the properties panel when at least one of name, type, cover, or avatar is added
+  const showPropertiesPanel = (name && name?.length > 0) || coverUrl || types.length > 0;
+
   return (
-    <>
-      <div className="rounded-lg border border-grey-02 shadow-button">
-        <div className="flex flex-col gap-6 p-5">
-          {Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
-            // Triple groups only ever have one renderable
-            const firstRenderable = renderables[0];
-            const renderableType = firstRenderable.type;
+    showPropertiesPanel && (
+      <>
+        <div className="rounded-lg border border-grey-02 shadow-button">
+          <div className="flex flex-col gap-6 p-5">
+            {Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
+              // Triple groups only ever have one renderable
+              const firstRenderable = renderables[0];
+              const renderableType = firstRenderable.type;
 
-            // @TODO: We can abstract this away. We also don't need to pass in the first renderable to options func.
-            const selectorOptions = getRenderableTypeSelectorOptions(
-              firstRenderable,
-              placeholderRenderable => {
-                if (!firstRenderable.placeholder) {
-                  send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
-                }
-                addPlaceholderRenderable(placeholderRenderable);
-              },
-              send
-            );
+              // @TODO: We can abstract this away. We also don't need to pass in the first renderable to options func.
+              const selectorOptions = getRenderableTypeSelectorOptions(
+                firstRenderable,
+                placeholderRenderable => {
+                  if (!firstRenderable.placeholder) {
+                    send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+                  }
+                  addPlaceholderRenderable(placeholderRenderable);
+                },
+                send
+              );
 
-            // Hide cover/avatar/types property, user can upload cover using upload icon on top placeholder
-            // and add types inline using the + button
-            if (
-              (renderableType === 'IMAGE' && firstRenderable.attributeId === SystemIds.COVER_PROPERTY) ||
-              (renderableType === 'IMAGE' && firstRenderable.attributeId === ContentIds.AVATAR_PROPERTY) ||
-              (renderableType === 'RELATION' && firstRenderable.attributeId === SystemIds.TYPES_PROPERTY)
-            ) {
-              return null;
-            }
+              // Hide cover/avatar/types/name property, user can upload cover using upload icon on top placeholder
+              // and add types inline using the + button, add name under cover image component
+              if (
+                (renderableType === 'IMAGE' && firstRenderable.attributeId === SystemIds.COVER_PROPERTY) ||
+                (renderableType === 'IMAGE' && firstRenderable.attributeId === ContentIds.AVATAR_PROPERTY) ||
+                (renderableType === 'RELATION' && firstRenderable.attributeId === SystemIds.TYPES_PROPERTY) ||
+                (renderableType === 'TEXT' && firstRenderable.attributeId === SystemIds.NAME_PROPERTY)
+              ) {
+                return null;
+              }
 
-            return (
-              <div key={`${id}-${attributeId}`} className="relative break-words">
-                <EditableAttribute
-                  renderable={firstRenderable}
-                  onChange={() => {
-                    // If we create a placeholder using the + button the placeholder gets an empty
-                    // attribute id. If we then add an attribute the placeholder won't get removed
-                    // because the placeholder attribute id is different than the new attribute id.
-                    //
-                    // Here we manually remove the placeholder when the attribute is changed. This is
-                    // a bit of different control flow from how we handle other placeholders, but it's
-                    // only necessary on entity pages.
-                    if (firstRenderable.placeholder === true && firstRenderable.attributeId === '') {
-                      removeEmptyPlaceholderRenderable(firstRenderable);
-                    }
-                  }}
-                />
-                {renderableType === 'RELATION' || renderableType === 'IMAGE' ? (
-                  <RelationsGroup
-                    key={attributeId}
-                    relations={renderables as RelationRenderableProperty[]}
-                    properties={properties}
+              return (
+                <div key={`${id}-${attributeId}`} className="relative break-words">
+                  <EditableAttribute
+                    renderable={firstRenderable}
+                    onChange={() => {
+                      // If we create a placeholder using the + button the placeholder gets an empty
+                      // attribute id. If we then add an attribute the placeholder won't get removed
+                      // because the placeholder attribute id is different than the new attribute id.
+                      //
+                      // Here we manually remove the placeholder when the attribute is changed. This is
+                      // a bit of different control flow from how we handle other placeholders, but it's
+                      // only necessary on entity pages.
+                      if (firstRenderable.placeholder === true && firstRenderable.attributeId === '') {
+                        removeEmptyPlaceholderRenderable(firstRenderable);
+                      }
+                    }}
                   />
-                ) : (
-                  <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
-                )}
+                  {renderableType === 'RELATION' || renderableType === 'IMAGE' ? (
+                    <RelationsGroup
+                      key={attributeId}
+                      relations={renderables as RelationRenderableProperty[]}
+                      properties={properties}
+                    />
+                  ) : (
+                    <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
+                  )}
 
-                <div className="absolute right-0 top-6 flex items-center gap-1">
-                  {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
-                  <>
-                    {renderableType === 'TIME' && (
-                      <DateFormatDropdown
-                        value={firstRenderable.options?.format}
-                        onSelect={(format: string) => {
-                          send({
-                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                            payload: {
-                              renderable: firstRenderable,
-                              value: {
-                                value: firstRenderable.value,
-                                type: 'TIME',
-                                options: {
-                                  format,
+                  <div className="absolute right-0 top-6 flex items-center gap-1">
+                    {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
+                    <>
+                      {renderableType === 'TIME' && (
+                        <DateFormatDropdown
+                          value={firstRenderable.options?.format}
+                          onSelect={(format: string) => {
+                            send({
+                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                              payload: {
+                                renderable: firstRenderable,
+                                value: {
+                                  value: firstRenderable.value,
+                                  type: 'TIME',
+                                  options: {
+                                    format,
+                                  },
                                 },
                               },
-                            },
-                          });
-                        }}
-                      />
-                    )}
-                    {renderableType === 'NUMBER' && (
-                      <NumberOptionsDropdown
-                        value={firstRenderable.value}
-                        format={firstRenderable.options?.format}
-                        onSelect={(format: string) => {
-                          send({
-                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                            payload: {
-                              renderable: firstRenderable,
-                              value: {
-                                value: firstRenderable.value,
-                                type: 'NUMBER',
-                                options: {
-                                  format,
+                            });
+                          }}
+                        />
+                      )}
+                      {renderableType === 'NUMBER' && (
+                        <NumberOptionsDropdown
+                          value={firstRenderable.value}
+                          format={firstRenderable.options?.format}
+                          onSelect={(format: string) => {
+                            send({
+                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                              payload: {
+                                renderable: firstRenderable,
+                                value: {
+                                  value: firstRenderable.value,
+                                  type: 'NUMBER',
+                                  options: {
+                                    format,
+                                  },
                                 },
                               },
-                            },
-                          });
-                        }}
-                      />
-                    )}
-                    <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
+                            });
+                          }}
+                        />
+                      )}
+                      <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
 
-                    {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
-                    {renderableType !== 'RELATION' && (
-                      <SquareButton
-                        icon={<Trash />}
-                        onClick={() => {
-                          send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
-                        }}
-                      />
-                    )}
-                  </>
+                      {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
+                      {renderableType !== 'RELATION' && (
+                        <SquareButton
+                          icon={<Trash />}
+                          onClick={() => {
+                            send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+                          }}
+                        />
+                      )}
+                    </>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          <div className="p-4">
+            <SquareButton
+              onClick={() => {
+                addPlaceholderRenderable({
+                  type: 'TEXT',
+                  entityId: id,
+                  entityName: name ?? '',
+                  attributeId: '',
+                  attributeName: null,
+                  value: '',
+                  spaceId,
+                  placeholder: true,
+                });
+              }}
+              icon={<Create />}
+            />
+          </div>
         </div>
-        <div className="p-4">
-          <SquareButton
-            onClick={() => {
-              addPlaceholderRenderable({
-                type: 'TEXT',
-                entityId: id,
-                entityName: name ?? '',
-                attributeId: '',
-                attributeName: null,
-                value: '',
-                spaceId,
-                placeholder: true,
-              });
-            }}
-            icon={<Create />}
-          />
-        </div>
-      </div>
-    </>
+      </>
+    )
   );
 }
 
@@ -266,7 +273,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
     },
   });
 
-  const hasPlaceholders = relations.some(r => r.placeholder === true);
   const typeOfId = relations[0].attributeId;
   const typeOfName = relations[0].attributeName;
   const typeOfRenderableType = relations[0].type;
@@ -343,119 +349,40 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
           return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue)} />;
         }
 
-        if (renderableType === 'RELATION' && r.placeholder === true) {
+        if (relationName !== 'Types') {
           return (
-            <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
-              <SelectEntity
-                key={JSON.stringify(relationValueTypes)}
-                spaceId={spaceId}
-                relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
-                onCreateEntity={result => {
-                  if (property?.relationValueTypeId) {
-                    send({
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: result.id,
-                        fromEntityName: result.name,
-                        toEntityId: property.relationValueTypeId,
-                        toEntityName: property.relationValueTypeName ?? null,
-                        typeOfId: SystemIds.TYPES_ATTRIBUTE,
-                        typeOfName: 'Types',
-                      },
-                    });
-                  }
-                }}
-                onDone={result => {
-                  const newRelationId = ID.createEntityId();
-
-                  const newRelation: StoreRelation = {
-                    id: newRelationId,
-                    space: spaceId,
-                    index: INITIAL_RELATION_INDEX_VALUE,
-                    typeOf: {
-                      id: EntityId(r.attributeId),
-                      name: r.attributeName,
+            <div key={`relation-${relationId}-${relationValue}`}>
+              <LinkableRelationChip
+                isEditing
+                onDelete={() => {
+                  send({
+                    type: 'DELETE_RELATION',
+                    payload: {
+                      renderable: r,
                     },
-                    fromEntity: {
-                      id: EntityId(id),
-                      name: name,
-                    },
-                    toEntity: {
-                      id: EntityId(result.id),
-                      name: result.name,
-                      renderableType: 'RELATION',
-                      value: EntityId(result.id),
-                    },
-                  };
-
-                  DB.upsertRelation({
-                    relation: newRelation,
-                    spaceId,
                   });
-
-                  if (result.space) {
-                    DB.upsert(
-                      {
-                        attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
-                        attributeName: 'To Entity',
-                        entityId: newRelationId,
-                        entityName: null,
-                        value: {
-                          type: 'URL',
-                          value: GraphUrl.fromEntityId(result.id, { spaceId: result.space }),
-                        },
-                      },
-                      spaceId
-                    );
-
-                    if (result.verified) {
-                      DB.upsert(
-                        {
-                          attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
-                          attributeName: 'Verified Source',
-                          entityId: newRelationId,
-                          entityName: null,
-                          value: {
-                            type: 'CHECKBOX',
-                            value: '1',
-                          },
-                        },
-                        spaceId
-                      );
-                    }
-                  }
                 }}
-                variant="fixed"
-              />
+                entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
+                relationHref={NavUtils.toEntity(spaceId, relationId)}
+              >
+                {relationName ?? relationValue}
+              </LinkableRelationChip>
             </div>
           );
         }
-
-        return (
-          <div key={`relation-${relationId}-${relationValue}`}>
-            <LinkableRelationChip
-              isEditing
-              onDelete={() => {
-                send({
-                  type: 'DELETE_RELATION',
-                  payload: {
-                    renderable: r,
-                  },
-                });
-              }}
-              entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
-              relationHref={NavUtils.toEntity(spaceId, relationId)}
-            >
-              {relationName ?? relationValue}
-            </LinkableRelationChip>
-          </div>
-        );
       })}
-      {!hasPlaceholders && typeOfRenderableType === 'RELATION' && (
+
+      {typeOfRenderableType === 'RELATION' && (
         <div>
           <SelectEntityAsPopover
             key={JSON.stringify(relationValueTypes)}
-            trigger={<SquareButton icon={<Create />} />}
+            trigger={
+              relations[0].valueName === 'Types' ? (
+                <AddTypeButton icon={<Create className="h-3 w-3" color="grey-04" />} label="type" />
+              ) : (
+                <SquareButton icon={<Create />} />
+              )
+            }
             relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
               if (property?.relationValueTypeId) {

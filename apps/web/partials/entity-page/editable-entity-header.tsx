@@ -100,7 +100,6 @@ export function EditableHeading({
           <Spacer height={12} />
         </div>
       )}
-
       <div className="flex items-center gap-5">
         <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
           {versions?.pages?.length === 0 && <HistoryEmpty />}

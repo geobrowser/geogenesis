@@ -1,6 +1,6 @@
 'use client';
 
-import { Image, SystemIds, ContentIds } from '@graphprotocol/grc-20';
+import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
 import LegacyImage from 'next/legacy/image';
 
 import { ChangeEvent, useRef } from 'react';
@@ -50,19 +50,22 @@ export const EditableCoverAvatarHeader = ({
 
   const coverRenderable = coverAvatarRenderable.find(r => r?.attributeId === SystemIds.COVER_PROPERTY);
   const avatarRenderable = coverAvatarRenderable.find(r => r?.attributeId === ContentIds.AVATAR_PROPERTY);
-  
+
   // Only show avatar when there's an actual avatar or user is in edit mode
   const showAvatar = avatarUrl || (editable && avatarRenderable);
 
   return (
-    <div className={`${coverRenderable 
-      ? `relative ${showAvatar ? 'mb-20' : 'mb-8'} -mt-6 w-full max-w-[1192px] ${coverUrl ? 'h-80' : 'h-32'}` 
-      : `mx-auto ${showAvatar ? 'mb-16' : 'mb-0'} w-[880px] ${avatarUrl ? 'h-10' : ''}`}`}
+    <div
+      className={`${
+        coverRenderable
+          ? `relative ${showAvatar ? 'mb-20' : 'mb-8'} -mt-6 w-full max-w-[1192px] ${coverUrl ? 'h-80' : 'h-32'}`
+          : `mx-auto ${showAvatar ? 'mb-16' : 'mb-0'} w-[880px] ${avatarUrl ? 'h-10' : ''}`
+      }`}
     >
       {coverRenderable && (
         <div
           key={`cover-${coverRenderable.attributeId}`}
-          className="absolute left-1/2 top-0 flex h-full w-full max-w-[1192px] -translate-x-1/2 transform items-center justify-center rounded-lg bg-no-repeat bg-center transition-all duration-200 ease-in-out"
+          className="absolute left-1/2 top-0 flex h-full w-full max-w-[1192px] -translate-x-1/2 transform items-center justify-center rounded-lg bg-center bg-no-repeat transition-all duration-200 ease-in-out"
         >
           <AvatarCoverInput
             typeOfId={coverRenderable.attributeId}
@@ -75,9 +78,13 @@ export const EditableCoverAvatarHeader = ({
       )}
       {/* Avatar placeholder - only show when there's an avatar or in edit mode with renderable */}
       {showAvatar && (
-        <div className={`${coverRenderable 
-          ? 'absolute bottom-[-40px] mx-auto w-full max-w-[880px] left-0 right-0 flex justify-start' 
-          : 'w-full max-w-[880px] mx-auto flex justify-start'}`}>
+        <div
+          className={`${
+            coverRenderable
+              ? 'absolute bottom-[-40px] left-0 right-0 mx-auto flex w-full max-w-[880px] justify-start'
+              : 'mx-auto flex w-full max-w-[880px] justify-start'
+          }`}
+        >
           <div className="flex h-20 w-20 items-center justify-center rounded-lg transition-all duration-200 ease-in-out">
             <AvatarCoverInput
               typeOfId={ContentIds.AVATAR_PROPERTY}
@@ -107,13 +114,15 @@ const AvatarCoverInput = ({
   imgUrl?: string | null;
 }) => {
   const [hovered, setHovered] = useState(false);
+  const [hoveredIcon, setHoveredIcon] = useState('');
 
   const { spaceId, id, name } = useEntityPageStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { ipfs } = Services.useServices();
 
-  const editable = useUserIsEditing(spaceId);
   const isCover = typeOfId === SystemIds.COVER_PROPERTY;
+
+  const editable = useUserIsEditing(spaceId);
 
   const send = useEditEvents({
     context: {
@@ -199,35 +208,50 @@ const AvatarCoverInput = ({
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className={`relative h-full w-full rounded-lg ${typeOfName === 'Cover' 
-          ? 'bg-cover-default hover:bg-cover-hover bg-no-repeat bg-center' 
-          : imgUrl 
-            ? 'bg-transparent relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-grey-01 shadow-lg' 
-            : 'bg-avatar-default bg-no-repeat bg-center hover:bg-avatar-hover h-[80px] w-[80px]'
+        className={`relative h-full w-full rounded-lg ${
+          isCover
+            ? 'bg-cover-default bg-center bg-no-repeat hover:bg-cover-hover'
+            : imgUrl
+              ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-grey-01 bg-transparent shadow-lg'
+              : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-avatar-hover'
         }`}
       >
         {imgUrl && (
           <LegacyImage
             layout="fill"
             src={getImagePath(imgUrl)}
-            className="h-full w-full rounded-lg border border-white object-cover bg-transparent"
+            className="h-full w-full rounded-lg border border-white bg-transparent object-cover"
           />
         )}
         {editable && (
-          <div className={`absolute flex items-center justify-center gap-[6px] ${
-            isCover ? 'top-4 right-4' : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transform'
-          }`}>
+          <div
+            className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center gap-[6px]`}
+          >
             {!imgUrl ? (
-              <button onClick={openInput}>
-                <Upload color={hovered ? 'text' : 'grey-03'} />
+              <button
+                onMouseEnter={() => setHoveredIcon('Upload')}
+                onMouseLeave={() => setHoveredIcon('')}
+                onClick={openInput}
+              >
+                <Upload color={hoveredIcon === 'Upload' ? undefined : 'grey-04'} />
               </button>
             ) : (
               <>
                 {hovered && (
                   <>
-                    <SquareButton onClick={openInput} icon={<Upload color="grey-03" />} />
+                    <SquareButton
+                      onMouseEnter={() => setHoveredIcon('Upload')}
+                      onMouseLeave={() => setHoveredIcon('')}
+                      onClick={openInput}
+                      icon={<Upload color={hoveredIcon === 'Upload' ? undefined : 'grey-04'} />}
+                    />
 
-                    {imgUrl && <SquareButton onClick={deleteProperty} icon={<Trash color="grey-03" />} />}
+                    <SquareButton
+                      onMouseEnter={() => setHoveredIcon('Trash')}
+                      onMouseLeave={() => setHoveredIcon('')}
+                      onClick={deleteProperty}
+                      icon={<Trash color={hoveredIcon === 'Trash' ? undefined : 'grey-04'} />}
+                    />
                   </>
                 )}
               </>

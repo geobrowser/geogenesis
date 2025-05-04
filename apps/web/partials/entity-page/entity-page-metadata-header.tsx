@@ -1,5 +1,7 @@
 'use client';
 
+import { SystemIds } from '@graphprotocol/grc-20';
+
 import * as React from 'react';
 
 import { useProperties } from '~/core/hooks/use-properties';
@@ -9,10 +11,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { RelationRenderableProperty } from '~/core/types';
 
-import { Create } from '~/design-system/icons/create';
-
 import { RelationsGroup } from './editable-entity-page';
-import { SystemIds } from '@graphprotocol/grc-20';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -20,11 +19,7 @@ interface EntityPageMetadataHeaderProps {
   spaceId: string;
 }
 
-export function EntityPageMetadataHeader({ id, entityName, spaceId }: EntityPageMetadataHeaderProps) {
-  const [addTypeState, setAddTypeState] = React.useState(false);
-
-  const { types } = useEntityPageStore();
-
+export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderProps) {
   const { id: entityId } = useEntityPageStore();
 
   const editable = useUserIsEditing(spaceId);
@@ -48,22 +43,8 @@ export function EntityPageMetadataHeader({ id, entityName, spaceId }: EntityPage
 
   return (
     <div className="flex items-center justify-between text-text">
-      {editable && (
-        <div>
-          {(typesRenderableObj && types.length > 0) || (addTypeState && types.length === 0) ? (
-            <RelationsGroup
-              relations={typesRenderableObj as RelationRenderableProperty[]}
-              properties={properties}
-            />
-          ) : (
-            <button
-              onClick={() => setAddTypeState(true)}
-              className="flex h-6 items-center gap-[6px] rounded border border-dashed border-grey-02 px-2"
-            >
-              <Create color="grey-04" className="h-3 w-3" /> type
-            </button>
-          )}
-        </div>
+      {typesRenderableObj && editable && (
+        <RelationsGroup relations={typesRenderableObj as RelationRenderableProperty[]} properties={properties} />
       )}
     </div>
   );
