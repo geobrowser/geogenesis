@@ -21,6 +21,13 @@ interface DateFieldProps {
   isEditing?: boolean;
 }
 
+interface DateInputProps {
+  variant?: 'body' | 'tableCell';
+  initialDate: string;
+  onDateChange: (date: string) => void;
+  label?: string;
+}
+
 const dateFieldStyles = cva(
   'w-full bg-transparent text-center tabular-nums transition-colors duration-75 ease-in-out placeholder:text-grey-02 focus:outline-none',
   {
@@ -56,7 +63,7 @@ const timeStyles = cva('m-0 w-[21px] bg-transparent p-0 tabular-nums placeholder
   },
 });
 
-export function DateField(props: DateFieldProps) {
+function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
   const {
     day: initialDay,
     month: initialMonth,
@@ -64,9 +71,7 @@ export function DateField(props: DateFieldProps) {
     hour: initialHour,
     minute: initialMinute,
     meridiem: initialMeridiem,
-  } = GeoDate.fromISOStringUTC(props.value);
-
-  const formattedDate = props.value ? GeoDate.format(props.value, props.format) : null;
+  } = GeoDate.fromISOStringUTC(initialDate);
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
   const formattedInitialMonth = initialMonth === '' ? initialMonth : initialMonth.padStart(2, '0');
@@ -191,7 +196,7 @@ export function DateField(props: DateFieldProps) {
 
   const onToggleMeridiem = () => {
     const newMeridiem = meridiem === 'am' ? 'pm' : 'am';
-    onBlur(newMeridiem);
+    updateDate(newMeridiem);
     setMeridiem(newMeridiem);
   };
 
@@ -242,7 +247,7 @@ export function DateField(props: DateFieldProps) {
     setHour(value);
   };
 
-  const onBlur = (meridiem: 'am' | 'pm') => {
+  const updateDate = (meridiem: 'am' | 'pm') => {
     let newMinute = minute.value;
     let newHour = hour.value;
     let newDay = day.value;
@@ -295,8 +300,7 @@ export function DateField(props: DateFieldProps) {
         hour: meridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
       });
 
-      // Only create the triple if the form is valid
-      props.onBlur?.({ value: isoString, format: props.format });
+      onDateChange(isoString);
     }
   };
 
@@ -306,25 +310,18 @@ export function DateField(props: DateFieldProps) {
   const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
   const isValidYear = year.value === '' || (!year.isValidating && year.isValid);
 
-  if (!props.isEditing)
-    return (
-      <p className="text-body text-text" data-testid="date-field-value">
-        {formattedDate}
-      </p>
-    );
-
   return (
-    <div>
+    <div className="flex flex-col">
+      {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
       <div className="flex items-start justify-between gap-3">
         <div className="flex w-[136px] items-center gap-1">
           <div className="flex flex-[6] flex-col">
             <input
-              data-testid="date-field-year"
               value={year.value}
               onChange={onYearChange}
-              onBlur={() => onBlur(meridiem)}
+              onBlur={() => updateDate(meridiem)}
               placeholder="YYYY"
-              className={`${dateFieldStyles({ variant: props.variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
+              className={`${dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
             />
           </div>
 
@@ -332,13 +329,12 @@ export function DateField(props: DateFieldProps) {
 
           <div className="flex flex-[4] flex-col">
             <input
-              data-testid="date-field-month"
               value={month.value}
               onChange={onMonthChange}
-              onBlur={() => onBlur(meridiem)}
+              onBlur={() => updateDate(meridiem)}
               placeholder="MM"
               className={dateFieldStyles({
-                variant: props.variant,
+                variant,
                 error: !isValidMonth || !dateFormState.isValid,
               })}
             />
@@ -348,13 +344,12 @@ export function DateField(props: DateFieldProps) {
 
           <div className="flex flex-[4] flex-col">
             <input
-              data-testid="date-field-day"
               value={day.value}
               onChange={onDayChange}
-              onBlur={() => onBlur(meridiem)}
+              onBlur={() => updateDate(meridiem)}
               placeholder="DD"
               className={dateFieldStyles({
-                variant: props.variant,
+                variant,
                 error: !isValidDay || !dateFormState.isValid,
               })}
             />
@@ -365,22 +360,20 @@ export function DateField(props: DateFieldProps) {
           <Spacer width={14} />
           <div className="flex items-center gap-1">
             <input
-              data-testid="date-field-hour"
               value={hour.value}
               onChange={onHourChange}
-              onBlur={() => onBlur(meridiem)}
+              onBlur={() => updateDate(meridiem)}
               placeholder="00"
-              className={timeStyles({ variant: props.variant, error: !isValidHour || !timeFormState.isValid })}
+              className={timeStyles({ variant, error: !isValidHour || !timeFormState.isValid })}
             />
 
             <span>:</span>
             <input
-              data-testid="date-field-minute"
               value={minute.value}
               onChange={onMinuteChange}
-              onBlur={() => onBlur(meridiem)}
+              onBlur={() => updateDate(meridiem)}
               placeholder="00"
-              className={timeStyles({ variant: props.variant, error: !isValidMinute || !timeFormState.isValid })}
+              className={timeStyles({ variant, error: !isValidMinute || !timeFormState.isValid })}
             />
           </div>
 
@@ -470,6 +463,105 @@ export function DateField(props: DateFieldProps) {
               transition={{ duration: 0.15, bounce: 0.2 }}
             >
               {timeFormState.error}
+            </motion.p>
+          )}
+        </div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+export function DateField({ value, format, isEditing, variant, onBlur }: DateFieldProps) {
+  const isDateInterval = React.useMemo(() => GeoDate.isDateInterval(value), [value]);
+  const [intervalError, setIntervalError] = React.useState<string | null>(null);
+
+  const [startDate, endDate] = React.useMemo(() => {
+    if (isDateInterval && value) {
+      const dateStrings = value.split(GeoDate.intervalDelimiter).map(d => d.trim());
+      return [dateStrings[0], dateStrings[1] || dateStrings[0]];
+    }
+    return [value, value];
+  }, [value, isDateInterval]);
+
+  const formattedDate = value ? GeoDate.format(value, format) : null;
+
+  const validateDateInterval = React.useCallback((start: string, end: string): boolean => {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    if (startDate > endDate) {
+      setIntervalError('End date cannot be before start date');
+      return false;
+    }
+
+    setIntervalError(null);
+    return true;
+  }, []);
+
+  const handleStartDateChange = (newStartDate: string) => {
+    if (!onBlur) return;
+
+    if (isDateInterval) {
+      const isValid = validateDateInterval(newStartDate, endDate);
+
+      if (isValid) {
+        onBlur({
+          value: `${newStartDate}${GeoDate.intervalDelimiter}${endDate}`,
+          format: format,
+        });
+      }
+    } else {
+      onBlur({
+        value: newStartDate,
+        format: format,
+      });
+    }
+  };
+
+  const handleEndDateChange = (newEndDate: string) => {
+    if (!onBlur || !isDateInterval) return;
+
+    const isValid = validateDateInterval(startDate, newEndDate);
+
+    if (isValid) {
+      onBlur({
+        value: `${startDate}${GeoDate.intervalDelimiter}${newEndDate}`,
+        format: format,
+      });
+    }
+  };
+
+  if (!isEditing)
+    return (
+      <p className="text-body text-text" data-testid="date-field-value">
+        {formattedDate}
+      </p>
+    );
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-row items-start gap-4">
+        <DateInput variant={variant} initialDate={startDate} onDateChange={handleStartDateChange} />
+
+        {isDateInterval && (
+          <>
+            <span>—</span>
+            <DateInput variant={variant} initialDate={endDate} onDateChange={handleEndDateChange} />
+          </>
+        )}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <div className="overflow-hidden">
+          {intervalError && (
+            <motion.p
+              className="text-smallButton text-red-01"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15, bounce: 0.2 }}
+            >
+              {intervalError}
             </motion.p>
           )}
         </div>
