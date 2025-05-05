@@ -64,8 +64,11 @@ export function TableBlockPropertyField(props: {
                 case 'NUMBER':
                   return (
                     <NumberField
+                      variant="tableCell"
                       key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
                       value={renderable.value}
+                      format={renderable.options?.format}
+                      isEditing={isEditing}
                       onChange={value => {
                         onChangeEntry(
                           {
@@ -82,6 +85,9 @@ export function TableBlockPropertyField(props: {
                                 value: {
                                   type: 'NUMBER',
                                   value: value,
+                                  options: {
+                                    format: renderable.options?.format,
+                                  },
                                 },
                               },
                             },
@@ -230,27 +236,33 @@ export function TableBlockPropertyField(props: {
       {props.renderables.map(renderable => {
         switch (renderable.type) {
           case 'TEXT':
-          case 'NUMBER':
             return (
               <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
                 {renderable.value}
               </Text>
+            );
+          case 'NUMBER':
+            return (
+              <NumberField
+                variant="tableCell"
+                key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                value={renderable.value}
+                format={renderable.options?.format}
+                isEditing={false}
+              />
             );
           case 'CHECKBOX': {
             const checked = getChecked(renderable.value);
             return <Checkbox key={`checkbox-${renderable.attributeId}-${renderable.value}`} checked={checked} />;
           }
           case 'TIME': {
-            const time = new Date(renderable.value).toLocaleDateString(undefined, {
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            });
-
             return (
-              <Text variant="breadcrumb" color="text" key={`time-${renderable.attributeId}-${renderable.value}`}>
-                {time}
-              </Text>
+              <DateField
+                key={`time-${renderable.attributeId}-${renderable.value}`}
+                isEditing={false}
+                value={renderable.value}
+                format={renderable.options?.format}
+              />
             );
           }
           case 'URL': {
