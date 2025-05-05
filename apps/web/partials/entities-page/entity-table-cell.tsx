@@ -149,6 +149,7 @@ export const EntityTableCell = ({
               key={renderable.value}
               value={renderable.value}
               format={renderable.options?.format}
+              unitId={renderable.options?.unit}
             />
           );
         }
