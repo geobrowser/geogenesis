@@ -67,6 +67,7 @@ export function TableBlockPropertyField(props: {
                       variant="tableCell"
                       key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
                       value={renderable.value}
+                      unitId={renderable.options?.unit}
                       format={renderable.options?.format}
                       isEditing={isEditing}
                       onChange={value => {
@@ -87,6 +88,7 @@ export function TableBlockPropertyField(props: {
                                   value: value,
                                   options: {
                                     format: renderable.options?.format,
+                                    unit: renderable.options?.unit,
                                   },
                                 },
                               },
@@ -248,6 +250,7 @@ export function TableBlockPropertyField(props: {
                 key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
                 value={renderable.value}
                 format={renderable.options?.format}
+                unitId={renderable.options?.unit}
                 isEditing={false}
               />
             );
