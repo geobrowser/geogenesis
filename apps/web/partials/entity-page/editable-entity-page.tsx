@@ -577,6 +577,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
             return (
               <NumberField
                 key={renderable.attributeId}
+                isEditing={true}
                 value={renderable.value}
                 format={renderable.options?.format}
                 onChange={value =>

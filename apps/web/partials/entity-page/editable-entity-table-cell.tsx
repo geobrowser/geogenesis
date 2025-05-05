@@ -335,6 +335,7 @@ export function EditableEntityTableCell({
           case 'NUMBER':
             return (
               <NumberField
+                variant="tableCell"
                 key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
                 value={renderable.value}
                 format={renderable.options?.format}

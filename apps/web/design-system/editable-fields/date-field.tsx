@@ -567,7 +567,7 @@ export function DateField({ value, format, isEditing, variant, onBlur }: DateFie
         </div>
       </AnimatePresence>
 
-      <p className="text-sm text-grey-04">Browse format · {formattedDate}</p>
+      {formattedDate && <span className="text-sm text-grey-04">Browse format · {formattedDate}</span>}
     </div>
   );
 }
