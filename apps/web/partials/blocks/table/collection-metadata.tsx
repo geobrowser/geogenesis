@@ -1,4 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
+import cx from 'classnames';
 import Image from 'next/image';
 
 import type { ReactNode } from 'react';
@@ -40,6 +41,7 @@ type CollectionMetadataProps = {
 export const CollectionMetadata = ({
   view,
   isEditing,
+  name,
   currentSpaceId,
   entityId,
   spaceId,
@@ -98,69 +100,85 @@ export const CollectionMetadata = ({
       }}
     >
       <div className="absolute -inset-2 z-0" />
-      <div className="relative z-10 flex w-full items-center gap-2">
-        {children}
-        {verified && (
-          <span>
-            <CheckCircle color={isEditing || view !== 'TABLE' ? 'text' : 'ctaHover'} />
+      <div className="relative z-10">
+        <div className="relative z-20 w-full">{children}</div>
+        <div className="pointer-events-none absolute inset-0 z-30">
+          <span
+            className={cx(
+              'inline',
+              'opacity-0',
+              view === 'GALLERY' ? (isEditing ? 'text-body' : 'text-smallTitle font-medium') : null,
+              view === 'LIST' ? (isEditing ? 'text-body' : 'text-smallTitle font-medium') : null,
+              view === 'TABLE' ? (isEditing ? 'text-tableCell' : 'text-tableCell text-ctaHover') : null,
+              view === 'BULLETED_LIST' ? (isEditing ? 'text-body' : 'text-body') : null
+            )}
+          >
+            {name}
           </span>
-        )}
-        {relationId && isHovered && (
-          <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-            <Popover.Trigger asChild>
-              <button
-                onMouseEnter={() => setIsPopoverOpen(true)}
-                className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
-              >
-                <Menu />
-              </button>
-            </Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Content
-                side="top"
-                sideOffset={-4}
-                className="group z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
-              >
-                {isEditing && (
-                  <SelectSpaceAsPopover
-                    entityId={EntityId(entityId)}
-                    spaceId={spaceId}
-                    verified={verified}
-                    onDone={result => {
-                      if (!relationId) return;
-
-                      onLinkEntry(relationId, result, verified);
-                    }}
-                    trigger={
-                      <button className="inline-flex items-center p-1">
-                        <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
-                          {space ? (
-                            <div className="size-[8px] overflow-clip rounded-sm grayscale">
-                              <Image fill src={getImagePath(space.spaceConfig.image)} alt="" />
-                            </div>
-                          ) : (
-                            <TopRanked />
-                          )}
-                        </span>
-                      </button>
-                    }
-                  />
-                )}
-                <PrefetchLink
-                  href={`/space/${currentSpaceId}/${relationId}`}
-                  className="p-1 hover:!text-text group-hover:text-grey-03"
-                >
-                  <RelationSmall />
-                </PrefetchLink>
-                {isEditing && (
-                  <button onClick={onDeleteEntry} className="p-1 hover:!text-text group-hover:text-grey-03">
-                    <CheckCloseSmall />
+          {verified && (
+            <span className="inline-block pl-2 pt-0.5">
+              <CheckCircle color={isEditing || view !== 'TABLE' ? 'text' : 'ctaHover'} />
+            </span>
+          )}
+          {relationId && isHovered && (
+            <div className="pointer-events-auto inline-block pl-2">
+              <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                <Popover.Trigger asChild>
+                  <button
+                    onMouseEnter={() => setIsPopoverOpen(true)}
+                    className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
+                  >
+                    <Menu />
                   </button>
-                )}
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>
-        )}
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content
+                    side="top"
+                    sideOffset={-4}
+                    className="group z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
+                  >
+                    {isEditing && (
+                      <SelectSpaceAsPopover
+                        entityId={EntityId(entityId)}
+                        spaceId={spaceId}
+                        verified={verified}
+                        onDone={result => {
+                          if (!relationId) return;
+
+                          onLinkEntry(relationId, result, verified);
+                        }}
+                        trigger={
+                          <button className="inline-flex items-center p-1">
+                            <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
+                              {space ? (
+                                <div className="size-[8px] overflow-clip rounded-sm grayscale">
+                                  <Image fill src={getImagePath(space.spaceConfig.image)} alt="" />
+                                </div>
+                              ) : (
+                                <TopRanked />
+                              )}
+                            </span>
+                          </button>
+                        }
+                      />
+                    )}
+                    <PrefetchLink
+                      href={`/space/${currentSpaceId}/${relationId}`}
+                      className="p-1 hover:!text-text group-hover:text-grey-03"
+                    >
+                      <RelationSmall />
+                    </PrefetchLink>
+                    {isEditing && (
+                      <button onClick={onDeleteEntry} className="p-1 hover:!text-text group-hover:text-grey-03">
+                        <CheckCloseSmall />
+                      </button>
+                    )}
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

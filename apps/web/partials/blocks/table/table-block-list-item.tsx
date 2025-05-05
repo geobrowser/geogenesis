@@ -10,11 +10,7 @@ import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
-import {
-  BlockImageField,
-  InlinePageStringField,
-  PageStringField,
-} from '~/design-system/editable-fields/editable-fields';
+import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 
@@ -224,7 +220,7 @@ export function TableBlockListItem({
             ) : (
               <>
                 {source.type !== 'COLLECTION' ? (
-                  <InlinePageStringField
+                  <PageStringField
                     placeholder="Entity name..."
                     value={name ?? ''}
                     onChange={value => {
@@ -268,7 +264,7 @@ export function TableBlockListItem({
                     verified={verified}
                     onLinkEntry={onLinkEntry}
                   >
-                    <InlinePageStringField
+                    <PageStringField
                       placeholder="Entity name..."
                       value={name ?? ''}
                       onChange={value => {
@@ -368,7 +364,7 @@ export function TableBlockListItem({
   return (
     <Link
       href={href}
-      className="group flex w-full max-w-full items-start justify-start gap-6 rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider"
+      className="group flex w-full max-w-full grow items-start justify-start gap-6 rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider"
     >
       <div className="relative h-16 w-16 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
         <NextImage
@@ -378,7 +374,7 @@ export function TableBlockListItem({
           fill
         />
       </div>
-      <div>
+      <div className="w-full">
         {source.type !== 'COLLECTION' ? (
           <Link href={href} className="text-smallTitle font-medium text-text">
             {name || rowEntityId}
