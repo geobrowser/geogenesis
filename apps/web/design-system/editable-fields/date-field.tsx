@@ -475,7 +475,7 @@ export function DateField(props: DateFieldProps) {
         </div>
       </AnimatePresence>
 
-      <p className="text-sm text-grey-04">Browse format · {formattedDate}</p>
+      {formattedDate && <span className="text-sm text-grey-04">Browse format · {formattedDate}</span>}
     </div>
   );
 }
