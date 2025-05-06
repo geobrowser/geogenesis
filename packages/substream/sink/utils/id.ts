@@ -1,5 +1,5 @@
 import { Base58, getChecksumAddress } from '@graphprotocol/grc-20';
-import { createHash } from 'crypto';
+import { md5 } from '@noble/hashes/legacy';
 import { v4 } from 'uuid';
 
 export function createMergedVersionId(mergedVersionIds: string[]) {
@@ -19,21 +19,11 @@ export function deriveSpaceId({ network, address }: { network: string; address: 
   return createIdFromUniqueString(`${network}:${getChecksumAddress(address)}`);
 }
 
-export function createIdFromUniqueString(text: string) {
-  const hashed = createHash('md5').update(text).digest('hex');
-  const bytes = hexToBytesArray(hashed);
-  const uuid = v4({ random: bytes });
+function createIdFromUniqueString(text: string) {
+  const encoded = new TextEncoder().encode(text);
+  const hashed = md5(encoded);
+  const uuid = v4({ random: hashed });
   return Base58.encodeBase58(uuid.split('-').join(''));
-}
-
-function hexToBytesArray(hex: string) {
-  const bytes: number[] = [];
-
-  for (let character = 0; character < hex.length; character += 2) {
-    bytes.push(parseInt(hex.slice(character, character + 2), 16));
-  }
-
-  return bytes;
 }
 
 type DeriveProposalIdArgs = {
