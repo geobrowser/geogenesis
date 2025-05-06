@@ -24,11 +24,9 @@ import { EntityPageContextMenu } from './entity-page-context-menu';
 export function EditableHeading({
   spaceId,
   entityId,
-  entityName,
 }: {
   spaceId: string;
   entityId: string;
-  entityName: string;
 }) {
   const { name } = useEntityPageStore();
   const isEditing = useUserIsEditing(spaceId);
@@ -126,7 +124,7 @@ export function EditableHeading({
             </div>
           )}
         </HistoryPanel>
-        <EntityPageContextMenu entityId={entityId} entityName={entityName} spaceId={spaceId} />
+        <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
       </div>
     </div>
   );

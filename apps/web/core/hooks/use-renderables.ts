@@ -2,8 +2,6 @@ import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { useQuery } from '@tanstack/react-query';
 import { pipe } from 'effect';
 
-import * as React from 'react';
-
 import { EntityId } from '~/core/io/schema';
 
 import { sortRenderables } from '~/partials/entity-page/entity-page-utils';

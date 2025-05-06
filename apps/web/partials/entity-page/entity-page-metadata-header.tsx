@@ -16,7 +16,6 @@ import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page
 
 interface EntityPageMetadataHeaderProps {
   id: string;
-  entityName: string;
   spaceId: string;
 }
 

@@ -8,14 +8,13 @@ import { RelationshipHeading } from '~/partials/entity-page/relationship-heading
 type EntityPageHeadingProps = {
   spaceId: string;
   entityId: string;
-  entityName: string;
 };
 
-export const EntityPageHeading = ({ spaceId, entityId, entityName }: EntityPageHeadingProps) => {
+export const EntityPageHeading = ({ spaceId, entityId }: EntityPageHeadingProps) => {
   const [isRelationPage, relationship] = useRelationship(entityId, spaceId);
 
   return !isRelationPage ? (
-    <EditableHeading spaceId={spaceId} entityId={entityId} entityName={entityName} />
+    <EditableHeading spaceId={spaceId} entityId={entityId} />
   ) : (
     <RelationshipHeading relationship={relationship} />
   );

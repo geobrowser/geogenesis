@@ -62,7 +62,6 @@ export function SpacePageMetadataHeader({
   return (
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-4 text-text">
       <div className="flex items-center gap-1">
-        {/* <span className="flex h-6 items-center rounded bg-text px-1.5 text-metadata text-white">Space</span> */}
         {editable ? (
           <div className="box-border h-6">
             {(typesRenderableObj && types.length > 0) || (addTypeState && types.length === 0) ? (

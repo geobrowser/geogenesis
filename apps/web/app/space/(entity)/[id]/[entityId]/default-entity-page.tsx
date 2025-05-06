@@ -67,10 +67,10 @@ export default async function DefaultEntityPage({
         <EntityPageContentContainer>
           <div className="space-y-2">
             {showHeading && (
-              <EntityPageHeading spaceId={props.spaceId} entityId={props.id} entityName={props.name ?? ''} />
+              <EntityPageHeading spaceId={props.spaceId} entityId={props.id} />
             )}
             {showHeader && (
-              <EntityPageMetadataHeader id={props.id} entityName={props.name ?? ''} spaceId={props.spaceId} />
+              <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />
             )}
           </div>
           {notice}

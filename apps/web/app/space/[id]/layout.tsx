@@ -17,7 +17,6 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 import { TabGroup } from '~/design-system/tab-group';
 
-import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
