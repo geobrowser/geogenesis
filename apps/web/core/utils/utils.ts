@@ -68,7 +68,7 @@ export function formatShortAddress(address: string): string {
 export class GeoNumber {
   static defaultFormat = 'precision-unlimited';
 
-  static format(value?: string | number, formatPattern?: string, locale = 'en') {
+  static format(value?: string | number, formatPattern?: string, currencySymbol: string = '', locale = 'en') {
     try {
       const numericValue = typeof value === 'string' ? parseFloat(value) : value;
 
@@ -80,7 +80,7 @@ export class GeoNumber {
       const intlMessageFormat = formatToUse.startsWith('::') ? formatToUse : `::${formatToUse}`;
 
       const message = new IntlMessageFormat(`{value, number, ${intlMessageFormat}}`, locale);
-      return message.format({ value: numericValue });
+      return `${currencySymbol}${message.format({ value: numericValue })}`;
     } catch (e) {
       console.error(`Unable to format number: "${value}" with format: "${formatPattern}".`);
       return value;
@@ -126,6 +126,7 @@ export class GeoPoint {
 
 export class GeoDate {
   static defaultFormat = 'MMM d, yyyy - h:mmaaa';
+  static intervalDelimiter = '/';
 
   /**
    * We return blocktime from the subgraph for createdAt and updatedAt fields.
@@ -243,13 +244,46 @@ export class GeoDate {
     }
   };
 
+  static toggleDateInterval = (dateIsoString?: string): string => {
+    if (!dateIsoString) {
+      return '';
+    }
+
+    if (this.isDateInterval(dateIsoString)) {
+      const [startDateString] = dateIsoString.split(this.intervalDelimiter).map(d => d.trim());
+      return startDateString;
+    }
+    return `${dateIsoString}${this.intervalDelimiter}${dateIsoString}`;
+  };
+
+  static isDateInterval = (dateString?: string): boolean => {
+    if (!dateString) {
+      return false;
+    }
+
+    return dateString.includes(this.intervalDelimiter);
+  };
+
   static format = (dateIsoString: string, displayFormat?: string) => {
     try {
       const validatedFormat = this.validateFormat(displayFormat);
+
+      if (this.isDateInterval(dateIsoString)) {
+        const [startDateString, endDateString] = dateIsoString.split(this.intervalDelimiter).map(d => d.trim());
+
+        const startDate = parseISO(startDateString);
+        const endDate = parseISO(endDateString);
+
+        const formattedStartDate = formatInTimeZone(startDate, 'UTC', validatedFormat);
+        const formattedEndDate = formatInTimeZone(endDate, 'UTC', validatedFormat);
+
+        return `${formattedStartDate} — ${formattedEndDate}`;
+      }
+
       const date = parseISO(dateIsoString);
       return formatInTimeZone(date, 'UTC', validatedFormat);
     } catch (e) {
-      console.error(`Unable to format date: "${dateIsoString}" with format: "${displayFormat}".`);
+      console.error(`Unable to format date: "${dateIsoString}" with format: "${displayFormat}".`, e);
       return dateIsoString;
     }
   };

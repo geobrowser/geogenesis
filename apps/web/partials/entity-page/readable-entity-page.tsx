@@ -1,19 +1,21 @@
+import { SystemIds } from '@graphprotocol/grc-20';
+
 import * as React from 'react';
 
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
-import { GeoNumber, NavUtils, getImagePath, GeoPoint } from '~/core/utils/utils';
+import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { Map } from '~/design-system/map';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
+import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
-import { SystemIds } from '@graphprotocol/grc-20';
 
 interface Props {
   triples: Triple[];
@@ -51,6 +53,17 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
   );
 }
 
+const ReadableNumberField = ({ value, format, unitId }: { value: string; format?: string; unitId?: string }) => {
+  const { entity } = useQueryEntity({ id: unitId });
+
+  const currencySign = React.useMemo(
+    () => entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+    [entity]
+  );
+
+  return <Text as="p">{GeoNumber.format(value, format, currencySign)}</Text>;
+};
+
 function TriplesGroup({
   entityId,
   triples,
@@ -83,17 +96,12 @@ function TriplesGroup({
                       // Parse the coordinates using the GeoPoint utility
                       const coordinates = GeoPoint.parseCoordinates(renderable.value);
                       return (
-                        <div 
+                        <div
                           key={`string-${renderable.attributeId}-${renderable.value}`}
-                          className="flex w-full flex-col gap-2">
-                          <Text as="p">
-                            ({renderable.value})
-                          </Text>
-                          <Map
-                            showMap={renderable.options?.format === 'EARTH COORDINATES'}
-                            latitude={coordinates?.latitude}
-                            longitude={coordinates?.longitude}
-                          />
+                          className="flex w-full flex-col gap-2"
+                        >
+                          <Text as="p">({renderable.value})</Text>
+                          <Map latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
                         </div>
                       );
                     } else {
@@ -108,11 +116,11 @@ function TriplesGroup({
                   }
                   case 'NUMBER':
                     return (
-                      <div>
-                        <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-                          {GeoNumber.format(renderable.value, renderable.options?.format)}
-                        </Text>
-                      </div>
+                      <ReadableNumberField
+                        value={renderable.value}
+                        format={renderable.options?.format}
+                        unitId={renderable.options?.unit}
+                      />
                     );
                   case 'CHECKBOX': {
                     const checked = getChecked(renderable.value);

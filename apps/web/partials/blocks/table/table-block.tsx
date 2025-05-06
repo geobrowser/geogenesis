@@ -41,13 +41,13 @@ import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn } from './change-entry';
 import { DataBlockViewMenu } from './data-block-view-menu';
+import { TableBlockBulletedListItem } from './table-block-bulleted-list-item';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
 import { TableBlockGalleryItem } from './table-block-gallery-item';
 import { TableBlockListItem } from './table-block-list-item';
-import { TableBlockBulletedListItem } from './table-block-bulleted-list-item';
 import { TableBlockTable } from './table-block-table';
 
 interface Props {
@@ -346,7 +346,9 @@ export const TableBlock = ({ spaceId }: Props) => {
               rowEntityId={row.entityId}
               isPlaceholder={Boolean(row.placeholder)}
               onChangeEntry={onChangeEntry}
+              onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
+              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
               source={source}
             />
           );

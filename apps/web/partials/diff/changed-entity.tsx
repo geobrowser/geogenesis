@@ -10,6 +10,7 @@ import Image from 'next/image';
 
 import * as React from 'react';
 
+import { useQueryEntity } from '~/core/sync/use-store';
 import { BlockChange, EntityChange, RenderableChange, TripleChangeValue } from '~/core/utils/change/types';
 import { GeoDate, GeoNumber, getImagePath, groupBy } from '~/core/utils/utils';
 
@@ -600,8 +601,26 @@ interface NumberDiffProps {
 
 const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
   const hasFormatChanged = before?.options?.format !== after?.options?.format;
-  const formattedNumberBefore = before?.value ? GeoNumber.format(before.value, before?.options?.format) : null;
-  const formattedNumberAfter = after?.value ? GeoNumber.format(after.value, after?.options?.format) : null;
+
+  const { entity: beforeUnitEntity } = useQueryEntity({ id: before?.options?.unit });
+  const { entity: afterUnitEntity } = useQueryEntity({ id: after?.options?.unit });
+
+  const [currencySignBefore, currencySignAfter] = React.useMemo(
+    () => [
+      before?.options?.unit &&
+        beforeUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+      after?.options?.unit &&
+        afterUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+    ],
+    [before, beforeUnitEntity, after, afterUnitEntity]
+  );
+
+  const formattedNumberBefore = before?.value
+    ? GeoNumber.format(before.value, before?.options?.format, currencySignBefore)
+    : null;
+  const formattedNumberAfter = after?.value
+    ? GeoNumber.format(after.value, after?.options?.format, currencySignAfter)
+    : null;
 
   const [formattedNumber, rawNumber, highlightClassName] =
     mode === 'before'
@@ -636,82 +655,26 @@ type DateTimeType = {
 };
 
 export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
-  const beforeDateTime = before?.value ? GeoDate.fromISOStringUTC(before.value) : null;
-  const afterDateTime = after?.value ? GeoDate.fromISOStringUTC(after.value) : null;
-
   const formattedDateBefore = before?.value ? GeoDate.format(before.value, before?.options?.format) : null;
   const formattedDateAfter = after?.value ? GeoDate.format(after.value, after?.options?.format) : null;
 
-  const renderedDateTime: DateTimeType | null = (
-    mode === 'before' ? beforeDateTime : afterDateTime
-  ) as DateTimeType | null;
-  const highlightClassName = mode === 'before' ? 'rounded bg-errorTertiary' : 'bg-successTertiary rounded';
+  const [formattedDate, highlightClassName] =
+    mode === 'before'
+      ? [formattedDateBefore, 'rounded bg-errorTertiary']
+      : [formattedDateAfter, 'rounded bg-successTertiary'];
 
-  const hasFormatChanged = before?.options?.format !== after?.options?.format;
-  const formattedDate = mode === 'before' ? formattedDateBefore : formattedDateAfter;
-  const formattedDateHighlightClassName = hasFormatChanged ? highlightClassName : '';
-
-  if (!renderedDateTime) return null;
+  if (!formattedDate) return null;
 
   return (
     <>
-      <div className="flex items-start gap-4">
-        <div className="flex w-[164px] items-center gap-3">
-          <div className="flex w-full flex-[4] flex-col items-center">
-            <p className={cx(beforeDateTime?.year !== afterDateTime?.year && highlightClassName, dateFieldClassNames)}>
-              {renderedDateTime.year}
-            </p>
-          </div>
-          <span className="flex flex-[1] items-center text-grey-02">/</span>
-          <div className="flex w-full flex-[2] flex-col">
-            <p
-              className={cx(beforeDateTime?.month !== afterDateTime?.month && highlightClassName, dateFieldClassNames)}
-            >
-              {renderedDateTime.month.padStart(2, '0')}
-            </p>
-          </div>
-          <span className="w-full flex-[1] text-grey-02">/</span>
-          <div className="flex flex-[2] flex-col items-center">
-            <p className={cx(beforeDateTime?.day !== afterDateTime?.day && highlightClassName, dateFieldClassNames)}>
-              {renderedDateTime.day.padStart(2, '0')}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center">
-          <Minus color="grey-03" />
-          <Spacer width={18} />
-          <div className="flex items-center gap-1">
-            <p className={cx(beforeDateTime?.hour !== afterDateTime?.hour && highlightClassName, timeClassNames)}>
-              {renderedDateTime.hour.padStart(2, '0')}
-            </p>
-            <span>:</span>
-            <p className={cx(beforeDateTime?.minute !== afterDateTime?.minute && highlightClassName, timeClassNames)}>
-              {renderedDateTime.minute.padStart(2, '0')}
-            </p>
-          </div>
-          <p
-            className={cx(
-              (!before?.value || !after?.value || beforeDateTime?.meridiem !== afterDateTime?.meridiem) &&
-                highlightClassName,
-              'w-[32px] text-center uppercase',
-              timeClassNames
-            )}
-          >
-            {renderedDateTime.meridiem}
-          </p>
-        </div>
-      </div>
-      {hasFormatChanged && formattedDate && (
-        <p className="py-2 text-sm text-grey-04">
-          Browse format · <span className={formattedDateHighlightClassName}>{formattedDate}</span>
+      {formattedDate && (
+        <p className="py-2 text-body">
+          <span className={highlightClassName}>{formattedDate}</span>
         </p>
       )}
     </>
   );
 };
-
-const dateFieldClassNames = `w-full text-center text-body tabular-nums`;
-const timeClassNames = `w-[21px] tabular-nums p-0 m-0 text-body`;
 
 type ChipProps = {
   status?: 'ADD' | 'UPDATE' | 'REMOVE' | 'UNCHANGED';

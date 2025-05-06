@@ -10,7 +10,6 @@ import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store'
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-import { Truncate } from '~/design-system/truncate';
 
 export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   const { name } = useEntityPageStore();
@@ -48,11 +47,9 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
       ) : (
         <div>
           <div className="flex items-center justify-between">
-            <Truncate maxLines={3} shouldTruncate>
-              <Text as="h1" variant="mainPage">
-                {name ?? ZERO_WIDTH_SPACE}
-              </Text>
-            </Truncate>
+            <Text as="h1" variant="mainPage">
+              {name ?? ZERO_WIDTH_SPACE}
+            </Text>
           </div>
           <Spacer height={12} />
         </div>

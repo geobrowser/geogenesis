@@ -30,11 +30,7 @@ import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import {
-  ImageZoom,
-  PageImageField,
-  PageStringField,
-} from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
@@ -132,14 +128,15 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                   <>
                     {renderableType === 'TIME' && (
                       <DateFormatDropdown
-                        value={firstRenderable.options?.format}
-                        onSelect={(format: string) => {
+                        value={firstRenderable.value}
+                        format={firstRenderable.options?.format}
+                        onSelect={(value?: string, format?: string) => {
                           send({
                             type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                             payload: {
                               renderable: firstRenderable,
                               value: {
-                                value: firstRenderable.value,
+                                value: value ?? firstRenderable.value,
                                 type: 'TIME',
                                 options: {
                                   format,
@@ -154,7 +151,8 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                       <NumberOptionsDropdown
                         value={firstRenderable.value}
                         format={firstRenderable.options?.format}
-                        onSelect={(format: string) => {
+                        unitId={firstRenderable.options?.unit}
+                        send={({ format, unitId }) => {
                           send({
                             type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                             payload: {
@@ -164,6 +162,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                                 type: 'NUMBER',
                                 options: {
                                   format,
+                                  unit: unitId,
                                 },
                               },
                             },
@@ -584,8 +583,10 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
             return (
               <NumberField
                 key={renderable.attributeId}
+                isEditing={true}
                 value={renderable.value}
                 format={renderable.options?.format}
+                unitId={renderable.options?.unit}
                 onChange={value =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
@@ -596,6 +597,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                         value: value,
                         options: {
                           format: renderable.options?.format,
+                          unit: renderable.options?.unit,
                         },
                       },
                     },
@@ -685,8 +687,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                     placeholder="Add value..."
                     aria-label="text-field"
                     value={renderable.value}
-                    format={renderable.options?.format}
-                    onChange={(value, format) => {
+                    onChange={value => {
                       send({
                         type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                         payload: {
@@ -694,9 +695,6 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                           value: {
                             type: 'POINT',
                             value: value,
-                            options: {
-                              format,
-                            },
                           },
                         },
                       });

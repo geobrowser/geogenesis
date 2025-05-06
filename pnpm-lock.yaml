@@ -51,8 +51,8 @@ importers:
         specifier: ^5.6.8
         version: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
       '@graphprotocol/grc-20':
-        specifier: ^0.11.2
-        version: 0.11.2(bufferutil@4.0.9)(graphql@16.10.0)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
+        specifier: ^0.11.5
+        version: 0.11.5(bufferutil@4.0.9)(graphql@16.10.0)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
       '@mobily/ts-belt':
         specifier: ^4.0.0-rc.2
         version: 4.0.0-rc.5
@@ -544,10 +544,10 @@ importers:
         version: 1.21.4(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
       vite:
         specifier: ^5.2.11
-        version: 5.4.14(@types/node@22.14.1)
+        version: 5.4.14(@types/node@22.15.14)
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@22.14.1)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+        version: 1.6.0(@types/node@22.15.14)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
     devDependencies:
       '@bufbuild/buf':
         specifier: ^1.31.0
@@ -660,7 +660,7 @@ importers:
         version: 4.3.0(prettier@3.4.2)
       '@types/node':
         specifier: latest
-        version: 22.14.1
+        version: 22.15.14
       '@types/pg':
         specifier: ^8.10.9
         version: 8.11.11
@@ -702,10 +702,10 @@ importers:
         version: 5.7.3
       vite:
         specifier: ^5.2.10
-        version: 5.4.14(@types/node@22.14.1)
+        version: 5.4.14(@types/node@22.15.14)
       vitest:
         specifier: ^1.5.2
-        version: 1.6.0(@types/node@22.14.1)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+        version: 1.6.0(@types/node@22.15.14)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
 
 packages:
 
@@ -736,12 +736,15 @@ packages:
 
   '@aragon/osx-ethers@1.2.1':
     resolution: {integrity: sha512-3Fscq8C9elIktiI6OT7fR5iaAvim+ghU6IUvZF3P/phvWm9roNp/GXAROhA/Vx41NQxeqmfXokgFo6KOWt4drA==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   '@aragon/osx-ethers@1.3.0':
     resolution: {integrity: sha512-zfLAYdgZ3SSifHiyJLkBKmoDw/IEX/yzvw6liUAa/gz7HZOsrwp3JsBJaIwB2epOnGa6vhXyWTKKZ15aJvoMaA==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   '@aragon/osx-ethers@1.3.1':
     resolution: {integrity: sha512-6APDAasHrIVmJ0SxUSmWCxusVe46OF3eGZGp8MVD3j4BDJjJ+FIrrjN9ePkTpPja3X8GL6PD00l1WIzW2GZQMQ==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   '@aragon/sdk-client-common@1.15.0':
     resolution: {integrity: sha512-pLWxo7+uXTvKMWK27PExIkq0E+ACwb1AndY9sZ5TiudGbLJ2udoB+QFapJxUrb578U8JjTaoFHzujws+gWorwQ==}
@@ -942,11 +945,8 @@ packages:
   '@bufbuild/protobuf@1.10.0':
     resolution: {integrity: sha512-QDdVFLoN93Zjg36NoQPZfsVH9tZew7wKDKyV5qRdj8ntT4wQCOradQjRaTdwMhWUYsgKsvCINKKm87FdEk96Ag==}
 
-  '@bufbuild/protobuf@1.10.1':
-    resolution: {integrity: sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ==}
-
-  '@bufbuild/protobuf@2.2.5':
-    resolution: {integrity: sha512-/g5EzJifw5GF8aren8wZ/G5oMuPoGeS6MQD3ca8ddcvdXR5UELUfdTZITCGNhNXynY/AYl3Z4plmxdj/tRl/hQ==}
+  '@bufbuild/protobuf@2.3.0':
+    resolution: {integrity: sha512-WK6zH4MtBp/uesX8KGCnwDDRVnEVHUvwjsigKXcSR57Oo8Oyv1vRS9qyUlSP+6KWRl5z8tNAU5qpf3QodeVYxA==}
 
   '@bufbuild/protoc-gen-es@1.10.0':
     resolution: {integrity: sha512-zBYBsVT/ul4uZb6F+kD7/k4sWNHVVbEPfJwKi0FDr+9VJo8MKIofI6pkr5ksBLr4fi/74r+e/75Xi/0clL5dXg==}
@@ -961,9 +961,6 @@ packages:
   '@bufbuild/protoplugin@1.10.0':
     resolution: {integrity: sha512-u6NE4vL0lw1+EK4/PiE/SQB7fKO4LRJNTEScIXVOi2x88K/c8WKc/k0KyEaA0asVBMpwekJQZGnRyj04ZtN5Gg==}
 
-  '@changesets/apply-release-plan@7.0.12':
-    resolution: {integrity: sha512-EaET7As5CeuhTzvXTQCRZeBUcisoYPDDcXvgTE/2jmmypKp0RC7LxKj/yzqeh/1qFTZI7oDGFcL1PHRuQuketQ==}
-
   '@changesets/apply-release-plan@7.0.8':
     resolution: {integrity: sha512-qjMUj4DYQ1Z6qHawsn7S71SujrExJ+nceyKKyI9iB+M5p9lCL55afuEd6uLBPRpLGWQwkwvWegDHtwHJb1UjpA==}
 
@@ -976,15 +973,8 @@ packages:
   '@changesets/changelog-git@0.2.0':
     resolution: {integrity: sha512-bHOx97iFI4OClIT35Lok3sJAwM31VbUM++gnMBV16fdbtBhgYu4dxsphBF/0AZZsyAHMrnM0yFcj5gZM1py6uQ==}
 
-  '@changesets/changelog-git@0.2.1':
-    resolution: {integrity: sha512-x/xEleCFLH28c3bQeQIyeZf8lFXyDFVn1SgcBiR2Tw/r4IAWlk1fzxCEZ6NxQAjF2Nwtczoen3OA2qR+UawQ8Q==}
-
   '@changesets/cli@2.27.12':
     resolution: {integrity: sha512-9o3fOfHYOvBnyEn0mcahB7wzaA3P4bGJf8PNqGit5PKaMEFdsRixik+txkrJWd2VX+O6wRFXpxQL8j/1ANKE9g==}
-    hasBin: true
-
-  '@changesets/cli@2.29.2':
-    resolution: {integrity: sha512-vwDemKjGYMOc0l6WUUTGqyAWH3AmueeyoJa1KmFRtCYiCoY5K3B68ErYpDB6H48T4lLI4czum4IEjh6ildxUeg==}
     hasBin: true
 
   '@changesets/config@3.0.5':
@@ -1001,9 +991,6 @@ packages:
 
   '@changesets/get-dependents-graph@2.1.3':
     resolution: {integrity: sha512-gphr+v0mv2I3Oxt19VdWRRUxq3sseyUpX9DaHpTUmLj92Y10AGy+XOtV+kbM6L/fDcpx7/ISDFK6T8A/P3lOdQ==}
-
-  '@changesets/get-release-plan@4.0.10':
-    resolution: {integrity: sha512-CCJ/f3edYaA3MqoEnWvGGuZm0uMEMzNJ97z9hdUR34AOvajSwySwsIzC/bBu3+kuGDsB+cny4FljG8UBWAa7jg==}
 
   '@changesets/get-release-plan@4.0.6':
     resolution: {integrity: sha512-FHRwBkY7Eili04Y5YMOZb0ezQzKikTka4wL753vfUA5COSebt7KThqiuCN9BewE4/qFGgF/5t3AuzXx1/UAY4w==}
@@ -1055,9 +1042,6 @@ packages:
 
   '@changesets/write@0.3.2':
     resolution: {integrity: sha512-kDxDrPNpUgsjDbWBvUo27PzKX4gqeKOlhibaOXDJA6kuBisGqNHv/HwGJrAu8U/dSf8ZEFIeHIPtvSlZI1kULw==}
-
-  '@changesets/write@0.4.0':
-    resolution: {integrity: sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q==}
 
   '@coinbase/wallet-sdk@3.9.3':
     resolution: {integrity: sha512-N/A2DRIf0Y3PHc1XAMvbBUu4zisna6qAdqABMZwBMNEfWrXpAwx16pZGkYCLGE+Rvv1edbcB2LYDRnACNcmCiw==}
@@ -1889,8 +1873,8 @@ packages:
     resolution: {integrity: sha512-Fakuk190EAKxWSa9YQyr/87g8mvAv8HBvk6yPCPuIoA3bYXF7n6kl0XSqKjSd5VfjEqhtnzQ6zJGzDf1Gv/tJg==}
     engines: {node: '>=8.6'}
 
-  '@graphprotocol/grc-20@0.11.2':
-    resolution: {integrity: sha512-YNrN4odKtMhHwK/XlNeCsK5RLhp75rqJXycki1qA9EhEkoHMz1+mR/ciNVJQdf+7/y33ilD6LszFdP3svBDuwQ==}
+  '@graphprotocol/grc-20@0.11.5':
+    resolution: {integrity: sha512-i25OlQtuhu4iT3KPvgNSE5G8HDxVIufIC1EzkquiSzI8q7vjSDPI3tu8zAxJMtFAwc/+tA5Itf/W2px8LTzepA==}
 
   '@graphprotocol/grc-20@0.9.4':
     resolution: {integrity: sha512-Dod9W8nvAgc0LpM4AwtNSghsj/eJ1pvzLF0ItYlcJz7e+kCS/9NQ0ysdupqZ/ITwfOF9sS5igLsGIvvNQ5MmXQ==}
@@ -3704,8 +3688,8 @@ packages:
   '@types/node@20.17.16':
     resolution: {integrity: sha512-vOTpLduLkZXePLxHiHsBLp98mHGnl8RptV4YAO3HfKO5UHjDvySGbxKtpYfy8Sx5+WKcgc45qNreJJRVM3L6mw==}
 
-  '@types/node@22.14.1':
-    resolution: {integrity: sha512-u0HuPQwe/dHrItgHHpmw3N2fYCR6x4ivMNbPHRkBVP4CvN+kiRrKHWk3i8tXiO/joPwXLMYvF9TTF0eqgHIuOw==}
+  '@types/node@22.15.14':
+    resolution: {integrity: sha512-BL1eyu/XWsFGTtDWOYULQEs4KR0qdtYfCxYAUYRoB7JP7h9ETYLgQTww6kH8Sj2C0pFGgrpM0XKv6/kbIzYJ1g==}
 
   '@types/pbf@3.0.5':
     resolution: {integrity: sha512-j3pOPiEcWZ34R6a6mN07mUkM4o4Lwf6hPNt8eilOeZhTFbxFXmKhvXl9Y28jotFPaI1bpPDJsbCprUoNke6OrA==}
@@ -3992,6 +3976,7 @@ packages:
 
   '@walletconnect/ethereum-provider@2.17.0':
     resolution: {integrity: sha512-b+KTAXOb6JjoxkwpgYQQKPUcTwENGmdEdZoIDLeRicUmZTn/IQKfkMoC2frClB4YxkyoVMtj1oMV2JAax+yu9A==}
+    deprecated: 'Reliability and performance improvements. See: https://github.com/WalletConnect/walletconnect-monorepo/releases'
 
   '@walletconnect/ethereum-provider@2.17.5':
     resolution: {integrity: sha512-oypmy5OXyyHaNzsMNIBBzq9xk930PoO6WQ52Kl9e85OBaLYZ8tK4/ZCPfREPEoRQbvKYBV9+ClB2L2Ox7m3Sgw==}
@@ -4986,9 +4971,6 @@ packages:
   effect@3.13.7:
     resolution: {integrity: sha512-yjDuWX5M34kB38Pwilv8QU956nA2m1a6ws0i+04VQkQJEBPI4GfVhUhtNNFRaqKIOlkqdqzJHCDOwARmaf2XzA==}
 
-  effect@3.14.10:
-    resolution: {integrity: sha512-qmqq8eqQlavxtOvDRtizbW5/Z2rSJA1U7vhrF5h+8gcCRVqYXj5nTyySUyHdMMEFPBjsgVeJ1aVKMXZGjaGoAg==}
-
   effect@3.6.0:
     resolution: {integrity: sha512-7bUV/Ytt058F3YWZJyra63MGA80msTk4AnFiVlvCM65RN7afc3LsvLOHpMifLqX/8CG0eDlJLg2lDLByyEnYGQ==}
 
@@ -5914,10 +5896,6 @@ packages:
   human-id@1.0.2:
     resolution: {integrity: sha512-UNopramDEhHJD+VR+ehk8rOslwSfByxPIZyJRfV739NDhN5LF1fa1MqnzKm2lGTQRjNrjK19Q5fhkgIfjlVUKw==}
 
-  human-id@4.1.1:
-    resolution: {integrity: sha512-3gKm/gCSUipeLsRYZbbdA1BD83lBoWUkZ7G9VFrhWPAU76KwYo5KR8V28bpoPm/ygy0x5/GCbpRQdY7VLYCoIg==}
-    hasBin: true
-
   human-signals@5.0.0:
     resolution: {integrity: sha512-AXcZb6vzzrFAUE61HnN4mpLqd/cSIwNQjtNWR0euPm6y0iqx3G4gOXaIDdtdDwZmhwe82LA6+zinmW4UBWVePQ==}
     engines: {node: '>=16.17.0'}
@@ -5945,11 +5923,6 @@ packages:
 
   image-size@2.0.0:
     resolution: {integrity: sha512-HP07n1SpdIXGUL4VotUIOQz66MQOq8g7VN+Yj02YTVowqZScQ5i/JYU0+lkNr2pwt5j4hOpk94/UBV1ZCbS2fA==}
-    engines: {node: '>=16.x'}
-    hasBin: true
-
-  image-size@2.0.2:
-    resolution: {integrity: sha512-IRqXKlaXwgSMAMtpNzZa1ZAe8m+Sa1770Dhk8VkSsP9LS+iHD62Zd8FQKs8fbPiagBE7BzoFX23cxFnwshpV6w==}
     engines: {node: '>=16.x'}
     hasBin: true
 
@@ -6795,14 +6768,6 @@ packages:
       typescript:
         optional: true
 
-  ox@0.6.9:
-    resolution: {integrity: sha512-wi5ShvzE4eOcTwQVsIPdFr+8ycyX+5le/96iAJutaZAvCes1J0+RvpEPg5QDPDiaR0XQQAvZVl7AwqQcINuUug==}
-    peerDependencies:
-      typescript: '>=5.4.0'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
-
   p-filter@2.1.0:
     resolution: {integrity: sha512-ZBxxZ5sL2HghephhpGAQdoskxplTwr7ICaehZwLIlfL6acuVgZPm8yBNuRAFBGEqtD/hmUeq9eqLg2ys9Xr/yw==}
     engines: {node: '>=8'}
@@ -6837,9 +6802,6 @@ packages:
 
   package-json-from-dist@1.0.1:
     resolution: {integrity: sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==}
-
-  package-manager-detector@0.2.11:
-    resolution: {integrity: sha512-BEnLolu+yuz22S56CU1SUKq3XC3PkwD5wv4ikR4MfGvnRVcmzXR9DwSlW2fEamyTPyXHomBJRzgapeuBvRNzJQ==}
 
   package-manager-detector@0.2.9:
     resolution: {integrity: sha512-+vYvA/Y31l8Zk8dwxHhL3JfTuHPm6tlxM2A3GeQyl7ovYnSp1+mzAxClxaOr0qO1TtPxbQxetI7v5XqKLJZk7Q==}
@@ -7372,9 +7334,6 @@ packages:
   qs@6.13.0:
     resolution: {integrity: sha512-+38qI9SOr8tfZ4QmJNplMUxqjbe7LKvvZgWdExBOmd+egZTtjLB67Gu0HRX3u/XOq7UU2Nx6nsjvS16Z9uwfpg==}
     engines: {node: '>=0.6'}
-
-  quansync@0.2.10:
-    resolution: {integrity: sha512-t41VRkMYbkHyCYmOvx/6URnN80H7k4X0lLdBMGsz+maAwrJQYB1djpV6vHrQIBE0WBSGqhtEHrK9U3DWWH8v7A==}
 
   query-string@7.1.3:
     resolution: {integrity: sha512-hh2WYhq4fi8+b+/2Kg9CEge4fDPvHS534aOOvOZeQ3+Vf2mCFsaFBYj0i+iXcAq6I9Vzp5fjMFBlONvayDC1qg==}
@@ -8506,14 +8465,6 @@ packages:
       typescript:
         optional: true
 
-  viem@2.27.2:
-    resolution: {integrity: sha512-VwsB+RswcflbwBNPMvzTHuafDA51iT8v4SuIFcudTP2skmxcdodbgoOLP4dYELVnCzcedxoSJDOeext4V3zdnA==}
-    peerDependencies:
-      typescript: '>=5.0.4'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
-
   vite-node@1.6.0:
     resolution: {integrity: sha512-de6HJgzC+TFzOu0NTC4RAIsyf/DY/ibWDYQUcuEA84EMHhcefTUGkjFHKKEJhQN4A+6I0u++kr3l36ZF2d7XRw==}
     engines: {node: ^18.0.0 || >=20.0.0}
@@ -9280,9 +9231,7 @@ snapshots:
 
   '@bufbuild/protobuf@1.10.0': {}
 
-  '@bufbuild/protobuf@1.10.1': {}
-
-  '@bufbuild/protobuf@2.2.5': {}
+  '@bufbuild/protobuf@2.3.0': {}
 
   '@bufbuild/protoc-gen-es@1.10.0(@bufbuild/protobuf@1.10.0)':
     dependencies:
@@ -9299,22 +9248,6 @@ snapshots:
       typescript: 4.5.2
     transitivePeerDependencies:
       - supports-color
-
-  '@changesets/apply-release-plan@7.0.12':
-    dependencies:
-      '@changesets/config': 3.1.1
-      '@changesets/get-version-range-type': 0.4.0
-      '@changesets/git': 3.0.4
-      '@changesets/should-skip-package': 0.1.2
-      '@changesets/types': 6.1.0
-      '@manypkg/get-packages': 1.1.3
-      detect-indent: 6.1.0
-      fs-extra: 7.0.1
-      lodash.startcase: 4.4.0
-      outdent: 0.5.0
-      prettier: 2.8.8
-      resolve-from: 5.0.0
-      semver: 7.7.1
 
   '@changesets/apply-release-plan@7.0.8':
     dependencies:
@@ -9354,10 +9287,6 @@ snapshots:
     dependencies:
       '@changesets/types': 6.1.0
 
-  '@changesets/changelog-git@0.2.1':
-    dependencies:
-      '@changesets/types': 6.1.0
-
   '@changesets/cli@2.27.12':
     dependencies:
       '@changesets/apply-release-plan': 7.0.8
@@ -9383,37 +9312,6 @@ snapshots:
       mri: 1.2.0
       p-limit: 2.3.0
       package-manager-detector: 0.2.9
-      picocolors: 1.1.1
-      resolve-from: 5.0.0
-      semver: 7.7.1
-      spawndamnit: 3.0.1
-      term-size: 2.2.1
-
-  '@changesets/cli@2.29.2':
-    dependencies:
-      '@changesets/apply-release-plan': 7.0.12
-      '@changesets/assemble-release-plan': 6.0.6
-      '@changesets/changelog-git': 0.2.1
-      '@changesets/config': 3.1.1
-      '@changesets/errors': 0.2.0
-      '@changesets/get-dependents-graph': 2.1.3
-      '@changesets/get-release-plan': 4.0.10
-      '@changesets/git': 3.0.4
-      '@changesets/logger': 0.1.1
-      '@changesets/pre': 2.0.2
-      '@changesets/read': 0.6.5
-      '@changesets/should-skip-package': 0.1.2
-      '@changesets/types': 6.1.0
-      '@changesets/write': 0.4.0
-      '@manypkg/get-packages': 1.1.3
-      ansi-colors: 4.1.3
-      ci-info: 3.9.0
-      enquirer: 2.4.1
-      external-editor: 3.1.0
-      fs-extra: 7.0.1
-      mri: 1.2.0
-      p-limit: 2.3.0
-      package-manager-detector: 0.2.11
       picocolors: 1.1.1
       resolve-from: 5.0.0
       semver: 7.7.1
@@ -9457,15 +9355,6 @@ snapshots:
       '@manypkg/get-packages': 1.1.3
       picocolors: 1.1.1
       semver: 7.7.1
-
-  '@changesets/get-release-plan@4.0.10':
-    dependencies:
-      '@changesets/assemble-release-plan': 6.0.6
-      '@changesets/config': 3.1.1
-      '@changesets/pre': 2.0.2
-      '@changesets/read': 0.6.5
-      '@changesets/types': 6.1.0
-      '@manypkg/get-packages': 1.1.3
 
   '@changesets/get-release-plan@4.0.6':
     dependencies:
@@ -9565,13 +9454,6 @@ snapshots:
       human-id: 1.0.2
       prettier: 2.8.8
 
-  '@changesets/write@0.4.0':
-    dependencies:
-      '@changesets/types': 6.1.0
-      fs-extra: 7.0.1
-      human-id: 4.1.1
-      prettier: 2.8.8
-
   '@coinbase/wallet-sdk@3.9.3':
     dependencies:
       bn.js: 5.2.1
@@ -9608,23 +9490,23 @@ snapshots:
       '@connectrpc/connect': 1.6.1(@bufbuild/protobuf@1.10.0)
       undici: 5.28.5
 
-  '@connectrpc/connect-node@2.0.2(@bufbuild/protobuf@2.2.5)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.5))':
+  '@connectrpc/connect-node@2.0.2(@bufbuild/protobuf@2.3.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.3.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.2.5
-      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.2.5)
+      '@bufbuild/protobuf': 2.3.0
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.3.0)
 
-  '@connectrpc/connect-web@2.0.2(@bufbuild/protobuf@2.2.5)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.5))':
+  '@connectrpc/connect-web@2.0.2(@bufbuild/protobuf@2.3.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.3.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.2.5
-      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.2.5)
+      '@bufbuild/protobuf': 2.3.0
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.3.0)
 
   '@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0)':
     dependencies:
       '@bufbuild/protobuf': 1.10.0
 
-  '@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.5)':
+  '@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.3.0)':
     dependencies:
-      '@bufbuild/protobuf': 2.2.5
+      '@bufbuild/protobuf': 2.3.0
 
   '@discoveryjs/json-ext@0.5.7': {}
 
@@ -10305,19 +10187,19 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@graphprotocol/grc-20@0.11.2(bufferutil@4.0.9)(graphql@16.10.0)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
+  '@graphprotocol/grc-20@0.11.5(bufferutil@4.0.9)(graphql@16.10.0)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
     dependencies:
-      '@bufbuild/protobuf': 1.10.1
-      '@changesets/cli': 2.29.2
-      effect: 3.14.10
+      '@bufbuild/protobuf': 1.10.0
+      '@changesets/cli': 2.27.12
+      effect: 3.13.7
       ethers: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
       fflate: 0.8.2
       graphql-request: 7.1.2(graphql@16.10.0)
-      image-size: 2.0.2
-      permissionless: 0.2.39(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(viem@2.27.2(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1))
+      image-size: 2.0.0
+      permissionless: 0.2.39(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(viem@2.23.7(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1))
       position-strings: 2.0.1
       uuid: 11.1.0
-      viem: 2.27.2(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
+      viem: 2.23.7(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
     transitivePeerDependencies:
       - bufferutil
       - graphql
@@ -11723,7 +11605,7 @@ snapshots:
   '@safe-global/safe-apps-sdk@9.1.0(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
     dependencies:
       '@safe-global/safe-gateway-typescript-sdk': 3.22.9
-      viem: 2.27.2(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
+      viem: 2.23.7(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
     transitivePeerDependencies:
       - bufferutil
       - typescript
@@ -11981,10 +11863,10 @@ snapshots:
       '@bufbuild/protobuf': 1.10.0
       '@connectrpc/connect': 1.6.1(@bufbuild/protobuf@1.10.0)
 
-  '@substreams/core@0.17.0(@bufbuild/protobuf@2.2.5)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.5))':
+  '@substreams/core@0.17.0(@bufbuild/protobuf@2.3.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.3.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.2.5
-      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.2.5)
+      '@bufbuild/protobuf': 2.3.0
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.3.0)
 
   '@substreams/manifest@0.15.0(@bufbuild/buf@1.50.0)(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0))(@effect/schema@0.63.4(effect@2.4.19)(fast-check@3.13.2))(effect@2.4.19)(yaml@2.7.0)':
     dependencies:
@@ -11999,11 +11881,11 @@ snapshots:
 
   '@substreams/node@0.6.2':
     dependencies:
-      '@bufbuild/protobuf': 2.2.5
-      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.2.5)
-      '@connectrpc/connect-node': 2.0.2(@bufbuild/protobuf@2.2.5)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.5))
-      '@connectrpc/connect-web': 2.0.2(@bufbuild/protobuf@2.2.5)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.5))
-      '@substreams/core': 0.17.0(@bufbuild/protobuf@2.2.5)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.2.5))
+      '@bufbuild/protobuf': 2.3.0
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.3.0)
+      '@connectrpc/connect-node': 2.0.2(@bufbuild/protobuf@2.3.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.3.0))
+      '@connectrpc/connect-web': 2.0.2(@bufbuild/protobuf@2.3.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.3.0))
+      '@substreams/core': 0.17.0(@bufbuild/protobuf@2.3.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.3.0))
       eventemitter3: 5.0.1
 
   '@substreams/sink@0.14.1(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0))(effect@2.4.19)':
@@ -12339,7 +12221,7 @@ snapshots:
     dependencies:
       undici-types: 6.19.8
 
-  '@types/node@22.14.1':
+  '@types/node@22.15.14':
     dependencies:
       undici-types: 6.21.0
 
@@ -14142,11 +14024,6 @@ snapshots:
       '@standard-schema/spec': 1.0.0
       fast-check: 3.23.2
 
-  effect@3.14.10:
-    dependencies:
-      '@standard-schema/spec': 1.0.0
-      fast-check: 3.23.2
-
   effect@3.6.0: {}
 
   electron-to-chromium@1.5.88: {}
@@ -15430,8 +15307,6 @@ snapshots:
 
   human-id@1.0.2: {}
 
-  human-id@4.1.1: {}
-
   human-signals@5.0.0: {}
 
   humanize-ms@1.2.1:
@@ -15453,8 +15328,6 @@ snapshots:
   ignore@5.3.2: {}
 
   image-size@2.0.0: {}
-
-  image-size@2.0.2: {}
 
   immediate@3.0.6: {}
 
@@ -15661,10 +15534,6 @@ snapshots:
   isows@1.0.6(ws@8.18.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
     dependencies:
       ws: 8.18.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-
-  isows@1.0.6(ws@8.18.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
-    dependencies:
-      ws: 8.18.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)
 
   iterall@1.3.0: {}
 
@@ -16337,20 +16206,6 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  ox@0.6.9(typescript@5.7.3)(zod@3.24.1):
-    dependencies:
-      '@adraffy/ens-normalize': 1.11.0
-      '@noble/curves': 1.8.2
-      '@noble/hashes': 1.7.2
-      '@scure/bip32': 1.6.2
-      '@scure/bip39': 1.5.4
-      abitype: 1.0.8(typescript@5.7.3)(zod@3.24.1)
-      eventemitter3: 5.0.1
-    optionalDependencies:
-      typescript: 5.7.3
-    transitivePeerDependencies:
-      - zod
-
   p-filter@2.1.0:
     dependencies:
       p-map: 2.1.0
@@ -16380,10 +16235,6 @@ snapshots:
   p-try@2.2.0: {}
 
   package-json-from-dist@1.0.1: {}
-
-  package-manager-detector@0.2.11:
-    dependencies:
-      quansync: 0.2.10
 
   package-manager-detector@0.2.9: {}
 
@@ -16445,12 +16296,6 @@ snapshots:
   permissionless@0.2.39(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(viem@2.23.7(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)):
     dependencies:
       viem: 2.23.7(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
-    optionalDependencies:
-      ox: 0.6.7(typescript@5.7.3)(zod@3.24.1)
-
-  permissionless@0.2.39(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(viem@2.27.2(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)):
-    dependencies:
-      viem: 2.27.2(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
     optionalDependencies:
       ox: 0.6.7(typescript@5.7.3)(zod@3.24.1)
 
@@ -16949,8 +16794,6 @@ snapshots:
   qs@6.13.0:
     dependencies:
       side-channel: 1.1.0
-
-  quansync@0.2.10: {}
 
   query-string@7.1.3:
     dependencies:
@@ -18209,30 +18052,13 @@ snapshots:
       - utf-8-validate
       - zod
 
-  viem@2.27.2(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1):
-    dependencies:
-      '@noble/curves': 1.8.1
-      '@noble/hashes': 1.7.1
-      '@scure/bip32': 1.6.2
-      '@scure/bip39': 1.5.4
-      abitype: 1.0.8(typescript@5.7.3)(zod@3.24.1)
-      isows: 1.0.6(ws@8.18.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))
-      ox: 0.6.9(typescript@5.7.3)(zod@3.24.1)
-      ws: 8.18.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-    optionalDependencies:
-      typescript: 5.7.3
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-      - zod
-
-  vite-node@1.6.0(@types/node@22.14.1):
+  vite-node@1.6.0(@types/node@22.15.14):
     dependencies:
       cac: 6.7.14
       debug: 4.4.0
       pathe: 1.1.2
       picocolors: 1.1.1
-      vite: 5.4.14(@types/node@22.14.1)
+      vite: 5.4.14(@types/node@22.15.14)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -18275,13 +18101,13 @@ snapshots:
       '@types/node': 17.0.45
       fsevents: 2.3.3
 
-  vite@5.4.14(@types/node@22.14.1):
+  vite@5.4.14(@types/node@22.15.14):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.5.1
       rollup: 4.32.1
     optionalDependencies:
-      '@types/node': 22.14.1
+      '@types/node': 22.15.14
       fsevents: 2.3.3
 
   vite@6.2.5(@types/node@17.0.45)(jiti@1.21.7)(tsx@4.19.2)(yaml@2.7.0):
@@ -18296,7 +18122,7 @@ snapshots:
       tsx: 4.19.2
       yaml: 2.7.0
 
-  vitest@1.6.0(@types/node@22.14.1)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
+  vitest@1.6.0(@types/node@22.15.14)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
     dependencies:
       '@vitest/expect': 1.6.0
       '@vitest/runner': 1.6.0
@@ -18315,11 +18141,11 @@ snapshots:
       strip-literal: 2.1.1
       tinybench: 2.9.0
       tinypool: 0.8.4
-      vite: 5.4.14(@types/node@22.14.1)
-      vite-node: 1.6.0(@types/node@22.14.1)
+      vite: 5.4.14(@types/node@22.15.14)
+      vite-node: 1.6.0(@types/node@22.15.14)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 22.14.1
+      '@types/node': 22.15.14
       jsdom: 20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - less

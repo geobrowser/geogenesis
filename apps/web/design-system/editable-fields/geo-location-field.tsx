@@ -1,13 +1,13 @@
-import * as React from 'react';
-import { useEffect } from 'react';
+import { cva } from 'class-variance-authority';
 import Textarea from 'react-textarea-autosize';
 
+import * as React from 'react';
+import { useEffect } from 'react';
+
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
-import { Map } from '../map';
-import { cva } from 'class-variance-authority';
 import { GeoPoint } from '~/core/utils/utils';
 
-const DISPLAY_MAP_FORMAT_OPTION = 'EARTH COORDINATES';
+import { Map } from '../map';
 
 const textareaStyles = cva(
   'm-0 -mb-[1px] w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none',
@@ -27,22 +27,19 @@ const textareaStyles = cva(
 );
 
 interface PageGeoLocationFieldProps {
-  onChange: (value: string, isBrowseMode: string) => void;
+  onChange: (value: string) => void;
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle';
   value?: string;
-  format?: string;
 }
 
 export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) {
-  const [localFormat, setLocalFormat] = React.useState(props.format || '');
-  
   const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
-    callback: (value) => props.onChange(value, localFormat),
+    callback: value => props.onChange(value),
     delay: 1000,
     initialValue: props.value || '',
   });
-  
+
   const [pointValues, setPointsValues] = React.useState(() => {
     const coordinates = GeoPoint.parseCoordinates(props.value);
     return {
@@ -81,21 +78,6 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
     }
   }, [props.value]);
 
-  // Update format when props.format changes
-  useEffect(() => {
-    if (props.format !== undefined) {
-      setLocalFormat(props.format);
-    }
-  }, [props.format]);
-
-  // Handle map visibility toggle
-  const handleShowMapToggle = () => {
-    const newFormat = localFormat === DISPLAY_MAP_FORMAT_OPTION ? '' : DISPLAY_MAP_FORMAT_OPTION;
-    setLocalFormat(newFormat);
-    // Notify parent of format change immediately
-    props.onChange(localValue, newFormat);
-  };
-
   return (
     <div className="flex w-full flex-col gap-4">
       <div className="mt-[3px] flex w-full justify-between  leading-[29px]">
@@ -121,21 +103,8 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
             />
           </div>
         </div>
-        <div className="flex h-7 items-center gap-[6px]">
-          {/* Toggle */}
-          <div className="relative h-3 w-5 cursor-pointer rounded-lg bg-black" onClick={handleShowMapToggle}>
-            <div
-              className={`absolute top-[1px] h-[10px] w-[10px] rounded-full bg-white transition-all duration-300 ease-in-out ${localFormat === DISPLAY_MAP_FORMAT_OPTION ? 'right-[1px]' : 'right-[9px]'}`}
-            ></div>
-          </div>
-          <span className="text-[1rem] font-normal leading-5 text-grey-04">Show map in browse mode</span>
-        </div>
       </div>
-      <Map
-        showMap={localFormat === DISPLAY_MAP_FORMAT_OPTION}
-        latitude={parseFloat(pointValues.latitude) || 0}
-        longitude={parseFloat(pointValues.longitude) || 0}
-      />
+      <Map latitude={parseFloat(pointValues.latitude) || 0} longitude={parseFloat(pointValues.longitude) || 0} />
     </div>
   );
 }

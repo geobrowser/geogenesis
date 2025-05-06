@@ -1,11 +1,13 @@
 'use client';
 
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 
 import * as React from 'react';
-import { useState } from 'react';
 
+import { useSearch } from '~/core/hooks/use-search';
+import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
@@ -13,17 +15,21 @@ import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Check } from '~/design-system/icons/check';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Magic } from '~/design-system/icons/magic';
+import { Input } from '~/design-system/input';
+import { Spinner } from '~/design-system/spinner';
 import { Toggle } from '~/design-system/toggle';
 
 interface Props {
   value?: string;
   format?: string;
-  onSelect: (value: string) => void;
+  unitId?: string;
+  send: ({ format, unitId }: { format?: string; unitId?: string }) => void;
 }
 
 interface SubmenuOptionProps {
   label: string;
-  format?: string;
+  labelRight?: string;
+  subtext?: string | null;
   onClick: (e: React.MouseEvent) => void;
   isSelected?: boolean;
   hasSubmenu?: boolean;
@@ -33,28 +39,13 @@ interface SubmenuOptionProps {
 
 const SubmenuOption: React.FC<SubmenuOptionProps> = ({
   label,
-  format,
+  labelRight,
+  subtext,
   onClick,
   isSelected,
   hasSubmenu = false,
   className,
 }) => {
-  const getFormatLabel = React.useCallback((formatString: string | undefined) => {
-    if (!formatString || formatString === undefined) return 'Unspecified';
-
-    for (const [key, value] of Object.entries(numberFormatOptions)) {
-      if (value === formatString) return key;
-    }
-
-    for (const [key, value] of Object.entries(percentageFormatOptions)) {
-      if (value === formatString) return key;
-    }
-
-    return 'Custom';
-  }, []);
-
-  const formatLabel = getFormatLabel(format);
-
   return (
     <DropdownPrimitive.Item
       onClick={onClick}
@@ -66,8 +57,9 @@ const SubmenuOption: React.FC<SubmenuOptionProps> = ({
     >
       <div className={cx('flex flex-col gap-[2px]', isSelected && 'rounded-md')}>
         <p className="text-button font-medium">{label}</p>
-        <p className="text-metadata">{formatLabel}</p>
+        <p className="text-metadata">{subtext}</p>
       </div>
+      {labelRight && <p className="font-medium text-grey-04">{labelRight}</p>}
       {hasSubmenu ? <ChevronRight color="grey-04" /> : isSelected ? <Check color="grey-04" /> : null}
     </DropdownPrimitive.Item>
   );
@@ -143,6 +135,102 @@ const NumberFormatView = ({ formatOptions, value }: { formatOptions?: NumberForm
   </>
 );
 
+const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; onSelect: (unitId: string) => void }) => {
+  const {
+    query,
+    onQueryChange,
+    isLoading: isSearchLoading,
+    results: searchResults,
+  } = useSearch({
+    filterByTypes: [SystemIds.CURRENCY_ATTRIBUTE],
+  });
+
+  const { entities, isLoading: isEntitiesLoading } = useQueryEntities({
+    where: { id: { in: searchResults.map(result => result.id) } },
+  });
+
+  const filteredEntities = React.useMemo(
+    () =>
+      entities.map(entity => ({
+        name: entity.name,
+        symbol: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value,
+        sign: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+        id: entity.id,
+      })),
+    [entities]
+  );
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.currentTarget.value;
+    onQueryChange(newValue);
+  };
+
+  // @TODO: Fill in, once we have entities for crypto currencies with Cryptocurrency type
+  const cryptoCurrencies = React.useMemo(() => [], []);
+
+  const fiatCurrencies = React.useMemo(
+    () => [
+      {
+        name: 'United States Dollar',
+        symbol: 'USD',
+        id: SystemIds.CURRENCY_USD_ATTRIBUTE,
+      },
+      {
+        name: 'Pound Sterling',
+        symbol: 'GBP',
+        id: SystemIds.CURRENCY_GBP_ATTRIBUTE,
+      },
+      {
+        name: 'Euro',
+        symbol: 'EUR',
+        id: SystemIds.CURRENCY_EUR_ATTRIBUTE,
+      },
+    ],
+    []
+  );
+
+  const [defaultCurrencies, title] = React.useMemo(
+    () => (type === 'CRYPTO' ? [cryptoCurrencies, 'Cryptocurrency'] : [fiatCurrencies, 'Fiat currency']),
+    [type, cryptoCurrencies, fiatCurrencies]
+  );
+
+  const currencies = query.length > 0 ? filteredEntities : defaultCurrencies;
+
+  const isSearchComplete = !isSearchLoading && query.length > 0;
+  const hasResults = searchResults.length > 0;
+  const isLoading = isSearchLoading || isEntitiesLoading;
+  const shouldShowNoResults = isSearchComplete && !hasResults && !isLoading;
+
+  return (
+    <>
+      <div className="p-1">
+        <Input value={query} onChange={handleInputChange} withSearchIcon />
+      </div>
+      <div className="mx-1 rounded-[6px] bg-grey-01 px-3 py-1 text-footnoteMedium">{title}</div>
+      <div className="min-h-[44px] p-1">
+        {isLoading ? (
+          <div className="flex h-full items-center justify-center py-2">
+            <Spinner />
+          </div>
+        ) : shouldShowNoResults ? (
+          <div className="w-full bg-white px-3 py-2">
+            <div className="truncate text-resultTitle text-text">No results.</div>
+          </div>
+        ) : (
+          currencies.map(currency => (
+            <SubmenuOption
+              key={currency.id}
+              label={currency.name || ''}
+              labelRight={currency.symbol || ''}
+              onClick={() => onSelect(currency.id)}
+            />
+          ))
+        )}
+      </div>
+    </>
+  );
+};
+
 const numberFormatOptions = {
   Precise: 'precision-unlimited',
   Rounded: 'precision-integer',
@@ -160,15 +248,23 @@ type NumberFormatOption = {
   onClick: () => void;
 };
 
-type NumberTypeSubmenuView = 'number-options' | 'number-unit' | 'number-format';
+type NumberTypeSubmenuView = 'number-options' | 'number-unit' | 'number-format' | 'currency-fiat' | 'currency-crypto';
 
-export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat, onSelect }: Props) => {
-  const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [viewHistory, setViewHistory] = useState<NumberTypeSubmenuView[]>(['number-options']);
+export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat, unitId, send }: Props) => {
+  const [isOpen, setIsOpen] = React.useState<boolean>(false);
+  const [viewHistory, setViewHistory] = React.useState<NumberTypeSubmenuView[]>(['number-options']);
   const currentView = viewHistory[viewHistory.length - 1];
-  const [selectedNumberType, setSelectedNumberType] = useState<'number' | 'percentage'>(
+  const [selectedNumberType, setSelectedNumberType] = React.useState<'number' | 'percentage'>(
     format.includes('percent') ? 'percentage' : 'number'
   );
+  const [selectedCurrencySymbol, setSelectedCurrencySymbol] = React.useState<string | null>(null);
+  const { entity } = useQueryEntity({ id: unitId });
+
+  React.useEffect(() => {
+    setSelectedCurrencySymbol(
+      (unitId && entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value) || null
+    );
+  }, [unitId, entity]);
 
   const handleBack = React.useCallback(
     (e: React.MouseEvent) => {
@@ -202,15 +298,41 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
       label,
       value: formatValue,
       isSelected: formatValue === format,
-      onClick: () => onSelect(formatValue),
+      onClick: () => send({ format: formatValue, unitId }),
     }));
-  }, [selectedNumberType, format, onSelect]);
+  }, [selectedNumberType, format, send, unitId]);
 
   const togglePercentage = React.useCallback(() => {
     const newNumberType = selectedNumberType === 'percentage' ? 'number' : 'percentage';
     setSelectedNumberType(newNumberType);
-    onSelect(newNumberType === 'percentage' ? percentageFormatOptions.Precise : numberFormatOptions.Precise);
-  }, [setSelectedNumberType, selectedNumberType, onSelect]);
+    send({
+      format: newNumberType === 'percentage' ? percentageFormatOptions.Precise : numberFormatOptions.Precise,
+      unitId,
+    });
+  }, [setSelectedNumberType, selectedNumberType, send, unitId]);
+
+  const removeUnitId = React.useCallback(() => {
+    send({
+      format,
+      unitId: undefined,
+    });
+  }, [send, format]);
+
+  const getFormatLabel = React.useCallback((formatString: string | undefined) => {
+    if (!formatString || formatString === undefined) return 'Unspecified';
+
+    for (const [key, value] of Object.entries(numberFormatOptions)) {
+      if (value === formatString) return key;
+    }
+
+    for (const [key, value] of Object.entries(percentageFormatOptions)) {
+      if (value === formatString) return key;
+    }
+
+    return 'Custom';
+  }, []);
+
+  const formatLabel = getFormatLabel(format);
 
   const renderContent = React.useCallback(() => {
     switch (currentView) {
@@ -221,6 +343,42 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
             <NumberFormatView formatOptions={formatOptions} value={value} />
           </>
         );
+      case 'number-unit':
+        return (
+          <>
+            <BackButton onClick={handleBack} />
+            <SubmenuOption
+              label="Fiat Currency"
+              onClick={e => handleNavigate(e, 'currency-fiat')}
+              hasSubmenu
+              options={formatOptions}
+            />
+            {/* @TODO: Uncomment, once we have entities for crypto currencies with Cryptocurrency type */}
+            {/* <SubmenuOption
+              label="Cryptocurrency"
+              onClick={e => handleNavigate(e, 'currency-crypto')}
+              hasSubmenu
+              options={formatOptions}
+            /> */}
+            <SubmenuOption label="Unspecified" onClick={removeUnitId} options={formatOptions} isSelected={!unitId} />
+          </>
+        );
+
+      case 'currency-fiat':
+        return (
+          <>
+            <BackButton onClick={handleBack} />
+            <CurrencySubmenuOption type="FIAT" onSelect={unitId => send({ format, unitId })} />
+          </>
+        );
+
+      case 'currency-crypto':
+        return (
+          <>
+            <BackButton onClick={handleBack} />
+            <CurrencySubmenuOption type="CRYPTO" onSelect={unitId => send({ format, unitId })} />
+          </>
+        );
 
       case 'number-options':
       default:
@@ -228,10 +386,17 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
           <>
             <PercentageToggle currentType={selectedNumberType} onToggle={togglePercentage} />
             <SubmenuOption
+              label="Unit"
+              onClick={e => handleNavigate(e, 'number-unit')}
+              hasSubmenu
+              subtext={selectedCurrencySymbol || 'Unspecified'}
+              options={formatOptions}
+            />
+            <SubmenuOption
               label="Format"
               onClick={e => handleNavigate(e, 'number-format')}
               hasSubmenu
-              format={format}
+              subtext={formatLabel}
               options={formatOptions}
             />
           </>
