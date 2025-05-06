@@ -62,6 +62,10 @@ function TriplesGroup({
   return (
     <>
       {triples.map((t, index) => {
+        // hide name property, it is already rendered in the header
+        if (t.attributeId === SystemIds.NAME_PROPERTY) {
+          return null;
+        }
         return (
           <div key={`${entityId}-${t.attributeId}-${index}`} className="break-words">
             <Text as="p" variant="bodySemibold">
@@ -122,16 +126,18 @@ function TriplesGroup({
   );
 }
 
-function RelationsGroup({ relations }: { relations: RelationRenderableProperty[] }) {
+export function RelationsGroup({ relations, isTypes }: { relations: RelationRenderableProperty[], isTypes?: boolean }) {
   const attributeId = relations[0].attributeId;
   const attributeName = relations[0].attributeName;
   const spaceId = relations[0].spaceId;
 
-  // hide cover and avatar properties
+  // hide cover, avatar, and type properties
   // they are already rendered in the avatar cover component
+  // unless this is the types group that is rendered in the header
   if (
     (attributeId === SystemIds.COVER_PROPERTY) ||
-    (attributeId === ContentIds.AVATAR_PROPERTY)
+    (attributeId === ContentIds.AVATAR_PROPERTY) || 
+    (attributeId === SystemIds.TYPES_PROPERTY && !isTypes)
   ) {
     return null;
   }
@@ -139,11 +145,14 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
   return (
     <>
       <div key={`${attributeId}-${attributeName}`} className="break-words">
-        <Link href={NavUtils.toEntity(spaceId, attributeId)}>
-          <Text as="p" variant="bodySemibold">
-            {attributeName ?? attributeId}
-          </Text>
-        </Link>
+        {attributeId !== SystemIds.TYPES_PROPERTY && (
+          <Link href={NavUtils.toEntity(spaceId, attributeId)}>
+            <Text as="p" variant="bodySemibold">
+              {attributeName ?? attributeId}
+            </Text>
+          </Link>
+        )}
+        
         <div className="flex flex-wrap gap-2">
           {relations.map(r => {
             const relationId = r.relationId;
@@ -155,7 +164,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
               const imagePath = getImagePath(relationValue ?? '');
               return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={imagePath} />;
             }
-
+            
             return (
               <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
                 <LinkableRelationChip

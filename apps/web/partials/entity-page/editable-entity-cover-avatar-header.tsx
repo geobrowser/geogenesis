@@ -20,6 +20,7 @@ import { getImagePath } from '~/core/utils/utils';
 import { SquareButton } from '~/design-system/button';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
+import { Dots } from '~/design-system/dots';
 
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
@@ -115,6 +116,7 @@ const AvatarCoverInput = ({
 }) => {
   const [hovered, setHovered] = useState(false);
   const [hoveredIcon, setHoveredIcon] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   const { spaceId, id, name } = useEntityPageStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -182,14 +184,22 @@ const AvatarCoverInput = ({
   };
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    if (imgUrl) {
-      deleteProperty();
-    }
     if (e.target.files) {
       const file = e.target.files[0];
-      const imageSrc = await ipfs.uploadFile(file);
-      onImageChange(imageSrc);
-      e.target.value = '';
+      setIsUploading(true);
+      try {
+        const imageSrc = await ipfs.uploadFile(file);
+        // Only delete the old image after the new one is successfully uploaded
+        if (imgUrl && firstRenderable) {
+          deleteProperty();
+        }
+        onImageChange(imageSrc);
+      } catch (error) {
+        console.error('Failed to upload image:', error);
+      } finally {
+        setIsUploading(false);
+        e.target.value = '';
+      }
     }
   };
 
@@ -209,9 +219,9 @@ const AvatarCoverInput = ({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onClick={() => {
-          if (!imgUrl) openInput();
+          if (!imgUrl && editable) openInput();
         }}
-        className={`relative h-full w-full rounded-lg ${!imgUrl && 'cursor-pointer'} ${
+        className={`relative h-full w-full rounded-lg ${!imgUrl && editable ? 'cursor-pointer' : ''} ${
           isCover
             ? 'bg-cover-default bg-center bg-no-repeat hover:bg-cover-hover'
             : imgUrl
@@ -228,30 +238,34 @@ const AvatarCoverInput = ({
         )}
         {editable && (
           <div
-            className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center gap-[6px]`}
+            className={`absolute ${imgUrl && isCover ? 'right-4 top-4 justify-end' : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'} flex transform items-center gap-[6px]`}
           >
             {!imgUrl ? (
-              <button onMouseEnter={() => setHoveredIcon('Upload')} onMouseLeave={() => setHoveredIcon('')}>
-                <Upload color={hovered ? undefined : 'grey-03'} />
-              </button>
+              <Upload color={hovered ? undefined : 'grey-03'} />
             ) : (
               <>
-                {hovered && (
-                  <>
-                    <SquareButton
-                      onMouseEnter={() => setHoveredIcon('Upload')}
-                      onMouseLeave={() => setHoveredIcon('')}
-                      onClick={openInput}
-                      icon={<Upload color={hoveredIcon === 'Upload' ? undefined : 'grey-04'} />}
-                    />
+                {isUploading ? (
+                  <div className="flex items-center justify-center">
+                    <Dots />
+                  </div>
+                ) : (
+                  hovered && (
+                    <>
+                      <SquareButton
+                        onMouseEnter={() => setHoveredIcon('Upload')}
+                        onMouseLeave={() => setHoveredIcon('')}
+                        onClick={openInput}
+                        icon={<Upload />}
+                      />
 
-                    <SquareButton
-                      onMouseEnter={() => setHoveredIcon('Trash')}
-                      onMouseLeave={() => setHoveredIcon('')}
-                      onClick={deleteProperty}
-                      icon={<Trash color={hoveredIcon === 'Trash' ? undefined : 'grey-04'} />}
-                    />
-                  </>
+                      <SquareButton
+                        onMouseEnter={() => setHoveredIcon('Trash')}
+                        onMouseLeave={() => setHoveredIcon('')}
+                        onClick={deleteProperty}
+                        icon={<Trash />}
+                      />
+                    </>
+                  )
                 )}
               </>
             )}

@@ -11,7 +11,8 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { RelationRenderableProperty } from '~/core/types';
 
-import { RelationsGroup } from './editable-entity-page';
+import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
+import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -43,8 +44,12 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
 
   return (
     <div className="flex items-center justify-between text-text">
-      {typesRenderableObj && editable && (
-        <RelationsGroup relations={typesRenderableObj as RelationRenderableProperty[]} properties={properties} />
+      {typesRenderableObj && (
+        editable ? (
+          <EditableRelationsGroup relations={typesRenderableObj as RelationRenderableProperty[]} properties={properties} />
+        ) : (
+          <ReadableRelationsGroup relations={typesRenderableObj as RelationRenderableProperty[]} isTypes={true} />
+        )
       )}
     </div>
   );
