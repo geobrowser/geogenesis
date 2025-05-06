@@ -113,6 +113,73 @@ describe('GeoDate', () => {
     expect(GeoDate.isMonth30Days(10)).toBe(false);
     expect(GeoDate.isMonth30Days(12)).toBe(false);
   });
+
+  it('toggles a date to a date interval', () => {
+    const date = '2023-01-01T12:00:00.000Z';
+    const expectedInterval = '2023-01-01T12:00:00.000Z/2023-01-01T12:00:00.000Z';
+
+    expect(GeoDate.toggleDateInterval(date)).toBe(expectedInterval);
+  });
+
+  it('toggles a date interval to a single date', () => {
+    const dateInterval = '2023-01-01T12:00:00.000Z/2023-01-02T12:00:00.000Z';
+    const expectedDate = '2023-01-01T12:00:00.000Z';
+
+    expect(GeoDate.toggleDateInterval(dateInterval)).toBe(expectedDate);
+  });
+
+  it('returns empty string when input is undefined', () => {
+    expect(GeoDate.toggleDateInterval(undefined)).toBe('');
+  });
+
+  it('returns empty string when input is empty', () => {
+    expect(GeoDate.toggleDateInterval('')).toBe('');
+  });
+
+  it('correctly identifies a date interval', () => {
+    expect(GeoDate.isDateInterval('2023-01-01T12:00:00.000Z/2023-01-02T12:00:00.000Z')).toBe(true);
+    expect(GeoDate.isDateInterval('2023-01-01T12:00:00.000Z')).toBe(false);
+    expect(GeoDate.isDateInterval('')).toBe(false);
+    expect(GeoDate.isDateInterval(undefined)).toBe(false);
+  });
+
+  describe('format', () => {
+    it('formats a single date with default format', () => {
+      const date = '2023-01-15T12:30:00.000Z';
+      const result = GeoDate.format(date);
+      expect(result).toBe('Jan 15, 2023 - 12:30pm');
+    });
+
+    it('formats a single date with custom format', () => {
+      const date = '2023-01-15T12:30:00.000Z';
+      const result = GeoDate.format(date, 'yyyy-MM-dd');
+      expect(result).toBe('2023-01-15');
+    });
+
+    it('formats a date interval with default format', () => {
+      const dateInterval = '2023-01-15T12:30:00.000Z/2023-01-20T15:45:00.000Z';
+      const result = GeoDate.format(dateInterval);
+      expect(result).toBe('Jan 15, 2023 - 12:30pm — Jan 20, 2023 - 3:45pm');
+    });
+
+    it('formats a date interval with custom format', () => {
+      const dateInterval = '2023-01-15T12:30:00.000Z/2023-01-20T15:45:00.000Z';
+      const result = GeoDate.format(dateInterval, 'yyyy-MM-dd');
+      expect(result).toBe('2023-01-15 — 2023-01-20');
+    });
+
+    it('returns original string when invalid date is provided', () => {
+      const invalidDate = 'not-a-date';
+      const result = GeoDate.format(invalidDate);
+      expect(result).toBe(invalidDate);
+    });
+
+    it('uses default format when invalid format is provided', () => {
+      const date = '2023-01-15T12:30:00.000Z';
+      const result = GeoDate.format(date, 'invalid-format');
+      expect(result).toBe('Jan 15, 2023 - 12:30pm');
+    });
+  });
 });
 
 describe('getImagePath', () => {

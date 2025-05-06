@@ -15,7 +15,6 @@ import { Dots } from '~/design-system/dots';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-import { Truncate } from '~/design-system/truncate';
 
 import { HistoryEmpty } from '../history/history-empty';
 import { HistoryItem } from '../history/history-item';
@@ -91,11 +90,9 @@ export function EditableHeading({
       ) : (
         <div>
           <div className="flex items-center justify-between">
-            <Truncate maxLines={3} shouldTruncate>
-              <Text as="h1" variant="mainPage">
-                {name ?? ZERO_WIDTH_SPACE}
-              </Text>
-            </Truncate>
+            <Text as="h1" variant="mainPage">
+              {name ?? ZERO_WIDTH_SPACE}
+            </Text>
           </div>
           <Spacer height={12} />
         </div>

@@ -135,51 +135,54 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                     <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
                   )}
 
-                  <div className="absolute right-0 top-6 flex items-center gap-1">
-                    {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
-                    <>
-                      {renderableType === 'TIME' && (
-                        <DateFormatDropdown
-                          value={firstRenderable.options?.format}
-                          onSelect={(format: string) => {
-                            send({
-                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                              payload: {
-                                renderable: firstRenderable,
-                                value: {
-                                  value: firstRenderable.value,
-                                  type: 'TIME',
-                                  options: {
-                                    format,
-                                  },
+                <div className="absolute right-0 top-6 flex items-center gap-1">
+                  {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
+                  <>
+                    {renderableType === 'TIME' && (
+                      <DateFormatDropdown
+                        value={firstRenderable.value}
+                        format={firstRenderable.options?.format}
+                        onSelect={(value?: string, format?: string) => {
+                          send({
+                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                            payload: {
+                              renderable: firstRenderable,
+                              value: {
+                                value: value ?? firstRenderable.value,
+                                type: 'TIME',
+                                options: {
+                                  format,
                                 },
                               },
-                            });
-                          }}
-                        />
-                      )}
-                      {renderableType === 'NUMBER' && (
-                        <NumberOptionsDropdown
-                          value={firstRenderable.value}
-                          format={firstRenderable.options?.format}
-                          onSelect={(format: string) => {
-                            send({
-                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                              payload: {
-                                renderable: firstRenderable,
-                                value: {
-                                  value: firstRenderable.value,
-                                  type: 'NUMBER',
-                                  options: {
-                                    format,
-                                  },
+                            },
+                          });
+                        }}
+                      />
+                    )}
+                    {renderableType === 'NUMBER' && (
+                      <NumberOptionsDropdown
+                        value={firstRenderable.value}
+                        format={firstRenderable.options?.format}
+                        unitId={firstRenderable.options?.unit}
+                        send={({ format, unitId }) => {
+                          send({
+                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                            payload: {
+                              renderable: firstRenderable,
+                              value: {
+                                value: firstRenderable.value,
+                                type: 'NUMBER',
+                                options: {
+                                  format,
+                                  unit: unitId,
                                 },
                               },
-                            });
-                          }}
-                        />
-                      )}
-                      <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
+                            },
+                          });
+                        }}
+                      />
+                    )}
+                    <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
 
                       {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
                       {renderableType !== 'RELATION' && (
@@ -513,8 +516,10 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
             return (
               <NumberField
                 key={renderable.attributeId}
+                isEditing={true}
                 value={renderable.value}
                 format={renderable.options?.format}
+                unitId={renderable.options?.unit}
                 onChange={value =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
@@ -525,6 +530,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                         value: value,
                         options: {
                           format: renderable.options?.format,
+                          unit: renderable.options?.unit,
                         },
                       },
                     },

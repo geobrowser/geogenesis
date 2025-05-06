@@ -10,6 +10,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CellContent } from '~/design-system/table/cell-content';
 
@@ -129,7 +130,6 @@ export const EntityTableCell = ({
             />
           );
         }
-
         if (renderable.type === 'CHECKBOX') {
           return (
             <input
@@ -137,6 +137,19 @@ export const EntityTableCell = ({
               disabled
               key={`checkbox-${renderable.attributeId}-${renderable.value}`}
               checked={renderable.value === '1'}
+            />
+          );
+        }
+
+        if (renderable.type === 'NUMBER') {
+          return (
+            <NumberField
+              variant="tableCell"
+              isEditing={false}
+              key={renderable.value}
+              value={renderable.value}
+              format={renderable.options?.format}
+              unitId={renderable.options?.unit}
             />
           );
         }

@@ -7,10 +7,11 @@ import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { CheckCircle } from '~/design-system/icons/check-circle';
 import { SelectEntity } from '~/design-system/select-entity';
 
-import { onChangeEntryFn } from './change-entry';
+import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { getName } from '~/partials/blocks/table/utils';
 
 type Props = {
   columns: Record<string, Cell>;
@@ -19,7 +20,9 @@ type Props = {
   rowEntityId: string;
   isPlaceholder: boolean;
   onChangeEntry: onChangeEntryFn;
+  onLinkEntry: onLinkEntryFn;
   properties?: Record<PropertyId, PropertySchema>;
+  relationId?: string;
   source: Source;
 };
 
@@ -30,35 +33,14 @@ export function TableBlockBulletedListItem({
   rowEntityId,
   isPlaceholder,
   onChangeEntry,
+  onLinkEntry,
+  relationId,
   source,
 }: Props) {
   const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
   const { cellId, verified } = nameCell;
-  let { name } = nameCell;
 
-  const maybeNameInSpaceRenderable = nameCell.renderables.find(
-    r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
-  );
-
-  let maybeNameInSpace = maybeNameInSpaceRenderable?.value;
-
-  if (maybeNameInSpaceRenderable?.type === 'RELATION') {
-    maybeNameInSpace = maybeNameInSpaceRenderable?.valueName ?? maybeNameInSpace;
-  }
-
-  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE);
-
-  let maybeOtherName = maybeNameRenderable?.value;
-
-  if (maybeNameRenderable?.type === 'RELATION') {
-    maybeOtherName = maybeNameRenderable?.valueName ?? maybeNameInSpace;
-  }
-
-  const maybeName = maybeNameInSpace ?? maybeOtherName;
-
-  if (maybeName) {
-    name = maybeOtherName ?? null;
-  }
+  const name = getName(nameCell, currentSpaceId);
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
@@ -107,43 +89,85 @@ export function TableBlockBulletedListItem({
               spaceId={currentSpaceId}
             />
           ) : (
-            <div className="flex items-center gap-2">
-              {verified && (
-                <span>
-                  <CheckCircle color={isEditing ? 'text' : 'ctaPrimary'} />
-                </span>
-              )}
-              <PageStringField
-                placeholder="Add name..."
-                onChange={value => {
-                  onChangeEntry(
-                    {
-                      entityId: rowEntityId,
-                      entityName: name,
-                      spaceId: currentSpaceId,
-                    },
-                    {
-                      type: 'EVENT',
-                      data: {
-                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                        payload: {
-                          renderable: {
-                            attributeId: SystemIds.NAME_ATTRIBUTE,
-                            entityId: rowEntityId,
-                            spaceId: currentSpaceId,
-                            attributeName: 'Name',
-                            entityName: name,
-                            type: 'TEXT',
-                            value: name ?? '',
-                          },
-                          value: { type: 'TEXT', value: value },
-                        },
+            <div>
+              {source.type !== 'COLLECTION' ? (
+                <PageStringField
+                  placeholder="Add name..."
+                  onChange={value => {
+                    onChangeEntry(
+                      {
+                        entityId: rowEntityId,
+                        entityName: name,
+                        spaceId: currentSpaceId,
                       },
-                    }
-                  );
-                }}
-                value={name ?? ''}
-              />
+                      {
+                        type: 'EVENT',
+                        data: {
+                          type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                          payload: {
+                            renderable: {
+                              attributeId: SystemIds.NAME_ATTRIBUTE,
+                              entityId: rowEntityId,
+                              spaceId: currentSpaceId,
+                              attributeName: 'Name',
+                              entityName: name,
+                              type: 'TEXT',
+                              value: name ?? '',
+                            },
+                            value: { type: 'TEXT', value: value },
+                          },
+                        },
+                      }
+                    );
+                  }}
+                  value={name ?? ''}
+                />
+              ) : (
+                <CollectionMetadata
+                  view="BULLETED_LIST"
+                  isEditing={true}
+                  name={name}
+                  href={href}
+                  currentSpaceId={currentSpaceId}
+                  entityId={rowEntityId}
+                  spaceId={nameCell?.space}
+                  relationId={relationId}
+                  verified={verified}
+                  onLinkEntry={onLinkEntry}
+                >
+                  <PageStringField
+                    placeholder="Add name..."
+                    onChange={value => {
+                      onChangeEntry(
+                        {
+                          entityId: rowEntityId,
+                          entityName: name,
+                          spaceId: currentSpaceId,
+                        },
+                        {
+                          type: 'EVENT',
+                          data: {
+                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                            payload: {
+                              renderable: {
+                                attributeId: SystemIds.NAME_ATTRIBUTE,
+                                entityId: rowEntityId,
+                                spaceId: currentSpaceId,
+                                attributeName: 'Name',
+                                entityName: name,
+                                type: 'TEXT',
+                                value: name ?? '',
+                              },
+                              value: { type: 'TEXT', value: value },
+                            },
+                          },
+                        }
+                      );
+                    }}
+                    value={name ?? ''}
+                  />
+                </CollectionMetadata>
+              )}
             </div>
           )}
         </div>
@@ -152,19 +176,30 @@ export function TableBlockBulletedListItem({
   }
 
   return (
-    <Link
-      href={href}
-      className="group relative flex w-full gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider"
-    >
+    <div className="group relative flex w-full gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
       <div className="mt-1 flex-shrink-0 text-xl leading-none text-text">•</div>
-      <div className="flex items-center gap-2">
-        {verified && (
-          <div>
-            <CheckCircle />
-          </div>
-        )}
-        <div className="text-body">{name}</div>
-      </div>
-    </Link>
+      {source.type !== 'COLLECTION' ? (
+        <Link href={href} className="text-body">
+          {name}
+        </Link>
+      ) : (
+        <CollectionMetadata
+          view="BULLETED_LIST"
+          isEditing={false}
+          name={name}
+          href={href}
+          currentSpaceId={currentSpaceId}
+          entityId={rowEntityId}
+          spaceId={nameCell?.space}
+          relationId={relationId}
+          verified={verified}
+          onLinkEntry={onLinkEntry}
+        >
+          <Link href={href} className="text-body">
+            {name}
+          </Link>
+        </CollectionMetadata>
+      )}
+    </div>
   );
 }

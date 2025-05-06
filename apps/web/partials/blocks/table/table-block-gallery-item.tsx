@@ -10,7 +10,7 @@ import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
-import { BlockImageField, InlinePageStringField } from '~/design-system/editable-fields/editable-fields';
+import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
@@ -234,7 +234,7 @@ export function TableBlockGalleryItem({
             ) : (
               <>
                 {source.type !== 'COLLECTION' ? (
-                  <InlinePageStringField
+                  <PageStringField
                     placeholder="Entity name..."
                     value={name ?? ''}
                     onChange={value => {
@@ -279,7 +279,7 @@ export function TableBlockGalleryItem({
                     verified={verified}
                     onLinkEntry={onLinkEntry}
                   >
-                    <InlinePageStringField
+                    <PageStringField
                       placeholder="Entity name..."
                       value={name ?? ''}
                       onChange={value => {
@@ -352,10 +352,10 @@ export function TableBlockGalleryItem({
           fill
         />
       </div>
-      <div className="flex flex-col gap-4 px-1">
+      <div className="flex w-full flex-col gap-4 px-1">
         <div className="flex flex-col gap-2">
           {source.type !== 'COLLECTION' ? (
-            <Link href={href} className="truncate text-smallTitle font-medium text-text">
+            <Link href={href} className="text-smallTitle font-medium text-text">
               {name || rowEntityId}
             </Link>
           ) : (
@@ -372,7 +372,7 @@ export function TableBlockGalleryItem({
               verified={verified}
               onLinkEntry={onLinkEntry}
             >
-              <Link href={href} className="truncate text-smallTitle font-medium text-text">
+              <Link href={href} className="text-smallTitle font-medium text-text">
                 {name || rowEntityId}
               </Link>
             </CollectionMetadata>
