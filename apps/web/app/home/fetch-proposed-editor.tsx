@@ -2,6 +2,7 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { fetchProfile } from '~/core/io/subgraph';
+import { defaultProfile } from '~/core/io/subgraph/fetch-profile-via-wallets-triple';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { Profile } from '~/core/types';
 
@@ -11,7 +12,7 @@ const getProposedEditorInProposalQuery = (proposalId: string) => `query {
     filter: { proposalId: { equalTo: "${proposalId}" } }
   ) {
     nodes {
-      accountId 
+      accountId
     }
   }
 }`;
@@ -24,7 +25,7 @@ interface NetworkResult {
   };
 }
 
-export async function fetchProposedEditorForProposal(proposalId: string): Promise<Profile | null> {
+export async function fetchProposedEditorForProposal(proposalId: string): Promise<Profile> {
   const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
@@ -77,7 +78,7 @@ export async function fetchProposedEditorForProposal(proposalId: string): Promis
   const proposedEditors = result.proposedEditors.nodes;
 
   if (proposedEditors.length === 0) {
-    return null;
+    return defaultProfile('');
   }
 
   // There should only be one proposed member in a single proposal
