@@ -92,7 +92,7 @@ export class GeoPoint {
   /**
    * Parses coordinates from a string format like "lat, lon" into separate latitude and longitude values
    * @param value - String containing latitude and longitude separated by a comma
-   * @returns An object with parsed latitude and longitude values, or undefined if parsing fails
+   * @returns An object with parsed latitude and longitude values, or null if parsing fails
    */
   static parseCoordinates(value?: string): { latitude: number; longitude: number } | null {
     if (!value) return null;
