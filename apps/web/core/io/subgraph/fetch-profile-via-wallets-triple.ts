@@ -136,7 +136,7 @@ export async function fetchProfileViaWalletsTripleAddress(address: string): Prom
   };
 }
 
-function defaultProfile(address: string): Profile {
+export function defaultProfile(address: string): Profile {
   return {
     id: address,
     address: address as `0x${string}`,
