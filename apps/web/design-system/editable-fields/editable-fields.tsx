@@ -1,5 +1,4 @@
 import { cva, cx } from 'class-variance-authority';
-import ReactInputAutosize from 'react-input-autosize';
 import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
