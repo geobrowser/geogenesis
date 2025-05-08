@@ -5,7 +5,8 @@ import { ErrorBoundary } from 'react-error-boundary';
 import * as React from 'react';
 
 import { EntityId } from '~/core/io/schema';
-import { EditorProvider } from '~/core/state/editor/editor-provider';
+import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
+import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
@@ -13,6 +14,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
+import { TabGroup } from '~/design-system/tab-group';
 
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
@@ -49,6 +51,8 @@ export default async function DefaultEntityPage({
   const avatarUrl = Entities.avatar(props.relationsOut) ?? props.serverAvatarUrl;
   const coverUrl = Entities.cover(props.relationsOut) ?? props.serverCoverUrl;
 
+  const tabs = buildTabsForEntityPage(props.tabEntities, params);
+
   return (
     <EntityStoreProvider
       id={props.id}
@@ -62,6 +66,7 @@ export default async function DefaultEntityPage({
         spaceId={props.spaceId}
         initialBlocks={props.blocks}
         initialBlockRelations={props.blockRelations}
+        initialTabs={props.tabs}
       >
         {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
         <EntityPageContentContainer>
@@ -71,6 +76,14 @@ export default async function DefaultEntityPage({
               <EntityPageMetadataHeader id={props.id} entityName={props.name ?? ''} spaceId={props.spaceId} />
             )}
           </div>
+          {tabs.length > 1 && (
+            <>
+              <Spacer height={40} />
+              <React.Suspense fallback={null}>
+                <TabGroup tabs={tabs} />
+              </React.Suspense>
+            </>
+          )}
           {notice}
           {(showSpacer || !!notice) && <Spacer height={40} />}
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
@@ -110,6 +123,32 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     return redirect(NavUtils.toEntity(newSpaceId, entityId));
   }
 
+  const tabIds = entity?.relationsOut
+    .filter(r => r.typeOf.id === EntityId(SystemIds.TABS_ATTRIBUTE))
+    ?.map(r => r.toEntity.id);
+
+  const tabEntities = tabIds ? await fetchEntitiesBatch({ spaceId, entityIds: tabIds }) : [];
+
+  const tabBlocks = await Promise.all(
+    tabEntities.map(async entity => {
+      const blockIds = entity?.relationsOut
+        .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
+        ?.map(r => r.toEntity.id);
+
+      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+      return blocks;
+    })
+  );
+
+  const tabs: Tabs = {};
+
+  tabEntities.forEach((entity, index) => {
+    tabs[entity.id as EntityId] = {
+      entity,
+      blocks: tabBlocks[index],
+    };
+  });
+
   const serverAvatarUrl = Entities.avatar(entity?.relationsOut);
   const serverCoverUrl = Entities.cover(entity?.relationsOut);
 
@@ -129,8 +168,62 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     relationsOut: entity?.relationsOut ?? [],
     types: entity?.types ?? [],
 
+    tabs,
+    tabEntities,
+
     // For entity page editor
     blockRelations: blockRelations ?? [],
     blocks,
   };
+};
+
+type EntityType = {
+  id: string;
+  name: string | null;
+};
+
+type TabProps = {
+  label: string;
+  href: string;
+};
+
+const buildTabsForEntityPage = (
+  tabEntities: EntityType[],
+  params: Awaited<Promise<{ id: string; entityId: string }>>
+): TabProps[] => {
+  const tabs = [];
+
+  const spaceId = params.id;
+  const entityId = params.entityId;
+
+  const ALL_ENTITIES_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toEntity(spaceId, entityId)}`,
+    },
+  ];
+
+  const DYNAMIC_TABS = getDynamicTabs(spaceId, entityId, tabEntities);
+
+  tabs.push(...ALL_ENTITIES_TABS);
+
+  if (DYNAMIC_TABS.length > 0) {
+    tabs.push(...DYNAMIC_TABS);
+  }
+
+  return tabs;
+};
+
+const getDynamicTabs = (spaceId: string, entityId: string, tabEntities: EntityType[]) => {
+  const tabs: Array<{ label: string; href: string; priority: 1 | 2 | 3 }> = [];
+
+  tabEntities.forEach(entity => {
+    tabs.push({
+      label: entity.name ?? '',
+      href: `${NavUtils.toEntity(spaceId, entityId)}?tabId=${entity.id}`,
+      priority: 1 as const,
+    });
+  });
+
+  return tabs;
 };
