@@ -31,6 +31,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
@@ -87,13 +88,14 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                 if (!firstRenderable.placeholder) {
                   send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
                 }
+
                 addPlaceholderRenderable(placeholderRenderable);
               },
               send
             );
 
             return (
-              <div key={`${id}-${attributeId}`} className="relative break-words">
+              <div key={`${id}-${attributeId}`} className="relative  break-words">
                 <EditableAttribute
                   renderable={firstRenderable}
                   onChange={() => {
@@ -118,8 +120,10 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                 ) : (
                   <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
                 )}
-
-                <div className="absolute right-0 top-6 flex items-center gap-1">
+                {/* We need to pin to top for Geo Location to prevent covering the display toggle */}
+                <div
+                  className={`absolute right-0 flex items-center gap-1 ${firstRenderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY && renderableType === 'POINT' ? 'top-0' : 'top-6'}`}
+                >
                   {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
                   <>
                     {renderableType === 'TIME' && (
@@ -670,6 +674,54 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                 }
                 value={renderable.value}
               />
+            );
+          }
+
+          case 'POINT': {
+            return (
+              <>
+                {renderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY && renderable.type === 'POINT' ? (
+                  <GeoLocationPointFields
+                    key={renderable.attributeId}
+                    variant="body"
+                    placeholder="Add value..."
+                    aria-label="text-field"
+                    value={renderable.value}
+                    onChange={value => {
+                      send({
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'POINT',
+                            value: value,
+                          },
+                        },
+                      });
+                    }}
+                  />
+                ) : (
+                  <PageStringField
+                    key={renderable.attributeId}
+                    variant="body"
+                    placeholder="Add value..."
+                    aria-label="text-field"
+                    value={renderable.value}
+                    onChange={value => {
+                      send({
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'POINT',
+                            value: value,
+                          },
+                        },
+                      });
+                    }}
+                  />
+                )}
+              </>
             );
           }
         }

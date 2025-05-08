@@ -6,13 +6,14 @@ import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
-import { GeoNumber, NavUtils, getImagePath } from '~/core/utils/utils';
+import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
+import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
@@ -89,6 +90,29 @@ function TriplesGroup({
                         {renderable.value}
                       </Text>
                     );
+                  }
+                  case 'POINT': {
+                    if (renderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY) {
+                      // Parse the coordinates using the GeoPoint utility
+                      const coordinates = GeoPoint.parseCoordinates(renderable.value);
+                      return (
+                        <div
+                          key={`string-${renderable.attributeId}-${renderable.value}`}
+                          className="flex w-full flex-col gap-2"
+                        >
+                          <Text as="p">({renderable.value})</Text>
+                          <Map latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div className="flex w-full flex-col gap-2">
+                          <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
+                            ({renderable.value})
+                          </Text>
+                        </div>
+                      );
+                    }
                   }
                   case 'NUMBER':
                     return (
