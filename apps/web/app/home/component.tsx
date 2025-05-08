@@ -33,6 +33,7 @@ import {
   ActiveProposalsForSpacesWhereEditor,
   getActiveProposalsForSpacesWhereEditor,
 } from './fetch-active-proposals-in-editor-spaces';
+import { fetchProposedEditorForProposal } from './fetch-proposed-editor';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
 import { PersonalHomeDashboard } from './personal-home-dashboard';
 
@@ -224,15 +225,18 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
   );
 }
 
-async function getProposalNameWithEditor(
+async function getMembershipProposalName(
   type: 'ADD_EDITOR' | 'ADD_MEMBER' | 'REMOVE_EDITOR' | 'REMOVE_MEMBER',
   proposal: ActiveProposalsForSpacesWhereEditor['proposals'][number]
 ) {
-  const profile = await fetchProfile({ address: proposal.createdBy.address });
+  const profile = await (type === 'ADD_EDITOR' || type === 'ADD_MEMBER'
+    ? fetchProfile({ address: proposal.createdBy.address })
+    : fetchProposedEditorForProposal(proposal.id));
 
   switch (type) {
-    case 'ADD_EDITOR':
+    case 'ADD_EDITOR': {
       return `Add ${profile.name ?? profile.address} as editor`;
+    }
     case 'ADD_MEMBER':
       return `Add ${profile.name ?? profile.address} as member`;
     case 'REMOVE_EDITOR':
@@ -256,7 +260,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
         return proposal.name;
       case 'ADD_EDITOR':
       case 'REMOVE_EDITOR':
-        return await getProposalNameWithEditor(proposal.type, proposal);
+        return await getMembershipProposalName(proposal.type, proposal);
       case 'ADD_SUBSPACE':
       case 'REMOVE_SUBSPACE':
         return proposal.name;
