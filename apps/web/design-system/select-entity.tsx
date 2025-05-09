@@ -10,6 +10,7 @@ import { startTransition, useState } from 'react';
 
 import { useWriteOps } from '~/core/database/write';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
@@ -194,6 +195,19 @@ export const SelectEntity = ({
   };
 
   const hasNoFilters = !typeFilter && !spaceFilter && allowedTypes.length === 0;
+
+  useKey('Enter', () => {
+    const result = results[0];
+
+    if (result) {
+      setResult(null);
+      onDone?.({
+        id: result.id,
+        name: result.name,
+      });
+      onQueryChange('');
+    }
+  });
 
   return (
     <div
