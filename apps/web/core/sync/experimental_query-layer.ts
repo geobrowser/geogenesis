@@ -66,7 +66,7 @@ export type WhereCondition = {
   name?: StringCondition;
   description?: StringCondition;
   types?: { id?: StringCondition; name?: StringCondition }[];
-  spaces?: { id?: StringCondition; name?: StringCondition }[];
+  spaces?: StringCondition[];
   space?: { id?: StringCondition };
   triples?: TripleCondition[];
   relations?: RelationCondition[];
