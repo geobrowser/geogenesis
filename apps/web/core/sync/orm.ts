@@ -259,11 +259,13 @@ export class E {
     skip: number;
   }): Promise<SearchResult[]> {
     const nameFilter = where.name?.fuzzy;
+    const spaceIdsFilter = where.space?.id?.equals ? where.space.id.equals : undefined;
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
     const remoteEntities = await cache.fetchQuery({
       queryKey: ['network', 'entities', 'fuzzy', where],
-      queryFn: ({ signal }) => fetchResults({ first, skip, query: nameFilter, typeIds: typeIdsFilter, signal }),
+      queryFn: ({ signal }) =>
+        fetchResults({ first, skip, query: nameFilter, spaceId: spaceIdsFilter, typeIds: typeIdsFilter, signal }),
     });
 
     const localEntities = new EntityQuery(store).where(where).execute();

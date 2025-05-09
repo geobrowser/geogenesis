@@ -11,7 +11,7 @@ import { SubstreamSearchResult } from '../schema';
 import { resultEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
-function getFetchResultsQuery(query: string | undefined, typeIds?: string[], first = 100, skip = 0) {
+function getFetchResultsQuery(query: string | undefined, typeIds?: string[], spaceId?: string, first = 100, skip = 0) {
   const typeIdsString =
     typeIds && typeIds.length > 0
       ? `versionTypes: {
@@ -20,12 +20,18 @@ function getFetchResultsQuery(query: string | undefined, typeIds?: string[], fir
       : // Filter out block entities by default
         `versionTypes: { every: { type: { entityId: { notIn: ["${SystemIds.TEXT_BLOCK}", "${SystemIds.DATA_BLOCK}", "${SystemIds.IMAGE_BLOCK}", "${SystemIds.PAGE_TYPE}"] } } } }`;
 
+  const spaceIdString = spaceId
+    ? `versionSpaces: {
+        some: { spaceId: { equalTo: "${spaceId}" } }
+      }`
+    : ``;
+
   const constructedWhere = `{
   name: {
     isNull: false
-  } ${typeIdsString} }`;
+  } ${typeIdsString} ${spaceIdString} }`;
 
-  return `query {
+  const fetchResultsQuery = `query {
     searchEntitiesFuzzy(searchTerm: ${JSON.stringify(query?.split(' ').join('&'))}, filter: {
         currentVersion: {
           version: ${constructedWhere}
@@ -43,11 +49,14 @@ function getFetchResultsQuery(query: string | undefined, typeIds?: string[], fir
       }
     }
   }`;
+
+  return fetchResultsQuery;
 }
 
 export interface FetchResultsOptions {
   query?: string;
   typeIds?: string[];
+  spaceId?: string;
   first?: number;
   skip?: number;
   signal?: AbortController['signal'];
@@ -63,7 +72,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchResultsQuery(options.query ?? '', options.typeIds, options.first, options.skip),
+    query: getFetchResultsQuery(options.query ?? '', options.typeIds, options.spaceId, options.first, options.skip),
     signal: options?.signal,
   });
 
@@ -84,6 +93,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
             `Encountered runtime graphql error in fetchResults. queryId: ${queryId} ryString: ${getFetchResultsQuery(
               options.query,
               options.typeIds,
+              options.spaceId,
               options.first,
               options.skip
             )}
