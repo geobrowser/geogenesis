@@ -15,6 +15,7 @@ import { useRenderables } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useEditorStore } from '~/core/state/editor/use-editor';
 import {
   PropertySchema,
   Relation,
@@ -38,6 +39,7 @@ import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
+import { SelectEntity } from '~/design-system/select-entity';
 import { Text } from '~/design-system/text';
 
 import { DateFormatDropdown } from './date-format-dropdown';
@@ -71,15 +73,30 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
 
   const coverUrl = Entities.cover(relations);
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
-
-  // Show the properties panel when at least one of name, type, cover, or avatar is added
-  const showPropertiesPanel = (name && name?.length > 0) || coverUrl || types.length > 0;
+  const { blockIds } = useEditorStore();
+  
+  // Show the properties panel when:
+  // 1. Name exists, OR
+  // 2. Cover/avatar exists, OR
+  // 3. Types exist, OR
+  // 4. Editor has content (blocks exist)
+  const showPropertiesPanel = (name && name?.length > 0) || coverUrl || types.length > 0 || (blockIds && blockIds.length > 0);
 
   return (
     showPropertiesPanel && (
       <>
         <div className="rounded-lg border border-grey-02 shadow-button">
           <div className="flex flex-col gap-6 p-5">
+            {Object.entries(renderablesGroupedByAttributeId).length === 0 && (
+              <div className="flex flex-col items-center justify-center py-4 text-center">
+                <Text as="p" variant="bodyMedium" color="grey-04">
+                  No properties added yet
+                </Text>
+                <Text as="p" variant="caption" color="grey-03" className="mt-1">
+                  Click the + button below to add properties
+                </Text>
+              </div>
+            )}
             {Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
               // Triple groups only ever have one renderable
               const firstRenderable = renderables[0];
@@ -281,6 +298,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const typeOfRenderableType = relations[0].type;
   const property = properties?.[typeOfId];
   const relationValueTypes = property?.relationValueTypes;
+  const hasPlaceholders = relations.some(r => r.placeholder === true);
 
   return (
     <div className="box-border flex flex-wrap items-center gap-1">
@@ -289,6 +307,12 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
         const relationName = r.valueName;
         const renderableType = r.type;
         const relationValue = r.value;
+
+        // Skip rendering placeholder relations of type RELATION
+        // This prevents the property itself from being displayed for placeholder relations
+        // if (renderableType === 'RELATION' && r.placeholder === true) {
+        //   return null;
+        // }
 
         if (renderableType === 'IMAGE' && r.placeholder === true) {
           return (
@@ -352,6 +376,94 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
           return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue)} />;
         }
 
+        if (renderableType === 'RELATION' && r.placeholder === true) {
+          return (
+            <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
+              <SelectEntity
+                key={JSON.stringify(relationValueTypes)}
+                spaceId={spaceId}
+                relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
+                onCreateEntity={result => {
+                  if (property?.relationValueTypeId) {
+                    send({
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: result.id,
+                        fromEntityName: result.name,
+                        toEntityId: property.relationValueTypeId,
+                        toEntityName: property.relationValueTypeName ?? null,
+                        typeOfId: SystemIds.TYPES_ATTRIBUTE,
+                        typeOfName: 'Types',
+                      },
+                    });
+                  }
+                }}
+                onDone={result => {
+                  const newRelationId = ID.createEntityId();
+
+                  const newRelation: StoreRelation = {
+                    id: newRelationId,
+                    space: spaceId,
+                    index: INITIAL_RELATION_INDEX_VALUE,
+                    typeOf: {
+                      id: EntityId(r.attributeId),
+                      name: r.attributeName,
+                    },
+                    fromEntity: {
+                      id: EntityId(id),
+                      name: name,
+                    },
+                    toEntity: {
+                      id: EntityId(result.id),
+                      name: result.name,
+                      renderableType: 'RELATION',
+                      value: EntityId(result.id),
+                    },
+                  };
+
+                  DB.upsertRelation({
+                    relation: newRelation,
+                    spaceId,
+                  });
+
+                  if (result.space) {
+                    DB.upsert(
+                      {
+                        attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
+                        attributeName: 'To Entity',
+                        entityId: newRelationId,
+                        entityName: null,
+                        value: {
+                          type: 'URL',
+                          value: GraphUrl.fromEntityId(result.id, { spaceId: result.space }),
+                        },
+                      },
+                      spaceId
+                    );
+
+                    if (result.verified) {
+                      DB.upsert(
+                        {
+                          attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
+                          attributeName: 'Verified Source',
+                          entityId: newRelationId,
+                          entityName: null,
+                          value: {
+                            type: 'CHECKBOX',
+                            value: '1',
+                          },
+                        },
+                        spaceId
+                      );
+                    }
+                  }
+                }}
+                variant="fixed"
+              />
+            </div>
+          );
+        }
+
         if (relationName !== 'Types') {
           return (
             <div key={`relation-${relationId}-${relationValue}`}>
@@ -373,9 +485,10 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             </div>
           );
         }
+
       })}
 
-      {typeOfRenderableType === 'RELATION' && (
+      {(!hasPlaceholders && typeOfRenderableType === 'RELATION') && (
         <div>
           <SelectEntityAsPopover
             key={JSON.stringify(relationValueTypes)}
@@ -466,6 +579,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
           />
         </div>
       )}
+
     </div>
   );
 }

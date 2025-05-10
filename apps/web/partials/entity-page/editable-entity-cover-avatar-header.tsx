@@ -223,51 +223,53 @@ const AvatarCoverInput = ({
         }}
         className={`relative h-full w-full rounded-lg ${!imgUrl && editable ? 'cursor-pointer' : ''} ${
           isCover
-            ? 'bg-cover-default bg-center bg-no-repeat hover:bg-cover-hover'
+            ? imgUrl 
+              ? 'bg-transparent'
+              : 'bg-cover-default bg-center bg-no-repeat hover:bg-cover-hover'
             : imgUrl
-              ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-grey-01 bg-transparent shadow-lg'
-              : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-avatar-hover'
+              ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-transparent shadow-lg'
+              : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-avatar-hover hover:bg-white'
         }`}
       >
         {imgUrl && (
           <LegacyImage
             layout="fill"
             src={getImagePath(imgUrl)}
-            className="h-full w-full rounded-lg border border-white bg-transparent object-cover"
+            className="h-full w-full rounded-lg border border-white bg-white object-cover"
           />
         )}
         {editable && (
           <div
             className={`absolute ${imgUrl && isCover ? 'right-4 top-4 justify-end' : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'} flex transform items-center gap-[6px]`}
           >
-            {!imgUrl ? (
-              <Upload color={hovered ? undefined : 'grey-03'} />
+            {isUploading ? (
+              <SquareButton disabled className="pointer-events-none bg-white/85 border-none">
+                <Dots color="bg-grey-03" />
+              </SquareButton>
+            ) : !imgUrl ? (
+              (hovered && ! isCover) ? (
+                null
+              ) : (
+                <Upload color={hovered ? undefined : 'grey-03'} />
+              ) 
             ) : (
-              <>
-                {isUploading ? (
-                  <div className="flex items-center justify-center">
-                    <Dots />
-                  </div>
-                ) : (
-                  hovered && (
-                    <>
-                      <SquareButton
-                        onMouseEnter={() => setHoveredIcon('Upload')}
-                        onMouseLeave={() => setHoveredIcon('')}
-                        onClick={openInput}
-                        icon={<Upload />}
-                      />
+              hovered && (
+                <>
+                  <SquareButton
+                    onMouseEnter={() => setHoveredIcon('Upload')}
+                    onMouseLeave={() => setHoveredIcon('')}
+                    onClick={openInput}
+                    icon={<Upload />}
+                  />
 
-                      <SquareButton
-                        onMouseEnter={() => setHoveredIcon('Trash')}
-                        onMouseLeave={() => setHoveredIcon('')}
-                        onClick={deleteProperty}
-                        icon={<Trash />}
-                      />
-                    </>
-                  )
-                )}
-              </>
+                  <SquareButton
+                    onMouseEnter={() => setHoveredIcon('Trash')}
+                    onMouseLeave={() => setHoveredIcon('')}
+                    onClick={deleteProperty}
+                    icon={<Trash />}
+                  />
+                </>
+              )
             )}
 
             <input
