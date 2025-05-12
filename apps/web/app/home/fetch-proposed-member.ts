@@ -84,3 +84,82 @@ export async function fetchProposedMemberForProposal(proposalId: string): Promis
   const proposedMemberAccount = proposedMembers[0].accountId;
   return await fetchProfile({ address: proposedMemberAccount });
 }
+
+const getProposedEditorInProposalQuery = (proposalId: string) => `query {
+  proposedEditors(
+    first: 1
+    filter: { proposalId: { equalTo: "${proposalId}" } }
+  ) {
+    nodes {
+      accountId
+    }
+  }
+}`;
+
+interface EditorNetworkResult {
+  proposedEditors: {
+    nodes: {
+      accountId: string;
+    }[];
+  };
+}
+export async function fetchProposedEditorForProposal(proposalId: string): Promise<Profile | null> {
+  const endpoint = Environment.getConfig().api;
+
+  const graphqlFetchEffect = graphql<EditorNetworkResult>({
+    endpoint,
+    query: getProposedEditorInProposalQuery(proposalId),
+  });
+
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
+
+      switch (error._tag) {
+        case 'AbortError':
+          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+          // the caller to consume the error channel as an effect. We throw here the typical JS
+          // way so we don't infect more of the codebase with the effect runtime.
+          throw error;
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchProposedMember. proposalId: ${proposalId} endpoint: ${endpoint}
+
+            queryString: ${getProposedMemberInProposalQuery(proposalId)}
+            `,
+            error.message
+          );
+
+          return {
+            proposedEditors: {
+              nodes: [],
+            },
+          };
+
+        default:
+          console.error(`${error._tag}: Unable to fetch subspace, proposalId: ${proposalId} endpoint: ${endpoint}`);
+
+          return {
+            proposedEditors: {
+              nodes: [],
+            },
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const proposedEditors = result.proposedEditors.nodes;
+
+  if (proposedEditors.length === 0) {
+    return null;
+  }
+
+  // There should only be one proposed member in a single proposal
+  const proposedMemberAccount = proposedEditors[0].accountId;
+  return await fetchProfile({ address: proposedMemberAccount });
+}
