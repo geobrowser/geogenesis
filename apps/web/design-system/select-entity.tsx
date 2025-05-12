@@ -9,20 +9,30 @@ import * as React from 'react';
 import { startTransition, useState } from 'react';
 
 import { useWriteOps } from '~/core/database/write';
+import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
+import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
-import { EntityId } from '~/core/io/schema';
+import { Space } from '~/core/io/dto/spaces';
+import { EntityId, SpaceId } from '~/core/io/schema';
 import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
+import { ResultsList } from '~/design-system/autocomplete/results-list';
+import { ResultItem } from '~/design-system/autocomplete/results-list';
+import { Breadcrumb } from '~/design-system/breadcrumb';
 import { IconButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { TopRanked } from '~/design-system/icons/top-ranked';
+import { Input } from '~/design-system/input';
+import { Select } from '~/design-system/select';
 import { Tag } from '~/design-system/tag';
+import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 import { Tooltip } from '~/design-system/tooltip';
 
@@ -30,6 +40,7 @@ import { ArrowLeft } from './icons/arrow-left';
 import { InfoSmall } from './icons/info-small';
 import { Search } from './icons/search';
 import { ResizableContainer } from './resizable-container';
+import { Spacer } from './spacer';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
 
@@ -94,6 +105,9 @@ const containerStyles = cva('relative', {
   },
 });
 
+type SpaceFilter = { spaceId: string; spaceName: string | null };
+type TypeFilter = { typeId: string; typeName: string | null };
+
 export const SelectEntity = ({
   onDone,
   onCreateEntity,
@@ -111,13 +125,25 @@ export const SelectEntity = ({
   const [result, setResult] = useState<SearchResult | null>(null);
 
   const [allowedTypes, setAllowedTypes] = useState<RelationValueType[]>(() => relationValueTypes ?? []);
-  const isAdvanced = relationValueTypes && relationValueTypes.length > 0;
-  const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
 
-  const filterByTypes = allowedTypes.length > 0 ? allowedTypes.map(r => r.typeId) : undefined;
+  const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
+  const [isAddingFilter, setIsAddingFilter] = useState<boolean>(false);
+  const [addFilterValue, setAddFilterValue] = useState<'space' | 'type'>('space');
+
+  const [spaceFilter, setSpaceFilter] = useState<SpaceFilter | null>(null);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
+
+  const filterBySpace = spaceFilter?.spaceId ?? undefined;
+
+  const filterByTypes = typeFilter
+    ? [typeFilter.typeId, ...(allowedTypes.length > 0 ? allowedTypes.map(r => r.typeId) : [])]
+    : allowedTypes.length > 0
+      ? allowedTypes.map(r => r.typeId)
+      : undefined;
 
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
     filterByTypes,
+    filterBySpace,
   });
 
   if (query === '' && result !== null) {
@@ -168,6 +194,21 @@ export const SelectEntity = ({
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
+  const hasNoFilters = !typeFilter && !spaceFilter && allowedTypes.length === 0;
+
+  useKey('Enter', () => {
+    const result = results[0];
+
+    if (result) {
+      setResult(null);
+      onDone?.({
+        id: result.id,
+        name: result.name,
+      });
+      onQueryChange('');
+    }
+  });
+
   return (
     <div
       className={containerStyles({
@@ -211,58 +252,132 @@ export const SelectEntity = ({
                     withSearchIcon && 'rounded-t-none'
                   )}
                 >
-                  {isAdvanced && (
-                    <div className="w-full">
-                      <button
-                        onClick={handleShowAdvanced}
-                        className="flex w-full justify-end border-b border-grey-02 px-2 py-1"
-                      >
-                        <div className="inline-flex items-center gap-1">
-                          <span className="text-[0.6875rem] text-grey-04">Advanced</span>
-                          <span
-                            className={cx('transition duration-300 ease-in-out', isShowingAdvanced && 'scale-y-[-1]')}
-                          >
-                            <ChevronDownSmall color="grey-04" />
-                          </span>
-                        </div>
-                      </button>
-                      <ResizableContainer>
-                        {isShowingAdvanced && (
-                          <div className="border-b border-grey-02 px-4 py-2">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="text-[0.875rem] text-grey-04">Applied</span>
+                  <div className="w-full">
+                    <button
+                      onClick={handleShowAdvanced}
+                      className="flex w-full justify-end border-b border-grey-02 px-2 py-1"
+                    >
+                      <div className="inline-flex items-center gap-1">
+                        <span className="text-[0.6875rem] text-grey-04">Advanced</span>
+                        <span
+                          className={cx('transition duration-300 ease-in-out', isShowingAdvanced && 'scale-y-[-1]')}
+                        >
+                          <ChevronDownSmall color="grey-04" />
+                        </span>
+                      </div>
+                    </button>
+                    <ResizableContainer>
+                      {isShowingAdvanced && (
+                        <div className="border-b border-grey-02 px-4 py-2">
+                          {!isAddingFilter ? (
+                            <>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="text-[0.875rem] text-grey-04">Applied</span>
+                                </div>
+                                <div>
+                                  <button
+                                    onClick={() => setIsAddingFilter(true)}
+                                    className="text-[0.875rem] text-ctaHover"
+                                  >
+                                    + Add filter
+                                  </button>
+                                </div>
                               </div>
-                              {/* <div>
-                              <button className="text-[0.875rem] text-ctaHover">+ Add filter</button>
-                            </div> */}
-                            </div>
-                            <div className="mt-1 flex w-full flex-wrap gap-1 text-black">
-                              {allowedTypes && allowedTypes.length > 0 ? (
-                                <>
-                                  {allowedTypes.map(allowedType => {
-                                    return (
-                                      <ValueTypePill
-                                        key={allowedType.typeId}
-                                        relationValueType={allowedType}
-                                        onDelete={() =>
-                                          setAllowedTypes([
-                                            ...allowedTypes.filter(r => r.typeId !== allowedType.typeId),
-                                          ])
-                                        }
+                              <div className="mt-1 flex w-full flex-wrap gap-1 text-black">
+                                {hasNoFilters ? (
+                                  <div>No filters applied</div>
+                                ) : (
+                                  <>
+                                    {allowedTypes.map(allowedType => {
+                                      return (
+                                        <FilterPill
+                                          key={allowedType.typeId}
+                                          filterType="Relation value type"
+                                          name={allowedType.typeName ?? ''}
+                                          onDelete={() =>
+                                            setAllowedTypes([
+                                              ...allowedTypes.filter(r => r.typeId !== allowedType.typeId),
+                                            ])
+                                          }
+                                        />
+                                      );
+                                    })}
+                                    {spaceFilter && (
+                                      <FilterPill
+                                        key={spaceFilter.spaceId}
+                                        filterType="Space"
+                                        name={spaceFilter.spaceName ?? ''}
+                                        onDelete={() => setSpaceFilter(null)}
                                       />
-                                    );
-                                  })}
-                                </>
-                              ) : (
-                                <div>No filters applied</div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </ResizableContainer>
-                    </div>
-                  )}
+                                    )}
+                                    {typeFilter && (
+                                      <FilterPill
+                                        key={typeFilter.typeId}
+                                        filterType="Type"
+                                        name={typeFilter.typeName ?? ''}
+                                        onDelete={() => setTypeFilter(null)}
+                                      />
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <button
+                                  onClick={() => {
+                                    setIsAddingFilter(false);
+                                  }}
+                                  className="text-[0.875rem] text-grey-04"
+                                >
+                                  Back
+                                </button>
+                              </div>
+                              <div className="relative z-100 mt-1 flex w-full items-center gap-2 text-black">
+                                <div className="flex flex-1">
+                                  <Select
+                                    options={[
+                                      { value: 'space', label: 'Space' },
+                                      { value: 'type', label: 'Type' },
+                                    ]}
+                                    value={addFilterValue}
+                                    onChange={value => setAddFilterValue(value as 'space' | 'type')}
+                                  />
+                                </div>
+                                <span className="text-button text-grey-04">is</span>
+                                <div className="flex flex-[2]">
+                                  {addFilterValue === 'space' && (
+                                    <SpaceFilterInput
+                                      onSelect={result => {
+                                        setSpaceFilter({
+                                          spaceId: SpaceId(result.id),
+                                          spaceName: result.name,
+                                        });
+                                        setIsAddingFilter(false);
+                                      }}
+                                    />
+                                  )}
+                                  {addFilterValue === 'type' && (
+                                    <TypeFilterInput
+                                      onSelect={result => {
+                                        setTypeFilter({
+                                          typeId: EntityId(result.id),
+                                          typeName: result.name,
+                                        });
+                                        setIsAddingFilter(false);
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </ResizableContainer>
+                  </div>
                   {!result ? (
                     <ResizableContainer>
                       <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
@@ -451,11 +566,13 @@ export const SelectEntity = ({
   );
 };
 
-const ValueTypePill = ({
-  relationValueType,
+const FilterPill = ({
+  filterType,
+  name,
   onDelete,
 }: {
-  relationValueType: RelationValueType;
+  filterType: 'Relation value type' | 'Type' | 'Space';
+  name: string;
   onDelete: () => void;
 }) => {
   return (
@@ -469,11 +586,195 @@ const ValueTypePill = ({
         />
       </svg>
       <div className="flex items-center gap-1">
-        <span>Relation value type is</span>
+        <span>{filterType} is</span>
         <span>·</span>
-        <span>{relationValueType.typeName}</span>
+        <span>{name}</span>
       </div>
       <IconButton icon={<CheckCloseSmall />} color="grey-04" onClick={onDelete} />
+    </div>
+  );
+};
+
+type SpaceFilterInputProps = {
+  onSelect: (result: { id: string; name: string | null }) => void;
+};
+
+const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
+  const [query, onQueryChange] = React.useState('');
+  const debouncedQuery = useDebouncedValue(query, 100);
+  const { spaces } = useSpaces();
+
+  const results = spaces.filter(s => s.spaceConfig?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
+
+  const onSelectSpace = (space: Space) => {
+    onQueryChange('');
+
+    onSelect({
+      id: space.id,
+      name: space.spaceConfig?.name ?? null,
+    });
+  };
+
+  return (
+    <div className="relative z-100 w-full">
+      <Popover.Root open={!!query} onOpenChange={() => onQueryChange('')}>
+        <Popover.Anchor asChild>
+          <Input value={query} onChange={e => onQueryChange(e.target.value)} />
+        </Popover.Anchor>
+        {query && (
+          <Popover.Portal forceMount>
+            <Popover.Content
+              onOpenAutoFocus={event => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+              forceMount
+            >
+              <div className="pt-1">
+                <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+                  <ResizableContainer>
+                    <ResultsList>
+                      {results.map(result => (
+                        <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
+                          <div className="flex w-full items-center justify-between leading-[1rem]">
+                            <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
+                              {result.spaceConfig?.name ?? result.id}
+                            </Text>
+                          </div>
+                          <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
+                            {(result.spaceConfig?.name ?? result.id) && (
+                              <Breadcrumb img={result.spaceConfig?.image ?? ''}>
+                                {result.spaceConfig?.name ?? result.id}
+                              </Breadcrumb>
+                            )}
+                            <span style={{ rotate: '270deg' }}>
+                              <ChevronDownSmall color="grey-04" />
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <Tag>Space</Tag>
+                            </div>
+                          </div>
+                        </ResultItem>
+                      ))}
+                    </ResultsList>
+                  </ResizableContainer>
+                </div>
+              </div>
+            </Popover.Content>
+          </Popover.Portal>
+        )}
+      </Popover.Root>
+    </div>
+  );
+};
+
+type TypeFilterInputProps = {
+  onSelect: (result: { id: string; name: string | null }) => void;
+};
+
+const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
+  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+    filterByTypes: [SystemIds.SCHEMA_TYPE],
+  });
+
+  return (
+    <div className="relative z-100 w-full">
+      <Popover.Root open={!!query} onOpenChange={() => onQueryChange('')}>
+        <Popover.Anchor asChild>
+          <Input value={query} onChange={e => onQueryChange(e.target.value)} />
+        </Popover.Anchor>
+        {query && (
+          <Popover.Portal forceMount>
+            <Popover.Content
+              onOpenAutoFocus={event => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+              forceMount
+            >
+              <div className="pt-1">
+                <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+                  <ResizableContainer>
+                    <ResultsList>
+                      {!results?.length && isLoading && (
+                        <div className="w-full border-b border-divider bg-white px-3 py-2">
+                          <div className="truncate text-button text-text">Loading...</div>
+                        </div>
+                      )}
+                      {isEmpty ? (
+                        <div className="w-full border-b border-divider bg-white px-3 py-2">
+                          <div className="truncate text-button text-text">No results.</div>
+                        </div>
+                      ) : (
+                        <>
+                          {results.map((result, index) => (
+                            <ResultItem key={index}>
+                              <button
+                                onClick={() => {
+                                  onSelect({
+                                    id: result.id,
+                                    name: result.name,
+                                  });
+                                  onQueryChange('');
+                                }}
+                                className="relative z-10 flex w-full flex-col transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
+                              >
+                                <div className="relative w-full">
+                                  <div className="relative z-0 max-w-full truncate text-button text-text">
+                                    {result.name}
+                                  </div>
+                                </div>
+                                {result.types.length > 0 && (
+                                  <>
+                                    <Spacer height={4} />
+                                    <div className="flex items-center gap-1.5">
+                                      {result.types.map(type => (
+                                        <Tag key={type.id}>{type.name}</Tag>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                                {result.description && (
+                                  <>
+                                    <Spacer height={4} />
+                                    <Truncate maxLines={3} shouldTruncate variant="footnote">
+                                      <p className="text-footnote text-grey-04">{result.description}</p>
+                                    </Truncate>
+                                  </>
+                                )}
+
+                                <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
+                                  <div className="inline-flex gap-0">
+                                    {(result.spaces ?? []).slice(0, 3).map(space => (
+                                      <div
+                                        key={space.spaceId}
+                                        className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                                      >
+                                        <img
+                                          src={getImagePath(space.image)}
+                                          alt=""
+                                          className="h-full w-full object-cover"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
+                                </div>
+                              </button>
+                            </ResultItem>
+                          ))}
+                        </>
+                      )}
+                    </ResultsList>
+                  </ResizableContainer>
+                </div>
+              </div>
+            </Popover.Content>
+          </Popover.Portal>
+        )}
+      </Popover.Root>
     </div>
   );
 };
