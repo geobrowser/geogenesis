@@ -90,10 +90,10 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
           <div className="flex flex-col gap-6 p-5">
             {Object.entries(renderablesGroupedByAttributeId).length === 0 && (
               <div className="flex flex-col items-center justify-center py-4 text-center">
-                <Text as="p" variant="bodyMedium" color="grey-04">
+                <Text as="p" variant="body" color="grey-04">
                   No properties added yet
                 </Text>
-                <Text as="p" variant="caption" color="grey-03" className="mt-1">
+                <Text as="p" variant="footnote" color="grey-03" className="mt-1">
                   Click the + button below to add properties
                 </Text>
               </div>
