@@ -247,11 +247,7 @@ const AvatarCoverInput = ({
                 <Dots color="bg-grey-03" />
               </SquareButton>
             ) : !imgUrl ? (
-              (hovered && ! isCover) ? (
-                null
-              ) : (
-                <Upload color={hovered ? undefined : 'grey-03'} />
-              ) 
+              <Upload color={hovered ? undefined : 'grey-03'} />
             ) : (
               hovered && (
                 <>
