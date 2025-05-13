@@ -15,7 +15,7 @@ const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 fo
     variant: {
       body: 'text-body',
       tableCell: 'text-tableCell',
-      tableProperty: 'decoration !text-resultLink !text-grey-04 !underline hover:!text-text',
+      tableProperty: 'decoration !text-resultLink !text-grey-03 !underline hover:!text-text',
     },
     editable: {
       false: 'truncate text-ctaPrimary no-underline transition-colors duration-75 hover:text-ctaHover hover:underline',
