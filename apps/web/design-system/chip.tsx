@@ -43,13 +43,14 @@ export function LinkableChip({ href, children }: LinkableChipProps) {
   );
 }
 
-interface LinkableRelationChipProps {
+type LinkableRelationChipProps = {
   entityHref: string;
   isEditing: boolean;
   relationHref: string;
   onDelete?: () => void;
+  className?: string;
   children: React.ReactNode;
-}
+};
 
 const linkableRelationChipStyles = cva(
   'group inline-flex items-center break-words rounded border border-grey-02 bg-white py-0.5 pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
@@ -151,6 +152,7 @@ export function LinkableRelationChip({
   relationHref,
   children,
   onDelete,
+  className = '',
 }: LinkableRelationChipProps) {
   const [isDotsHovered, setIsDotsHovered] = useState(false);
   const [isRelationHovered, setIsRelationHovered] = useState(false);
@@ -165,6 +167,7 @@ export function LinkableRelationChip({
         isDotsHovered,
         isRelationHovered,
         isDeleteHovered,
+        className,
       })}
     >
       <Link href={entityHref}>{children}</Link>

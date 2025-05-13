@@ -15,6 +15,7 @@ const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 fo
     variant: {
       body: 'text-body',
       tableCell: 'text-tableCell',
+      tableProperty: 'decoration !text-resultLink !text-grey-04 !underline hover:!text-text',
     },
     editable: {
       false: 'truncate text-ctaPrimary no-underline transition-colors duration-75 hover:text-ctaHover hover:underline',
@@ -25,16 +26,24 @@ const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 fo
   },
 });
 
-interface Props {
+type WebUrlFieldProps = {
   isEditing?: boolean;
   placeholder?: string;
   spaceId: string;
   value: string;
   onBlur?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  variant?: 'body' | 'tableCell';
-}
+  variant?: 'body' | 'tableCell' | 'tableProperty';
+  className?: string;
+};
 
-export function WebUrlField({ variant = 'body', isEditing = false, spaceId, value, ...props }: Props) {
+export function WebUrlField({
+  variant = 'body',
+  isEditing = false,
+  spaceId,
+  value,
+  className = '',
+  ...props
+}: WebUrlFieldProps) {
   // We use the local value and onBlur to improve performance when WebUrlField is rendered
   // in a large table. Our Actions model means that every keystroke triggers a re-render
   // of all fields deriving data from the ActionStore.
@@ -52,11 +61,16 @@ export function WebUrlField({ variant = 'body', isEditing = false, spaceId, valu
     <input
       {...props}
       value={localValue}
-      className={webUrlFieldStyles({ variant, editable: isEditing })}
+      className={webUrlFieldStyles({ variant, editable: isEditing, className })}
       onChange={e => setLocalValue(e.currentTarget.value)}
     />
   ) : (
-    <a href={value} target="_blank" rel="noreferrer" className={webUrlFieldStyles({ variant, editable: isEditing })}>
+    <a
+      href={value}
+      target="_blank"
+      rel="noreferrer"
+      className={webUrlFieldStyles({ variant, editable: isEditing, className })}
+    >
       {value}
     </a>
   );
