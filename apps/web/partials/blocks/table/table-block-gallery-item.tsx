@@ -352,7 +352,7 @@ export function TableBlockGalleryItem({
           fill
         />
       </div>
-      <div className="flex w-full flex-col gap-4 px-1">
+      <div className="flex w-full flex-col px-1">
         <div className="flex flex-col gap-2">
           {source.type !== 'COLLECTION' ? (
             <Link href={href} className="text-smallTitle font-medium text-text">
@@ -378,7 +378,7 @@ export function TableBlockGalleryItem({
             </CollectionMetadata>
           )}
           {description && propertyDataHasDescription && (
-            <div className="line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
+            <div className="line-clamp-4 text-metadata text-text md:line-clamp-3">{description}</div>
           )}
         </div>
 

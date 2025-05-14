@@ -1,11 +1,9 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { Source } from '~/core/blocks/data/source';
-import { EditEvent, EditEventContext, editEvent, useEditEvents } from '~/core/events/edit-events';
+import { editEvent, useEditEvents } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { SearchResult } from '~/core/io/dto/search';
-import { EntityId } from '~/core/io/schema';
 import { PropertySchema, RelationRenderableProperty, RenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -197,6 +195,7 @@ export function TableBlockPropertyField(props: {
                   return (
                     <WebUrlField
                       key={renderable.attributeId}
+                      variant="tableCell"
                       placeholder="Add a URI"
                       isEditing={true}
                       spaceId={spaceId}
@@ -272,9 +271,11 @@ export function TableBlockPropertyField(props: {
             return (
               <WebUrlField
                 key={`uri-${renderable.attributeId}-${renderable.value}`}
+                variant="tableProperty"
                 isEditing={false}
                 spaceId={props.spaceId}
                 value={renderable.value}
+                className="mt-1"
               />
             );
           }
@@ -287,6 +288,7 @@ export function TableBlockPropertyField(props: {
                 isEditing={false}
                 entityHref={NavUtils.toEntity(renderable.spaceId, renderable.value)}
                 relationHref={NavUtils.toEntity(renderable.spaceId, renderable.relationId)}
+                className="mt-2"
               >
                 {renderable.valueName ?? renderable.value}
               </LinkableRelationChip>
