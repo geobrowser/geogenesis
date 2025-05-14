@@ -16,6 +16,8 @@ import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useEditorStore } from '~/core/state/editor/use-editor';
+import { useAtom } from 'jotai';
+import { editorHasContentAtom } from '~/atoms';
 import {
   PropertySchema,
   Relation,
@@ -75,13 +77,15 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
   const coverUrl = Entities.cover(relations);
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
   const { blockIds } = useEditorStore();
+  // Use the shared atom directly to get the latest value
+  const [ editorHasContent ] = useAtom(editorHasContentAtom);
   
   // Show the properties panel when:
   // 1. Name exists, OR
   // 2. Cover/avatar exists, OR
   // 3. Types exist, OR
-  // 4. Editor has content (blocks exist)
-  const showPropertiesPanel = (name && name?.length > 0) || coverUrl || types.length > 0 || (blockIds && blockIds.length > 0);
+  // 4. Editor has content / blocks exist
+  const showPropertiesPanel = (name && name?.length > 0) || coverUrl || types.length > 0 || (blockIds && blockIds.length > 0) || editorHasContent;
 
   return (
     showPropertiesPanel && (
@@ -380,6 +384,95 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
         }
 
         if (renderableType === 'RELATION' && r.placeholder === true) {
+          if (r.attributeName === 'Types') {
+            return (
+              <div key={`relation-select-entity-${relationId}`} data-testid="select-entity">
+                <SelectEntityAsPopover
+                  key={JSON.stringify(relationValueTypes)}
+                  trigger={<AddTypeButton icon={<Create className="h-3 w-3" color="grey-04" />} label="type" />}
+                  spaceId={spaceId}
+                  relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
+                  // placeholder="+ type"
+                  onCreateEntity={result => {
+                    if (property?.relationValueTypeId) {
+                      send({
+                        type: 'UPSERT_RELATION',
+                        payload: {
+                          fromEntityId: result.id,
+                          fromEntityName: result.name,
+                          toEntityId: property.relationValueTypeId,
+                          toEntityName: property.relationValueTypeName ?? null,
+                          typeOfId: SystemIds.TYPES_ATTRIBUTE,
+                          typeOfName: 'Types',
+                        },
+                      });
+                    }
+                  }}
+                  onDone={result => {
+                    const newRelationId = ID.createEntityId();
+  
+                    const newRelation: StoreRelation = {
+                      id: newRelationId,
+                      space: spaceId,
+                      index: INITIAL_RELATION_INDEX_VALUE,
+                      typeOf: {
+                        id: EntityId(r.attributeId),
+                        name: r.attributeName,
+                      },
+                      fromEntity: {
+                        id: EntityId(id),
+                        name: name,
+                      },
+                      toEntity: {
+                        id: EntityId(result.id),
+                        name: result.name,
+                        renderableType: 'RELATION',
+                        value: EntityId(result.id),
+                      },
+                    };
+  
+                    DB.upsertRelation({
+                      relation: newRelation,
+                      spaceId,
+                    });
+  
+                    if (result.space) {
+                      DB.upsert(
+                        {
+                          attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
+                          attributeName: 'To Entity',
+                          entityId: newRelationId,
+                          entityName: null,
+                          value: {
+                            type: 'URL',
+                            value: GraphUrl.fromEntityId(result.id, { spaceId: result.space }),
+                          },
+                        },
+                        spaceId
+                      );
+  
+                      if (result.verified) {
+                        DB.upsert(
+                          {
+                            attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
+                            attributeName: 'Verified Source',
+                            entityId: newRelationId,
+                            entityName: null,
+                            value: {
+                              type: 'CHECKBOX',
+                              value: '1',
+                            },
+                          },
+                          spaceId
+                        );
+                      }
+                    }
+                  }}
+                />
+              </div>
+            );
+          }
+          
           return (
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
