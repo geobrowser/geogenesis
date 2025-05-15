@@ -170,7 +170,7 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="w-full space-y-4">
+        <div className="w-full space-y-3">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
             {isPlaceholder && source.type === 'COLLECTION' ? (
@@ -299,7 +299,6 @@ export function TableBlockListItem({
               </>
             )}
           </div>
-          <Divider type="horizontal" style="dashed" />
           <div>
             <div className="text-metadata text-grey-04">Description</div>
             <PageStringField
@@ -340,7 +339,6 @@ export function TableBlockListItem({
           {otherPropertyData.map(p => {
             return (
               <>
-                <Divider type="horizontal" style="dashed" />
                 <div key={p.slotId}>
                   <TableBlockPropertyField
                     key={p.slotId}
