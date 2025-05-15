@@ -257,19 +257,19 @@ const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockV
 
 const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string }> = {
   TABLE: {
-    text: 'Add an entity',
+    text: 'Add your first entity row to get started',
     image: '/table.png',
   },
   LIST: {
-    text: 'Add a list item',
+    text: 'Add your first entity row to get started',
     image: '/list.png',
   },
   GALLERY: {
-    text: 'Add a gallery card',
+    text: 'Add your first gallery card to get started',
     image: '/gallery.png',
   },
   BULLETED_LIST: {
-    text: 'Add a bullet list item',
+    text: 'Add your first entity row to get started',
     image: '/list.png',
-  }
+  },
 };

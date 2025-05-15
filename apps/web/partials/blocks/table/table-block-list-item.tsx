@@ -85,7 +85,7 @@ export function TableBlockListItem({
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
-        <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
+        <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-[0.625rem] bg-grey-01">
           {image ? (
             <NextImage
               src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
