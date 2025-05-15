@@ -311,7 +311,7 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   if (view === 'LIST') {
     EntriesComponent = (
-      <div className="flex w-full flex-col space-y-10">
+      <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
         {entries.map((row, index: number) => {
           return (
             <TableBlockListItem
