@@ -18,6 +18,7 @@ module.exports = {
       'grey-02': '#DBDBDB',
       'grey-03': '#B6B6B6',
       'grey-04': '#606060',
+      link: '#8B8B8B',
       divider: '#F0F0F0',
       orange: '#FFA134',
       green: '#2ACE9D',
@@ -173,6 +174,14 @@ module.exports = {
           {
             lineHeight: '1.3125rem',
             fontWeight: '400',
+          },
+        ],
+        tableProperty: [
+          '1rem',
+          {
+            lineHeight: '1rem',
+            fontWeight: '400',
+            letterSpacing: '-0.25px',
           },
         ],
         textLink: [
