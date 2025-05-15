@@ -27,7 +27,7 @@ interface Props {
 }
 
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
-  const { upsertEditorState, editorJson, blockIds } = useEditorStore();
+  const { upsertEditorState, editorJson, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
 
   const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
@@ -51,6 +51,19 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       },
       immediatelyRender: false,
       onBlur: onBlur,
+      onUpdate: ({ editor }) => {
+        if (editable) {
+          const hasContent = editor.getText().trim().length > 0 || 
+                          editor.getJSON().content?.some(node => 
+                            node.type === 'image' || node.type === 'tableNode');
+          
+          // Check if we have actual content and update the state immediately
+          // This will cause the properties panel to show before blur events
+          if (hasContent) {
+            setHasContent(true);
+          }
+        }
+      },
     },
     [editorJson]
   );

@@ -5,6 +5,7 @@ import { Image } from '@graphprotocol/grc-20';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { useSearchParams } from 'next/navigation';
+import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
@@ -27,6 +28,7 @@ import * as TextEntity from './text-entity';
 import { Content } from './types';
 import { RelationWithBlock, useBlocks } from './use-blocks';
 import { getNodeId } from './utils';
+import { editorHasContentAtom } from '~/atoms';
 
 interface MakeNewBlockArgs {
   addedBlock: { id: string; value: string };
@@ -208,6 +210,7 @@ export const useTabId = () => {
 
 export function useEditorStore() {
   const { id: entityId, spaceId, initialBlockRelations, initialBlocks, initialTabs } = useEditorInstance();
+  const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
 
   const tabId = useTabId();
   const activeEntityId = tabId ?? entityId;
@@ -473,5 +476,7 @@ export function useEditorStore() {
     editorJson,
     blockIds,
     blockRelations,
+    hasContent,
+    setHasContent,
   };
 }

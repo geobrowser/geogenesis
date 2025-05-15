@@ -82,6 +82,7 @@ export const Button = forwardRef(function Button(
 type SquareButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   icon?: React.ReactNode;
   isActive?: boolean;
+  label?: string;
 };
 
 const squareButtonClassNames = cva(
@@ -153,4 +154,28 @@ export const SmallButton = forwardRef(function SmallButton(
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   return <Button ref={ref} variant={variant} small={true} {...rest} />;
+});
+
+const defaultClassNameAddTypeButton =
+  'box-content flex h-6 items-center gap-[6px] rounded border border-dashed border-grey-02 px-[7px] text-[1rem] font-normal text-grey-04';
+
+export const AddTypeButton = forwardRef(function AddTypeButton(
+  {
+    icon,
+    isActive = false,
+    className = defaultClassNameAddTypeButton,
+    style = {},
+    disabled = false,
+    children,
+    label,
+    ...rest
+  }: SquareButtonProps,
+  ref: React.ForwardedRef<HTMLButtonElement>
+) {
+  return (
+    <button ref={ref} className={className} style={{ fontFeatureSettings: '"tnum" 1', ...style }} {...rest}>
+      {icon}
+      {label}
+    </button>
+  );
 });
