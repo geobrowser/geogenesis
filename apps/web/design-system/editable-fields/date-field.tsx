@@ -1,6 +1,7 @@
 'use client';
 
 import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
@@ -15,18 +16,32 @@ import { Spacer } from '~/design-system/spacer';
 
 interface DateFieldProps {
   onBlur?: ({ value, format }: { value: string; format?: string }) => void;
-  variant?: 'body' | 'tableCell';
+  variant?: 'body' | 'tableCell' | 'tableProperty';
   value: string;
   format?: string;
   isEditing?: boolean;
+  className?: string;
 }
 
 interface DateInputProps {
-  variant?: 'body' | 'tableCell';
+  variant?: 'body' | 'tableCell' | 'tableProperty';
   initialDate: string;
   onDateChange: (date: string) => void;
   label?: string;
 }
+
+const dateTextStyles = cva('', {
+  variants: {
+    variant: {
+      body: 'text-body text-text',
+      tableCell: 'text-tableCell text-text',
+      tableProperty: '!text-tableProperty !text-grey-04',
+    },
+  },
+  defaultVariants: {
+    variant: 'body',
+  },
+});
 
 const dateFieldStyles = cva(
   'w-full bg-transparent text-center tabular-nums transition-colors duration-75 ease-in-out placeholder:text-grey-02 focus:outline-none',
@@ -35,6 +50,7 @@ const dateFieldStyles = cva(
       variant: {
         body: 'text-body',
         tableCell: 'text-tableCell',
+        tableProperty: '!text-tableProperty !text-grey-04',
       },
       error: {
         true: 'text-red-01',
@@ -52,6 +68,7 @@ const timeStyles = cva('m-0 w-[21px] bg-transparent p-0 tabular-nums placeholder
     variant: {
       body: 'text-body',
       tableCell: 'text-tableCell',
+      tableProperty: '!text-tableProperty !text-grey-04',
     },
     error: {
       true: 'text-red-01',
@@ -471,7 +488,7 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
   );
 }
 
-export function DateField({ value, format, isEditing, variant, onBlur }: DateFieldProps) {
+export function DateField({ value, format, isEditing, variant, onBlur, className = '' }: DateFieldProps) {
   const isDateInterval = React.useMemo(() => GeoDate.isDateInterval(value), [value]);
   const [intervalError, setIntervalError] = React.useState<string | null>(null);
 
@@ -533,13 +550,13 @@ export function DateField({ value, format, isEditing, variant, onBlur }: DateFie
 
   if (!isEditing)
     return (
-      <p className="text-body text-text" data-testid="date-field-value">
+      <p className={dateTextStyles({ variant, className })} data-testid="date-field-value">
         {formattedDate}
       </p>
     );
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className={cx('flex flex-col gap-1', className)}>
       <div className="flex flex-row items-start gap-4">
         <DateInput variant={variant} initialDate={startDate} onDateChange={handleStartDateChange} />
 
