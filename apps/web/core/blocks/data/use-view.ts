@@ -269,7 +269,7 @@ const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string 
     image: '/gallery.png',
   },
   BULLETED_LIST: {
-    text: 'Add your first entity row to get started',
+    text: 'Add your first bullet item to get started',
     image: '/list.png',
   },
 };
