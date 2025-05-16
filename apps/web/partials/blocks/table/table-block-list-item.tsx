@@ -397,14 +397,11 @@ export function TableBlockListItem({
             </Link>
           </CollectionMetadata>
         )}
-        {description && (
-          <div className="mt-0.5 line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
-        )}
+        {description && <div className="line-clamp-4 text-metadata text-text md:line-clamp-3">{description}</div>}
 
         {otherPropertyData.map(p => {
           return (
             <div key={`${p.slotId}-${cellId}`}>
-              <Spacer height={12} />
               <TableBlockPropertyField
                 key={p.slotId}
                 renderables={p.renderables.filter(r => Boolean(r.placeholder) === false)}
