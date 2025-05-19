@@ -223,15 +223,13 @@ interface Props {
 export function DataBlockProvider({ spaceId, children, entityId, relationId }: Props) {
   const { pageNumber, setPage } = usePagination();
 
-  const store = React.useMemo(() => {
-    return {
-      spaceId,
-      entityId,
-      relationId,
-      pageNumber,
-      setPage,
-    };
-  }, [spaceId, entityId, relationId, pageNumber, setPage]);
+  const store = {
+    spaceId,
+    entityId,
+    relationId,
+    pageNumber,
+    setPage,
+  };
 
   return <DataBlockContext.Provider value={store}>{children}</DataBlockContext.Provider>;
 }

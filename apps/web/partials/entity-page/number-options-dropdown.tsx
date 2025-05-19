@@ -72,13 +72,13 @@ const PercentageToggle = ({
   currentType: 'number' | 'percentage';
   onToggle: (numberType: 'number' | 'percentage') => void;
 }) => {
-  const handleToggleChange = React.useCallback(() => {
+  const handleToggleChange = () => {
     onToggle(currentType === 'percentage' ? 'number' : 'percentage');
-  }, [currentType, onToggle]);
+  };
 
-  const suppressDefault = React.useCallback((e: React.MouseEvent) => {
+  const suppressDefault = (e: React.MouseEvent) => {
     e.preventDefault();
-  }, []);
+  };
 
   return (
     <DropdownPrimitive.Item
@@ -97,9 +97,9 @@ const PercentageToggle = ({
 };
 
 const BackButton = ({ onClick }: { onClick: (e: React.MouseEvent) => void }) => {
-  const suppressDefault = React.useCallback((e: React.MouseEvent) => {
+  const suppressDefault = (e: React.MouseEvent) => {
     e.preventDefault();
-  }, []);
+  };
 
   return (
     <DropdownPrimitive.Item
@@ -149,16 +149,12 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     where: { id: { in: searchResults.map(result => result.id) } },
   });
 
-  const filteredEntities = React.useMemo(
-    () =>
-      entities.map(entity => ({
-        name: entity.name,
-        symbol: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value,
-        sign: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
-        id: entity.id,
-      })),
-    [entities]
-  );
+  const filteredEntities = entities.map(entity => ({
+    name: entity.name,
+    symbol: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value,
+    sign: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+    id: entity.id,
+  }));
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.currentTarget.value;
@@ -166,33 +162,28 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
   };
 
   // @TODO: Fill in, once we have entities for crypto currencies with Cryptocurrency type
-  const cryptoCurrencies = React.useMemo(() => [], []);
+  const cryptoCurrencies: any[] = [];
 
-  const fiatCurrencies = React.useMemo(
-    () => [
-      {
-        name: 'United States Dollar',
-        symbol: 'USD',
-        id: SystemIds.CURRENCY_USD_ATTRIBUTE,
-      },
-      {
-        name: 'Pound Sterling',
-        symbol: 'GBP',
-        id: SystemIds.CURRENCY_GBP_ATTRIBUTE,
-      },
-      {
-        name: 'Euro',
-        symbol: 'EUR',
-        id: SystemIds.CURRENCY_EUR_ATTRIBUTE,
-      },
-    ],
-    []
-  );
+  const fiatCurrencies = [
+    {
+      name: 'United States Dollar',
+      symbol: 'USD',
+      id: SystemIds.CURRENCY_USD_ATTRIBUTE,
+    },
+    {
+      name: 'Pound Sterling',
+      symbol: 'GBP',
+      id: SystemIds.CURRENCY_GBP_ATTRIBUTE,
+    },
+    {
+      name: 'Euro',
+      symbol: 'EUR',
+      id: SystemIds.CURRENCY_EUR_ATTRIBUTE,
+    },
+  ];
 
-  const [defaultCurrencies, title] = React.useMemo(
-    () => (type === 'CRYPTO' ? [cryptoCurrencies, 'Cryptocurrency'] : [fiatCurrencies, 'Fiat currency']),
-    [type, cryptoCurrencies, fiatCurrencies]
-  );
+  const [defaultCurrencies, title] =
+    type === 'CRYPTO' ? [cryptoCurrencies, 'Cryptocurrency'] : [fiatCurrencies, 'Fiat currency'];
 
   const currencies = query.length > 0 ? filteredEntities : defaultCurrencies;
 
@@ -266,30 +257,24 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
     );
   }, [unitId, entity]);
 
-  const handleBack = React.useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      if (viewHistory.length > 1) {
-        setViewHistory(prev => prev.slice(0, -1));
-      } else {
-        setIsOpen(false);
-      }
-    },
-    [viewHistory, setIsOpen, setViewHistory]
-  );
+  const handleBack = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (viewHistory.length > 1) {
+      setViewHistory(prev => prev.slice(0, -1));
+    } else {
+      setIsOpen(false);
+    }
+  };
 
-  const handleNavigate = React.useCallback(
-    (e: React.MouseEvent, view: NumberTypeSubmenuView) => {
-      e.preventDefault();
-      setViewHistory(prev => [...prev, view]);
-    },
-    [setViewHistory]
-  );
+  const handleNavigate = (e: React.MouseEvent, view: NumberTypeSubmenuView) => {
+    e.preventDefault();
+    setViewHistory(prev => [...prev, view]);
+  };
 
-  const toggleIsOpen = React.useCallback(() => {
+  const toggleIsOpen = () => {
     setIsOpen(prev => !prev);
     setViewHistory(['number-options']);
-  }, [setIsOpen, setViewHistory]);
+  };
 
   const formatOptions = React.useMemo(() => {
     const options = selectedNumberType === 'percentage' ? percentageFormatOptions : numberFormatOptions;
@@ -302,23 +287,23 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
     }));
   }, [selectedNumberType, format, send, unitId]);
 
-  const togglePercentage = React.useCallback(() => {
+  const togglePercentage = () => {
     const newNumberType = selectedNumberType === 'percentage' ? 'number' : 'percentage';
     setSelectedNumberType(newNumberType);
     send({
       format: newNumberType === 'percentage' ? percentageFormatOptions.Precise : numberFormatOptions.Precise,
       unitId,
     });
-  }, [setSelectedNumberType, selectedNumberType, send, unitId]);
+  };
 
-  const removeUnitId = React.useCallback(() => {
+  const removeUnitId = () => {
     send({
       format,
       unitId: undefined,
     });
-  }, [send, format]);
+  };
 
-  const getFormatLabel = React.useCallback((formatString: string | undefined) => {
+  const getFormatLabel = (formatString: string | undefined) => {
     if (!formatString || formatString === undefined) return 'Unspecified';
 
     for (const [key, value] of Object.entries(numberFormatOptions)) {
@@ -330,11 +315,11 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
     }
 
     return 'Custom';
-  }, []);
+  };
 
   const formatLabel = getFormatLabel(format);
 
-  const renderContent = React.useCallback(() => {
+  const renderContent = () => {
     switch (currentView) {
       case 'number-format':
         return (
@@ -402,7 +387,7 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
           </>
         );
     }
-  }, [currentView, formatOptions, selectedNumberType, format, value, handleBack, handleNavigate, togglePercentage]);
+  };
 
   return (
     <DropdownPrimitive.Root open={isOpen} onOpenChange={toggleIsOpen}>

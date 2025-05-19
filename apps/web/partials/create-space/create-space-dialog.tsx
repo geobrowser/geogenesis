@@ -409,11 +409,11 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileInputClick = useCallback(() => {
+  const handleFileInputClick = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
-  }, []);
+  };
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {

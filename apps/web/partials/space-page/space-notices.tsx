@@ -9,7 +9,7 @@ import type { LinkProps } from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 
 import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';
@@ -187,10 +187,10 @@ const noticeClassNames = cva('group relative flex overflow-clip rounded-lg p-4',
 const Notice = ({ id, color, media, title, description, action, format = 'normal' }: NoticeProps) => {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
 
-  const handleDismissNotice = useCallback(() => {
+  const handleDismissNotice = () => {
     const newDismissedNotices = [...dismissedNotices, id];
     setDismissedNotices(newDismissedNotices);
-  }, [id, dismissedNotices, setDismissedNotices]);
+  };
 
   if (dismissedNotices.includes(id)) return null;
 
@@ -318,21 +318,21 @@ const TeamNotice = () => {
   const [dismissed, setDismissed] = useAtom(teamNoticeDismissedAtom);
   const showNotice = getShowNotice(dismissed);
 
-  const handleTemporarilyDismiss = useCallback(() => {
+  const handleTemporarilyDismiss = () => {
     setDismissed({
       dismissedCount: dismissed.dismissedCount + 1,
       lastDismissed: dayjs().format('YYYY-MM-DD'),
     });
-  }, [dismissed, setDismissed]);
+  };
 
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
 
-  const handlePermanentlyDismiss = useCallback(() => {
+  const handlePermanentlyDismiss = () => {
     const newDismissedNotices = [...dismissedNotices, 'companyTeamSetup'];
     setDismissedNotices(newDismissedNotices);
-  }, [dismissedNotices, setDismissedNotices]);
+  };
 
-  if (dismissedNotices.includes('companyTeamSetup') || !showNotice) return null;
+  if (dismissedNotices.includes('companyTeamSetup') || !showNotice) return <></>;
 
   return (
     <ClientOnly>
@@ -412,7 +412,7 @@ const CopyInviteLink = () => {
   );
 };
 
-const getShowNotice = (dismissed: RepeatingNotice) => {
+function getShowNotice(dismissed: RepeatingNotice) {
   switch (dismissed.dismissedCount) {
     case undefined:
       return true;
@@ -427,4 +427,4 @@ const getShowNotice = (dismissed: RepeatingNotice) => {
     default:
       return dayjs().diff(dismissed.lastDismissed, 'day') >= 7;
   }
-};
+}

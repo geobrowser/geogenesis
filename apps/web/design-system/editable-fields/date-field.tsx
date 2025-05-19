@@ -472,7 +472,7 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 }
 
 export function DateField({ value, format, isEditing, variant, onBlur }: DateFieldProps) {
-  const isDateInterval = React.useMemo(() => GeoDate.isDateInterval(value), [value]);
+  const isDateInterval = GeoDate.isDateInterval(value);
   const [intervalError, setIntervalError] = React.useState<string | null>(null);
 
   const [startDate, endDate] = React.useMemo(() => {
@@ -485,7 +485,7 @@ export function DateField({ value, format, isEditing, variant, onBlur }: DateFie
 
   const formattedDate = value ? GeoDate.format(value, format) : null;
 
-  const validateDateInterval = React.useCallback((start: string, end: string): boolean => {
+  const validateDateInterval = (start: string, end: string): boolean => {
     const startDate = new Date(start);
     const endDate = new Date(end);
 
@@ -496,7 +496,7 @@ export function DateField({ value, format, isEditing, variant, onBlur }: DateFie
 
     setIntervalError(null);
     return true;
-  }, []);
+  };
 
   const handleStartDateChange = (newStartDate: string) => {
     if (!onBlur) return;

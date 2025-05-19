@@ -125,14 +125,11 @@ export function NavbarActions() {
             </Link>
           </AvatarMenuItem>
         )}
-        <AvatarMenuItem>
-          <button
-            onClick={logout}
-            className="m-0 flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-0"
-          >
+        <AvatarMenuItem onClick={logout}>
+          <div className="m-0 flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-0">
             <p className="text-button">Sign out</p>
             <DisconnectWallet />
-          </button>
+          </div>
         </AvatarMenuItem>
       </Menu>
     </div>
@@ -205,7 +202,7 @@ function ModeToggle() {
   const [attemptCount, setAttemptCount] = React.useState(0);
   const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
 
-  const onToggle = React.useCallback(() => {
+  const onToggle = () => {
     if (!spaceId) {
       setEditable(false);
       return;
@@ -228,18 +225,15 @@ function ModeToggle() {
         setAttemptCount(0);
       } else setAttemptCount(attemptCount => attemptCount + 1);
     } else setEditable(!editable);
-  }, [canUserEdit, controls, editable, setEditable, attemptCount, spaceId]);
+  };
 
-  const memoizedShortcuts = React.useMemo(
-    () => [
-      // Toggle edit mode when ⌘ + e is pressed
-      {
-        key: 'e',
-        callback: onToggle,
-      },
-    ],
-    [onToggle]
-  );
+  const memoizedShortcuts = [
+    // Toggle edit mode when ⌘ + e is pressed
+    {
+      key: 'e',
+      callback: onToggle,
+    },
+  ];
 
   useKeyboardShortcuts(memoizedShortcuts);
 

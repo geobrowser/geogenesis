@@ -27,15 +27,13 @@ export const EditorProvider = ({
   initialTabs,
   children,
 }: EditorProviderProps) => {
-  const value = React.useMemo(() => {
-    return {
-      id,
-      spaceId,
-      initialBlockRelations,
-      initialBlocks,
-      initialTabs,
-    };
-  }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs]);
+  const value = {
+    id,
+    spaceId,
+    initialBlockRelations,
+    initialBlocks,
+    initialTabs,
+  };
 
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
 };

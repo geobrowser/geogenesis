@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useEffectOnce } from '~/core/hooks/use-effect-once';
 
 interface Shortcut {
   key: KeyboardEvent['key'];
@@ -6,28 +6,22 @@ interface Shortcut {
 }
 
 export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
-  const shortcutMap = useMemo(
-    () => new Map(shortcuts.map((shortcut: Shortcut) => [shortcut.key, shortcut.callback])),
-    [shortcuts]
-  );
+  const shortcutMap = new Map(shortcuts.map((shortcut: Shortcut) => [shortcut.key, shortcut.callback]));
 
-  const down = useCallback(
-    (e: KeyboardEvent) => {
-      // MacOS
-      if (e.metaKey && shortcutMap.has(e.key)) {
-        shortcutMap.get(e.key)?.();
-      }
+  const down = (e: KeyboardEvent) => {
+    // MacOS
+    if (e.metaKey && shortcutMap.has(e.key)) {
+      shortcutMap.get(e.key)?.();
+    }
 
-      // Windows
-      if (e.ctrlKey && shortcutMap.has(e.key)) {
-        shortcutMap.get(e.key)?.();
-      }
-    },
-    [shortcutMap]
-  );
+    // Windows
+    if (e.ctrlKey && shortcutMap.has(e.key)) {
+      shortcutMap.get(e.key)?.();
+    }
+  };
 
-  useEffect(() => {
+  useEffectOnce(() => {
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
-  }, [down]);
+  });
 }

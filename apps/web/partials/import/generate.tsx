@@ -8,7 +8,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
@@ -62,7 +62,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   const spacePath = pathname?.split('/import')[0] ?? '/spaces';
 
   const [entityType, setEntityType] = useState<Entity | undefined>(undefined);
-  const { supportedAttributes, unsupportedAttributes } = useMemo(() => getAttributes(entityType), [entityType]);
+  const { supportedAttributes, unsupportedAttributes } = getAttributes(entityType);
 
   const [entityNameIndex, setEntityNameIndex] = useState<number | undefined>(undefined);
   const [entityIdIndex, setEntityIdIndex] = useState<number | undefined>(undefined);
@@ -120,7 +120,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     setActions([]);
   }, [setActions, setRecords, setStep]);
 
-  const handleGenerateActions = useCallback(async () => {
+  const handleGenerateActions = async () => {
     setIsLoading(true);
 
     const [, ...entities] = records;
@@ -266,17 +266,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
 
     setIsLoading(false);
     setStep('step4');
-  }, [
-    entityAttributes,
-    entityIdIndex,
-    entityNameIndex,
-    entityType,
-    records,
-    setActions,
-    setIsLoading,
-    setStep,
-    spaceId,
-  ]);
+  };
 
   const handlePublishActions = () => {
     setIsPublishOpen(true);

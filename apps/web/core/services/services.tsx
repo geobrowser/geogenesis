@@ -24,18 +24,16 @@ interface Props {
 }
 
 export function ServicesProvider({ children }: Props) {
-  const services = useMemo((): Services => {
-    const config = Environment.getConfig();
+  const config = Environment.getConfig();
 
-    return {
-      ipfs: {
-        uploadFile: IpfsClient.uploadFile,
-        upload: IpfsClient.upload,
-      },
-      config,
-      subgraph: Subgraph,
-    };
-  }, []);
+  const services = {
+    ipfs: {
+      uploadFile: IpfsClient.uploadFile,
+      upload: IpfsClient.upload,
+    },
+    config,
+    subgraph: Subgraph,
+  };
 
   return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>;
 }

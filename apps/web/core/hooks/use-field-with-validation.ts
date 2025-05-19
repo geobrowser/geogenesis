@@ -10,7 +10,7 @@ export function useFieldWithValidation(
   const [isValidating, setIsValidating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const memoizedValidate = React.useCallback(validate, [validate]);
+  const memoizedValidate = validate;
   const memoizedTransformedValue = React.useMemo(() => {
     if (transform) {
       return transform(value);

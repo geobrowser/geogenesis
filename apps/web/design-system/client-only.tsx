@@ -1,7 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+
+import { useEffectOnce } from '~/core/hooks/use-effect-once';
 
 type ClientOnlyProps = {
   children: React.ReactNode;
@@ -10,9 +12,9 @@ type ClientOnlyProps = {
 export const ClientOnly = ({ children }: ClientOnlyProps) => {
   const [hasMounted, setHasMounted] = useState(false);
 
-  useEffect(() => {
+  useEffectOnce(() => {
     setHasMounted(true);
-  }, []);
+  });
 
   if (!hasMounted) return null;
 

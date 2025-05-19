@@ -19,7 +19,7 @@ export function useRequestToBeEditor(votingPluginAddress: string | null) {
     address: votingPluginAddress,
   });
 
-  const handleRequestToBeEditor = useCallback(async () => {
+  const handleRequestToBeEditor = async () => {
     if (!smartAccount) {
       return;
     }
@@ -49,7 +49,7 @@ export function useRequestToBeEditor(votingPluginAddress: string | null) {
       },
       onRight: () => console.log('Successfully requested to be editor'),
     });
-  }, [dispatch, smartAccount, tx]);
+  };
 
   const { mutate, status } = useMutation({
     mutationFn: handleRequestToBeEditor,

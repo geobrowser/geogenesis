@@ -605,15 +605,12 @@ const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
   const { entity: beforeUnitEntity } = useQueryEntity({ id: before?.options?.unit });
   const { entity: afterUnitEntity } = useQueryEntity({ id: after?.options?.unit });
 
-  const [currencySignBefore, currencySignAfter] = React.useMemo(
-    () => [
-      before?.options?.unit &&
-        beforeUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
-      after?.options?.unit &&
-        afterUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
-    ],
-    [before, beforeUnitEntity, after, afterUnitEntity]
-  );
+  const [currencySignBefore, currencySignAfter] = [
+    before?.options?.unit &&
+      beforeUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+    after?.options?.unit &&
+      afterUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+  ];
 
   const formattedNumberBefore = before?.value
     ? GeoNumber.format(before.value, before?.options?.format, currencySignBefore)

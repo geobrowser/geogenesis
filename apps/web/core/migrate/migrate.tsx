@@ -301,34 +301,28 @@ export function useMigrateHub() {
 
   const [, startTransition] = useTransition();
 
-  const hub = React.useMemo(() => {
-    return migrateHub({
-      actionsApi: {
-        upsert,
-        remove,
-      },
-      queryClient,
-    });
-  }, [remove, queryClient, upsert]);
-
-  const dispatch = React.useCallback(
-    async (action: MigrateAction) => {
-      const actions = await hub.dispatch(action);
-      const actionsToBatch = groupBy([...actions], action => action.space);
-
-      if (Object.keys(actionsToBatch).length === 0) {
-        return;
-      }
-
-      startTransition(() => {
-        Object.entries(actionsToBatch).forEach(([space, actions]) => {
-          upsertMany(actions, space);
-        });
-      });
+  const hub = migrateHub({
+    actionsApi: {
+      upsert,
+      remove,
     },
+    queryClient,
+  });
 
-    [hub, upsertMany]
-  );
+  const dispatch = async (action: MigrateAction) => {
+    const actions = await hub.dispatch(action);
+    const actionsToBatch = groupBy([...actions], action => action.space);
+
+    if (Object.keys(actionsToBatch).length === 0) {
+      return;
+    }
+
+    startTransition(() => {
+      Object.entries(actionsToBatch).forEach(([space, actions]) => {
+        upsertMany(actions, space);
+      });
+    });
+  };
 
   return {
     dispatch,

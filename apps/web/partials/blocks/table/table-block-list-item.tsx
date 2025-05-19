@@ -2,6 +2,8 @@ import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
 import Link from 'next/link';
 
+import { Fragment } from 'react';
+
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { editEvent } from '~/core/events/edit-events';
@@ -12,7 +14,6 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Divider } from '~/design-system/divider';
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
-import { Spacer } from '~/design-system/spacer';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
@@ -340,7 +341,7 @@ export function TableBlockListItem({
 
           {otherPropertyData.map(p => {
             return (
-              <>
+              <Fragment key={p.slotId}>
                 <Divider type="horizontal" style="dashed" />
                 <div key={p.slotId}>
                   <TableBlockPropertyField
@@ -353,7 +354,7 @@ export function TableBlockListItem({
                     source={source}
                   />
                 </div>
-              </>
+              </Fragment>
             );
           })}
         </div>
@@ -376,9 +377,7 @@ export function TableBlockListItem({
       </div>
       <div className="w-full">
         {source.type !== 'COLLECTION' ? (
-          <Link href={href} className="text-smallTitle font-medium text-text">
-            {name || rowEntityId}
-          </Link>
+          <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
         ) : (
           <CollectionMetadata
             view="LIST"
@@ -392,9 +391,7 @@ export function TableBlockListItem({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <Link href={href} className="text-smallTitle font-medium text-text">
-              {name || rowEntityId}
-            </Link>
+            <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
           </CollectionMetadata>
         )}
         {description && <div className="line-clamp-4 text-metadata text-text md:line-clamp-3">{description}</div>}

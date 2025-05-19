@@ -39,10 +39,10 @@ export function SpaceEditorsManageDialogContent({ members, votingPluginAddress, 
     status === 'idle'
       ? 'Add member'
       : status === 'pending'
-      ? 'Adding member...'
-      : status === 'success'
-      ? 'Member added!'
-      : 'Add member';
+        ? 'Adding member...'
+        : status === 'success'
+          ? 'Member added!'
+          : 'Add member';
 
   return (
     <div className="flex flex-col gap-4">
@@ -113,15 +113,13 @@ function CurrentMember({ member, votingPluginAddress, spaceType }: CurrentMember
 function useQueriedEditors(members: Member[]) {
   const [query, setQuery] = React.useState('');
 
-  const queriedEditors = React.useMemo(() => {
-    return members.filter(e => {
-      if (e.name) {
-        return e.name?.toLowerCase().includes(query.toLowerCase());
-      }
+  const queriedEditors = members.filter(e => {
+    if (e.name) {
+      return e.name?.toLowerCase().includes(query.toLowerCase());
+    }
 
-      return e.id.toLowerCase().includes(query.toLowerCase());
-    });
-  }, [members, query]);
+    return e.id.toLowerCase().includes(query.toLowerCase());
+  });
 
   return {
     setQuery,

@@ -46,10 +46,8 @@ export function NumberField({
 
   const { entity } = useQueryEntity({ id: unitId });
 
-  const currencySign = React.useMemo(
-    () => unitId && entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
-    [unitId, entity]
-  );
+  const currencySign =
+    unitId && entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value;
 
   if (!isEditing) {
     return <span className={numberFieldStyles({ variant })}>{GeoNumber.format(value, format, currencySign)}</span>;

@@ -53,23 +53,15 @@ const ReviewChanges = () => {
   const [activeSpace, setActiveSpace] = useState<string>('');
   const { setIsReviewOpen } = useDiff();
 
-  const allSpacesWithTripleChanges = useTriples(
-    React.useMemo(() => {
-      return {
-        selector: t => t.hasBeenPublished === false,
-        includeDeleted: true,
-      };
-    }, [])
-  ).map(t => t.space);
+  const allSpacesWithTripleChanges = useTriples({
+    selector: t => t.hasBeenPublished === false,
+    includeDeleted: true,
+  }).map(t => t.space);
 
-  const allSpacesWithRelationChanges = useRelations(
-    React.useMemo(() => {
-      return {
-        selector: r => r.hasBeenPublished === false,
-        includeDeleted: true,
-      };
-    }, [])
-  ).map(r => r.space);
+  const allSpacesWithRelationChanges = useRelations({
+    selector: r => r.hasBeenPublished === false,
+    includeDeleted: true,
+  }).map(r => r.space);
 
   const dedupedSpacesWithActions = React.useMemo(() => {
     return [...new Set([...allSpacesWithTripleChanges, ...allSpacesWithRelationChanges]).values()];
@@ -144,23 +136,15 @@ const ReviewChanges = () => {
   // Entity Id -> Attribute Id -> boolean
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
 
-  const triplesFromSpace = useTriples(
-    React.useMemo(() => {
-      return {
-        selector: t => t.space === activeSpace,
-        includeDeleted: true,
-      };
-    }, [activeSpace])
-  );
+  const triplesFromSpace = useTriples({
+    selector: t => t.space === activeSpace,
+    includeDeleted: true,
+  });
 
-  const relationsFromSpace = useRelations(
-    React.useMemo(() => {
-      return {
-        selector: r => r.space === activeSpace,
-        includeDeleted: true,
-      };
-    }, [activeSpace])
-  );
+  const relationsFromSpace = useRelations({
+    selector: r => r.space === activeSpace,
+    includeDeleted: true,
+  });
 
   const isReadyToPublish =
     proposalName?.length > 0 &&
@@ -170,9 +154,9 @@ const ReviewChanges = () => {
   const { makeProposal } = usePublish();
   const [changes, isLoading] = useLocalChanges(activeSpace);
 
-  const handleDeleteActions = useCallback(() => {
+  const handleDeleteActions = () => {
     // @TODO(database)
-  }, []);
+  };
 
   const handleStaging = (entityId: string, attributeId: string) => {
     const newChanges = { ...unstagedChanges };
@@ -196,7 +180,7 @@ const ReviewChanges = () => {
     // }
   };
 
-  const handlePublish = useCallback(async () => {
+  const handlePublish = async () => {
     if (!activeSpace) return;
     setIsPublishing(true);
 
@@ -217,7 +201,7 @@ const ReviewChanges = () => {
     });
 
     setIsPublishing(false);
-  }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace, relationsFromSpace]);
+  };
 
   if (isLoading || !changes || isSpacesLoading) {
     return <div>Loading...</div>;

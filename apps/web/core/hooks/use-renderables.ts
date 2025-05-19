@@ -30,6 +30,7 @@ import { useUserIsEditing } from './use-user-is-editing';
 export function useRenderables(serverTriples: Triple[], spaceId: string, isRelationPage?: boolean) {
   const findMany = useQueryEntitiesAsync();
   const isEditing = useUserIsEditing(spaceId);
+
   const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
     usePlaceholderRenderables();
 

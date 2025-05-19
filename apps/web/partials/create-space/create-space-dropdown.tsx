@@ -29,9 +29,9 @@ export function CreateSpaceDropdown() {
       open={isMenuOpen}
       onOpenChange={setIsMenuOpen}
       trigger={
-        <button className="rounded-full p-2 text-grey-04 transition-colors duration-200 hover:bg-grey-01 focus:bg-grey-01 active:bg-divider sm:hidden">
+        <div className="rounded-full p-2 text-grey-04 transition-colors duration-200 hover:bg-grey-01 focus:bg-grey-01 active:bg-divider sm:hidden">
           <Create />
-        </button>
+        </div>
       }
       className="max-w-[98px] bg-white"
     >

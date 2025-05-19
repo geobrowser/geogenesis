@@ -43,115 +43,119 @@ export function usePublish() {
    * space with the published actions being flagged as `hasBeenPublished` and run any additional
    * side effects.
    */
-  const make = React.useCallback(
-    async ({ triples: triplesToPublish, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
-      if (!smartAccount) return;
-      if (triplesToPublish.length === 0 && relations.length === 0) return;
+  const make = async ({
+    triples: triplesToPublish,
+    relations,
+    name,
+    spaceId,
+    onSuccess,
+    onError,
+  }: MakeProposalOptions) => {
+    if (!smartAccount) return;
+    if (triplesToPublish.length === 0 && relations.length === 0) return;
 
-      const space = await fetchSpace({ id: spaceId });
+    const space = await fetchSpace({ id: spaceId });
 
-      const publish = Effect.gen(function* () {
-        if (!space) {
-          return;
-        }
-
-        const { opsToPublish: ops, relationTriples } = Triples.prepareTriplesForPublishing(
-          triplesToPublish,
-          relations,
-          spaceId
-        );
-
-        if (ops.length === 0) {
-          console.error('resulting ops are empty, cancelling publish');
-          return;
-        }
-
-        yield* makeProposal({
-          name,
-          onChangePublishState: (newState: ReviewState) =>
-            dispatch({
-              type: 'SET_REVIEW_STATE',
-              payload: newState,
-            }),
-          ops,
-          smartAccount,
-          space: {
-            id: space.id,
-            spacePluginAddress: space.spacePluginAddress,
-            mainVotingPluginAddress: space.mainVotingPluginAddress,
-            personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
-            type: space.type,
-          },
-        });
-
-        const dataBeingPublished = new Set([
-          ...triplesToPublish.map(a => {
-            return a.id;
-          }),
-          ...relations.map(a => {
-            return a.id;
-          }),
-        ]);
-
-        // We filter out the actions that are being published from the actionsBySpace. We do this
-        // since we need to update the entire state of the space with the published actions and the
-        // unpublished actions being merged together.
-        // If the actionsBySpace[spaceId] is empty, then we return an empty array
-        const nonPublishedTriples = getTriples({
-          selector: t => t.space === spaceId && !dataBeingPublished.has(t.id),
-        });
-
-        const nonPublishedRelations = getRelations({
-          selector: r => r.space === spaceId && !dataBeingPublished.has(r.id),
-        });
-
-        const publishedTriples: StoredTriple[] = [...triplesToPublish, ...relationTriples].map(triple =>
-          // We keep published relations' ops in memory so we can continue to render any relations
-          // as entity pages. These don't actually get published since we publish relations as
-          // a CREATE_RELATION and DELETE_RELATION op.
-          Triple.make(triple, { hasBeenPublished: true, isDeleted: triple.isDeleted })
-        );
-
-        const publishedRelations = relations.map(relation => ({
-          ...relation,
-          // We keep published actions in memory to keep the UI optimistic. This is mostly done
-          // because there is a period between publishing actions and the subgraph finishing indexing
-          // where the UI would be in a state where the published actions are not showing up in the UI.
-          // Instead we keep the actions in memory so the UI is up-to-date while the subgraph indexes.
-          hasBeenPublished: true,
-        }));
-
-        restoreRelations([...publishedRelations, ...nonPublishedRelations]);
-        restore([...publishedTriples, ...nonPublishedTriples]);
-      });
-
-      const result = await Effect.runPromise(Effect.either(publish));
-
-      if (Either.isLeft(result)) {
-        const error = result.left;
-        onError?.();
-
-        if (error instanceof Error) {
-          if (error.message.startsWith('Publish failed: UserRejectedRequestError: User rejected the request')) {
-            dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-            return;
-          }
-        }
-
-        dispatch({ type: 'ERROR', payload: error.message });
+    const publish = Effect.gen(function* () {
+      if (!space) {
         return;
       }
 
-      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
+      const { opsToPublish: ops, relationTriples } = Triples.prepareTriplesForPublishing(
+        triplesToPublish,
+        relations,
+        spaceId
+      );
 
-      // want to show the "complete" state for 3s if it succeeds
-      await sleepWithCallback(() => {
-        dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-        onSuccess?.();
-      }, 3000);
-    },
-    [restore, smartAccount, dispatch, restoreRelations]
-  );
+      if (ops.length === 0) {
+        console.error('resulting ops are empty, cancelling publish');
+        return;
+      }
+
+      yield* makeProposal({
+        name,
+        onChangePublishState: (newState: ReviewState) =>
+          dispatch({
+            type: 'SET_REVIEW_STATE',
+            payload: newState,
+          }),
+        ops,
+        smartAccount,
+        space: {
+          id: space.id,
+          spacePluginAddress: space.spacePluginAddress,
+          mainVotingPluginAddress: space.mainVotingPluginAddress,
+          personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
+          type: space.type,
+        },
+      });
+
+      const dataBeingPublished = new Set([
+        ...triplesToPublish.map(a => {
+          return a.id;
+        }),
+        ...relations.map(a => {
+          return a.id;
+        }),
+      ]);
+
+      // We filter out the actions that are being published from the actionsBySpace. We do this
+      // since we need to update the entire state of the space with the published actions and the
+      // unpublished actions being merged together.
+      // If the actionsBySpace[spaceId] is empty, then we return an empty array
+      const nonPublishedTriples = getTriples({
+        selector: t => t.space === spaceId && !dataBeingPublished.has(t.id),
+      });
+
+      const nonPublishedRelations = getRelations({
+        selector: r => r.space === spaceId && !dataBeingPublished.has(r.id),
+      });
+
+      const publishedTriples: StoredTriple[] = [...triplesToPublish, ...relationTriples].map(triple =>
+        // We keep published relations' ops in memory so we can continue to render any relations
+        // as entity pages. These don't actually get published since we publish relations as
+        // a CREATE_RELATION and DELETE_RELATION op.
+        Triple.make(triple, { hasBeenPublished: true, isDeleted: triple.isDeleted })
+      );
+
+      const publishedRelations = relations.map(relation => ({
+        ...relation,
+        // We keep published actions in memory to keep the UI optimistic. This is mostly done
+        // because there is a period between publishing actions and the subgraph finishing indexing
+        // where the UI would be in a state where the published actions are not showing up in the UI.
+        // Instead we keep the actions in memory so the UI is up-to-date while the subgraph indexes.
+        hasBeenPublished: true,
+      }));
+
+      restoreRelations([...publishedRelations, ...nonPublishedRelations]);
+      restore([...publishedTriples, ...nonPublishedTriples]);
+    });
+
+    const result = await Effect.runPromise(Effect.either(publish));
+
+    if (Either.isLeft(result)) {
+      const error = result.left;
+      onError?.();
+
+      if (error instanceof Error) {
+        if (error.message.startsWith('Publish failed: UserRejectedRequestError: User rejected the request')) {
+          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+          return;
+        }
+      }
+
+      dispatch({ type: 'ERROR', payload: error.message });
+      return;
+    }
+
+    dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
+
+    // want to show the "complete" state for 3s if it succeeds
+    await sleepWithCallback(() => {
+      dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+      onSuccess?.();
+    }, 3000);
+  };
 
   return {
     makeProposal: make,
@@ -166,65 +170,62 @@ export function useBulkPublish() {
    * Take the bulk actions for a specific space the user wants to write to Geo and publish them
    * to IPFS + transact the IPFS hash onto Polygon.
    */
-  const makeBulkProposal = React.useCallback(
-    async ({ triples, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
-      if (triples.length === 0) return;
-      if (!smartAccount) return;
+  const makeBulkProposal = async ({ triples, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
+    if (triples.length === 0) return;
+    if (!smartAccount) return;
 
-      // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
-      // All of our contract calls rely on knowing plugin metadata so this is probably
-      // something we need for all of them.
-      const space = await fetchSpace({ id: spaceId });
+    // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
+    // All of our contract calls rely on knowing plugin metadata so this is probably
+    // something we need for all of them.
+    const space = await fetchSpace({ id: spaceId });
 
-      const publish = Effect.gen(function* () {
-        if (!space || !space.mainVotingPluginAddress) {
-          return;
-        }
-
-        yield* makeProposal({
-          name,
-          onChangePublishState: (newState: ReviewState) =>
-            dispatch({
-              type: 'SET_REVIEW_STATE',
-              payload: newState,
-            }),
-          ops: Triples.prepareTriplesForPublishing(triples, relations, spaceId).opsToPublish,
-          smartAccount,
-          space: {
-            id: space.id,
-            spacePluginAddress: space.spacePluginAddress,
-            mainVotingPluginAddress: space.mainVotingPluginAddress,
-            personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
-            type: space.type,
-          },
-        });
-      });
-
-      const result = await Effect.runPromise(Effect.either(publish));
-
-      if (Either.isLeft(result)) {
-        const error = result.left;
-        onError?.();
-
-        if (error instanceof Error) {
-          if (error.message.startsWith('Publish failed: UserRejectedRequestError: User rejected the request')) {
-            dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-            return;
-          }
-        }
-
-        dispatch({ type: 'ERROR', payload: error.message });
+    const publish = Effect.gen(function* () {
+      if (!space || !space.mainVotingPluginAddress) {
         return;
       }
 
-      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
-      onSuccess?.();
+      yield* makeProposal({
+        name,
+        onChangePublishState: (newState: ReviewState) =>
+          dispatch({
+            type: 'SET_REVIEW_STATE',
+            payload: newState,
+          }),
+        ops: Triples.prepareTriplesForPublishing(triples, relations, spaceId).opsToPublish,
+        smartAccount,
+        space: {
+          id: space.id,
+          spacePluginAddress: space.spacePluginAddress,
+          mainVotingPluginAddress: space.mainVotingPluginAddress,
+          personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
+          type: space.type,
+        },
+      });
+    });
 
-      // want to show the "complete" state for 3s if it succeeds
-      await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
-    },
-    [smartAccount, dispatch]
-  );
+    const result = await Effect.runPromise(Effect.either(publish));
+
+    if (Either.isLeft(result)) {
+      const error = result.left;
+      onError?.();
+
+      if (error instanceof Error) {
+        if (error.message.startsWith('Publish failed: UserRejectedRequestError: User rejected the request')) {
+          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+          return;
+        }
+      }
+
+      dispatch({ type: 'ERROR', payload: error.message });
+      return;
+    }
+
+    dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
+    onSuccess?.();
+
+    // want to show the "complete" state for 3s if it succeeds
+    await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
+  };
 
   return {
     makeBulkProposal,

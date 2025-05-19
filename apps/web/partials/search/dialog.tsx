@@ -1,10 +1,11 @@
 import { A } from '@mobily/ts-belt';
+import { DialogTitle } from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import * as React from 'react';
 
 import { useSearch } from '~/core/hooks/use-search';
@@ -37,12 +38,12 @@ export const SearchDialog = ({ open, onDone }: Props) => {
   const [isCreatingNewEntity, setIsCreatingNewEntity] = useState<boolean>(false);
   const selectedEntity = openSpacesIndex !== null ? autocomplete.results[openSpacesIndex] : null;
 
-  const handleOpenChange = useCallback(() => {
+  const handleOpenChange = () => {
     autocomplete.onQueryChange('');
     setOpenSpacesIndex(null);
     setIsCreatingNewEntity(false);
     onDone();
-  }, [autocomplete, onDone]);
+  };
 
   const isValidEntityId = validateEntityId(autocomplete.query);
 
@@ -57,6 +58,7 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 
   return (
     <Command.Dialog open={open} onOpenChange={handleOpenChange} label="Entity search">
+      <DialogTitle className="sr-only">Entity search</DialogTitle>
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center">
         <div className="pointer-events-auto mt-32 w-full max-w-[434px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-dropdown">
           <Command.List>

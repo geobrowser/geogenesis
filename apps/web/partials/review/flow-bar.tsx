@@ -27,9 +27,7 @@ export const FlowBar = () => {
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
-  const triples = useTriples(
-    React.useMemo(() => ({ selector: t => t.hasBeenPublished === false, includeDeleted: true }), [])
-  );
+  const triples = useTriples({ selector: t => t.hasBeenPublished === false, includeDeleted: true });
 
   // @TODO: We can use Change.fromLocal to aggregate the "real" counts.
   const opsCount = triples.length;

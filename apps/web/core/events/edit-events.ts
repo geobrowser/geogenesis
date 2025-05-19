@@ -3,8 +3,6 @@
 import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
-import { useMemo } from 'react';
-
 import {
   BaseRelationRenderableProperty,
   ImageRelationRenderableProperty,
@@ -365,16 +363,14 @@ const listener =
 export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
   const { upsert, remove, upsertMany } = useWriteOps();
 
-  const send = useMemo(() => {
-    return listener({
-      ...config,
-      api: {
-        upsert,
-        remove,
-        upsertMany,
-      },
-    });
-  }, [config, remove, upsert, upsertMany]);
+  const send = listener({
+    ...config,
+    api: {
+      upsert,
+      remove,
+      upsertMany,
+    },
+  });
 
   return send;
 }

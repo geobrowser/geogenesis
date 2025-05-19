@@ -166,10 +166,10 @@ const Notice = ({ id, color, title, description, element, media }: NoticeProps) 
     },
   });
 
-  const handleDismissNotice = React.useCallback(() => {
+  const handleDismissNotice = () => {
     const newDismissedNotices = [...dismissedNotices, id];
     setDismissedNotices(newDismissedNotices);
-  }, [id, dismissedNotices, setDismissedNotices]);
+  };
 
   if (dismissedNotices.includes(id)) return null;
 

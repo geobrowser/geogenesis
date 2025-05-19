@@ -21,12 +21,7 @@ interface Props {
   unpublishedColumns: PropertySchema[];
 }
 
-export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({
-  column,
-  spaceId,
-  entityId,
-  unpublishedColumns,
-}: Props) {
+export const EditableEntityTableColumnHeader = ({ column, spaceId, entityId, unpublishedColumns }: Props) => {
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
   const [localName, setLocalName] = useState(column.name ?? '');
@@ -69,4 +64,4 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
       {isUnpublished && <RenderableTypeDropdown value={value} options={selectorOptions} />}
     </div>
   );
-});
+};

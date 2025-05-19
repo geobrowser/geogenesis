@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { createContext, useContext, useMemo } from 'react';
+import { createContext, useContext } from 'react';
 
 import { OmitStrict, Relation, SpaceId, Triple } from '~/core/types';
 
@@ -17,15 +17,13 @@ interface Props {
 }
 
 export function EntityStoreProvider({ id, spaceId, children, initialSpaces, initialTriples, initialRelations }: Props) {
-  const store = useMemo(() => {
-    return {
-      spaceId,
-      initialSpaces,
-      initialTriples,
-      initialRelations,
-      id,
-    };
-  }, [spaceId, initialSpaces, initialTriples, initialRelations, id]);
+  const store = {
+    spaceId,
+    initialSpaces,
+    initialTriples,
+    initialRelations,
+    id,
+  };
 
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;
 }

@@ -19,7 +19,7 @@ export function useRequestToBeMember(votingPluginAddress: string | null) {
     address: votingPluginAddress,
   });
 
-  const handleRequestToBeMember = useCallback(async () => {
+  const handleRequestToBeMember = async () => {
     if (!smartAccount) {
       return null;
     }
@@ -51,7 +51,7 @@ export function useRequestToBeMember(votingPluginAddress: string | null) {
       },
       onRight: () => console.log('Successfully requested to be member'),
     });
-  }, [dispatch, smartAccount, tx, votingPluginAddress]);
+  };
 
   const { mutate, status } = useMutation({
     mutationFn: handleRequestToBeMember,

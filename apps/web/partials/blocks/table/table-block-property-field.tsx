@@ -1,5 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
+import { Fragment } from 'react';
+
 import { Source } from '~/core/blocks/data/source';
 import { editEvent, useEditEvents } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
@@ -408,8 +410,8 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
         }
 
         return (
-          <>
-            <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
+          <Fragment key={`relation-${relationId}-${relationValue}`}>
+            <div className="mt-1">
               <LinkableRelationChip
                 isEditing
                 onDelete={() => {
@@ -426,7 +428,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                 {relationName ?? relationValue}
               </LinkableRelationChip>
             </div>
-          </>
+          </Fragment>
         );
       })}
       {!hasPlaceholders && (

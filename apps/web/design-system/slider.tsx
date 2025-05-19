@@ -3,7 +3,7 @@
 import cx from 'classnames';
 import { useInView } from 'framer-motion';
 
-import { Children, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Children, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 
 import { IconButton } from '~/design-system/button';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
@@ -28,23 +28,23 @@ const MobileSlider = ({ label, children }: SliderProps) => {
   const prefix = kebabCase(label);
 
   const cards = Children.toArray(children);
-  const slides = useMemo(() => chunk(cards, 2), [cards]);
+  const slides = chunk(cards, 2);
 
   const hasPrev = page > 0;
-  const handlePrev = useCallback(() => {
+  const handlePrev = () => {
     if (page > 0) {
       const element = document.getElementById(`${prefix}-slider-mobile-${page - 1}`);
       element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
-  }, [page, prefix]);
+  };
 
   const hasNext = page < slides.length - 1;
-  const handleNext = useCallback(() => {
+  const handleNext = () => {
     if (page < slides.length - 1) {
       const element = document.getElementById(`${prefix}-slider-mobile-${page + 1}`);
       element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
-  }, [page, slides.length, prefix]);
+  };
 
   return (
     <>
@@ -85,23 +85,23 @@ const DesktopSlider = ({ label, children }: SliderProps) => {
   const prefix = kebabCase(label);
 
   const cards = Children.toArray(children);
-  const slides = useMemo(() => chunk(cards, 3), [cards]);
+  const slides = chunk(cards, 3);
 
   const hasPrev = page > 0;
-  const handlePrev = useCallback(() => {
+  const handlePrev = () => {
     if (page > 0) {
       const element = document.getElementById(`${prefix}-slider-desktop-${page - 1}`);
       element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
-  }, [page, prefix]);
+  };
 
   const hasNext = page < slides.length - 1;
-  const handleNext = useCallback(() => {
+  const handleNext = () => {
     if (page < slides.length - 1) {
       const element = document.getElementById(`${prefix}-slider-desktop-${page + 1}`);
       element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
-  }, [page, slides.length, prefix]);
+  };
 
   return (
     <>

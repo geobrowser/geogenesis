@@ -24,20 +24,17 @@ export function App({ children }: { children: React.ReactNode }) {
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
   // Ideally memoization happens in the useKeyboardShortcuts hook
-  const memoizedShortcuts = React.useMemo(
-    () => [
-      // Toggle the menu when ⌘ + / is pressed
-      {
-        key: '/',
-        callback: () => setOpen(open => !open),
-      },
-      {
-        key: '.',
-        callback: () => setIsReviewOpen(!isReviewOpen),
-      },
-    ],
-    [setOpen, setIsReviewOpen, isReviewOpen]
-  );
+  const memoizedShortcuts = [
+    // Toggle the menu when ⌘ + / is pressed
+    {
+      key: '/',
+      callback: () => setOpen(open => !open),
+    },
+    {
+      key: '.',
+      callback: () => setIsReviewOpen(!isReviewOpen),
+    },
+  ];
 
   useKeyboardShortcuts(memoizedShortcuts);
 

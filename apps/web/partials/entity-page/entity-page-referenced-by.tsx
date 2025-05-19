@@ -106,6 +106,7 @@ function ReferencedByEntityItem({ referencedByEntity }: { referencedByEntity: Re
         <div className="flex items-center gap-1">
           {referencedByEntity.space.image && (
             <span className="relative h-3 w-3 overflow-hidden rounded-xs">
+              {/* @TODO investigate how this is getting different props on server and client?? */}
               <Image layout="fill" objectFit="cover" src={getImagePath(referencedByEntity.space.image)} alt="" />
             </span>
           )}

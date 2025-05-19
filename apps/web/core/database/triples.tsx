@@ -19,8 +19,20 @@ interface UseTriplesArgs {
   includeDeleted?: boolean;
 }
 
-function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeWith = [] }: UseTriplesArgs) {
-  return selectAtom(
+const atomCache = new Map();
+
+function getLocalOpsAtomWithSelector(args: UseTriplesArgs) {
+  const { selector, includeDeleted = false, mergeWith = [] } = args;
+
+  const mergeWithKey = JSON.stringify(mergeWith);
+  const selectorKey = selector ? selector.toString() : 'null';
+  const cacheKey = `${selectorKey}:${includeDeleted}:${mergeWithKey}`;
+
+  if (atomCache.has(cacheKey)) {
+    return atomCache.get(cacheKey);
+  }
+
+  const newAtom = selectAtom(
     localOpsAtom,
     ops => {
       const mergedTriples = Triples.merge(ops, mergeWith);
@@ -30,14 +42,33 @@ function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeW
     },
     equal
   );
+
+  atomCache.set(cacheKey, newAtom);
+
+  return newAtom;
 }
 
 export function useTriples(args?: UseTriplesArgs) {
-  const memoizedArgs = React.useMemo(() => args, [args]);
-  const memoizedAtom = React.useMemo(() => makeLocalOpsAtomWithSelector(memoizedArgs ?? {}), [memoizedArgs]);
-  return useAtomValue(memoizedAtom);
+  const stableArgs = React.useRef<UseTriplesArgs>({
+    selector: args?.selector,
+    includeDeleted: args?.includeDeleted ?? false,
+    mergeWith: args?.mergeWith ?? [],
+  }).current;
+
+  React.useEffect(() => {
+    stableArgs.selector = args?.selector;
+    stableArgs.includeDeleted = args?.includeDeleted ?? false;
+    stableArgs.mergeWith = args?.mergeWith ?? [];
+  }, [args?.selector, args?.includeDeleted, args?.mergeWith ? JSON.stringify(args.mergeWith) : '[]']);
+
+  const atom = React.useMemo(
+    () => getLocalOpsAtomWithSelector(stableArgs),
+    [stableArgs.selector, stableArgs.includeDeleted, JSON.stringify(stableArgs.mergeWith)]
+  );
+
+  return useAtomValue(atom) as ITriple[];
 }
 
 export function getTriples(args: UseTriplesArgs) {
-  return store.get(makeLocalOpsAtomWithSelector(args));
+  return store.get(getLocalOpsAtomWithSelector(args)) as ITriple[];
 }

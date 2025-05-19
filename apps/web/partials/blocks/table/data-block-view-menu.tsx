@@ -88,9 +88,9 @@ const ToggleView = ({ activeView, view, isLoading }: ToggleViewProps) => {
   const isActive = !isLoading && activeView === view.value;
   const { setView } = useView();
 
-  const onToggleView = useCallback(async () => {
+  const onToggleView = async () => {
     setView(view);
-  }, [setView, view]);
+  };
 
   return (
     <MenuItem active={isActive}>

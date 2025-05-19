@@ -19,9 +19,7 @@ export function useFilters() {
     spaceId,
   });
 
-  const filterTriple = React.useMemo(() => {
-    return blockEntity?.triples.find(t => t.attributeId === SystemIds.FILTER);
-  }, [blockEntity?.triples]);
+  const filterTriple = blockEntity?.triples.find(t => t.attributeId === SystemIds.FILTER);
 
   const geoFilterString = React.useMemo(() => {
     if (!filterTriple) return null;
@@ -60,31 +58,28 @@ export function useFilters() {
     },
   });
 
-  const setFilterState = React.useCallback(
-    (filters: Filter[], source: Source) => {
-      const newState = filters.length === 0 ? [] : filters;
+  const setFilterState = (filters: Filter[], source: Source) => {
+    const newState = filters.length === 0 ? [] : filters;
 
-      // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString = newState.length === 0 ? '' : toGeoFilterState(newState, source);
+    // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
+    const newFiltersString = newState.length === 0 ? '' : toGeoFilterState(newState, source);
 
-      const entityName = blockEntity?.name ?? '';
+    const entityName = blockEntity?.name ?? '';
 
-      return upsert(
-        {
-          attributeId: SystemIds.FILTER,
-          attributeName: 'Filter',
-          entityId,
-          entityName,
-          value: {
-            type: 'TEXT',
-            value: newFiltersString,
-          },
+    return upsert(
+      {
+        attributeId: SystemIds.FILTER,
+        attributeName: 'Filter',
+        entityId,
+        entityName,
+        value: {
+          type: 'TEXT',
+          value: newFiltersString,
         },
-        spaceId
-      );
-    },
-    [entityId, spaceId, blockEntity?.name]
-  );
+      },
+      spaceId
+    );
+  };
 
   return {
     filterState: filterState ?? [],

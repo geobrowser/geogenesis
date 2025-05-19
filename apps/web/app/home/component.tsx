@@ -474,10 +474,10 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
 //     },
 //   });
 
-//   const handleDismissNotice = React.useCallback(() => {
+//   const handleDismissNotice = () => {
 //     const newDismissedNotices = [...dismissedNotices, id];
 //     setDismissedNotices(newDismissedNotices);
-//   }, [id, dismissedNotices, setDismissedNotices]);
+//   };
 
 //   if (dismissedNotices.includes(id)) return null;
 

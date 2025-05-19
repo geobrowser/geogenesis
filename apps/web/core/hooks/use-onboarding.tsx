@@ -54,9 +54,9 @@ export function useOnboarding() {
     },
   });
 
-  const hideOnboarding = useCallback(() => {
+  const hideOnboarding = () => {
     setIsOnboardingVisible(false);
-  }, [setIsOnboardingVisible]);
+  };
 
   return { isOnboardingVisible, hideOnboarding };
 }

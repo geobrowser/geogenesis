@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export function useWindowSize() {
   const [windowSize, setWindowSize] = useState<{ width: number; height: number }>({
@@ -22,10 +22,8 @@ export function useWindowSize() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  return useMemo(() => {
-    return {
-      width: windowSize.width,
-      height: windowSize.height,
-    };
-  }, [windowSize.height, windowSize.width]);
+  return {
+    width: windowSize.width,
+    height: windowSize.height,
+  };
 }

@@ -1,3 +1,5 @@
+'use client';
+
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
@@ -56,10 +58,7 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
 const ReadableNumberField = ({ value, format, unitId }: { value: string; format?: string; unitId?: string }) => {
   const { entity } = useQueryEntity({ id: unitId });
 
-  const currencySign = React.useMemo(
-    () => entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
-    [entity]
-  );
+  const currencySign = entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value;
 
   return <Text as="p">{GeoNumber.format(value, format, currencySign)}</Text>;
 };
@@ -117,6 +116,7 @@ function TriplesGroup({
                   case 'NUMBER':
                     return (
                       <ReadableNumberField
+                        key={`number-${renderable.attributeId}-${renderable.value}`}
                         value={renderable.value}
                         format={renderable.options?.format}
                         unitId={renderable.options?.unit}

@@ -26,11 +26,13 @@ interface Props {
   spacePage?: boolean;
 }
 
-export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
+export const Editor = ({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) => {
   const { upsertEditorState, editorJson, blockIds } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
 
-  const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
+  const memoizedEditorJson = React.useMemo(() => editorJson, [JSON.stringify(editorJson)]);
+
+  const extensions = [...tiptapExtensions, createIdExtension(spaceId)];
 
   useInterceptEditorLinks(spaceId);
 
@@ -52,7 +54,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       immediatelyRender: false,
       onBlur: onBlur,
     },
-    [editorJson]
+    [memoizedEditorJson]
   );
 
   // We are in browse mode and there is no content.
@@ -80,12 +82,11 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     <LayoutGroup id="editor">
       <div className={editable ? 'editable' : 'not-editable'}>
         {editor ? <EditorContent editor={editor} /> : <ServerContent content={editorJson.content} />}
-
         {shouldHandleOwnSpacing && <Spacer height={60} />}
       </div>
     </LayoutGroup>
   );
-}
+};
 
 /**
  * Sets up listeners to intercept clicks on links on entity pages and redirect them to the
