@@ -63,10 +63,17 @@ export function useCollection() {
     })
     .filter(item => item !== undefined);
 
+  // Don't show loading if we already have data and are just refetching
+  const hasExistingData = orderedCollectionItems.length > 0 || collectionRelations.length > 0;
+  const isLoading = (isCollectionItemsLoading || isCollectionRelationsLoading) && !hasExistingData;
+
+  console.log('Collection items:', orderedCollectionItems);
+  console.log('isLoading', isLoading);
+
   return {
     collectionItems: orderedCollectionItems,
     collectionRelations,
-    isLoading: isCollectionItemsLoading || isCollectionRelationsLoading,
-    isFetched: !isCollectionItemsLoading && !isCollectionRelationsLoading,
+    isLoading,
+    isFetched: hasExistingData && !isLoading,
   };
 }
