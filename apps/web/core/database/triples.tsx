@@ -48,7 +48,7 @@ function getLocalOpsAtomWithSelector(args: UseTriplesArgs) {
   return newAtom;
 }
 
-export function useTriples(args?: UseTriplesArgs) {
+export function useTriples(args?: UseTriplesArgs): StoredTriple[] {
   const stableArgs = React.useRef<UseTriplesArgs>({
     selector: args?.selector,
     includeDeleted: args?.includeDeleted ?? false,
@@ -66,9 +66,9 @@ export function useTriples(args?: UseTriplesArgs) {
     [stableArgs.selector, stableArgs.includeDeleted, JSON.stringify(stableArgs.mergeWith)]
   );
 
-  return useAtomValue(atom) as ITriple[];
+  return useAtomValue(atom) as StoredTriple[];
 }
 
-export function getTriples(args: UseTriplesArgs) {
-  return store.get(getLocalOpsAtomWithSelector(args)) as ITriple[];
+export function getTriples(args: UseTriplesArgs): StoredTriple[] {
+  return store.get(getLocalOpsAtomWithSelector(args)) as StoredTriple[];
 }

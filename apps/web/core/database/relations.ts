@@ -46,7 +46,7 @@ function getRelationsAtomWithSelector(args: UseRelationsArgs) {
   return newAtom;
 }
 
-export function useRelations(args: UseRelationsArgs) {
+export function useRelations(args: UseRelationsArgs): Relation[] {
   const stableArgs = React.useRef<UseRelationsArgs>({
     selector: args?.selector,
     includeDeleted: args?.includeDeleted ?? false,
@@ -67,6 +67,6 @@ export function useRelations(args: UseRelationsArgs) {
   return useAtomValue(atom) as Relation[];
 }
 
-export function getRelations(args: UseRelationsArgs) {
-  return store.get(getRelationsAtomWithSelector(args));
+export function getRelations(args: UseRelationsArgs): Relation[] {
+  return store.get(getRelationsAtomWithSelector(args)) as Relation[];
 }

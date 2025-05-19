@@ -2,8 +2,6 @@ import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
 import Link from 'next/link';
 
-import { Fragment } from 'react';
-
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { editEvent } from '~/core/events/edit-events';
@@ -11,7 +9,6 @@ import { PropertyId } from '~/core/hooks/use-properties';
 import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
-import { Divider } from '~/design-system/divider';
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
 
@@ -86,7 +83,7 @@ export function TableBlockListItem({
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
-        <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
+        <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-[0.625rem] bg-grey-01">
           {image ? (
             <NextImage
               src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
@@ -172,7 +169,7 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="w-full space-y-4">
+        <div className="w-full space-y-3">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
             {isPlaceholder && source.type === 'COLLECTION' ? (
@@ -301,7 +298,6 @@ export function TableBlockListItem({
               </>
             )}
           </div>
-          <Divider type="horizontal" style="dashed" />
           <div>
             <div className="text-metadata text-grey-04">Description</div>
             <PageStringField
@@ -341,8 +337,7 @@ export function TableBlockListItem({
 
           {otherPropertyData.map(p => {
             return (
-              <Fragment key={p.slotId}>
-                <Divider type="horizontal" style="dashed" />
+              <>
                 <div key={p.slotId}>
                   <TableBlockPropertyField
                     key={p.slotId}
@@ -354,7 +349,7 @@ export function TableBlockListItem({
                     source={source}
                   />
                 </div>
-              </Fragment>
+              </>
             );
           })}
         </div>
@@ -377,7 +372,9 @@ export function TableBlockListItem({
       </div>
       <div className="w-full">
         {source.type !== 'COLLECTION' ? (
-          <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
+          <Link href={href} className="text-smallTitle font-medium text-text">
+            {name || rowEntityId}
+          </Link>
         ) : (
           <CollectionMetadata
             view="LIST"
@@ -391,7 +388,9 @@ export function TableBlockListItem({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
+            <Link href={href} className="text-smallTitle font-medium text-text">
+              {name || rowEntityId}
+            </Link>
           </CollectionMetadata>
         )}
         {description && <div className="line-clamp-4 text-metadata text-text md:line-clamp-3">{description}</div>}
