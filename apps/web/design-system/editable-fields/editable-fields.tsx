@@ -171,7 +171,7 @@ export function BlockImageField({ imageSrc, onImageChange, onImageRemove, varian
       ) : null}
 
       <div className="absolute h-full w-full">
-        <img src={placeholderImage} className="h-full w-full object-cover" />
+        <img src={placeholderImage} className="h-full w-full overflow-visible object-cover" />
       </div>
 
       <div className="z-10 flex h-full w-full items-center justify-center">
