@@ -67,9 +67,6 @@ export function useCollection() {
   const hasExistingData = orderedCollectionItems.length > 0 || collectionRelations.length > 0;
   const isLoading = (isCollectionItemsLoading || isCollectionRelationsLoading) && !hasExistingData;
 
-  console.log('Collection items:', orderedCollectionItems);
-  console.log('isLoading', isLoading);
-
   return {
     collectionItems: orderedCollectionItems,
     collectionRelations,
