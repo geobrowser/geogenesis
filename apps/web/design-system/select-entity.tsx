@@ -730,94 +730,92 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
           <Input value={query} onChange={e => onQueryChange(e.target.value)} />
         </Popover.Anchor>
         {query && (
-          <Popover.Portal forceMount>
-            <Popover.Content
-              onOpenAutoFocus={event => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
-              forceMount
-            >
-              <div className="pt-1">
-                <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
-                  <ResizableContainer>
-                    <ResultsList>
-                      {!results?.length && isLoading && (
-                        <div className="w-full border-b border-divider bg-white px-3 py-2">
-                          <div className="truncate text-button text-text">Loading...</div>
-                        </div>
-                      )}
-                      {isEmpty ? (
-                        <div className="w-full border-b border-divider bg-white px-3 py-2">
-                          <div className="truncate text-button text-text">No results.</div>
-                        </div>
-                      ) : (
-                        <>
-                          {results.map((result, index) => (
-                            <ResultItem key={index}>
-                              <button
-                                onClick={() => {
-                                  onSelect({
-                                    id: result.id,
-                                    name: result.name,
-                                  });
-                                  onQueryChange('');
-                                }}
-                                className="relative z-10 flex w-full flex-col transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
-                              >
-                                <div className="relative w-full">
-                                  <div className="relative z-0 max-w-full truncate text-button text-text">
-                                    {result.name}
-                                  </div>
+          <Popover.Content
+            onOpenAutoFocus={event => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+            forceMount
+          >
+            <div className="pt-1">
+              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+                <ResizableContainer>
+                  <ResultsList>
+                    {!results?.length && isLoading && (
+                      <div className="w-full border-b border-divider bg-white px-3 py-2">
+                        <div className="truncate text-button text-text">Loading...</div>
+                      </div>
+                    )}
+                    {isEmpty ? (
+                      <div className="w-full border-b border-divider bg-white px-3 py-2">
+                        <div className="truncate text-button text-text">No results.</div>
+                      </div>
+                    ) : (
+                      <>
+                        {results.map((result, index) => (
+                          <ResultItem key={index}>
+                            <button
+                              onClick={() => {
+                                onSelect({
+                                  id: result.id,
+                                  name: result.name,
+                                });
+                                onQueryChange('');
+                              }}
+                              className="relative z-10 flex w-full flex-col transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
+                            >
+                              <div className="relative w-full">
+                                <div className="relative z-0 max-w-full truncate text-button text-text">
+                                  {result.name}
                                 </div>
-                                {result.types.length > 0 && (
-                                  <>
-                                    <Spacer height={4} />
-                                    <div className="flex items-center gap-1.5">
-                                      {result.types.map(type => (
-                                        <Tag key={type.id}>{type.name}</Tag>
-                                      ))}
-                                    </div>
-                                  </>
-                                )}
-                                {result.description && (
-                                  <>
-                                    <Spacer height={4} />
-                                    <Truncate maxLines={3} shouldTruncate variant="footnote">
-                                      <p className="text-footnote text-grey-04">{result.description}</p>
-                                    </Truncate>
-                                  </>
-                                )}
-
-                                <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
-                                  <div className="inline-flex gap-0">
-                                    {(result.spaces ?? []).slice(0, 3).map(space => (
-                                      <div
-                                        key={space.spaceId}
-                                        className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
-                                      >
-                                        <img
-                                          src={getImagePath(space.image)}
-                                          alt=""
-                                          className="h-full w-full object-cover"
-                                        />
-                                      </div>
+                              </div>
+                              {result.types.length > 0 && (
+                                <>
+                                  <Spacer height={4} />
+                                  <div className="flex items-center gap-1.5">
+                                    {result.types.map(type => (
+                                      <Tag key={type.id}>{type.name}</Tag>
                                     ))}
                                   </div>
-                                  {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
+                                </>
+                              )}
+                              {result.description && (
+                                <>
+                                  <Spacer height={4} />
+                                  <Truncate maxLines={3} shouldTruncate variant="footnote">
+                                    <p className="text-footnote text-grey-04">{result.description}</p>
+                                  </Truncate>
+                                </>
+                              )}
+
+                              <div className="mt-1 inline-flex items-center gap-1 text-footnoteMedium text-grey-04">
+                                <div className="inline-flex gap-0">
+                                  {(result.spaces ?? []).slice(0, 3).map(space => (
+                                    <div
+                                      key={space.spaceId}
+                                      className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
+                                    >
+                                      <img
+                                        src={getImagePath(space.image)}
+                                        alt=""
+                                        className="h-full w-full object-cover"
+                                      />
+                                    </div>
+                                  ))}
                                 </div>
-                              </button>
-                            </ResultItem>
-                          ))}
-                        </>
-                      )}
-                    </ResultsList>
-                  </ResizableContainer>
-                </div>
+                                {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
+                              </div>
+                            </button>
+                          </ResultItem>
+                        ))}
+                      </>
+                    )}
+                  </ResultsList>
+                </ResizableContainer>
               </div>
-            </Popover.Content>
-          </Popover.Portal>
+            </div>
+          </Popover.Content>
         )}
       </Popover.Root>
     </div>

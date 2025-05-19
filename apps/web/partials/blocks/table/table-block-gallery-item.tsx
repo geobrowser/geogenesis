@@ -319,7 +319,6 @@ export function TableBlockGalleryItem({
           {otherPropertyData.map(p => {
             return (
               <>
-                <Divider type="horizontal" style="dashed" />
                 <div key={p.slotId}>
                   <TableBlockPropertyField
                     key={p.slotId}

@@ -309,9 +309,9 @@ export const TableBlock = ({ spaceId }: Props) => {
     />
   );
 
-  if (view === 'LIST') {
+  if (view === 'LIST' && entries.length > 0) {
     EntriesComponent = (
-      <div className="flex w-full flex-col space-y-4">
+      <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
         {entries.map((row, index: number) => {
           return (
             <TableBlockListItem
@@ -333,7 +333,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     );
   }
 
-  if (view === 'BULLETED_LIST') {
+  if (view === 'BULLETED_LIST' && entries.length > 0) {
     EntriesComponent = (
       <div className="flex w-full flex-col">
         {entries.map((row, index: number) => {
@@ -357,7 +357,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     );
   }
 
-  if (view === 'GALLERY') {
+  if (view === 'GALLERY' && entries.length > 0) {
     EntriesComponent = (
       <div className="grid grid-cols-3 gap-x-4 gap-y-10 sm:grid-cols-2">
         {entries.map((row, index: number) => {
