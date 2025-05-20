@@ -79,7 +79,6 @@ const SubstreamTimeValue = Schema.Struct({
   textValue: Schema.String,
   formatOption: Schema.NullOr(Schema.String),
   languageOption: Schema.NullOr(Schema.String),
-  unitOption: Schema.NullOr(Schema.String),
 });
 
 type SubstreamTimeValue = Schema.Schema.Type<typeof SubstreamTimeValue>;
@@ -97,6 +96,7 @@ const SubstreamNumberValue = Schema.Struct({
   valueType: Schema.Literal('NUMBER'),
   textValue: Schema.String,
   formatOption: Schema.NullOr(Schema.String),
+  unitOption: Schema.NullOr(Schema.String),
 });
 
 type SubstreamNumberValue = Schema.Schema.Type<typeof SubstreamNumberValue>;
