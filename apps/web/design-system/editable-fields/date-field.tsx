@@ -224,6 +224,15 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (!regex.test(value)) return;
     if (value.length > 2) return;
     setDay(value);
+
+    // Auto-focus to hour field when 2 digits are entered for day
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (hourInputRef.current) {
+          hourInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const onMonthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -233,6 +242,15 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (!regex.test(value)) return;
     if (value.length > 2) return;
     setMonth(value);
+
+    // Auto-focus to day field when 2 digits are entered for month
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (dayInputRef.current) {
+          dayInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const onYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,6 +260,15 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (!regex.test(value)) return;
     if (value.length > 4) return;
     setYear(value);
+
+    // Auto-focus to month field when 4 digits are entered for year
+    if (value.length === 4) {
+      queueMicrotask(() => {
+        if (monthInputRef.current) {
+          monthInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const onMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -250,8 +277,16 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
     if (!regex.test(value)) return;
     if (value.length > 2) return;
-
     setMinute(value);
+
+    // Auto-focus to meridiem button when 2 digits are entered for minute
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (meridiemButtonRef.current) {
+          meridiemButtonRef.current.focus();
+        }
+      });
+    }
   };
 
   const onHourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -260,8 +295,16 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
     if (!regex.test(value)) return;
     if (value.length > 2) return;
-
     setHour(value);
+
+    // Auto-focus to minute field when 2 digits are entered for hour
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (minuteInputRef.current) {
+          minuteInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const updateDate = (meridiem: 'am' | 'pm') => {
@@ -327,6 +370,46 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
   const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
   const isValidYear = year.value === '' || (!year.isValidating && year.isValid);
 
+  // Create refs for all input fields
+  const yearInputRef = React.useRef<HTMLInputElement>(null);
+  const monthInputRef = React.useRef<HTMLInputElement>(null);
+  const dayInputRef = React.useRef<HTMLInputElement>(null);
+  const hourInputRef = React.useRef<HTMLInputElement>(null);
+  const minuteInputRef = React.useRef<HTMLInputElement>(null);
+  const meridiemButtonRef = React.useRef<HTMLButtonElement>(null);
+
+  // Add hook to select all text when input receives focus
+  React.useEffect(() => {
+    const selectAllOnFocus = (event: FocusEvent) => {
+      const input = event.target as HTMLInputElement;
+      if (input.type === 'text' || input.type === '') {
+        queueMicrotask(() => {
+          input.select();
+        });
+      }
+    };
+
+    const yearInput = yearInputRef.current;
+    const monthInput = monthInputRef.current;
+    const dayInput = dayInputRef.current;
+    const hourInput = hourInputRef.current;
+    const minuteInput = minuteInputRef.current;
+
+    if (yearInput) yearInput.addEventListener('focus', selectAllOnFocus);
+    if (monthInput) monthInput.addEventListener('focus', selectAllOnFocus);
+    if (dayInput) dayInput.addEventListener('focus', selectAllOnFocus);
+    if (hourInput) hourInput.addEventListener('focus', selectAllOnFocus);
+    if (minuteInput) minuteInput.addEventListener('focus', selectAllOnFocus);
+
+    return () => {
+      if (yearInput) yearInput.removeEventListener('focus', selectAllOnFocus);
+      if (monthInput) monthInput.removeEventListener('focus', selectAllOnFocus);
+      if (dayInput) dayInput.removeEventListener('focus', selectAllOnFocus);
+      if (hourInput) hourInput.removeEventListener('focus', selectAllOnFocus);
+      if (minuteInput) minuteInput.removeEventListener('focus', selectAllOnFocus);
+    };
+  }, []);
+
   return (
     <div className="flex flex-col">
       {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
@@ -334,6 +417,7 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
         <div className="flex w-[136px] items-center gap-1">
           <div className="flex flex-[6] flex-col">
             <input
+              ref={yearInputRef}
               value={year.value}
               onChange={onYearChange}
               onBlur={() => updateDate(meridiem)}
@@ -346,6 +430,7 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
           <div className="flex flex-[4] flex-col">
             <input
+              ref={monthInputRef}
               value={month.value}
               onChange={onMonthChange}
               onBlur={() => updateDate(meridiem)}
@@ -361,6 +446,7 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
           <div className="flex flex-[4] flex-col">
             <input
+              ref={dayInputRef}
               value={day.value}
               onChange={onDayChange}
               onBlur={() => updateDate(meridiem)}
@@ -377,6 +463,7 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
           <Spacer width={14} />
           <div className="flex items-center gap-1">
             <input
+              ref={hourInputRef}
               value={hour.value}
               onChange={onHourChange}
               onBlur={() => updateDate(meridiem)}
@@ -386,6 +473,7 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
             <span>:</span>
             <input
+              ref={minuteInputRef}
               value={minute.value}
               onChange={onMinuteChange}
               onBlur={() => updateDate(meridiem)}
@@ -396,7 +484,12 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
           <Spacer width={12} />
           <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
-            <SmallButton onClick={() => onToggleMeridiem()} variant="secondary" className="whitespace-nowrap uppercase">
+            <SmallButton
+              ref={meridiemButtonRef}
+              onClick={() => onToggleMeridiem()}
+              variant="secondary"
+              className="whitespace-nowrap uppercase"
+            >
               {meridiem}
             </SmallButton>
           </motion.div>
