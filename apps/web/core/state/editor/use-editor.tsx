@@ -278,7 +278,23 @@ export function useEditorStore() {
         /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
         const isSSR = typeof window === 'undefined';
         const json = isSSR ? generateServerJSON(html, tiptapExtensions) : generateJSON(html, tiptapExtensions);
-        const nodeData = json.content[0];
+
+        function mergeListItems(node: {
+          content?: Array<{
+            type: string;
+            content?: Array<any>;
+          }>;
+        }) {
+          if (node?.content && node?.content?.length > 1) {
+            const firstNode = node?.content?.[0];
+            if (firstNode?.content?.[0]?.content) {
+              firstNode.content[0].content.push(...node.content.slice(1));
+            }
+          }
+          return node;
+        }
+
+        const nodeData = json.content.length === 1 ? json.content[0] : mergeListItems(json)?.content?.[0]
 
         return {
           ...nodeData,
