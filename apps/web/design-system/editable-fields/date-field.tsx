@@ -225,6 +225,9 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (value.length > 2) return;
     setDay(value);
 
+    // Reset touched state when editing
+    setDayTouched(false);
+
     // Auto-focus to hour field when 2 digits are entered for day
     if (value.length === 2) {
       queueMicrotask(() => {
@@ -242,6 +245,9 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (!regex.test(value)) return;
     if (value.length > 2) return;
     setMonth(value);
+
+    // Reset touched state when editing
+    setMonthTouched(false);
 
     // Auto-focus to day field when 2 digits are entered for month
     if (value.length === 2) {
@@ -261,6 +267,9 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (value.length > 4) return;
     setYear(value);
 
+    // Reset touched state when editing
+    setYearTouched(false);
+
     // Auto-focus to month field when 4 digits are entered for year
     if (value.length === 4) {
       queueMicrotask(() => {
@@ -279,6 +288,9 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (value.length > 2) return;
     setMinute(value);
 
+    // Reset touched state when editing
+    setMinuteTouched(false);
+
     // Auto-focus to meridiem button when 2 digits are entered for minute
     if (value.length === 2) {
       queueMicrotask(() => {
@@ -296,6 +308,9 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (!regex.test(value)) return;
     if (value.length > 2) return;
     setHour(value);
+
+    // Reset touched state when editing
+    setHourTouched(false);
 
     // Auto-focus to minute field when 2 digits are entered for hour
     if (value.length === 2) {
@@ -364,11 +379,42 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     }
   };
 
-  const isValidHour = hour.value === '' || (!hour.isValidating && hour.isValid);
-  const isValidMinute = minute.value === '' || (!minute.isValidating && minute.isValid);
-  const isValidDay = day.value === '' || (!day.isValidating && day.isValid);
-  const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
-  const isValidYear = year.value === '' || (!year.isValidating && year.isValid);
+  const VALID_YEAR_LENGTH = 4;
+  const VALID_MONTH_LENGTH = 2;
+  const VALID_DAY_LENGTH = 2;
+  const VALID_HOUR_LENGTH = 2;
+  const VALID_MINUTE_LENGTH = 2;
+
+  // Modify isValid checks to only validate if the field has been touched (blurred) or has a complete value
+  const [yearTouched, setYearTouched] = React.useState(false);
+  const [monthTouched, setMonthTouched] = React.useState(false);
+  const [dayTouched, setDayTouched] = React.useState(false);
+  const [hourTouched, setHourTouched] = React.useState(false);
+  const [minuteTouched, setMinuteTouched] = React.useState(false);
+
+  const isValidYear =
+    year.value === '' ||
+    (!year.isValidating && year.isValid) ||
+    (!yearTouched && year.value.length < VALID_YEAR_LENGTH);
+
+  const isValidMonth =
+    month.value === '' ||
+    (!month.isValidating && month.isValid) ||
+    (!monthTouched && month.value.length < VALID_MONTH_LENGTH) ||
+    !dateFormState.isValid;
+
+  const isValidDay =
+    day.value === '' || (!day.isValidating && day.isValid) || (!dayTouched && day.value.length < VALID_DAY_LENGTH);
+
+  const isValidHour =
+    hour.value === '' ||
+    (!hour.isValidating && hour.isValid) ||
+    (!hourTouched && hour.value.length < VALID_HOUR_LENGTH);
+
+  const isValidMinute =
+    minute.value === '' ||
+    (!minute.isValidating && minute.isValid) ||
+    (!minuteTouched && minute.value.length < VALID_MINUTE_LENGTH);
 
   // Create refs for all input fields
   const yearInputRef = React.useRef<HTMLInputElement>(null);
@@ -420,7 +466,10 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
               ref={yearInputRef}
               value={year.value}
               onChange={onYearChange}
-              onBlur={() => updateDate(meridiem)}
+              onBlur={() => {
+                setYearTouched(true);
+                updateDate(meridiem);
+              }}
               placeholder="YYYY"
               className={`${dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
             />
@@ -433,7 +482,10 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
               ref={monthInputRef}
               value={month.value}
               onChange={onMonthChange}
-              onBlur={() => updateDate(meridiem)}
+              onBlur={() => {
+                setMonthTouched(true);
+                updateDate(meridiem);
+              }}
               placeholder="MM"
               className={dateFieldStyles({
                 variant,
@@ -449,7 +501,10 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
               ref={dayInputRef}
               value={day.value}
               onChange={onDayChange}
-              onBlur={() => updateDate(meridiem)}
+              onBlur={() => {
+                setDayTouched(true);
+                updateDate(meridiem);
+              }}
               placeholder="DD"
               className={dateFieldStyles({
                 variant,
@@ -466,7 +521,10 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
               ref={hourInputRef}
               value={hour.value}
               onChange={onHourChange}
-              onBlur={() => updateDate(meridiem)}
+              onBlur={() => {
+                setHourTouched(true);
+                updateDate(meridiem);
+              }}
               placeholder="00"
               className={timeStyles({ variant, error: !isValidHour || !timeFormState.isValid })}
             />
@@ -476,7 +534,10 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
               ref={minuteInputRef}
               value={minute.value}
               onChange={onMinuteChange}
-              onBlur={() => updateDate(meridiem)}
+              onBlur={() => {
+                setMinuteTouched(true);
+                updateDate(meridiem);
+              }}
               placeholder="00"
               className={timeStyles({ variant, error: !isValidMinute || !timeFormState.isValid })}
             />
