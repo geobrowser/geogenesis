@@ -13,14 +13,16 @@ type Props = {
   format?: string;
   unitId?: string;
   isEditing?: boolean;
-  variant?: 'body' | 'tableCell';
+  variant?: 'body' | 'tableCell' | 'tableProperty';
+  className?: string;
 };
 
-const numberFieldStyles = cva('text-text', {
+const numberFieldStyles = cva('', {
   variants: {
     variant: {
-      body: 'text-body',
-      tableCell: 'text-tableCell',
+      body: 'text-body text-text',
+      tableCell: 'text-tableCell text-text',
+      tableProperty: '!text-tableProperty !text-grey-04',
     },
   },
   defaultVariants: {
@@ -36,6 +38,7 @@ export function NumberField({
   placeholder = 'Add value...',
   isEditing = false,
   variant,
+  className = '',
 }: Props) {
   const [localValue, setLocalValue] = React.useState(value || '');
 
@@ -52,7 +55,9 @@ export function NumberField({
   );
 
   if (!isEditing) {
-    return <span className={numberFieldStyles({ variant })}>{GeoNumber.format(value, format, currencySign)}</span>;
+    return (
+      <span className={numberFieldStyles({ variant, className })}>{GeoNumber.format(value, format, currencySign)}</span>
+    );
   }
 
   if (isEditing && !onChange) {
