@@ -2,8 +2,6 @@ import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { useQuery } from '@tanstack/react-query';
 import { pipe } from 'effect';
 
-import * as React from 'react';
-
 import { EntityId } from '~/core/io/schema';
 
 import { sortRenderables } from '~/partials/entity-page/entity-page-utils';
@@ -15,6 +13,8 @@ import { PropertySchema, RenderableProperty, Triple, ValueTypeId } from '../type
 import { toRenderables } from '../utils/to-renderables';
 import { groupBy } from '../utils/utils';
 import { useUserIsEditing } from './use-user-is-editing';
+import { atom, useAtom } from 'jotai';
+import { atomFamily } from 'jotai/utils';
 
 /**
  * When rendering the underlying data for Properties we map them to a shared data structure
@@ -30,10 +30,12 @@ import { useUserIsEditing } from './use-user-is-editing';
 export function useRenderables(serverTriples: Triple[], spaceId: string, isRelationPage?: boolean) {
   const findMany = useQueryEntitiesAsync();
   const isEditing = useUserIsEditing(spaceId);
-  const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
-    usePlaceholderRenderables();
-
   const { triples: localTriples, relations, schema, name, id } = useEntityPageStore();
+  
+  // Scope the placeholder renderables to the entityId so that we don't have to worry about
+  // them being shared across different entities.
+  const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
+    usePlaceholderRenderables(EntityId(id));
 
   const triplesFromSpace = useTriples({
     selector: t => t.space === spaceId,
@@ -130,8 +132,13 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
   };
 }
 
-function usePlaceholderRenderables() {
-  const [placeholderRenderables, setPlaceholderRenderables] = React.useState<RenderableProperty[]>([]);
+const placeholderRenderablesAtomFamily = atomFamily(
+  (entityId: EntityId) => atom<RenderableProperty[]>([]),
+  (a, b) => a === b
+);
+
+function usePlaceholderRenderables(entityId: EntityId) {
+  const [placeholderRenderables, setPlaceholderRenderables] = useAtom(placeholderRenderablesAtomFamily(entityId));
 
   const onAddPlaceholderRenderable = (renderable: RenderableProperty) => {
     const newPlaceholders = placeholderRenderables.filter(r => r.attributeId !== renderable.attributeId);
