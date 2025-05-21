@@ -38,12 +38,10 @@ import { HistoryPanel } from '../history/history-panel';
 export function EditableSpaceHeading({
   spaceId,
   entityId,
-  spaceName,
   addSubspaceComponent,
 }: {
   spaceId: string;
   entityId: string;
-  spaceName?: string;
   addSubspaceComponent?: React.ReactElement<any>;
 }) {
   const { name } = useEntityPageStore();
@@ -187,7 +185,7 @@ export function EditableSpaceHeading({
             {isCreatingNewVersion && (
               <CreateNewVersionInSpace
                 entityId={entityId as EntityId}
-                entityName={spaceName}
+                entityName={name ?? ''}
                 setIsCreatingNewVersion={setIsCreatingNewVersion}
                 onDone={() => {
                   setIsContextMenuOpen(false);

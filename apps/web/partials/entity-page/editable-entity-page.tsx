@@ -315,12 +315,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
         const renderableType = r.type;
         const relationValue = r.value;
 
-        // Skip rendering placeholder relations of type RELATION
-        // This prevents the property itself from being displayed for placeholder relations
-        // if (renderableType === 'RELATION' && r.placeholder === true) {
-        //   return null;
-        // }
-
         if (renderableType === 'IMAGE' && r.placeholder === true) {
           return (
             <div key={`relation-upload-image-${relationId}`}>

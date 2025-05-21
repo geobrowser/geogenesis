@@ -79,7 +79,6 @@ export default async function Layout(props0: LayoutProps) {
             <EditableSpaceHeading
               spaceId={props.spaceId}
               entityId={props.id}
-              spaceName={props.name ?? ''}
               addSubspaceComponent={
                 <AddSubspaceDialog
                   spaceId={spaceId}
