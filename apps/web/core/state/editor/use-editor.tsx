@@ -312,8 +312,6 @@ export function useEditorStore() {
     (json: JSONContent) => {
       const { content = [] } = json;
 
-      console.log('upsertEditorState', content);
-
       const populatedContent = content.filter(node => {
         const isNonParagraph = node.type !== 'paragraph';
         const isParagraphWithContent =

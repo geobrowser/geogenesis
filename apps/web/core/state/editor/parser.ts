@@ -180,11 +180,6 @@ export function markdownToHtml(markdown: string): string {
     return text;
   }
   
-  function getIndentLevel(line: string): number {
-    const match = line.match(/^(\s*)/);
-    return match ? match[1].length : 0;
-  }
-  
   function closeListsToDepth(targetDepth: number) {
     while (listStack.length > 0 && listStack[listStack.length - 1].depth > targetDepth) {
       const list = listStack.pop()!;
