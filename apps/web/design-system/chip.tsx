@@ -43,16 +43,18 @@ export function LinkableChip({ href, children }: LinkableChipProps) {
   );
 }
 
-interface LinkableRelationChipProps {
+type LinkableRelationChipProps = {
   entityHref: string;
   isEditing: boolean;
   relationHref: string;
   onDelete?: () => void;
+  small?: boolean;
+  className?: string;
   children: React.ReactNode;
-}
+};
 
 const linkableRelationChipStyles = cva(
-  'group inline-flex items-center break-words rounded border border-grey-02 bg-white py-0.5 pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  'group inline-flex items-center break-words rounded border border-grey-02 bg-white pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
       shouldClamp: {
@@ -67,6 +69,10 @@ const linkableRelationChipStyles = cva(
       },
       isDeleteHovered: {
         true: '!border-text !text-text',
+      },
+      small: {
+        true: 'py-px',
+        false: 'py-0.5',
       },
     },
     defaultVariants: {
@@ -151,6 +157,8 @@ export function LinkableRelationChip({
   relationHref,
   children,
   onDelete,
+  small = false,
+  className = '',
 }: LinkableRelationChipProps) {
   const [isDotsHovered, setIsDotsHovered] = useState(false);
   const [isRelationHovered, setIsRelationHovered] = useState(false);
@@ -165,6 +173,8 @@ export function LinkableRelationChip({
         isDotsHovered,
         isRelationHovered,
         isDeleteHovered,
+        small,
+        className,
       })}
     >
       <Link href={entityHref}>{children}</Link>

@@ -12,7 +12,6 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Divider } from '~/design-system/divider';
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
-import { Spacer } from '~/design-system/spacer';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
@@ -85,7 +84,7 @@ export function TableBlockListItem({
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
-        <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-lg bg-grey-01">
+        <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-[0.625rem] bg-grey-01">
           {image ? (
             <NextImage
               src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
@@ -171,7 +170,7 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="w-full space-y-4">
+        <div className="w-full space-y-3">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
             {isPlaceholder && source.type === 'COLLECTION' ? (
@@ -300,7 +299,6 @@ export function TableBlockListItem({
               </>
             )}
           </div>
-          <Divider type="horizontal" style="dashed" />
           <div>
             <div className="text-metadata text-grey-04">Description</div>
             <PageStringField
@@ -341,7 +339,6 @@ export function TableBlockListItem({
           {otherPropertyData.map(p => {
             return (
               <>
-                <Divider type="horizontal" style="dashed" />
                 <div key={p.slotId}>
                   <TableBlockPropertyField
                     key={p.slotId}
@@ -397,14 +394,11 @@ export function TableBlockListItem({
             </Link>
           </CollectionMetadata>
         )}
-        {description && (
-          <div className="mt-0.5 line-clamp-4 text-metadata text-grey-04 md:line-clamp-3">{description}</div>
-        )}
+        {description && <div className="line-clamp-4 text-metadata text-text md:line-clamp-3">{description}</div>}
 
         {otherPropertyData.map(p => {
           return (
             <div key={`${p.slotId}-${cellId}`}>
-              <Spacer height={12} />
               <TableBlockPropertyField
                 key={p.slotId}
                 renderables={p.renderables.filter(r => Boolean(r.placeholder) === false)}

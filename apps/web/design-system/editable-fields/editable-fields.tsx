@@ -24,6 +24,7 @@ const textareaStyles = cva(
         mainPage: 'mb-[-1px] text-mainPage',
         body: 'mb-[-6.5px] text-body',
         tableCell: 'mb-[-3.5px] text-tableCell',
+        tableProperty: '!text-tableProperty !text-grey-04',
         smallTitle: 'text-smallTitle',
       },
     },
@@ -33,13 +34,14 @@ const textareaStyles = cva(
   }
 );
 
-interface TableStringFieldProps {
+type TableStringFieldProps = {
   onChange: (value: string) => void;
   placeholder?: string;
   value?: string;
-}
+  variant?: 'tableCell' | 'tableProperty';
+};
 
-export function TableStringField({ ...props }: TableStringFieldProps) {
+export function TableStringField({ variant = 'tableCell', ...props }: TableStringFieldProps) {
   const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
     callback: props.onChange,
     delay: 1000,
@@ -51,7 +53,7 @@ export function TableStringField({ ...props }: TableStringFieldProps) {
       {...props}
       onChange={e => setLocalValue(e.currentTarget.value)}
       value={localValue}
-      className={textareaStyles({ variant: 'tableCell' })}
+      className={textareaStyles({ variant })}
     />
   );
 }
@@ -169,7 +171,7 @@ export function BlockImageField({ imageSrc, onImageChange, onImageRemove, varian
       ) : null}
 
       <div className="absolute h-full w-full">
-        <img src={placeholderImage} className="h-full w-full object-cover" />
+        <img src={placeholderImage} className="h-full w-full overflow-visible object-cover" />
       </div>
 
       <div className="z-10 flex h-full w-full items-center justify-center">

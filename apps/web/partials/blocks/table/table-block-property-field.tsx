@@ -1,11 +1,13 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import cx from 'classnames';
+
+import type { ReactNode } from 'react';
+import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { EditEvent, EditEventContext, editEvent, useEditEvents } from '~/core/events/edit-events';
+import { editEvent, useEditEvents } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { SearchResult } from '~/core/io/dto/search';
-import { EntityId } from '~/core/io/schema';
 import { PropertySchema, RelationRenderableProperty, RenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -64,8 +66,8 @@ export function TableBlockPropertyField(props: {
                 case 'NUMBER':
                   return (
                     <NumberField
-                      variant="tableCell"
                       key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                      variant="tableCell"
                       value={renderable.value}
                       unitId={renderable.options?.unit}
                       format={renderable.options?.format}
@@ -102,6 +104,7 @@ export function TableBlockPropertyField(props: {
                   return (
                     <TableStringField
                       key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                      variant="tableCell"
                       placeholder="Add value..."
                       value={renderable.value}
                       onChange={value => {
@@ -197,6 +200,7 @@ export function TableBlockPropertyField(props: {
                   return (
                     <WebUrlField
                       key={renderable.attributeId}
+                      variant="tableCell"
                       placeholder="Add a URI"
                       isEditing={true}
                       spaceId={spaceId}
@@ -234,68 +238,138 @@ export function TableBlockPropertyField(props: {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {props.renderables.map(renderable => {
-        switch (renderable.type) {
-          case 'TEXT':
-            return (
-              <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-                {renderable.value}
-              </Text>
-            );
-          case 'NUMBER':
-            return (
-              <NumberField
-                variant="tableCell"
-                key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
-                value={renderable.value}
-                format={renderable.options?.format}
-                unitId={renderable.options?.unit}
-                isEditing={false}
-              />
-            );
-          case 'CHECKBOX': {
-            const checked = getChecked(renderable.value);
-            return <Checkbox key={`checkbox-${renderable.attributeId}-${renderable.value}`} checked={checked} />;
+    <div>
+      {props.renderables
+        .filter(r => !!r.value)
+        .map(renderable => {
+          switch (renderable.type) {
+            case 'TEXT':
+              return (
+                <Property
+                  key={`string-${renderable.attributeId}-${renderable.value}`}
+                  renderable={renderable}
+                  className="mt-1"
+                >
+                  <Text variant="tableProperty" color="grey-04" as="p">
+                    {renderable.value}
+                  </Text>
+                </Property>
+              );
+            case 'NUMBER':
+              return (
+                <Property
+                  key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                  renderable={renderable}
+                  className="mt-1"
+                >
+                  <NumberField
+                    variant="tableProperty"
+                    value={renderable.value}
+                    format={renderable.options?.format}
+                    unitId={renderable.options?.unit}
+                    isEditing={false}
+                  />
+                </Property>
+              );
+            case 'CHECKBOX': {
+              const checked = getChecked(renderable.value);
+              return (
+                <Property
+                  key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                  renderable={renderable}
+                  className="mt-1"
+                >
+                  <Checkbox checked={checked} />
+                </Property>
+              );
+            }
+            case 'TIME': {
+              return (
+                <Property
+                  key={`time-${renderable.attributeId}-${renderable.value}`}
+                  renderable={renderable}
+                  className="mt-1"
+                >
+                  <DateField
+                    variant="tableProperty"
+                    isEditing={false}
+                    value={renderable.value}
+                    format={renderable.options?.format}
+                  />
+                </Property>
+              );
+            }
+            case 'URL': {
+              return (
+                <Property
+                  key={`uri-${renderable.attributeId}-${renderable.value}`}
+                  renderable={renderable}
+                  className="mt-1"
+                >
+                  <WebUrlField
+                    variant="tableProperty"
+                    isEditing={false}
+                    spaceId={props.spaceId}
+                    value={renderable.value}
+                  />
+                </Property>
+              );
+            }
+            case 'IMAGE':
+              // We don't support rendering images in list or gallery views except the main image
+              return null;
+            case 'RELATION':
+              return (
+                <Property
+                  key={`uri-${renderable.attributeId}-${renderable.value}`}
+                  renderable={renderable}
+                  className="mt-2"
+                >
+                  <LinkableRelationChip
+                    isEditing={false}
+                    entityHref={NavUtils.toEntity(renderable.spaceId, renderable.value)}
+                    relationHref={NavUtils.toEntity(renderable.spaceId, renderable.relationId)}
+                    small
+                  >
+                    {renderable.valueName ?? renderable.value}
+                  </LinkableRelationChip>
+                </Property>
+              );
           }
-          case 'TIME': {
-            return (
-              <DateField
-                key={`time-${renderable.attributeId}-${renderable.value}`}
-                isEditing={false}
-                value={renderable.value}
-                format={renderable.options?.format}
-              />
-            );
-          }
-          case 'URL': {
-            return (
-              <WebUrlField
-                key={`uri-${renderable.attributeId}-${renderable.value}`}
-                isEditing={false}
-                spaceId={props.spaceId}
-                value={renderable.value}
-              />
-            );
-          }
-          case 'IMAGE':
-            // We don't support rendering images in list or gallery views except the main image
-            return null;
-          case 'RELATION':
-            return (
-              <LinkableRelationChip
-                isEditing={false}
-                entityHref={NavUtils.toEntity(renderable.spaceId, renderable.value)}
-                relationHref={NavUtils.toEntity(renderable.spaceId, renderable.relationId)}
-              >
-                {renderable.valueName ?? renderable.value}
-              </LinkableRelationChip>
-            );
-        }
-      })}
+        })}
     </div>
   );
 }
+
+type PropertyProps = {
+  renderable: RenderableProperty;
+  className?: string;
+  children: ReactNode;
+};
+
+const Property = ({ renderable, className = '', children }: PropertyProps) => {
+  const [isHovered, setIsHovered] = useState<boolean>(false);
+
+  return (
+    <div
+      className={cx('relative inline-block', className)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="absolute right-0 top-0 -translate-y-full pb-1">
+        <div
+          className={cx(
+            'rounded-sm bg-black p-1 text-footnoteMedium text-white duration-300 ease-in-out',
+            isHovered ? 'opacity-100 delay-700' : 'opacity-0'
+          )}
+        >
+          {renderable.attributeName}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+};
 
 type RelationsGroupProps = {
   spaceId: string;
@@ -420,6 +494,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                 }}
                 entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
                 relationHref={NavUtils.toEntity(spaceId, relationId)}
+                small
               >
                 {relationName ?? relationValue}
               </LinkableRelationChip>

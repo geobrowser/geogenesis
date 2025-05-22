@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -158,9 +158,10 @@ type QueryEntitiesOptions = {
   enabled?: boolean;
   first?: number;
   skip?: number;
+  placeholderData?: typeof keepPreviousData;
 };
 
-export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }: QueryEntitiesOptions) {
+export function useQueryEntities({ where, first = 9, skip = 0, enabled = true, placeholderData = undefined }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
   const [localEntities, setLocalEntities] = useState<Entity[]>([]);
@@ -183,9 +184,18 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
    *
    * In the future we can decide that we want to sync more often, so we can
    * use RQ's refetch function or add a polling/refetch interval.
+   * 
+   * The placeholderData parameter allows controlling what happens during a refetch:
+   * - When set to keepPreviousData: previous data will be shown while new data is being 
+   *   fetched, preventing flickering and UI jumps
+   * - When set to undefined (default): standard loading behavior applies
+   * 
+   * To prevent flicker when adding new items to collections, callers should explicitly 
+   * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const { isFetched } = useQuery({
+  const { isFetched, isLoading } = useQuery({
     enabled,
+    placeholderData,
     queryKey: [...GeoStore.queryKeys(where), first, skip],
     queryFn: async () => {
       const entities = await E.findMany({ store, cache, where, first, skip });
@@ -193,7 +203,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
       return entities;
     },
-  });
+  });  
 
   useEffect(() => {
     if (!enabled) return;
@@ -407,7 +417,7 @@ export function useQueryEntities({ where, first = 9, skip = 0, enabled = true }:
 
   return {
     entities: localEntities,
-    isLoading: !isFetched && enabled,
+    isLoading: !isFetched && enabled && isLoading,
   };
 }
 

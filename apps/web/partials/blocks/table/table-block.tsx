@@ -113,13 +113,30 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
   const { source } = useSource();
   const { setEditable } = useEditable();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
+  const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
 
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
 
-  const renderedEntries =
-    hasPlaceholderRow && isEditing && !entries.find(e => e.entityId === nextEntityId)
-      ? [makePlaceholderRow(nextEntityId, spaceId, properties), ...entries]
-      : entries;
+  // Clear pending ID once it appears in entries
+  React.useEffect(() => {
+    if (pendingEntityId && entries.find(e => e.entityId === pendingEntityId)) {
+      setPendingEntityId(null);
+    }
+  }, [entries, pendingEntityId]);
+
+  // Show the placeholder row if we're editing and either:
+  // 1. We have hasPlaceholderRow set and no entry exists with nextEntityId
+  // 2. We have a pendingEntityId that hasn't appeared in entries yet
+  const shouldShowPlaceholder = isEditing && (
+    (hasPlaceholderRow && !entries.find(e => e.entityId === nextEntityId)) ||
+    (pendingEntityId && !entries.find(e => e.entityId === pendingEntityId))
+  );
+
+  const placeholderEntityId = pendingEntityId || nextEntityId;
+
+  const renderedEntries = shouldShowPlaceholder
+    ? [makePlaceholderRow(placeholderEntityId, spaceId, properties), ...entries]
+    : entries;
 
   const onChangeEntry: onChangeEntryFn = (context, event) => {
     if (event.type === 'EVENT') {
@@ -189,11 +206,14 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
               verified: true,
             });
           }
+
+          // Mark this ID as pending to keep the placeholder visible
+          setPendingEntityId(to.id);
         }
       }
     }
 
-    if (context.entityId === nextEntityId) {
+    if (context.entityId === nextEntityId || context.entityId === pendingEntityId) {
       setHasPlaceholderRow(false);
 
       /**
@@ -206,6 +226,9 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
        */
       if (event.type !== 'Find') {
         const maybeName = event.type === 'Create' ? event.data.name : undefined;
+
+        // Mark this ID as pending before creating
+        setPendingEntityId(context.entityId);
 
         createEntityWithTypes({
           name: maybeName,
@@ -317,9 +340,9 @@ export const TableBlock = ({ spaceId }: Props) => {
     />
   );
 
-  if (view === 'LIST') {
+  if (view === 'LIST' && entries.length > 0) {
     EntriesComponent = (
-      <div className="flex w-full flex-col space-y-4">
+      <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
         {entries.map((row, index: number) => {
           return (
             <TableBlockListItem
@@ -341,7 +364,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     );
   }
 
-  if (view === 'BULLETED_LIST') {
+  if (view === 'BULLETED_LIST' && entries.length > 0) {
     EntriesComponent = (
       <div className="flex w-full flex-col">
         {entries.map((row, index: number) => {
@@ -365,7 +388,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     );
   }
 
-  if (view === 'GALLERY') {
+  if (view === 'GALLERY' && entries.length > 0) {
     EntriesComponent = (
       <div className="grid grid-cols-3 gap-x-4 gap-y-10 sm:grid-cols-2">
         {entries.map((row, index: number) => {
