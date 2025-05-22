@@ -52,7 +52,11 @@ export function useDataBlock() {
     collectionRelations,
     isFetched: isCollectionFetched,
     isLoading: isCollectionLoading,
-  } = useCollection();
+    totalRelationsAmount,
+  } = useCollection({
+    first: PAGE_SIZE + 1,
+    skip: pageNumber * PAGE_SIZE,
+  });
 
   const where = filterStateToWhere(filterState);
 
@@ -153,6 +157,8 @@ export function useDataBlock() {
     }
   })();
 
+  const totalPages = Math.ceil(totalRelationsAmount / PAGE_SIZE);
+
   const setName = (newName: string) => {
     upsert(
       {
@@ -202,6 +208,7 @@ export function useDataBlock() {
 
     name: entity?.name ?? null,
     setName,
+    totalPages,
   };
 }
 

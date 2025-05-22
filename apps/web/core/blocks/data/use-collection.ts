@@ -6,7 +6,12 @@ import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { useDataBlockInstance } from './use-data-block';
 import { useSource } from './use-source';
 
-export function useCollection() {
+export interface CollectionProps {
+  first?: number;
+  skip?: number;
+}
+
+export function useCollection({ first, skip }: CollectionProps) {
   const { entityId, spaceId } = useDataBlockInstance();
   const { source } = useSource();
 
@@ -37,6 +42,8 @@ export function useCollection() {
         in: collectionItemIds,
       },
     },
+    first,
+    skip,
   });
 
   const { entities: collectionRelations, isLoading: isCollectionRelationsLoading } = useQueryEntities({
@@ -46,6 +53,8 @@ export function useCollection() {
         in: collectionRelationIds,
       },
     },
+    first,
+    skip,
   });
 
   /**
@@ -68,5 +77,6 @@ export function useCollection() {
     collectionRelations,
     isLoading: isCollectionItemsLoading || isCollectionRelationsLoading,
     isFetched: !isCollectionItemsLoading && !isCollectionRelationsLoading,
+    totalRelationsAmount: collectionItemsRelations.length,
   };
 }

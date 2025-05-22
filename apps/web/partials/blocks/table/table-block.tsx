@@ -27,6 +27,7 @@ import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
 import { Cell, PropertySchema, Row } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
+import { getPaginationPages } from '~/core/utils/utils';
 import { VALUE_TYPES } from '~/core/value-types';
 
 import { IconButton } from '~/design-system/button';
@@ -264,8 +265,17 @@ export const TableBlock = ({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { spaces } = useSpaces();
-  const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber, propertiesSchema } =
-    useDataBlock();
+  const {
+    properties,
+    rows,
+    setPage,
+    isLoading,
+    hasNextPage,
+    hasPreviousPage,
+    pageNumber,
+    propertiesSchema,
+    totalPages,
+  } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
@@ -292,8 +302,6 @@ export const TableBlock = ({ spaceId }: Props) => {
 
     return f;
   });
-
-  const hasPagination = hasPreviousPage || hasNextPage;
 
   let EntriesComponent = (
     <TableBlockTable
@@ -463,26 +471,23 @@ export const TableBlock = ({ spaceId }: Props) => {
         ) : (
           EntriesComponent
         )}
-        {hasPagination && (
+        {totalPages > 1 && (
           <>
-            <Spacer height={12} />
+            <Spacer height={16} />
             <PageNumberContainer>
-              {pageNumber > 1 && (
-                <>
-                  <PageNumber number={1} onClick={() => setPage(0)} />
-                  {pageNumber > 2 ? (
-                    <Text color="grey-03" variant="metadataMedium">
-                      ...
-                    </Text>
-                  ) : null}
-                </>
-              )}
-              {hasPreviousPage && <PageNumber number={pageNumber} onClick={() => setPage('previous')} />}
-              <PageNumber isActive number={pageNumber + 1} />
-              {hasNextPage && <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />}
-              <Spacer width={8} />
-              <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
-              <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
+              {getPaginationPages(totalPages).map((page, index) => {
+                return page === '...' ? (
+                  <Text color="grey-03" className="flex w-[34px] justify-center" variant="metadataMedium">
+                    ...
+                  </Text>
+                ) : (
+                  <PageNumber number={index + 1} onClick={() => setPage(index)} isActive={index === pageNumber} />
+                );
+              })}
+              <Spacer width={4} />
+              <PreviousButton isDisabled={!hasPreviousPage} showText={true} onClick={() => setPage('previous')} />
+              <Spacer width={12} />
+              <NextButton isDisabled={!hasNextPage} showText={true} onClick={() => setPage('next')} />
             </PageNumberContainer>
           </>
         )}

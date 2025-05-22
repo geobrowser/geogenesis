@@ -96,23 +96,23 @@ export class GeoPoint {
    */
   static parseCoordinates(value?: string): { latitude: number; longitude: number } | null {
     if (!value) return null;
-    
+
     try {
       const coordParts = value.split(',').map(part => part.trim());
       if (coordParts.length !== 2) return null;
-      
+
       const latitude = parseFloat(coordParts[0]);
       const longitude = parseFloat(coordParts[1]);
-      
+
       if (isNaN(latitude) || isNaN(longitude)) return null;
-      
+
       return { latitude, longitude };
     } catch (e) {
       console.error(`Unable to parse coordinates: "${value}"`);
       return null;
     }
   }
-  
+
   /**
    * Formats coordinates as a string
    * @param latitude - Latitude value
@@ -492,4 +492,13 @@ export const getTabSlug = (label: string) => {
     .replace(/[^a-zA-Z0-9\s]/g, '')
     .replace(/\s+/g, '-')
     .toLowerCase();
+};
+
+//For pagination rendering
+export const getPaginationPages = (totalPages: number) => {
+  if (totalPages <= 3) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  return [1, 2, 3, '...', totalPages];
 };
