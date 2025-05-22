@@ -7,12 +7,12 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
     case 'TEXT':
       return { type: 'TEXT', value: networkTriple.textValue };
     case 'POINT':
-      return { 
-        type: 'POINT', 
+      return {
+        type: 'POINT',
         value: networkTriple.textValue,
         options: {
           format: networkTriple.formatOption || undefined,
-        }
+        },
       };
     case 'CHECKBOX':
       return { type: 'CHECKBOX', value: networkTriple.booleanValue ? '1' : '0' };
@@ -23,7 +23,6 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
         options: {
           format: networkTriple.formatOption || undefined,
           language: networkTriple.languageOption || undefined,
-          unit: networkTriple.unitOption || undefined,
         },
       };
 
@@ -33,7 +32,10 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
       return {
         type: 'NUMBER',
         value: networkTriple.textValue,
-        options: { format: networkTriple.formatOption || undefined },
+        options: {
+          format: networkTriple.formatOption || undefined,
+          unit: networkTriple.unitOption || undefined,
+        },
       };
   }
 }

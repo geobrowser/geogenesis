@@ -601,7 +601,6 @@ interface NumberDiffProps {
 
 const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
   const hasFormatChanged = before?.options?.format !== after?.options?.format;
-
   const { entity: beforeUnitEntity } = useQueryEntity({ id: before?.options?.unit });
   const { entity: afterUnitEntity } = useQueryEntity({ id: after?.options?.unit });
 
@@ -629,12 +628,9 @@ const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
 
   return (
     <>
-      <span className={highlightClassName}>{rawNumber}</span>
-      {hasFormatChanged && formattedNumber && (
-        <p className="py-2 text-sm text-grey-04">
-          Browse format · <span className={highlightClassName}>{formattedNumber}</span>
-        </p>
-      )}
+      <p className="py-2 text-body">
+        <span className={highlightClassName}>{formattedNumber}</span>
+      </p>
     </>
   );
 };

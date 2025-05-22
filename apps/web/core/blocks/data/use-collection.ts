@@ -1,6 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { EntityId } from '~/core/io/schema';
+import { keepPreviousData } from '@tanstack/react-query';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 
 import { useDataBlockInstance } from './use-data-block';
@@ -37,6 +38,7 @@ export function useCollection() {
         in: collectionItemIds,
       },
     },
+    placeholderData: keepPreviousData,
   });
 
   const { entities: collectionRelations, isLoading: isCollectionRelationsLoading } = useQueryEntities({
@@ -46,6 +48,7 @@ export function useCollection() {
         in: collectionRelationIds,
       },
     },
+    placeholderData: keepPreviousData,
   });
 
   /**
@@ -62,7 +65,7 @@ export function useCollection() {
       return entity;
     })
     .filter(item => item !== undefined);
-
+    
   return {
     collectionItems: orderedCollectionItems,
     collectionRelations,

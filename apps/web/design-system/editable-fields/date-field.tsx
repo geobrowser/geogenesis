@@ -224,6 +224,18 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (!regex.test(value)) return;
     if (value.length > 2) return;
     setDay(value);
+
+    // Reset touched state when editing
+    setDayTouched(false);
+
+    // Auto-focus to hour field when 2 digits are entered for day
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (hourInputRef.current) {
+          hourInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const onMonthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -233,6 +245,18 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (!regex.test(value)) return;
     if (value.length > 2) return;
     setMonth(value);
+
+    // Reset touched state when editing
+    setMonthTouched(false);
+
+    // Auto-focus to day field when 2 digits are entered for month
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (dayInputRef.current) {
+          dayInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const onYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,6 +266,18 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     if (!regex.test(value)) return;
     if (value.length > 4) return;
     setYear(value);
+
+    // Reset touched state when editing
+    setYearTouched(false);
+
+    // Auto-focus to month field when 4 digits are entered for year
+    if (value.length === 4) {
+      queueMicrotask(() => {
+        if (monthInputRef.current) {
+          monthInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const onMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -250,8 +286,19 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
     if (!regex.test(value)) return;
     if (value.length > 2) return;
-
     setMinute(value);
+
+    // Reset touched state when editing
+    setMinuteTouched(false);
+
+    // Auto-focus to meridiem button when 2 digits are entered for minute
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (meridiemButtonRef.current) {
+          meridiemButtonRef.current.focus();
+        }
+      });
+    }
   };
 
   const onHourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -260,8 +307,19 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
     if (!regex.test(value)) return;
     if (value.length > 2) return;
-
     setHour(value);
+
+    // Reset touched state when editing
+    setHourTouched(false);
+
+    // Auto-focus to minute field when 2 digits are entered for hour
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (minuteInputRef.current) {
+          minuteInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const updateDate = (meridiem: 'am' | 'pm') => {
@@ -321,11 +379,82 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
     }
   };
 
-  const isValidHour = hour.value === '' || (!hour.isValidating && hour.isValid);
-  const isValidMinute = minute.value === '' || (!minute.isValidating && minute.isValid);
-  const isValidDay = day.value === '' || (!day.isValidating && day.isValid);
-  const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
-  const isValidYear = year.value === '' || (!year.isValidating && year.isValid);
+  const VALID_YEAR_LENGTH = 4;
+  const VALID_MONTH_LENGTH = 2;
+  const VALID_DAY_LENGTH = 2;
+  const VALID_HOUR_LENGTH = 2;
+  const VALID_MINUTE_LENGTH = 2;
+
+  // Modify isValid checks to only validate if the field has been touched (blurred) or has a complete value
+  const [yearTouched, setYearTouched] = React.useState(false);
+  const [monthTouched, setMonthTouched] = React.useState(false);
+  const [dayTouched, setDayTouched] = React.useState(false);
+  const [hourTouched, setHourTouched] = React.useState(false);
+  const [minuteTouched, setMinuteTouched] = React.useState(false);
+
+  const isValidYear =
+    year.value === '' ||
+    (!year.isValidating && year.isValid) ||
+    (!yearTouched && year.value.length < VALID_YEAR_LENGTH);
+
+  const isValidMonth =
+    month.value === '' ||
+    (!month.isValidating && month.isValid) ||
+    (!monthTouched && month.value.length < VALID_MONTH_LENGTH) ||
+    !dateFormState.isValid;
+
+  const isValidDay =
+    day.value === '' || (!day.isValidating && day.isValid) || (!dayTouched && day.value.length < VALID_DAY_LENGTH);
+
+  const isValidHour =
+    hour.value === '' ||
+    (!hour.isValidating && hour.isValid) ||
+    (!hourTouched && hour.value.length < VALID_HOUR_LENGTH);
+
+  const isValidMinute =
+    minute.value === '' ||
+    (!minute.isValidating && minute.isValid) ||
+    (!minuteTouched && minute.value.length < VALID_MINUTE_LENGTH);
+
+  // Create refs for all input fields
+  const yearInputRef = React.useRef<HTMLInputElement>(null);
+  const monthInputRef = React.useRef<HTMLInputElement>(null);
+  const dayInputRef = React.useRef<HTMLInputElement>(null);
+  const hourInputRef = React.useRef<HTMLInputElement>(null);
+  const minuteInputRef = React.useRef<HTMLInputElement>(null);
+  const meridiemButtonRef = React.useRef<HTMLButtonElement>(null);
+
+  // Add hook to select all text when input receives focus
+  React.useEffect(() => {
+    const selectAllOnFocus = (event: FocusEvent) => {
+      const input = event.target as HTMLInputElement;
+      if (input.type === 'text' || input.type === '') {
+        queueMicrotask(() => {
+          input.select();
+        });
+      }
+    };
+
+    const yearInput = yearInputRef.current;
+    const monthInput = monthInputRef.current;
+    const dayInput = dayInputRef.current;
+    const hourInput = hourInputRef.current;
+    const minuteInput = minuteInputRef.current;
+
+    if (yearInput) yearInput.addEventListener('focus', selectAllOnFocus);
+    if (monthInput) monthInput.addEventListener('focus', selectAllOnFocus);
+    if (dayInput) dayInput.addEventListener('focus', selectAllOnFocus);
+    if (hourInput) hourInput.addEventListener('focus', selectAllOnFocus);
+    if (minuteInput) minuteInput.addEventListener('focus', selectAllOnFocus);
+
+    return () => {
+      if (yearInput) yearInput.removeEventListener('focus', selectAllOnFocus);
+      if (monthInput) monthInput.removeEventListener('focus', selectAllOnFocus);
+      if (dayInput) dayInput.removeEventListener('focus', selectAllOnFocus);
+      if (hourInput) hourInput.removeEventListener('focus', selectAllOnFocus);
+      if (minuteInput) minuteInput.removeEventListener('focus', selectAllOnFocus);
+    };
+  }, []);
 
   return (
     <div className="flex flex-col">
@@ -334,9 +463,13 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
         <div className="flex w-[136px] items-center gap-1">
           <div className="flex flex-[6] flex-col">
             <input
+              ref={yearInputRef}
               value={year.value}
               onChange={onYearChange}
-              onBlur={() => updateDate(meridiem)}
+              onBlur={() => {
+                setYearTouched(true);
+                updateDate(meridiem);
+              }}
               placeholder="YYYY"
               className={`${dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
             />
@@ -346,9 +479,13 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
           <div className="flex flex-[4] flex-col">
             <input
+              ref={monthInputRef}
               value={month.value}
               onChange={onMonthChange}
-              onBlur={() => updateDate(meridiem)}
+              onBlur={() => {
+                setMonthTouched(true);
+                updateDate(meridiem);
+              }}
               placeholder="MM"
               className={dateFieldStyles({
                 variant,
@@ -361,9 +498,13 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
           <div className="flex flex-[4] flex-col">
             <input
+              ref={dayInputRef}
               value={day.value}
               onChange={onDayChange}
-              onBlur={() => updateDate(meridiem)}
+              onBlur={() => {
+                setDayTouched(true);
+                updateDate(meridiem);
+              }}
               placeholder="DD"
               className={dateFieldStyles({
                 variant,
@@ -377,18 +518,26 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
           <Spacer width={14} />
           <div className="flex items-center gap-1">
             <input
+              ref={hourInputRef}
               value={hour.value}
               onChange={onHourChange}
-              onBlur={() => updateDate(meridiem)}
+              onBlur={() => {
+                setHourTouched(true);
+                updateDate(meridiem);
+              }}
               placeholder="00"
               className={timeStyles({ variant, error: !isValidHour || !timeFormState.isValid })}
             />
 
             <span>:</span>
             <input
+              ref={minuteInputRef}
               value={minute.value}
               onChange={onMinuteChange}
-              onBlur={() => updateDate(meridiem)}
+              onBlur={() => {
+                setMinuteTouched(true);
+                updateDate(meridiem);
+              }}
               placeholder="00"
               className={timeStyles({ variant, error: !isValidMinute || !timeFormState.isValid })}
             />
@@ -396,7 +545,12 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
 
           <Spacer width={12} />
           <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
-            <SmallButton onClick={() => onToggleMeridiem()} variant="secondary" className="whitespace-nowrap uppercase">
+            <SmallButton
+              ref={meridiemButtonRef}
+              onClick={() => onToggleMeridiem()}
+              variant="secondary"
+              className="whitespace-nowrap uppercase"
+            >
               {meridiem}
             </SmallButton>
           </motion.div>
