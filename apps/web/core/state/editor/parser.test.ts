@@ -1,13 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { htmlToMarkdown, markdownToHtml, htmlToPlainText } from './parser';
 
 // Mock window for SSR tests
 const mockWindow = (exists: boolean) => {
   if (!exists) {
-    // @ts-ignore
+    // @ts-expect-error - Deleting window from global for SSR testing
     delete global.window;
   } else {
-    // @ts-ignore
+    // @ts-expect-error - Mocking window object for testing
     global.window = { document: global.document };
   }
 };

@@ -51,11 +51,12 @@ export function htmlToMarkdown(html: string): string {
       case 'i':
         result = `*${processChildren(element, indent)}*`;
         break;
-      case 'a':
+      case 'a': {
         const href = element.getAttribute('href') || '';
         const text = processChildren(element, indent);
         result = `[${text}](${href})`;
         break;
+      }
       case 'ol':
       case 'ul':
         result = processListItems(element, indent);
@@ -96,7 +97,6 @@ export function htmlToMarkdown(html: string): string {
       const child = listElement.children[i];
       if (child.tagName.toLowerCase() === 'li') {
         let itemContent = '';
-        let hasNestedList = false;
         
         // Process each child of the li
         for (let j = 0; j < child.childNodes.length; j++) {
@@ -108,7 +108,6 @@ export function htmlToMarkdown(html: string): string {
             
             if (childTag === 'ul') {
               // Handle nested list
-              hasNestedList = true;
               const nestedList = processNode(liChild, indent + '  ');
               if (itemContent.trim()) {
                 // If there's content before the nested list, add it as a bullet point
