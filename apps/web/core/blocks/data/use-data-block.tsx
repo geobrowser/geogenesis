@@ -52,7 +52,7 @@ export function useDataBlock() {
     collectionRelations,
     isFetched: isCollectionFetched,
     isLoading: isCollectionLoading,
-    totalRelationsAmount,
+    collectionLength,
   } = useCollection({
     first: PAGE_SIZE + 1,
     skip: pageNumber * PAGE_SIZE,
@@ -157,7 +157,7 @@ export function useDataBlock() {
     }
   })();
 
-  const totalPages = Math.ceil(totalRelationsAmount / PAGE_SIZE);
+  const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
 
   const setName = (newName: string) => {
     upsert(

@@ -77,6 +77,6 @@ export function useCollection({ first, skip }: CollectionProps) {
     collectionRelations,
     isLoading: isCollectionItemsLoading || isCollectionRelationsLoading,
     isFetched: !isCollectionItemsLoading && !isCollectionRelationsLoading,
-    totalRelationsAmount: collectionItemsRelations.length,
+    collectionLength: collectionItemsRelations.length,
   };
 }
