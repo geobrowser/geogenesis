@@ -15,8 +15,8 @@ export function PageNumber({
   isActive?: boolean;
 }) {
   return (
-    <button onClick={onClick} className="flex h-5 w-5 items-center justify-center rounded-sm border border-grey-02">
-      <Text className="text-xs" color={isActive ? 'text' : 'grey-03'}>
+    <button onClick={onClick}>
+      <Text variant="metadataMedium" color={isActive ? 'text' : 'grey-03'}>
         {number}
       </Text>
     </button>
@@ -26,26 +26,23 @@ export function PageNumber({
 interface PageButtonProps {
   onClick: () => void;
   isDisabled: boolean;
-  showText?: boolean;
 }
 
-export function PreviousButton({ onClick, isDisabled, showText }: PageButtonProps) {
+export function PreviousButton({ onClick, isDisabled }: PageButtonProps) {
   const color: ColorName = isDisabled ? 'grey-03' : 'text';
 
   return (
     <TextButton disabled={isDisabled} onClick={isDisabled ? undefined : onClick}>
       <LeftArrowLong color={color} />
-      {showText && <span className={`pl-2 text-${color}`}>Previous</span>}
     </TextButton>
   );
 }
 
-export function NextButton({ onClick, isDisabled, showText }: PageButtonProps) {
+export function NextButton({ onClick, isDisabled }: PageButtonProps) {
   const color: ColorName = isDisabled ? 'grey-03' : 'text';
 
   return (
-    <TextButton className="bg-red-01" disabled={isDisabled} onClick={isDisabled ? undefined : onClick}>
-      {showText && <span className={`pr-2 text-${color}`}>Next</span>}
+    <TextButton disabled={isDisabled} onClick={isDisabled ? undefined : onClick}>
       <span
         style={{
           transform: 'rotate(180deg)',

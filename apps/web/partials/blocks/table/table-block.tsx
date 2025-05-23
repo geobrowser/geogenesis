@@ -127,10 +127,10 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
   // Show the placeholder row if we're editing and either:
   // 1. We have hasPlaceholderRow set and no entry exists with nextEntityId
   // 2. We have a pendingEntityId that hasn't appeared in entries yet
-  const shouldShowPlaceholder = isEditing && (
-    (hasPlaceholderRow && !entries.find(e => e.entityId === nextEntityId)) ||
-    (pendingEntityId && !entries.find(e => e.entityId === pendingEntityId))
-  );
+  const shouldShowPlaceholder =
+    isEditing &&
+    ((hasPlaceholderRow && !entries.find(e => e.entityId === nextEntityId)) ||
+      (pendingEntityId && !entries.find(e => e.entityId === pendingEntityId)));
 
   const placeholderEntityId = pendingEntityId || nextEntityId;
 
@@ -496,7 +496,7 @@ export const TableBlock = ({ spaceId }: Props) => {
         )}
         {totalPages > 1 && (
           <>
-            <Spacer height={16} />
+            <Spacer height={12} />
             <PageNumberContainer>
               {getPaginationPages(totalPages).map((page, index) => {
                 return page === '...' ? (
@@ -507,10 +507,9 @@ export const TableBlock = ({ spaceId }: Props) => {
                   <PageNumber number={index + 1} onClick={() => setPage(index)} isActive={index === pageNumber} />
                 );
               })}
-              <Spacer width={4} />
-              <PreviousButton isDisabled={!hasPreviousPage} showText={true} onClick={() => setPage('previous')} />
-              <Spacer width={12} />
-              <NextButton isDisabled={!hasNextPage} showText={true} onClick={() => setPage('next')} />
+              <Spacer width={8} />
+              <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
+              <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
             </PageNumberContainer>
           </>
         )}

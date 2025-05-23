@@ -496,9 +496,9 @@ export const getTabSlug = (label: string) => {
 
 //For pagination rendering
 export const getPaginationPages = (totalPages: number) => {
-  if (totalPages <= 3) {
+  if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, i) => i + 1);
   }
 
-  return [1, 2, 3, '...', totalPages];
+  return [1, 2, 3, 4, 5, 6, 7, '...', totalPages];
 };
