@@ -9,7 +9,6 @@ import { PropertyId } from '~/core/hooks/use-properties';
 import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
-import { Divider } from '~/design-system/divider';
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
 
@@ -336,13 +335,15 @@ export function TableBlockListItem({
             />
           </div>
 
-          {otherPropertyData.map(p => {
-            return (
-              <>
+          {!isPlaceholder &&
+            otherPropertyData.map(p => {
+              return (
                 <div key={p.slotId}>
                   <TableBlockPropertyField
                     key={p.slotId}
-                    renderables={p.renderables}
+                    renderables={
+                      nameCell?.space ? p.renderables.filter(r => r.spaceId === nameCell.space) : p.renderables
+                    }
                     spaceId={currentSpaceId}
                     entityId={rowEntityId}
                     properties={properties}
@@ -350,9 +351,8 @@ export function TableBlockListItem({
                     source={source}
                   />
                 </div>
-              </>
-            );
-          })}
+              );
+            })}
         </div>
       </div>
     );
@@ -401,7 +401,11 @@ export function TableBlockListItem({
             <div key={`${p.slotId}-${cellId}`}>
               <TableBlockPropertyField
                 key={p.slotId}
-                renderables={p.renderables.filter(r => Boolean(r.placeholder) === false)}
+                renderables={
+                  nameCell?.space
+                    ? p.renderables.filter(r => Boolean(r.placeholder) === false && r.spaceId === nameCell.space)
+                    : p.renderables.filter(r => Boolean(r.placeholder) === false)
+                }
                 spaceId={currentSpaceId}
                 entityId={cellId}
                 properties={properties}

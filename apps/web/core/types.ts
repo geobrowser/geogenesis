@@ -5,13 +5,7 @@ import { EntityId } from './io/schema';
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type ValueType =
-  | 'TEXT'
-  | 'URL'
-  | 'TIME'
-  | 'NUMBER'
-  | 'CHECKBOX'
-  | 'POINT';
+export type ValueType = 'TEXT' | 'URL' | 'TIME' | 'NUMBER' | 'CHECKBOX' | 'POINT';
 
 export type Value = {
   type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER' | 'POINT';

@@ -7,11 +7,11 @@ import { RenderableProperty, SwitchableRenderableType, ValueTypeId } from '~/cor
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
+import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
-import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Url } from '~/design-system/icons/url';
 
 export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
