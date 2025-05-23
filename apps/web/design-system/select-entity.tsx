@@ -192,6 +192,8 @@ export const SelectEntity = ({
       );
     }
     onDone?.({ id: newEntityId, name: query }, true);
+    onQueryChange('');
+    setSelectedIndex(0);
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
