@@ -46,14 +46,17 @@ type ResultContentProps = {
   alreadySelected?: boolean;
   onChooseSpace?: () => void;
   withDescription?: boolean;
-};
+  active?: boolean;
+} & React.ComponentPropsWithoutRef<'button'>;
 
 export const ResultContent = ({
   onClick,
   result,
-  alreadySelected,
+  active = false,
+  alreadySelected = false,
   withDescription = true,
   onChooseSpace,
+  ...rest
 }: ResultContentProps) => {
   const [space, ...otherSpaces] = result.spaces;
 
@@ -76,9 +79,11 @@ export const ResultContent = ({
       <button
         onClick={onSelect}
         className={cx(
+          active && 'bg-grey-01',
           alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
           'flex w-full flex-col p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none'
         )}
+        {...rest}
       >
         <div className="flex w-full items-center justify-between leading-[1rem]">
           <Text variant="metadataMedium" ellipsize className="leading-[1.125rem]">
