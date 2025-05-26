@@ -4,9 +4,10 @@ import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import * as React from 'react';
 
+import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
@@ -22,17 +23,24 @@ import { Search } from '~/design-system/icons/search';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 
-interface Props {
+type Props = {
   open: boolean;
   onDone: () => void;
-}
+};
 
 type View = 'selectEntity' | 'selectSpace' | 'createEntity';
 
 export const SearchDialog = ({ open, onDone }: Props) => {
+  if (!open) return null;
+
+  return <SearchDialogComponent open={open} onDone={onDone} />;
+};
+
+const SearchDialogComponent = ({ open, onDone }: Props) => {
   const router = useRouter();
   const autocomplete = useSearch();
 
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [openSpacesIndex, setOpenSpacesIndex] = useState<number | null>(null);
   const [isCreatingNewEntity, setIsCreatingNewEntity] = useState<boolean>(false);
   const selectedEntity = openSpacesIndex !== null ? autocomplete.results[openSpacesIndex] : null;
@@ -53,7 +61,47 @@ export const SearchDialog = ({ open, onDone }: Props) => {
     view = 'createEntity';
   }
 
-  if (!open) return null;
+  const hasResults = autocomplete.query && autocomplete.results.length > 0;
+
+  useKey('Enter', () => {
+    if (!hasResults) return;
+
+    const result = autocomplete.results[selectedIndex];
+
+    if (result) {
+      router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
+      autocomplete.onQueryChange('');
+      setOpenSpacesIndex(null);
+      onDone();
+    }
+  });
+
+  useKey('ArrowUp', event => {
+    if (!hasResults) return;
+
+    event.preventDefault();
+    setSelectedIndex(prev => (prev - 1 + autocomplete.results.length) % autocomplete.results.length);
+  });
+
+  useKey('ArrowDown', event => {
+    if (!hasResults) return;
+
+    event.preventDefault();
+    setSelectedIndex(prev => (prev + 1) % autocomplete.results.length);
+  });
+
+  useEffect(() => {
+    if (!hasResults) return;
+
+    const element = document.querySelector(`#search-result-${selectedIndex}`);
+
+    if (element) {
+      element.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }
+  }, [hasResults, selectedIndex]);
 
   return (
     <Command.Dialog open={open} onOpenChange={handleOpenChange} label="Entity search">
@@ -129,20 +177,18 @@ export const SearchDialog = ({ open, onDone }: Props) => {
                         <div>
                           <Command.Item
                             onSelect={() => {
-                              if (result.spaces.length > 1) {
-                                setOpenSpacesIndex(i);
-                              } else {
-                                router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
-                                autocomplete.onQueryChange('');
-                                setOpenSpacesIndex(null);
-                                onDone();
-                              }
+                              router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
+                              autocomplete.onQueryChange('');
+                              setOpenSpacesIndex(null);
+                              onDone();
                             }}
                           >
                             <ResultContent
+                              id={`search-result-${i}`}
                               // The onClick behavior is handled by cmdk.
                               onClick={() => {}}
                               result={result}
+                              active={i === selectedIndex}
                               onChooseSpace={() => setOpenSpacesIndex(i)}
                             />
                           </Command.Item>

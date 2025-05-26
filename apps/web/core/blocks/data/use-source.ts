@@ -2,7 +2,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import { upsert } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+// import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Source, getSource, removeSourceType, upsertSourceType } from './source';
@@ -12,7 +12,7 @@ import { useView } from './use-view';
 
 export function useSource() {
   const { entityId, spaceId } = useDataBlockInstance();
-  const { name: fromEntityName } = useEntityPageStore();
+  // const { name: fromEntityName } = useEntityPageStore();
   const { shownColumnRelations, toggleProperty } = useView();
 
   const { filterState, setFilterState } = useFilters();
@@ -53,18 +53,20 @@ export function useSource() {
         newSource
       );
 
-      if (fromEntityName && blockEntity?.name !== undefined && blockEntity?.name !== null) {
-        upsert(
-          {
-            attributeId: SystemIds.NAME_ATTRIBUTE,
-            entityId: entityId,
-            entityName: fromEntityName,
-            attributeName: 'Name',
-            value: { type: 'TEXT', value: fromEntityName },
-          },
-          spaceId
-        );
-      }
+      // @NOTE disabled since overwrites user set titles if changing source before onBlur writes ops
+
+      // if (fromEntityName && blockEntity?.name !== undefined && blockEntity?.name !== null) {
+      //   upsert(
+      //     {
+      //       attributeId: SystemIds.NAME_ATTRIBUTE,
+      //       entityId: entityId,
+      //       entityName: fromEntityName,
+      //       attributeName: 'Name',
+      //       value: { type: 'TEXT', value: fromEntityName },
+      //     },
+      //     spaceId
+      //   );
+      // }
 
       /**
        * When creating a relation block we set the Properties to set the Name

@@ -189,7 +189,6 @@ const makeBlocksRelations = async ({
       entityPageId,
     });
 
-    console.log('new relation', newRelation);
 
     DB.upsertRelation({ relation: newRelation, spaceId });
   }
@@ -278,6 +277,8 @@ export function useEditorStore() {
         /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
         const isSSR = typeof window === 'undefined';
         const json = isSSR ? generateServerJSON(html, tiptapExtensions) : generateJSON(html, tiptapExtensions);
+
+
         const nodeData = json.content[0];
 
         return {
