@@ -499,8 +499,10 @@ export enum PagesPaginationPlaceholder {
   skip = '...',
 }
 
+const MAX_VISIBLE_PAGES = 7;
+
 export const getPaginationPages = (totalPages: number, activePage: number) => {
-  if (totalPages <= 7) {
+  if (totalPages <= MAX_VISIBLE_PAGES) {
     return Array.from({ length: totalPages }, (_, i) => i + 1);
   }
 
@@ -515,8 +517,8 @@ export const getPaginationPages = (totalPages: number, activePage: number) => {
   //Always show first and second pages
   pages.push(1, 2);
 
-  if (activePage <= 7) {
-    addRange(3, 7);
+  if (activePage <= MAX_VISIBLE_PAGES) {
+    addRange(3, MAX_VISIBLE_PAGES);
     pages.push(PagesPaginationPlaceholder.skip);
   } else if (activePage === totalPages || activePage === totalPages - 1) {
     pages.push(PagesPaginationPlaceholder.skip);
