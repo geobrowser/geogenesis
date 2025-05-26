@@ -5,10 +5,6 @@ import { useAtomValue } from 'jotai';
 
 import * as React from 'react';
 
-import { SquareButton } from '~/design-system/button';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-
-import { RightArrowLongSmall } from '../icons/right-arrow-long-small';
 import { editingPropertiesAtom } from '~/atoms';
 
 interface Props {
@@ -20,9 +16,8 @@ interface Props {
   isEditMode?: boolean;
 }
 
-export function TableCell({ children, width, isLinkable, href, isShown, isEditMode }: Props) {
+export function TableCell({ children, width, isShown, isEditMode }: Props) {
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
-  const [isHovered, setIsHovered] = React.useState(false);
 
   return (
     <td
@@ -33,21 +28,10 @@ export function TableCell({ children, width, isLinkable, href, isShown, isEditMo
       style={{
         maxWidth: width,
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       width={width}
     >
       <div className="relative h-full w-full leading-none">
         <div className="flex items-center gap-2">{children}</div>
-        {isHovered && (
-          <div className="absolute right-0 top-0 z-10 flex items-center gap-1">
-            {isLinkable && href && (
-              <Link href={href}>
-                <SquareButton icon={<RightArrowLongSmall />} />
-              </Link>
-            )}
-          </div>
-        )}
       </div>
     </td>
   );

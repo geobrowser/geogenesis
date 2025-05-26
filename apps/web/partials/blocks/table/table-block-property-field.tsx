@@ -238,7 +238,7 @@ export function TableBlockPropertyField(props: {
   }
 
   return (
-    <div>
+    <div className="flex flex-wrap gap-x-2">
       {props.renderables
         .filter(r => !!r.value)
         .map(renderable => {
@@ -409,7 +409,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
     : [];
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-x-2">
       {renderables.map(r => {
         const relationId = r.relationId;
         const relationName = r.valueName;
@@ -481,7 +481,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
 
         return (
           <>
-            <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
+            <div key={`relation-${relationId}-${relationValue}`} className="mt-2">
               <LinkableRelationChip
                 isEditing
                 onDelete={() => {

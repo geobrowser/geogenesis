@@ -306,6 +306,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const property = properties?.[typeOfId];
   const relationValueTypes = property?.relationValueTypes;
   const hasPlaceholders = relations.some(r => r.placeholder === true);
+  const valueType = relationValueTypes?.[0];
 
   return (
     <div className="box-border flex flex-wrap items-center gap-1">
@@ -474,14 +475,28 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                 spaceId={spaceId}
                 relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
                 onCreateEntity={result => {
-                  if (property?.relationValueTypeId) {
+                  DB.upsert(
+                    {
+                      entityId: result.id,
+                      attributeId: SystemIds.NAME_ATTRIBUTE,
+                      entityName: result.name,
+                      attributeName: 'Name',
+                      value: {
+                        type: 'TEXT',
+                        value: result.name ?? '',
+                      },
+                    },
+                    spaceId
+                  );
+
+                  if (valueType) {
                     send({
                       type: 'UPSERT_RELATION',
                       payload: {
                         fromEntityId: result.id,
                         fromEntityName: result.name,
-                        toEntityId: property.relationValueTypeId,
-                        toEntityName: property.relationValueTypeName ?? null,
+                        toEntityId: valueType.typeId,
+                        toEntityName: valueType.typeName ?? null,
                         typeOfId: SystemIds.TYPES_ATTRIBUTE,
                         typeOfName: 'Types',
                       },
@@ -591,14 +606,28 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             }
             relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
-              if (property?.relationValueTypeId) {
+              DB.upsert(
+                {
+                  entityId: result.id,
+                  attributeId: SystemIds.NAME_ATTRIBUTE,
+                  entityName: result.name,
+                  attributeName: 'Name',
+                  value: {
+                    type: 'TEXT',
+                    value: result.name ?? '',
+                  },
+                },
+                spaceId
+              );
+
+              if (valueType) {
                 send({
                   type: 'UPSERT_RELATION',
                   payload: {
                     fromEntityId: result.id,
                     fromEntityName: result.name,
-                    toEntityId: property.relationValueTypeId,
-                    toEntityName: property.relationValueTypeName ?? null,
+                    toEntityId: valueType.typeId,
+                    toEntityName: valueType.typeName ?? null,
                     typeOfId: SystemIds.TYPES_ATTRIBUTE,
                     typeOfName: 'Types',
                   },

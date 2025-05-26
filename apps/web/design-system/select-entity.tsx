@@ -124,6 +124,7 @@ export const SelectEntity = ({
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
 
   const [result, setResult] = useState<SearchResult | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
   const [allowedTypes, setAllowedTypes] = useState<RelationValueType[]>(() => relationValueTypes ?? []);
 
@@ -192,12 +193,12 @@ export const SelectEntity = ({
       );
     }
     onDone?.({ id: newEntityId, name: query }, true);
+    onQueryChange('');
+    setSelectedIndex(0);
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
   const hasNoFilters = !typeFilter && !spaceFilter && allowedTypes.length === 0;
-
-  const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
   const hasResults = query && results.length > 0;
 

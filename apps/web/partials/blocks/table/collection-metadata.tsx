@@ -13,10 +13,12 @@ import { EntityId } from '~/core/io/schema';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 
+import { SquareButton } from '~/design-system/button';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Menu } from '~/design-system/icons/menu';
 import { RelationSmall } from '~/design-system/icons/relation-small';
+import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { TopRanked } from '~/design-system/icons/top-ranked';
 import { PrefetchLink } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
@@ -27,6 +29,7 @@ type CollectionMetadataProps = {
   view: DataBlockView;
   isEditing: boolean;
   name: string | null;
+  placeholder?: string;
   href: string;
   currentSpaceId: string;
   entityId: string;
@@ -42,6 +45,7 @@ export const CollectionMetadata = ({
   view,
   isEditing,
   name,
+  placeholder = 'Entity name...',
   currentSpaceId,
   entityId,
   spaceId,
@@ -113,7 +117,7 @@ export const CollectionMetadata = ({
               view === 'BULLETED_LIST' ? (isEditing ? 'text-body' : 'text-body') : null
             )}
           >
-            {name}
+            {name || placeholder}
           </span>
           {verified && (
             <span className="inline-block pl-2 pt-0.5">
@@ -178,6 +182,13 @@ export const CollectionMetadata = ({
               </Popover.Root>
             </div>
           )}
+          <div className="pointer-events-auto absolute bottom-0 right-0 top-0  flex items-center">
+            {isEditing && isHovered && (
+              <PrefetchLink href={`/space/${spaceId}/${entityId}`}>
+                <SquareButton icon={<RightArrowLongSmall />} />
+              </PrefetchLink>
+            )}
+          </div>
         </div>
       </div>
     </div>
