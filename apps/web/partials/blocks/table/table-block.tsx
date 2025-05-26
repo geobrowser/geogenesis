@@ -26,6 +26,7 @@ import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
 import { Cell, PropertySchema, Row } from '~/core/types';
+import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
 import { VALUE_TYPES } from '~/core/value-types';
@@ -498,13 +499,13 @@ export const TableBlock = ({ spaceId }: Props) => {
           <>
             <Spacer height={12} />
             <PageNumberContainer>
-              {getPaginationPages(totalPages).map((page, index) => {
-                return page === '...' ? (
+              {getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
+                return page === PagesPaginationPlaceholder.skip ? (
                   <Text color="grey-03" className="flex w-[34px] justify-center" variant="metadataMedium">
                     ...
                   </Text>
                 ) : (
-                  <PageNumber number={index + 1} onClick={() => setPage(index)} isActive={index === pageNumber} />
+                  <PageNumber number={page} onClick={() => setPage(index)} isActive={page === pageNumber + 1} />
                 );
               })}
               <Spacer width={8} />

@@ -495,10 +495,42 @@ export const getTabSlug = (label: string) => {
 };
 
 //For pagination rendering
-export const getPaginationPages = (totalPages: number) => {
+export enum PagesPaginationPlaceholder {
+  skip = '...',
+}
+
+export const getPaginationPages = (totalPages: number, activePage: number) => {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, i) => i + 1);
   }
 
-  return [1, 2, 3, 4, 5, 6, 7, '...', totalPages];
+  const pages = [];
+
+  const addRange = (start: number, end: number) => {
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+  };
+
+  //Always show first and second pages
+  pages.push(1, 2);
+
+  if (activePage <= 7) {
+    addRange(3, 7);
+    pages.push(PagesPaginationPlaceholder.skip);
+  } else if (activePage === totalPages || activePage === totalPages - 1) {
+    pages.push(PagesPaginationPlaceholder.skip);
+    addRange(activePage - 5, totalPages - 1);
+  } else if (activePage === totalPages - 1) {
+    pages.push(PagesPaginationPlaceholder.skip);
+    addRange(activePage - 4, totalPages - 1);
+  } else {
+    pages.push(PagesPaginationPlaceholder.skip);
+    addRange(activePage - 3, activePage);
+    pages.push(PagesPaginationPlaceholder.skip);
+  }
+
+  //Always show last page
+  pages.push(totalPages);
+  return pages;
 };
