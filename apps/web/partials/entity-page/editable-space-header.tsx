@@ -202,17 +202,13 @@ export function EditableSpaceHeading({
                   <Copy color="grey-04" />
                   <p>Copy Entity ID</p>
                 </MenuItem>
-                {isEditing && (
-                  <>
-                    <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
-                      <div className="shrink-0">
-                        <MoveSpace />
-                      </div>
-                      <p>Create in space</p>
-                    </MenuItem>
-                    {addSubspaceComponent}
-                  </>
-                )}
+                <MenuItem onClick={() => setIsCreatingNewVersion(true)}>
+                  <div className="shrink-0">
+                    <MoveSpace />
+                  </div>
+                  <p>Create in space</p>
+                </MenuItem>
+                {addSubspaceComponent}
               </>
             )}
           </Menu>
