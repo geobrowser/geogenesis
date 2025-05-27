@@ -84,6 +84,12 @@ module.exports = {
         'slide-down': 'slideDown 300ms ease-in-out',
         'slide-up': 'slideUp 300ms ease-in-out',
       },
+      backgroundImage: {
+        'cover-default': "url('/images/placeholders/Cover_Default.svg')",
+        'cover-hover': "url('/images/placeholders/Cover_Hover.svg')",
+        'avatar-default': "url('/images/placeholders/Avatar_Default.svg')",
+        'avatar-hover': "url('/images/placeholders/Avatar_Hover.svg')",
+      },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0' },
