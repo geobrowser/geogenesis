@@ -327,6 +327,8 @@ export const TableBlock = ({ spaceId }: Props) => {
     return f;
   });
 
+  const hasPagination = hasPreviousPage || hasNextPage || totalPages > 1;
+
   let EntriesComponent = (
     <TableBlockTable
       source={source}
@@ -495,11 +497,11 @@ export const TableBlock = ({ spaceId }: Props) => {
         ) : (
           EntriesComponent
         )}
-        {totalPages > 1 && (
+        {hasPagination && (
           <>
             <Spacer height={12} />
             <PageNumberContainer>
-              {getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
+              {source.type === 'COLLECTION' ? getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
                 return page === PagesPaginationPlaceholder.skip ? (
                   <Text key={`ellipsis-${index}`} color="grey-03" className="flex justify-center" variant="metadataMedium">
                     ...
@@ -507,7 +509,23 @@ export const TableBlock = ({ spaceId }: Props) => {
                 ) : (
                   <PageNumber key={`page-${page}`} number={page} onClick={() => setPage(page - 1)} isActive={page === pageNumber + 1} />
                 );
-              })}
+              }) : (
+                <>
+                  {pageNumber > 1 && (
+                    <>
+                      <PageNumber number={1} onClick={() => setPage(0)} />
+                      {pageNumber > 2 ? (
+                        <Text color="grey-03" variant="metadataMedium">
+                          ...
+                        </Text>
+                      ) : null}
+                    </>
+                  )}
+                  {hasPreviousPage && <PageNumber number={pageNumber} onClick={() => setPage('previous')} />}
+                  <PageNumber isActive number={pageNumber + 1} />
+                  {hasNextPage && <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />}
+                </>
+              )}
               <Spacer width={8} />
               <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
               <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
