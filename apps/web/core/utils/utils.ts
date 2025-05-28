@@ -96,23 +96,23 @@ export class GeoPoint {
    */
   static parseCoordinates(value?: string): { latitude: number; longitude: number } | null {
     if (!value) return null;
-    
+
     try {
       const coordParts = value.split(',').map(part => part.trim());
       if (coordParts.length !== 2) return null;
-      
+
       const latitude = parseFloat(coordParts[0]);
       const longitude = parseFloat(coordParts[1]);
-      
+
       if (isNaN(latitude) || isNaN(longitude)) return null;
-      
+
       return { latitude, longitude };
     } catch (e) {
       console.error(`Unable to parse coordinates: "${value}"`);
       return null;
     }
   }
-  
+
   /**
    * Formats coordinates as a string
    * @param latitude - Latitude value
@@ -492,4 +492,52 @@ export const getTabSlug = (label: string) => {
     .replace(/[^a-zA-Z0-9\s]/g, '')
     .replace(/\s+/g, '-')
     .toLowerCase();
+};
+
+//For pagination rendering
+export enum PagesPaginationPlaceholder {
+  skip = '...',
+}
+
+const MAX_VISIBLE_PAGES = 7;
+
+export const getPaginationPages = (totalPages: number, activePage: number) => {
+  if (totalPages <= MAX_VISIBLE_PAGES) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const pages = [];
+
+  // Always show first and second pages
+  pages.push(1, 2);
+
+  if (activePage <= 7) {
+    // Current page is within first 7 pages: show 1 2 3 4 5 6 7 ... last
+    for (let i = 3; i <= 7; i++) {
+      pages.push(i);
+    }
+    pages.push(PagesPaginationPlaceholder.skip);
+  } else if (activePage >= totalPages - 1) {
+    // Current page is last or second-to-last: show 1 2 ... (last-5) through (last-1) last
+    pages.push(PagesPaginationPlaceholder.skip);
+    // Show at least 6 pages at the end (including the last page)
+    const startPage = Math.max(totalPages - 5, 3); // Ensure we don't overlap with pages 1 and 2
+    for (let i = startPage; i < totalPages; i++) {
+      pages.push(i);
+    }
+  } else {
+    // Current page is in the middle: show 1 2 ... (current-3) (current-2) (current-1) current ... last
+    pages.push(PagesPaginationPlaceholder.skip);
+    
+    // Show 3 pages before current and current page itself
+    for (let i = activePage - 3; i <= activePage; i++) {
+      pages.push(i);
+    }
+    
+    pages.push(PagesPaginationPlaceholder.skip);
+  }
+
+  // Always show last page
+  pages.push(totalPages);
+  return pages;
 };

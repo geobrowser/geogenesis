@@ -26,7 +26,9 @@ import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
 import { Cell, PropertySchema, Row } from '~/core/types';
+import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
+import { getPaginationPages } from '~/core/utils/utils';
 import { VALUE_TYPES } from '~/core/value-types';
 
 import { IconButton } from '~/design-system/button';
@@ -126,10 +128,10 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
   // Show the placeholder row if we're editing and either:
   // 1. We have hasPlaceholderRow set and no entry exists with nextEntityId
   // 2. We have a pendingEntityId that hasn't appeared in entries yet
-  const shouldShowPlaceholder = isEditing && (
-    (hasPlaceholderRow && !entries.find(e => e.entityId === nextEntityId)) ||
-    (pendingEntityId && !entries.find(e => e.entityId === pendingEntityId))
-  );
+  const shouldShowPlaceholder =
+    isEditing &&
+    ((hasPlaceholderRow && !entries.find(e => e.entityId === nextEntityId)) ||
+      (pendingEntityId && !entries.find(e => e.entityId === pendingEntityId)));
 
   const placeholderEntityId = pendingEntityId || nextEntityId;
 
@@ -287,8 +289,17 @@ export const TableBlock = ({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { spaces } = useSpaces();
-  const { properties, rows, setPage, isLoading, hasNextPage, hasPreviousPage, pageNumber, propertiesSchema } =
-    useDataBlock();
+  const {
+    properties,
+    rows,
+    setPage,
+    isLoading,
+    hasNextPage,
+    hasPreviousPage,
+    pageNumber,
+    propertiesSchema,
+    totalPages,
+  } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
@@ -315,8 +326,6 @@ export const TableBlock = ({ spaceId }: Props) => {
 
     return f;
   });
-
-  const hasPagination = hasPreviousPage || hasNextPage;
 
   let EntriesComponent = (
     <TableBlockTable
@@ -486,23 +495,19 @@ export const TableBlock = ({ spaceId }: Props) => {
         ) : (
           EntriesComponent
         )}
-        {hasPagination && (
+        {totalPages > 1 && (
           <>
             <Spacer height={12} />
             <PageNumberContainer>
-              {pageNumber > 1 && (
-                <>
-                  <PageNumber number={1} onClick={() => setPage(0)} />
-                  {pageNumber > 2 ? (
-                    <Text color="grey-03" variant="metadataMedium">
-                      ...
-                    </Text>
-                  ) : null}
-                </>
-              )}
-              {hasPreviousPage && <PageNumber number={pageNumber} onClick={() => setPage('previous')} />}
-              <PageNumber isActive number={pageNumber + 1} />
-              {hasNextPage && <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />}
+              {getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
+                return page === PagesPaginationPlaceholder.skip ? (
+                  <Text key={`ellipsis-${index}`} color="grey-03" className="flex justify-center" variant="metadataMedium">
+                    ...
+                  </Text>
+                ) : (
+                  <PageNumber key={`page-${page}`} number={page} onClick={() => setPage(page - 1)} isActive={page === pageNumber + 1} />
+                );
+              })}
               <Spacer width={8} />
               <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
               <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />

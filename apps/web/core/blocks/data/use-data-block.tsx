@@ -52,7 +52,11 @@ export function useDataBlock() {
     collectionRelations,
     isFetched: isCollectionFetched,
     isLoading: isCollectionLoading,
-  } = useCollection();
+    collectionLength,
+  } = useCollection({
+    first: PAGE_SIZE + 1,
+    skip: pageNumber * PAGE_SIZE,
+  });
 
   const where = filterStateToWhere(filterState);
 
@@ -153,6 +157,8 @@ export function useDataBlock() {
     }
   })();
 
+  const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
+
   const setName = (newName: string) => {
     upsert(
       {
@@ -183,6 +189,11 @@ export function useDataBlock() {
   }
 
   // @TODO: Returned data type should be a FSM depending on the source.type
+  // For collections, check if there are more items beyond the current page
+  const hasNextPage = source.type === 'COLLECTION' 
+    ? (pageNumber + 1) * PAGE_SIZE < collectionLength
+    : rows ? rows.length > PAGE_SIZE : false;
+  
   return {
     entityId,
     spaceId,
@@ -194,7 +205,7 @@ export function useDataBlock() {
     propertiesSchema,
 
     pageNumber,
-    hasNextPage: rows ? rows?.length > PAGE_SIZE : false,
+    hasNextPage,
     hasPreviousPage: pageNumber > 0,
     setPage,
 
@@ -202,6 +213,7 @@ export function useDataBlock() {
 
     name: entity?.name ?? null,
     setName,
+    totalPages,
   };
 }
 

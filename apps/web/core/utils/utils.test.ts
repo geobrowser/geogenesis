@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IPFS_GATEWAY_READ_PATH } from '../constants';
-import { GeoDate, GeoNumber, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl } from './utils';
+import { GeoDate, GeoNumber, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl, getPaginationPages, PagesPaginationPlaceholder } from './utils';
 
 describe('GeoNumber', () => {
   let consoleErrorSpy: any;
@@ -239,5 +239,54 @@ describe('getOpenGraphImageUrl', () => {
 describe('formatShortAddress', () => {
   it('returns a truncated address', () => {
     expect(formatShortAddress('0x1234567890123456789012345678901234567890')).toBe('0x123456...567890');
+  });
+});
+
+describe('getPaginationPages', () => {
+  it('returns all pages when total pages is 7 or less', () => {
+    expect(getPaginationPages(5, 3)).toEqual([1, 2, 3, 4, 5]);
+    expect(getPaginationPages(7, 4)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('shows ellipsis after page 7 when current page is within first 7 pages', () => {
+    expect(getPaginationPages(11, 5)).toEqual([1, 2, 3, 4, 5, 6, 7, PagesPaginationPlaceholder.skip, 11]);
+    expect(getPaginationPages(11, 7)).toEqual([1, 2, 3, 4, 5, 6, 7, PagesPaginationPlaceholder.skip, 11]);
+  });
+
+  it('shows ellipsis between page 2 and current-3 when current page is past 7', () => {
+    expect(getPaginationPages(11, 8)).toEqual([1, 2, PagesPaginationPlaceholder.skip, 5, 6, 7, 8, PagesPaginationPlaceholder.skip, 11]);
+    expect(getPaginationPages(20, 10)).toEqual([1, 2, PagesPaginationPlaceholder.skip, 7, 8, 9, 10, PagesPaginationPlaceholder.skip, 20]);
+  });
+
+  it('removes trailing ellipsis when on second-to-last or last page', () => {
+    expect(getPaginationPages(11, 10)).toEqual([1, 2, PagesPaginationPlaceholder.skip, 6, 7, 8, 9, 10, 11]);
+    expect(getPaginationPages(11, 11)).toEqual([1, 2, PagesPaginationPlaceholder.skip, 6, 7, 8, 9, 10, 11]);
+    expect(getPaginationPages(20, 19)).toEqual([1, 2, PagesPaginationPlaceholder.skip, 15, 16, 17, 18, 19, 20]);
+    expect(getPaginationPages(20, 20)).toEqual([1, 2, PagesPaginationPlaceholder.skip, 15, 16, 17, 18, 19, 20]);
+  });
+
+  it('handles edge case with 8 total pages', () => {
+    expect(getPaginationPages(8, 1)).toEqual([1, 2, 3, 4, 5, 6, 7, PagesPaginationPlaceholder.skip, 8]);
+    expect(getPaginationPages(8, 7)).toEqual([1, 2, 3, 4, 5, 6, 7, PagesPaginationPlaceholder.skip, 8]);
+    expect(getPaginationPages(8, 8)).toEqual([1, 2, PagesPaginationPlaceholder.skip, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('correctly handles all pages from 1 to last with arrow navigation', () => {
+    const totalPages = 15;
+    
+    // Test that we can navigate to every page
+    for (let page = 1; page <= totalPages; page++) {
+      const result = getPaginationPages(totalPages, page);
+      
+      // Every result should include page 1, 2, and last page
+      expect(result).toContain(1);
+      expect(result).toContain(2);
+      expect(result).toContain(totalPages);
+      
+      // If current page > 2, it should be included
+      if (page > 2) {
+        expect(result).toContain(page);
+      }
+    }
   });
 });
