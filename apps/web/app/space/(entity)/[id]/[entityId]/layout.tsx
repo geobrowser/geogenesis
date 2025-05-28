@@ -128,7 +128,7 @@ export default async function ProfileLayout(props: Props) {
         <EntityPageContentContainer>
           <div className="space-y-2">
             <EditableHeading spaceId={params.id} entityId={entityId} />
-            <EntityPageMetadataHeader id={profile.id} entityName={profile.name ?? ''} spaceId={params.id} />
+            <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
           </div>
 
           <Spacer height={40} />
