@@ -508,31 +508,36 @@ export const getPaginationPages = (totalPages: number, activePage: number) => {
 
   const pages = [];
 
-  const addRange = (start: number, end: number) => {
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-  };
-
-  //Always show first and second pages
+  // Always show first and second pages
   pages.push(1, 2);
 
-  if (activePage <= MAX_VISIBLE_PAGES) {
-    addRange(3, MAX_VISIBLE_PAGES);
+  if (activePage <= 7) {
+    // Current page is within first 7 pages: show 1 2 3 4 5 6 7 ... last
+    for (let i = 3; i <= 7; i++) {
+      pages.push(i);
+    }
     pages.push(PagesPaginationPlaceholder.skip);
-  } else if (activePage === totalPages || activePage === totalPages - 1) {
+  } else if (activePage >= totalPages - 1) {
+    // Current page is last or second-to-last: show 1 2 ... (last-5) through (last-1) last
     pages.push(PagesPaginationPlaceholder.skip);
-    addRange(activePage - 5, totalPages - 1);
-  } else if (activePage === totalPages - 1) {
-    pages.push(PagesPaginationPlaceholder.skip);
-    addRange(activePage - 4, totalPages - 1);
+    // Show at least 6 pages at the end (including the last page)
+    const startPage = Math.max(totalPages - 5, 3); // Ensure we don't overlap with pages 1 and 2
+    for (let i = startPage; i < totalPages; i++) {
+      pages.push(i);
+    }
   } else {
+    // Current page is in the middle: show 1 2 ... (current-3) (current-2) (current-1) current ... last
     pages.push(PagesPaginationPlaceholder.skip);
-    addRange(activePage - 3, activePage);
+    
+    // Show 3 pages before current and current page itself
+    for (let i = activePage - 3; i <= activePage; i++) {
+      pages.push(i);
+    }
+    
     pages.push(PagesPaginationPlaceholder.skip);
   }
 
-  //Always show last page
+  // Always show last page
   pages.push(totalPages);
   return pages;
 };

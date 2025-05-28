@@ -501,11 +501,11 @@ export const TableBlock = ({ spaceId }: Props) => {
             <PageNumberContainer>
               {getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
                 return page === PagesPaginationPlaceholder.skip ? (
-                  <Text color="grey-03" className="flex w-[34px] justify-center" variant="metadataMedium">
+                  <Text key={`ellipsis-${index}`} color="grey-03" className="flex justify-center" variant="metadataMedium">
                     ...
                   </Text>
                 ) : (
-                  <PageNumber number={page} onClick={() => setPage(index)} isActive={page === pageNumber + 1} />
+                  <PageNumber key={`page-${page}`} number={page} onClick={() => setPage(page - 1)} isActive={page === pageNumber + 1} />
                 );
               })}
               <Spacer width={8} />

@@ -189,6 +189,11 @@ export function useDataBlock() {
   }
 
   // @TODO: Returned data type should be a FSM depending on the source.type
+  // For collections, check if there are more items beyond the current page
+  const hasNextPage = source.type === 'COLLECTION' 
+    ? (pageNumber + 1) * PAGE_SIZE < collectionLength
+    : rows ? rows.length > PAGE_SIZE : false;
+  
   return {
     entityId,
     spaceId,
@@ -200,7 +205,7 @@ export function useDataBlock() {
     propertiesSchema,
 
     pageNumber,
-    hasNextPage: rows ? rows?.length > PAGE_SIZE : false,
+    hasNextPage,
     hasPreviousPage: pageNumber > 0,
     setPage,
 
