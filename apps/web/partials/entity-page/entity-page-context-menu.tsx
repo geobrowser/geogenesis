@@ -6,8 +6,9 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { removeRelation, useWriteOps } from '~/core/database/write';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { EntityId } from '~/core/io/schema';
+import { useEditable } from '~/core/state/editable-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 
 import { Context } from '~/design-system/icons/context';
@@ -18,16 +19,18 @@ import { Menu } from '~/design-system/menu';
 
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 
-interface Props {
+type Props = {
   entityId: string;
   entityName: string;
   spaceId: string;
-}
+};
 
 export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
-  const isEditing = useUserIsEditing(spaceId);
+  const { isMember } = useAccessControl(spaceId);
+
+  const { editable, setEditable } = useEditable();
   const { triples, relations } = useEntityPageStore();
   const { remove } = useWriteOps();
 
@@ -41,9 +44,19 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
   };
 
   const onDelete = () => {
-    triples.forEach(t => remove(t, t.space));
-    relations.forEach(r => removeRelation({ relation: r, spaceId }));
-    setIsMenuOpen(false);
+    if (editable) {
+      triples.forEach(t => remove(t, t.space));
+      relations.forEach(r => removeRelation({ relation: r, spaceId }));
+      setIsMenuOpen(false);
+    } else {
+      setEditable(true);
+
+      setTimeout(() => {
+        triples.forEach(t => remove(t, t.space));
+        relations.forEach(r => removeRelation({ relation: r, spaceId }));
+        setIsMenuOpen(false);
+      }, 500);
+    }
   };
 
   const [isCreatingNewVersion, setIsCreatingNewVersion] = useState<boolean>(false);
@@ -88,7 +101,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
               Create in space
             </button>
           </EntityPageContextMenuItem>
-          {isEditing && (
+          {isMember && (
             <EntityPageContextMenuItem>
               <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
                 <Trash />
