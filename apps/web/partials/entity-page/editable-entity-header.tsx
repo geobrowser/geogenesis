@@ -21,13 +21,7 @@ import { HistoryItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 
-export function EditableHeading({
-  spaceId,
-  entityId,
-}: {
-  spaceId: string;
-  entityId: string;
-}) {
+export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   const { name } = useEntityPageStore();
   const isEditing = useUserIsEditing(spaceId);
 
@@ -76,7 +70,7 @@ export function EditableHeading({
   return (
     <div className="relative flex items-center justify-between">
       {isEditing ? (
-        <div>
+        <div className="flex-grow">
           <PageStringField variant="mainPage" placeholder="Entity name..." value={name ?? ''} onChange={onNameChange} />
           {/*
             This height differs from the readable page height due to how we're using an expandable textarea for editing
