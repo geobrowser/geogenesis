@@ -62,15 +62,38 @@ function makeNewBlockRelation({
   // user blurs the editor. See the comment earlier in this function.
   const beforeCollectionItemIndex =
     blockRelations.find(c => c.block.id === beforeBlockIndex)?.index ??
-    newBlocks.find(c => c.id === beforeBlockIndex)?.index;
+    newBlocks.find(c => c.toEntity.id === beforeBlockIndex)?.index;
   const afterCollectionItemIndex =
     blockRelations.find(c => c.block.id === afterBlockIndex)?.index ??
-    newBlocks.find(c => c.id === afterBlockIndex)?.index;
+    newBlocks.find(c => c.toEntity.id === afterBlockIndex)?.index;
+
+  // Validate ordering constraint for fractional indexing
+  // If beforeIndex >= afterIndex, we need to fix the ordering
+  let validBeforeIndex = beforeCollectionItemIndex;
+  let validAfterIndex = afterCollectionItemIndex;
+  
+  if (validBeforeIndex && validAfterIndex && validBeforeIndex >= validAfterIndex) {
+    // If the ordering is invalid, we'll use only one of the anchors or neither
+    // This prevents the "left must be less than right" error
+    console.warn('Invalid index ordering detected, using fallback positioning', {
+      beforeIndex: validBeforeIndex,
+      afterIndex: validAfterIndex,
+      position,
+      blockId: addedBlock.id
+    });
+    
+    // Use only the after index if it exists, otherwise only the before index
+    if (validAfterIndex) {
+      validBeforeIndex = undefined;
+    } else {
+      validAfterIndex = undefined;
+    }
+  }
 
   const newTripleOrdering = R.reorder({
     relationId: newRelationId,
-    beforeIndex: beforeCollectionItemIndex,
-    afterIndex: afterCollectionItemIndex,
+    beforeIndex: validBeforeIndex,
+    afterIndex: validAfterIndex,
   });
 
   const renderableType = ((): RenderableEntityType => {
