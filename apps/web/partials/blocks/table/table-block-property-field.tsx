@@ -503,7 +503,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
         );
       })}
       {!hasPlaceholders && (
-        <div className="mt-1">
+        <div className="mt-2">
           <SelectEntityAsPopover
             trigger={<SquareButton icon={<Create />} />}
             relationValueTypes={filterSearchByTypes}

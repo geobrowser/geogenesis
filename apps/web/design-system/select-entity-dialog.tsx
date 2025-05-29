@@ -37,7 +37,7 @@ export function SelectEntityAsPopover({
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
       <Popover.Portal>
-        <Popover.Content sideOffset={4} align="start">
+        <Popover.Content sideOffset={4} align="start" className="z-30">
           <SelectEntity
             key={JSON.stringify(relationValueTypes)}
             withSearchIcon={true}
