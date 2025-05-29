@@ -64,49 +64,13 @@ type SelectEntityProps = {
   inputClassName?: string;
   variant?: 'floating' | 'fixed';
   width?: 'clamped' | 'full';
+  withSelectSpace?: boolean;
   withSearchIcon?: boolean;
+  advanced?: boolean;
 };
 
-const inputStyles = cva('', {
-  variants: {
-    fixed: {
-      true: 'm-0 block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
-    },
-    floating: {
-      true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
-    },
-    withSearchIcon: {
-      true: 'pl-9',
-    },
-  },
-  defaultVariants: {
-    fixed: true,
-    floating: false,
-    withSearchIcon: false,
-  },
-});
-
-const containerStyles = cva('relative', {
-  variants: {
-    width: {
-      clamped: 'w-[400px]',
-      full: 'w-full',
-    },
-    floating: {
-      true: 'rounded-md border border-divider bg-white',
-    },
-    isQueried: {
-      true: 'rounded-b-none',
-    },
-  },
-  defaultVariants: {
-    width: 'clamped',
-    floating: false,
-    isQueried: false,
-  },
-});
-
 type SpaceFilter = { spaceId: string; spaceName: string | null };
+
 type TypeFilter = { typeId: string; typeName: string | null };
 
 export const SelectEntity = ({
@@ -119,7 +83,9 @@ export const SelectEntity = ({
   variant = 'fixed',
   containerClassName = '',
   inputClassName = '',
+  withSelectSpace = true,
   withSearchIcon = false,
+  advanced = true,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
 
@@ -304,130 +270,134 @@ export const SelectEntity = ({
                   withSearchIcon && 'rounded-t-none'
                 )}
               >
-                <div className="w-full">
-                  <button
-                    onClick={handleShowAdvanced}
-                    className="flex w-full justify-end border-b border-grey-02 px-2 py-1"
-                  >
-                    <div className="inline-flex items-center gap-1">
-                      <span className="text-[0.6875rem] text-grey-04">Advanced</span>
-                      <span className={cx('transition duration-300 ease-in-out', isShowingAdvanced && 'scale-y-[-1]')}>
-                        <ChevronDownSmall color="grey-04" />
-                      </span>
-                    </div>
-                  </button>
-                  <ResizableContainer>
-                    {isShowingAdvanced && (
-                      <div className="border-b border-grey-02 px-4 py-2">
-                        {!isAddingFilter ? (
-                          <>
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="text-[0.875rem] text-grey-04">Applied</span>
+                {advanced && (
+                  <div className="w-full">
+                    <button
+                      onClick={handleShowAdvanced}
+                      className="flex w-full justify-end border-b border-grey-02 px-2 py-1"
+                    >
+                      <div className="inline-flex items-center gap-1">
+                        <span className="text-[0.6875rem] text-grey-04">Advanced</span>
+                        <span
+                          className={cx('transition duration-300 ease-in-out', isShowingAdvanced && 'scale-y-[-1]')}
+                        >
+                          <ChevronDownSmall color="grey-04" />
+                        </span>
+                      </div>
+                    </button>
+                    <ResizableContainer>
+                      {isShowingAdvanced && (
+                        <div className="border-b border-grey-02 px-4 py-2">
+                          {!isAddingFilter ? (
+                            <>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="text-[0.875rem] text-grey-04">Applied</span>
+                                </div>
+                                <div>
+                                  <button
+                                    onClick={() => setIsAddingFilter(true)}
+                                    className="text-[0.875rem] text-ctaHover"
+                                  >
+                                    + Add filter
+                                  </button>
+                                </div>
                               </div>
+                              <div className="mt-1 flex w-full flex-wrap gap-1 text-black">
+                                {hasNoFilters ? (
+                                  <div>No filters applied</div>
+                                ) : (
+                                  <>
+                                    {allowedTypes.map(allowedType => {
+                                      return (
+                                        <FilterPill
+                                          key={allowedType.typeId}
+                                          filterType="Relation value type"
+                                          name={allowedType.typeName ?? ''}
+                                          onDelete={() =>
+                                            setAllowedTypes([
+                                              ...allowedTypes.filter(r => r.typeId !== allowedType.typeId),
+                                            ])
+                                          }
+                                        />
+                                      );
+                                    })}
+                                    {spaceFilter && (
+                                      <FilterPill
+                                        key={spaceFilter.spaceId}
+                                        filterType="Space"
+                                        name={spaceFilter.spaceName ?? ''}
+                                        onDelete={() => setSpaceFilter(null)}
+                                      />
+                                    )}
+                                    {typeFilter && (
+                                      <FilterPill
+                                        key={typeFilter.typeId}
+                                        filterType="Type"
+                                        name={typeFilter.typeName ?? ''}
+                                        onDelete={() => setTypeFilter(null)}
+                                      />
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <>
                               <div>
                                 <button
-                                  onClick={() => setIsAddingFilter(true)}
-                                  className="text-[0.875rem] text-ctaHover"
+                                  onClick={() => {
+                                    setIsAddingFilter(false);
+                                  }}
+                                  className="text-[0.875rem] text-grey-04"
                                 >
-                                  + Add filter
+                                  Back
                                 </button>
                               </div>
-                            </div>
-                            <div className="mt-1 flex w-full flex-wrap gap-1 text-black">
-                              {hasNoFilters ? (
-                                <div>No filters applied</div>
-                              ) : (
-                                <>
-                                  {allowedTypes.map(allowedType => {
-                                    return (
-                                      <FilterPill
-                                        key={allowedType.typeId}
-                                        filterType="Relation value type"
-                                        name={allowedType.typeName ?? ''}
-                                        onDelete={() =>
-                                          setAllowedTypes([
-                                            ...allowedTypes.filter(r => r.typeId !== allowedType.typeId),
-                                          ])
-                                        }
-                                      />
-                                    );
-                                  })}
-                                  {spaceFilter && (
-                                    <FilterPill
-                                      key={spaceFilter.spaceId}
-                                      filterType="Space"
-                                      name={spaceFilter.spaceName ?? ''}
-                                      onDelete={() => setSpaceFilter(null)}
+                              <div className="relative z-100 mt-1 flex w-full items-center gap-2 text-black">
+                                <div className="flex flex-1">
+                                  <Select
+                                    options={[
+                                      { value: 'space', label: 'Space' },
+                                      { value: 'type', label: 'Type' },
+                                    ]}
+                                    value={addFilterValue}
+                                    onChange={value => setAddFilterValue(value as 'space' | 'type')}
+                                  />
+                                </div>
+                                <span className="text-button text-grey-04">is</span>
+                                <div className="flex flex-[2]">
+                                  {addFilterValue === 'space' && (
+                                    <SpaceFilterInput
+                                      onSelect={result => {
+                                        setSpaceFilter({
+                                          spaceId: SpaceId(result.id),
+                                          spaceName: result.name,
+                                        });
+                                        setIsAddingFilter(false);
+                                      }}
                                     />
                                   )}
-                                  {typeFilter && (
-                                    <FilterPill
-                                      key={typeFilter.typeId}
-                                      filterType="Type"
-                                      name={typeFilter.typeName ?? ''}
-                                      onDelete={() => setTypeFilter(null)}
+                                  {addFilterValue === 'type' && (
+                                    <TypeFilterInput
+                                      onSelect={result => {
+                                        setTypeFilter({
+                                          typeId: EntityId(result.id),
+                                          typeName: result.name,
+                                        });
+                                        setIsAddingFilter(false);
+                                      }}
                                     />
                                   )}
-                                </>
-                              )}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div>
-                              <button
-                                onClick={() => {
-                                  setIsAddingFilter(false);
-                                }}
-                                className="text-[0.875rem] text-grey-04"
-                              >
-                                Back
-                              </button>
-                            </div>
-                            <div className="relative z-100 mt-1 flex w-full items-center gap-2 text-black">
-                              <div className="flex flex-1">
-                                <Select
-                                  options={[
-                                    { value: 'space', label: 'Space' },
-                                    { value: 'type', label: 'Type' },
-                                  ]}
-                                  value={addFilterValue}
-                                  onChange={value => setAddFilterValue(value as 'space' | 'type')}
-                                />
+                                </div>
                               </div>
-                              <span className="text-button text-grey-04">is</span>
-                              <div className="flex flex-[2]">
-                                {addFilterValue === 'space' && (
-                                  <SpaceFilterInput
-                                    onSelect={result => {
-                                      setSpaceFilter({
-                                        spaceId: SpaceId(result.id),
-                                        spaceName: result.name,
-                                      });
-                                      setIsAddingFilter(false);
-                                    }}
-                                  />
-                                )}
-                                {addFilterValue === 'type' && (
-                                  <TypeFilterInput
-                                    onSelect={result => {
-                                      setTypeFilter({
-                                        typeId: EntityId(result.id),
-                                        typeName: result.name,
-                                      });
-                                      setIsAddingFilter(false);
-                                    }}
-                                  />
-                                )}
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </ResizableContainer>
-                </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </ResizableContainer>
+                  </div>
+                )}
                 {!result ? (
                   <ResizableContainer>
                     <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
@@ -466,25 +436,43 @@ export const SelectEntity = ({
                                   )}
                                   <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
                                   <div className="mt-1.5 flex items-center gap-1.5">
-                                    <div className="flex shrink-0 items-center gap-1">
-                                      <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
-                                        <TopRanked color="grey-04" />
-                                      </span>
-                                      <span className="text-[0.875rem] text-text">Top-ranked</span>
-                                    </div>
+                                    {withSelectSpace && (
+                                      <div className="flex shrink-0 items-center gap-1">
+                                        <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
+                                          {(result.spaces ?? []).length > 0 ? (
+                                            <>
+                                              <img
+                                                src={getImagePath(result.spaces[0].image)}
+                                                alt=""
+                                                className="h-full w-full object-cover"
+                                              />
+                                            </>
+                                          ) : (
+                                            <TopRanked color="grey-04" />
+                                          )}
+                                        </span>
+                                        <span className="text-[0.875rem] text-text">Top-ranked</span>
+                                      </div>
+                                    )}
                                     {result.types.length > 0 && (
                                       <>
-                                        <div className="shrink-0">
-                                          <svg
-                                            width="8"
-                                            height="9"
-                                            viewBox="0 0 8 9"
-                                            fill="none"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                          >
-                                            <path d="M2.25 8L5.75 4.5L2.25 1" stroke="#606060" strokeLinecap="round" />
-                                          </svg>
-                                        </div>
+                                        {withSelectSpace && (
+                                          <div className="shrink-0">
+                                            <svg
+                                              width="8"
+                                              height="9"
+                                              viewBox="0 0 8 9"
+                                              fill="none"
+                                              xmlns="http://www.w3.org/2000/svg"
+                                            >
+                                              <path
+                                                d="M2.25 8L5.75 4.5L2.25 1"
+                                                stroke="#606060"
+                                                strokeLinecap="round"
+                                              />
+                                            </svg>
+                                          </div>
+                                        )}
                                         <div className="flex items-center gap-1.5">
                                           {result.types.slice(0, 3).map(type => (
                                             <Tag key={type.id}>{type.name}</Tag>
@@ -505,33 +493,36 @@ export const SelectEntity = ({
                                   )}
                                 </button>
                               </div>
-                              <div className="-mt-2 p-1">
-                                <button
-                                  onClick={() => setResult(result)}
-                                  className="relative z-0 flex w-full items-center justify-between rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-grey-01"
-                                >
-                                  <div className="flex items-center gap-1">
-                                    <div className="inline-flex gap-0">
-                                      {(result.spaces ?? []).slice(0, 3).map(space => (
-                                        <div
-                                          key={space.spaceId}
-                                          className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
-                                        >
-                                          <img
-                                            src={getImagePath(space.image)}
-                                            alt=""
-                                            className="h-full w-full object-cover"
-                                          />
-                                        </div>
-                                      ))}
+                              {withSelectSpace && (
+                                <div className="-mt-2 p-1">
+                                  <button
+                                    onClick={() => setResult(result)}
+                                    className="relative z-0 flex w-full items-center justify-between rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-grey-01"
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <div className="inline-flex gap-0">
+                                        {(result.spaces ?? []).slice(0, 3).map(space => (
+                                          <div
+                                            key={space.spaceId}
+                                            className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
+                                          >
+                                            <img
+                                              src={getImagePath(space.image)}
+                                              alt=""
+                                              className="h-full w-full object-cover"
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className="text-[0.875rem] text-text">
+                                        {(result.spaces ?? []).length}{' '}
+                                        {pluralize('space', (result.spaces ?? []).length)}
+                                      </div>
                                     </div>
-                                    <div className="text-[0.875rem] text-text">
-                                      {(result.spaces ?? []).length} {pluralize('space', (result.spaces ?? []).length)}
-                                    </div>
-                                  </div>
-                                  <div className="text-[0.875rem] text-grey-04">Select space</div>
-                                </button>
-                              </div>
+                                    <div className="text-[0.875rem] text-grey-04">Select space</div>
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -613,6 +604,45 @@ export const SelectEntity = ({
     </div>
   );
 };
+
+const inputStyles = cva('', {
+  variants: {
+    fixed: {
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+    },
+    floating: {
+      true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+    },
+    withSearchIcon: {
+      true: 'pl-9',
+    },
+  },
+  defaultVariants: {
+    fixed: true,
+    floating: false,
+    withSearchIcon: false,
+  },
+});
+
+const containerStyles = cva('relative', {
+  variants: {
+    width: {
+      clamped: 'w-[400px]',
+      full: 'w-full',
+    },
+    floating: {
+      true: 'rounded-md border border-divider bg-white',
+    },
+    isQueried: {
+      true: 'rounded-b-none',
+    },
+  },
+  defaultVariants: {
+    width: 'clamped',
+    floating: false,
+    isQueried: false,
+  },
+});
 
 const FilterPill = ({
   filterType,
