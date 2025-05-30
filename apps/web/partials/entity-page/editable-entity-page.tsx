@@ -3,6 +3,7 @@
 import { ContentIds, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { Image } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
@@ -14,10 +15,8 @@ import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useEditorStore } from '~/core/state/editor/use-editor';
-import { useAtom } from 'jotai';
-import { editorHasContentAtom } from '~/atoms';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import {
   PropertySchema,
   Relation,
@@ -29,7 +28,6 @@ import { Triple as ITriple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
-import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -41,14 +39,15 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { SelectEntity } from '~/design-system/select-entity';
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
 import { DateFormatDropdown } from './date-format-dropdown';
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { NumberOptionsDropdown } from './number-options-dropdown';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
+import { editorHasContentAtom } from '~/atoms';
 
 interface Props {
   triples: ITriple[];
@@ -78,14 +77,15 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
   const { blockIds } = useEditorStore();
   // Use the shared atom directly to get the latest value
-  const [ editorHasContent ] = useAtom(editorHasContentAtom);
-  
+  const [editorHasContent] = useAtom(editorHasContentAtom);
+
   // Show the properties panel when:
   // 1. Name exists, OR
   // 2. Cover/avatar exists, OR
   // 3. Types exist, OR
   // 4. Editor has content / blocks exist
-  const showPropertiesPanel = (name && name?.length > 0) || coverUrl || types.length > 0 || (blockIds && blockIds.length > 0) || editorHasContent;
+  const showPropertiesPanel =
+    (name && name?.length > 0) || coverUrl || types.length > 0 || (blockIds && blockIds.length > 0) || editorHasContent;
 
   return (
     showPropertiesPanel && (
@@ -156,57 +156,57 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                   ) : (
                     <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
                   )}
-                {/* We need to pin to top for Geo Location to prevent covering the display toggle */}
-                <div
-                  className={`absolute right-0 flex items-center gap-1 ${firstRenderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY && renderableType === 'POINT' ? 'top-0' : 'top-6'}`}
-                >
-                  {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
-                  <>
-                    {renderableType === 'TIME' && (
-                      <DateFormatDropdown
-                        value={firstRenderable.value}
-                        format={firstRenderable.options?.format}
-                        onSelect={(value?: string, format?: string) => {
-                          send({
-                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                            payload: {
-                              renderable: firstRenderable,
-                              value: {
-                                value: value ?? firstRenderable.value,
-                                type: 'TIME',
-                                options: {
-                                  format,
+                  {/* We need to pin to top for Geo Location to prevent covering the display toggle */}
+                  <div
+                    className={`absolute right-0 flex items-center gap-1 ${firstRenderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY && renderableType === 'POINT' ? 'top-0' : 'top-6'}`}
+                  >
+                    {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
+                    <>
+                      {renderableType === 'TIME' && (
+                        <DateFormatDropdown
+                          value={firstRenderable.value}
+                          format={firstRenderable.options?.format}
+                          onSelect={(value?: string, format?: string) => {
+                            send({
+                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                              payload: {
+                                renderable: firstRenderable,
+                                value: {
+                                  value: value ?? firstRenderable.value,
+                                  type: 'TIME',
+                                  options: {
+                                    format,
+                                  },
                                 },
                               },
-                            },
-                          });
-                        }}
-                      />
-                    )}
-                    {renderableType === 'NUMBER' && (
-                      <NumberOptionsDropdown
-                        value={firstRenderable.value}
-                        format={firstRenderable.options?.format}
-                        unitId={firstRenderable.options?.unit}
-                        send={({ format, unitId }) => {
-                          send({
-                            type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                            payload: {
-                              renderable: firstRenderable,
-                              value: {
-                                value: firstRenderable.value,
-                                type: 'NUMBER',
-                                options: {
-                                  format,
-                                  unit: unitId,
+                            });
+                          }}
+                        />
+                      )}
+                      {renderableType === 'NUMBER' && (
+                        <NumberOptionsDropdown
+                          value={firstRenderable.value}
+                          format={firstRenderable.options?.format}
+                          unitId={firstRenderable.options?.unit}
+                          send={({ format, unitId }) => {
+                            send({
+                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                              payload: {
+                                renderable: firstRenderable,
+                                value: {
+                                  value: firstRenderable.value,
+                                  type: 'NUMBER',
+                                  options: {
+                                    format,
+                                    unit: unitId,
+                                  },
                                 },
                               },
-                            },
-                          });
-                        }}
-                      />
-                    )}
-                    <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
+                            });
+                          }}
+                        />
+                      )}
+                      <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
 
                       {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
                       {renderableType !== 'RELATION' && (
@@ -259,19 +259,50 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
 
   if (renderable.attributeId === '') {
     return (
-      <EntityTextAutocomplete
-        spaceId={spaceId}
-        placeholder="Add Property..."
-        onDone={result => {
-          onChange();
-          send({
-            type: 'UPSERT_ATTRIBUTE',
-            payload: { renderable, attributeId: result.id, attributeName: result.name },
-          });
-        }}
-        filterByTypes={[{ typeId: SystemIds.ATTRIBUTE, typeName: 'Attribute' }]}
-        alreadySelectedIds={[]}
-      />
+      <>
+        <SelectEntity
+          placeholder="Add property..."
+          spaceId={spaceId}
+          relationValueTypes={[{ typeId: SystemIds.PROPERTY, typeName: 'Property' }]}
+          onCreateEntity={result => {
+            send({
+              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+              payload: {
+                renderable: {
+                  attributeId: SystemIds.NAME_ATTRIBUTE,
+                  entityId: result.id,
+                  spaceId,
+                  attributeName: 'Name',
+                  entityName: result.name,
+                  type: 'TEXT',
+                  value: result.name ?? '',
+                },
+                value: { type: 'TEXT', value: result.name ?? '' },
+              },
+            });
+            send({
+              type: 'UPSERT_RELATION',
+              payload: {
+                fromEntityId: result.id,
+                fromEntityName: result.name,
+                toEntityId: SystemIds.PROPERTY,
+                toEntityName: 'Property',
+                typeOfId: SystemIds.TYPES_ATTRIBUTE,
+                typeOfName: 'Types',
+              },
+            });
+          }}
+          onDone={result => {
+            onChange();
+            send({
+              type: 'UPSERT_ATTRIBUTE',
+              payload: { renderable, attributeId: result.id, attributeName: result.name },
+            });
+          }}
+          withSelectSpace={false}
+          advanced={false}
+        />
+      </>
     );
   }
 
@@ -309,7 +340,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const valueType = relationValueTypes?.[0];
 
   return (
-    <div className="box-border flex flex-wrap items-center gap-1">
+    <div className="flex flex-wrap items-center gap-1 pr-10">
       {relations.map(r => {
         const relationId = r.relationId;
         const relationName = r.valueName;
@@ -405,7 +436,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                   }}
                   onDone={result => {
                     const newRelationId = ID.createEntityId();
-  
+
                     const newRelation: StoreRelation = {
                       id: newRelationId,
                       space: spaceId,
@@ -425,12 +456,12 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                         value: EntityId(result.id),
                       },
                     };
-  
+
                     DB.upsertRelation({
                       relation: newRelation,
                       spaceId,
                     });
-  
+
                     if (result.space) {
                       DB.upsert(
                         {
@@ -445,7 +476,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                         },
                         spaceId
                       );
-  
+
                       if (result.verified) {
                         DB.upsert(
                           {
@@ -467,7 +498,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
               </div>
             );
           }
-          
+
           return (
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
@@ -590,10 +621,9 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             </div>
           );
         }
-
       })}
 
-      {(!hasPlaceholders && typeOfRenderableType === 'RELATION') && (
+      {!hasPlaceholders && typeOfRenderableType === 'RELATION' && (
         <div>
           <SelectEntityAsPopover
             key={JSON.stringify(relationValueTypes)}
@@ -698,7 +728,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
           />
         </div>
       )}
-
     </div>
   );
 }

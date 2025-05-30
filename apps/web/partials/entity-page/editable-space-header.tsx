@@ -116,7 +116,7 @@ export function EditableSpaceHeading({
   return (
     <div className="relative flex items-center justify-between">
       {isEditing ? (
-        <div>
+        <div className="flex-grow">
           <PageStringField variant="mainPage" placeholder="Entity name..." value={name ?? ''} onChange={onNameChange} />
           {/*
             This height differs from the readable page height due to how we're using an expandable textarea for editing
