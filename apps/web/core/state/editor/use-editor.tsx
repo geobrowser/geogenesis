@@ -57,43 +57,25 @@ function makeNewBlockRelation({
   const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
   const afterBlockIndex = nextBlockIds[position + 1] as string | undefined;
 
+  // combine addedBlocks with blockRelations
+  const allRelations = [...blockRelations, ...newBlocks].sort((a, b) => a.index < b.index ? -1 : 1)
+
   // Check both the existing blocks and any that are created as part of this update
   // tick. This is necessary as right now we don't update the Geo state until the
   // user blurs the editor. See the comment earlier in this function.
-  const beforeCollectionItemIndex =
-    blockRelations.find(c => c.block.id === beforeBlockIndex)?.index ??
-    newBlocks.find(c => c.toEntity.id === beforeBlockIndex)?.index;
-  const afterCollectionItemIndex =
-    blockRelations.find(c => c.block.id === afterBlockIndex)?.index ??
-    newBlocks.find(c => c.toEntity.id === afterBlockIndex)?.index;
 
-  // Validate ordering constraint for fractional indexing
-  // If beforeIndex >= afterIndex, we need to fix the ordering
-  let validBeforeIndex = beforeCollectionItemIndex;
-  let validAfterIndex = afterCollectionItemIndex;
-  
-  if (validBeforeIndex && validAfterIndex && validBeforeIndex >= validAfterIndex) {
-    // If the ordering is invalid, we'll use only one of the anchors or neither
-    // This prevents the "left must be less than right" error
-    console.warn('Invalid index ordering detected, using fallback positioning', {
-      beforeIndex: validBeforeIndex,
-      afterIndex: validAfterIndex,
-      position,
-      blockId: addedBlock.id
-    });
-    
-    // Use only the after index if it exists, otherwise only the before index
-    if (validAfterIndex) {
-      validBeforeIndex = undefined;
-    } else {
-      validAfterIndex = undefined;
-    }
-  }
+  const beforeCollectionItemIndex =
+  allRelations.find(c => c.toEntity.id === beforeBlockIndex)?.index 
+
+  // when the afterCollectionItemIndex is undefined, we need to use the next block of beforeBlockIndex
+  const afterCollectionItemIndex =
+    allRelations.find(c => c.toEntity.id === afterBlockIndex)?.index ??
+    allRelations[allRelations.findIndex(c => c.index === beforeCollectionItemIndex) + 1].index;
 
   const newTripleOrdering = R.reorder({
     relationId: newRelationId,
-    beforeIndex: validBeforeIndex,
-    afterIndex: validAfterIndex,
+    beforeIndex: beforeCollectionItemIndex,
+    afterIndex: afterCollectionItemIndex,
   });
 
   const renderableType = ((): RenderableEntityType => {
