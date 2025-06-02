@@ -706,7 +706,8 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
               // the entity ends up with type = 'RELATION' after creation.
               // So temporary I'll add some checks to render it
               (renderableType === 'RELATION' && r.attributeId === VENUE_PROPERTY) ? (
-                <div className="flex w-full flex-col my-3">
+                <div className="flex w-full flex-col">
+                  <span className="my-3 text-[19px] leading-[29px]">{geoData?.name}</span>
                   <GeoLocationPointFields
                     key={relationId}
                     variant="body"

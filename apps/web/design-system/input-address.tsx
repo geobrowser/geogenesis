@@ -30,7 +30,7 @@ import { TopRanked } from './icons/top-ranked';
 import { ResizableContainer } from './resizable-container';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
-import { PLACE_TYPE } from '~/core/system-ids';
+import { ADDRESS_PROPERTY, MAPBOX_PROPERTY, PLACE_TYPE, SOURCE_DATABASE_IDENTIFIER_PROPERTY, SOURCES_TYPE } from '~/core/system-ids';
 
 type SearchPlaceEntityProps = {
   spaceId: string;
@@ -208,7 +208,7 @@ export const InputPlace = ({
 
     //Add type to Address entity
     createRelation(
-      SystemIds.ADDRESS_ATTRIBUTE,
+      ADDRESS_PROPERTY, // TODO use system ID
       'Address',
       addressEntityId,
       result.text,
@@ -218,11 +218,11 @@ export const InputPlace = ({
 
     //Add source to Address entity
     const newRelationSourceId = createRelation(
-      'XrRygNVtYLwG4S1YoiWW8c', // Mapbox attribute
+      MAPBOX_PROPERTY, // TODO use system ID
       'Mapbox',
       addressEntityId,
       result.text,
-      'A7NJF2WPh8VhmvbfVWiyLo', // Source attribute
+      SOURCES_TYPE, // TODO use system ID
       'Sources'
     );
 
@@ -230,7 +230,7 @@ export const InputPlace = ({
     DB.upsert(
       {
         entityId: newRelationSourceId,
-        attributeId: 'CgLt3CoEzWmhPW3XGkakYa',
+        attributeId: SOURCE_DATABASE_IDENTIFIER_PROPERTY, // TODO use system ID
         attributeName: 'Source database identifier',
         entityName: '',
         value: {
@@ -276,11 +276,11 @@ export const InputPlace = ({
 
     //Add source to Place entity
     const newRelationPlaceSourceId = createRelation(
-      'XrRygNVtYLwG4S1YoiWW8c', // Mapbox attribute
+      MAPBOX_PROPERTY, // TODO use system ID
       'Mapbox',
       placeEntityId,
       result.place_name,
-      'A7NJF2WPh8VhmvbfVWiyLo', // Source attribute
+      SOURCES_TYPE, // TODO use system ID
       'Sources'
     );
 
@@ -288,7 +288,7 @@ export const InputPlace = ({
     DB.upsert(
       {
         entityId: newRelationPlaceSourceId,
-        attributeId: 'CgLt3CoEzWmhPW3XGkakYa',
+        attributeId: SOURCE_DATABASE_IDENTIFIER_PROPERTY, // TODO use system ID
         attributeName: 'Source database identifier',
         entityName: '',
         value: {
@@ -309,7 +309,7 @@ export const InputPlace = ({
       'Properties Sourced'
     );
     createRelation(
-      SystemIds.ADDRESS_ATTRIBUTE,
+      ADDRESS_PROPERTY, // TODO use system ID
       'Address',
       newRelationPlaceSourceId,
       '',
@@ -326,7 +326,7 @@ export const InputPlace = ({
       result.text,
       placeEntityId,
       result.place_name,
-      SystemIds.ADDRESS_ATTRIBUTE,
+      ADDRESS_PROPERTY, // TODO use system ID
       'Address'
     );
 
