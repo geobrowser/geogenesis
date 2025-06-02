@@ -107,8 +107,6 @@ export const InputPlace = ({
     filterByTypes,
   });
 
-  console.log(resultEntities);
-
   if (query === '' && result !== null) {
     startTransition(() => {
       setResult(null);
