@@ -438,6 +438,11 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
           );
         }
 
+        //Remove in future. Added it to avoid ts error
+        if (renderableType === 'PLACE') {
+          return null;
+        }
+
         if (r.placeholder === true) {
           return (
             <div key={`${r.entityId}-${r.attributeId}-${r.value}`} data-testid="select-entity" className="w-full">

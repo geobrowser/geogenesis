@@ -10,6 +10,7 @@ import { Date } from '~/design-system/icons/date';
 import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
+import { Place } from '~/design-system/icons/place';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
@@ -234,6 +235,28 @@ export const getRenderableTypeSelectorOptions = (
       onClick: () =>
         onSelect({
           type: 'POINT',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        }),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <IconWrapper>
+            <Place />
+          </IconWrapper>
+          <p>Place</p>
+        </div>
+      ),
+      value: 'PLACE' as const,
+      onClick: () =>
+        onSelect({
+          type: 'PLACE',
           entityId: renderable.entityId,
           entityName: renderable.entityName,
           attributeId: renderable.attributeId,

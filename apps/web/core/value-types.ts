@@ -1,4 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import { PLACE_TYPE } from './system-ids';
 
 import { ValueType as TripleValueType, ValueTypeId } from './types';
 
@@ -9,6 +10,8 @@ export const VALUE_TYPE_IDS: Record<TripleValueType, ValueTypeId> = {
   CHECKBOX: SystemIds.CHECKBOX,
   NUMBER: SystemIds.NUMBER,
   POINT: SystemIds.POINT,
+  // TODO Change to SystemIds
+  PLACE: PLACE_TYPE,
 };
 
 export type FilterableValueType = TripleValueType | 'RELATION' | 'IMAGE';
@@ -21,6 +24,9 @@ export const VALUE_TYPES: Record<ValueTypeId, FilterableValueType> = {
   [SystemIds.RELATION]: 'RELATION',
   [SystemIds.TEXT]: 'TEXT',
   [SystemIds.URL]: 'URL',
+  [SystemIds.POINT]: 'POINT',
+  // TODO Change to SystemIds
+  [PLACE_TYPE]: 'PLACE',
 };
 
 export const VALUE_TYPE_NAMES: Record<ValueTypeId, string> = {
@@ -31,4 +37,5 @@ export const VALUE_TYPE_NAMES: Record<ValueTypeId, string> = {
   [SystemIds.RELATION]: 'Relation',
   [SystemIds.TEXT]: 'Text',
   [SystemIds.URL]: 'Web URL',
+  [SystemIds.POINT]: 'Point',
 };

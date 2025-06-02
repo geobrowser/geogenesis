@@ -70,7 +70,7 @@ export const cloneEntity = async (
           entity: newEntityId,
           attribute: triple.attributeId,
           value: {
-            type: triple.value.type,
+            type: triple.value.type as any, // TODO fix this type in grc-20
             value: replacedValue,
           },
         })
@@ -81,7 +81,7 @@ export const cloneEntity = async (
           entity: newEntityId,
           attribute: triple.attributeId,
           value: {
-            type: triple.value.type,
+            type: triple.value.type as any, // TODO fix this type in grc-20
             value: triple.value.value,
           },
         })

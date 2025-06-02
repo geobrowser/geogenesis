@@ -343,7 +343,8 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               </div>
             );
           }
-          case 'TEXT': {
+          case 'TEXT':
+          case 'POINT': {
             return (
               <div key={index} className="-mt-px flex gap-16">
                 <div className="flex-1 border border-grey-02 p-4">

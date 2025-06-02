@@ -1,14 +1,15 @@
 import { SystemIds, TripleValueOptions } from '@graphprotocol/grc-20';
 
 import { EntityId } from './io/schema';
+import { PLACE_TYPE } from './system-ids';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type ValueType = 'TEXT' | 'URL' | 'TIME' | 'NUMBER' | 'CHECKBOX' | 'POINT';
+export type ValueType = 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER' | 'PLACE' | 'POINT';
 
 export type Value = {
-  type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER' | 'POINT';
+  type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER' | 'PLACE' | 'POINT';
   value: string;
   options?: TripleValueOptions;
 };
@@ -55,7 +56,7 @@ export type Triple = {
   isDeleted?: boolean;
 };
 
-export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT';
+export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT' | 'PLACE';
 
 // Renderable fields are a special data model to represent us rendering both
 // triples and relations in the same way. This is used across tables and entity
@@ -87,6 +88,10 @@ type RelationPropertyProperties = {
   placeholder?: boolean;
 };
 
+export type PointRelationRenderableProperty = {
+  type: 'POINT';
+} & NativeRenderableProperty;
+
 export type BaseRelationRenderableProperty = {
   type: 'RELATION';
 } & RelationPropertyProperties;
@@ -95,23 +100,36 @@ export type ImageRelationRenderableProperty = {
   type: 'IMAGE';
 } & RelationPropertyProperties;
 
-export type PointRelationRenderableProperty = {
-  type: 'POINT';
-} & NativeRenderableProperty;
+export type PlaceRelationRenderableProperty = {
+  type: 'PLACE';
+} & RelationPropertyProperties;
 
-export type RelationRenderableProperty = BaseRelationRenderableProperty | ImageRelationRenderableProperty;
+export type RelationRenderableProperty =
+  | BaseRelationRenderableProperty
+  | ImageRelationRenderableProperty
+  | PlaceRelationRenderableProperty;
 
 export type TripleRenderableProperty = NativeRenderableProperty;
 export type RenderableProperty =
   | TripleRenderableProperty
   | BaseRelationRenderableProperty
   | ImageRelationRenderableProperty
+  | PlaceRelationRenderableProperty
   | PointRelationRenderableProperty;
 
 // The types of renderables don't map 1:1 to the triple value types. We might
 // also render relations with a specific type, e.g., an Image entity or a
 // Person entity, etc.
-export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URL' | 'TIME' | 'IMAGE' | 'CHECKBOX' | 'NUMBER' | 'POINT';
+export type SwitchableRenderableType =
+  | 'TEXT'
+  | 'RELATION'
+  | 'URL'
+  | 'TIME'
+  | 'IMAGE'
+  | 'CHECKBOX'
+  | 'NUMBER'
+  | 'PLACE'
+  | 'POINT';
 
 export type ReviewState =
   | 'idle'
@@ -147,6 +165,7 @@ export type ValueTypeId =
   | typeof SystemIds.CHECKBOX
   | typeof SystemIds.NUMBER
   | typeof SystemIds.IMAGE
+  | typeof PLACE_TYPE
   | typeof SystemIds.POINT;
 
 export type GeoType = {
