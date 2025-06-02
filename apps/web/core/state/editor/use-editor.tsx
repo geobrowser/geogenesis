@@ -57,15 +57,29 @@ function makeNewBlockRelation({
   const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
   const afterBlockIndex = nextBlockIds[position + 1] as string | undefined;
 
+  // Create a unified array with consistent structure for both blockRelations and newBlocks
+  const allRelations = [
+    ...blockRelations.map(r => ({
+      toEntity: { id: r.block.id },
+      index: r.index
+    })),
+    ...newBlocks.map(b => ({
+      toEntity: { id: b.toEntity.id },
+      index: b.index
+    }))
+  ].sort((a, b) => a.index < b.index ? -1 : 1);
+
   // Check both the existing blocks and any that are created as part of this update
   // tick. This is necessary as right now we don't update the Geo state until the
   // user blurs the editor. See the comment earlier in this function.
+
   const beforeCollectionItemIndex =
-    blockRelations.find(c => c.block.id === beforeBlockIndex)?.index ??
-    newBlocks.find(c => c.id === beforeBlockIndex)?.index;
+    allRelations.find(c => c.toEntity.id === beforeBlockIndex)?.index;
+
+  // When the afterCollectionItemIndex is undefined, we need to use the next block of beforeBlockIndex
   const afterCollectionItemIndex =
-    blockRelations.find(c => c.block.id === afterBlockIndex)?.index ??
-    newBlocks.find(c => c.id === afterBlockIndex)?.index;
+    allRelations.find(c => c.toEntity.id === afterBlockIndex)?.index ??
+    allRelations[allRelations.findIndex(c => c.index === beforeCollectionItemIndex) + 1]?.index;
 
   const newTripleOrdering = R.reorder({
     relationId: newRelationId,
