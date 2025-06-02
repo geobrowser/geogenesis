@@ -30,6 +30,8 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
 
   const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId, isRelationPage);
 
+  console.log('ReadableEntityPage renderables', renderables);
+
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
       {Object.entries(renderables).map(([attributeId, renderable]) => {
