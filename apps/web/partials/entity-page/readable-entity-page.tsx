@@ -30,6 +30,11 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
 
   const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId, isRelationPage);
 
+  // If there are no renderables or only the name property, don't render anything
+  if (Object.keys(renderables).length === 0 || (Object.keys(renderables).length === 1 && Object.keys(renderables)[0] === SystemIds.NAME_PROPERTY)) {
+    return;
+  }
+
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
       {Object.entries(renderables).map(([attributeId, renderable]) => {
