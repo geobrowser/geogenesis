@@ -1,7 +1,7 @@
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+
 import * as React from 'react';
 
-import { useGeoCoordinates } from '~/core/hooks/use-geo-coordinates';
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -14,7 +14,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
-import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
+import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -37,7 +37,8 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
       {Object.entries(renderables).map(([attributeId, renderable]) => {
-        const isRelation = renderable[0].type === 'RELATION' || renderable[0].type === 'IMAGE' || renderable[0].type === 'PLACE';
+        const isRelation =
+          renderable[0].type === 'RELATION' || renderable[0].type === 'IMAGE' || renderable[0].type === 'PLACE';
 
         if (isRelation) {
           return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableProperty[]} />;
@@ -166,20 +167,19 @@ function TriplesGroup({
   );
 }
 
-export function RelationsGroup({ relations, isTypes }: { relations: RelationRenderableProperty[], isTypes?: boolean }) {
+export function RelationsGroup({ relations, isTypes }: { relations: RelationRenderableProperty[]; isTypes?: boolean }) {
   const attributeId = relations[0].attributeId;
   const attributeName = relations[0].attributeName;
   const spaceId = relations[0].spaceId;
 
   const { id } = useEntityPageStore();
-  const geoData = useGeoCoordinates(id, spaceId);
 
   // hide cover, avatar, and type properties
   // they are already rendered in the avatar cover component
   // unless this is the types group that is rendered in the header
   if (
-    (attributeId === SystemIds.COVER_PROPERTY) ||
-    (attributeId === ContentIds.AVATAR_PROPERTY) || 
+    attributeId === SystemIds.COVER_PROPERTY ||
+    attributeId === ContentIds.AVATAR_PROPERTY ||
     (attributeId === SystemIds.TYPES_PROPERTY && !isTypes)
   ) {
     return null;
@@ -195,7 +195,7 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
             </Text>
           </Link>
         )}
-        
+
         <div className="flex flex-wrap gap-2">
           {relations.map(r => {
             const relationId = r.relationId;
@@ -212,8 +212,7 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
               <div
                 key={`relation-${relationId}-${relationValue}`}
                 className={`mt-1 ${
-                  renderableType === 'PLACE' ||
-                  (renderableType === 'RELATION' && r.attributeId === VENUE_PROPERTY)
+                  renderableType === 'PLACE' || (renderableType === 'RELATION' && r.attributeId === VENUE_PROPERTY)
                     ? 'w-full'
                     : ''
                 }`}
@@ -230,18 +229,7 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
                 // the entity ends up with type = 'RELATION' after creation.
                 // So temporary I'll add some checks to render it
                 (renderableType === 'RELATION' && r.attributeId === VENUE_PROPERTY) ? (
-                  <div className="flex w-full flex-col my-3">
-                    <span className="my-3 text-[19px] leading-[29px]">{geoData?.name}</span>
-                    <GeoLocationPointFields
-                      key={relationId}
-                      variant="body"
-                      placeholder="Add value..."
-                      aria-label="text-field"
-                      value={geoData?.geoLocation}
-                      onChange={() => {}}
-                      hideInputs={true}
-                    />
-                  </div>
+                  <GeoLocationWrapper relationId={relationId} />
                 ) : null}
               </div>
             );

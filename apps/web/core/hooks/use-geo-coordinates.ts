@@ -1,8 +1,8 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { VENUE_PROPERTY, ADDRESS_PROPERTY, PLACE_TYPE } from '../system-ids';
 
 import { useEntity } from '../database/entities';
 import { EntityId } from '../io/schema';
+import { ADDRESS_PROPERTY, VENUE_PROPERTY } from '../system-ids';
 
 export function useGeoCoordinates(entityId: string, spaceId: string) {
   // Get the main entity

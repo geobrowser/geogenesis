@@ -13,8 +13,8 @@ import { mergeSearchResult } from '../database/result';
 import { SearchResult } from '../io/dto/search';
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
-import { useDebouncedValue } from './use-debounced-value';
 import { PLACE_TYPE } from '../system-ids';
+import { useDebouncedValue } from './use-debounced-value';
 
 export type Feature = {
   place_name: string;
@@ -43,7 +43,7 @@ export const usePlaceSearch = ({ filterByTypes }: SearchOptions = {}) => {
   // TODO replace with a proper system ID import
   const mockFilterByTypes = [PLACE_TYPE];
 
-  const { data: resultsEntities, isLoading: isEntitiesLoading } = useQuery({
+  const { isLoading: isEntitiesLoading } = useQuery({
     enabled: debouncedQuery !== '',
     queryKey: ['search', debouncedQuery, mockFilterByTypes],
     queryFn: async () => {
@@ -83,7 +83,8 @@ export const usePlaceSearch = ({ filterByTypes }: SearchOptions = {}) => {
               throw error;
           }
         }
-
+        console.log('resultOrError.right', resultOrError.right);
+        if (resultOrError.right) setResultEntities([resultOrError.right]);
         return resultOrError.right ? [resultOrError.right] : [];
       }
 
@@ -131,6 +132,9 @@ export const usePlaceSearch = ({ filterByTypes }: SearchOptions = {}) => {
         }
       }
 
+      console.log('resultOrError.right', resultOrError.right);
+
+      setResultEntities(resultOrError.right);
       return resultOrError.right;
     },
     /**
@@ -142,10 +146,6 @@ export const usePlaceSearch = ({ filterByTypes }: SearchOptions = {}) => {
      */
     gcTime: Duration.toMillis(Duration.seconds(15)),
   });
-
-  useEffect(() => {
-    setResultEntities(resultsEntities);
-  }, [resultsEntities]);
 
   const handleSearch = async () => {
     if (query === '') {

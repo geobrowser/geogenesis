@@ -15,6 +15,13 @@ import { Feature } from '~/core/hooks/use-place-search';
 import { usePlaceSearch } from '~/core/hooks/use-place-search';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
+import {
+  ADDRESS_PROPERTY,
+  MAPBOX_PROPERTY,
+  PLACE_TYPE,
+  SOURCES_TYPE,
+  SOURCE_DATABASE_IDENTIFIER_PROPERTY,
+} from '~/core/system-ids';
 import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 import { GeoPoint } from '~/core/utils/utils';
@@ -30,7 +37,6 @@ import { TopRanked } from './icons/top-ranked';
 import { ResizableContainer } from './resizable-container';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
-import { ADDRESS_PROPERTY, MAPBOX_PROPERTY, PLACE_TYPE, SOURCE_DATABASE_IDENTIFIER_PROPERTY, SOURCES_TYPE } from '~/core/system-ids';
 
 type SearchPlaceEntityProps = {
   spaceId: string;
@@ -103,7 +109,7 @@ export const InputPlace = ({
 
   const filterByTypes = relationValueTypes.length > 0 ? relationValueTypes.map(r => r.typeId) : undefined;
 
-  const { results, onQueryChange, query, isEmpty, isLoading, resultEntities, isEntitiesLoading } = usePlaceSearch({
+  const { results, onQueryChange, query, isEmpty, resultEntities, isEntitiesLoading } = usePlaceSearch({
     filterByTypes,
   });
 
@@ -156,12 +162,12 @@ export const InputPlace = ({
     return newRelationId;
   };
 
-  //Create/import logic
+  // Create/import logic
   const createPlaceWithAddress = async (result: Feature) => {
     const addressEntityId = ID.createEntityId();
     const placeEntityId = ID.createEntityId();
 
-    //Get coordinates from mapbox
+    // Get coordinates from mapbox
     const coordinates = await GeoPoint.fetchCoordinatesFromMapbox(result.mapbox_id);
 
     // Create Address entity
@@ -204,7 +210,7 @@ export const InputPlace = ({
       spaceId
     );
 
-    //Add type to Address entity
+    // Add type to Address entity
     createRelation(
       ADDRESS_PROPERTY, // TODO use system ID
       'Address',
@@ -214,7 +220,7 @@ export const InputPlace = ({
       'Types'
     );
 
-    //Add source to Address entity
+    // Add source to Address entity
     const newRelationSourceId = createRelation(
       MAPBOX_PROPERTY, // TODO use system ID
       'Mapbox',
@@ -224,7 +230,7 @@ export const InputPlace = ({
       'Sources'
     );
 
-    //Add source db identifier to address
+    // Add source db identifier to address
     DB.upsert(
       {
         entityId: newRelationSourceId,
@@ -239,7 +245,7 @@ export const InputPlace = ({
       spaceId
     );
 
-    //Add relations to properties sources (name/geo location)
+    // Add relations to properties sources (name/geo location)
     createRelation(
       SystemIds.NAME_ATTRIBUTE,
       'Name',
@@ -257,7 +263,7 @@ export const InputPlace = ({
       'Properties Sourced'
     );
 
-    //Create place entity
+    // Create place entity
     DB.upsert(
       {
         entityId: placeEntityId,
@@ -272,7 +278,7 @@ export const InputPlace = ({
       spaceId
     );
 
-    //Add source to Place entity
+    // Add source to Place entity
     const newRelationPlaceSourceId = createRelation(
       MAPBOX_PROPERTY, // TODO use system ID
       'Mapbox',
@@ -282,7 +288,7 @@ export const InputPlace = ({
       'Sources'
     );
 
-    //Add source db identifier to place
+    // Add source db identifier to place
     DB.upsert(
       {
         entityId: newRelationPlaceSourceId,
@@ -297,7 +303,7 @@ export const InputPlace = ({
       spaceId
     );
 
-    //Add relations to properties sources (name/address)
+    // Add relations to properties sources (name/address)
     createRelation(
       SystemIds.NAME_ATTRIBUTE,
       'Name',
@@ -318,7 +324,7 @@ export const InputPlace = ({
     // TODO use system ID
     createRelation(PLACE_TYPE, 'Place', placeEntityId, result.place_name, SystemIds.TYPES_ATTRIBUTE, 'Types');
 
-    //Create relation in place entity with address entity
+    // Create relation in place entity with address entity
     createRelation(
       addressEntityId,
       result.text,
@@ -328,7 +334,7 @@ export const InputPlace = ({
       'Address'
     );
 
-    //Create relation between place entity and current working entity
+    // Create relation between place entity and current working entity
     onDone?.({ id: placeEntityId, name: result.place_name }, true);
   };
 

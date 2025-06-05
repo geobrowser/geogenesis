@@ -5,6 +5,8 @@ import * as React from 'react';
 import { useEffect } from 'react';
 
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
+import { useGeoCoordinates } from '~/core/hooks/use-geo-coordinates';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { GeoPoint } from '~/core/utils/utils';
 
 import { Map } from '../map';
@@ -110,6 +112,26 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
         </div>
       )}
       <Map latitude={parseFloat(pointValues.latitude) || 0} longitude={parseFloat(pointValues.longitude) || 0} />
+    </div>
+  );
+}
+
+export function GeoLocationWrapper({ relationId }: { relationId: string }) {
+  const { id, spaceId } = useEntityPageStore();
+  const geoData = useGeoCoordinates(id, spaceId);
+
+  return (
+    <div className="flex w-full flex-col">
+      <span className="my-3 text-[19px] leading-[29px]">{geoData?.name}</span>
+      <GeoLocationPointFields
+        key={relationId}
+        variant="body"
+        placeholder="Add value..."
+        aria-label="text-field"
+        value={geoData?.geoLocation}
+        onChange={() => {}}
+        hideInputs={true}
+      />
     </div>
   );
 }
