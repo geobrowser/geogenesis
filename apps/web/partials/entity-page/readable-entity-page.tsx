@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
+import { Relation, RelationRenderableProperty, RenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -15,6 +15,12 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+
+type Renderables = {
+  [key: string]: RenderableProperty[];
+  [key: number]: RenderableProperty[];
+  [key: symbol]: RenderableProperty[];
+};
 
 interface Props {
   triples: Triple[];
@@ -30,8 +36,35 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
 
   const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId, isRelationPage);
 
-  // If there are no renderables or only the name property, don't render anything
-  if (Object.keys(renderables).length === 0 || (Object.keys(renderables).length === 1 && Object.keys(renderables)[0] === SystemIds.NAME_PROPERTY)) {
+  /**
+   * Checks if the current page is a space or entity page by examining its renderables.
+   * 
+   * A space page will only contain Types and Name attributes (length 2).
+   * An entity page will only contain the Name attribute (length 1).
+   * 
+   * This helps determine if we need to render any property fields.
+   */
+  function checkRenderableType(renderable: RenderableProperty[], type: string): boolean {
+    return renderable.every(item => {
+      const isRelation = item.type.toLowerCase() === "relation";
+      return isRelation ? item.value === type : item.attributeId === type;
+    });
+  }
+
+  function isRenderablesNoProperty(renderables: Renderables): boolean {
+    const values = Object.values(renderables);
+    
+    if (values.length <= 1) return true;
+    
+    if (values.length === 2) {
+      const [nameProperty, spaceType] = values;
+      return checkRenderableType(spaceType, SystemIds.SPACE_TYPE) && 
+             checkRenderableType(nameProperty, SystemIds.NAME_PROPERTY);
+    }    
+    return false;
+  }
+
+  if (isRenderablesNoProperty(renderables)) {
     return;
   }
 
@@ -177,7 +210,7 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
   // unless this is the types group that is rendered in the header
   if (
     (attributeId === SystemIds.COVER_PROPERTY) ||
-    (attributeId === ContentIds.AVATAR_PROPERTY) || 
+    (attributeId === ContentIds.AVATAR_PROPERTY) ||
     (attributeId === SystemIds.TYPES_PROPERTY && !isTypes)
   ) {
     return null;
@@ -193,7 +226,7 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
             </Text>
           </Link>
         )}
-        
+
         <div className="flex flex-wrap gap-2">
           {relations.map(r => {
             const relationId = r.relationId;
@@ -205,7 +238,7 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
               const imagePath = getImagePath(relationValue ?? '');
               return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={imagePath} />;
             }
-            
+
             return (
               <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
                 <LinkableRelationChip
