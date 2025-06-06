@@ -3,7 +3,7 @@ import { Duration } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Subgraph } from '~/core/io';
 import { EntityId } from '~/core/io/schema';
@@ -22,11 +22,7 @@ export type Feature = {
   text: string;
 };
 
-interface SearchOptions {
-  filterByTypes?: string[];
-}
-
-export const usePlaceSearch = ({ filterByTypes }: SearchOptions = {}) => {
+export const usePlaceSearch = () => {
   const [query, setQuery] = useState('');
   const [results, setPlacesResults] = useState<Feature[]>([]);
   const [resultEntities, setResultEntities] = useState<SearchResult[] | undefined>();
@@ -147,7 +143,7 @@ export const usePlaceSearch = ({ filterByTypes }: SearchOptions = {}) => {
     gcTime: Duration.toMillis(Duration.seconds(15)),
   });
 
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (query === '') {
       setPlacesResults([]);
       setIsLoading(false);
@@ -172,7 +168,7 @@ export const usePlaceSearch = ({ filterByTypes }: SearchOptions = {}) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [query]);
 
   const onQueryChange = (value: string) => {
     setIsLoading(true);
@@ -181,7 +177,7 @@ export const usePlaceSearch = ({ filterByTypes }: SearchOptions = {}) => {
 
   useEffect(() => {
     handleSearch();
-  }, [debouncedQuery]);
+  }, [debouncedQuery, handleSearch]);
 
   return {
     results,

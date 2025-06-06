@@ -6,10 +6,10 @@ import { PLACE_TYPE } from './system-ids';
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type ValueType = 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER' | 'PLACE' | 'POINT';
+export type ValueType = 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER' | 'POINT';
 
 export type Value = {
-  type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER' | 'PLACE' | 'POINT';
+  type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER' | 'POINT';
   value: string;
   options?: TripleValueOptions;
 };

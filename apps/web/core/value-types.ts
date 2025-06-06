@@ -10,8 +10,6 @@ export const VALUE_TYPE_IDS: Record<TripleValueType, ValueTypeId> = {
   CHECKBOX: SystemIds.CHECKBOX,
   NUMBER: SystemIds.NUMBER,
   POINT: SystemIds.POINT,
-  // TODO Change to SystemIds
-  PLACE: PLACE_TYPE,
 };
 
 export type FilterableValueType = TripleValueType | 'RELATION' | 'IMAGE';
@@ -25,8 +23,6 @@ export const VALUE_TYPES: Record<ValueTypeId, FilterableValueType> = {
   [SystemIds.TEXT]: 'TEXT',
   [SystemIds.URL]: 'URL',
   [SystemIds.POINT]: 'POINT',
-  // TODO Change to SystemIds
-  [PLACE_TYPE]: 'PLACE',
 };
 
 export const VALUE_TYPE_NAMES: Record<ValueTypeId, string> = {

@@ -81,7 +81,7 @@ export class ChangeStream {
               attribute: event.triple.attributeId,
               entity: event.triple.entityId,
               value: {
-                ...event.triple.value as any, // TODO: Fix this type in grc-20
+                ...event.triple.value,
               },
             },
           });

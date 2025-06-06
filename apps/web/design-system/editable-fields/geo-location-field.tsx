@@ -79,7 +79,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
         });
       }
     }
-  }, [props.value]);
+  }, [props.value, localValue]);
 
   return (
     <div className="flex w-full flex-col gap-4">

@@ -105,7 +105,7 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
         entity: t.entityId,
         attribute: t.attributeId,
         value: {
-          type: t.value.type as any, // TODO fix this type in grc-20
+          type: t.value.type,
           value: t.value.value,
           ...(t.value.options !== undefined && {
             options: Object.fromEntries(Object.entries(t.value.options).filter(([, v]) => v !== undefined)),
