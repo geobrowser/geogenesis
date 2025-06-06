@@ -9,6 +9,7 @@ import {
   BaseRelationRenderableProperty,
   ImageRelationRenderableProperty,
   OmitStrict,
+  PlaceRelationRenderableProperty,
   RenderableEntityType,
   RenderableProperty,
   TripleRenderableProperty,
@@ -69,7 +70,7 @@ export type EditEvent =
   | {
       type: 'DELETE_RELATION';
       payload: {
-        renderable: BaseRelationRenderableProperty | ImageRelationRenderableProperty;
+        renderable: BaseRelationRenderableProperty | ImageRelationRenderableProperty | PlaceRelationRenderableProperty;
       };
     }
 

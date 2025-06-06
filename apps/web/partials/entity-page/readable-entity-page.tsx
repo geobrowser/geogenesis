@@ -4,7 +4,9 @@ import * as React from 'react';
 
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { VENUE_PROPERTY } from '~/core/system-ids';
 import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -12,6 +14,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -34,7 +37,8 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
       {Object.entries(renderables).map(([attributeId, renderable]) => {
-        const isRelation = renderable[0].type === 'RELATION' || renderable[0].type === 'IMAGE';
+        const isRelation =
+          renderable[0].type === 'RELATION' || renderable[0].type === 'IMAGE' || renderable[0].type === 'PLACE';
 
         if (isRelation) {
           return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableProperty[]} />;
@@ -168,6 +172,8 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
   const attributeName = relations[0].attributeName;
   const spaceId = relations[0].spaceId;
 
+  const { id } = useEntityPageStore();
+
   // hide cover, avatar, and type properties
   // they are already rendered in the avatar cover component
   // unless this is the types group that is rendered in the header
@@ -203,7 +209,14 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
             }
 
             return (
-              <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
+              <div
+                key={`relation-${relationId}-${relationValue}`}
+                className={`mt-1 ${
+                  renderableType === 'PLACE' || (renderableType === 'RELATION' && r.attributeId === VENUE_PROPERTY)
+                    ? 'w-full'
+                    : ''
+                }`}
+              >
                 <LinkableRelationChip
                   isEditing={false}
                   currentSpaceId={spaceId}
@@ -212,6 +225,13 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
                 >
                   {relationName ?? relationValue}
                 </LinkableRelationChip>
+                {renderableType === 'PLACE' ||
+                // Currently, when we create an entity with a venue property and renderable type = 'PLACE',
+                // the entity ends up with type = 'RELATION' after creation.
+                // So temporary I'll add some checks to render it
+                (renderableType === 'RELATION' && r.attributeId === VENUE_PROPERTY) ? (
+                  <GeoLocationWrapper relationId={relationId} />
+                ) : null}
               </div>
             );
           })}
