@@ -219,8 +219,9 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
               >
                 <LinkableRelationChip
                   isEditing={false}
-                  entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
-                  relationHref={NavUtils.toEntity(spaceId, relationId)}
+                  currentSpaceId={spaceId}
+                  entityId={relationValue}
+                  relationId={relationId}
                 >
                   {relationName ?? relationValue}
                 </LinkableRelationChip>

@@ -4,7 +4,7 @@ import { Source } from '~/core/blocks/data/source';
 import { RelationRenderableProperty, RenderableProperty } from '~/core/types';
 import type { RelationValueType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { getImagePath } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -29,7 +29,6 @@ type Props = {
   filterSearchByTypes?: RelationValueType[];
   isPlaceholderRow: boolean;
   name: string | null;
-  href: string;
   currentSpaceId: string;
   collectionId?: string;
   relationId?: string;
@@ -47,7 +46,6 @@ export function EditableEntityTableCell({
   filterSearchByTypes,
   isPlaceholderRow,
   name,
-  href,
   currentSpaceId,
   collectionId,
   relationId,
@@ -149,7 +147,6 @@ export function EditableEntityTableCell({
             view="TABLE"
             isEditing={true}
             name={name}
-            href={href}
             currentSpaceId={currentSpaceId}
             entityId={entityId}
             spaceId={spaceId}
@@ -287,8 +284,9 @@ export function EditableEntityTableCell({
                       }
                     );
                   }}
-                  entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
-                  relationHref={NavUtils.toEntity(spaceId, relationId)}
+                  currentSpaceId={spaceId}
+                  entityId={relationValue}
+                  relationId={relationId}
                 >
                   {relationName ?? relationValue}
                 </LinkableRelationChip>

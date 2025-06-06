@@ -692,8 +692,9 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                     },
                   });
                 }}
-                entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
-                relationHref={NavUtils.toEntity(spaceId, relationId)}
+                currentSpaceId={spaceId}
+                entityId={relationValue}
+                relationId={relationId}
               >
                 {relationName ?? relationValue}
               </LinkableRelationChip>
