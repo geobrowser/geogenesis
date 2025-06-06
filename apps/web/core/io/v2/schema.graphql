@@ -1,0 +1,184 @@
+type Entity {
+  id: ID!
+  name: String
+  description: String
+  # cover: How do we want to represent cover?
+  blocks: [Block]!
+  createdAt: String!
+  createdAtBlock: String!
+  updatedAt: String!
+  updatedAtBlock: String!
+
+  # Values associated with this entity, optionally filtered by spaceId
+  # When spaceId is provided, only returns values from that specific space
+  values(spaceId: String, filter: ValueFilter): [Value]!
+
+  # Relations associated with this entity, optionally filtered by spaceId
+  # When spaceId is provided, only returns relations from that specific space
+  relations(spaceId: String, filter: RelationFilter): [Relation]!
+
+  types: [Entity]!
+  spaces: [String]!
+}
+
+enum DataSourceType {
+  QUERY
+  GEO
+  COLLECTION
+}
+
+enum BlockType {
+  TEXT
+  IMAGE
+  DATA
+}
+
+type Block {
+  id: ID!
+  type: BlockType!
+  value: String # depends on the block type, e.g., text, image, video, etc.
+  entity: Entity
+  dataSourceType: DataSourceType
+}
+
+enum DataType {
+  TEXT
+  NUMBER
+  CHECKBOX
+  TIME
+  POINT
+  RELATION
+}
+
+type Property {
+  id: ID!
+  dataType: DataType!
+  relationValueTypes: [Type]
+  entity: Entity
+}
+
+type Value {
+  id: ID!
+  propertyId: String!
+  entityId: String!
+  spaceId: String!
+  value: String
+
+  entity: Entity
+  property: Property
+
+  language: String
+  unit: String
+}
+
+type Relation {
+  id: ID!
+  spaceId: String!
+  typeId: String!
+  fromId: String!
+  toId: String!
+  toSpaceId: String
+  position: String
+
+  type: Entity
+  from: Entity
+  to: Entity
+  # verified
+}
+
+type Type {
+  id: ID!
+  name: String
+  description: String
+
+  properties: [Property]
+  entity: Entity
+}
+
+type Query {
+  # Get multiple entities with optional space filtering
+  # When spaceId is provided, the spaceId propagates to child resolvers for values and relations
+  entities(filter: EntityFilter, limit: Int = 100, offset: Int = 0, spaceId: String): [Entity]!
+
+  # Get a single entity by ID with optional space context
+  # When spaceId is provided, the spaceId propagates to child resolvers for values and relations
+  entity(id: String!, spaceId: String): Entity
+
+  types(spaceId: String, limit: Int = 100, offset: Int = 0): [Type]!
+
+  properties(filter: PropertyFilter, limit: Int = 100, offset: Int = 0): [Property]!
+
+  # Search entities by name and description using pg_trgm similarity
+  search(query: String!, spaceId: String, limit: Int = 10, offset: Int = 0, threshold: Float = 0.3): [Entity]!
+
+  # relation
+  # relations
+  # property
+  # properties
+  # type
+  # space
+  # spaces
+  # proposal
+  # proposals
+  # edit
+  # edits
+  # version?
+  # versions?
+}
+
+input PropertyFilter {
+  dataType: DataType
+}
+
+input TextFilter {
+  is: String
+  contains: String
+  startsWith: String
+  endsWith: String
+  exists: Boolean
+  NOT: TextFilter
+}
+
+input NumberFilter {
+  is: Float
+  lessThan: Float
+  lessThanOrEqual: Float
+  greaterThan: Float
+  greaterThanOrEqual: Float
+  exists: Boolean
+  NOT: NumberFilter
+}
+
+input CheckboxFilter {
+  is: Boolean
+  exists: Boolean
+}
+
+input PointFilter {
+  is: [Float]
+  exists: Boolean
+}
+
+input ValueFilter {
+  property: String!
+  text: TextFilter
+  number: NumberFilter
+  checkbox: CheckboxFilter
+  point: PointFilter
+}
+
+input RelationFilter {
+  typeId: String
+  fromEntityId: String
+  toEntityId: String
+}
+
+# Filter input for entities in Query.entities
+# Supports logical operators and filtering by values and relations
+input EntityFilter {
+  OR: [EntityFilter!]
+  NOT: EntityFilter
+  value: ValueFilter
+  fromRelation: RelationFilter
+  toRelation: RelationFilter
+}
