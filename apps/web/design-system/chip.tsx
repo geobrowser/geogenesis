@@ -222,7 +222,8 @@ export function LinkableRelationChip({
             sideOffset={-4}
             className="z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
           >
-            {isEditing && (
+            {/* @TODO restore with GRC-20 */}
+            {/* {isEditing && (
               <div
                 className="-mt-1 inline-block"
                 onMouseEnter={() => setIsSpaceHovered(true)}
@@ -296,7 +297,7 @@ export function LinkableRelationChip({
                   }
                 />
               </div>
-            )}
+            )} */}
             {relationId && (
               <Link
                 href={NavUtils.toEntity(currentSpaceId, relationId)}
