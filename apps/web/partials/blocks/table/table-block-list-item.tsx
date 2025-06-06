@@ -254,7 +254,6 @@ export function TableBlockListItem({
                     view="LIST"
                     isEditing={true}
                     name={name}
-                    href={href}
                     currentSpaceId={currentSpaceId}
                     entityId={rowEntityId}
                     spaceId={nameCell?.space}
@@ -381,7 +380,6 @@ export function TableBlockListItem({
             view="LIST"
             isEditing={false}
             name={name}
-            href={href}
             currentSpaceId={currentSpaceId}
             entityId={rowEntityId}
             spaceId={nameCell?.space}
