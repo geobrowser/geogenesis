@@ -36,35 +36,19 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
 
   const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId, isRelationPage);
 
-  /**
-   * Checks if the current page is a space or entity page by examining its renderables.
-   * 
-   * A space page will only contain Types and Name attributes (length 2).
-   * An entity page will only contain the Name attribute (length 1).
-   * 
-   * This helps determine if we need to render any property fields.
-   */
-  function checkRenderableType(renderable: RenderableProperty[], type: string): boolean {
-    return renderable.every(item => {
-      const isRelation = item.type.toLowerCase() === "relation";
-      return isRelation ? item.value === type : item.attributeId === type;
+  // Checks if the current page is a space or entity page by examining its renderables.
+  function countRenderableProperty(renderables: Renderables): number {
+    let count = 0;
+    Object.values(renderables).forEach((renderable) => {
+      const attributeId = renderable[0].attributeId;
+      if (attributeId !== SystemIds.TYPES_PROPERTY && attributeId !== SystemIds.NAME_PROPERTY) {
+        count++;
+      }
     });
+    return count;
   }
 
-  function isRenderablesNoProperty(renderables: Renderables): boolean {
-    const values = Object.values(renderables);
-    
-    if (values.length <= 1) return true;
-    
-    if (values.length === 2) {
-      const [nameProperty, spaceType] = values;
-      return checkRenderableType(spaceType, SystemIds.SPACE_TYPE) && 
-             checkRenderableType(nameProperty, SystemIds.NAME_PROPERTY);
-    }    
-    return false;
-  }
-
-  if (isRenderablesNoProperty(renderables)) {
+  if (countRenderableProperty(renderables) <= 0) {
     return;
   }
 
