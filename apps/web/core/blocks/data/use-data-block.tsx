@@ -190,10 +190,13 @@ export function useDataBlock() {
 
   // @TODO: Returned data type should be a FSM depending on the source.type
   // For collections, check if there are more items beyond the current page
-  const hasNextPage = source.type === 'COLLECTION' 
-    ? (pageNumber + 1) * PAGE_SIZE < collectionLength
-    : rows ? rows.length > PAGE_SIZE : false;
-  
+  const hasNextPage =
+    source.type === 'COLLECTION'
+      ? (pageNumber + 1) * PAGE_SIZE < collectionLength
+      : rows
+        ? rows.length > PAGE_SIZE
+        : false;
+
   return {
     entityId,
     spaceId,
@@ -263,11 +266,11 @@ function filterStateToWhere(filterState: Filter[]): WhereCondition {
 
   for (const filter of filterState) {
     if (filter.valueType === 'TEXT') {
-      if (!where.triples) {
-        where.triples = [];
+      if (!where.values) {
+        where.values = [];
       }
 
-      where['triples'].push({
+      where['values'].push({
         attributeId: {
           equals: filter.columnId,
         },

@@ -111,7 +111,7 @@ export class SyncEngine {
       case GeoEventStream.RELATION_DELETED: {
         entityIds.push(event.relation.fromEntity.id);
         entityIds.push(event.relation.toEntity.id);
-        entityIds.push(event.relation.typeOf.id);
+        entityIds.push(event.relation.type.id);
         entityIds.push(event.relation.id);
 
         // Update any entities in the store that reference the entity where the relation is

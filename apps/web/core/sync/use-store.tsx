@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 
 import { useEffect, useRef, useState } from 'react';
 
-import { Entity } from '../io/dto/entities';
+import { Entity } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E } from './orm';
 import { GeoStore } from './store';
@@ -89,13 +89,13 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationToChanged = entity?.relationsOut.some(r => r.toEntity.id === event.value.entityId);
+      const maybeRelationToChanged = entity?.relations.some(r => r.toEntity.id === event.value.entityId);
 
       if (maybeRelationToChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entity?.relationsOut.some(r => r.id === event.value.entityId);
+      const maybeRelationEntityChanged = entity?.relations.some(r => r.id === event.value.entityId);
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;
@@ -120,13 +120,13 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationToChanged = entity?.relationsOut.some(r => r.toEntity.id === event.value.entityId);
+      const maybeRelationToChanged = entity?.relations.some(r => r.toEntity.id === event.value.entityId);
 
       if (maybeRelationToChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entity?.relationsOut.some(r => r.id === event.value.entityId);
+      const maybeRelationEntityChanged = entity?.relations.some(r => r.id === event.value.entityId);
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;
@@ -272,7 +272,7 @@ export function useQueryEntities({
        * to get the latest name for Geo, PBC.
        */
       const maybeRelationChanged = latestQueriedEntities.some(e =>
-        e.relationsOut.some(r => syncedEntitiesIds.includes(r.toEntity.id))
+        e.relations.some(r => syncedEntitiesIds.includes(r.toEntity.id))
       );
 
       if (maybeRelationChanged) {
@@ -338,15 +338,13 @@ export function useQueryEntities({
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationToChanged = entities.some(e =>
-        e.relationsOut.some(r => r.toEntity.id === event.value.entityId)
-      );
+      const maybeRelationToChanged = entities.some(e => e.relations.some(r => r.toEntity.id === event.value.entityId));
 
       if (maybeRelationToChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entities.some(e => e.relationsOut.some(r => r.id === event.value.entityId));
+      const maybeRelationEntityChanged = entities.some(e => e.relations.some(r => r.id === event.value.entityId));
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;
@@ -393,13 +391,13 @@ export function useQueryEntities({
        * re-pull Byron to get the latest name for Geo, PBC.
        */
 
-      const maybeRelationChanged = entities.some(e => e.relationsOut.some(r => r.toEntity.id === event.value.entityId));
+      const maybeRelationChanged = entities.some(e => e.relations.some(r => r.toEntity.id === event.value.entityId));
 
       if (maybeRelationChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entities.some(e => e.relationsOut.some(r => r.id === event.value.entityId));
+      const maybeRelationEntityChanged = entities.some(e => e.relations.some(r => r.id === event.value.entityId));
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;

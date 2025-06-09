@@ -1,8 +1,7 @@
-import { Entity } from '~/core/io/dto/entities';
 import { GeoStore } from '~/core/sync/store';
-import { Relation, Triple } from '~/core/types';
 
 import { EntityId } from '../io/schema';
+import { Entity, Relation, Value } from '../v2.types';
 
 const compareOperators = {
   string: {
@@ -47,11 +46,11 @@ type NumberCondition = {
 
 type BooleanCondition = { equals: boolean };
 
-type TripleCondition = {
-  attributeName?: StringCondition;
-  attributeId?: StringCondition;
+type ValueCondition = {
+  propertyName?: StringCondition;
+  propertyId?: StringCondition;
   value?: StringCondition | NumberCondition | BooleanCondition;
-  valueType?: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER';
+  dataType?: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER';
   space?: StringCondition;
 };
 
@@ -68,7 +67,7 @@ export type WhereCondition = {
   types?: { id?: StringCondition; name?: StringCondition }[];
   spaces?: StringCondition[];
   space?: { id?: StringCondition };
-  triples?: TripleCondition[];
+  values?: ValueCondition[];
   relations?: RelationCondition[];
   OR?: WhereCondition[];
   AND?: WhereCondition[];
@@ -157,10 +156,10 @@ export class EntityQuery {
   }
 
   /**
-   * Filter by triple (property)
+   * Filter by value (property)
    */
-  whereTriple(condition: TripleCondition): EntityQuery {
-    return this.where({ triples: [condition] });
+  whereValue(condition: ValueCondition): EntityQuery {
+    return this.where({ values: [condition] });
   }
 
   /**
@@ -379,11 +378,11 @@ export class EntityQuery {
         }
         return false;
 
-      case 'triples':
-        return this.matchesTriples(entity.triples, condition);
+      case 'values':
+        return this.matchesValues(entity.values, condition);
 
       case 'relations': {
-        return this.matchesRelations(entity.relationsOut, condition);
+        return this.matchesRelations(entity.relations, condition);
       }
 
       default:
@@ -392,48 +391,48 @@ export class EntityQuery {
   }
 
   /**
-   * Check if any triples match the condition
+   * Check if any values match the condition
    */
-  private matchesTriples(triples: Triple[], condition: TripleCondition | TripleCondition[]): boolean {
+  private matchesValues(values: Value[], condition: ValueCondition | ValueCondition[]): boolean {
     const conditions = Array.isArray(condition) ? condition : [condition];
 
     return conditions.some(cond => {
-      return triples.some(triple => {
+      return values.some(value => {
         // Check attributeName
-        if (cond.attributeName && !this.matchesStringCondition(triple.attributeName || '', cond.attributeName)) {
+        if (cond.propertyName && !this.matchesStringCondition(value.property.name || '', cond.propertyName)) {
           return false;
         }
 
         // Check attributeId
-        if (cond.attributeId && !this.matchesStringCondition(triple.attributeId, cond.attributeId)) {
+        if (cond.propertyId && !this.matchesStringCondition(value.property.id, cond.propertyId)) {
           return false;
         }
 
         // Check space
-        if (cond.space && !this.matchesStringCondition(triple.space, cond.space)) {
+        if (cond.space && !this.matchesStringCondition(value.spaceId, cond.space)) {
           return false;
         }
 
         // Check valueType
-        if (cond.valueType && triple.value.type !== cond.valueType) {
+        if (cond.dataType && value.property.dataType !== cond.dataType) {
           return false;
         }
 
         // Check value
         if (cond.value) {
-          if (triple.value.type === 'NUMBER') {
-            const numValue = parseFloat(triple.value.value);
+          if (value.property.dataType === 'NUMBER') {
+            const numValue = parseFloat(value.value);
             if (isNaN(numValue) || !this.matchesNumberCondition(numValue, cond.value as NumberCondition)) {
               return false;
             }
-          } else if (triple.value.type === 'CHECKBOX') {
-            const boolValue = triple.value.value.toLowerCase() === 'true';
+          } else if (value.property.dataType === 'CHECKBOX') {
+            const boolValue = value.value.toLowerCase() === 'true';
             if (!this.matchesBooleanCondition(boolValue, cond.value as BooleanCondition)) {
               return false;
             }
           } else {
             // TEXT, URL, TIME
-            if (!this.matchesStringCondition(triple.value.value, cond.value as StringCondition)) {
+            if (!this.matchesStringCondition(value.value, cond.value as StringCondition)) {
               return false;
             }
           }
@@ -453,12 +452,12 @@ export class EntityQuery {
     return conditions.every(cond => {
       return relations.some(relation => {
         // Check typeOf.id
-        if (cond.typeOf?.id && !this.matchesStringCondition(relation.typeOf.id as string, cond.typeOf.id)) {
+        if (cond.typeOf?.id && !this.matchesStringCondition(relation.type.id as string, cond.typeOf.id)) {
           return false;
         }
 
         // Check typeOf.name
-        if (cond.typeOf?.name && !this.matchesStringCondition(relation.typeOf.name || '', cond.typeOf.name)) {
+        if (cond.typeOf?.name && !this.matchesStringCondition(relation.type.name || '', cond.typeOf.name)) {
           return false;
         }
 
@@ -473,7 +472,7 @@ export class EntityQuery {
         }
 
         // Check space
-        if (cond.space && !this.matchesStringCondition(relation.space, cond.space)) {
+        if (cond.space && !this.matchesStringCondition(relation.spaceId, cond.space)) {
           return false;
         }
 
@@ -665,11 +664,11 @@ export class EntityQuery {
           case 'spaces':
             result.spaces = entity.spaces;
             break;
-          case 'triples':
-            result.triples = entity.triples;
+          case 'values':
+            result.values = entity.values;
             break;
-          case 'relationsOut':
-            result.relationsOut = entity.relationsOut;
+          case 'relations':
+            result.relations = entity.relations;
             break;
         }
       }
@@ -725,7 +724,7 @@ export class EntityQueryBuilder {
       .orWhere([
         { name: { contains: text } },
         { description: { contains: text } },
-        { triples: [{ value: { contains: text } }] },
+        { values: [{ value: { contains: text } }] },
       ])
       .execute();
   }
@@ -743,11 +742,11 @@ export class EntityQueryBuilder {
    * Find entities that have a specific property (triple)
    */
   findByProperty(propertyName: string, value?: string): Entity[] {
-    const condition: TripleCondition = { attributeName: { contains: propertyName } };
+    const condition: ValueCondition = { propertyName: { contains: propertyName } };
     if (value !== undefined) {
       condition.value = { contains: value };
     }
-    return this.query().whereTriple(condition).execute();
+    return this.query().whereValue(condition).execute();
   }
 
   /**

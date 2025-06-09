@@ -54,7 +54,7 @@ export class E {
     spaceId?: string;
     store: GeoStore;
     mergeWith?: Entity | null;
-  }) {
+  }): Entity | null {
     const remoteEntity = mergeWith;
 
     // We need to include the deleted to correctly merge with remote data
@@ -93,14 +93,8 @@ export class E {
       spaces: [...(localEntity?.spaces ?? []), ...(remoteEntity?.spaces ?? [])],
       description,
       types,
-      triples: values,
-      relationsOut: relations,
-      // @TODO: Spaces with metadata
-      // @TODO: Schema? Adding schema here might result in infinite queries since we
-      // if we called getEntity from within getEntity it would query infinitlely deep
-      // until we hit some defined base-case. We could specify a max depth for the
-      // recursion so we only return the closest schema and not the whole chain.
-      schema: [],
+      values: values,
+      relations: relations,
     };
   }
 
@@ -114,7 +108,7 @@ export class E {
     spaceId?: string;
     store: GeoStore;
     cache: QueryClient;
-  }) {
+  }): Promise<Entity | null> {
     const cachedEntity = await cache.fetchQuery({
       queryKey: ['network', 'entity', id, spaceId],
       queryFn: ({ signal }) => fetchEntity({ id, signal, spaceId }),
@@ -175,12 +169,12 @@ export class E {
       filters.push(...relationConditions);
     }
 
-    if (where.triples) {
-      const tripleConditions = where.triples
+    if (where.values) {
+      const tripleConditions = where.values
         .map((t): Filter | null => {
-          if (t.attributeId?.equals && t.value?.equals) {
+          if (t.propertyId?.equals && t.value?.equals) {
             return {
-              columnId: t.attributeId.equals,
+              columnId: t.propertyId.equals,
               columnName: null,
               value: t.value.equals.toString(),
               valueName: null,

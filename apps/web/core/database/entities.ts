@@ -13,8 +13,6 @@ import { PropertySchema, SpaceId, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
 import { Entity, Relation, Value } from '../v2.types';
 
-export type EntityWithSchema = Entity & { schema: PropertySchema[] };
-
 type UseEntityOptions = {
   spaceId?: SpaceId;
   id: EntityId;

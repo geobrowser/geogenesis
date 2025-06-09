@@ -2,8 +2,8 @@ import { Entity, Relation, Value } from '../v2.types';
 
 const ENTITY_UPDATED = 'entity:updated' as const;
 const ENTITY_DELETED = 'entity:deleted' as const;
-const VALUES_CREATED = 'triples:updated' as const;
-const VALUES_DELETED = 'triples:deleted' as const;
+const VALUES_CREATED = 'values:updated' as const;
+const VALUES_DELETED = 'values:deleted' as const;
 const RELATION_CREATED = 'relations:created' as const;
 const RELATION_DELETED = 'relations:deleted' as const;
 const ENTITIES_SYNCED = 'entities:synced' as const;

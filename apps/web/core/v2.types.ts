@@ -1,4 +1,4 @@
-import { SpaceConfigEntity } from './io/dto/spaces';
+import { ValueTypeId } from './types';
 
 export type DataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
 export type RenderableType = 'URL' | 'IMAGE';
@@ -84,6 +84,23 @@ export type Entity = {
   relations: Relation[];
   values: Value[];
 };
+
+export type RelationValueType = {
+  typeId: string;
+  typeName: string | null;
+  spaceIdOfProperty?: string;
+};
+
+export interface PropertySchema {
+  id: string;
+  name: string | null;
+  valueType: ValueTypeId;
+  relationValueTypeId?: string;
+  relationValueTypeName?: string | null;
+  relationValueTypes?: RelationValueType[];
+}
+
+export type EntityWithSchema = Entity & { schema: PropertySchema[] };
 
 export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT';
 
