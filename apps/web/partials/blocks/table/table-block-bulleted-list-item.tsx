@@ -127,7 +127,6 @@ export function TableBlockBulletedListItem({
                   view="BULLETED_LIST"
                   isEditing={true}
                   name={name}
-                  href={href}
                   currentSpaceId={currentSpaceId}
                   entityId={rowEntityId}
                   spaceId={nameCell?.space}
@@ -187,7 +186,6 @@ export function TableBlockBulletedListItem({
           view="BULLETED_LIST"
           isEditing={false}
           name={name}
-          href={href}
           currentSpaceId={currentSpaceId}
           entityId={rowEntityId}
           spaceId={nameCell?.space}

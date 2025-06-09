@@ -1,4 +1,5 @@
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+
 import * as React from 'react';
 
 import { useRelationship } from '~/core/hooks/use-relationship';
@@ -184,7 +185,7 @@ function TriplesGroup({
   );
 }
 
-export function RelationsGroup({ relations, isTypes }: { relations: RelationRenderableProperty[], isTypes?: boolean }) {
+export function RelationsGroup({ relations, isTypes }: { relations: RelationRenderableProperty[]; isTypes?: boolean }) {
   const attributeId = relations[0].attributeId;
   const attributeName = relations[0].attributeName;
   const spaceId = relations[0].spaceId;
@@ -193,8 +194,8 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
   // they are already rendered in the avatar cover component
   // unless this is the types group that is rendered in the header
   if (
-    (attributeId === SystemIds.COVER_PROPERTY) ||
-    (attributeId === ContentIds.AVATAR_PROPERTY) ||
+    attributeId === SystemIds.COVER_PROPERTY ||
+    attributeId === ContentIds.AVATAR_PROPERTY ||
     (attributeId === SystemIds.TYPES_PROPERTY && !isTypes)
   ) {
     return null;
@@ -227,8 +228,9 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
               <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
                 <LinkableRelationChip
                   isEditing={false}
-                  entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
-                  relationHref={NavUtils.toEntity(spaceId, relationId)}
+                  currentSpaceId={spaceId}
+                  entityId={relationValue}
+                  relationId={relationId}
                 >
                   {relationName ?? relationValue}
                 </LinkableRelationChip>
