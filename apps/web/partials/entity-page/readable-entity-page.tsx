@@ -17,11 +17,7 @@ import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-type Renderables = {
-  [key: string]: RenderableProperty[];
-  [key: number]: RenderableProperty[];
-  [key: symbol]: RenderableProperty[];
-};
+type Renderables = Record<string, RenderableProperty[]>;
 
 interface Props {
   triples: Triple[];
