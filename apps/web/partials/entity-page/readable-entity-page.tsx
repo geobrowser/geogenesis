@@ -33,7 +33,6 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
 
   const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId, isRelationPage);
 
-  // Checks if the current page is a space or entity page by examining its renderables.
   function countRenderableProperty(renderables: Renderables): number {
     let count = 0;
     Object.values(renderables).forEach((renderable) => {
