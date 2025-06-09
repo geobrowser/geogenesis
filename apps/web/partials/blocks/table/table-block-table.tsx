@@ -148,7 +148,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           }
           isPlaceholderRow={Boolean(row.original.placeholder)}
           name={name}
-          href={href}
           currentSpaceId={space}
           collectionId={collectionId}
           relationId={relationId}

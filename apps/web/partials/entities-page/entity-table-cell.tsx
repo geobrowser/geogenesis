@@ -5,7 +5,7 @@ import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { RenderableProperty } from '~/core/types';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { getImagePath } from '~/core/utils/utils';
 
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
@@ -62,7 +62,6 @@ export const EntityTableCell = ({
             view="TABLE"
             isEditing={false}
             name={name}
-            href={href}
             currentSpaceId={currentSpaceId}
             entityId={entityId}
             spaceId={spaceId}
@@ -93,14 +92,15 @@ export const EntityTableCell = ({
           const name = renderable.valueName;
           const relationId = renderable.relationId;
           const relationValue = renderable.value;
-          const spaceId = renderable.spaceId;
 
           return (
             <LinkableRelationChip
               key={value}
               isEditing={false}
-              entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
-              relationHref={NavUtils.toEntity(spaceId, relationId)}
+              currentSpaceId={spaceId}
+              entityId={relationValue}
+              spaceId={renderable.spaceId}
+              relationId={relationId}
             >
               {name ?? value}
             </LinkableRelationChip>

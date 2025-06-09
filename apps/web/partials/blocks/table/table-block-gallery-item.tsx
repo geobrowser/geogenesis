@@ -269,7 +269,6 @@ export function TableBlockGalleryItem({
                     view="GALLERY"
                     isEditing={true}
                     name={name}
-                    href={href}
                     currentSpaceId={currentSpaceId}
                     entityId={rowEntityId}
                     spaceId={nameCell?.space}
@@ -361,7 +360,6 @@ export function TableBlockGalleryItem({
               view="GALLERY"
               isEditing={false}
               name={name}
-              href={href}
               currentSpaceId={currentSpaceId}
               entityId={rowEntityId}
               spaceId={nameCell?.space}
