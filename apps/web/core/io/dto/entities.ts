@@ -2,49 +2,24 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import { RelationDtoHistorical, RelationDtoLive } from '~/core/io/dto/relations';
 import { TripleDto } from '~/core/io/dto/triples';
-import { Relation, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { Entity } from '~/core/v2.types';
 
-import { EntityId, SubstreamEntityHistorical, SubstreamEntityLive } from '../schema';
+import { EntityId, SubstreamEntityHistorical } from '../schema';
+import { RemoteEntity } from '../v2/v2.schema';
+import { ValueDto } from './values';
 
-export type Entity = {
-  id: EntityId;
-  name: string | null;
-  description: string | null;
-  nameTripleSpaces: string[];
-  spaces: string[];
-  types: { id: EntityId; name: string | null }[];
-  relationsOut: Relation[];
-  triples: Triple[];
-};
-
-export function EntityDtoLive(substreamEntity: SubstreamEntityLive): Entity {
-  const entity = substreamEntity.currentVersion.version;
-  const networkTriples = entity.triples.nodes;
-  const triples = networkTriples.map(TripleDto);
-  const nameTriples = Entities.nameTriples(triples);
-
-  const networkRelations = entity.relationsByFromVersionId.nodes;
-  const relationsOut = networkRelations.map(r => RelationDtoLive(r, substreamEntity));
-
-  const entityTypes = relationsOut
-    .filter(relation => relation.typeOf.id === EntityId(SystemIds.TYPES_ATTRIBUTE))
-    .map(relation => {
-      return {
-        id: relation.toEntity.id,
-        name: relation.toEntity.name,
-      };
-    });
+export function EntityDtoLive(substreamEntity: RemoteEntity): Entity {
+  const relationsOut = substreamEntity.relations.map(r => RelationDtoLive(r, substreamEntity));
 
   return {
     id: substreamEntity.id,
-    name: entity.name,
-    description: Entities.description(triples),
-    nameTripleSpaces: nameTriples.map(t => t.space),
-    spaces: entity.versionSpaces.nodes.map(node => node.spaceId),
-    types: entityTypes,
-    relationsOut,
-    triples,
+    name: substreamEntity.name,
+    description: substreamEntity.description,
+    spaces: [],
+    types: [...substreamEntity.types],
+    relations: relationsOut,
+    values: substreamEntity.values.map(ValueDto),
   };
 }
 

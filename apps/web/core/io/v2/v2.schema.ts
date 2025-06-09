@@ -45,6 +45,8 @@ export const Value = Schema.Struct({
   unit: Schema.NullOr(Schema.String),
 });
 
+export type RemoteValue = Schema.Schema.Type<typeof Value>;
+
 export const Relation = Schema.Struct({
   id: Schema.UUID,
   spaceId: Schema.UUID,
@@ -85,4 +87,4 @@ export const Entity = Schema.Struct({
   // updatedAt
 });
 
-export type Entity = Schema.Schema.Type<typeof Entity>;
+export type RemoteEntity = Schema.Schema.Type<typeof Entity>;

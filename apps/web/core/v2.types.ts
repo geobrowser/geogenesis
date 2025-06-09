@@ -76,7 +76,6 @@ export type Entity = {
   id: string;
   name: string | null;
   description: string | null;
-  nameTripleSpaces: string[];
   spaces: string[];
   types: { id: string; name: string | null }[];
   relations: Relation[];
