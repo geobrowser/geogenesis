@@ -68,7 +68,9 @@ type Value {
   property: Property
 
   language: String
+  format: String
   unit: String
+  timezone: String
 }
 
 type Relation {
@@ -79,11 +81,11 @@ type Relation {
   toId: String!
   toSpaceId: String
   position: String
+  verified: Boolean
 
   type: Entity
   from: Entity
   to: Entity
-  # verified
 }
 
 type Type {
