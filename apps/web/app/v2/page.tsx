@@ -4,6 +4,7 @@ import { Schema } from '@effect/schema';
 import { useQuery } from '@tanstack/react-query';
 import request from 'graphql-request';
 
+import { getConfig } from '~/core/environment/environment';
 import { AllEntitiesQuery } from '~/core/gql/graphql';
 import { entitiesQuery } from '~/core/io/v2/fragments';
 import { Entity } from '~/core/io/v2/v2.schema';
@@ -18,10 +19,7 @@ function Idk() {
     queryFn: async () => {
       // This is a placeholder for the actual query function
       // You would typically use a GraphQL client to fetch data here
-      const { entities } = await request<AllEntitiesQuery>(
-        'https://hypergraph-v2.up.railway.app/graphql',
-        entitiesQuery
-      );
+      const { entities } = await request<AllEntitiesQuery>(getConfig().api, entitiesQuery);
 
       return entities.map(e => Schema.decodeUnknownSync(Entity)(e, { errors: 'all' }));
     },
