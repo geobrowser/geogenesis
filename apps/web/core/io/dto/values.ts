@@ -2,15 +2,15 @@ import { Value } from '~/core/v2.types';
 
 import { RemoteValue } from '../v2/v2.schema';
 
-export function ValueDto(value: RemoteValue): Value {
+export function ValueDto(remoteValue: RemoteValue): Value {
   return {
-    spaceId: value.spaceId,
+    spaceId: remoteValue.spaceId,
     property: {
-      id: value.property.id,
-      name: value.property.entity.name ?? null,
-      dataType: value.property.dataType,
-      relationValueTypes: [...value.property.relationValueTypes],
+      id: remoteValue.property.id,
+      name: remoteValue.property.entity.name ?? null,
+      dataType: remoteValue.property.dataType,
+      relationValueTypes: [...remoteValue.property.relationValueTypes],
     },
-    value: value.value,
+    value: remoteValue.value,
   };
 }

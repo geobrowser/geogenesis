@@ -9,17 +9,17 @@ import { EntityId, SubstreamEntityHistorical } from '../schema';
 import { RemoteEntity } from '../v2/v2.schema';
 import { ValueDto } from './values';
 
-export function EntityDtoLive(substreamEntity: RemoteEntity): Entity {
-  const relationsOut = substreamEntity.relations.map(r => RelationDtoLive(r, substreamEntity));
+export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
+  const relationsOut = remoteEntity.relations.map(r => RelationDtoLive(r, remoteEntity));
 
   return {
-    id: substreamEntity.id,
-    name: substreamEntity.name,
-    description: substreamEntity.description,
+    id: remoteEntity.id,
+    name: remoteEntity.name,
+    description: remoteEntity.description,
     spaces: [],
-    types: [...substreamEntity.types],
+    types: [...remoteEntity.types],
     relations: relationsOut,
-    values: substreamEntity.values.map(ValueDto),
+    values: remoteEntity.values.map(ValueDto),
   };
 }
 
