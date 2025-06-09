@@ -13,7 +13,7 @@ export default function Page() {
 }
 
 function Idk() {
-  const result = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['entities'],
     queryFn: async () => {
       // This is a placeholder for the actual query function
@@ -23,14 +23,25 @@ function Idk() {
         entitiesQuery
       );
 
-      console.log('entities', entities);
-
       return entities.map(e => Schema.decodeUnknownSync(Entity)(e, { errors: 'all' }));
     },
   });
 
-  // too many clients already
-  console.log('Idk', result.data, result.error);
+  if (error) {
+    return <p>Error: {error.message}</p>;
+  }
 
-  return null;
+  if (isLoading) {
+    return <p>Loading...</p>;
+  }
+
+  return (
+    <div>
+      {data?.map(e => (
+        <p key={e.id}>
+          {e.name ?? e.id} – {JSON.stringify(e.types, null, 2)}
+        </p>
+      ))}
+    </div>
+  );
 }

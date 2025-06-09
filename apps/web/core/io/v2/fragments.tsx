@@ -5,6 +5,12 @@ export const entityFragment = graphql(/* GraphQL */ `
     id
     name
     description
+
+    types {
+      id
+      name
+    }
+
     values {
       spaceId
       property {
