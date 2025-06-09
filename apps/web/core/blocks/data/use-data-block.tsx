@@ -60,10 +60,14 @@ export function useDataBlock() {
 
   const where = filterStateToWhere(filterState);
 
-  const { entities: queriedEntities, isLoading: isQueryEntitiesLoading } = useQueryEntities({
+  const {
+    entities: queriedEntities,
+    isLoading: isQueryEntitiesLoading,
+    entitiesLength,
+  } = useQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
-    first: PAGE_SIZE + 1,
+    first: PAGE_SIZE,
     skip: pageNumber * PAGE_SIZE,
   });
 
@@ -157,7 +161,7 @@ export function useDataBlock() {
     }
   })();
 
-  const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
+  const totalPages = Math.ceil((source.type === 'COLLECTION' ? collectionLength : entitiesLength) / PAGE_SIZE);
 
   const setName = (newName: string) => {
     upsert(
@@ -190,10 +194,13 @@ export function useDataBlock() {
 
   // @TODO: Returned data type should be a FSM depending on the source.type
   // For collections, check if there are more items beyond the current page
-  const hasNextPage = source.type === 'COLLECTION' 
-    ? (pageNumber + 1) * PAGE_SIZE < collectionLength
-    : rows ? rows.length > PAGE_SIZE : false;
-  
+  const hasNextPage =
+    source.type === 'COLLECTION'
+      ? (pageNumber + 1) * PAGE_SIZE < collectionLength
+      : rows
+        ? pageNumber + 1 < totalPages
+        : false;
+
   return {
     entityId,
     spaceId,
