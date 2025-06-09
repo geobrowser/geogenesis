@@ -41,7 +41,7 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
     let count = 0;
     Object.values(renderables).forEach((renderable) => {
       const attributeId = renderable[0].attributeId;
-      if (attributeId !== SystemIds.TYPES_PROPERTY && attributeId !== SystemIds.NAME_PROPERTY) {
+      if (![SystemIds.TYPES_PROPERTY, SystemIds.NAME_PROPERTY, SystemIds.COVER_PROPERTY, ContentIds.AVATAR_PROPERTY].includes(attributeId as any)) {
         count++;
       }
     });
