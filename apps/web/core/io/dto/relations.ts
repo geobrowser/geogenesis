@@ -1,45 +1,39 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { TripleDto } from '~/core/io/dto/triples';
+import { RemoteRelation } from '~/core/io/v2/v2.schema';
 import { RenderableEntityType } from '~/core/types';
+import { Relation } from '~/core/v2.types';
 
 import { EntityId, SubstreamRelationHistorical, SubstreamRelationLive, SubstreamType } from '../schema';
 
-export function RelationDtoLive(relation: SubstreamRelationLive) {
-  const toEntityTriples = relation.toEntity.currentVersion.version.triples.nodes.map(TripleDto);
-  const toEntityTypes = relation.toEntity.currentVersion.version.versionTypes.nodes.map(relation => relation.type);
-
-  // If the entity is an image then we should already have the triples used to define
-  // the image URI for that image. We need to parse the triples to find the correct
-  // triple URI value representing the image URI.
-  const imageEntityUrlValue =
-    toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
-
-  const renderableType = getRenderableEntityType(toEntityTypes);
-
+export function RelationDtoLive(relation: RemoteRelation, from: { id: string; name: string | null }): Relation {
   return {
-    space: relation.spaceId,
-    id: relation.entityId,
-    index: getIndexFromRelationEntity(relation),
-    typeOf: {
-      id: relation.typeOf.currentVersion.version.entityId,
-      name: relation.typeOf.currentVersion.version.name,
+    id: relation.id,
+    spaceId: relation.spaceId,
+    entityId: relation.entityId,
+    position: relation.position,
+    verified: relation.verified ?? null,
+    toSpaceId: relation.toSpaceId ?? null,
+    renderableType: 'RELATION',
+    type: {
+      id: relation.type.id,
+      name: relation.type.entity.name ?? null,
     },
     fromEntity: {
-      id: relation.fromEntity.currentVersion.version.entityId,
-      name: relation.fromEntity.currentVersion.version.name,
+      id: from.id,
+      name: from.name,
     },
     toEntity: {
-      id: relation.toEntity.currentVersion.version.entityId,
-      name: relation.toEntity.currentVersion.version.name,
+      id: relation.to.id,
+      name: relation.to.name,
 
       // The "Renderable Type" for an entity provides a hint to the consumer
       // of the entity to _what_ the entity is so they know how they should
       // render it depending on their use case.
-      renderableType,
       // Right now we only support images and entity ids as the value of the To entity.
-      value:
-        renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toEntity.currentVersion.version.entityId,
+      value: relation.to.id,
+      // renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toEntity.currentVersion.version.entityId,
     },
   };
 }

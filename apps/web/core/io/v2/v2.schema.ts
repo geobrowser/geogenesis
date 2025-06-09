@@ -57,9 +57,14 @@ export const Relation = Schema.Struct({
   toSpaceId: Schema.NullOr(Schema.String),
   type: Schema.Struct({
     id: Schema.UUID,
-    name: Schema.NullOr(Schema.String),
+    entity: Schema.Struct({
+      name: Schema.NullOr(Schema.String),
+    }),
   }),
+  entityId: Schema.UUID,
 });
+
+export type RemoteRelation = Schema.Schema.Type<typeof Relation>;
 
 export const Entity = Schema.Struct({
   id: Schema.UUID,
@@ -79,3 +84,5 @@ export const Entity = Schema.Struct({
   // createdAt
   // updatedAt
 });
+
+export type Entity = Schema.Schema.Type<typeof Entity>;

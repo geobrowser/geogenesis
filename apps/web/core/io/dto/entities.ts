@@ -25,7 +25,7 @@ export function EntityDtoLive(substreamEntity: SubstreamEntityLive): Entity {
   const nameTriples = Entities.nameTriples(triples);
 
   const networkRelations = entity.relationsByFromVersionId.nodes;
-  const relationsOut = networkRelations.map(RelationDtoLive);
+  const relationsOut = networkRelations.map(r => RelationDtoLive(r, substreamEntity));
 
   const entityTypes = relationsOut
     .filter(relation => relation.typeOf.id === EntityId(SystemIds.TYPES_ATTRIBUTE))

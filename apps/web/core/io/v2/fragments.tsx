@@ -34,6 +34,7 @@ export const entityFragment = graphql(/* GraphQL */ `
       spaceId
       position
       verified
+      entityId
       to {
         id
         name
@@ -41,7 +42,9 @@ export const entityFragment = graphql(/* GraphQL */ `
       toSpaceId
       type {
         id
-        name
+        entity {
+          name
+        }
       }
     }
   }
