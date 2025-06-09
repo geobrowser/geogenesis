@@ -163,7 +163,7 @@ const listener =
           context.spaceId
         );
 
-        if (renderable.type === 'RELATION') {
+        if (renderable.type === 'RELATION' || renderable.type === 'PLACE') {
           return upsert(
             {
               entityId: renderable.relationId,
@@ -230,7 +230,7 @@ const listener =
           });
         }
 
-        if (type === 'RELATION') {
+        if (type === 'RELATION' || type === 'PLACE') {
           // Delete the previous triple and create a new relation entity
           return removeRelation({
             relation: {

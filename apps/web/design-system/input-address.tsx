@@ -107,11 +107,8 @@ export const InputPlace = ({
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const [result, setResult] = useState<Feature[] | null>(null);
 
-  const filterByTypes = relationValueTypes.length > 0 ? relationValueTypes.map(r => r.typeId) : undefined;
 
-  const { results, onQueryChange, query, isEmpty, resultEntities, isEntitiesLoading } = usePlaceSearch({
-    filterByTypes,
-  });
+  const { results, onQueryChange, query, isEmpty, resultEntities, isEntitiesLoading } = usePlaceSearch();
 
   if (query === '' && result !== null) {
     startTransition(() => {

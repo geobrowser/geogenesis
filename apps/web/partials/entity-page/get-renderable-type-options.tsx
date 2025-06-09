@@ -262,6 +262,8 @@ export const getRenderableTypeSelectorOptions = (
           attributeId: renderable.attributeId,
           attributeName: renderable.attributeName,
           value: '',
+          relationId: '',
+          valueName: null,
           spaceId: renderable.spaceId,
           placeholder: true,
         }),
