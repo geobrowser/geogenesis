@@ -39,7 +39,6 @@ export const Type = Schema.Struct({
 
 export const Value = Schema.Struct({
   spaceId: Schema.UUID,
-  entityId: Schema.UUID,
   property: Property,
   value: Schema.String,
   language: Schema.NullOr(Schema.String),
