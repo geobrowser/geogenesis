@@ -161,17 +161,10 @@ type QueryEntitiesOptions = {
   placeholderData?: typeof keepPreviousData;
 };
 
-export function useQueryEntities({
-  where,
-  first = 9,
-  skip = 0,
-  enabled = true,
-  placeholderData = undefined,
-}: QueryEntitiesOptions) {
+export function useQueryEntities({ where, first = 9, skip = 0, enabled = true, placeholderData = undefined }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
   const [localEntities, setLocalEntities] = useState<Entity[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
 
   const prevWhere = useRef(where);
 
@@ -191,33 +184,26 @@ export function useQueryEntities({
    *
    * In the future we can decide that we want to sync more often, so we can
    * use RQ's refetch function or add a polling/refetch interval.
-   *
+   * 
    * The placeholderData parameter allows controlling what happens during a refetch:
-   * - When set to keepPreviousData: previous data will be shown while new data is being
+   * - When set to keepPreviousData: previous data will be shown while new data is being 
    *   fetched, preventing flickering and UI jumps
    * - When set to undefined (default): standard loading behavior applies
-   *
-   * To prevent flicker when adding new items to collections, callers should explicitly
+   * 
+   * To prevent flicker when adding new items to collections, callers should explicitly 
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const { isFetched, isLoading, data } = useQuery({
+  const { isFetched, isLoading } = useQuery({
     enabled,
     placeholderData,
     queryKey: [...GeoStore.queryKeys(where), first, skip],
     queryFn: async () => {
-      if (where.spaces || where.relations) {
-        const { entities, totalCount } = await E.findManyWithCount({ store, cache, where, first, skip });
-        stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
-        return { entities, totalCount };
-      }
+      const entities = await E.findMany({ store, cache, where, first, skip });
+      setLocalEntities(entities);
+      stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
+      return entities;
     },
-  });
-
-  useEffect(() => {
-    if (data) {
-      setTotalCount(data?.totalCount);
-    }
-  }, [data]);
+  });  
 
   useEffect(() => {
     if (!enabled) return;
@@ -233,11 +219,6 @@ export function useQueryEntities({
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
       const latestQueriedEntitiesIds = latestQueriedEntities.map(e => e.id);
-
-      if (syncedEntitiesIds.length > 0 && latestQueriedEntitiesIds.length === 0) {
-        setLocalEntities(event.entities);
-        return;
-      }
 
       /**
        * If we end up with a filter that doesn't return any data then none of
@@ -432,12 +413,11 @@ export function useQueryEntities({
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [where, stream, store, data, enabled, first, skip]);
+  }, [where, stream, store, localEntities, enabled, first, skip]);
 
   return {
     entities: localEntities,
     isLoading: !isFetched && enabled && isLoading,
-    entitiesLength: totalCount,
   };
 }
 
