@@ -4,21 +4,21 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { dedupeWith } from 'effect/Array';
 
-import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
 import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
-import { PropertySchema, Relation, SpaceId, Triple, ValueTypeId } from '../types';
+import { PropertySchema, SpaceId, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
+import { Entity, Relation, Value } from '../v2.types';
 
 export type EntityWithSchema = Entity & { schema: PropertySchema[] };
 
 type UseEntityOptions = {
   spaceId?: SpaceId;
   id: EntityId;
-  initialData?: { spaces: SpaceId[]; triples: Triple[]; relationsOut: Relation[] };
+  initialData?: { spaces: SpaceId[]; values: Value[]; relations: Relation[] };
 };
 
 export function useEntity(options: UseEntityOptions): EntityWithSchema {
@@ -37,7 +37,6 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   const relations = data?.relationsOut ?? [];
 
   const name = Entities.name(triples ?? []);
-  const nameTripleSpaces = triples.filter(t => t.attributeId === SystemIds.NAME_ATTRIBUTE).map(t => t.space);
   const spaces = data?.spaces ?? [];
   const description = Entities.description(triples);
   const types = readTypes(relations);
@@ -54,12 +53,11 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   return {
     id,
     name,
-    nameTripleSpaces,
     spaces,
     description,
     schema: schema ?? DEFAULT_ENTITY_SCHEMA,
-    triples,
-    relationsOut: relations,
+    values: data.values,
+    relations: relations,
     types,
   };
 }
@@ -195,7 +193,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
  */
 export function readTypes(relations: Relation[]): { id: EntityId; name: string | null }[] {
   const typeIdsViaRelations = relations
-    .filter(r => r.typeOf.id === EntityId(SystemIds.TYPES_ATTRIBUTE))
+    .filter(r => r.type.id === EntityId(SystemIds.TYPES_PROPERTY))
     .map(r => ({
       id: EntityId(r.toEntity.id),
       name: r.toEntity.name,

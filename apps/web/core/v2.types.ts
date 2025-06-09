@@ -1,3 +1,5 @@
+import { SpaceConfigEntity } from './io/dto/spaces';
+
 export type DataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
 export type RenderableType = 'URL' | 'IMAGE';
 
@@ -43,6 +45,7 @@ export type ValueOptions = {
 };
 
 export type Value = LocalMetadata & {
+  entityId: string;
   property: Property;
   value: string;
   spaceId: string;
@@ -139,3 +142,16 @@ export type RenderableProperty =
 // also render relations with a specific type, e.g., an Image entity or a
 // Person entity, etc.
 // export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URL' | 'TIME' | 'IMAGE' | 'CHECKBOX' | 'NUMBER' | 'POINT';
+
+export type SearchResult = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  spaces: SpaceConfigEntity[];
+  types: { id: string; name: string | null }[];
+};
+
+export type SpaceConfigEntity = Entity & {
+  spaceId: string;
+  image: string;
+};

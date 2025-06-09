@@ -25,9 +25,9 @@ export class SyncEngine {
       this.processSyncQueue(event);
     });
 
-    const onTriplesUpdated = this.stream.on(GeoEventStream.TRIPLES_CREATED, event => {
+    const onTriplesUpdated = this.stream.on(GeoEventStream.VALUES_CREATED, event => {
       if (this.env === 'development') {
-        console.log(`queueing sync after ${GeoEventStream.TRIPLES_CREATED}`, event);
+        console.log(`queueing sync after ${GeoEventStream.VALUES_CREATED}`, event);
       }
       this.processSyncQueue(event);
     });
@@ -46,9 +46,9 @@ export class SyncEngine {
       this.processSyncQueue(event);
     });
 
-    const onTriplesDeleted = this.stream.on(GeoEventStream.TRIPLES_DELETED, event => {
+    const onTriplesDeleted = this.stream.on(GeoEventStream.VALUES_DELETED, event => {
       if (this.env === 'development') {
-        console.log(`queueing sync after ${GeoEventStream.TRIPLES_DELETED}`, event);
+        console.log(`queueing sync after ${GeoEventStream.VALUES_DELETED}`, event);
       }
       this.processSyncQueue(event);
     });
@@ -96,14 +96,14 @@ export class SyncEngine {
       case GeoEventStream.ENTITY_DELETED:
         entityIds.push(event.entity.id);
         break;
-      case GeoEventStream.TRIPLES_CREATED:
-      case GeoEventStream.TRIPLES_DELETED: {
-        entityIds.push(event.triple.entityId);
+      case GeoEventStream.VALUES_CREATED:
+      case GeoEventStream.VALUES_DELETED: {
+        entityIds.push(event.value.entityId);
 
         // Update any entities in the store that reference the entity where the triple is
         // being added. This is so we can sync fields that derive from triples like name,
         // description, etc.
-        const referencing = this.store.findReferencingEntities(event.triple.entityId);
+        const referencing = this.store.findReferencingEntities(event.value.entityId);
         entityIds.push(...referencing);
         break;
       }

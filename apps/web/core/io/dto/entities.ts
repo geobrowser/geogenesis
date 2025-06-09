@@ -19,7 +19,7 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
     spaces: [],
     types: [...remoteEntity.types],
     relations: relationsOut,
-    values: remoteEntity.values.map(ValueDto),
+    values: remoteEntity.values.map(v => ValueDto(remoteEntity.id, v)),
   };
 }
 
@@ -44,7 +44,9 @@ export function EntityDtoHistorical(substreamEntity: SubstreamEntityHistorical) 
   return {
     id: substreamEntity.id,
     name: entity.name,
-    description: Entities.description(triples),
+    // @TODO: This Dto is using the legacy data model still, so we can't
+    // correctly read description this way
+    description: Entities.description([]),
     nameTripleSpaces: nameTriples.map(t => t.space),
     spaces: entity.versionSpaces.nodes.map(node => node.spaceId),
     types: entityTypes,

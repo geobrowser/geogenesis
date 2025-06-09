@@ -1,14 +1,14 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { SpaceGovernanceType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { SpaceConfigEntity } from '~/core/v2.types';
 
-import { Address, EntityId, type Address as IAddress, SpaceId, SubstreamSpace, SubstreamVersion } from '../schema';
-import { Entity } from './entities';
+import { Address, EntityId, type Address as IAddress, SubstreamSpace, SubstreamVersion } from '../schema';
 import { VersionDto } from './versions';
 
 export type Space = {
-  id: SpaceId;
-  entityId: EntityId;
+  id: string;
+  entityId: string;
   type: SpaceGovernanceType;
   editors: string[];
   members: string[];
@@ -18,11 +18,6 @@ export type Space = {
   mainVotingPluginAddress: Address | null;
   memberAccessPluginAddress: Address | null;
   personalSpaceAdminPluginAddress: Address | null;
-};
-
-export type SpaceConfigEntity = Entity & {
-  spaceId: string;
-  image: string;
 };
 
 export function SpaceDto(space: SubstreamSpace): Space {

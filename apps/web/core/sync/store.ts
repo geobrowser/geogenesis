@@ -2,10 +2,9 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import { readTypes } from '../database/entities';
 import { ID } from '../id';
-import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
-import { Relation, Triple } from '../types';
 import { Entities } from '../utils/entity';
+import { Entity, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
@@ -20,7 +19,7 @@ type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 export class GeoStore {
   // Core data storage
   private entities: Map<string, Entity> = new Map();
-  private triples: Map<string, Triple[]> = new Map();
+  private values: Map<string, Value[]> = new Map();
   private relations: Map<string, Relation[]> = new Map();
   private deletedEntities: Set<string> = new Set();
 
@@ -28,7 +27,7 @@ export class GeoStore {
   // @TODO:
   // We don't need pending data since we don't actually _write_ anything
   // to the network, we only read and merge.
-  private pendingTriples: Map<string, Map<string, Triple>> = new Map();
+  private pendingTriples: Map<string, Map<string, Value>> = new Map();
   private pendingRelations: Map<string, Map<string, Relation>> = new Map();
   private pendingEntityDeletes: Set<string> = new Set();
 
@@ -51,7 +50,7 @@ export class GeoStore {
   private syncEntities(entities: Entity[]) {
     for (const entity of entities) {
       this.entities.set(entity.id, entity);
-      this.triples.set(entity.id, entity.triples);
+      this.values.set(entity.id, entity.values);
 
       // @TODO: Do we still need this? Or is merging handled correctly before syncing here?
       // const newRelations: Relation[] = [];
@@ -63,7 +62,7 @@ export class GeoStore {
       //   }
       // }
 
-      this.relations.set(entity.id, entity.relationsOut);
+      this.relations.set(entity.id, entity.relations);
     }
 
     if (process.env.NODE_ENV === 'development') {
@@ -85,7 +84,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const entitiesToSync = this.getEntities();
 
     this.entities.clear();
-    this.triples.clear();
+    this.values.clear();
     this.relations.clear();
     this.deletedEntities.clear();
     this.pendingTriples.clear();
@@ -108,19 +107,19 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const entity = this.entities.get(id);
 
     // Get triples including any pending optimistic updates
-    const triples = this.getResolvedTriples(id, options.includeDeleted);
+    const values = this.getResolvedValues(id, options.includeDeleted);
 
     // Get relations including any pending optimistic updates
     const relations = this.getResolvedRelations(id, options.includeDeleted);
 
-    if (!entity && triples.length === 0 && relations.length === 0) {
+    if (!entity && values.length === 0 && relations.length === 0) {
       return undefined;
     }
 
-    const name = Entities.name(triples);
-    const description = Entities.description(triples);
+    const name = Entities.name(values);
+    const description = Entities.description(values);
     const types = readTypes(relations);
-    const spaces = Entities.spaces(triples, relations);
+    const spaces = Entities.spaces(values, relations);
 
     // Return fully resolved entity
     const resolvedEntity: Entity = {
@@ -141,15 +140,15 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             spaces,
             nameTripleSpaces: spaces,
           }),
-      triples: triples.filter(t =>
-        includeDeleted ? true : Boolean(t.isDeleted) === false && options.spaceId ? t.space === options.spaceId : true
+      values: values.filter(t =>
+        includeDeleted ? true : Boolean(t.isDeleted) === false && options.spaceId ? t.spaceId === options.spaceId : true
       ),
-      relationsOut: relations.filter(r =>
-        includeDeleted ? true : Boolean(r.isDeleted) === false && options.spaceId ? r.space === options.spaceId : true
+      relations: relations.filter(r =>
+        includeDeleted ? true : Boolean(r.isDeleted) === false && options.spaceId ? r.spaceId === options.spaceId : true
       ),
     };
 
-    const resolvedRelations = resolvedEntity.relationsOut.map(r => {
+    const resolvedRelations = resolvedEntity.relations.map(r => {
       let maybeToEntity: Entity | null = null;
       let maybeRelationEntity: Entity | null = null;
 
@@ -160,9 +159,9 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
       return {
         ...r,
-        index:
-          maybeRelationEntity?.triples.find(t => t.attributeId === EntityId(SystemIds.RELATION_INDEX))?.value.value ??
-          r.index,
+        position:
+          maybeRelationEntity?.values.find(t => t.property.id === EntityId(SystemIds.RELATION_INDEX))?.value ??
+          r.position,
         toEntity: {
           ...r.toEntity,
           name: maybeToEntity?.name ?? r.toEntity.name,
@@ -170,7 +169,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       };
     });
 
-    resolvedEntity.relationsOut = resolvedRelations;
+    resolvedEntity.relations = resolvedRelations;
 
     return resolvedEntity;
   }
@@ -193,15 +192,15 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.entities.set(entity.id as string, baseEntity);
 
     // Set entity triples
-    if (entity.triples && entity.triples.length > 0) {
-      entity.triples.forEach(triple => {
-        this.setTriple(triple);
+    if (entity.values && entity.values.length > 0) {
+      entity.values.forEach(value => {
+        this.setValue(value);
       });
     }
 
     // Set entity relations
-    if (entity.relationsOut && entity.relationsOut.length > 0) {
-      entity.relationsOut.forEach(relation => {
+    if (entity.relations && entity.relations.length > 0) {
+      entity.relations.forEach(relation => {
         this.setRelation(relation);
       });
     }
@@ -212,14 +211,14 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   /**
    * Get triples for an entity (without pending changes)
    */
-  private getBaseTriples(entityId: string): Triple[] {
-    return this.triples.get(entityId) || [];
+  private getBaseTriples(entityId: string): Value[] {
+    return this.values.get(entityId) || [];
   }
 
   /**
    * Get all triples for an entity including optimistic updates
    */
-  public getResolvedTriples(entityId: string, includeDeleted = false): Triple[] {
+  public getResolvedValues(entityId: string, includeDeleted = false): Value[] {
     const baseTriples = this.getBaseTriples(entityId);
     const pendingTripleMap = this.pendingTriples.get(entityId);
 
@@ -227,33 +226,36 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       return baseTriples;
     }
 
-    // Create a map of base triples for easier merging
-    const tripleMap = new Map<string, Triple>();
+    // Create a map of base value for easier merging
+    const valueMap = new Map<string, Value>();
 
-    // Function to generate a unique key for each triple
-    const getTripleKey = (triple: Triple): string =>
-      ID.createTripleId({
-        attributeId: triple.attributeId,
-        entityId: triple.entityId,
-        space: triple.space,
-      });
-
-    // Add base triples to the map
-    baseTriples.forEach(triple => {
-      tripleMap.set(getTripleKey(triple), triple);
+    // Add base value to the map
+    baseTriples.forEach(value => {
+      valueMap.set(
+        ID.createValueId({
+          propertyId: value.property.id,
+          entityId: value.entityId,
+          spaceId: value.spaceId,
+        }),
+        value
+      );
     });
 
-    // Apply pending triple changes
-    pendingTripleMap.forEach(pendingTriple => {
-      const key = getTripleKey(pendingTriple);
-      if (pendingTriple.isDeleted && !includeDeleted) {
-        tripleMap.delete(key);
+    // Apply pending value changes
+    pendingTripleMap.forEach(pendingValue => {
+      const key = ID.createValueId({
+        propertyId: pendingValue.property.id,
+        entityId: pendingValue.entityId,
+        spaceId: pendingValue.spaceId,
+      });
+      if (pendingValue.isDeleted && !includeDeleted) {
+        valueMap.delete(key);
       } else {
-        tripleMap.set(key, pendingTriple);
+        valueMap.set(key, pendingValue);
       }
     });
 
-    return Array.from(tripleMap.values());
+    return Array.from(valueMap.values());
   }
 
   /**
@@ -302,16 +304,16 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   }
 
   /**
-   * Add or update a triple with optimistic updates
+   * Add or update a value with optimistic updates
    */
-  public setTriple(triple: Triple): void {
-    const entityId = triple.entityId;
+  public setValue(value: Value): void {
+    const entityId = value.entityId;
 
-    // Create a composite key for the triple
-    const tripleKey = ID.createTripleId({
-      attributeId: triple.attributeId,
-      entityId: triple.entityId,
-      space: triple.space,
+    // Create a composite key for the value
+    const tripleKey = ID.createValueId({
+      propertyId: value.property.id,
+      entityId: value.entityId,
+      spaceId: value.spaceId,
     });
     // Get or create the pending triples map for this entity
     if (!this.pendingTriples.has(entityId)) {
@@ -319,24 +321,24 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     }
 
     // Add to pending changes
-    this.pendingTriples.get(entityId)!.set(tripleKey, triple);
+    this.pendingTriples.get(entityId)!.set(tripleKey, value);
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.TRIPLES_CREATED, triple });
+    this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value: value });
   }
 
   /**
-   * Delete a triple with optimistic updates
+   * Delete a value with optimistic updates
    */
-  public deleteTriple(triple: Triple): void {
-    // Mark the triple as deleted in pending changes
-    const entityId = triple.entityId;
-    const tripleKey = ID.createTripleId({
-      attributeId: triple.attributeId,
-      entityId: triple.entityId,
-      space: triple.space,
+  public deleteValue(value: Value): void {
+    // Mark the value as deleted in pending changes
+    const entityId = value.entityId;
+    const valueKey = ID.createValueId({
+      propertyId: value.property.id,
+      entityId: value.entityId,
+      spaceId: value.spaceId,
     });
-    triple.isDeleted = true;
+    value.isDeleted = true;
 
     // Get or create the pending triples map for this entity
     if (!this.pendingTriples.has(entityId)) {
@@ -344,10 +346,10 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     }
 
     // Add a deleted version to pending changes
-    this.pendingTriples.get(entityId)!.set(tripleKey, triple);
+    this.pendingTriples.get(entityId)!.set(valueKey, value);
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.TRIPLES_DELETED, triple });
+    this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: value });
   }
 
   /**

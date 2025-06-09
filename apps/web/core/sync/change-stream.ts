@@ -22,11 +22,11 @@ export class ChangeStream {
     this.stream = stream;
     this.cache = cache;
 
-    const onTriplesUpdated = this.stream.on(GeoEventStream.TRIPLES_CREATED, event => {
+    const onTriplesUpdated = this.stream.on(GeoEventStream.VALUES_CREATED, event => {
       this.processDiff(event);
     });
 
-    const onTriplesDeleted = this.stream.on(GeoEventStream.TRIPLES_DELETED, event => {
+    const onTriplesDeleted = this.stream.on(GeoEventStream.VALUES_DELETED, event => {
       // Write to changes based on space id -> entity id -> triple id
       this.processDiff(event);
     });
@@ -46,7 +46,7 @@ export class ChangeStream {
     switch (event.type) {
       case 'triples:updated':
       case 'triples:deleted': {
-        entityId = event.triple.entityId;
+        entityId = event.value.entityId;
         break;
       }
     }
@@ -63,11 +63,11 @@ export class ChangeStream {
 
     switch (event.type) {
       case 'triples:updated': {
-        const newId = ID.createTripleId(event.triple);
-        const maybeRemoteTriple = entity?.triples.find(t => ID.createTripleId(t) === newId);
+        const newId = ID.createValueId(event.value);
+        const maybeRemoteTriple = entity?.triples.find(t => ID.createValueId(t) === newId);
 
-        const after = AfterTripleDiff.diffAfter(event.triple.value, maybeRemoteTriple?.value ?? null);
-        const before = AfterTripleDiff.diffBefore(event.triple.value, maybeRemoteTriple?.value ?? null);
+        const after = AfterTripleDiff.diffAfter(event.value.value, maybeRemoteTriple?.value ?? null);
+        const before = AfterTripleDiff.diffBefore(event.value.value, maybeRemoteTriple?.value ?? null);
 
         /**
          * Keep track of any local changes that are different than data
@@ -76,12 +76,12 @@ export class ChangeStream {
         if (isRealChange(before, after)) {
           this.tripleChanges.set(newId, {
             type: 'SET_TRIPLE',
-            spaceId: event.triple.space,
+            spaceId: event.value.space,
             triple: {
-              attribute: event.triple.attributeId,
-              entity: event.triple.entityId,
+              attribute: event.value.attributeId,
+              entity: event.value.entityId,
               value: {
-                ...event.triple.value,
+                ...event.value.value,
               },
             },
           });
@@ -92,8 +92,8 @@ export class ChangeStream {
         break;
       }
       case 'triples:deleted': {
-        const newId = ID.createTripleId(event.triple);
-        const maybeRemoteTriple = entity?.triples.find(t => ID.createTripleId(t) === newId);
+        const newId = ID.createValueId(event.value);
+        const maybeRemoteTriple = entity?.triples.find(t => ID.createValueId(t) === newId);
 
         /**
          * Keep track of any local changes that are different than data
@@ -102,10 +102,10 @@ export class ChangeStream {
         if (maybeRemoteTriple) {
           this.tripleChanges.set(newId, {
             type: 'DELETE_TRIPLE',
-            spaceId: event.triple.space,
+            spaceId: event.value.space,
             triple: {
-              attribute: event.triple.attributeId,
-              entity: event.triple.entityId,
+              attribute: event.value.attributeId,
+              entity: event.value.entityId,
             },
           });
         } else {

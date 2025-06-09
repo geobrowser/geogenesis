@@ -37,7 +37,7 @@ export class Triple {
   ): LocalTriple {
     return {
       ...triple,
-      id: ID.createTripleId(triple),
+      id: ID.createValueId(triple),
       hasBeenPublished: options.hasBeenPublished ?? false,
       timestamp: new Date().toISOString(),
       isDeleted: options.isDeleted ?? false,

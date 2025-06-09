@@ -4,16 +4,14 @@ import { dedupeWith } from 'effect/Array';
 
 import { Filter } from '../blocks/data/filters';
 import { queryStringFromFilters } from '../blocks/data/to-query-string';
-import { Triple } from '../database/Triple';
 import { readTypes } from '../database/entities';
-import { Entity } from '../io/dto/entities';
-import { SearchResult } from '../io/dto/search';
 import { EntityId } from '../io/schema';
 import { fetchEntity, fetchResults, fetchSpaces, fetchTableRowEntities } from '../io/subgraph';
 import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
-import { OmitStrict, Relation } from '../types';
+import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
-import { Triples } from '../utils/triples';
+import { Values } from '../utils/value';
+import { Entity, Relation, SearchResult } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
 
@@ -74,36 +72,28 @@ export class E {
       return remoteEntity;
     }
 
-    const mergedTriples = Triples.merge(
-      localEntity.triples.map(t =>
-        Triple.make(t, {
-          hasBeenPublished: t.hasBeenPublished,
-          isDeleted: t.isDeleted,
-        })
-      ),
-      remoteEntity.triples
-    );
+    const mergedValues = Values.merge(localEntity.values, remoteEntity.values);
 
-    const triples = mergedTriples.filter(t => (Boolean(t.isDeleted) === false && spaceId ? t.space === spaceId : true));
-    const mergedRelations = mergeRelations(localEntity.relationsOut, remoteEntity.relationsOut);
-    const relations = mergedRelations.filter(t =>
-      Boolean(t.isDeleted) === false && spaceId ? t.space === spaceId : true
+    const values = mergedValues.filter(v => (Boolean(v.isDeleted) === false && spaceId ? v.spaceId === spaceId : true));
+
+    const mergedRelations = mergeRelations(localEntity.relations, remoteEntity.relations);
+    const relations = mergedRelations.filter(r =>
+      Boolean(r.isDeleted) === false && spaceId ? r.spaceId === spaceId : true
     );
 
     // Use the merged triples to derive the name instead of the remote entity
     // `name` property in case the name was deleted/changed locally.
-    const name = Entities.name(triples);
-    const description = Entities.description(triples);
+    const name = Entities.name(values);
+    const description = Entities.description(values);
     const types = readTypes(relations);
 
     return {
       id: EntityId(id),
       name,
-      nameTripleSpaces: Entities.nameTriples(triples).map(t => t.space),
       spaces: [...(localEntity?.spaces ?? []), ...(remoteEntity?.spaces ?? [])],
       description,
       types,
-      triples: triples,
+      triples: values,
       relationsOut: relations,
       // @TODO: Spaces with metadata
       // @TODO: Schema? Adding schema here might result in infinite queries since we
@@ -334,13 +324,13 @@ function mergeSearchResult({
     };
   }
 
-  const triples = localEntity.triples.filter(t => Boolean(t.isDeleted) === false);
-  const relations = localEntity.relationsOut.filter(t => Boolean(t.isDeleted) === false);
+  const values = localEntity.values.filter(t => Boolean(t.isDeleted) === false);
+  const relations = localEntity.relations.filter(t => Boolean(t.isDeleted) === false);
 
   // Use the merged triples to derive the name instead of the remote entity
   // `name` property in case the name was deleted/changed locally.
-  const name = Entities.name(triples) ?? remoteEntity.name;
-  const description = Entities.description(triples) ?? remoteEntity.name;
+  const name = Entities.name(values) ?? remoteEntity.name;
+  const description = Entities.description(values) ?? remoteEntity.name;
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
 
   return {

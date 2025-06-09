@@ -6,7 +6,7 @@ import * as Either from 'effect/Either';
 import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
 
-import { Entity, EntityDtoLive } from '../dto/entities';
+import { EntityDtoLive } from '../dto/entities';
 import { SubstreamEntityLive } from '../schema';
 import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';

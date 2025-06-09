@@ -22,8 +22,8 @@ const opsWithPersistence = () => {
       const stored = await db.triples.toArray();
 
       for (const triple of stored) {
-        if (triple.isDeleted) geoStore.deleteTriple(triple);
-        else geoStore.setTriple(triple);
+        if (triple.isDeleted) geoStore.deleteValue(triple);
+        else geoStore.setValue(triple);
       }
 
       setValue(stored);
@@ -97,7 +97,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
     });
 
     for (const triple of triples) {
-      geoStore.setTriple(triple);
+      geoStore.setValue(triple);
     }
 
     const unchangedRelations = store.get(localRelationsAtom).filter(r => {
@@ -189,7 +189,7 @@ export async function removeEntity(entityId: string, spaceId: string) {
 export const upsert = (op: UpsertOp, spaceId: string) => {
   const triple = Triple.make({ ...op, space: spaceId }, { hasBeenPublished: false, isDeleted: false });
   writeMany([triple]);
-  geoStore.setTriple(triple);
+  geoStore.setValue(triple);
 };
 
 export const upsertMany = (ops: UpsertOp[], spaceId: string) => {
@@ -199,7 +199,7 @@ export const upsertMany = (ops: UpsertOp[], spaceId: string) => {
   writeMany(triples);
 
   for (const triple of triples) {
-    geoStore.setTriple(triple);
+    geoStore.setValue(triple);
   }
 };
 
@@ -218,7 +218,7 @@ export const remove = (op: RemoveOp, spaceId: string) => {
   );
 
   writeMany([triple]);
-  geoStore.deleteTriple(triple);
+  geoStore.deleteValue(triple);
 };
 
 export const removeMany = (ops: RemoveOp[], spaceId: string) => {
@@ -240,7 +240,7 @@ export const removeMany = (ops: RemoveOp[], spaceId: string) => {
   writeMany(triples);
 
   for (const triple of triples) {
-    geoStore.deleteTriple(triple);
+    geoStore.deleteValue(triple);
   }
 };
 

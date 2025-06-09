@@ -2,7 +2,7 @@
 // Entity
 // Value
 // Relation
-import { Schema } from '@effect/schema';
+import { Schema } from 'effect';
 
 // Need a more ergonomic querying system besides the graphql and shitty
 // variable mechanism we have now

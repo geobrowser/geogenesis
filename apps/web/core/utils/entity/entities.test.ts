@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Triple } from '~/core/types';
 
-import { description, descriptionTriple, name, nameTriple } from './entities';
+import { description, descriptionTriple, name, nameValue } from './entities';
 
 const triplesWithSystemDescriptionAttribute: Triple[] = [
   {
@@ -66,10 +66,10 @@ describe('Entity name helpers', () => {
   });
 
   it('Entity.nameTriple should return the Name triple', () => {
-    expect(nameTriple(triplesWithSystemNameAttribute)).toBe(triplesWithSystemNameAttribute[0]);
+    expect(nameValue(triplesWithSystemNameAttribute)).toBe(triplesWithSystemNameAttribute[0]);
   });
 
   it('Entity.nameTriple should return undefined if there is no Name triple', () => {
-    expect(nameTriple([])).toBe(undefined);
+    expect(nameValue([])).toBe(undefined);
   });
 });

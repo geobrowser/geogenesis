@@ -1,13 +1,7 @@
-import { EntityId, SubstreamSearchResult } from '../schema';
-import { SpaceConfigEntity, SpaceMetadataDto } from './spaces';
+import { SearchResult } from '~/core/v2.types';
 
-export type SearchResult = {
-  id: EntityId;
-  name: string | null;
-  description: string | null;
-  spaces: Array<SpaceConfigEntity>;
-  types: Array<{ id: EntityId; name: string | null }>;
-};
+import { SubstreamSearchResult } from '../schema';
+import { SpaceConfigEntity, SpaceMetadataDto } from './spaces';
 
 export function SearchResultDto(result: SubstreamSearchResult): SearchResult {
   const spaces = result.currentVersion.version.versionSpaces.nodes.flatMap(result =>
