@@ -205,11 +205,9 @@ export function useQueryEntities({
     placeholderData,
     queryKey: [...GeoStore.queryKeys(where), first, skip],
     queryFn: async () => {
-      if (where.spaces || where.relations) {
-        const { entities, totalCount } = await E.findManyWithCount({ store, cache, where, first, skip });
-        stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
-        return { entities, totalCount };
-      }
+      const { entities, totalCount } = await E.findManyWithCount({ store, cache, where, first, skip });
+      stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
+      return { entities, totalCount };
     },
   });
 
