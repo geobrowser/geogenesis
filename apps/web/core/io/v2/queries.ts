@@ -1,8 +1,8 @@
-import { EntitiesBatchQuery, EntityQuery } from '~/core/gql/graphql';
+import { EntitiesBatchQuery, EntityQuery, EntityTypesQuery } from '~/core/gql/graphql';
 import { Entity } from '~/core/v2.types';
 
-import { EntityDecoder } from './entity';
-import { entitiesBatchQuery, entityQuery } from './fragments';
+import { EntityDecoder, EntityTypeDecoder } from './entity';
+import { entitiesBatchQuery, entityQuery, entityTypesQuery } from './fragments';
 import { graphql } from './graphql';
 
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
@@ -15,10 +15,19 @@ export function getBatchEntities(entityIds: string[], spaceId?: string, signal?:
 }
 
 export function getEntity(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
-  return graphql<EntityQuery, Entity>({
+  return graphql<EntityQuery, Entity | null>({
     query: entityQuery,
-    decoder: data => EntityDecoder.decode(data.entity),
+    decoder: data => (data.entity ? EntityDecoder.decode(data.entity) : null),
     variables: { id: entityId, spaceId },
+    signal,
+  });
+}
+
+export function getEntityTypes(entityId: string, signal?: AbortController['signal']) {
+  return graphql<EntityTypesQuery, { id: string; name: string | null }[]>({
+    query: entityTypesQuery,
+    decoder: data => data.entity?.types.map(t => EntityTypeDecoder.decode(t)) ?? [],
+    variables: { id: entityId },
     signal,
   });
 }

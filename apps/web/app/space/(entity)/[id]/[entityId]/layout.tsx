@@ -1,16 +1,15 @@
-import { GraphUri, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
 import { Metadata } from 'next';
 
-import { Entity } from '~/core/io/dto/entities';
 import { EntityId, TypeId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
+import { Entity, Relation } from '~/core/v2.types';
 
 import { Spacer } from '~/design-system/spacer';
 import { TabGroup } from '~/design-system/tab-group';
@@ -31,28 +30,28 @@ interface Props {
 }
 
 async function getTitleForRelation(entity: Entity | null): Promise<string | null> {
-  const maybeRelation = entity?.triples.find(t => t.attributeId === SystemIds.TYPES_ATTRIBUTE);
-  const maybeType = maybeRelation?.value.value;
+  // const maybeRelation = entity?.values.find(t => t.property.id === SystemIds.TYPES_ATTRIBUTE);
+  // const maybeType = maybeRelation?.value;
 
-  if (
-    maybeRelation?.value.type === 'URL' &&
-    maybeType &&
-    SystemIds.RELATION_TYPE === GraphUrl.toEntityId(maybeType as GraphUri)
-  ) {
-    const maybeFrom = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE);
-    const maybeTo = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE);
+  // if (
+  //   maybeRelation?.value.type === 'URL' &&
+  //   maybeType &&
+  //   SystemIds.RELATION_TYPE === GraphUrl.toEntityId(maybeType as GraphUri)
+  // ) {
+  //   const maybeFrom = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE);
+  //   const maybeTo = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE);
 
-    if (maybeFrom?.value.type === 'URL' && maybeTo?.value.type === 'URL') {
-      const [maybeFromEntity, maybeToEntity] = await Promise.all([
-        cachedFetchEntity(GraphUrl.toEntityId(maybeFrom.value.value as GraphUri)),
-        cachedFetchEntity(GraphUrl.toEntityId(maybeTo.value.value as GraphUri)),
-      ]);
+  //   if (maybeFrom?.value.type === 'URL' && maybeTo?.value.type === 'URL') {
+  //     const [maybeFromEntity, maybeToEntity] = await Promise.all([
+  //       cachedFetchEntity(GraphUrl.toEntityId(maybeFrom.value.value as GraphUri)),
+  //       cachedFetchEntity(GraphUrl.toEntityId(maybeTo.value.value as GraphUri)),
+  //     ]);
 
-      if (maybeFromEntity && maybeToEntity) {
-        return `${maybeFromEntity.name ?? maybeFromEntity.id} → ${maybeToEntity.name ?? maybeToEntity.id}`;
-      }
-    }
-  }
+  //     if (maybeFromEntity && maybeToEntity) {
+  //       return `${maybeFromEntity.name ?? maybeFromEntity.id} → ${maybeToEntity.name ?? maybeToEntity.id}`;
+  //     }
+  //   }
+  // }
 
   return null;
 }
@@ -104,7 +103,7 @@ export default async function ProfileLayout(props: Props) {
 
   const types = await cachedFetchEntityType(entityId);
 
-  if (!types.includes(TypeId(SystemIds.PERSON_TYPE))) {
+  if (!types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
     return <>{children}</>;
   }
 
@@ -115,8 +114,8 @@ export default async function ProfileLayout(props: Props) {
       id={entityId}
       spaceId={params.id}
       initialSpaces={profile.spaces}
-      initialTriples={profile.triples}
-      initialRelations={profile.relationsOut}
+      initialValues={profile.values}
+      initialRelations={profile.relations}
     >
       <EditorProvider
         id={profile.id}
@@ -171,28 +170,27 @@ async function getProfilePage(entityId: string): Promise<
     return {
       id: EntityId(entityId),
       name: null,
-      nameTripleSpaces: [],
       spaces: [],
       avatarUrl: null,
       coverUrl: null,
-      triples: [],
+      values: [],
       types: [],
       description: null,
-      relationsOut: [],
+      relations: [],
       blocks: [],
       blockRelations: [],
     };
   }
 
-  const blockRelations = person?.relationsOut.filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS));
+  const blockRelations = person?.relations.filter(r => r.type.id === EntityId(SystemIds.BLOCKS));
   const blockIds = blockRelations?.map(r => r.toEntity.id);
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
     ...person,
-    avatarUrl: Entities.avatar(person.relationsOut),
-    coverUrl: Entities.cover(person.relationsOut),
-    blockRelations: person.relationsOut,
+    avatarUrl: Entities.avatar(person.relations),
+    coverUrl: Entities.cover(person.relations),
+    blockRelations: blockRelations,
     blocks,
   };
 }

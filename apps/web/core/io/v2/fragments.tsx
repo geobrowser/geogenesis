@@ -73,3 +73,14 @@ export const entityQuery = graphql(/* GraphQL */ `
     }
   }
 `);
+
+export const entityTypesQuery = graphql(/* GraphQL */ `
+  query EntityTypes($id: String!, $spaceId: String) {
+    entity(id: $id, spaceId: $spaceId) {
+      types {
+        id
+        name
+      }
+    }
+  }
+`);

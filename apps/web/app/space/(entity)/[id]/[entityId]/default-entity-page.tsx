@@ -89,9 +89,9 @@ export default async function DefaultEntityPage({
               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
               show any referenced by loading states but do want to stream it in
             */}
-            <React.Suspense fallback={<div />}>
+            {/* <React.Suspense fallback={<div />}>
               <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
-            </React.Suspense>
+            </React.Suspense> */}
           </ErrorBoundary>
         </EntityPageContentContainer>
       </EditorProvider>
@@ -104,17 +104,17 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE))) {
-    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
-    return redirect(NavUtils.toSpace(spaceId));
-  }
+  // if (entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE))) {
+  //   console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
+  //   return redirect(NavUtils.toSpace(spaceId));
+  // }
 
   // Redirect from an invalid space to a valid one
-  if (entity && !spaces.includes(spaceId) && !preventRedirect) {
-    const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
-    console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
-    return redirect(NavUtils.toEntity(newSpaceId, entityId));
-  }
+  // if (entity && !spaces.includes(spaceId) && !preventRedirect) {
+  //   const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
+  //   console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
+  //   return redirect(NavUtils.toEntity(newSpaceId, entityId));
+  // }
 
   const tabIds = entity?.relations
     .filter(r => r.type.id === EntityId(SystemIds.TABS_ATTRIBUTE))
@@ -147,6 +147,8 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const blockRelations = entity?.relations.filter(r => r.type.id === EntityId(SystemIds.BLOCKS));
   const blockIds = blockRelations?.map(r => r.toEntity.id);
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+
+  console.log('values', entity?.values);
 
   return {
     values: entity?.values ?? [],

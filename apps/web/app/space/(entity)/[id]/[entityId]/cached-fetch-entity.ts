@@ -5,6 +5,7 @@ import { cache } from 'react';
 import { getBatchEntities, getEntity } from '~/core/io/v2/queries';
 
 export const cachedFetchEntity = cache(async (entityId: string, spaceId?: string) => {
+  console.log('fetching entity', entityId);
   return await Effect.runPromise(getEntity(entityId, spaceId));
 });
 

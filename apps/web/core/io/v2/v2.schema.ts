@@ -68,16 +68,18 @@ export const Relation = Schema.Struct({
 
 export type RemoteRelation = Schema.Schema.Type<typeof Relation>;
 
+export const EntityType = Schema.Struct({
+  id: Schema.UUID,
+  name: Schema.NullOr(Schema.String),
+});
+
+export type RemoteEntityType = Schema.Schema.Type<typeof Entity>;
+
 export const Entity = Schema.Struct({
   id: Schema.UUID,
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
-  types: Schema.Array(
-    Schema.Struct({
-      id: Schema.UUID,
-      name: Schema.NullOr(Schema.String),
-    })
-  ),
+  types: Schema.Array(EntityType),
   // spaces
   // cover
   // blocks: Schema.
