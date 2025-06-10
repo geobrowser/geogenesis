@@ -1,7 +1,7 @@
 'use client';
 
 import { ContentIds, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
-import { Image } from '@graphprotocol/grc-20';
+// import { Image } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { useAtom } from 'jotai';
 
@@ -352,52 +352,49 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             <div key={`relation-upload-image-${relationId}`}>
               <PageImageField
                 onImageChange={imageSrc => {
-                  const { id: imageId, ops } = Image.make({ cid: imageSrc });
-                  const [createRelationOp, setTripleOp] = ops;
-
-                  if (createRelationOp.type === 'CREATE_RELATION') {
-                    send({
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: createRelationOp.relation.fromEntity,
-                        fromEntityName: name,
-                        toEntityId: createRelationOp.relation.toEntity,
-                        toEntityName: null,
-                        typeOfId: createRelationOp.relation.type,
-                        typeOfName: 'Types',
-                      },
-                    });
-                  }
-
-                  if (setTripleOp.type === 'SET_TRIPLE') {
-                    DB.upsert(
-                      {
-                        value: {
-                          type: 'URL',
-                          value: setTripleOp.triple.value.value,
-                        },
-                        entityId: imageId,
-                        attributeId: setTripleOp.triple.attribute,
-                        entityName: null,
-                        attributeName: 'Image URL',
-                      },
-                      spaceId
-                    );
-
-                    send({
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: id,
-                        fromEntityName: name,
-                        toEntityId: imageId,
-                        toEntityName: null,
-                        typeOfId: r.attributeId,
-                        typeOfName: r.attributeName,
-                        renderableType: 'IMAGE',
-                        value: setTripleOp.triple.value.value,
-                      },
-                    });
-                  }
+                  // const { id: imageId, ops } = Image.make({ cid: imageSrc });
+                  // const [createRelationOp, setTripleOp] = ops;
+                  // if (createRelationOp.type === 'CREATE_RELATION') {
+                  //   send({
+                  //     type: 'UPSERT_RELATION',
+                  //     payload: {
+                  //       fromEntityId: createRelationOp.relation.fromEntity,
+                  //       fromEntityName: name,
+                  //       toEntityId: createRelationOp.relation.toEntity,
+                  //       toEntityName: null,
+                  //       typeOfId: createRelationOp.relation.type,
+                  //       typeOfName: 'Types',
+                  //     },
+                  //   });
+                  // }
+                  // if (setTripleOp.type === 'SET_TRIPLE') {
+                  //   DB.upsert(
+                  //     {
+                  //       value: {
+                  //         type: 'URL',
+                  //         value: setTripleOp.triple.value.value,
+                  //       },
+                  //       entityId: imageId,
+                  //       attributeId: setTripleOp.triple.attribute,
+                  //       entityName: null,
+                  //       attributeName: 'Image URL',
+                  //     },
+                  //     spaceId
+                  //   );
+                  //   send({
+                  //     type: 'UPSERT_RELATION',
+                  //     payload: {
+                  //       fromEntityId: id,
+                  //       fromEntityName: name,
+                  //       toEntityId: imageId,
+                  //       toEntityName: null,
+                  //       typeOfId: r.attributeId,
+                  //       typeOfName: r.attributeName,
+                  //       renderableType: 'IMAGE',
+                  //       value: setTripleOp.triple.value.value,
+                  //     },
+                  //   });
+                  // }
                 }}
                 onImageRemove={() => console.log(`remove`)}
               />

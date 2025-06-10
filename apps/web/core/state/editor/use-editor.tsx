@@ -1,11 +1,10 @@
 'use client';
 
-import { Relation as R, SystemIds } from '@graphprotocol/grc-20';
-import { Image } from '@graphprotocol/grc-20';
+import { Position, SystemIds } from '@graphprotocol/grc-20';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
-import { useSearchParams } from 'next/navigation';
 import { useAtom } from 'jotai';
+import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -61,31 +60,31 @@ function makeNewBlockRelation({
   const allRelations = [
     ...blockRelations.map(r => ({
       toEntity: { id: r.block.id },
-      index: r.index
+      index: r.index,
     })),
     ...newBlocks.map(b => ({
       toEntity: { id: b.toEntity.id },
-      index: b.index
-    }))
-  ].sort((a, b) => a.index < b.index ? -1 : 1);
+      index: b.index,
+    })),
+  ].sort((a, b) => (a.index < b.index ? -1 : 1));
 
   // Check both the existing blocks and any that are created as part of this update
   // tick. This is necessary as right now we don't update the Geo state until the
   // user blurs the editor. See the comment earlier in this function.
 
-  const beforeCollectionItemIndex =
-    allRelations.find(c => c.toEntity.id === beforeBlockIndex)?.index;
+  const beforeCollectionItemIndex = allRelations.find(c => c.toEntity.id === beforeBlockIndex)?.index;
 
   // When the afterCollectionItemIndex is undefined, we need to use the next block of beforeBlockIndex
   const afterCollectionItemIndex =
     allRelations.find(c => c.toEntity.id === afterBlockIndex)?.index ??
     allRelations[allRelations.findIndex(c => c.index === beforeCollectionItemIndex) + 1]?.index;
 
-  const newTripleOrdering = R.reorder({
-    relationId: newRelationId,
-    beforeIndex: beforeCollectionItemIndex,
-    afterIndex: afterCollectionItemIndex,
-  });
+  // @TODO(migration): Fix
+  // const newTripleOrdering = R.reorder({
+  //   relationId: newRelationId,
+  //   beforeIndex: beforeCollectionItemIndex,
+  //   afterIndex: afterCollectionItemIndex,
+  // });
 
   const renderableType = ((): RenderableEntityType => {
     switch (tiptapBlock.type) {
@@ -106,7 +105,8 @@ function makeNewBlockRelation({
   const newRelation: Relation = {
     space: spaceId,
     id: newRelationId,
-    index: newTripleOrdering.triple.value.value,
+    index: 'a0',
+    // index: newTripleOrdering.triple.value.value,
     typeOf: {
       id: EntityId(SystemIds.BLOCKS),
       name: 'Blocks',
@@ -205,7 +205,6 @@ const makeBlocksRelations = async ({
       entityPageId,
     });
 
-
     DB.upsertRelation({ relation: newRelation, spaceId });
   }
 };
@@ -231,7 +230,7 @@ export function useEditorStore() {
 
   const blockRelations = useBlocks(
     activeEntityId,
-    isTab ? initialTabs![tabId as EntityId].entity.relationsOut : initialBlockRelations
+    isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
   );
 
   const blockIds = React.useMemo(() => {
@@ -241,7 +240,7 @@ export function useEditorStore() {
   const initialBlockTriples = React.useMemo(() => {
     const blocks = isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
 
-    return blocks.flatMap(b => b.triples);
+    return blocks.flatMap(b => b.values);
   }, [initialBlocks, initialTabs, isTab, tabId]);
 
   /**
@@ -294,7 +293,6 @@ export function useEditorStore() {
         /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
         const isSSR = typeof window === 'undefined';
         const json = isSSR ? generateServerJSON(html, tiptapExtensions) : generateJSON(html, tiptapExtensions);
-
 
         const nodeData = json.content[0];
 
@@ -401,26 +399,27 @@ export function useEditorStore() {
           case SystemIds.IMAGE_TYPE: {
             const imageHash = getImageHash(node.attrs?.src);
             const imageUrl = `ipfs://${imageHash}`;
-            const { ops } = Image.make({ cid: imageUrl });
-            const [, setTripleOp] = ops;
 
-            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SystemIds.IMAGE_TYPE, spaceId), spaceId });
+            // const { ops } = Image.make({ cid: imageUrl });
+            // const [, setTripleOp] = ops;
 
-            if (setTripleOp.type === 'SET_TRIPLE') {
-              DB.upsert(
-                {
-                  value: {
-                    type: 'URL',
-                    value: setTripleOp.triple.value.value,
-                  },
-                  entityId: node.id,
-                  attributeId: setTripleOp.triple.attribute,
-                  entityName: null,
-                  attributeName: 'Image URL',
-                },
-                spaceId
-              );
-            }
+            // DB.upsertRelation({ relation: getRelationForBlockType(node.id, SystemIds.IMAGE_TYPE, spaceId), spaceId });
+
+            // if (setTripleOp.type === 'SET_TRIPLE') {
+            //   DB.upsert(
+            //     {
+            //       value: {
+            //         type: 'URL',
+            //         value: setTripleOp.triple.value.value,
+            //       },
+            //       entityId: node.id,
+            //       attributeId: setTripleOp.triple.attribute,
+            //       entityName: null,
+            //       attributeName: 'Image URL',
+            //     },
+            //     spaceId
+            //   );
+            // }
 
             break;
           }

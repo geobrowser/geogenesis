@@ -148,8 +148,6 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const blockIds = blockRelations?.map(r => r.toEntity.id);
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
-  console.log('values', entity?.values);
-
   return {
     values: entity?.values ?? [],
     id: entityId,

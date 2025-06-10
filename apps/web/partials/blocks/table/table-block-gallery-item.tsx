@@ -1,4 +1,4 @@
-import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
 import Link from 'next/link';
 
@@ -111,75 +111,71 @@ export function TableBlockGalleryItem({
               variant="gallery"
               imageSrc={image ?? undefined}
               onImageChange={imageSrc => {
-                const { id: imageId, ops } = Image.make({ cid: imageSrc });
-                const [createRelationOp, setTripleOp] = ops;
-
-                if (createRelationOp.type === 'CREATE_RELATION') {
-                  const imageEntityDispatch = editEvent({
-                    context: {
-                      entityId: createRelationOp.relation.fromEntity,
-                      entityName: null,
-                      spaceId: currentSpaceId,
-                    },
-                  });
-
-                  imageEntityDispatch({
-                    type: 'UPSERT_RELATION',
-                    payload: {
-                      fromEntityId: createRelationOp.relation.fromEntity,
-                      fromEntityName: name,
-                      toEntityId: createRelationOp.relation.toEntity,
-                      toEntityName: null,
-                      typeOfId: createRelationOp.relation.type,
-                      typeOfName: 'Types',
-                    },
-                  });
-
-                  if (setTripleOp.type === 'SET_TRIPLE') {
-                    imageEntityDispatch({
-                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                      payload: {
-                        renderable: {
-                          attributeId: setTripleOp.triple.attribute,
-                          entityId: imageId,
-                          spaceId: currentSpaceId,
-                          attributeName: 'Image URL',
-                          entityName: null,
-                          type: 'URL',
-                          value: setTripleOp.triple.value.value,
-                        },
-                        value: {
-                          type: 'URL',
-                          value: setTripleOp.triple.value.value,
-                        },
-                      },
-                    });
-
-                    onChangeEntry(
-                      {
-                        entityId: rowEntityId,
-                        entityName: name,
-                        spaceId: currentSpaceId,
-                      },
-                      {
-                        type: 'EVENT',
-                        data: {
-                          type: 'UPSERT_RELATION',
-                          payload: {
-                            fromEntityId: rowEntityId,
-                            fromEntityName: name,
-                            toEntityId: imageId,
-                            toEntityName: null,
-                            typeOfId: ContentIds.AVATAR_ATTRIBUTE,
-                            typeOfName: 'Avatar',
-                            renderableType: 'IMAGE',
-                            value: setTripleOp.triple.value.value,
-                          },
-                        },
-                      }
-                    );
-                  }
-                }
+                // const { id: imageId, ops } = Image.make({ cid: imageSrc });
+                // const [createRelationOp, setTripleOp] = ops;
+                // if (createRelationOp.type === 'CREATE_RELATION') {
+                //   const imageEntityDispatch = editEvent({
+                //     context: {
+                //       entityId: createRelationOp.relation.fromEntity,
+                //       entityName: null,
+                //       spaceId: currentSpaceId,
+                //     },
+                //   });
+                //   imageEntityDispatch({
+                //     type: 'UPSERT_RELATION',
+                //     payload: {
+                //       fromEntityId: createRelationOp.relation.fromEntity,
+                //       fromEntityName: name,
+                //       toEntityId: createRelationOp.relation.toEntity,
+                //       toEntityName: null,
+                //       typeOfId: createRelationOp.relation.type,
+                //       typeOfName: 'Types',
+                //     },
+                //   });
+                //   if (setTripleOp.type === 'SET_TRIPLE') {
+                //     imageEntityDispatch({
+                //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                //       payload: {
+                //         renderable: {
+                //           attributeId: setTripleOp.triple.attribute,
+                //           entityId: imageId,
+                //           spaceId: currentSpaceId,
+                //           attributeName: 'Image URL',
+                //           entityName: null,
+                //           type: 'URL',
+                //           value: setTripleOp.triple.value.value,
+                //         },
+                //         value: {
+                //           type: 'URL',
+                //           value: setTripleOp.triple.value.value,
+                //         },
+                //       },
+                //     });
+                //     onChangeEntry(
+                //       {
+                //         entityId: rowEntityId,
+                //         entityName: name,
+                //         spaceId: currentSpaceId,
+                //       },
+                //       {
+                //         type: 'EVENT',
+                //         data: {
+                //           type: 'UPSERT_RELATION',
+                //           payload: {
+                //             fromEntityId: rowEntityId,
+                //             fromEntityName: name,
+                //             toEntityId: imageId,
+                //             toEntityName: null,
+                //             typeOfId: ContentIds.AVATAR_ATTRIBUTE,
+                //             typeOfName: 'Avatar',
+                //             renderableType: 'IMAGE',
+                //             value: setTripleOp.triple.value.value,
+                //           },
+                //         },
+                //       }
+                //     );
+                // }
+                // }
               }}
             />
           )}

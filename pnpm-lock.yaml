@@ -51,8 +51,8 @@ importers:
         specifier: ^5.6.8
         version: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
       '@graphprotocol/grc-20':
-        specifier: ^0.11.5
-        version: 0.11.5(bufferutil@4.0.9)(graphql@15.10.1)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
+        specifier: ^0.17.1
+        version: 0.17.1(bufferutil@4.0.9)(graphql@15.10.1)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
       '@mobily/ts-belt':
         specifier: ^4.0.0-rc.2
         version: 4.0.0-rc.5
@@ -2001,8 +2001,8 @@ packages:
     resolution: {integrity: sha512-Fakuk190EAKxWSa9YQyr/87g8mvAv8HBvk6yPCPuIoA3bYXF7n6kl0XSqKjSd5VfjEqhtnzQ6zJGzDf1Gv/tJg==}
     engines: {node: '>=8.6'}
 
-  '@graphprotocol/grc-20@0.11.5':
-    resolution: {integrity: sha512-i25OlQtuhu4iT3KPvgNSE5G8HDxVIufIC1EzkquiSzI8q7vjSDPI3tu8zAxJMtFAwc/+tA5Itf/W2px8LTzepA==}
+  '@graphprotocol/grc-20@0.17.1':
+    resolution: {integrity: sha512-JX7tUuILGh1bgdSFlwNyrn4i5GEF40NNsj7MgyjVw7mfbXVQaymsxfzDBCSE7ADEpeSwyOJ/5BMq9gT7YIv0vA==}
 
   '@graphprotocol/grc-20@0.9.4':
     resolution: {integrity: sha512-Dod9W8nvAgc0LpM4AwtNSghsj/eJ1pvzLF0ItYlcJz7e+kCS/9NQ0ysdupqZ/ITwfOF9sS5igLsGIvvNQ5MmXQ==}
@@ -2637,10 +2637,6 @@ packages:
     resolution: {integrity: sha512-warwspo+UYUPep0Q+vtdVB4Ugn8GGQj8iyB3gnRWsztmUHTI3S1nhdiWNsPUGL0vud7JlRRk1XEu7Lq1KGTnMQ==}
     engines: {node: ^14.21.3 || >=16}
 
-  '@noble/curves@1.8.2':
-    resolution: {integrity: sha512-vnI7V6lFNe0tLAuJMu+2sX+FcL14TaCWy1qiczg1VwRmPrpQCdq5ESXQMqUc2tluRNf6irBXrWbl1mGN8uaU/g==}
-    engines: {node: ^14.21.3 || >=16}
-
   '@noble/curves@1.9.2':
     resolution: {integrity: sha512-HxngEd2XUcg9xi20JkwlLCtYwfoFw4JGkuZpT+WlsPD4gB/cxkvTD8fSsoAnphGZhFdZYKeQIPCuFlWPm1uE0g==}
     engines: {node: ^14.21.3 || >=16}
@@ -2655,10 +2651,6 @@ packages:
 
   '@noble/hashes@1.7.1':
     resolution: {integrity: sha512-B8XBPsn4vT/KJAGqDzbwztd+6Yte3P4V7iafm24bxgDe/mlRuK6xmWPuCNrKt2vDafZ8MfJLlchDG/vYafQEjQ==}
-    engines: {node: ^14.21.3 || >=16}
-
-  '@noble/hashes@1.7.2':
-    resolution: {integrity: sha512-biZ0NUSxyjLLqo6KxEJ1b+C2NAx0wtDoFvCaXHGgUkeHzf3Xc1xKumFKREuT7f7DARNZ/slvYUwFG6B0f2b6hQ==}
     engines: {node: ^14.21.3 || >=16}
 
   '@noble/hashes@1.8.0':
@@ -10520,7 +10512,7 @@ snapshots:
 
   '@coinbase/wallet-sdk@4.2.3':
     dependencies:
-      '@noble/hashes': 1.7.2
+      '@noble/hashes': 1.8.0
       clsx: 1.2.1
       eventemitter3: 5.0.1
       preact: 10.25.4
@@ -11259,7 +11251,7 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@graphprotocol/grc-20@0.11.5(bufferutil@4.0.9)(graphql@15.10.1)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
+  '@graphprotocol/grc-20@0.17.1(bufferutil@4.0.9)(graphql@15.10.1)(ox@0.6.7(typescript@5.7.3)(zod@3.24.1))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)':
     dependencies:
       '@bufbuild/protobuf': 1.10.0
       '@changesets/cli': 2.27.12
@@ -12097,7 +12089,7 @@ snapshots:
     dependencies:
       '@ethereumjs/tx': 4.2.0
       '@metamask/superstruct': 3.1.0
-      '@noble/hashes': 1.7.2
+      '@noble/hashes': 1.8.0
       '@scure/base': 1.2.4
       '@types/debug': 4.1.12
       debug: 4.4.0
@@ -12111,7 +12103,7 @@ snapshots:
     dependencies:
       '@ethereumjs/tx': 4.2.0
       '@metamask/superstruct': 3.1.0
-      '@noble/hashes': 1.7.2
+      '@noble/hashes': 1.8.0
       '@scure/base': 1.2.4
       '@types/debug': 4.1.12
       debug: 4.4.0
@@ -12219,10 +12211,6 @@ snapshots:
     dependencies:
       '@noble/hashes': 1.7.1
 
-  '@noble/curves@1.8.2':
-    dependencies:
-      '@noble/hashes': 1.7.2
-
   '@noble/curves@1.9.2':
     dependencies:
       '@noble/hashes': 1.8.0
@@ -12232,8 +12220,6 @@ snapshots:
   '@noble/hashes@1.4.0': {}
 
   '@noble/hashes@1.7.1': {}
-
-  '@noble/hashes@1.7.2': {}
 
   '@noble/hashes@1.8.0': {}
 
@@ -13242,7 +13228,7 @@ snapshots:
 
   '@solana/wallet-standard-util@1.1.2':
     dependencies:
-      '@noble/curves': 1.8.2
+      '@noble/curves': 1.9.2
       '@solana/wallet-standard-chains': 1.1.1
       '@solana/wallet-standard-features': 1.3.0
 
@@ -15719,8 +15705,8 @@ snapshots:
     dependencies:
       '@ecies/ciphers': 0.2.2(@noble/ciphers@1.2.1)
       '@noble/ciphers': 1.2.1
-      '@noble/curves': 1.8.2
-      '@noble/hashes': 1.7.2
+      '@noble/curves': 1.9.2
+      '@noble/hashes': 1.8.0
 
   ee-first@1.1.1: {}
 

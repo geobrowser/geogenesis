@@ -1,56 +1,55 @@
 'use client';
 
-import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import LegacyImage from 'next/legacy/image';
 
 import { ChangeEvent, useRef } from 'react';
 import { useState } from 'react';
 
-import { DB } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Triple } from '~/core/types';
 import { RenderableProperty } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
+import { Value } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
+import { Dots } from '~/design-system/dots';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
-import { Dots } from '~/design-system/dots';
 
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
-  triples,
+  values,
   coverUrl,
 }: {
   avatarUrl: string | null;
-  triples: Triple[] | undefined;
+  values: Value[] | undefined;
   coverUrl: string | null;
 }) => {
   const { spaceId, id } = useEntityPageStore();
   const entityId = id;
   const [isRelationPage] = useRelationship(entityId, spaceId);
   const editable = useUserIsEditing(spaceId);
-  const { renderablesGroupedByAttributeId } = useRenderables(triples ?? [], spaceId, isRelationPage);
+  const { renderablesGroupedByAttributeId } = useRenderables(values ?? [], spaceId, isRelationPage);
 
   const coverAvatarRenderable = Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
     const firstRenderable = renderables[0];
     const renderableType = firstRenderable.type;
 
     if (
-      (renderableType === 'IMAGE' && firstRenderable.attributeId === SystemIds.COVER_PROPERTY) ||
-      (renderableType === 'IMAGE' && firstRenderable.attributeId === ContentIds.AVATAR_PROPERTY)
+      (renderableType === 'IMAGE' && firstRenderable.propertyId === SystemIds.COVER_PROPERTY) ||
+      (renderableType === 'IMAGE' && firstRenderable.propertyId === ContentIds.AVATAR_PROPERTY)
     ) {
       return firstRenderable;
     }
   });
 
-  const coverRenderable = coverAvatarRenderable.find(r => r?.attributeId === SystemIds.COVER_PROPERTY);
-  const avatarRenderable = coverAvatarRenderable.find(r => r?.attributeId === ContentIds.AVATAR_PROPERTY);
+  const coverRenderable = coverAvatarRenderable.find(r => r?.propertyId === SystemIds.COVER_PROPERTY);
+  const avatarRenderable = coverAvatarRenderable.find(r => r?.propertyId === ContentIds.AVATAR_PROPERTY);
 
   // Only show avatar when there's an actual avatar or user is in edit mode
   const showAvatar = avatarUrl || (editable && avatarRenderable);
@@ -65,12 +64,12 @@ export const EditableCoverAvatarHeader = ({
     >
       {coverRenderable && (
         <div
-          key={`cover-${coverRenderable.attributeId}`}
+          key={`cover-${coverRenderable.propertyId}`}
           className="absolute left-1/2 top-0 flex h-full w-full max-w-[1192px] -translate-x-1/2 transform items-center justify-center rounded-lg bg-center bg-no-repeat transition-all duration-200 ease-in-out"
         >
           <AvatarCoverInput
-            typeOfId={coverRenderable.attributeId}
-            typeOfName={coverRenderable.attributeName ?? ''}
+            typeOfId={coverRenderable.propertyId}
+            typeOfName={coverRenderable.propertyName ?? ''}
             inputId="cover-input"
             firstRenderable={coverRenderable}
             imgUrl={coverUrl}
@@ -135,52 +134,49 @@ const AvatarCoverInput = ({
   });
 
   const onImageChange = (imageSrc: string) => {
-    const { id: imageId, ops } = Image.make({ cid: imageSrc });
-    const [createRelationOp, setTripleOp] = ops;
-
-    if (createRelationOp.type === 'CREATE_RELATION') {
-      send({
-        type: 'UPSERT_RELATION',
-        payload: {
-          fromEntityId: createRelationOp.relation.fromEntity,
-          fromEntityName: name,
-          toEntityId: createRelationOp.relation.toEntity,
-          toEntityName: null,
-          typeOfId: createRelationOp.relation.type,
-          typeOfName: 'Types',
-        },
-      });
-    }
-
-    if (setTripleOp.type === 'SET_TRIPLE') {
-      DB.upsert(
-        {
-          value: {
-            type: 'URL',
-            value: setTripleOp.triple.value.value,
-          },
-          entityId: imageId,
-          attributeId: setTripleOp.triple.attribute,
-          entityName: null,
-          attributeName: 'Image URL',
-        },
-        spaceId
-      );
-
-      send({
-        type: 'UPSERT_RELATION',
-        payload: {
-          fromEntityId: id,
-          fromEntityName: name,
-          toEntityId: imageId,
-          toEntityName: null,
-          typeOfId,
-          typeOfName,
-          renderableType: 'IMAGE',
-          value: setTripleOp.triple.value.value,
-        },
-      });
-    }
+    // const { id: imageId, ops } = Image.make({ cid: imageSrc });
+    // const [createRelationOp, setTripleOp] = ops;
+    // if (createRelationOp.type === 'CREATE_RELATION') {
+    //   send({
+    //     type: 'UPSERT_RELATION',
+    //     payload: {
+    //       fromEntityId: createRelationOp.relation.fromEntity,
+    //       fromEntityName: name,
+    //       toEntityId: createRelationOp.relation.toEntity,
+    //       toEntityName: null,
+    //       typeOfId: createRelationOp.relation.type,
+    //       typeOfName: 'Types',
+    //     },
+    //   });
+    // }
+    // if (setTripleOp.type === 'SET_TRIPLE') {
+    //   DB.upsert(
+    //     {
+    //       value: {
+    //         type: 'URL',
+    //         value: setTripleOp.triple.value.value,
+    //       },
+    //       entityId: imageId,
+    //       attributeId: setTripleOp.triple.attribute,
+    //       entityName: null,
+    //       attributeName: 'Image URL',
+    //     },
+    //     spaceId
+    //   );
+    //   send({
+    //     type: 'UPSERT_RELATION',
+    //     payload: {
+    //       fromEntityId: id,
+    //       fromEntityName: name,
+    //       toEntityId: imageId,
+    //       toEntityName: null,
+    //       typeOfId,
+    //       typeOfName,
+    //       renderableType: 'IMAGE',
+    //       value: setTripleOp.triple.value.value,
+    //     },
+    //   });
+    // }
   };
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -223,12 +219,12 @@ const AvatarCoverInput = ({
         }}
         className={`relative h-full w-full rounded-lg ${!imgUrl && editable ? 'cursor-pointer' : ''} ${
           isCover
-            ? imgUrl 
+            ? imgUrl
               ? 'bg-transparent'
-              : 'bg-cover-default bg-center bg-no-repeat hover:bg-cover-hover'
+              : 'bg-cover-default hover:bg-cover-hover bg-center bg-no-repeat'
             : imgUrl
               ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-transparent shadow-lg'
-              : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-avatar-hover hover:bg-white'
+              : 'bg-avatar-default hover:bg-avatar-hover h-[80px] w-[80px] bg-center bg-no-repeat hover:bg-white'
         }`}
       >
         {imgUrl && (
@@ -243,7 +239,7 @@ const AvatarCoverInput = ({
             className={`absolute ${imgUrl && isCover ? 'right-4 top-4 justify-end' : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'} flex transform items-center gap-[6px]`}
           >
             {isUploading ? (
-              <SquareButton disabled className="pointer-events-none bg-white/85 border-none">
+              <SquareButton disabled className="pointer-events-none border-none bg-white/85">
                 <Dots color="bg-grey-03" />
               </SquareButton>
             ) : !imgUrl ? (

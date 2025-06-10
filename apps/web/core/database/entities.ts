@@ -31,12 +31,12 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   // we fetch the entity from the server and merge it with the local state.
   const data = entity ?? initialData;
 
-  const triples = data?.values ?? [];
+  const values = data?.values ?? [];
   const relations = data?.relations ?? [];
 
-  const name = Entities.name(triples ?? []);
+  const name = Entities.name(values ?? []);
   const spaces = data?.spaces ?? [];
-  const description = Entities.description(triples);
+  const description = Entities.description(values);
   const types = readTypes(relations);
 
   const { data: schema } = useQuery({
