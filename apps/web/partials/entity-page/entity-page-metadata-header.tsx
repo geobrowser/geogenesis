@@ -9,7 +9,6 @@ import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RelationRenderableProperty } from '~/core/types';
 
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
 import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
@@ -30,26 +29,28 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
 
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
-  const typesRenderable = Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
+  const typesRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];
     const renderableType = firstRenderable.type;
 
-    if (renderableType === 'RELATION' && firstRenderable.attributeId === SystemIds.TYPES_PROPERTY) {
+    if (renderableType === 'RELATION' && firstRenderable.propertyId === SystemIds.TYPES_PROPERTY) {
       return renderables;
     }
   });
 
-  const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.attributeId === SystemIds.TYPES_PROPERTY));
+  const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.propertyId === SystemIds.TYPES_PROPERTY));
 
   return (
     <div className="flex items-center justify-between text-text">
-      {typesRenderableObj && (
-        editable ? (
-          <EditableRelationsGroup relations={typesRenderableObj as RelationRenderableProperty[]} properties={properties} />
+      {typesRenderableObj &&
+        (editable ? (
+          <EditableRelationsGroup
+            relations={typesRenderableObj as RelationRenderableProperty[]}
+            properties={properties}
+          />
         ) : (
           <ReadableRelationsGroup relations={typesRenderableObj as RelationRenderableProperty[]} isTypes={true} />
-        )
-      )}
+        ))}
     </div>
   );
 }
