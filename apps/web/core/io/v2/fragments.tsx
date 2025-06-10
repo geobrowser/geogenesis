@@ -58,9 +58,17 @@ export const entitiesQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const entitiesBatchQuery = graphql(/* GraphQL */ `
+  query EntitiesBatch($ids: [String!]!, $spaceId: String) {
+    entities(spaceId: $spaceId, filter: { id: { in: $ids } }) {
+      ...FullEntity
+    }
+  }
+`);
+
 export const entityQuery = graphql(/* GraphQL */ `
-  query Entity($id: String!) {
-    entity(id: $id) {
+  query Entity($id: String!, $spaceId: String) {
+    entity(id: $id, spaceId: $spaceId) {
       ...FullEntity
     }
   }

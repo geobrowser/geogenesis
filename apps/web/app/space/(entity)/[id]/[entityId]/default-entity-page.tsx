@@ -1,11 +1,11 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import { Effect } from 'effect';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
 import { EntityId } from '~/core/io/schema';
-import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
@@ -47,10 +47,6 @@ export default async function DefaultEntityPage({
   const showSpacer = showCover || showHeading || showHeader;
 
   const props = await getData(params.id, params.entityId, searchParams?.edit === 'true' ? true : false);
-
-  const avatarUrl = Entities.avatar(props.relationsOut) ?? props.serverAvatarUrl;
-  const coverUrl = Entities.cover(props.relationsOut) ?? props.serverCoverUrl;
-
   const tabs = buildTabsForEntityPage(props.tabEntities, params);
 
   return (
@@ -58,8 +54,8 @@ export default async function DefaultEntityPage({
       id={props.id}
       spaceId={props.spaceId}
       initialSpaces={props.spaces}
-      initialTriples={props.triples}
-      initialRelations={props.relationsOut}
+      initialValues={props.values}
+      initialRelations={props.relations}
     >
       <EditorProvider
         id={props.id}
@@ -68,15 +64,11 @@ export default async function DefaultEntityPage({
         initialBlockRelations={props.blockRelations}
         initialTabs={props.tabs}
       >
-        {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
+        {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
         <EntityPageContentContainer>
           <div className="space-y-2">
-            {showHeading && (
-              <EntityPageHeading spaceId={props.spaceId} entityId={props.id} />
-            )}
-            {showHeader && (
-              <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />
-            )}
+            {showHeading && <EntityPageHeading spaceId={props.spaceId} entityId={props.id} />}
+            {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
           </div>
           {tabs.length > 1 && (
             <>
@@ -109,11 +101,10 @@ export default async function DefaultEntityPage({
 
 const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
   const entity = await cachedFetchEntity(entityId, spaceId);
-  const nameTripleSpace = entity?.nameTripleSpaces?.[0];
   const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && nameTripleSpace) {
+  if (entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE))) {
     console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
     return redirect(NavUtils.toSpace(spaceId));
   }
@@ -125,17 +116,16 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     return redirect(NavUtils.toEntity(newSpaceId, entityId));
   }
 
-  const tabIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SystemIds.TABS_ATTRIBUTE))
+  const tabIds = entity?.relations
+    .filter(r => r.type.id === EntityId(SystemIds.TABS_ATTRIBUTE))
     ?.map(r => r.toEntity.id);
 
-  const tabEntities = tabIds ? await fetchEntitiesBatch({ spaceId, entityIds: tabIds }) : [];
+  const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
 
+  // @TODO(migration): We can query blocks from entities now
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
-      const blockIds = entity?.relationsOut
-        .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
-        ?.map(r => r.toEntity.id);
+      const blockIds = entity?.relations.filter(r => r.type.id === EntityId(SystemIds.BLOCKS))?.map(r => r.toEntity.id);
 
       const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
       return blocks;
@@ -151,23 +141,23 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     };
   });
 
-  const serverAvatarUrl = Entities.avatar(entity?.relationsOut);
-  const serverCoverUrl = Entities.cover(entity?.relationsOut);
+  const serverAvatarUrl = Entities.avatar(entity?.relations);
+  const serverCoverUrl = Entities.cover(entity?.relations);
 
-  const blockRelations = entity?.relationsOut.filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS));
+  const blockRelations = entity?.relations.filter(r => r.type.id === EntityId(SystemIds.BLOCKS));
   const blockIds = blockRelations?.map(r => r.toEntity.id);
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
-    triples: entity?.triples ?? [],
+    values: entity?.values ?? [],
     id: entityId,
     name: entity?.name ?? null,
-    description: Entities.description(entity?.triples ?? []),
+    description: Entities.description(entity?.values ?? []),
     spaceId,
     spaces,
     serverAvatarUrl,
     serverCoverUrl,
-    relationsOut: entity?.relationsOut ?? [],
+    relations: entity?.relations ?? [],
     types: entity?.types ?? [],
 
     tabs,

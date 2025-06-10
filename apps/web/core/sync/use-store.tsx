@@ -78,7 +78,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
     const onTripleCreatedSub = stream.on(GeoEventStream.VALUES_CREATED, event => {
       let shouldUpdate = false;
 
-      if (event.value.entityId === id) {
+      if (event.value.entity.id === id) {
         shouldUpdate = true;
       }
 
@@ -89,13 +89,13 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationToChanged = entity?.relations.some(r => r.toEntity.id === event.value.entityId);
+      const maybeRelationToChanged = entity?.relations.some(r => r.toEntity.id === event.value.entity.id);
 
       if (maybeRelationToChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entity?.relations.some(r => r.id === event.value.entityId);
+      const maybeRelationEntityChanged = entity?.relations.some(r => r.id === event.value.entity.id);
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;
@@ -109,7 +109,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
     const onTripleDeletedSub = stream.on(GeoEventStream.VALUES_DELETED, event => {
       let shouldUpdate = false;
 
-      if (event.value.entityId === id) {
+      if (event.value.entity.id === id) {
         shouldUpdate = true;
       }
 
@@ -120,13 +120,13 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationToChanged = entity?.relations.some(r => r.toEntity.id === event.value.entityId);
+      const maybeRelationToChanged = entity?.relations.some(r => r.toEntity.id === event.value.entity.id);
 
       if (maybeRelationToChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entity?.relations.some(r => r.id === event.value.entityId);
+      const maybeRelationEntityChanged = entity?.relations.some(r => r.id === event.value.entity.id);
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;
@@ -327,7 +327,7 @@ export function useQueryEntities({
         .execute();
       const ids: string[] = entities.map(e => e.id);
 
-      if (ids.includes(event.value.entityId)) {
+      if (ids.includes(event.value.entity.id)) {
         shouldUpdate = true;
       }
 
@@ -338,13 +338,13 @@ export function useQueryEntities({
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationToChanged = entities.some(e => e.relations.some(r => r.toEntity.id === event.value.entityId));
+      const maybeRelationToChanged = entities.some(e => e.relations.some(r => r.toEntity.id === event.value.entity.id));
 
       if (maybeRelationToChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entities.some(e => e.relations.some(r => r.id === event.value.entityId));
+      const maybeRelationEntityChanged = entities.some(e => e.relations.some(r => r.id === event.value.entity.id));
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;
@@ -375,8 +375,8 @@ export function useQueryEntities({
         .execute();
       const localEntitiesList = localEntities;
 
-      const previousListHasChangedEntity = localEntitiesList.some(e => e.id === event.value.entityId);
-      const newListDoesNotHaveChangedEntity = !entities.some(e => e.id === event.value.entityId);
+      const previousListHasChangedEntity = localEntitiesList.some(e => e.id === event.value.entity.id);
+      const newListDoesNotHaveChangedEntity = !entities.some(e => e.id === event.value.entity.id);
 
       // This means the queried list has changed as a result of the deleted relation
       if (previousListHasChangedEntity && newListDoesNotHaveChangedEntity) {
@@ -391,13 +391,13 @@ export function useQueryEntities({
        * re-pull Byron to get the latest name for Geo, PBC.
        */
 
-      const maybeRelationChanged = entities.some(e => e.relations.some(r => r.toEntity.id === event.value.entityId));
+      const maybeRelationChanged = entities.some(e => e.relations.some(r => r.toEntity.id === event.value.entity.id));
 
       if (maybeRelationChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entities.some(e => e.relations.some(r => r.id === event.value.entityId));
+      const maybeRelationEntityChanged = entities.some(e => e.relations.some(r => r.id === event.value.entity.id));
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;

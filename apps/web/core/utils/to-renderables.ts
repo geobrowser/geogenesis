@@ -1,19 +1,16 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-
 import {
   PropertySchema,
   Relation,
   RelationRenderableProperty,
   RenderableProperty,
-  Triple,
-  TripleRenderableProperty,
-} from '../types';
-import { VALUE_TYPES } from '../value-types';
+  Value,
+  ValueRenderableProperty,
+} from '../v2.types';
 
 interface ToRenderablesArgs {
   entityId: string;
   entityName: string | null;
-  triples: Triple[];
+  values: Value[];
   relations: Relation[];
   spaceId: string;
   schema?: PropertySchema[];
@@ -23,7 +20,7 @@ interface ToRenderablesArgs {
 export function toRenderables({
   entityId,
   entityName,
-  triples,
+  values,
   relations,
   spaceId,
   schema,
@@ -32,49 +29,49 @@ export function toRenderables({
   // The schema for a given set of types define the expected attributes and relations for
   // any entities with those types. We want to show any properties from the schema that
   // aren't already set on the entity.
-  const attributesWithAValue = new Set([...triples.map(t => t.attributeId), ...relations.map(r => r.typeOf.id)]);
-
-  const placeholders = new Set([...(placeholderRenderables?.map(r => r.attributeId) ?? [])]);
+  const attributesWithAValue = new Set([...values.map(t => t.property.id), ...relations.map(r => r.type.id)]);
+  const placeholders = new Set([...(placeholderRenderables?.map(r => r.propertyId) ?? [])]);
 
   // Make some placeholder triples derived from the schema. We later hide and show these depending
   // on if the entity has filled these fields or not.
   const schemaRenderables = (schema ?? [])
     .filter(renderable => !attributesWithAValue.has(renderable.id) && !placeholders.has(renderable.id))
-    .map((s): TripleRenderableProperty | RelationRenderableProperty => {
-      switch (s.valueType) {
-        case SystemIds.RELATION:
+    .map((s): ValueRenderableProperty | RelationRenderableProperty => {
+      switch (s.dataType) {
+        case 'RELATION':
           return {
             type: 'RELATION',
             relationId: s.id,
             valueName: s.name,
             entityId: entityId,
             entityName: entityName,
-            attributeId: s.id,
-            attributeName: s.name,
+            propertyId: s.id,
+            propertyName: s.name,
             spaceId,
             value: '',
             placeholder: true,
           };
-        case SystemIds.IMAGE:
-          return {
-            type: 'IMAGE',
-            relationId: s.id,
-            valueName: s.name,
-            entityId: entityId,
-            entityName: entityName,
-            attributeId: s.id,
-            attributeName: s.name,
-            spaceId,
-            value: '',
-            placeholder: true,
-          };
+        // @TODO(migration): Fix image rendering
+        // case SystemIds.IMAGE:
+        //   return {
+        //     type: 'IMAGE',
+        //     relationId: s.id,
+        //     valueName: s.name,
+        //     entityId: entityId,
+        //     entityName: entityName,
+        //     attributeId: s.id,
+        //     attributeName: s.name,
+        //     spaceId,
+        //     value: '',
+        //     placeholder: true,
+        //   };
         default:
           return {
-            type: (VALUE_TYPES[s.valueType] as TripleRenderableProperty['type']) ?? 'TEXT',
+            type: s.dataType,
             entityId: entityId,
             entityName: entityName,
-            attributeId: s.id,
-            attributeName: s.name,
+            propertyId: s.id,
+            propertyName: s.name,
             spaceId,
             value: '',
             placeholder: true,
@@ -82,31 +79,31 @@ export function toRenderables({
       }
     });
 
-  const triplesToRenderable = triples.map((t): TripleRenderableProperty => {
+  const valuesToRenderable = values.map((t): ValueRenderableProperty => {
     return {
-      type: t.value.type,
-      entityId: t.entityId,
-      entityName: t.entityName,
-      attributeId: t.attributeId,
-      attributeName: t.attributeName,
-      spaceId: t.space,
-      value: t.value.value,
-      options: t.value.options,
+      type: t.property.dataType,
+      entityId: t.entity.id,
+      entityName: t.entity.name,
+      propertyId: t.property.id,
+      propertyName: t.property.name,
+      spaceId: t.spaceId,
+      value: t.value,
+      options: t.options ?? undefined,
     };
   });
 
   const relationsToRenderable = relations
     // DATA and TEXT relations are mostly consumed by components rendering blocks. We don't
     // care about those in the property area.
-    .filter(r => r.toEntity.renderableType !== 'DATA' && r.toEntity.renderableType !== 'TEXT')
+    .filter(r => r.renderableType !== 'DATA' && r.renderableType !== 'TEXT')
     .map((r): RelationRenderableProperty => {
       return {
-        type: r.toEntity.renderableType as RelationRenderableProperty['type'], // We filter out data and text relations above
+        type: r.renderableType as RelationRenderableProperty['type'], // We filter out data and text relations above
         entityId: entityId,
         entityName: null,
-        attributeId: r.typeOf.id,
-        attributeName: r.typeOf.name,
-        spaceId: r.space,
+        propertyId: r.type.id,
+        propertyName: r.type.name,
+        spaceId: r.spaceId,
         relationId: r.id,
         value: r.toEntity.value, // This is either the image URL or the entity ID
         valueName: r.toEntity.name,
@@ -114,11 +111,11 @@ export function toRenderables({
     });
 
   return [
-    ...triplesToRenderable,
+    ...valuesToRenderable,
     ...relationsToRenderable,
     ...schemaRenderables,
     // If we've finished entering data for a Property and written it to the DB we don't need
     // to show the placeholder for that attribute anymore.
-    ...(placeholderRenderables ?? []).filter(r => !attributesWithAValue.has(r.attributeId)),
+    ...(placeholderRenderables ?? []).filter(r => !attributesWithAValue.has(r.propertyId)),
   ];
 }

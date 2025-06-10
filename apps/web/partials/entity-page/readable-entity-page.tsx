@@ -5,8 +5,9 @@ import * as React from 'react';
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
+import { TripleRenderableProperty } from '~/core/types';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
+import { RelationRenderableProperty, Value } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -18,18 +19,17 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 interface Props {
-  triples: Triple[];
-  relations: Relation[];
+  values: Value[];
   id: string;
   spaceId: string;
 }
 
-export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Props) {
+export function ReadableEntityPage({ values: serverValues, id, spaceId }: Props) {
   const entityId = id;
 
   const [isRelationPage] = useRelationship(entityId, spaceId);
 
-  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId, isRelationPage);
+  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverValues, spaceId, isRelationPage);
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
@@ -57,7 +57,7 @@ const ReadableNumberField = ({ value, format, unitId }: { value: string; format?
   const { entity } = useQueryEntity({ id: unitId });
 
   const currencySign = React.useMemo(
-    () => entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+    () => entity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value,
     [entity]
   );
 
@@ -164,8 +164,8 @@ function TriplesGroup({
 }
 
 export function RelationsGroup({ relations, isTypes }: { relations: RelationRenderableProperty[]; isTypes?: boolean }) {
-  const attributeId = relations[0].attributeId;
-  const attributeName = relations[0].attributeName;
+  const attributeId = relations[0].propertyId;
+  const attributeName = relations[0].propertyName;
   const spaceId = relations[0].spaceId;
 
   // hide cover, avatar, and type properties

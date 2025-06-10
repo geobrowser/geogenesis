@@ -19,7 +19,7 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
     spaces: [],
     types: [...remoteEntity.types],
     relations: relationsOut,
-    values: remoteEntity.values.map(v => ValueDto(remoteEntity.id, v)),
+    values: remoteEntity.values.map(v => ValueDto(remoteEntity, v)),
   };
 }
 

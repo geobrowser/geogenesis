@@ -1,5 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { QueryClient } from '@tanstack/react-query';
+import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
 import { Filter } from '../blocks/data/filters';
@@ -7,7 +8,7 @@ import { queryStringFromFilters } from '../blocks/data/to-query-string';
 import { readTypes } from '../database/entities';
 import { EntityId } from '../io/schema';
 import { fetchEntity, fetchResults, fetchSpaces, fetchTableRowEntities } from '../io/subgraph';
-import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
+import { getBatchEntities } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
 import { Values } from '../utils/value';
@@ -135,7 +136,11 @@ export class E {
 
       const remoteEntities = await cache.fetchQuery({
         queryKey: ['network', 'entities', entityIds],
-        queryFn: ({ signal }) => fetchEntitiesBatch({ entityIds, signal }),
+        queryFn: async ({ signal }) => {
+          // @TODO: error handle
+          const entities = await Effect.runPromise(getBatchEntities(entityIds, undefined, signal));
+          return entities;
+        },
       });
 
       const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));

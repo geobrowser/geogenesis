@@ -16,12 +16,14 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
 type Documents = {
     "\n  fragment FullEntity on Entity {\n    id\n    name\n    description\n\n    types {\n      id\n      name\n    }\n\n    values {\n      spaceId\n      property {\n        id\n        entity {\n          id\n          name\n        }\n        dataType\n        relationValueTypes {\n          id\n          name\n        }\n      }\n      value\n      language\n      unit\n    }\n    relations {\n      id\n      spaceId\n      position\n      verified\n      entityId\n      to {\n        id\n        name\n      }\n      toSpaceId\n      type {\n        id\n        entity {\n          name\n        }\n      }\n    }\n  }\n": typeof types.FullEntityFragmentDoc,
     "\n  query AllEntities($limit: Int, $offset: Int) {\n    entities(limit: $limit, offset: $offset) {\n      ...FullEntity\n    }\n  }\n": typeof types.AllEntitiesDocument,
-    "\n  query Entity($id: String!) {\n    entity(id: $id) {\n      ...FullEntity\n    }\n  }\n": typeof types.EntityDocument,
+    "\n  query EntitiesBatch($ids: [String!]!, $spaceId: String) {\n    entities(spaceId: $spaceId, filter: { id: { in: $ids } }) {\n      ...FullEntity\n    }\n  }\n": typeof types.EntitiesBatchDocument,
+    "\n  query Entity($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...FullEntity\n    }\n  }\n": typeof types.EntityDocument,
 };
 const documents: Documents = {
     "\n  fragment FullEntity on Entity {\n    id\n    name\n    description\n\n    types {\n      id\n      name\n    }\n\n    values {\n      spaceId\n      property {\n        id\n        entity {\n          id\n          name\n        }\n        dataType\n        relationValueTypes {\n          id\n          name\n        }\n      }\n      value\n      language\n      unit\n    }\n    relations {\n      id\n      spaceId\n      position\n      verified\n      entityId\n      to {\n        id\n        name\n      }\n      toSpaceId\n      type {\n        id\n        entity {\n          name\n        }\n      }\n    }\n  }\n": types.FullEntityFragmentDoc,
     "\n  query AllEntities($limit: Int, $offset: Int) {\n    entities(limit: $limit, offset: $offset) {\n      ...FullEntity\n    }\n  }\n": types.AllEntitiesDocument,
-    "\n  query Entity($id: String!) {\n    entity(id: $id) {\n      ...FullEntity\n    }\n  }\n": types.EntityDocument,
+    "\n  query EntitiesBatch($ids: [String!]!, $spaceId: String) {\n    entities(spaceId: $spaceId, filter: { id: { in: $ids } }) {\n      ...FullEntity\n    }\n  }\n": types.EntitiesBatchDocument,
+    "\n  query Entity($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...FullEntity\n    }\n  }\n": types.EntityDocument,
 };
 
 /**
@@ -49,7 +51,11 @@ export function graphql(source: "\n  query AllEntities($limit: Int, $offset: Int
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query Entity($id: String!) {\n    entity(id: $id) {\n      ...FullEntity\n    }\n  }\n"): (typeof documents)["\n  query Entity($id: String!) {\n    entity(id: $id) {\n      ...FullEntity\n    }\n  }\n"];
+export function graphql(source: "\n  query EntitiesBatch($ids: [String!]!, $spaceId: String) {\n    entities(spaceId: $spaceId, filter: { id: { in: $ids } }) {\n      ...FullEntity\n    }\n  }\n"): (typeof documents)["\n  query EntitiesBatch($ids: [String!]!, $spaceId: String) {\n    entities(spaceId: $spaceId, filter: { id: { in: $ids } }) {\n      ...FullEntity\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query Entity($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...FullEntity\n    }\n  }\n"): (typeof documents)["\n  query Entity($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...FullEntity\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

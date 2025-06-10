@@ -1,14 +1,12 @@
-import { ValueTypeId } from './types';
-
 export type DataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
-export type RenderableType = 'URL' | 'IMAGE';
+export type RenderableType = DataType | 'URL' | 'IMAGE';
 
 export type Property = {
   id: string;
   name: string | null;
   dataType: DataType;
   relationValueTypes: { id: string; name: string | null }[];
-  renderableType?: DataType | RenderableType | null;
+  renderableType?: RenderableType | null;
 };
 
 // @TODO: Relation renderable types + values
@@ -45,7 +43,10 @@ export type ValueOptions = {
 };
 
 export type Value = LocalMetadata & {
-  entityId: string;
+  entity: {
+    id: string;
+    name: string | null;
+  };
   property: Property;
   value: string;
   spaceId: string;
@@ -94,7 +95,8 @@ export type RelationValueType = {
 export interface PropertySchema {
   id: string;
   name: string | null;
-  valueType: ValueTypeId;
+  dataType: DataType;
+  renderableType?: RenderableType;
   relationValueTypeId?: string;
   relationValueTypeName?: string | null;
   relationValueTypes?: RelationValueType[];
@@ -148,9 +150,9 @@ export type PointRelationRenderableProperty = {
 
 export type RelationRenderableProperty = BaseRelationRenderableProperty | ImageRelationRenderableProperty;
 
-export type TripleRenderableProperty = NativeRenderableProperty;
+export type ValueRenderableProperty = NativeRenderableProperty;
 export type RenderableProperty =
-  | TripleRenderableProperty
+  | ValueRenderableProperty
   | BaseRelationRenderableProperty
   | ImageRelationRenderableProperty
   | PointRelationRenderableProperty;

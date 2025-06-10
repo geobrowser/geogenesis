@@ -10,10 +10,10 @@ export function stringValue(triple?: Triple) {
 
 export function merge(values: Value[], remoteValues: Value[]) {
   const localTripleIds = new Set(
-    values.map(v => ID.createValueId({ spaceId: v.spaceId, entityId: v.entityId, propertyId: v.property.id }))
+    values.map(v => ID.createValueId({ spaceId: v.spaceId, entityId: v.entity.id, propertyId: v.property.id }))
   );
   const remoteTriplesWithoutLocalTriples = remoteValues.filter(
-    v => !localTripleIds.has(ID.createValueId({ spaceId: v.spaceId, entityId: v.entityId, propertyId: v.property.id }))
+    v => !localTripleIds.has(ID.createValueId({ spaceId: v.spaceId, entityId: v.entity.id, propertyId: v.property.id }))
   );
 
   return [...remoteTriplesWithoutLocalTriples, ...values];

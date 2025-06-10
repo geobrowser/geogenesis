@@ -98,12 +98,12 @@ export class SyncEngine {
         break;
       case GeoEventStream.VALUES_CREATED:
       case GeoEventStream.VALUES_DELETED: {
-        entityIds.push(event.value.entityId);
+        entityIds.push(event.value.entity.id);
 
         // Update any entities in the store that reference the entity where the triple is
         // being added. This is so we can sync fields that derive from triples like name,
         // description, etc.
-        const referencing = this.store.findReferencingEntities(event.value.entityId);
+        const referencing = this.store.findReferencingEntities(event.value.entity.id);
         entityIds.push(...referencing);
         break;
       }

@@ -39,7 +39,7 @@ export class ChangeStream {
     switch (event.type) {
       case GeoEventStream.VALUES_CREATED:
       case GeoEventStream.VALUES_DELETED: {
-        entityId = event.value.entityId;
+        entityId = event.value.entity.id;
         break;
       }
     }

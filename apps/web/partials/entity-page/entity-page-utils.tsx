@@ -1,31 +1,35 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { RenderableProperty, Triple } from '~/core/types';
+import { RenderableProperty, Value } from '~/core/v2.types';
 
 /* Entity page sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> Triples in Schema -> Alphabetical */
 
 /* Relation page sort order goes Relation Type -> Relation From -> Relation To -> Name -> Description -> Types -> Placeholders (Empty or modified) -> Triples in Schema -> Alphabetical -> Relation Index */
 
-export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: Triple[]) {
-  const schemaAttributeIds = schemaTriples.map(schemaTriple => schemaTriple.attributeId);
+export function sortEntityPageTriples(visibleValues: Value[], schemaValues: Value[]) {
+  const schemaPropertyIds = schemaValues.map(schemaValue => schemaValue.property.id);
 
   /* Visible triples includes both real triples and placeholder triples */
-  return visibleTriples.sort((tripleA, tripleB) => {
-    const { attributeId: attributeIdA, attributeName: attributeNameA } = tripleA;
-    const { attributeId: attributeIdB, attributeName: attributeNameB } = tripleB;
+  return visibleValues.sort((tripleA, tripleB) => {
+    const {
+      property: { id: propertyIdA, name: propertyNameA },
+    } = tripleA;
+    const {
+      property: { id: propertyIdB, name: propertyNameB },
+    } = tripleB;
 
-    const isNameA = attributeIdA === SystemIds.NAME_ATTRIBUTE;
-    const isNameB = attributeIdB === SystemIds.NAME_ATTRIBUTE;
-    const isDescriptionA = attributeIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isDescriptionB = attributeIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isTypesA = attributeIdA === SystemIds.TYPES_ATTRIBUTE;
-    const isTypesB = attributeIdB === SystemIds.TYPES_ATTRIBUTE;
+    const isNameA = propertyIdA === SystemIds.NAME_ATTRIBUTE;
+    const isNameB = propertyIdB === SystemIds.NAME_ATTRIBUTE;
+    const isDescriptionA = propertyIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = propertyIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = propertyIdA === SystemIds.TYPES_ATTRIBUTE;
+    const isTypesB = propertyIdB === SystemIds.TYPES_ATTRIBUTE;
 
-    const aIndex = schemaAttributeIds.indexOf(attributeIdA);
-    const bIndex = schemaAttributeIds.indexOf(attributeIdB);
+    const aIndex = schemaPropertyIds.indexOf(propertyIdA);
+    const bIndex = schemaPropertyIds.indexOf(propertyIdB);
 
-    const aInSchema = schemaAttributeIds.includes(attributeIdA);
-    const bInSchema = schemaAttributeIds.includes(attributeIdB);
+    const aInSchema = schemaPropertyIds.includes(propertyIdA);
+    const bInSchema = schemaPropertyIds.includes(propertyIdB);
 
     if (isNameA && !isNameB) return -1;
     if (!isNameA && isNameB) return 1;
@@ -48,7 +52,7 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
       return aIndex - bIndex;
     }
 
-    return (attributeNameA || '').localeCompare(attributeNameB || '');
+    return (propertyNameA || '').localeCompare(propertyNameB || '');
   });
 }
 
@@ -57,30 +61,30 @@ export function sortRenderables(renderables: RenderableProperty[], isRelationPag
   return renderables.sort((renderableA, renderableB) => {
     // Always put an empty, placeholder triple with no attribute id at the bottom
     // of the list
-    if (renderableA.attributeId === '') return 1;
+    if (renderableA.propertyId === '') return 1;
 
-    const { attributeId: attributeIdA, attributeName: attributeNameA } = renderableA;
-    const { attributeId: attributeIdB, attributeName: attributeNameB } = renderableB;
+    const { propertyId: propertyIdA, propertyName: propertyNameA } = renderableA;
+    const { propertyId: propertyIdB, propertyName: propertyNameB } = renderableB;
 
-    const isNameA = attributeIdA === SystemIds.NAME_ATTRIBUTE;
-    const isNameB = attributeIdB === SystemIds.NAME_ATTRIBUTE;
-    const isDescriptionA = attributeIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isDescriptionB = attributeIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isTypesA = attributeIdA === SystemIds.TYPES_ATTRIBUTE;
-    const isTypesB = attributeIdB === SystemIds.TYPES_ATTRIBUTE;
+    const isNameA = propertyIdA === SystemIds.NAME_ATTRIBUTE;
+    const isNameB = propertyIdB === SystemIds.NAME_ATTRIBUTE;
+    const isDescriptionA = propertyIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
+    const isDescriptionB = propertyIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
+    const isTypesA = propertyIdA === SystemIds.TYPES_ATTRIBUTE;
+    const isTypesB = propertyIdB === SystemIds.TYPES_ATTRIBUTE;
 
     if (isRelationPage) {
-      const isRelationTypeA = attributeIdA === SystemIds.RELATION_TYPE_ATTRIBUTE;
-      const isRelationTypeB = attributeIdB === SystemIds.RELATION_TYPE_ATTRIBUTE;
+      const isRelationTypeA = propertyIdA === SystemIds.RELATION_TYPE_ATTRIBUTE;
+      const isRelationTypeB = propertyIdB === SystemIds.RELATION_TYPE_ATTRIBUTE;
 
-      const isRelationFromA = attributeIdA === SystemIds.RELATION_FROM_ATTRIBUTE;
-      const isRelationFromB = attributeIdB === SystemIds.RELATION_FROM_ATTRIBUTE;
+      const isRelationFromA = propertyIdA === SystemIds.RELATION_FROM_ATTRIBUTE;
+      const isRelationFromB = propertyIdB === SystemIds.RELATION_FROM_ATTRIBUTE;
 
-      const isRelationToA = attributeIdA === SystemIds.RELATION_TO_ATTRIBUTE;
-      const isRelationToB = attributeIdB === SystemIds.RELATION_TO_ATTRIBUTE;
+      const isRelationToA = propertyIdA === SystemIds.RELATION_TO_ATTRIBUTE;
+      const isRelationToB = propertyIdB === SystemIds.RELATION_TO_ATTRIBUTE;
 
-      const isRelationIndexA = attributeIdA === SystemIds.RELATION_INDEX;
-      const isRelationIndexB = attributeIdB === SystemIds.RELATION_INDEX;
+      const isRelationIndexA = propertyIdA === SystemIds.RELATION_INDEX;
+      const isRelationIndexB = propertyIdB === SystemIds.RELATION_INDEX;
 
       if (isRelationTypeA && !isRelationTypeB) return -1;
       if (!isRelationTypeA && isRelationTypeB) return 1;
@@ -103,6 +107,6 @@ export function sortRenderables(renderables: RenderableProperty[], isRelationPag
     if (isTypesA && !isTypesB) return -1;
     if (!isTypesA && isTypesB) return 1;
 
-    return (attributeNameA || '').localeCompare(attributeNameB || '');
+    return (propertyNameA || '').localeCompare(propertyNameB || '');
   });
 }

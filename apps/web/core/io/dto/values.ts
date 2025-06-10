@@ -2,9 +2,12 @@ import { Value } from '~/core/v2.types';
 
 import { RemoteValue } from '../v2/v2.schema';
 
-export function ValueDto(entityId: string, remoteValue: RemoteValue): Value {
+export function ValueDto(entity: { id: string; name: string | null }, remoteValue: RemoteValue): Value {
   return {
-    entityId,
+    entity: {
+      id: entity.id,
+      name: entity.name,
+    },
     spaceId: remoteValue.spaceId,
     property: {
       id: remoteValue.property.id,

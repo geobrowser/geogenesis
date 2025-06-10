@@ -234,7 +234,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       valueMap.set(
         ID.createValueId({
           propertyId: value.property.id,
-          entityId: value.entityId,
+          entityId: value.entity.id,
           spaceId: value.spaceId,
         }),
         value
@@ -245,7 +245,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     pendingTripleMap.forEach(pendingValue => {
       const key = ID.createValueId({
         propertyId: pendingValue.property.id,
-        entityId: pendingValue.entityId,
+        entityId: pendingValue.entity.id,
         spaceId: pendingValue.spaceId,
       });
       if (pendingValue.isDeleted && !includeDeleted) {
@@ -307,12 +307,12 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Add or update a value with optimistic updates
    */
   public setValue(value: Value): void {
-    const entityId = value.entityId;
+    const entityId = value.entity.id;
 
     // Create a composite key for the value
     const tripleKey = ID.createValueId({
       propertyId: value.property.id,
-      entityId: value.entityId,
+      entityId: value.entity.id,
       spaceId: value.spaceId,
     });
     // Get or create the pending triples map for this entity
@@ -332,10 +332,10 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    */
   public deleteValue(value: Value): void {
     // Mark the value as deleted in pending changes
-    const entityId = value.entityId;
+    const entityId = value.entity.id;
     const valueKey = ID.createValueId({
       propertyId: value.property.id,
-      entityId: value.entityId,
+      entityId: value.entity.id,
       spaceId: value.spaceId,
     });
     value.isDeleted = true;

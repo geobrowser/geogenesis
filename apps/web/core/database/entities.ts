@@ -9,9 +9,9 @@ import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
 import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
-import { PropertySchema, SpaceId, ValueTypeId } from '../types';
+import { SpaceId } from '../types';
 import { Entities } from '../utils/entity';
-import { Entity, Relation, Value } from '../v2.types';
+import { EntityWithSchema, PropertySchema, Relation, Value } from '../v2.types';
 
 type UseEntityOptions = {
   spaceId?: SpaceId;
@@ -31,8 +31,8 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
   // we fetch the entity from the server and merge it with the local state.
   const data = entity ?? initialData;
 
-  const triples = data?.triples ?? [];
-  const relations = data?.relationsOut ?? [];
+  const triples = data?.values ?? [];
+  const relations = data?.relations ?? [];
 
   const name = Entities.name(triples ?? []);
   const spaces = data?.spaces ?? [];
@@ -54,7 +54,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     spaces,
     description,
     schema: schema ?? DEFAULT_ENTITY_SCHEMA,
-    values: data.values,
+    values: data?.values ?? [],
     relations: relations,
     types,
   };
@@ -66,22 +66,23 @@ export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [
   {
     id: EntityId(SystemIds.NAME_ATTRIBUTE),
     name: 'Name',
-    valueType: SystemIds.TEXT,
+    dataType: 'TEXT',
   },
   {
     id: EntityId(SystemIds.DESCRIPTION_ATTRIBUTE),
     name: 'Description',
-    valueType: SystemIds.TEXT,
+    dataType: 'TEXT',
   },
   {
     id: EntityId(SystemIds.TYPES_ATTRIBUTE),
     name: 'Types',
-    valueType: SystemIds.RELATION,
+    dataType: 'RELATION',
   },
   {
     id: EntityId(SystemIds.COVER_ATTRIBUTE),
     name: 'Cover',
-    valueType: SystemIds.IMAGE,
+    dataType: 'RELATION',
+    renderableType: 'IMAGE',
   },
 ];
 
@@ -108,8 +109,9 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
     skip: 0,
   });
 
+  // @TODO(migration): Fetch types directly
   const schemaWithoutValueType = schemaEntities.flatMap((e): PropertySchema[] => {
-    const attributeRelations = e.relationsOut.filter(t => t.typeOf.id === EntityId(SystemIds.PROPERTIES));
+    const attributeRelations = e.relations.filter(t => t.type.id === EntityId(SystemIds.PROPERTIES));
 
     if (attributeRelations.length === 0) {
       return [];
@@ -118,8 +120,9 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
     return attributeRelations.map(a => ({
       id: a.toEntity.id,
       name: a.toEntity.name,
+
       // We add the correct value type below.
-      valueType: SystemIds.TEXT,
+      dataType: 'TEXT', // @TODO(migration): Use types query
     }));
   });
 
@@ -135,21 +138,21 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
     skip: 0,
   });
 
-  const valueTypes = attributes.map(a => {
-    const valueTypeId = a.relationsOut.find(r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE))?.toEntity.id;
-    return {
-      attributeId: a.id,
-      valueTypeId,
-    };
-  });
+  // const valueTypes = attributes.map(a => {
+  //   const valueTypeId = a.relations.find(r => r.type.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE))?.toEntity.id;
+  //   return {
+  //     attributeId: a.id,
+  //     valueTypeId,
+  //   };
+  // });
 
   const relationValueTypes = attributes.map(a => {
-    const relationValueType = a.relationsOut.find(
-      r => r.typeOf.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
+    const relationValueType = a.relations.find(
+      r => r.type.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
     )?.toEntity;
 
-    const relationValueTypes = a.relationsOut
-      .filter(r => r.typeOf.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE))
+    const relationValueTypes = a.relations
+      .filter(r => r.type.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE))
       .map(r => ({ typeId: r.toEntity.id, typeName: r.toEntity.name }));
 
     return {
@@ -165,7 +168,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
 
     return {
       ...s,
-      valueType: (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SystemIds.TEXT) as ValueTypeId,
+      dataType: 'TEXT', // @TODO(migration): use Types
       relationValueTypeId: relationValueType?.relationValueTypeId,
       relationValueTypeName: relationValueType?.relationValueTypeName,
       relationValueTypes: relationValueType?.relationValueTypes,

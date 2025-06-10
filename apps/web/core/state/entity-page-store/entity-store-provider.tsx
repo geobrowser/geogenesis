@@ -3,7 +3,8 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { OmitStrict, Relation, SpaceId, Triple } from '~/core/types';
+import { OmitStrict, SpaceId } from '~/core/types';
+import { Relation, Value } from '~/core/v2.types';
 
 const EntityStoreContext = createContext<OmitStrict<Props, 'children'> | undefined>(undefined);
 
@@ -12,20 +13,20 @@ interface Props {
   spaceId: string;
   children: React.ReactNode;
   initialSpaces: SpaceId[];
-  initialTriples: Triple[];
+  initialValues: Value[];
   initialRelations: Relation[];
 }
 
-export function EntityStoreProvider({ id, spaceId, children, initialSpaces, initialTriples, initialRelations }: Props) {
+export function EntityStoreProvider({ id, spaceId, children, initialSpaces, initialValues, initialRelations }: Props) {
   const store = useMemo(() => {
     return {
       spaceId,
       initialSpaces,
-      initialTriples,
+      initialValues,
       initialRelations,
       id,
     };
-  }, [spaceId, initialSpaces, initialTriples, initialRelations, id]);
+  }, [spaceId, initialSpaces, initialValues, initialRelations, id]);
 
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;
 }
