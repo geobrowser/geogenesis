@@ -2,7 +2,6 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import { upsert } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
-// import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Source, getSource, removeSourceType, upsertSourceType } from './source';
@@ -12,7 +11,6 @@ import { useView } from './use-view';
 
 export function useSource() {
   const { entityId, spaceId } = useDataBlockInstance();
-  // const { name: fromEntityName } = useEntityPageStore();
   const { shownColumnRelations, toggleProperty } = useView();
 
   const { filterState, setFilterState } = useFilters();
@@ -24,14 +22,14 @@ export function useSource() {
 
   const source: Source = getSource({
     blockId: EntityId(entityId),
-    dataEntityRelations: blockEntity?.relationsOut ?? [],
+    dataEntityRelations: blockEntity?.relations ?? [],
     currentSpaceId: SpaceId(spaceId),
     filterState,
   });
 
   const setSource = (newSource: Source) => {
     removeSourceType({
-      relations: blockEntity?.relationsOut ?? [],
+      relations: blockEntity?.relations ?? [],
       spaceId: SpaceId(spaceId),
     });
     upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });

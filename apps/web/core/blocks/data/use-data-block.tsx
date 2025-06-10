@@ -6,10 +6,10 @@ import * as React from 'react';
 
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { Cell, PropertySchema, Relation } from '~/core/v2.types';
 
 import { upsert } from '../../database/write';
 import { useProperties } from '../../hooks/use-properties';
-import { Cell, PropertySchema, Relation } from '../../types';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter } from './filters';
 import { Source } from './source';
@@ -118,6 +118,7 @@ export function useDataBlock() {
         return [];
       });
 
+      // @TODO: Error handling
       return await Effect.runPromise(run);
     },
   });
@@ -271,7 +272,7 @@ function filterStateToWhere(filterState: Filter[]): WhereCondition {
       }
 
       where['values'].push({
-        attributeId: {
+        propertyId: {
           equals: filter.columnId,
         },
         value: {

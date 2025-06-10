@@ -1,10 +1,10 @@
 import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 
-import { Entity } from '~/core/io/dto/entities';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
 import { RenderableProperty } from '~/core/types';
+import { Entity } from '~/core/v2.types';
 
 export type TripleSegment = {
   type: 'TRIPLE';
@@ -72,6 +72,7 @@ export function parseSelectorIntoLexicon(selector: string | null): PathSegment[]
   return segments;
 }
 
+// @TODO(migration): Update to latest relations data model
 export async function mapSelectorLexiconToSourceEntity(
   lexicon: PathSegment[],
   startEntityId: string
@@ -86,7 +87,7 @@ export async function mapSelectorLexiconToSourceEntity(
     // @TODO: Need to handle if the entity is an image
     if (segment.type === 'RELATION') {
       if (segment.property === SystemIds.RELATION_TO_ATTRIBUTE) {
-        const newInputId = input?.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)?.value.value;
+        const newInputId = input?.values.find(t => t.property.id === SystemIds.RELATION_TO_PROPERTY)?.value;
 
         if (!newInputId) {
           continue;
@@ -102,7 +103,7 @@ export async function mapSelectorLexiconToSourceEntity(
       }
 
       if (segment.property === SystemIds.RELATION_FROM_ATTRIBUTE) {
-        const newInputId = input?.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE)?.value.value;
+        const newInputId = input?.values.find(t => t.property.id === SystemIds.RELATION_FROM_ATTRIBUTE)?.value;
 
         if (!newInputId) {
           continue;
@@ -117,7 +118,7 @@ export async function mapSelectorLexiconToSourceEntity(
         continue;
       }
 
-      const relations = input?.relationsOut.filter(r => r.typeOf.id === segment.property) ?? [];
+      const relations = input?.relations.filter(r => r.type.id === segment.property) ?? [];
 
       if (relations.length === 0) {
         return [];

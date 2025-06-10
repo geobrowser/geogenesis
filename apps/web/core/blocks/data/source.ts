@@ -6,7 +6,7 @@ import { Filter } from '~/core/blocks/data/filters';
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { Relation } from '~/core/types';
+import { Relation } from '~/core/v2.types';
 
 type EntitySource = {
   type: 'RELATIONS';
@@ -21,7 +21,7 @@ type CollectionSource = {
 
 type MultipleSources = {
   type: 'SPACES'; // | 'collections';
-  value: Array<SpaceId>;
+  value: Array<string>;
 };
 
 type AllOfGeoSource = {
@@ -39,7 +39,7 @@ export type Source = CollectionSource | MultipleSources | AllOfGeoSource | Entit
 type GetSourceArgs = {
   blockId: EntityId;
   dataEntityRelations: Relation[];
-  currentSpaceId: SpaceId;
+  currentSpaceId: string;
   filterState: Filter[];
 };
 
@@ -63,8 +63,7 @@ type GetSourceArgs = {
  * a fallback source with a type of Spaces containing the current space id.
  */
 export function getSource({ blockId, dataEntityRelations, currentSpaceId, filterState }: GetSourceArgs): Source {
-  const sourceType = dataEntityRelations.find(r => r.typeOf.id === EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE))
-    ?.toEntity.id;
+  const sourceType = dataEntityRelations.find(r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE)?.toEntity.id;
 
   const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_ATTRIBUTE);
 
@@ -76,7 +75,7 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
     };
   }
 
-  if (sourceType === EntityId(SystemIds.COLLECTION_DATA_SOURCE)) {
+  if (sourceType === SystemIds.COLLECTION_DATA_SOURCE) {
     // We default to using the block as the collection source. Any defined collection items
     // will point from the block itself.
     return {
@@ -85,10 +84,10 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
     };
   }
 
-  if (sourceType === EntityId(SystemIds.QUERY_DATA_SOURCE)) {
+  if (sourceType === SystemIds.QUERY_DATA_SOURCE) {
     return {
       type: 'SPACES',
-      value: filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => SpaceId(f.value)),
+      value: filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value),
     };
   }
 
@@ -117,7 +116,7 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
 export function removeSourceType({ relations, spaceId }: { relations: Relation[]; spaceId: SpaceId }) {
   // Delete the existing source type relation. There should only be one source type
   // relation, but delete many just in case.
-  const sourceTypeRelations = relations.filter(r => r.typeOf.id === EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE));
+  const sourceTypeRelations = relations.filter(r => r.type.id === EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE));
 
   for (const relation of sourceTypeRelations) {
     DB.removeRelation({

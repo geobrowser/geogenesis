@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
-import { EntityId, TypeId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
@@ -96,11 +95,8 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
 export default async function ProfileLayout(props: Props) {
   const params = await props.params;
-
-  const { children } = props;
-
   const entityId = params.entityId;
-
+  const { children } = props;
   const types = await cachedFetchEntityType(entityId);
 
   if (!types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
@@ -168,7 +164,7 @@ async function getProfilePage(entityId: string): Promise<
   // @TODO: Real error handling
   if (!person) {
     return {
-      id: EntityId(entityId),
+      id: entityId,
       name: null,
       spaces: [],
       avatarUrl: null,
@@ -182,7 +178,7 @@ async function getProfilePage(entityId: string): Promise<
     };
   }
 
-  const blockRelations = person?.relations.filter(r => r.type.id === EntityId(SystemIds.BLOCKS));
+  const blockRelations = person?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
   const blockIds = blockRelations?.map(r => r.toEntity.id);
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 

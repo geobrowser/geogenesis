@@ -174,3 +174,27 @@ export type SpaceConfigEntity = Entity & {
   spaceId: string;
   image: string;
 };
+
+export type Cell = {
+  slotId: string;
+  cellId: string;
+  name: string | null;
+  renderables: RenderableProperty[];
+  description?: string | null;
+  image?: string | null;
+  space?: string;
+  verified?: boolean;
+  renderedPropertyId?: string;
+  collectionId?: string;
+  relationId?: string;
+};
+
+export type Row = {
+  entityId: string;
+  // There's a UX where users can press a + button to create a new row. This
+  // new row doesn't have any data and isn't associated with an entity until
+  // the association is made by adding real data or selecting an existing entity.
+  placeholder?: boolean;
+  // attributeId -> Cell
+  columns: Record<string, Cell>;
+};

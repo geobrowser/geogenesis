@@ -1,24 +1,25 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { Cell, RenderableProperty, ValueTypeId } from '~/core/types';
+import { Cell } from '~/core/types';
+import { DataType, RenderableProperty } from '~/core/v2.types';
 
 interface MakePlaceholderFromValueTypeArgs {
-  valueType: ValueTypeId;
-  attributeId: string;
-  attributeName: string | null;
+  dataType: DataType;
+  propertyId: string;
+  propertyName: string | null;
   spaceId: string;
   entityId: string;
 }
 
 export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeArgs): RenderableProperty {
-  const { attributeId, attributeName, entityId, valueType, spaceId } = args;
+  const { propertyId, propertyName, entityId, dataType, spaceId } = args;
 
-  switch (valueType) {
-    case SystemIds.RELATION:
+  switch (dataType) {
+    case 'RELATION':
       return {
         type: 'RELATION',
-        attributeId,
-        attributeName,
+        propertyId,
+        propertyName,
         entityId,
         entityName: null,
         spaceId,
@@ -27,35 +28,36 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         relationId: '',
         placeholder: true,
       };
-    case SystemIds.TIME:
+    case 'TIME':
       return {
         type: 'TIME',
-        attributeId,
-        attributeName,
+        propertyId,
+        propertyName,
         entityId,
         entityName: null,
         spaceId,
         value: '',
         placeholder: true,
       };
-    case SystemIds.URL:
-      return {
-        type: 'URL',
-        attributeId,
-        attributeName,
-        entityId,
-        entityName: null,
-        spaceId,
-        value: '',
-        placeholder: true,
-      };
+    // @TODO(migration): Fix renderable URL
+    // case SystemIds.URL:
+    //   return {
+    //     type: 'URL',
+    //     propertyId,
+    //     propertyName,
+    //     entityId,
+    //     entityName: null,
+    //     spaceId,
+    //     value: '',
+    //     placeholder: true,
+    //   };
 
-    case SystemIds.TEXT:
+    case 'TEXT':
     default:
       return {
         type: 'TEXT',
-        attributeId,
-        attributeName,
+        propertyId,
+        propertyName,
         entityId,
         entityName: null,
         spaceId,

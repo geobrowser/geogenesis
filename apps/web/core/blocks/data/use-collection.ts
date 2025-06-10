@@ -1,7 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-
-import { EntityId } from '~/core/io/schema';
 import { keepPreviousData } from '@tanstack/react-query';
+
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 
 import { useDataBlockInstance } from './use-data-block';
@@ -24,14 +23,15 @@ export function useCollection({ first, skip }: CollectionProps) {
 
   const collectionItemsRelations =
     source.type === 'COLLECTION'
-      ? (blockEntity?.relationsOut.filter(
-          r => r.fromEntity.id === source.value && r.typeOf.id === EntityId(SystemIds.COLLECTION_ITEM_RELATION_TYPE)
+      ? (blockEntity?.relations.filter(
+          r => r.fromEntity.id === source.value && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE
         ) ?? [])
       : [];
 
-  const orderedCollectionItemRelations = collectionItemsRelations.sort((a, z) =>
-    a.index.toLowerCase().localeCompare(z.index.toLowerCase())
-  );
+  const orderedCollectionItemRelations = collectionItemsRelations.sort((a, z) => {
+    // @TODO(migration): fix optional positions
+    return a.position.toLowerCase().localeCompare(z.position.toLowerCase());
+  });
 
   const collectionItemIds = orderedCollectionItemRelations?.map(c => c.toEntity.id) ?? [];
   const collectionRelationIds = orderedCollectionItemRelations?.map(c => c.id) ?? [];
@@ -74,7 +74,7 @@ export function useCollection({ first, skip }: CollectionProps) {
       return entity;
     })
     .filter(item => item !== undefined);
-    
+
   return {
     collectionItems: orderedCollectionItems,
     collectionRelations,

@@ -20,15 +20,15 @@ export function useFilters() {
   });
 
   const filterTriple = React.useMemo(() => {
-    return blockEntity?.triples.find(t => t.attributeId === SystemIds.FILTER);
-  }, [blockEntity?.triples]);
+    return blockEntity?.values.find(t => t.property.id === SystemIds.FILTER);
+  }, [blockEntity?.values]);
 
   const geoFilterString = React.useMemo(() => {
     if (!filterTriple) return null;
 
-    if (filterTriple.value.type === 'TEXT') {
-      if (filterTriple.value.value === '') return null;
-      return filterTriple.value.value;
+    if (filterTriple.property.dataType === 'TEXT') {
+      if (filterTriple.value === '') return null;
+      return filterTriple.value;
     }
 
     return null;

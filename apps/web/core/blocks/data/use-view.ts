@@ -4,11 +4,10 @@ import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
 import { ID } from '~/core/id';
-import { Entity } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
+import { Entity, Relation } from '~/core/v2.types';
 
 import { useDataBlockInstance } from './use-data-block';
 import { useMapping } from './use-mapping';
@@ -32,16 +31,12 @@ export function useView() {
     id: relationId,
   });
 
-  const viewRelation = blockRelation?.relationsOut.find(
-    relation => relation.typeOf.id === EntityId(SystemIds.VIEW_ATTRIBUTE)
-  );
+  const viewRelation = blockRelation?.relations.find(relation => relation.type.id === SystemIds.VIEW_ATTRIBUTE);
 
   const shownColumnRelations =
-    blockRelation?.relationsOut.filter(
+    blockRelation?.relations.filter(
       // We fall back to an old properties used to render shown columns.
-      relation =>
-        relation.typeOf.id === EntityId(SystemIds.SHOWN_COLUMNS) ||
-        relation.typeOf.id === EntityId(SystemIds.PROPERTIES)
+      relation => relation.type.id === SystemIds.SHOWN_COLUMNS || relation.type.id === SystemIds.PROPERTIES
     ) ?? [];
 
   const { mapping, isLoading, isFetched } = useMapping(
@@ -241,10 +236,10 @@ const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockV
   let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
 
   if (blockEntity) {
-    const placeholderTextTriple = blockEntity.triples.find(triple => triple.attributeId === SystemIds.PLACEHOLDER_TEXT);
+    const placeholderTextTriple = blockEntity.values.find(value => value.property.id === SystemIds.PLACEHOLDER_TEXT);
 
-    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
-      text = placeholderTextTriple.value.value;
+    if (placeholderTextTriple && placeholderTextTriple.property.dataType === 'TEXT') {
+      text = placeholderTextTriple.value;
     }
 
     // @TODO(relations): This should be a relation pointing to the image entity
