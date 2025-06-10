@@ -21,7 +21,6 @@ import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import {
   PropertySchema,
-  Relation,
   RelationRenderableProperty,
   RenderableProperty,
   Value,
@@ -35,7 +34,6 @@ import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
-import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -173,10 +171,10 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
                                 renderable: firstRenderable,
                                 value: {
                                   value: value ?? firstRenderable.value,
-                                  type: 'TIME',
-                                  options: {
-                                    format,
-                                  },
+                                  // @TODO(migration): Fix formatting. Now on property
+                                  // options: {
+                                  //   format,
+                                  // },
                                 },
                               },
                             });
@@ -196,9 +194,9 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
                                 renderable: firstRenderable,
                                 value: {
                                   value: firstRenderable.value,
-                                  type: 'NUMBER',
                                   options: {
-                                    format,
+                                    // @TODO(migration): Fix formatting. Now on property
+                                    // format,
                                     unit: unitId,
                                   },
                                 },
@@ -274,15 +272,15 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
               type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
               payload: {
                 renderable: {
-                  attributeId: SystemIds.NAME_ATTRIBUTE,
+                  propertyId: SystemIds.NAME_ATTRIBUTE,
                   entityId: result.id,
                   spaceId,
-                  attributeName: 'Name',
+                  propertyName: 'Name',
                   entityName: result.name,
                   type: 'TEXT',
                   value: result.name ?? '',
                 },
-                value: { type: 'TEXT', value: result.name ?? '' },
+                value: { value: result.name ?? '' },
               },
             });
             send({
@@ -301,7 +299,7 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
             onChange();
             send({
               type: 'UPSERT_ATTRIBUTE',
-              payload: { renderable, attributeId: result.id, attributeName: result.name },
+              payload: { renderable, propertyId: result.id, propertyName: result.name },
             });
           }}
           withSelectSpace={false}
@@ -768,7 +766,6 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                     payload: {
                       renderable,
                       value: {
-                        type: 'TEXT',
                         value: value,
                       },
                     },
@@ -792,7 +789,6 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                     payload: {
                       renderable,
                       value: {
-                        type: 'NUMBER',
                         value: value,
                         options: {
                           // @TODO(migration): Fix formatting. Now on property
@@ -818,7 +814,6 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                     payload: {
                       renderable,
                       value: {
-                        type: 'CHECKBOX',
                         value: !checked ? '1' : '0',
                       },
                     },
@@ -837,9 +832,9 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                     payload: {
                       value: {
                         value,
-                        type: 'TIME',
                         options: {
-                          format,
+                          // @TODO(migration): Fix formatting. Now on property
+                          // format,
                         },
                       },
                       renderable,
@@ -895,7 +890,6 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                         payload: {
                           renderable,
                           value: {
-                            type: 'POINT',
                             value: value,
                           },
                         },
@@ -915,7 +909,6 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                         payload: {
                           renderable,
                           value: {
-                            type: 'POINT',
                             value: value,
                           },
                         },

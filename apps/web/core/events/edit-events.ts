@@ -5,42 +5,37 @@ import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
 import { useMemo } from 'react';
 
-import {
-  BaseRelationRenderableProperty,
-  ImageRelationRenderableProperty,
-  OmitStrict,
-  RenderableEntityType,
-  RenderableProperty,
-  TripleRenderableProperty,
-  Triple as TripleType,
-  Value,
-} from '~/core/types';
+import { OmitStrict } from '~/core/types';
 
 import { StoreRelation } from '../database/types';
 import { remove, removeRelation, upsert, upsertMany, upsertRelation, useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
+import {
+  BaseRelationRenderableProperty,
+  ImageRelationRenderableProperty,
+  RenderableEntityType,
+  RenderableProperty,
+  Value,
+  ValueRenderableProperty,
+} from '../v2.types';
 
 export type EditEvent =
   | {
       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE';
       payload: {
-        renderable: TripleRenderableProperty;
-        value: Value;
+        renderable: ValueRenderableProperty;
+        value: {
+          value: Value['value'];
+          options?: Value['options'];
+        };
       };
     }
   | {
       type: 'UPSERT_ATTRIBUTE';
       payload: {
         renderable: RenderableProperty;
-        attributeId: string;
-        attributeName: string | null;
-      };
-    }
-  | {
-      type: 'CHANGE_RENDERABLE_TYPE';
-      payload: {
-        renderable: RenderableProperty;
-        type: RenderableProperty['type'];
+        propertyId: string;
+        propertyName: string | null;
       };
     }
   | {
@@ -62,7 +57,7 @@ export type EditEvent =
         // These properties can be optionally passed. e.g., we're inserting
         // a block in between other blocks, or we'll creating an image relation.
         renderableType?: RenderableEntityType;
-        index?: string;
+        position?: string;
         value?: string;
       };
     }
@@ -83,7 +78,7 @@ export type EditEvent =
   | {
       type: 'DELETE_ENTITY';
       payload: {
-        triple: TripleType;
+        value: Value;
       };
     };
 
@@ -121,13 +116,13 @@ const listener =
       }
 
       case 'UPSERT_RELATION': {
-        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName, renderableType, index, value } =
+        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName, renderableType, position, value } =
           event.payload;
         const { spaceId } = context;
 
         const newRelation: StoreRelation = {
           space: spaceId,
-          index: index ?? INITIAL_RELATION_INDEX_VALUE,
+          index: position ?? INITIAL_RELATION_INDEX_VALUE,
           typeOf: {
             id: EntityId(typeOfId),
             name: typeOfName,
@@ -148,15 +143,15 @@ const listener =
       }
 
       case 'UPSERT_ATTRIBUTE': {
-        const { renderable, attributeId, attributeName } = event.payload;
+        const { renderable, propertyId, propertyName } = event.payload;
 
         // When we change the attribute for a renderable we actually change
         // the id. We delete the previous renderable here so we don't still
         // render the old renderable.
         remove(
           {
-            attributeId: renderable.attributeId,
-            attributeName: renderable.attributeName,
+            attributeId: renderable.propertyId,
+            attributeName: renderable.propertyName,
             entityId: renderable.entityId,
           },
           context.spaceId
@@ -167,13 +162,13 @@ const listener =
             {
               entityId: renderable.relationId,
               entityName: null,
-              attributeId: SystemIds.RELATION_TYPE_ATTRIBUTE,
+              attributeId: SystemIds.RELATION_TYPE_PROPERTY,
               attributeName: 'Relation type',
               // Relations are the only entity in the system that we expect
               // to use an entity value type in a triple
               value: {
                 type: 'URL',
-                value: GraphUrl.fromEntityId(attributeId),
+                value: GraphUrl.fromEntityId(propertyId),
               },
             },
             context.spaceId
@@ -188,7 +183,7 @@ const listener =
         return upsert(
           {
             ...renderable,
-            attributeId,
+            attributeId: propertyId,
             attributeName,
             value: {
               type: renderable.type,
