@@ -1,39 +1,16 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-
 import * as React from 'react';
 
 import type { EditEvent } from '~/core/events/edit-events';
-import { RenderableProperty, SwitchableRenderableType, ValueTypeId } from '~/core/types';
+import { RenderableProperty, RenderableType } from '~/core/v2.types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
 import { GeoLocation } from '~/design-system/icons/geo-location';
-import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
-import { Url } from '~/design-system/icons/url';
 
-export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
-  switch (valueType) {
-    case SystemIds.TEXT:
-      return 'TEXT';
-    case SystemIds.CHECKBOX:
-      return 'CHECKBOX';
-    case SystemIds.TIME:
-      return 'TIME';
-    case SystemIds.URL:
-      return 'URL';
-    case SystemIds.RELATION:
-      return 'RELATION';
-    case SystemIds.IMAGE:
-      return 'IMAGE';
-    case SystemIds.POINT:
-      return 'POINT';
-    default:
-      return 'TEXT';
-  }
-}
+// import { Url } from '~/design-system/icons/url';
 
 export const getRenderableTypeSelectorOptions = (
   renderable: RenderableProperty,
@@ -41,7 +18,7 @@ export const getRenderableTypeSelectorOptions = (
   send: (event: EditEvent) => void
 ): {
   label: React.ReactNode;
-  value: SwitchableRenderableType;
+  value: RenderableType;
   onClick: () => void;
 }[] => {
   return [
@@ -60,8 +37,8 @@ export const getRenderableTypeSelectorOptions = (
           type: 'TEXT',
           entityId: renderable.entityId,
           entityName: renderable.entityName,
-          attributeId: renderable.attributeId,
-          attributeName: renderable.attributeName,
+          propertyId: renderable.propertyId,
+          propertyName: renderable.propertyName,
           value: '',
           spaceId: renderable.spaceId,
           placeholder: true,
@@ -83,8 +60,8 @@ export const getRenderableTypeSelectorOptions = (
           type: 'CHECKBOX',
           entityId: renderable.entityId,
           entityName: renderable.entityName,
-          attributeId: renderable.attributeId,
-          attributeName: renderable.attributeName,
+          propertyId: renderable.propertyId,
+          propertyName: renderable.propertyName,
           value: '0',
           spaceId: renderable.spaceId,
           placeholder: true,
@@ -107,30 +84,31 @@ export const getRenderableTypeSelectorOptions = (
         });
       },
     },
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <IconWrapper>
-            <Image />
-          </IconWrapper>
-          <p>Image</p>
-        </div>
-      ),
-      value: 'IMAGE' as const,
-      onClick: () =>
-        onSelect({
-          type: 'IMAGE',
-          entityId: renderable.entityId,
-          entityName: renderable.entityName,
-          attributeId: renderable.attributeId,
-          attributeName: renderable.attributeName,
-          value: '',
-          relationId: '',
-          valueName: null,
-          spaceId: renderable.spaceId,
-          placeholder: true,
-        }),
-    },
+    // @TODO(migration): Fix image renderable
+    // {
+    //   label: (
+    //     <div className="flex items-center gap-2">
+    //       <IconWrapper>
+    //         <Image />
+    //       </IconWrapper>
+    //       <p>Image</p>
+    //     </div>
+    //   ),
+    //   value: 'IMAGE' as const,
+    //   onClick: () =>
+    //     onSelect({
+    //       type: 'IMAGE',
+    //       entityId: renderable.entityId,
+    //       entityName: renderable.entityName,
+    //       propertyId: renderable.propertyId,
+    //       propertyName: renderable.propertyName,
+    //       value: '',
+    //       relationId: '',
+    //       valueName: null,
+    //       spaceId: renderable.spaceId,
+    //       placeholder: true,
+    //     }),
+    // },
     {
       label: (
         <div className="flex items-center gap-2">
@@ -146,35 +124,36 @@ export const getRenderableTypeSelectorOptions = (
           type: 'TIME',
           entityId: renderable.entityId,
           entityName: renderable.entityName,
-          attributeId: renderable.attributeId,
-          attributeName: renderable.attributeName,
+          propertyId: renderable.propertyId,
+          propertyName: renderable.propertyName,
           value: '',
           spaceId: renderable.spaceId,
           placeholder: true,
         }),
     },
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <IconWrapper>
-            <Url />
-          </IconWrapper>
-          <p>URL</p>
-        </div>
-      ),
-      value: 'URL' as const,
-      onClick: () =>
-        onSelect({
-          type: 'URL',
-          entityId: renderable.entityId,
-          entityName: renderable.entityName,
-          attributeId: renderable.attributeId,
-          attributeName: renderable.attributeName,
-          value: '',
-          spaceId: renderable.spaceId,
-          placeholder: true,
-        }),
-    },
+    // @TODO(migration): Fix url renderable
+    // {
+    //   label: (
+    //     <div className="flex items-center gap-2">
+    //       <IconWrapper>
+    //         <Url />
+    //       </IconWrapper>
+    //       <p>URL</p>
+    //     </div>
+    //   ),
+    //   value: 'URL' as const,
+    //   onClick: () =>
+    //     onSelect({
+    //       type: 'URL',
+    //       entityId: renderable.entityId,
+    //       entityName: renderable.entityName,
+    //       propertyId: renderable.propertyId,
+    //       propertyName: renderable.propertyName,
+    //       value: '',
+    //       spaceId: renderable.spaceId,
+    //       placeholder: true,
+    //     }),
+    // },
     {
       label: (
         <div className="flex items-center gap-2">
@@ -190,8 +169,8 @@ export const getRenderableTypeSelectorOptions = (
           type: 'NUMBER',
           entityId: renderable.entityId,
           entityName: renderable.entityName,
-          attributeId: renderable.attributeId,
-          attributeName: renderable.attributeName,
+          propertyId: renderable.propertyId,
+          propertyName: renderable.propertyName,
           value: '',
           spaceId: renderable.spaceId,
           placeholder: true,
@@ -212,8 +191,8 @@ export const getRenderableTypeSelectorOptions = (
           type: 'RELATION',
           entityId: renderable.entityId,
           entityName: renderable.entityName,
-          attributeId: renderable.attributeId,
-          attributeName: renderable.attributeName,
+          propertyId: renderable.propertyId,
+          propertyName: renderable.propertyName,
           value: '',
           relationId: '',
           valueName: null,
@@ -236,8 +215,8 @@ export const getRenderableTypeSelectorOptions = (
           type: 'POINT',
           entityId: renderable.entityId,
           entityName: renderable.entityName,
-          attributeId: renderable.attributeId,
-          attributeName: renderable.attributeName,
+          propertyId: renderable.propertyId,
+          propertyName: renderable.propertyName,
           value: '',
           spaceId: renderable.spaceId,
           placeholder: true,

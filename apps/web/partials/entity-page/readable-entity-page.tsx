@@ -22,9 +22,7 @@ interface Props {
   spaceId: string;
 }
 
-export function ReadableEntityPage({ values: serverValues, id, spaceId }: Props) {
-  const entityId = id;
-
+export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId }: Props) {
   const [isRelationPage] = useRelationship(entityId, spaceId);
 
   const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverValues, spaceId, isRelationPage);
@@ -38,14 +36,7 @@ export function ReadableEntityPage({ values: serverValues, id, spaceId }: Props)
           return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableProperty[]} />;
         }
 
-        return (
-          <ValuesGroup
-            key={attributeId}
-            entityId={entityId}
-            values={renderable as ValueRenderableProperty[]}
-            spaceId={spaceId}
-          />
-        );
+        return <ValuesGroup key={attributeId} entityId={entityId} values={renderable as ValueRenderableProperty[]} />;
       })}
     </div>
   );
@@ -62,15 +53,7 @@ const ReadableNumberField = ({ value, format, unitId }: { value: string; format?
   return <Text as="p">{GeoNumber.format(value, format, currencySign)}</Text>;
 };
 
-function ValuesGroup({
-  entityId,
-  values,
-  spaceId,
-}: {
-  entityId: string;
-  values: ValueRenderableProperty[];
-  spaceId: string;
-}) {
+function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRenderableProperty[] }) {
   return (
     <>
       {values.map((t, index) => {

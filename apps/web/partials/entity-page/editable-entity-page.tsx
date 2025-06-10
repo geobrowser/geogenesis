@@ -17,16 +17,16 @@ import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { Entities } from '~/core/utils/entity';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 import {
   PropertySchema,
   Relation,
   RelationRenderableProperty,
   RenderableProperty,
-  TripleRenderableProperty,
-} from '~/core/types';
-import { Triple as ITriple } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+  Value,
+  ValueRenderableProperty,
+} from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -50,19 +50,18 @@ import { RenderableTypeDropdown } from './renderable-type-dropdown';
 import { editorHasContentAtom } from '~/atoms';
 
 interface Props {
-  triples: ITriple[];
+  values: Value[];
   id: string;
   spaceId: string;
-  relationsOut: Relation[];
 }
 
-export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Props) {
+export function EditableEntityPage({ id, spaceId, values }: Props) {
   const entityId = id;
 
   const [isRelationPage] = useRelationship(entityId, spaceId);
 
   const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
-    useRenderables(serverTriples, spaceId, isRelationPage);
+    useRenderables(values, spaceId, isRelationPage);
   const { name, relations, types } = useEntityPageStore();
 
   const send = useEditEvents({
@@ -122,10 +121,10 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
               // Hide cover/avatar/types/name property, user can upload cover using upload icon on top placeholder
               // and add types inline using the + button, add name under cover image component
               if (
-                (renderableType === 'IMAGE' && firstRenderable.attributeId === SystemIds.COVER_PROPERTY) ||
-                (renderableType === 'IMAGE' && firstRenderable.attributeId === ContentIds.AVATAR_PROPERTY) ||
-                (renderableType === 'RELATION' && firstRenderable.attributeId === SystemIds.TYPES_PROPERTY) ||
-                (renderableType === 'TEXT' && firstRenderable.attributeId === SystemIds.NAME_PROPERTY)
+                (renderableType === 'IMAGE' && firstRenderable.propertyId === SystemIds.COVER_PROPERTY) ||
+                (renderableType === 'IMAGE' && firstRenderable.propertyId === ContentIds.AVATAR_PROPERTY) ||
+                (renderableType === 'RELATION' && firstRenderable.propertyId === SystemIds.TYPES_PROPERTY) ||
+                (renderableType === 'TEXT' && firstRenderable.propertyId === SystemIds.NAME_PROPERTY)
               ) {
                 return null;
               }
@@ -142,7 +141,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                       // Here we manually remove the placeholder when the attribute is changed. This is
                       // a bit of different control flow from how we handle other placeholders, but it's
                       // only necessary on entity pages.
-                      if (firstRenderable.placeholder === true && firstRenderable.attributeId === '') {
+                      if (firstRenderable.placeholder === true && firstRenderable.propertyId === '') {
                         removeEmptyPlaceholderRenderable(firstRenderable);
                       }
                     }}
@@ -154,18 +153,19 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                       properties={properties}
                     />
                   ) : (
-                    <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
+                    <ValuesGroup key={attributeId} values={renderables as ValueRenderableProperty[]} />
                   )}
                   {/* We need to pin to top for Geo Location to prevent covering the display toggle */}
                   <div
-                    className={`absolute right-0 flex items-center gap-1 ${firstRenderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY && renderableType === 'POINT' ? 'top-0' : 'top-6'}`}
+                    className={`absolute right-0 flex items-center gap-1 ${firstRenderable.propertyId === SystemIds.GEO_LOCATION_PROPERTY && renderableType === 'POINT' ? 'top-0' : 'top-6'}`}
                   >
                     {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
                     <>
                       {renderableType === 'TIME' && (
                         <DateFormatDropdown
                           value={firstRenderable.value}
-                          format={firstRenderable.options?.format}
+                          // @TODO(migration): fix formatting. Now on property
+                          // format={firstRenderable.options?.format}
                           onSelect={(value?: string, format?: string) => {
                             send({
                               type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
@@ -186,7 +186,8 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                       {renderableType === 'NUMBER' && (
                         <NumberOptionsDropdown
                           value={firstRenderable.value}
-                          format={firstRenderable.options?.format}
+                          // @TODO(migration): Fix format. Now defined on Property
+                          // format={firstRenderable.options?.format}
                           unitId={firstRenderable.options?.unit}
                           send={({ format, unitId }) => {
                             send({
@@ -206,6 +207,10 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                           }}
                         />
                       )}
+                      {/* 
+                        @TODO(migration): Renderable type is no longer selectable. Instead it's
+                        defined on the Property
+                      */}
                       <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
 
                       {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
@@ -230,8 +235,8 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                   type: 'TEXT',
                   entityId: id,
                   entityName: name ?? '',
-                  attributeId: '',
-                  attributeName: null,
+                  propertyId: '',
+                  propertyName: null,
                   value: '',
                   spaceId,
                   placeholder: true,
@@ -257,7 +262,7 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
     },
   });
 
-  if (renderable.attributeId === '') {
+  if (renderable.propertyId === '') {
     return (
       <>
         <SelectEntity
@@ -307,9 +312,9 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
   }
 
   return (
-    <Link href={NavUtils.toEntity(spaceId, renderable.attributeId)}>
+    <Link href={NavUtils.toEntity(spaceId, renderable.propertyId)}>
       <Text as="p" variant="bodySemibold">
-        {renderable.attributeName ?? renderable.attributeId}
+        {renderable.propertyName ?? renderable.propertyId}
       </Text>
     </Link>
   );
@@ -331,8 +336,8 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
     },
   });
 
-  const typeOfId = relations[0].attributeId;
-  const typeOfName = relations[0].attributeName;
+  const typeOfId = relations[0].propertyId;
+  const typeOfName = relations[0].propertyName;
   const typeOfRenderableType = relations[0].type;
   const property = properties?.[typeOfId];
   const relationValueTypes = property?.relationValueTypes;
@@ -407,7 +412,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
         }
 
         if (renderableType === 'RELATION' && r.placeholder === true) {
-          if (r.attributeName === 'Types') {
+          if (r.propertyId === SystemIds.TYPES_PROPERTY) {
             return (
               <div key={`relation-select-entity-${relationId}`} data-testid="select-entity">
                 <SelectEntityAsPopover
@@ -439,8 +444,8 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                       space: spaceId,
                       index: INITIAL_RELATION_INDEX_VALUE,
                       typeOf: {
-                        id: EntityId(r.attributeId),
-                        name: r.attributeName,
+                        id: EntityId(r.propertyId),
+                        name: r.propertyName,
                       },
                       fromEntity: {
                         id: EntityId(id),
@@ -539,8 +544,8 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                     space: spaceId,
                     index: INITIAL_RELATION_INDEX_VALUE,
                     typeOf: {
-                      id: EntityId(r.attributeId),
-                      name: r.attributeName,
+                      id: EntityId(r.propertyId),
+                      name: r.propertyName,
                     },
                     fromEntity: {
                       id: EntityId(id),
@@ -730,11 +735,11 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   );
 }
 
-type TriplesGroupProps = {
-  triples: TripleRenderableProperty[];
+type ValuesGroupProps = {
+  values: ValueRenderableProperty[];
 };
 
-function TriplesGroup({ triples }: TriplesGroupProps) {
+function ValuesGroup({ values }: ValuesGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
 
   const send = useEditEvents({
@@ -747,12 +752,12 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
 
   return (
     <div className="flex flex-wrap gap-2">
-      {triples.map(renderable => {
+      {values.map(renderable => {
         switch (renderable.type) {
           case 'TEXT': {
             return (
               <PageStringField
-                key={renderable.attributeId}
+                key={renderable.propertyId}
                 variant="body"
                 placeholder="Add value..."
                 aria-label="text-field"
@@ -775,10 +780,11 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
           case 'NUMBER':
             return (
               <NumberField
-                key={renderable.attributeId}
+                key={renderable.propertyId}
                 isEditing={true}
                 value={renderable.value}
-                format={renderable.options?.format}
+                // @TODO(migration): Fix formatting. Now on property
+                // format={renderable.options?.format}
                 unitId={renderable.options?.unit}
                 onChange={value =>
                   send({
@@ -789,7 +795,8 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                         type: 'NUMBER',
                         value: value,
                         options: {
-                          format: renderable.options?.format,
+                          // @TODO(migration): Fix formatting. Now on property
+                          // format: renderable.options?.format,
                           unit: renderable.options?.unit,
                         },
                       },
@@ -803,7 +810,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
 
             return (
               <Checkbox
-                key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                key={`checkbox-${renderable.propertyId}-${renderable.value}`}
                 checked={checked}
                 onChange={() => {
                   send({
@@ -823,7 +830,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
           case 'TIME': {
             return (
               <DateField
-                key={renderable.attributeId}
+                key={renderable.propertyId}
                 onBlur={({ value, format }) =>
                   send({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
@@ -841,41 +848,43 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                 }
                 isEditing={true}
                 value={renderable.value}
-                format={renderable.options?.format}
+                // @TODO(migration): Fix formatting. Now on property
+                // format={renderable.options?.format}
               />
             );
           }
 
-          case 'URL': {
-            return (
-              <WebUrlField
-                key={renderable.attributeId}
-                spaceId={spaceId}
-                placeholder="Add a URI"
-                isEditing={true}
-                onBlur={event =>
-                  send({
-                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: {
-                      value: {
-                        value: event.target.value,
-                        type: 'URL',
-                      },
-                      renderable,
-                    },
-                  })
-                }
-                value={renderable.value}
-              />
-            );
-          }
+          // @TODO(migration): Fix url renderable
+          // case 'URL': {
+          //   return (
+          //     <WebUrlField
+          //       key={renderable.propertyId}
+          //       spaceId={spaceId}
+          //       placeholder="Add a URI"
+          //       isEditing={true}
+          //       onBlur={event =>
+          //         send({
+          //           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+          //           payload: {
+          //             value: {
+          //               value: event.target.value,
+          //               type: 'URL',
+          //             },
+          //             renderable,
+          //           },
+          //         })
+          //       }
+          //       value={renderable.value}
+          //     />
+          //   );
+          // }
 
           case 'POINT': {
             return (
               <>
-                {renderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY && renderable.type === 'POINT' ? (
+                {renderable.propertyId === SystemIds.GEO_LOCATION_PROPERTY && renderable.type === 'POINT' ? (
                   <GeoLocationPointFields
-                    key={renderable.attributeId}
+                    key={renderable.propertyId}
                     variant="body"
                     placeholder="Add value..."
                     aria-label="text-field"
@@ -895,7 +904,7 @@ function TriplesGroup({ triples }: TriplesGroupProps) {
                   />
                 ) : (
                   <PageStringField
-                    key={renderable.attributeId}
+                    key={renderable.propertyId}
                     variant="body"
                     placeholder="Add value..."
                     aria-label="text-field"

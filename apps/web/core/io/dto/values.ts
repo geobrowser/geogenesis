@@ -16,5 +16,9 @@ export function ValueDto(entity: { id: string; name: string | null }, remoteValu
       relationValueTypes: [...remoteValue.property.relationValueTypes],
     },
     value: remoteValue.value,
+    options: {
+      language: remoteValue.language ?? undefined,
+      unit: remoteValue.unit ?? undefined,
+    },
   };
 }

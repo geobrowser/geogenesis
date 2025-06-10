@@ -1,10 +1,10 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Brand } from 'effect';
+import { Brand, Effect } from 'effect';
 
 import { EntityId } from '../io/schema';
-import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
-import { PropertySchema, ValueTypeId } from '../types';
+import { getBatchEntities } from '../io/v2/queries';
+import { PropertySchema } from '../v2.types';
 
 export type PropertyId = string & Brand.Brand<'PropertyId'>;
 export const PropertyId = Brand.nominal<PropertyId>();
@@ -15,29 +15,21 @@ export function useProperties(propertyIds: string[]): Record<PropertyId, Propert
     enabled: propertyIds.length > 0,
     initialData: {},
     queryKey: ['properties-schema', propertyIds],
-    queryFn: async () => {
-      const properties = await fetchEntitiesBatch({ entityIds: propertyIds });
-
-      const valueTypes = properties.map(a => {
-        const valueTypeId = a.relationsOut.find(r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE))?.toEntity
-          .id;
-        return {
-          attributeId: a.id,
-          valueTypeId,
-        };
-      });
+    queryFn: async ({ signal }) => {
+      const properties = await Effect.runPromise(getBatchEntities(propertyIds, undefined, signal));
 
       const schema = properties.map((s): PropertySchema => {
-        const relationValueTypes = s.relationsOut
-          .filter(s => s.typeOf.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE))
+        const relationValueTypes = s.relations
+          .filter(s => s.type.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE))
           .map(s => ({ typeId: s.toEntity.id, typeName: s.toEntity.name }));
 
         return {
           id: s.id,
           name: s.name,
-          valueType: (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SystemIds.TEXT) as ValueTypeId,
+          // @TODO(migration): Use global properties/types
+          dataType: 'TEXT',
+          // @TODO(migration): Renderable type
           relationValueTypes,
-          homeSpace: s.spaces[0],
         };
       });
 

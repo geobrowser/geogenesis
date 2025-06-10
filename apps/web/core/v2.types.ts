@@ -38,8 +38,8 @@ type LocalMetadata = {
 };
 
 export type ValueOptions = {
-  unit: string | null;
-  language: string | null;
+  unit?: string;
+  language?: string;
 };
 
 export type Value = LocalMetadata & {

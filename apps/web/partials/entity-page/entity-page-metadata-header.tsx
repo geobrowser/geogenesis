@@ -9,6 +9,7 @@ import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { RelationRenderableProperty } from '~/core/v2.types';
 
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
 import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
