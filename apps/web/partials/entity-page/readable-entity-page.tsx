@@ -45,7 +45,7 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
   }
 
   if (countRenderableProperty(renderables) <= 0) {
-    return;
+    return null;
   }
 
   return (
