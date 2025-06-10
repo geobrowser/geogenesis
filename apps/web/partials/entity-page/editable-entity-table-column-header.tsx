@@ -7,7 +7,7 @@ import { useEditEvents } from '~/core/events/edit-events';
 import { PropertySchema } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 
-import { getRenderableTypeFromValueType, getRenderableTypeSelectorOptions } from './get-renderable-type-options';
+import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
@@ -41,11 +41,10 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const valueType = column.valueType;
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
   const selectorOptions = getRenderableTypeSelectorOptions(
     toRenderables({
-      triples: [],
+      values: [],
       relations: [],
       spaceId: spaceId ?? '',
       entityId,
@@ -54,7 +53,9 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
     () => {},
     send
   );
-  const value = getRenderableTypeFromValueType(valueType);
+
+  // @TODO(migration): Value type comes from property
+  const value = 'TEXT';
 
   return (
     <div className="relative flex w-full items-center justify-between">

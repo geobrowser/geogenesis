@@ -12,9 +12,8 @@ import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RenderableProperty } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
-import { Value } from '~/core/v2.types';
+import { RenderableProperty, Value } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -36,7 +35,7 @@ export const EditableCoverAvatarHeader = ({
   const editable = useUserIsEditing(spaceId);
   const { renderablesGroupedByAttributeId } = useRenderables(values ?? [], spaceId, isRelationPage);
 
-  const coverAvatarRenderable = Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
+  const coverAvatarRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];
     const renderableType = firstRenderable.type;
 
