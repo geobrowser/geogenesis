@@ -19,6 +19,7 @@ const opsWithPersistence = () => {
     (async () => {
       const stored = await db.values.toArray();
 
+      // @TODO: Move this to hydration layer based on change stream
       for (const value of stored) {
         if (value.isDeleted) geoStore.deleteValue(value);
         else geoStore.setValue(value);
@@ -38,6 +39,7 @@ const relationsWithPersistence = () => {
     (async () => {
       const stored = await db.relations.toArray();
 
+      // @TODO: Move this to hydration layer based on change stream
       for (const relation of stored) {
         if (relation.isDeleted) geoStore.deleteRelation(relation);
         else geoStore.setRelation(relation);

@@ -14,8 +14,6 @@ export const createRelationsAtom = (initialRelations: Relation[]) => {
       // Only return initialRelations that haven't been deleted locally
       .filter(r => !deletedRelationIds.has(r.id));
 
-    // @TODO: Merge local triples for updated (not created) relations. This is for things like
-    // the index.
     return [...localRelations, ...remoteRelationsThatWerentDeleted];
   });
 };
