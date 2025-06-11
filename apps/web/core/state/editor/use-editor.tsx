@@ -256,9 +256,9 @@ export function useEditorStore() {
     const json = {
       type: 'doc',
       content: blockRelations.map(block => {
-        // At the time we're rendering the store hasn't been hydrated with the editor blocks
-        // We need to hydrate the editor ahead of time somehow...
-
+        // @TODO(migration): We should be using the sync store to read all data for
+        // the app. We need to be able to pre-hydrate the store with values based
+        // on the data from the server or else the store won't have any data.
         const markdownValuesForBlockId = getValues({
           mergeWith: initialBlockValues,
           selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,

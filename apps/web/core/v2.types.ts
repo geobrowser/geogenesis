@@ -43,6 +43,7 @@ export type ValueOptions = {
 };
 
 export type Value = LocalMetadata & {
+  id: string;
   entity: {
     id: string;
     name: string | null;

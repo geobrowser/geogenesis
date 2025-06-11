@@ -8,25 +8,13 @@ import {
   SystemIds,
 } from '@graphprotocol/grc-20';
 
-import { Triple as T } from '~/core/database/Triple';
-import { StoredRelation, StoredTriple } from '~/core/database/types';
+import { StoredRelation } from '~/core/database/types';
 import { ID } from '~/core/id';
-import { createValueId } from '~/core/id/create-id';
 import { EntityId } from '~/core/io/schema';
 import { Relation, Triple } from '~/core/types';
 
 export function timestamp() {
   return new Date().toISOString();
-}
-
-export function merge(local: StoredTriple[], remote: Triple[]): StoredTriple[] {
-  const localTripleIds = new Set(local.map(t => t.id));
-  const remoteTriplesWithoutLocalTriples = remote.filter(
-    t => !localTripleIds.has(createValueId({ ...t, space: t.space }))
-  );
-
-  const remoteTriplesMappedToLocalTriples = remoteTriplesWithoutLocalTriples.map(t => T.make(t));
-  return [...remoteTriplesMappedToLocalTriples, ...local];
 }
 
 export function prepareTriplesForPublishing(triples: Triple[], relations: StoredRelation[], spaceId: string) {

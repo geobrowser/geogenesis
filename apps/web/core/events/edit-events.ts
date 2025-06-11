@@ -7,7 +7,6 @@ import { useMemo } from 'react';
 
 import { OmitStrict } from '~/core/types';
 
-import { StoreRelation } from '../database/types';
 import { remove, removeRelation, upsert, upsertMany, upsertRelation, useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
 import {
@@ -106,13 +105,10 @@ const listener =
       case 'UPSERT_RENDERABLE_TRIPLE_VALUE': {
         const { value, renderable } = event.payload;
 
-        return upsert(
-          {
-            ...renderable,
-            value,
-          },
-          context.spaceId
-        );
+        return upsert({
+          ...renderable,
+          value,
+        });
       }
 
       case 'UPSERT_RELATION': {
@@ -148,31 +144,25 @@ const listener =
         // When we change the attribute for a renderable we actually change
         // the id. We delete the previous renderable here so we don't still
         // render the old renderable.
-        remove(
-          {
-            attributeId: renderable.propertyId,
-            attributeName: renderable.propertyName,
-            entityId: renderable.entityId,
-          },
-          context.spaceId
-        );
+        remove({
+          attributeId: renderable.propertyId,
+          attributeName: renderable.propertyName,
+          entityId: renderable.entityId,
+        });
 
         if (renderable.type === 'RELATION') {
-          return upsert(
-            {
-              entityId: renderable.relationId,
-              entityName: null,
-              attributeId: SystemIds.RELATION_TYPE_PROPERTY,
-              attributeName: 'Relation type',
-              // Relations are the only entity in the system that we expect
-              // to use an entity value type in a triple
-              value: {
-                type: 'URL',
-                value: GraphUrl.fromEntityId(propertyId),
-              },
+          return upsert({
+            entityId: renderable.relationId,
+            entityName: null,
+            attributeId: SystemIds.RELATION_TYPE_PROPERTY,
+            attributeName: 'Relation type',
+            // Relations are the only entity in the system that we expect
+            // to use an entity value type in a triple
+            value: {
+              type: 'URL',
+              value: GraphUrl.fromEntityId(propertyId),
             },
-            context.spaceId
-          );
+          });
         }
 
         // @TODO(relations): Add support for IMAGE
@@ -180,18 +170,15 @@ const listener =
           return;
         }
 
-        return upsert(
-          {
-            ...renderable,
-            attributeId: propertyId,
-            attributeName,
-            value: {
-              type: renderable.type,
-              value: renderable.value,
-            },
+        return upsert({
+          ...renderable,
+          attributeId: propertyId,
+          attributeName,
+          value: {
+            type: renderable.type,
+            value: renderable.value,
           },
-          context.spaceId
-        );
+        });
       }
 
       case 'CHANGE_RENDERABLE_TYPE': {
@@ -255,16 +242,13 @@ const listener =
           return;
         }
 
-        return upsert(
-          {
-            ...renderable,
-            value: {
-              type,
-              value: '',
-            },
+        return upsert({
+          ...renderable,
+          value: {
+            type,
+            value: '',
           },
-          context.spaceId
-        );
+        });
       }
 
       case 'DELETE_RENDERABLE': {
@@ -295,14 +279,11 @@ const listener =
           });
         }
 
-        return remove(
-          {
-            attributeName: renderable.attributeName,
-            attributeId: renderable.attributeId,
-            entityId: context.entityId,
-          },
-          context.spaceId
-        );
+        return remove({
+          attributeName: renderable.attributeName,
+          attributeId: renderable.attributeId,
+          entityId: context.entityId,
+        });
       }
 
       // ALL OF THE BELOW EVENTS ARE LEGACY AND WILL GET REMOVED
@@ -310,16 +291,13 @@ const listener =
       case 'EDIT_ENTITY_NAME': {
         const { name } = event.payload;
 
-        return upsert(
-          {
-            entityId: context.entityId,
-            entityName: name,
-            attributeId: SystemIds.NAME_ATTRIBUTE,
-            attributeName: 'Name',
-            value: { type: 'TEXT', value: name },
-          },
-          context.spaceId
-        );
+        return upsert({
+          entityId: context.entityId,
+          entityName: name,
+          attributeId: SystemIds.NAME_ATTRIBUTE,
+          attributeName: 'Name',
+          value: { type: 'TEXT', value: name },
+        });
       }
 
       // @TODO: Do we need both of these delete events?

@@ -10,7 +10,7 @@ import { store } from '../state/jotai-store';
 import { Values } from '../utils/value';
 import { Value } from '../v2.types';
 import { isNotDeletedSelector } from './selectors';
-import { localOpsAtom } from './write';
+import { localValuesAtom } from './write';
 
 interface UseValuesArgs {
   mergeWith?: Value[];
@@ -20,7 +20,7 @@ interface UseValuesArgs {
 
 function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeWith = [] }: UseValuesArgs) {
   return selectAtom(
-    localOpsAtom,
+    localValuesAtom,
     ops => {
       const mergedTriples = Values.merge(ops, mergeWith);
       return mergedTriples.filter(t => {

@@ -2,7 +2,7 @@ import { GraphUri, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { getRelations } from '~/core/database/relations';
-import { getTriples } from '~/core/database/v2_values';
+import { getValues } from '~/core/database/v2.values';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { EntityId } from '~/core/io/schema';
 import { useQueryEntitiesAsync } from '~/core/sync/use-store';
@@ -272,11 +272,11 @@ export function mappingToCell(
           ];
     }
 
-    const mergedTriples = getTriples({
+    const mergedValues = getValues({
       mergeWith: cellTriples,
-      selector: triple => {
-        const isRowCell = triple.entityId === id;
-        const isColCell = triple.attributeId === propertyId;
+      selector: value => {
+        const isRowCell = value.entity.id === id;
+        const isColCell = value.property.id === propertyId;
 
         // For mapped data we don't care about the correct value type
         return isRowCell && isColCell;
@@ -287,7 +287,7 @@ export function mappingToCell(
       mergeWith: cellRelations,
       selector: relation => {
         const isRowCell = relation.fromEntity.id === id;
-        const isColCell = relation.typeOf.id === propertyId;
+        const isColCell = relation.type.id === propertyId;
 
         return isRowCell && isColCell;
       },
@@ -297,7 +297,7 @@ export function mappingToCell(
       entityId: id,
       entityName,
       spaceId,
-      triples: mergedTriples,
+      values: mergedValues,
       relations: mergedRelations,
     });
   });

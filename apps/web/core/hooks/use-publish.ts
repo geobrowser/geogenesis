@@ -10,7 +10,7 @@ import * as React from 'react';
 import { Triple } from '../database/Triple';
 import { getRelations } from '../database/relations';
 import { StoredTriple } from '../database/types';
-import { getTriples } from '../database/v2_values';
+import { getValues } from '../database/v2.values';
 import { useWriteOps } from '../database/write';
 import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
@@ -97,12 +97,12 @@ export function usePublish() {
         // since we need to update the entire state of the space with the published actions and the
         // unpublished actions being merged together.
         // If the actionsBySpace[spaceId] is empty, then we return an empty array
-        const nonPublishedTriples = getTriples({
-          selector: t => t.space === spaceId && !dataBeingPublished.has(t.id),
+        const nonPublishedTriples = getValues({
+          selector: t => t.spaceId === spaceId && !dataBeingPublished.has(t.id),
         });
 
         const nonPublishedRelations = getRelations({
-          selector: r => r.space === spaceId && !dataBeingPublished.has(r.id),
+          selector: r => r.spaceId === spaceId && !dataBeingPublished.has(r.id),
         });
 
         const publishedTriples: StoredTriple[] = [...triplesToPublish, ...relationTriples].map(triple =>
