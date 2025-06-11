@@ -81,8 +81,14 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
   // 2. Cover/avatar exists, OR
   // 3. Types exist, OR
   // 4. Editor has content / blocks exist
+  // 5. If there are more than 0 properties
   const showPropertiesPanel =
-    (name && name?.length > 0) || coverUrl || types.length > 0 || (blockIds && blockIds.length > 0) || editorHasContent;
+    (name && name?.length > 0) ||
+    coverUrl ||
+    types.length > 0 ||
+    (blockIds && blockIds.length > 0) ||
+    editorHasContent ||
+    Object.entries(renderablesGroupedByAttributeId).length > 0;
 
   return (
     showPropertiesPanel && (

@@ -1,4 +1,4 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -6,7 +6,7 @@ import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
-import { RelationRenderableProperty, Value, ValueRenderableProperty } from '~/core/v2.types';
+import { RelationRenderableProperty, RenderableProperty, Value, ValueRenderableProperty } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -15,6 +15,8 @@ import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+
+type Renderables = Record<string, RenderableProperty[]>;
 
 interface Props {
   values: Value[];
@@ -26,6 +28,28 @@ export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId
   const [isRelationPage] = useRelationship(entityId, spaceId);
 
   const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverValues, spaceId, isRelationPage);
+
+  function countRenderableProperty(renderables: Renderables): number {
+    let count = 0;
+    Object.values(renderables).forEach(renderable => {
+      const attributeId = renderable[0].attributeId;
+      if (
+        ![
+          SystemIds.TYPES_PROPERTY,
+          SystemIds.NAME_PROPERTY,
+          SystemIds.COVER_PROPERTY,
+          ContentIds.AVATAR_PROPERTY,
+        ].includes(attributeId as Id.Id)
+      ) {
+        count++;
+      }
+    });
+    return count;
+  }
+
+  if (countRenderableProperty(renderables) <= 0) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
