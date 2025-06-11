@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import * as React from 'react';
 
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
-import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { useQueryEntitiesWithCount, useQueryEntity } from '~/core/sync/use-store';
 
 import { upsert } from '../../database/write';
 import { useProperties } from '../../hooks/use-properties';
@@ -64,7 +64,7 @@ export function useDataBlock() {
     entities: queriedEntities,
     isLoading: isQueryEntitiesLoading,
     entitiesLength,
-  } = useQueryEntities({
+  } = useQueryEntitiesWithCount({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     first: PAGE_SIZE,
