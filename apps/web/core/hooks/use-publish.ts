@@ -7,11 +7,8 @@ import { encodeFunctionData, stringToHex } from 'viem';
 import * as React from 'react';
 
 // import { check } from '../check';
-import { Triple } from '../database/Triple';
 import { getRelations } from '../database/relations';
-import { StoredTriple } from '../database/types';
 import { getValues } from '../database/v2.values';
-import { useWriteOps } from '../database/write';
 import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';

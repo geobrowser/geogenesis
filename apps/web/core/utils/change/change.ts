@@ -4,7 +4,7 @@ import equal from 'fast-deep-equal';
 
 import { EntityWithSchema } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
-import { getTriples } from '~/core/database/v2_values';
+import { getValues } from '~/core/database/v2.values';
 import type { Entity } from '~/core/io/dto/entities';
 import { Proposal } from '~/core/io/dto/proposals';
 import { fetchParentEntityId } from '~/core/io/fetch-parent-entity-id';
@@ -29,7 +29,7 @@ import {
 } from './types';
 
 export async function fromLocal(spaceId?: string) {
-  const triples = getTriples({
+  const triples = getValues({
     selector: t => (t.hasBeenPublished === false && spaceId ? t.space === spaceId : true),
     includeDeleted: true,
   });

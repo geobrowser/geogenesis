@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
-import { useValues } from '~/core/database/v2_values';
+import { useValues } from '~/core/database/v2.values';
 import { DB } from '~/core/database/write';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';

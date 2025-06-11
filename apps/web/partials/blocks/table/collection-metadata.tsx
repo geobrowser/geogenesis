@@ -7,7 +7,7 @@ import { useState } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
-import { removeRelation, useWriteOps } from '~/core/database/write';
+import { removeRelation } from '~/core/database/write';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
 import { useQueryEntity } from '~/core/sync/use-store';

@@ -5,11 +5,11 @@ import cx from 'classnames';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { removeRelation, useWriteOps } from '~/core/database/write';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { EntityId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
@@ -31,8 +31,8 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
   const { isMember } = useAccessControl(spaceId);
 
   const { editable, setEditable } = useEditable();
-  const { triples, relations } = useEntityPageStore();
-  const { remove } = useWriteOps();
+  const { values, relations } = useEntityPageStore();
+  const { transaction } = useMutate();
 
   const onCopyEntityId = async () => {
     try {
@@ -45,15 +45,20 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
 
   const onDelete = () => {
     if (editable) {
-      triples.forEach(t => remove(t, t.space));
-      relations.forEach(r => removeRelation({ relation: r, spaceId }));
+      transaction.commit(db => {
+        values.forEach(t => db.values.delete(t));
+        relations.forEach(r => db.relations.delete(r));
+      });
       setIsMenuOpen(false);
     } else {
       setEditable(true);
 
+      // Why?
       setTimeout(() => {
-        triples.forEach(t => remove(t, t.space));
-        relations.forEach(r => removeRelation({ relation: r, spaceId }));
+        transaction.commit(db => {
+          values.forEach(t => db.values.delete(t));
+          relations.forEach(r => db.relations.delete(r));
+        });
         setIsMenuOpen(false);
       }, 500);
     }
