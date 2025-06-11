@@ -10,7 +10,6 @@ import { E } from '../sync/orm';
 import { store as geoStore } from '../sync/use-sync-engine';
 import { OmitStrict } from '../types';
 import { Relation, Value } from '../v2.types';
-import { Triple } from './Triple';
 import { db } from './indexeddb';
 import { RemoveOp, UpsertOp } from './types';
 
