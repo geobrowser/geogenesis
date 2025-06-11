@@ -11,7 +11,6 @@ import { store as geoStore } from '../sync/use-sync-engine';
 import { OmitStrict } from '../types';
 import { Relation, Value } from '../v2.types';
 import { db } from './indexeddb';
-import { RemoveOp, UpsertOp } from './types';
 
 const opsWithPersistence = () => {
   const baseAtom = atom<Value[]>([]);
