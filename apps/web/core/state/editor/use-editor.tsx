@@ -9,8 +9,6 @@ import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { getValues } from '~/core/database/v2.values';
-import { useQueryEntities } from '~/core/sync/use-store';
-import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { getImageHash, getImagePath, validateEntityId } from '~/core/utils/utils';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
@@ -239,13 +237,11 @@ export function useEditorStore() {
     isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
   );
 
-  console.log('blockRelations', blockRelations);
-
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
   }, [blockRelations]);
 
-  const initialBlockTriples = React.useMemo(() => {
+  const initialBlockValues = React.useMemo(() => {
     const blocks = isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
 
     return blocks.flatMap(b => b.values);
@@ -264,7 +260,7 @@ export function useEditorStore() {
         // We need to hydrate the editor ahead of time somehow...
 
         const markdownValuesForBlockId = getValues({
-          mergeWith: initialBlockTriples,
+          mergeWith: initialBlockValues,
           selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,
         });
 
@@ -330,7 +326,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockRelations, spaceId, initialBlockTriples]);
+  }, [blockRelations, spaceId, initialBlockValues]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
