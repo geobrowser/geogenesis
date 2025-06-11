@@ -5,6 +5,12 @@ import { EntityDecoder, EntityTypeDecoder } from './entity';
 import { entitiesBatchQuery, entityQuery, entityTypesQuery } from './fragments';
 import { graphql } from './graphql';
 
+// @TODO(migration): Can we somehow bind the querying patterns to the sync store?
+// When we querying for things on the client we want them to populate the sync store
+// automatically...
+//
+// We also want to merge local data as much as possible
+
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   return graphql<EntitiesBatchQuery, Entity[]>({
     query: entitiesBatchQuery,

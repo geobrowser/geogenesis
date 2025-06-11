@@ -23,11 +23,10 @@ export class GeoStore {
   private relations: Map<string, Relation[]> = new Map();
   private deletedEntities: Set<string> = new Set();
 
-  // Pending optimistic updates
-  // @TODO:
-  // We don't need pending data since we don't actually _write_ anything
-  // to the network, we only read and merge.
-  private pendingTriples: Map<string, Map<string, Value>> = new Map();
+  // TODO(migration): We can use the pending data to represent what hasn't been
+  // published yet. Right now when we sync we do put the synced
+  // data directly in the values and relations though.
+  private pendingValues: Map<string, Map<string, Value>> = new Map();
   private pendingRelations: Map<string, Map<string, Relation>> = new Map();
   private pendingEntityDeletes: Set<string> = new Set();
 
@@ -87,7 +86,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.values.clear();
     this.relations.clear();
     this.deletedEntities.clear();
-    this.pendingTriples.clear();
+    this.pendingValues.clear();
     this.pendingRelations.clear();
     this.pendingEntityDeletes.clear();
 
@@ -220,7 +219,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    */
   public getResolvedValues(entityId: string, includeDeleted = false): Value[] {
     const baseTriples = this.getBaseTriples(entityId);
-    const pendingTripleMap = this.pendingTriples.get(entityId);
+    const pendingTripleMap = this.pendingValues.get(entityId);
 
     if (!pendingTripleMap || pendingTripleMap.size === 0) {
       return baseTriples;
@@ -316,12 +315,12 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       spaceId: value.spaceId,
     });
     // Get or create the pending triples map for this entity
-    if (!this.pendingTriples.has(entityId)) {
-      this.pendingTriples.set(entityId, new Map());
+    if (!this.pendingValues.has(entityId)) {
+      this.pendingValues.set(entityId, new Map());
     }
 
     // Add to pending changes
-    this.pendingTriples.get(entityId)!.set(tripleKey, value);
+    this.pendingValues.get(entityId)!.set(tripleKey, value);
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value: value });
@@ -341,12 +340,12 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     value.isDeleted = true;
 
     // Get or create the pending triples map for this entity
-    if (!this.pendingTriples.has(entityId)) {
-      this.pendingTriples.set(entityId, new Map());
+    if (!this.pendingValues.has(entityId)) {
+      this.pendingValues.set(entityId, new Map());
     }
 
     // Add a deleted version to pending changes
-    this.pendingTriples.get(entityId)!.set(valueKey, value);
+    this.pendingValues.get(entityId)!.set(valueKey, value);
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: value });
