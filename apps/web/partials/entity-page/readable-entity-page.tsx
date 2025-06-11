@@ -32,7 +32,7 @@ export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId
   function countRenderableProperty(renderables: Renderables): number {
     let count = 0;
     Object.values(renderables).forEach(renderable => {
-      const attributeId = renderable[0].attributeId;
+      const attributeId = renderable[0].propertyId;
       if (
         ![
           SystemIds.TYPES_PROPERTY,
