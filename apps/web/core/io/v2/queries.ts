@@ -32,7 +32,7 @@ export function getEntity(entityId: string, spaceId?: string, signal?: AbortCont
 export function getEntityTypes(entityId: string, signal?: AbortController['signal']) {
   return graphql<EntityTypesQuery, { id: string; name: string | null }[]>({
     query: entityTypesQuery,
-    decoder: data => data.entity?.types.map(t => EntityTypeDecoder.decode(t)) ?? [],
+    decoder: data => data.entity?.types.map(EntityTypeDecoder.decode).filter(e => e !== null) ?? [],
     variables: { id: entityId },
     signal,
   });

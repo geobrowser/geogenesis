@@ -1,25 +1,16 @@
 import { Either, Schema } from 'effect';
 
-import { Entity as GraphqlEntity } from '~/core/gql/graphql';
 import { Entity as EntityType } from '~/core/v2.types';
 
 import { EntityDtoLive } from '../dto/entities';
 import { Entity as EntitySchema, EntityType as EntityTypeSchema } from './v2.schema';
 
 export class EntityDecoder {
-  static decode(data: GraphqlEntity | null | undefined): EntityType | null {
-    if (!data) {
-      return null;
-    }
-
+  static decode(data: unknown): EntityType | null {
     const decoded = Schema.decodeUnknownEither(EntitySchema)(data);
 
     if (Either.isLeft(decoded)) {
-      console.error(
-        'data.values',
-        data.relations.map(r => r?.to)
-      );
-      console.error('Could not decode entity', data.id);
+      // @TODO: Error handling when decoding
       return null;
     }
 
@@ -28,7 +19,14 @@ export class EntityDecoder {
 }
 
 export class EntityTypeDecoder {
-  static decode(data: unknown): { id: string; name: string | null } {
-    return Schema.decodeUnknownSync(EntityTypeSchema)(data);
+  static decode(data: unknown): { id: string; name: string | null } | null {
+    const decoded = Schema.decodeUnknownEither(EntityTypeSchema)(data);
+
+    if (Either.isLeft(decoded)) {
+      // @TODO: Error handling when decoding
+      return null;
+    }
+
+    return decoded.right;
   }
 }
