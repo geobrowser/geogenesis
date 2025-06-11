@@ -1,4 +1,4 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -37,7 +37,7 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
     let count = 0;
     Object.values(renderables).forEach((renderable) => {
       const attributeId = renderable[0].attributeId;
-      if (![SystemIds.TYPES_PROPERTY, SystemIds.NAME_PROPERTY, SystemIds.COVER_PROPERTY, ContentIds.AVATAR_PROPERTY].includes(attributeId as any)) {
+      if (![SystemIds.TYPES_PROPERTY, SystemIds.NAME_PROPERTY, SystemIds.COVER_PROPERTY, ContentIds.AVATAR_PROPERTY].includes(attributeId as Id.Id)) {
         count++;
       }
     });
