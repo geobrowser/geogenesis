@@ -322,6 +322,12 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       entityId: value.entity.id,
       spaceId: value.spaceId,
     });
+
+    value.hasBeenPublished = false;
+    value.isDeleted = false;
+    value.isLocal = true;
+    value.timestamp = new Date().toISOString();
+
     // Get or create the pending triples map for this entity
     if (!this.pendingValues.has(entityId)) {
       this.pendingValues.set(entityId, new Map());
@@ -345,7 +351,11 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       entityId: value.entity.id,
       spaceId: value.spaceId,
     });
+
+    value.hasBeenPublished = false;
     value.isDeleted = true;
+    value.isLocal = true;
+    value.timestamp = new Date().toISOString();
 
     // Get or create the pending triples map for this entity
     if (!this.pendingValues.has(entityId)) {
@@ -364,6 +374,11 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    */
   public setRelation(relation: Relation): void {
     const entityId = relation.fromEntity.id;
+
+    relation.hasBeenPublished = false;
+    relation.isDeleted = false;
+    relation.isLocal = true;
+    relation.timestamp = new Date().toISOString();
 
     // Get or create the pending relations map for this entity
     if (!this.pendingRelations.has(entityId)) {
@@ -384,8 +399,11 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    */
   public deleteRelation(relation: Relation): void {
     const entityId = relation.fromEntity.id;
-    relation.isDeleted = true;
 
+    relation.hasBeenPublished = false;
+    relation.isDeleted = true;
+    relation.isLocal = true;
+    relation.timestamp = new Date().toISOString();
     // Get or create the pending relations map for this entity
     if (!this.pendingRelations.has(entityId)) {
       this.pendingRelations.set(entityId, new Map());
