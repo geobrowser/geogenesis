@@ -37,7 +37,7 @@ export function toRenderables({
   const schemaRenderables = (schema ?? [])
     .filter(renderable => !attributesWithAValue.has(renderable.id) && !placeholders.has(renderable.id))
     .map((s): ValueRenderableProperty | RelationRenderableProperty => {
-      switch (s.dataType) {
+      switch (s.renderableType) {
         case 'RELATION':
           return {
             type: 'RELATION',
@@ -51,20 +51,19 @@ export function toRenderables({
             value: '',
             placeholder: true,
           };
-        // @TODO(migration): Fix image rendering
-        // case SystemIds.IMAGE:
-        //   return {
-        //     type: 'IMAGE',
-        //     relationId: s.id,
-        //     valueName: s.name,
-        //     entityId: entityId,
-        //     entityName: entityName,
-        //     attributeId: s.id,
-        //     attributeName: s.name,
-        //     spaceId,
-        //     value: '',
-        //     placeholder: true,
-        //   };
+        case 'IMAGE':
+          return {
+            type: 'IMAGE',
+            relationId: s.id,
+            valueName: s.name,
+            entityId: entityId,
+            entityName: entityName,
+            propertyId: s.id,
+            propertyName: s.name,
+            spaceId,
+            value: '',
+            placeholder: true,
+          };
         default:
           return {
             type: s.dataType,

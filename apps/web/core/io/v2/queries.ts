@@ -14,7 +14,7 @@ import { graphql } from './graphql';
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   return graphql<EntitiesBatchQuery, Entity[]>({
     query: entitiesBatchQuery,
-    decoder: data => data.entities.map(EntityDecoder.decode),
+    decoder: data => data.entities.map(EntityDecoder.decode).filter(e => e !== null),
     variables: { ids: entityIds, spaceId },
     signal,
   });

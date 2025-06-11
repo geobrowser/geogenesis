@@ -55,6 +55,12 @@ export const Relation = Schema.Struct({
   to: Schema.Struct({
     id: Schema.UUID,
     name: Schema.NullOr(Schema.String),
+    values: Schema.Array(
+      Schema.Struct({
+        propertyId: Schema.UUID,
+        value: Schema.String,
+      })
+    ),
   }),
   toSpaceId: Schema.NullOr(Schema.String),
   type: Schema.Struct({
@@ -62,6 +68,7 @@ export const Relation = Schema.Struct({
     entity: Schema.Struct({
       name: Schema.NullOr(Schema.String),
     }),
+    renderableType: Schema.NullOr(Schema.Union(Schema.Literal('IMAGE'), Schema.Literal('URL'))),
   }),
   entityId: Schema.UUID,
 });

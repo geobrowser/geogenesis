@@ -38,6 +38,10 @@ export const entityFragment = graphql(/* GraphQL */ `
       to {
         id
         name
+        values {
+          propertyId
+          value
+        }
       }
       toSpaceId
       type {
@@ -45,6 +49,7 @@ export const entityFragment = graphql(/* GraphQL */ `
         entity {
           name
         }
+        renderableType
       }
     }
   }

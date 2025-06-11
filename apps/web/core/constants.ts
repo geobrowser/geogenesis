@@ -8,3 +8,5 @@ export const DEFAULT_OPENGRAPH_DESCRIPTION =
 export const IPFS_GATEWAY_PATH = 'https://node.lighthouse.storage';
 export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`;
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+export const RENDERABLE_TYPE_PROPERTY = '2316bbe1-c76f-4635-83f2-3e03b4f1fe46';

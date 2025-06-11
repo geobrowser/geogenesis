@@ -8,6 +8,10 @@ import { Relation } from '~/core/v2.types';
 import { EntityId, SubstreamRelationHistorical, SubstreamRelationLive, SubstreamType } from '../schema';
 
 export function RelationDtoLive(relation: RemoteRelation, from: { id: string; name: string | null }): Relation {
+  const imageEntityUrlValue =
+    relation.to.values.find(relation => relation.propertyId === SystemIds.IMAGE_URL_PROPERTY)?.value ?? null;
+  const renderableType = relation.type.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION';
+
   return {
     id: relation.id,
     spaceId: relation.spaceId,
@@ -15,7 +19,7 @@ export function RelationDtoLive(relation: RemoteRelation, from: { id: string; na
     position: relation.position,
     verified: relation.verified ?? null,
     toSpaceId: relation.toSpaceId ?? null,
-    renderableType: 'RELATION',
+    renderableType,
     type: {
       id: relation.type.id,
       name: relation.type.entity.name ?? null,
@@ -32,8 +36,7 @@ export function RelationDtoLive(relation: RemoteRelation, from: { id: string; na
       // of the entity to _what_ the entity is so they know how they should
       // render it depending on their use case.
       // Right now we only support images and entity ids as the value of the To entity.
-      value: relation.to.id,
-      // renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toEntity.currentVersion.version.entityId,
+      value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.to.id,
     },
   };
 }

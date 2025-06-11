@@ -80,7 +80,7 @@ export default async function DefaultEntityPage({
           )}
           {notice}
           {(showSpacer || !!notice) && <Spacer height={40} />}
-          <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
+          {/* <Editor spaceId={props.spaceId} shouldHandleOwnSpacing /> */}
           <ToggleEntityPage {...props} />
           <AutomaticModeToggle />
           <Spacer height={40} />
