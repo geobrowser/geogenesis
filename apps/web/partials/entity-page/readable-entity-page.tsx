@@ -1,11 +1,11 @@
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
+import { Relation, RelationRenderableProperty, RenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -16,6 +16,8 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+
+type Renderables = Record<string, RenderableProperty[]>;
 
 interface Props {
   triples: Triple[];
@@ -30,6 +32,21 @@ export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Prop
   const [isRelationPage] = useRelationship(entityId, spaceId);
 
   const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId, isRelationPage);
+
+  function countRenderableProperty(renderables: Renderables): number {
+    let count = 0;
+    Object.values(renderables).forEach((renderable) => {
+      const attributeId = renderable[0].attributeId;
+      if (![SystemIds.TYPES_PROPERTY, SystemIds.NAME_PROPERTY, SystemIds.COVER_PROPERTY, ContentIds.AVATAR_PROPERTY].includes(attributeId as Id.Id)) {
+        count++;
+      }
+    });
+    return count;
+  }
+
+  if (countRenderableProperty(renderables) <= 0) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
