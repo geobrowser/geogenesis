@@ -8,7 +8,7 @@ import { queryStringFromFilters } from '../blocks/data/to-query-string';
 import { readTypes } from '../database/entities';
 import { EntityId } from '../io/schema';
 import { fetchEntity, fetchResults, fetchSpaces, fetchTableRowEntities } from '../io/subgraph';
-import { getBatchEntities } from '../io/v2/queries';
+import { getBatchEntities, getEntity } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
 import { Values } from '../utils/value';
@@ -112,7 +112,7 @@ export class E {
   }): Promise<Entity | null> {
     const cachedEntity = await cache.fetchQuery({
       queryKey: ['network', 'entity', id, spaceId],
-      queryFn: ({ signal }) => fetchEntity({ id, signal, spaceId }),
+      queryFn: ({ signal }) => Effect.runPromise(getEntity(id, spaceId, signal)),
     });
 
     return this.merge({ id, store, spaceId, mergeWith: cachedEntity });

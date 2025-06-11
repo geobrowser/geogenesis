@@ -10,20 +10,21 @@ import { E } from '../sync/orm';
 import { store as geoStore } from '../sync/use-sync-engine';
 import { OmitStrict } from '../types';
 import { Relations } from '../utils/relations';
+import { Relation, Value } from '../v2.types';
 import { Triple } from './Triple';
 import { db } from './indexeddb';
 import { RemoveOp, StoreRelation, StoredRelation, StoredTriple, UpsertOp } from './types';
 
 const opsWithPersistence = () => {
-  const baseAtom = atom<StoredTriple[]>([]);
+  const baseAtom = atom<Value[]>([]);
 
   baseAtom.onMount = setValue => {
     (async () => {
-      const stored = await db.triples.toArray();
+      const stored = await db.values.toArray();
 
-      for (const triple of stored) {
-        if (triple.isDeleted) geoStore.deleteValue(triple);
-        else geoStore.setValue(triple);
+      for (const value of stored) {
+        if (value.isDeleted) geoStore.deleteValue(value);
+        else geoStore.setValue(value);
       }
 
       setValue(stored);
@@ -34,7 +35,7 @@ const opsWithPersistence = () => {
 };
 
 const relationsWithPersistence = () => {
-  const baseAtom = atom<StoredRelation[]>([]);
+  const baseAtom = atom<Relation[]>([]);
 
   baseAtom.onMount = setValue => {
     (async () => {

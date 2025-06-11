@@ -1,19 +1,19 @@
 import Dexie, { Table } from 'dexie';
 
-import { StoredRelation, StoredTriple } from './types';
+import { Relation, Value } from '../v2.types';
 
 const DB_NAME = 'geogenesis';
 const VERSION = 2;
 
 export class Geo extends Dexie {
-  triples!: Table<StoredTriple>;
-  relations!: Table<StoredRelation>;
+  values!: Table<Value>;
+  relations!: Table<Relation>;
 
   constructor() {
     super(DB_NAME);
 
     this.version(VERSION).stores({
-      triples: '++id',
+      values: '++id',
       relations: '++id',
     });
   }

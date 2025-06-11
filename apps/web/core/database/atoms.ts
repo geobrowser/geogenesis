@@ -2,11 +2,10 @@ import { atom } from 'jotai';
 
 import { localRelationsAtom } from '~/core/database/write';
 
-import { Relation } from '../types';
-import { StoredRelation } from './types';
+import { Relation } from '../v2.types';
 
 export const createRelationsAtom = (initialRelations: Relation[]) => {
-  return atom((get): StoredRelation[] => {
+  return atom((get): Relation[] => {
     const localRelations = get(localRelationsAtom);
     const locallyDeletedRelations = localRelations.filter(r => r.isDeleted).map(r => r.id);
 

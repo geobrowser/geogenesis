@@ -38,6 +38,10 @@ export const entityFragment = graphql(/* GraphQL */ `
       to {
         id
         name
+        types {
+          id
+          name
+        }
         values {
           propertyId
           value

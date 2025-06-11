@@ -7,7 +7,7 @@ import { EntityId } from '~/core/io/schema';
 
 import { sortRenderables } from '~/partials/entity-page/entity-page-utils';
 
-import { useTriples } from '../database/triples';
+import { useValues } from '../database/v2_values';
 import { useEntityPageStore } from '../state/entity-page-store/entity-store';
 import { toRenderables } from '../utils/to-renderables';
 import { groupBy } from '../utils/utils';
@@ -34,7 +34,7 @@ export function useRenderables(serverValues: Value[], spaceId: string, isRelatio
   const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
     usePlaceholderRenderables(EntityId(id));
 
-  const triplesFromSpace = useTriples({
+  const triplesFromSpace = useValues({
     selector: t => t.space === spaceId,
     includeDeleted: true,
   });

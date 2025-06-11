@@ -2,7 +2,7 @@ import { GraphUri, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { getRelations } from '~/core/database/relations';
-import { getTriples } from '~/core/database/triples';
+import { getTriples } from '~/core/database/v2_values';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { EntityId } from '~/core/io/schema';
 import { useQueryEntitiesAsync } from '~/core/sync/use-store';

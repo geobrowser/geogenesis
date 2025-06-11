@@ -4,19 +4,17 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { dedupeWith } from 'effect/Array';
 
-import { EntityId } from '../io/schema';
 import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
 import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
-import { SpaceId } from '../types';
 import { Entities } from '../utils/entity';
 import { EntityWithSchema, PropertySchema, Relation, Value } from '../v2.types';
 
 type UseEntityOptions = {
-  spaceId?: SpaceId;
-  id: EntityId;
-  initialData?: { spaces: SpaceId[]; values: Value[]; relations: Relation[] };
+  spaceId?: string;
+  id: string;
+  initialData?: { spaces: string[]; values: Value[]; relations: Relation[] };
 };
 
 export function useEntity(options: UseEntityOptions): EntityWithSchema {
@@ -64,22 +62,22 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
 // if they aren't defined in the schema.
 export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [
   {
-    id: EntityId(SystemIds.NAME_ATTRIBUTE),
+    id: SystemIds.NAME_ATTRIBUTE,
     name: 'Name',
     dataType: 'TEXT',
   },
   {
-    id: EntityId(SystemIds.DESCRIPTION_ATTRIBUTE),
+    id: SystemIds.DESCRIPTION_ATTRIBUTE,
     name: 'Description',
     dataType: 'TEXT',
   },
   {
-    id: EntityId(SystemIds.TYPES_ATTRIBUTE),
+    id: SystemIds.TYPES_ATTRIBUTE,
     name: 'Types',
     dataType: 'RELATION',
   },
   {
-    id: EntityId(SystemIds.COVER_ATTRIBUTE),
+    id: SystemIds.COVER_ATTRIBUTE,
     name: 'Cover',
     dataType: 'RELATION',
     renderableType: 'IMAGE',
@@ -111,7 +109,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
 
   // @TODO(migration): Fetch types directly
   const schemaWithoutValueType = schemaEntities.flatMap((e): PropertySchema[] => {
-    const attributeRelations = e.relations.filter(t => t.type.id === EntityId(SystemIds.PROPERTIES));
+    const attributeRelations = e.relations.filter(t => t.type.id === SystemIds.PROPERTIES);
 
     if (attributeRelations.length === 0) {
       return [];
@@ -147,12 +145,10 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
   // });
 
   const relationValueTypes = attributes.map(a => {
-    const relationValueType = a.relations.find(
-      r => r.type.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
-    )?.toEntity;
+    const relationValueType = a.relations.find(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)?.toEntity;
 
     const relationValueTypes = a.relations
-      .filter(r => r.type.id === EntityId(SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE))
+      .filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
       .map(r => ({ typeId: r.toEntity.id, typeName: r.toEntity.name }));
 
     return {
@@ -192,11 +188,11 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
  * The triples and relations here should already be merged with the entity's
  * local and remote state.
  */
-export function readTypes(relations: Relation[]): { id: EntityId; name: string | null }[] {
+export function readTypes(relations: Relation[]): { id: string; name: string | null }[] {
   const typeIdsViaRelations = relations
-    .filter(r => r.type.id === EntityId(SystemIds.TYPES_PROPERTY))
+    .filter(r => r.type.id === SystemIds.TYPES_PROPERTY)
     .map(r => ({
-      id: EntityId(r.toEntity.id),
+      id: r.toEntity.id,
       name: r.toEntity.name,
     }));
 

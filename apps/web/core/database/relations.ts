@@ -7,7 +7,7 @@ import { atomFamily, selectAtom } from 'jotai/utils';
 import * as React from 'react';
 
 import { store } from '../state/jotai-store';
-import { Relation } from '../types';
+import { Relation } from '../v2.types';
 import { createRelationsAtom } from './atoms';
 
 interface UseRelationsArgs {

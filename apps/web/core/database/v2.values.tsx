@@ -7,23 +7,22 @@ import { selectAtom } from 'jotai/utils';
 import * as React from 'react';
 
 import { store } from '../state/jotai-store';
-import { Triple as ITriple } from '../types';
-import { Triples } from '../utils/triples';
+import { Values } from '../utils/value';
+import { Value } from '../v2.types';
 import { isNotDeletedSelector } from './selectors';
-import { StoredTriple } from './types';
 import { localOpsAtom } from './write';
 
-interface UseTriplesArgs {
-  mergeWith?: ITriple[];
-  selector?: (t: StoredTriple) => boolean;
+interface UseValuesArgs {
+  mergeWith?: Value[];
+  selector?: (t: Value) => boolean;
   includeDeleted?: boolean;
 }
 
-function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeWith = [] }: UseTriplesArgs) {
+function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeWith = [] }: UseValuesArgs) {
   return selectAtom(
     localOpsAtom,
     ops => {
-      const mergedTriples = Triples.merge(ops, mergeWith);
+      const mergedTriples = Values.merge(ops, mergeWith);
       return mergedTriples.filter(t => {
         return (selector ? selector(t) : true) && (includeDeleted ? true : isNotDeletedSelector(t));
       });
@@ -32,12 +31,12 @@ function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeW
   );
 }
 
-export function useTriples(args?: UseTriplesArgs) {
+export function useValues(args?: UseValuesArgs) {
   const memoizedArgs = React.useMemo(() => args, [args]);
   const memoizedAtom = React.useMemo(() => makeLocalOpsAtomWithSelector(memoizedArgs ?? {}), [memoizedArgs]);
   return useAtomValue(memoizedAtom);
 }
 
-export function getTriples(args: UseTriplesArgs) {
+export function getValues(args: UseValuesArgs) {
   return store.get(makeLocalOpsAtomWithSelector(args));
 }

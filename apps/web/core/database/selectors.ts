@@ -1,9 +1,9 @@
-import { Triple } from '../types';
+import { Value } from '../v2.types';
 
-export const activeTriplesForEntityIdSelector = (entityId: string) => (triple: Triple) => {
-  return triple.entityId === entityId && isNotDeletedSelector(triple);
+export const activeTriplesForEntityIdSelector = (entityId: string) => (value: Value) => {
+  return value.entity.id === entityId && isNotDeletedSelector(value);
 };
 
-export const isNotDeletedSelector = (triple: Triple) => {
-  return triple.isDeleted === false;
+export const isNotDeletedSelector = (value: Value) => {
+  return value.isDeleted === false;
 };

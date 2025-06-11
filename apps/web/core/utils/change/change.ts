@@ -4,7 +4,7 @@ import equal from 'fast-deep-equal';
 
 import { EntityWithSchema } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
-import { getTriples } from '~/core/database/triples';
+import { getTriples } from '~/core/database/v2_values';
 import type { Entity } from '~/core/io/dto/entities';
 import { Proposal } from '~/core/io/dto/proposals';
 import { fetchParentEntityId } from '~/core/io/fetch-parent-entity-id';

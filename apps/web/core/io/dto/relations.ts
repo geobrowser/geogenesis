@@ -1,7 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { TripleDto } from '~/core/io/dto/triples';
-import { RemoteRelation } from '~/core/io/v2/v2.schema';
+import { RemoteEntityType, RemoteRelation } from '~/core/io/v2/v2.schema';
 import { RenderableEntityType } from '~/core/types';
 import { Relation } from '~/core/v2.types';
 
@@ -10,7 +10,7 @@ import { EntityId, SubstreamRelationHistorical, SubstreamRelationLive, Substream
 export function RelationDtoLive(relation: RemoteRelation, from: { id: string; name: string | null }): Relation {
   const imageEntityUrlValue =
     relation.to.values.find(relation => relation.propertyId === SystemIds.IMAGE_URL_PROPERTY)?.value ?? null;
-  const renderableType = relation.type.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION';
+  const renderableType = v2_getRenderableEntityType(relation.to.types);
 
   return {
     id: relation.id,
@@ -77,6 +77,24 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
       value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toVersion.entityId,
     },
   };
+}
+
+function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): RenderableEntityType {
+  const typeIds = types.map(type => type.id);
+
+  if (typeIds.includes(EntityId(SystemIds.IMAGE_TYPE))) {
+    return 'IMAGE';
+  }
+
+  if (typeIds.includes(EntityId(SystemIds.DATA_BLOCK))) {
+    return 'DATA';
+  }
+
+  if (typeIds.includes(EntityId(SystemIds.TEXT_BLOCK))) {
+    return 'TEXT';
+  }
+
+  return 'RELATION';
 }
 
 function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {

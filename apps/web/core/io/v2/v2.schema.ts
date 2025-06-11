@@ -47,6 +47,13 @@ export const Value = Schema.Struct({
 
 export type RemoteValue = Schema.Schema.Type<typeof Value>;
 
+export const EntityType = Schema.Struct({
+  id: Schema.UUID,
+  name: Schema.NullOr(Schema.String),
+});
+
+export type RemoteEntityType = Schema.Schema.Type<typeof EntityType>;
+
 export const Relation = Schema.Struct({
   id: Schema.UUID,
   spaceId: Schema.UUID,
@@ -55,6 +62,7 @@ export const Relation = Schema.Struct({
   to: Schema.Struct({
     id: Schema.UUID,
     name: Schema.NullOr(Schema.String),
+    types: Schema.Array(EntityType),
     values: Schema.Array(
       Schema.Struct({
         propertyId: Schema.UUID,
@@ -74,13 +82,6 @@ export const Relation = Schema.Struct({
 });
 
 export type RemoteRelation = Schema.Schema.Type<typeof Relation>;
-
-export const EntityType = Schema.Struct({
-  id: Schema.UUID,
-  name: Schema.NullOr(Schema.String),
-});
-
-export type RemoteEntityType = Schema.Schema.Type<typeof Entity>;
 
 export const Entity = Schema.Struct({
   id: Schema.UUID,

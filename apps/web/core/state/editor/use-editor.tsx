@@ -8,17 +8,18 @@ import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
+import { getValues } from '~/core/database/v2.values';
+import { useQueryEntities } from '~/core/sync/use-store';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { getImageHash, getImagePath, validateEntityId } from '~/core/utils/utils';
+import { Relation, RenderableEntityType } from '~/core/v2.types';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
-import { getTriples } from '../../database/triples';
 import { DB } from '../../database/write';
 import { ID } from '../../id';
 import { EntityId } from '../../io/schema';
-import { Relation, RenderableEntityType } from '../../types';
-import { Values } from '../../utils/value';
 import { getRelationForBlockType } from './block-types';
 import { useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
@@ -60,24 +61,26 @@ function makeNewBlockRelation({
   const allRelations = [
     ...blockRelations.map(r => ({
       toEntity: { id: r.block.id },
-      index: r.index,
+      // @TODO(migration): default position
+      position: r.position ?? 'a0',
     })),
     ...newBlocks.map(b => ({
       toEntity: { id: b.toEntity.id },
-      index: b.index,
+      // @TODO(migration): default position
+      position: b.position ?? 'a0',
     })),
-  ].sort((a, b) => (a.index < b.index ? -1 : 1));
+  ].sort((a, b) => (a.position < b.position ? -1 : 1));
 
   // Check both the existing blocks and any that are created as part of this update
   // tick. This is necessary as right now we don't update the Geo state until the
   // user blurs the editor. See the comment earlier in this function.
 
-  const beforeCollectionItemIndex = allRelations.find(c => c.toEntity.id === beforeBlockIndex)?.index;
+  const beforeCollectionItemIndex = allRelations.find(c => c.toEntity.id === beforeBlockIndex)?.position;
 
   // When the afterCollectionItemIndex is undefined, we need to use the next block of beforeBlockIndex
   const afterCollectionItemIndex =
-    allRelations.find(c => c.toEntity.id === afterBlockIndex)?.index ??
-    allRelations[allRelations.findIndex(c => c.index === beforeCollectionItemIndex) + 1]?.index;
+    allRelations.find(c => c.toEntity.id === afterBlockIndex)?.position ??
+    allRelations[allRelations.findIndex(c => c.position === beforeCollectionItemIndex) + 1]?.position;
 
   // @TODO(migration): Fix
   // const newTripleOrdering = R.reorder({
@@ -103,22 +106,25 @@ function makeNewBlockRelation({
   })();
 
   const newRelation: Relation = {
-    space: spaceId,
+    spaceId: spaceId,
     id: newRelationId,
-    index: 'a0',
+    // @TODO(migration): Fix position
+    position: 'a0',
+    verified: false,
+    entityId: '',
     // index: newTripleOrdering.triple.value.value,
-    typeOf: {
-      id: EntityId(SystemIds.BLOCKS),
+    renderableType,
+    type: {
+      id: SystemIds.BLOCKS,
       name: 'Blocks',
     },
     toEntity: {
-      id: EntityId(addedBlock.id),
-      renderableType,
+      id: addedBlock.id,
       name: null,
       value: addedBlock.value,
     },
     fromEntity: {
-      id: EntityId(entityPageId),
+      id: entityPageId,
       name: null,
     },
   };
@@ -233,6 +239,8 @@ export function useEditorStore() {
     isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
   );
 
+  console.log('blockRelations', blockRelations);
+
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
   }, [blockRelations]);
@@ -252,12 +260,15 @@ export function useEditorStore() {
     const json = {
       type: 'doc',
       content: blockRelations.map(block => {
-        const markdownTriplesForBlockId = getTriples({
+        // At the time we're rendering the store hasn't been hydrated with the editor blocks
+        // We need to hydrate the editor ahead of time somehow...
+
+        const markdownValuesForBlockId = getValues({
           mergeWith: initialBlockTriples,
-          selector: triple => triple.entityId === block.block.id && triple.attributeId === SystemIds.MARKDOWN_CONTENT,
+          selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,
         });
 
-        const markdownTripleForBlockId = markdownTriplesForBlockId[0];
+        const markdownValueForBlockId = markdownValuesForBlockId?.[0];
         const relationForBlockId = blockRelations.find(r => r.block.id === block.block.id);
 
         const toEntity = relationForBlockId?.block;
@@ -287,9 +298,7 @@ export function useEditorStore() {
           };
         }
 
-        const html = markdownTripleForBlockId
-          ? Parser.markdownToHtml(Values.stringValue(markdownTripleForBlockId) || '')
-          : '';
+        const html = markdownValueForBlockId ? Parser.markdownToHtml(markdownValueForBlockId.value || '') : '';
         /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
         const isSSR = typeof window === 'undefined';
         const json = isSSR ? generateServerJSON(html, tiptapExtensions) : generateJSON(html, tiptapExtensions);
@@ -321,7 +330,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockRelations, initialBlockTriples, spaceId]);
+  }, [blockRelations, spaceId, initialBlockTriples]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
