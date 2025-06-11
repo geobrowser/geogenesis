@@ -28,7 +28,6 @@ export const mutator: Mutation = {
     get: (id, entityId) => store.getValue(id, entityId),
     set: newValue => {
       store.setValue(newValue);
-      console.log('set', newValue);
 
       // Currently we have two stores, the new sync store and the
       // legacy jotai events store. For now we interop between both,
@@ -101,7 +100,6 @@ export function useMutate() {
       get: (id, entityId) => store.getValue(id, entityId),
       set: newValue => {
         store.setValue(newValue);
-        console.log('set', newValue);
 
         // Currently we have two stores, the new sync store and the
         // legacy jotai events store. For now we interop between both,
