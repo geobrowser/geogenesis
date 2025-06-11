@@ -18,6 +18,7 @@ import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { Space } from '~/core/io/dto/spaces';
 import { EntityId, SpaceId } from '~/core/io/schema';
+import { useMutate } from '~/core/sync/use-mutate';
 import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -87,6 +88,7 @@ export const SelectEntity = ({
   advanced = true,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
+  const { transaction } = useMutate();
 
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -128,7 +130,6 @@ export const SelectEntity = ({
   };
 
   const [, setToast] = useToast();
-  const { upsert } = useWriteOps();
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
@@ -143,19 +144,26 @@ export const SelectEntity = ({
       onCreateEntity({ id: newEntityId, name: query });
     } else {
       // Create new entity with name and types using internal id
-      upsert(
-        {
-          entityId: newEntityId,
-          attributeId: SystemIds.NAME_ATTRIBUTE,
-          entityName: query,
-          attributeName: 'Name',
-          value: {
-            type: 'TEXT',
-            value: query,
+      transaction.commit(db => {
+        db.values.set({
+          id: ID.createValueId({
+            entityId: newEntityId,
+            propertyId: SystemIds.NAME_PROPERTY,
+            spaceId,
+          }),
+          spaceId,
+          entity: {
+            id: newEntityId,
+            name: query,
           },
-        },
-        spaceId
-      );
+          property: {
+            id: SystemIds.NAME_PROPERTY,
+            name: 'Name',
+            dataType: 'TEXT',
+          },
+          value: query,
+        });
+      });
     }
     onDone?.({ id: newEntityId, name: query }, true);
     onQueryChange('');

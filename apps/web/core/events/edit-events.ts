@@ -65,20 +65,6 @@ export type EditEvent =
       payload: {
         renderable: BaseRelationRenderableProperty | ImageRelationRenderableProperty;
       };
-    }
-
-  // EVERYTHING BELOW THIS IS A LEGACY EVENT THAT WILL GET REMOVED
-  | {
-      type: 'EDIT_ENTITY_NAME';
-      payload: {
-        name: string;
-      };
-    }
-  | {
-      type: 'DELETE_ENTITY';
-      payload: {
-        value: Value;
-      };
     };
 
 export interface EditEventContext {

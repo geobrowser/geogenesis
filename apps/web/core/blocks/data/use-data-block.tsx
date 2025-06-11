@@ -161,16 +161,13 @@ export function useDataBlock() {
   const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
 
   const setName = (newName: string) => {
-    upsert(
-      {
-        attributeId: SystemIds.NAME_ATTRIBUTE,
-        entityId: entityId,
-        entityName: newName,
-        attributeName: 'Name',
-        value: { type: 'TEXT', value: newName },
-      },
-      spaceId
-    );
+    upsert({
+      attributeId: SystemIds.NAME_ATTRIBUTE,
+      entityId: entityId,
+      entityName: newName,
+      attributeName: 'Name',
+      value: { type: 'TEXT', value: newName },
+    });
   };
 
   let isLoading = true;

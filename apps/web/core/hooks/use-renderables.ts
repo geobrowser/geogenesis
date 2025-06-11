@@ -34,8 +34,8 @@ export function useRenderables(serverValues: Value[], spaceId: string, isRelatio
   const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
     usePlaceholderRenderables(EntityId(id));
 
-  const triplesFromSpace = useValues({
-    selector: t => t.space === spaceId,
+  const valuesFromSpace = useValues({
+    selector: t => t.spaceId === spaceId,
     includeDeleted: true,
   });
 
@@ -45,7 +45,7 @@ export function useRenderables(serverValues: Value[], spaceId: string, isRelatio
   // There may be some deleted triples locally. We check the actions to make sure that there are
   // actually 0 actions in the case that there are 0 local triples as the local triples here
   // are only the ones where `isDeleted` is false.
-  const values = localValues.length === 0 && triplesFromSpace.length === 0 ? serverValues : localValues;
+  const values = localValues.length === 0 && valuesFromSpace.length === 0 ? serverValues : localValues;
 
   // @TODO(migration): Type properties aren't working with new data model
   // const serverUrlValues = serverValues.filter(triple => triple.value.type === 'URL');

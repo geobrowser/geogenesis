@@ -1,5 +1,6 @@
 'use client';
 
+import { SystemIds } from '@graphprotocol/grc-20';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -7,8 +8,10 @@ import * as React from 'react';
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useAction } from '~/core/events/edit-events';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
 import { fetchHistoryVersions } from '~/core/io/subgraph/fetch-history-versions';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -24,6 +27,7 @@ import { EntityPageContextMenu } from './entity-page-context-menu';
 export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   const { name } = useEntityPageStore();
   const isEditing = useUserIsEditing(spaceId);
+  const { transaction } = useMutate();
 
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 
@@ -50,20 +54,26 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
   const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
   const showMore = !isOnePage && !isLastPage;
 
-  const send = useAction({
-    context: {
-      entityId,
-      spaceId,
-      entityName: name ?? '',
-    },
-  });
-
   const onNameChange = (value: string) => {
-    send({
-      type: 'EDIT_ENTITY_NAME',
-      payload: {
-        name: value,
-      },
+    transaction.commit(db => {
+      db.values.set({
+        id: ID.createValueId({
+          entityId,
+          propertyId: SystemIds.NAME_PROPERTY,
+          spaceId,
+        }),
+        spaceId,
+        entity: {
+          id: entityId,
+          name: value,
+        },
+        property: {
+          id: SystemIds.NAME_PROPERTY,
+          name: 'Name',
+          dataType: 'TEXT',
+        },
+        value,
+      });
     });
   };
 
