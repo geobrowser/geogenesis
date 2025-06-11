@@ -5,7 +5,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
-import { useEditEvents } from '~/core/events/edit-events';
+import { useAction } from '~/core/events/edit-events';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { fetchHistoryVersions } from '~/core/io/subgraph/fetch-history-versions';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -50,7 +50,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
   const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
   const showMore = !isOnePage && !isLastPage;
 
-  const send = useEditEvents({
+  const send = useAction({
     context: {
       entityId,
       spaceId,

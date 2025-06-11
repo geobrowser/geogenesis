@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { memo, useState } from 'react';
 
-import { useEditEvents } from '~/core/events/edit-events';
+import { useAction } from '~/core/events/edit-events';
 import { PropertySchema } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 
@@ -31,7 +31,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   // around this issue by using local state.
   const [localName, setLocalName] = useState(column.name ?? '');
 
-  const send = useEditEvents({
+  const send = useAction({
     context: {
       entityId,
       spaceId: spaceId ?? '',

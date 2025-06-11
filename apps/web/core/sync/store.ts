@@ -257,6 +257,14 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     return Array.from(valueMap.values());
   }
 
+  getValue(id: string, entityId: string): Value | null {
+    return this.getResolvedValues(entityId).find(v => v.id === id) ?? null;
+  }
+
+  getRelation(id: string, entityId: string): Relation | null {
+    return this.getResolvedRelations(entityId).find(r => r.id === id) ?? null;
+  }
+
   /**
    * Get relations for an entity (without pending changes)
    */

@@ -1,15 +1,13 @@
 'use client';
 
-import { ContentIds, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 // import { Image } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { StoreRelation } from '~/core/database/types';
-import { DB } from '~/core/database/write';
-import { useEditEvents } from '~/core/events/edit-events';
+import { useAction } from '~/core/events/edit-events';
 import { useProperties } from '~/core/hooks/use-properties';
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
@@ -17,10 +15,12 @@ import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import {
   PropertySchema,
+  Relation,
   RelationRenderableProperty,
   RenderableProperty,
   Value,
@@ -62,7 +62,7 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
     useRenderables(values, spaceId, isRelationPage);
   const { name, relations, types } = useEntityPageStore();
 
-  const send = useEditEvents({
+  const send = useAction({
     context: {
       entityId,
       spaceId,
@@ -258,7 +258,7 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
 function EditableAttribute({ renderable, onChange }: { renderable: RenderableProperty; onChange: () => void }) {
   const { id, name, spaceId } = useEntityPageStore();
 
-  const send = useEditEvents({
+  const send = useAction({
     context: {
       entityId: id,
       spaceId,
@@ -331,8 +331,9 @@ type RelationsGroupProps = {
 
 export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
+  const { transaction } = useMutate();
 
-  const send = useEditEvents({
+  const send = useAction({
     context: {
       entityId: id,
       spaceId,
@@ -442,12 +443,17 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                   }}
                   onDone={result => {
                     const newRelationId = ID.createEntityId();
+                    // @TODO(migration): lightweight relation pointing to entity id
+                    const newEntityId = ID.createEntityId();
 
-                    const newRelation: StoreRelation = {
+                    const newRelation: Relation = {
                       id: newRelationId,
-                      space: spaceId,
-                      index: INITIAL_RELATION_INDEX_VALUE,
-                      typeOf: {
+                      spaceId: spaceId,
+                      position: INITIAL_RELATION_INDEX_VALUE,
+                      renderableType: 'RELATION',
+                      verified: false,
+                      entityId: newEntityId,
+                      type: {
                         id: EntityId(r.propertyId),
                         name: r.propertyName,
                       },
@@ -458,47 +464,21 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                       toEntity: {
                         id: EntityId(result.id),
                         name: result.name,
-                        renderableType: 'RELATION',
                         value: EntityId(result.id),
                       },
                     };
 
-                    DB.upsertRelation({
-                      relation: newRelation,
-                      spaceId,
-                    });
-
-                    if (result.space) {
-                      DB.upsert(
-                        {
-                          attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
-                          attributeName: 'To Entity',
-                          entityId: newRelationId,
-                          entityName: null,
-                          value: {
-                            type: 'URL',
-                            value: GraphUrl.fromEntityId(result.id, { spaceId: result.space }),
-                          },
-                        },
-                        spaceId
-                      );
+                    transaction.commit(db => {
+                      if (result.space) {
+                        newRelation.toSpaceId = result.space;
+                      }
 
                       if (result.verified) {
-                        DB.upsert(
-                          {
-                            attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
-                            attributeName: 'Verified Source',
-                            entityId: newRelationId,
-                            entityName: null,
-                            value: {
-                              type: 'CHECKBOX',
-                              value: '1',
-                            },
-                          },
-                          spaceId
-                        );
+                        newRelation.verified = true;
                       }
-                    }
+
+                      db.relations.set(newRelation);
+                    });
                   }}
                 />
               </div>
@@ -512,19 +492,26 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                 spaceId={spaceId}
                 relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
                 onCreateEntity={result => {
-                  DB.upsert(
-                    {
-                      entityId: result.id,
-                      attributeId: SystemIds.NAME_ATTRIBUTE,
-                      entityName: result.name,
-                      attributeName: 'Name',
-                      value: {
-                        type: 'TEXT',
-                        value: result.name ?? '',
+                  transaction.commit(db => {
+                    db.values.set({
+                      id: ID.createValueId({
+                        entityId: result.id,
+                        propertyId: SystemIds.NAME_PROPERTY,
+                        spaceId,
+                      }),
+                      entity: {
+                        id: result.id,
+                        name: result.name,
                       },
-                    },
-                    spaceId
-                  );
+                      property: {
+                        id: SystemIds.NAME_PROPERTY,
+                        name: 'Name',
+                        dataType: 'TEXT',
+                      },
+                      spaceId,
+                      value: result.name ?? '',
+                    });
+                  });
 
                   if (valueType) {
                     send({
@@ -542,12 +529,17 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                 }}
                 onDone={result => {
                   const newRelationId = ID.createEntityId();
+                  // @TODO(migration): lightweight relation pointing to entity id
+                  const newEntityId = ID.createEntityId();
 
-                  const newRelation: StoreRelation = {
+                  const newRelation: Relation = {
                     id: newRelationId,
-                    space: spaceId,
-                    index: INITIAL_RELATION_INDEX_VALUE,
-                    typeOf: {
+                    spaceId: spaceId,
+                    position: INITIAL_RELATION_INDEX_VALUE,
+                    renderableType: 'RELATION',
+                    verified: false,
+                    entityId: newEntityId,
+                    type: {
                       id: EntityId(r.propertyId),
                       name: r.propertyName,
                     },
@@ -558,47 +550,21 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                     toEntity: {
                       id: EntityId(result.id),
                       name: result.name,
-                      renderableType: 'RELATION',
                       value: EntityId(result.id),
                     },
                   };
 
-                  DB.upsertRelation({
-                    relation: newRelation,
-                    spaceId,
-                  });
-
-                  if (result.space) {
-                    DB.upsert(
-                      {
-                        attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
-                        attributeName: 'To Entity',
-                        entityId: newRelationId,
-                        entityName: null,
-                        value: {
-                          type: 'URL',
-                          value: GraphUrl.fromEntityId(result.id, { spaceId: result.space }),
-                        },
-                      },
-                      spaceId
-                    );
+                  transaction.commit(db => {
+                    if (result.space) {
+                      newRelation.toSpaceId = result.space;
+                    }
 
                     if (result.verified) {
-                      DB.upsert(
-                        {
-                          attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
-                          attributeName: 'Verified Source',
-                          entityId: newRelationId,
-                          entityName: null,
-                          value: {
-                            type: 'CHECKBOX',
-                            value: '1',
-                          },
-                        },
-                        spaceId
-                      );
+                      newRelation.verified = true;
                     }
-                  }
+
+                    db.relations.set(newRelation);
+                  });
                 }}
                 variant="fixed"
               />
@@ -643,19 +609,26 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             }
             relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
-              DB.upsert(
-                {
-                  entityId: result.id,
-                  attributeId: SystemIds.NAME_ATTRIBUTE,
-                  entityName: result.name,
-                  attributeName: 'Name',
-                  value: {
-                    type: 'TEXT',
-                    value: result.name ?? '',
+              transaction.commit(db => {
+                db.values.set({
+                  id: ID.createValueId({
+                    entityId: result.id,
+                    propertyId: SystemIds.NAME_PROPERTY,
+                    spaceId,
+                  }),
+                  entity: {
+                    id: result.id,
+                    name: result.name,
                   },
-                },
-                spaceId
-              );
+                  property: {
+                    id: SystemIds.NAME_PROPERTY,
+                    name: 'Name',
+                    dataType: 'TEXT',
+                  },
+                  spaceId,
+                  value: result.name ?? '',
+                });
+              });
 
               if (valueType) {
                 send({
@@ -673,63 +646,42 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             }}
             onDone={result => {
               const newRelationId = ID.createEntityId();
+              // @TODO(migration): lightweight relation pointing to entity id
+              const newEntityId = ID.createEntityId();
 
-              const newRelation: StoreRelation = {
+              const newRelation: Relation = {
                 id: newRelationId,
-                space: spaceId,
-                index: INITIAL_RELATION_INDEX_VALUE,
-                typeOf: {
-                  id: EntityId(typeOfId),
+                spaceId: spaceId,
+                position: INITIAL_RELATION_INDEX_VALUE,
+                renderableType: 'RELATION',
+                verified: false,
+                entityId: newEntityId,
+                type: {
+                  id: typeOfId,
                   name: typeOfName,
                 },
                 fromEntity: {
-                  id: EntityId(id),
+                  id: id,
                   name: name,
                 },
                 toEntity: {
-                  id: EntityId(result.id),
+                  id: result.id,
                   name: result.name,
-                  renderableType: 'RELATION',
-                  value: EntityId(result.id),
+                  value: result.id,
                 },
               };
 
-              DB.upsertRelation({
-                relation: newRelation,
-                spaceId,
-              });
-
-              if (result.space) {
-                DB.upsert(
-                  {
-                    attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
-                    attributeName: 'To Entity',
-                    entityId: newRelationId,
-                    entityName: null,
-                    value: {
-                      type: 'URL',
-                      value: GraphUrl.fromEntityId(result.id, { spaceId: result.space }),
-                    },
-                  },
-                  spaceId
-                );
+              transaction.commit(db => {
+                if (result.space) {
+                  newRelation.toSpaceId = result.space;
+                }
 
                 if (result.verified) {
-                  DB.upsert(
-                    {
-                      attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
-                      attributeName: 'Verified Source',
-                      entityId: newRelationId,
-                      entityName: null,
-                      value: {
-                        type: 'CHECKBOX',
-                        value: '1',
-                      },
-                    },
-                    spaceId
-                  );
+                  newRelation.verified = true;
                 }
-              }
+
+                db.relations.set(newRelation);
+              });
             }}
             spaceId={spaceId}
           />
@@ -746,7 +698,7 @@ type ValuesGroupProps = {
 function ValuesGroup({ values }: ValuesGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
 
-  const send = useEditEvents({
+  const send = useAction({
     context: {
       entityId: id,
       spaceId: spaceId,

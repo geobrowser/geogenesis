@@ -1,17 +1,17 @@
 'use client';
 
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
 import { useMemo } from 'react';
 
 import { OmitStrict } from '~/core/types';
 
-import { remove, removeRelation, upsert, upsertMany, upsertRelation, useWriteOps } from '../database/write';
-import { EntityId } from '../io/schema';
+import { ID } from '../id';
+import { Mutation, Transaction, mutator, useMutate } from '../sync/use-mutate';
 import {
   BaseRelationRenderableProperty,
   ImageRelationRenderableProperty,
+  Relation,
   RenderableEntityType,
   RenderableProperty,
   Value,
@@ -81,12 +81,6 @@ export type EditEvent =
       };
     };
 
-interface EditApi {
-  upsertMany: ReturnType<typeof useWriteOps>['upsertMany'];
-  upsert: ReturnType<typeof useWriteOps>['upsert'];
-  remove: ReturnType<typeof useWriteOps>['remove'];
-}
-
 export interface EditEventContext {
   spaceId: string;
   entityId: string;
@@ -94,21 +88,41 @@ export interface EditEventContext {
 }
 
 interface ListenerConfig {
-  api: EditApi;
+  transaction: { commit: Transaction };
   context: EditEventContext;
 }
 
 const listener =
-  ({ api: { upsert, remove }, context }: ListenerConfig) =>
+  ({ transaction, context }: ListenerConfig) =>
   (event: EditEvent) => {
     switch (event.type) {
       case 'UPSERT_RENDERABLE_TRIPLE_VALUE': {
         const { value, renderable } = event.payload;
 
-        return upsert({
-          ...renderable,
-          value,
+        transaction.commit(db => {
+          const newValue: Value = {
+            ...renderable,
+            ...value,
+            entity: {
+              id: renderable.entityId,
+              name: renderable.entityName,
+            },
+            id: ID.createValueId({
+              entityId: renderable.entityId,
+              propertyId: renderable.propertyId,
+              spaceId: renderable.spaceId,
+            }),
+            property: {
+              id: renderable.propertyId,
+              name: renderable.propertyName,
+              dataType: renderable.type,
+            },
+          };
+
+          db.values.set(newValue);
         });
+
+        break;
       }
 
       case 'UPSERT_RELATION': {
@@ -116,26 +130,34 @@ const listener =
           event.payload;
         const { spaceId } = context;
 
-        const newRelation: StoreRelation = {
-          space: spaceId,
-          index: position ?? INITIAL_RELATION_INDEX_VALUE,
-          typeOf: {
-            id: EntityId(typeOfId),
+        // @TODO(migration): Migrate to new lightweight relations
+        const newRelation: Relation = {
+          id: ID.createEntityId(),
+          entityId: ID.createEntityId(),
+          spaceId: spaceId,
+          position: position ?? INITIAL_RELATION_INDEX_VALUE,
+          renderableType: renderableType ?? 'RELATION',
+          verified: false,
+          type: {
+            id: typeOfId,
             name: typeOfName,
           },
           fromEntity: {
-            id: EntityId(fromEntityId),
+            id: fromEntityId,
             name: null,
           },
           toEntity: {
-            id: EntityId(toEntityId),
+            id: toEntityId,
             name: toEntityName,
-            renderableType: renderableType ?? 'RELATION',
             value: value ?? toEntityId,
           },
         };
 
-        return upsertRelation({ spaceId: context.spaceId, relation: newRelation });
+        transaction.commit(db => {
+          db.relations.set(newRelation);
+        });
+
+        break;
       }
 
       case 'UPSERT_ATTRIBUTE': {
@@ -144,221 +166,114 @@ const listener =
         // When we change the attribute for a renderable we actually change
         // the id. We delete the previous renderable here so we don't still
         // render the old renderable.
-        remove({
-          attributeId: renderable.propertyId,
-          attributeName: renderable.propertyName,
-          entityId: renderable.entityId,
-        });
-
-        if (renderable.type === 'RELATION') {
-          return upsert({
-            entityId: renderable.relationId,
-            entityName: null,
-            attributeId: SystemIds.RELATION_TYPE_PROPERTY,
-            attributeName: 'Relation type',
-            // Relations are the only entity in the system that we expect
-            // to use an entity value type in a triple
-            value: {
-              type: 'URL',
-              value: GraphUrl.fromEntityId(propertyId),
-            },
+        transaction.commit(db => {
+          const valueId = ID.createValueId({
+            entityId: renderable.entityId,
+            propertyId: renderable.propertyId,
+            spaceId: renderable.spaceId,
           });
-        }
 
-        // @TODO(relations): Add support for IMAGE
-        if (renderable.type === 'IMAGE') {
-          return;
-        }
+          const lastValue = db.values.get(valueId, renderable.entityId);
 
-        return upsert({
-          ...renderable,
-          attributeId: propertyId,
-          attributeName,
-          value: {
-            type: renderable.type,
+          if (lastValue) {
+            db.values.delete(lastValue);
+          }
+
+          if (renderable.type === 'RELATION') {
+            // @TODO: Create lightweight relation
+          }
+
+          db.values.set({
+            id: valueId,
+            entity: {
+              id: renderable.entityId,
+              name: renderable.entityName,
+            },
+            spaceId: renderable.spaceId,
             value: renderable.value,
-          },
-        });
-      }
-
-      case 'CHANGE_RENDERABLE_TYPE': {
-        const { renderable, type } = event.payload;
-
-        // If we're changing from a relation then we need to delete all of the triples
-        // on the relation.
-        if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
-          return removeRelation({
-            relation: {
-              id: EntityId(renderable.relationId),
-              space: context.spaceId,
-              index: INITIAL_RELATION_INDEX_VALUE,
-              typeOf: {
-                id: EntityId(renderable.attributeId),
-                name: renderable.attributeName,
-              },
-              fromEntity: {
-                id: EntityId(renderable.entityId),
-                name: renderable.entityName,
-              },
-              toEntity: {
-                id: EntityId(renderable.value),
-                name: renderable.valueName,
-                renderableType: 'RELATION',
-                value: renderable.value,
-              },
+            property: {
+              id: propertyId,
+              name: propertyName,
+              dataType: 'TEXT',
+              // @TODO: Other fields
             },
-            spaceId: context.spaceId,
           });
-        }
 
-        if (type === 'RELATION') {
-          // Delete the previous triple and create a new relation entity
-          return removeRelation({
-            relation: {
-              id: EntityId(renderable.entityId),
-              space: context.spaceId,
-              index: INITIAL_RELATION_INDEX_VALUE,
-              typeOf: {
-                id: EntityId(renderable.attributeId),
-                name: renderable.attributeName,
-              },
-              fromEntity: {
-                id: EntityId(renderable.entityId),
-                name: renderable.entityName,
-              },
-              toEntity: {
-                id: EntityId(renderable.value),
-                name: null,
-                renderableType: 'RELATION',
-                value: renderable.value,
-              },
-            },
-            spaceId: context.spaceId,
-          });
-        }
-
-        // @TODO(relations): Add support for IMAGE
-        if (type === 'IMAGE') {
-          return;
-        }
-
-        return upsert({
-          ...renderable,
-          value: {
-            type,
-            value: '',
-          },
+          // @TODO(relations): Add support for IMAGE
+          if (renderable.type === 'IMAGE') {
+            return;
+          }
         });
+
+        break;
       }
 
       case 'DELETE_RENDERABLE': {
         const { renderable } = event.payload;
 
         if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
-          return removeRelation({
-            relation: {
-              id: EntityId(renderable.relationId),
-              space: context.spaceId,
-              index: INITIAL_RELATION_INDEX_VALUE,
-              typeOf: {
-                id: EntityId(renderable.attributeId),
-                name: renderable.attributeName,
-              },
-              fromEntity: {
-                id: EntityId(renderable.entityId),
-                name: renderable.entityName,
-              },
-              toEntity: {
-                id: EntityId(renderable.value),
-                name: renderable.valueName,
-                renderableType: 'RELATION',
-                value: renderable.value,
-              },
-            },
-            spaceId: context.spaceId,
+          return transaction.commit(db => {
+            const lastRelation = db.relations.get(renderable.relationId, renderable.entityId);
+
+            if (lastRelation) {
+              db.relations.delete(lastRelation);
+            }
           });
         }
 
-        return remove({
-          attributeName: renderable.attributeName,
-          attributeId: renderable.attributeId,
-          entityId: context.entityId,
+        const valueId = ID.createValueId({
+          entityId: renderable.entityId,
+          propertyId: renderable.propertyId,
+          spaceId: renderable.spaceId,
         });
+
+        transaction.commit(db => {
+          const lastValue = db.values.get(valueId, renderable.entityId);
+
+          if (lastValue) {
+            db.values.delete(lastValue);
+          }
+        });
+
+        break;
       }
 
       // ALL OF THE BELOW EVENTS ARE LEGACY AND WILL GET REMOVED
 
-      case 'EDIT_ENTITY_NAME': {
-        const { name } = event.payload;
-
-        return upsert({
-          entityId: context.entityId,
-          entityName: name,
-          attributeId: SystemIds.NAME_ATTRIBUTE,
-          attributeName: 'Name',
-          value: { type: 'TEXT', value: name },
-        });
-      }
-
-      // @TODO: Do we need both of these delete events?
-      case 'DELETE_ENTITY': {
-        const { triple } = event.payload;
-        return remove(triple, context.spaceId);
-      }
-
       case 'DELETE_RELATION': {
         const { renderable } = event.payload;
 
-        return removeRelation({
-          relation: {
-            id: EntityId(renderable.relationId),
-            space: context.spaceId,
-            index: INITIAL_RELATION_INDEX_VALUE,
-            typeOf: {
-              id: EntityId(renderable.attributeId),
-              name: renderable.attributeName,
-            },
-            fromEntity: {
-              id: EntityId(renderable.entityId),
-              name: renderable.entityName,
-            },
-            toEntity: {
-              id: EntityId(renderable.value),
-              name: renderable.valueName,
-              renderableType: 'RELATION',
-              value: renderable.value,
-            },
-          },
-          spaceId: context.spaceId,
+        return transaction.commit(db => {
+          const lastRelation = db.relations.get(renderable.relationId, renderable.entityId);
+
+          if (lastRelation) {
+            db.relations.delete(lastRelation);
+          }
         });
       }
     }
   };
 
-export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
-  const { upsert, remove, upsertMany } = useWriteOps();
+export function useAction(config: OmitStrict<ListenerConfig, 'transaction'>) {
+  const { transaction } = useMutate();
 
   const send = useMemo(() => {
     return listener({
       ...config,
-      api: {
-        upsert,
-        remove,
-        upsertMany,
-      },
+      transaction,
     });
-  }, [config, remove, upsert, upsertMany]);
+  }, [config, transaction]);
 
   return send;
 }
 
-export function editEvent(config: OmitStrict<ListenerConfig, 'api'>) {
+export function action(config: OmitStrict<ListenerConfig, 'transaction'>) {
   return listener({
     ...config,
-    api: {
-      upsert: upsert,
-      remove: remove,
-      upsertMany: upsertMany,
+    transaction: {
+      commit: (fn: (store: Mutation) => void) => {
+        fn(mutator);
+      },
     },
   });
 }

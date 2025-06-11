@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { editEvent, useEditEvents } from '~/core/events/edit-events';
+import { action, useAction } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { PropertySchema, RelationRenderableProperty, RenderableProperty } from '~/core/types';
@@ -387,7 +387,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
   // different spaces actually.
   //
   // @TODO: Makesure we write to the right entity and space.
-  const send = useEditEvents({
+  const send = useAction({
     context: {
       entityId: entityId,
       spaceId,
@@ -422,7 +422,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
         // can potentially belong to different entities in different spaces. By
         // default we try to use the renderable space. If the current user doesn't
         // have access to the renderable's space we should use the local one.
-        const send = editEvent({
+        const send = action({
           context: {
             entityId: r.entityId,
             entityName: r.entityName,

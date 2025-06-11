@@ -5,7 +5,7 @@ export type Property = {
   id: string;
   name: string | null;
   dataType: DataType;
-  relationValueTypes: { id: string; name: string | null }[];
+  relationValueTypes?: { id: string; name: string | null }[];
   renderableType?: RenderableType | null;
 };
 
@@ -127,11 +127,11 @@ export type NativeRenderableProperty = {
 
 type RelationPropertyProperties = {
   entityId: string;
+  relationId: string;
   entityName: string | null;
   propertyId: string;
   propertyName: string | null;
   spaceId: string;
-  relationId: string;
   valueName: string | null; // name of the entity
   value: string;
   placeholder?: boolean;

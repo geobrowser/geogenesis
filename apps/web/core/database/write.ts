@@ -62,7 +62,9 @@ type UpsertRelationArgs = {
 
 type DeleteRelationArgs = {
   type: 'DELETE_RELATION';
-  relation: Relation;
+  relationId: string;
+  spaceId: string;
+  fromEntityId: string;
 };
 
 export const upsertRelation = (args: OmitStrict<UpsertRelationArgs, 'type'>) => {
@@ -84,14 +86,14 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
     return;
   }
 
-  const relationId = args.relation.id;
+  const relationId = args.relationId;
   const nonDeletedRelations = store.get(localRelationsAtom).filter(r => r.id !== relationId);
 
   store.set(localRelationsAtom, [
     ...nonDeletedRelations,
     // We can set a dummy relation here since we only care about the deleted state
     {
-      spaceId: args.relation.spaceId,
+      spaceId: args.spaceId,
       entityId: '',
       id: relationId as string,
       verified: false,
@@ -103,11 +105,11 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
         name: null,
       },
       fromEntity: {
-        id: args.relation.fromEntity.id,
+        id: args.fromEntityId,
         name: null,
       },
       toEntity: {
-        id: args.relation.id as string,
+        id: '',
         name: null,
         value: '',
       },
@@ -123,7 +125,9 @@ export async function removeEntity(entityId: string) {
 
     for (const relation of entity.relations) {
       removeRelation({
-        relation,
+        fromEntityId: relation.fromEntity.id,
+        relationId: relation.id,
+        spaceId: relation.spaceId,
       });
     }
   }
@@ -205,24 +209,6 @@ export const deleteAll = (spaceId: string) => {
   const relations = store.get(localRelationsAtom).filter(r => r.spaceId !== spaceId);
   store.set(localRelationsAtom, relations);
 };
-
-/**
- * Hook to write to the ops event stream. The ops event stream is mapped by
- * downstream consumers that transform the stream to other data models like
- * entities.
- *
- * You shouldn't need to read the ops in app-code except at publish-time.
- * Instead, read from a mapped stream using a hook like useEntities.
- */
-export function useWriteOps() {
-  return {
-    upsert,
-    upsertMany,
-    remove,
-    restore,
-    restoreRelations,
-  };
-}
 
 export const DB = {
   upsert,

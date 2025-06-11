@@ -1,22 +1,86 @@
 import produce, { Draft } from 'immer';
 
+import { remove, removeRelation, upsert, upsertRelation } from '../database/write';
 import { Relation, Value } from '../v2.types';
-import { useSyncEngine } from './use-sync-engine';
+import { store, useSyncEngine } from './use-sync-engine';
 
 type GeoProduceFn<T> = (base: T, recipe: (draft: Draft<T>) => void | T | undefined) => void;
 
-interface Mutation {
+export interface Mutation {
   values: {
+    get: (id: string, entityId: string) => Value | null;
     set: (value: Value) => void;
     update: GeoProduceFn<Value>;
     delete: (value: Value) => void;
   };
   relations: {
+    get: (id: string, entityId: string) => Relation | null;
     set: (relation: Relation) => void;
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
   };
 }
+
+export type Transaction = (fn: (store: Mutation) => void) => void;
+
+export const mutator: Mutation = {
+  values: {
+    get: (id, entityId) => store.getValue(id, entityId),
+    set: newValue => {
+      store.setValue(newValue);
+
+      // Currently we have two stores, the new sync store and the
+      // legacy jotai events store. For now we interop between both,
+      // but eventually we should migrate completely to the sync store.
+      upsert(newValue);
+    },
+    update: (base, recipe) => {
+      const newValue = produce(base, recipe);
+      store.setValue(newValue);
+
+      // Currently we have two stores, the new sync store and the
+      // legacy jotai events store. For now we interop between both,
+      // but eventually we should migrate completely to the sync store.
+      upsert(newValue);
+    },
+    delete: newValue => {
+      store.deleteValue(newValue);
+
+      // Currently we have two stores, the new sync store and the
+      // legacy jotai events store. For now we interop between both,
+      // but eventually we should migrate completely to the sync store.
+      remove(newValue);
+    },
+  },
+  relations: {
+    get: (id, entityId) => store.getRelation(id, entityId),
+    set: newRelation => {
+      store.setRelation(newRelation);
+
+      // Currently we have two stores, the new sync store and the
+      // legacy jotai events store. For now we interop between both,
+      // but eventually we should migrate completely to the sync store.
+      upsertRelation({ relation: newRelation });
+    },
+    update: (base, recipe) => {
+      const newRelation = produce(base, recipe);
+      store.setRelation(newRelation);
+
+      // Currently we have two stores, the new sync store and the
+      // legacy jotai events store. For now we interop between both,
+      // but eventually we should migrate completely to the sync store.
+      upsertRelation({ relation: newRelation });
+    },
+    delete: newRelation => {
+      store.deleteRelation(newRelation);
+
+      // Currently we have two stores, the new sync store and the
+      // legacy jotai events store. For now we interop between both,
+      // but eventually we should migrate completely to the sync store.
+      removeRelation({ relation: newRelation });
+    },
+  },
+};
 
 export function useMutate() {
   const { store } = useSyncEngine();
@@ -33,6 +97,7 @@ export function useMutate() {
   // anything in a tx changed so we can manage syncing + downstream effects.
   const api: Mutation = {
     values: {
+      get: (id, entityId) => store.getValue(id, entityId),
       set: store.setValue,
       update: (base, recipe) => {
         const newValue = produce(base, recipe);
@@ -42,6 +107,7 @@ export function useMutate() {
       delete: store.deleteValue,
     },
     relations: {
+      get: (id, entityId) => store.getRelation(id, entityId),
       set: store.setRelation,
       update: (base, recipe) => {
         const newValue = produce(base, recipe);
@@ -60,17 +126,19 @@ export function useMutate() {
   };
 
   return {
-    tx: (fn: (store: typeof api) => void) => {
-      fn(api);
+    transaction: {
+      commit: (fn: (store: Mutation) => void) => {
+        fn(api);
+      },
     },
   };
 }
 
 function Example() {
   const { store } = useSyncEngine();
-  const { tx } = useMutate();
+  const { transaction } = useMutate();
 
-  tx(db => {
+  transaction.commit(db => {
     /**
      * Option 1: Explicit set/delete
      *
@@ -80,8 +148,8 @@ function Example() {
      * in order to write. Modifying an existing struct may
      * be more cumbersome.
      */
-    db.relations.set(newRelation);
-    db.values.delete(value);
+    // db.relations.set(newRelation);
+    // db.values.delete(value);
 
     /**
      * Option 2: Draft-based mutations
@@ -99,14 +167,14 @@ function Example() {
      * since we need to have the sync event fire _after_ the state is
      * updated locally.
      */
-    const relation = db.relations.get('relation id');
+    // const relation = db.relations.get('relation id');
 
-    relation.verified = true;
-    db.relations.save([relation.id]); // this could send the event
+    // relation.verified = true;
+    // db.relations.save([relation.id]); // this could send the event
 
-    const value = db.values.get('id');
-    value.value = 'banana';
-    db.values.save([value.id]);
+    // const value = db.values.get('id');
+    // value.value = 'banana';
+    // db.values.save([value.id]);
 
     /**
      * Option 3: Combination of both
@@ -120,9 +188,11 @@ function Example() {
     // an existing value
     db.values.set(entity!.values[0]);
     // Updating an existing value
+
     db.values.update(entity!.values[0], draft => {
       draft.value = 'banana';
     });
+
     db.values.delete(entity!.values[0]);
 
     db.relations.set(entity!.relations[0]);

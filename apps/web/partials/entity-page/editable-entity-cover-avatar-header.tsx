@@ -6,7 +6,7 @@ import LegacyImage from 'next/legacy/image';
 import { ChangeEvent, useRef } from 'react';
 import { useState } from 'react';
 
-import { useEditEvents } from '~/core/events/edit-events';
+import { useAction } from '~/core/events/edit-events';
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -124,7 +124,7 @@ const AvatarCoverInput = ({
 
   const editable = useUserIsEditing(spaceId);
 
-  const send = useEditEvents({
+  const send = useAction({
     context: {
       entityId: id,
       spaceId,

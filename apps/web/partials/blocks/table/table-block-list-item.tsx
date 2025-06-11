@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { editEvent } from '~/core/events/edit-events';
+import { action } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';

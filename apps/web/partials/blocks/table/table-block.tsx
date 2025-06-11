@@ -17,7 +17,7 @@ import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
-import { editEvent } from '~/core/events/edit-events';
+import { action } from '~/core/events/edit-events';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -141,7 +141,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
   const onChangeEntry: onChangeEntryFn = (context, event) => {
     if (event.type === 'EVENT') {
-      const send = editEvent({
+      const send = action({
         context,
       });
 
@@ -501,15 +501,27 @@ export const TableBlock = ({ spaceId }: Props) => {
           <>
             <Spacer height={12} />
             <PageNumberContainer>
-              {source.type === 'COLLECTION' ? getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
-                return page === PagesPaginationPlaceholder.skip ? (
-                  <Text key={`ellipsis-${index}`} color="grey-03" className="flex justify-center" variant="metadataMedium">
-                    ...
-                  </Text>
-                ) : (
-                  <PageNumber key={`page-${page}`} number={page} onClick={() => setPage(page - 1)} isActive={page === pageNumber + 1} />
-                );
-              }) : (
+              {source.type === 'COLLECTION' ? (
+                getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
+                  return page === PagesPaginationPlaceholder.skip ? (
+                    <Text
+                      key={`ellipsis-${index}`}
+                      color="grey-03"
+                      className="flex justify-center"
+                      variant="metadataMedium"
+                    >
+                      ...
+                    </Text>
+                  ) : (
+                    <PageNumber
+                      key={`page-${page}`}
+                      number={page}
+                      onClick={() => setPage(page - 1)}
+                      isActive={page === pageNumber + 1}
+                    />
+                  );
+                })
+              ) : (
                 <>
                   {pageNumber > 1 && (
                     <>

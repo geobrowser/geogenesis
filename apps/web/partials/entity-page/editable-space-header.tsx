@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import * as React from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
-import { useEditEvents } from '~/core/events/edit-events';
+import { useAction } from '~/core/events/edit-events';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
@@ -95,8 +95,8 @@ export function EditableSpaceHeading({
       console.error('Failed to copy entity ID in: ', entityId);
     }
   };
-  
-  const send = useEditEvents({
+
+  const send = useAction({
     context: {
       entityId,
       spaceId,
