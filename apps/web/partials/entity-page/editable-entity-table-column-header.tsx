@@ -5,9 +5,7 @@ import { memo, useState } from 'react';
 
 import { useAction } from '~/core/events/edit-events';
 import { PropertySchema } from '~/core/types';
-import { toRenderables } from '~/core/utils/to-renderables';
 
-import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
@@ -42,17 +40,6 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
-  const selectorOptions = getRenderableTypeSelectorOptions(
-    toRenderables({
-      values: [],
-      relations: [],
-      spaceId: spaceId ?? '',
-      entityId,
-      entityName: localName,
-    })[0],
-    () => {},
-    send
-  );
 
   // @TODO(migration): Value type comes from property
   const value = 'TEXT';
@@ -67,7 +54,8 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
         value={localName}
       />
 
-      {isUnpublished && <RenderableTypeDropdown value={value} options={selectorOptions} />}
+      {/* @TODO: Data type should now come from Property */}
+      {isUnpublished && <RenderableTypeDropdown value={value} options={[]} />}
     </div>
   );
 });

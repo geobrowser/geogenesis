@@ -3,11 +3,26 @@ import produce, { Draft } from 'immer';
 import { remove, removeRelation, upsert, upsertRelation } from '../database/write';
 import { ID } from '../id';
 import { NativeRenderableProperty, Relation, RelationRenderableProperty, Value } from '../v2.types';
+import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
 type Recipe<T> = (draft: Draft<T>) => void | T | undefined;
 type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
 
+/**
+ * The Mutator interface defines common patterns for updating data
+ * in the app local store. Currently we have three common data models
+ * that change:
+ * 1. Values
+ * 2. Relations
+ * 3. Renderables – A unified representation of a Value OR a Relation
+ *
+ * The Mutator API abstracts complexity for writing to stores directly.
+ * The Mutator API orchestrates writes to the appropriate stores based
+ * on the type of data model being changed. The stores handle internal
+ * state and syncing behind-the-scenes, and update any components
+ * subscribed to store state.
+ */
 export interface Mutator {
   values: {
     get: (id: string, entityId: string) => Value | null;
@@ -21,6 +36,17 @@ export interface Mutator {
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
   };
+  /**
+   * When mutating renderables in the app, you should go through the
+   * renderables namespace. This makes it simpler to continue using
+   * the renderable data without having to map to values or relations
+   * in the caller's code.
+   *
+   * Instead, just pass the renderable you want to create, update, or
+   * delete. This namespace automatically converts to either a Value or
+   * Relation depending on whether you used renderables.values or
+   * renderables.relations.
+   */
   renderables: {
     values: {
       set: (renderable: NativeRenderableProperty) => void;
@@ -35,133 +61,8 @@ export interface Mutator {
   };
 }
 
-export const storage: Mutator = {
-  values: {
-    get: (id, entityId) => store.getValue(id, entityId),
-    set: newValue => {
-      store.setValue(newValue);
-
-      // Currently we have two stores, the new sync store and the
-      // legacy jotai events store. For now we interop between both,
-      // but eventually we should migrate completely to the sync store.
-      upsert(newValue);
-    },
-    update: (base, recipe) => {
-      const newValue = produce(base, recipe);
-      store.setValue(newValue);
-
-      // Currently we have two stores, the new sync store and the
-      // legacy jotai events store. For now we interop between both,
-      // but eventually we should migrate completely to the sync store.
-      upsert(newValue);
-    },
-    delete: newValue => {
-      store.deleteValue(newValue);
-
-      // Currently we have two stores, the new sync store and the
-      // legacy jotai events store. For now we interop between both,
-      // but eventually we should migrate completely to the sync store.
-      remove(newValue);
-    },
-  },
-  relations: {
-    get: (id, entityId) => store.getRelation(id, entityId),
-    set: newRelation => {
-      store.setRelation(newRelation);
-
-      // Currently we have two stores, the new sync store and the
-      // legacy jotai events store. For now we interop between both,
-      // but eventually we should migrate completely to the sync store.
-      upsertRelation({ relation: newRelation });
-    },
-    update: (base, recipe) => {
-      const newRelation = produce(base, recipe);
-      store.setRelation(newRelation);
-
-      // Currently we have two stores, the new sync store and the
-      // legacy jotai events store. For now we interop between both,
-      // but eventually we should migrate completely to the sync store.
-      upsertRelation({ relation: newRelation });
-    },
-    delete: newRelation => {
-      store.deleteRelation(newRelation);
-
-      // Currently we have two stores, the new sync store and the
-      // legacy jotai events store. For now we interop between both,
-      // but eventually we should migrate completely to the sync store.
-      removeRelation({ relation: newRelation });
-    },
-  },
-  renderables: {
-    values: {
-      set: renderable => {
-        const valueFromRenderable = getValueFromRenderable(renderable);
-        store.setValue(valueFromRenderable);
-
-        // Currently we have two stores, the new sync store and the
-        // legacy jotai events store. For now we interop between both,
-        // but eventually we should migrate completely to the sync store.
-        upsert(valueFromRenderable);
-      },
-      update: (renderable, draft) => {
-        const valueFromRenderable = getValueFromRenderable(renderable);
-        const newRenderable = produce(valueFromRenderable, draft);
-        store.setValue(newRenderable);
-
-        // Currently we have two stores, the new sync store and the
-        // legacy jotai events store. For now we interop between both,
-        // but eventually we should migrate completely to the sync store.
-        upsert(valueFromRenderable);
-      },
-      delete: renderable => {
-        const valueFromRenderable = getValueFromRenderable(renderable);
-        store.deleteValue(valueFromRenderable);
-        remove(valueFromRenderable);
-      },
-    },
-    relations: {
-      set: renderable => {
-        const relation = getRelationFromRenderable(renderable);
-        store.setRelation(relation);
-
-        // Currently we have two stores, the new sync store and the
-        // legacy jotai events store. For now we interop between both,
-        // but eventually we should migrate completely to the sync store.
-        upsertRelation({ relation });
-      },
-      update: (renderable, draft) => {
-        const relation = getRelationFromRenderable(renderable);
-        const newRenderable = produce(relation, draft);
-        store.setRelation(newRenderable);
-
-        // Currently we have two stores, the new sync store and the
-        // legacy jotai events store. For now we interop between both,
-        // but eventually we should migrate completely to the sync store.
-        upsertRelation({ relation });
-      },
-      delete: renderable => {
-        const relation = getRelationFromRenderable(renderable);
-        store.deleteRelation(relation);
-        removeRelation({ relation });
-      },
-    },
-  },
-};
-
-export function useMutate() {
-  const { store } = useSyncEngine();
-
-  // @TODO: Should this API be immer-y? Where we can provide a set of new
-  // values to be written to the GeoStore? Would that matter? e.g., I want
-  // to just change the value of a Value I could just do value.value = X
-  // instead of having to set the entire Value.
-  //
-  // Might especially be ergonomic for relations, actually. Can also have
-  // an Entities-based model which might feel better than values + relations.
-  //
-  // Main thing we'd still need is to be able to dispatch an event whenever
-  // anything in a tx changed so we can manage syncing + downstream effects.
-  const api: Mutator = {
+function createMutator(store: GeoStore): Mutator {
+  return {
     values: {
       get: (id, entityId) => store.getValue(id, entityId),
       set: newValue => {
@@ -273,9 +174,15 @@ export function useMutate() {
       },
     },
   };
+}
+
+export const storage: Mutator = createMutator(store);
+
+export function useMutate() {
+  const { store } = useSyncEngine();
 
   return {
-    storage: api,
+    storage: createMutator(store),
   };
 }
 
