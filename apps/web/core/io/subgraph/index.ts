@@ -12,9 +12,6 @@ export type { FetchResultsOptions } from './fetch-results';
 export { fetchEntity } from './fetch-entity';
 export type { FetchEntityOptions } from './fetch-entity';
 
-export { fetchSpace } from './fetch-space';
-export type { FetchSpaceOptions } from './fetch-space';
-
 export { fetchProfile } from './fetch-profile';
 export type { FetchProfileOptions } from './fetch-profile';
 

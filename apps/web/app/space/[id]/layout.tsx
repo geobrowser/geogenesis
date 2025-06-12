@@ -1,10 +1,8 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-import { redirect } from 'next/navigation';
+import { Id, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
 import { EntityId } from '~/core/io/schema';
-import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
@@ -52,23 +50,23 @@ export default async function Layout(props0: LayoutProps) {
 
   const spaceId = params.id;
 
-  const props = await getData(spaceId);
-  const coverUrl = Entities.cover(props.relationsOut);
+  const props = await getSpaceFrontPage(spaceId);
+  const coverUrl = Entities.cover(props.relations);
 
-  const typeNames = props.space.entity?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
-  const tabs = buildTabsForSpacePage(props.tabEntities, props.space.entity?.types ?? [], params);
+  const typeNames = props.space?.entity?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
+  const tabs = buildTabsForSpacePage(props.tabEntities, props.space?.entity?.types ?? [], params);
 
   return (
     <EntityStoreProvider
       id={props.id}
-      spaceId={props.spaceId}
+      spaceId={spaceId}
       initialSpaces={props.spaces}
-      initialTriples={props.triples}
-      initialRelations={props.relationsOut}
+      initialValues={props.values}
+      initialRelations={props.relations}
     >
       <EditorProvider
         id={props.id}
-        spaceId={props.spaceId}
+        spaceId={spaceId}
         initialBlockRelations={props.blockRelations}
         initialBlocks={props.blocks}
         initialTabs={props.tabs}
@@ -77,7 +75,7 @@ export default async function Layout(props0: LayoutProps) {
         <EntityPageContentContainer>
           <div className="space-y-2">
             <EditableSpaceHeading
-              spaceId={props.spaceId}
+              spaceId={spaceId}
               entityId={props.id}
               addSubspaceComponent={
                 <AddSubspaceDialog
@@ -88,13 +86,13 @@ export default async function Layout(props0: LayoutProps) {
                       <p>Add subspace</p>
                     </MenuItem>
                   }
-                  spaceType={props.space.type}
+                  spaceType={props.space?.type ?? 'PERSONAL'}
                 />
               }
             />
             <SpacePageMetadataHeader
               typeNames={typeNames}
-              spaceId={props.spaceId}
+              spaceId={spaceId}
               entityId={props.id}
               membersComponent={
                 <React.Suspense fallback={<MembersSkeleton />}>
@@ -126,28 +124,34 @@ function MembersSkeleton() {
   );
 }
 
-const getData = async (spaceId: string) => {
-  // @TODO: If there's no space we should 404
+const getSpaceFrontPage = async (spaceId: string) => {
   const space = await cachedFetchSpace(spaceId);
   const entity = space?.entity;
 
   if (!entity) {
-    console.log(`Redirecting to /space/${spaceId}/entities`);
-    redirect(`/space/${spaceId}/entities`);
+    return {
+      id: Id.generate(),
+      name: null,
+      description: null,
+      spaces: [spaceId],
+      values: [],
+      relations: [],
+      tabEntities: [],
+      tabs: {},
+      blockRelations: [],
+      blocks: [],
+      space: null,
+    };
   }
 
   const spaces = entity?.spaces ?? [];
-  const tabIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SystemIds.TABS_PROPERTY))
-    ?.map(r => r.toEntity.id);
+  const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 
-  const tabEntities = tabIds ? await fetchEntitiesBatch({ spaceId, entityIds: tabIds }) : [];
+  const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
 
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
-      const blockIds = entity?.relationsOut
-        .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
-        ?.map(r => r.toEntity.id);
+      const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
 
       const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
       return blocks;
@@ -163,25 +167,22 @@ const getData = async (spaceId: string) => {
     };
   });
 
-  const blockIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
-    ?.map(r => r.toEntity.id);
+  const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
 
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
-    triples: entity.triples,
-    relationsOut: entity.relationsOut,
+    values: entity.values,
+    relations: entity.relations,
     id: entity.id,
     name: entity.name,
-    description: Entities.description(entity.triples),
-    spaceId,
+    description: Entities.description(entity.values),
     spaces,
 
     tabEntities,
     tabs,
 
-    blockRelations: entity.relationsOut,
+    blockRelations: entity.relations,
     blocks,
 
     space,
