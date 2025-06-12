@@ -16,8 +16,8 @@ export type Space = {
   membershipAddress: Address | null;
   personalAddress: Address | null;
 
-  // editors: string[];
-  // members: string[];
+  editors: string[];
+  members: string[];
 };
 
 export function SpaceDto(space: RemoteSpace): Space {
@@ -27,6 +27,10 @@ export function SpaceDto(space: RemoteSpace): Space {
     id: space.id,
     type: space.type,
     entity: spaceEntity,
+
+    // @TODO(migration): implement editors + members
+    editors: [],
+    members: [],
 
     daoAddress: space.daoAddress,
     mainVotingAddress: space.mainVotingAddress,
