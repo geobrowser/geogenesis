@@ -149,12 +149,12 @@ const listener =
         // the id. We delete the previous renderable here so we don't still
         // render the old renderable.
         const valueId = ID.createValueId({
-          entityId: renderable.entityId,
+          entityId: renderable.fromEntityId,
           propertyId: renderable.propertyId,
           spaceId: renderable.spaceId,
         });
 
-        const lastValue = storage.values.get(valueId, renderable.entityId);
+        const lastValue = storage.values.get(valueId, renderable.fromEntityId);
 
         if (lastValue) {
           storage.values.delete(lastValue);
@@ -167,8 +167,8 @@ const listener =
         storage.values.set({
           id: valueId,
           entity: {
-            id: renderable.entityId,
-            name: renderable.entityName,
+            id: renderable.fromEntityId,
+            name: renderable.fromEntityName,
           },
           spaceId: renderable.spaceId,
           value: renderable.value,
@@ -192,7 +192,7 @@ const listener =
         const { renderable } = event.payload;
 
         if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
-          const lastRelation = storage.relations.get(renderable.relationId, renderable.entityId);
+          const lastRelation = storage.relations.get(renderable.relationId, renderable.fromEntityId);
 
           if (lastRelation) {
             storage.relations.delete(lastRelation);
@@ -221,7 +221,7 @@ const listener =
       case 'DELETE_RELATION': {
         const { renderable } = event.payload;
 
-        const lastRelation = storage.relations.get(renderable.relationId, renderable.entityId);
+        const lastRelation = storage.relations.get(renderable.relationId, renderable.fromEntityId);
 
         if (lastRelation) {
           storage.relations.delete(lastRelation);

@@ -71,10 +71,10 @@ export type Relation = LocalMetadata & {
     value: string;
   };
   renderableType: RenderableEntityType;
-  position: string | null;
-  verified: boolean | null;
+  position?: string;
+  verified?: boolean;
   spaceId: string;
-  toSpaceId?: string | null;
+  toSpaceId?: string;
 };
 
 export type Entity = {
@@ -126,14 +126,18 @@ export type NativeRenderableProperty = {
 };
 
 type RelationPropertyProperties = {
-  entityId: string;
+  fromEntityId: string;
+  fromEntityName: string | null;
   relationId: string;
-  entityName: string | null;
+  relationEntityId: string;
   propertyId: string;
   propertyName: string | null;
   spaceId: string;
   valueName: string | null; // name of the entity
   value: string;
+  position?: string;
+  verified?: boolean;
+  toSpaceId?: string;
   placeholder?: boolean;
 };
 

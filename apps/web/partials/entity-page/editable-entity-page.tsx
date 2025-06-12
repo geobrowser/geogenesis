@@ -1,13 +1,12 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 // import { Image } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useAction } from '~/core/events/edit-events';
 import { useProperties } from '~/core/hooks/use-properties';
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
@@ -19,6 +18,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import {
+  NativeRenderableProperty,
   PropertySchema,
   Relation,
   RelationRenderableProperty,
@@ -42,7 +42,6 @@ import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
 import { DateFormatDropdown } from './date-format-dropdown';
-import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { NumberOptionsDropdown } from './number-options-dropdown';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 import { editorHasContentAtom } from '~/atoms';
@@ -61,14 +60,7 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
   const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
     useRenderables(values, spaceId, isRelationPage);
   const { name, relations, types } = useEntityPageStore();
-
-  const send = useAction({
-    context: {
-      entityId,
-      spaceId,
-      entityName: name ?? '',
-    },
-  });
+  const { storage } = useMutate();
 
   const coverUrl = Entities.cover(relations);
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
@@ -109,18 +101,6 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
               // Triple groups only ever have one renderable
               const firstRenderable = renderables[0];
               const renderableType = firstRenderable.type;
-
-              // @TODO: We can abstract this away. We also don't need to pass in the first renderable to options func.
-              const selectorOptions = getRenderableTypeSelectorOptions(
-                firstRenderable,
-                placeholderRenderable => {
-                  if (!firstRenderable.placeholder) {
-                    send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
-                  }
-                  addPlaceholderRenderable(placeholderRenderable);
-                },
-                send
-              );
 
               // Hide cover/avatar/types/name property, user can upload cover using upload icon on top placeholder
               // and add types inline using the + button, add name under cover image component
@@ -171,18 +151,8 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
                           // @TODO(migration): fix formatting. Now on property
                           // format={firstRenderable.options?.format}
                           onSelect={(value?: string, format?: string) => {
-                            send({
-                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                              payload: {
-                                renderable: firstRenderable,
-                                value: {
-                                  value: value ?? firstRenderable.value,
-                                  // @TODO(migration): Fix formatting. Now on property
-                                  // options: {
-                                  //   format,
-                                  // },
-                                },
-                              },
+                            storage.renderables.values.update(firstRenderable, draft => {
+                              draft.value = value ?? firstRenderable.value;
                             });
                           }}
                         />
@@ -194,19 +164,13 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
                           // format={firstRenderable.options?.format}
                           unitId={firstRenderable.options?.unit}
                           send={({ format, unitId }) => {
-                            send({
-                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                              payload: {
-                                renderable: firstRenderable,
-                                value: {
-                                  value: firstRenderable.value,
-                                  options: {
-                                    // @TODO(migration): Fix formatting. Now on property
-                                    // format,
-                                    unit: unitId,
-                                  },
-                                },
-                              },
+                            storage.renderables.values.update(firstRenderable, draft => {
+                              const newOptions = {
+                                language: draft.options?.language,
+                                unit: unitId,
+                              };
+
+                              draft.options = newOptions;
                             });
                           }}
                         />
@@ -215,14 +179,14 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
                         @TODO(migration): Renderable type is no longer selectable. Instead it's
                         defined on the Property
                       */}
-                      <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
+                      <RenderableTypeDropdown value={renderableType} options={[]} />
 
                       {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
                       {renderableType !== 'RELATION' && (
                         <SquareButton
                           icon={<Trash />}
                           onClick={() => {
-                            send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+                            storage.renderables.values.delete(firstRenderable as NativeRenderableProperty);
                           }}
                         />
                       )}
@@ -256,15 +220,8 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
 }
 
 function EditableAttribute({ renderable, onChange }: { renderable: RenderableProperty; onChange: () => void }) {
-  const { id, name, spaceId } = useEntityPageStore();
-
-  const send = useAction({
-    context: {
-      entityId: id,
-      spaceId,
-      entityName: name ?? '',
-    },
-  });
+  const { spaceId } = useEntityPageStore();
+  const { storage } = useMutate();
 
   if (renderable.propertyId === '') {
     return (
@@ -274,39 +231,47 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
           spaceId={spaceId}
           relationValueTypes={[{ typeId: SystemIds.PROPERTY, typeName: 'Property' }]}
           onCreateEntity={result => {
-            send({
-              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-              payload: {
-                renderable: {
-                  propertyId: SystemIds.NAME_ATTRIBUTE,
-                  entityId: result.id,
-                  spaceId,
-                  propertyName: 'Name',
-                  entityName: result.name,
-                  type: 'TEXT',
-                  value: result.name ?? '',
-                },
-                value: { value: result.name ?? '' },
-              },
+            storage.renderables.values.set({
+              propertyId: SystemIds.NAME_PROPERTY,
+              entityId: result.id,
+              spaceId,
+              propertyName: 'Name',
+              entityName: result.name,
+              type: 'TEXT',
+              value: result.name ?? '',
             });
-            send({
-              type: 'UPSERT_RELATION',
-              payload: {
-                fromEntityId: result.id,
-                fromEntityName: result.name,
-                toEntityId: SystemIds.PROPERTY,
-                toEntityName: 'Property',
-                typeOfId: SystemIds.TYPES_ATTRIBUTE,
-                typeOfName: 'Types',
+
+            storage.relations.set({
+              id: Id.generate(),
+              entityId: Id.generate(),
+              spaceId,
+              renderableType: 'RELATION',
+              verified: result.verified,
+              toSpaceId: result.space,
+              type: {
+                id: SystemIds.TYPES_PROPERTY,
+                name: 'Types',
+              },
+              fromEntity: {
+                id: result.id,
+                name: result.name,
+              },
+              toEntity: {
+                id: SystemIds.PROPERTY,
+                name: 'Property',
+                value: SystemIds.PROPERTY,
               },
             });
           }}
           onDone={result => {
             onChange();
-            send({
-              type: 'UPSERT_ATTRIBUTE',
-              payload: { renderable, propertyId: result.id, propertyName: result.name },
-            });
+
+            // @TODO(migration): Change functionality based on property data type
+
+            // .send({
+            //   type: 'UPSERT_ATTRIBUTE',
+            //   payload: { renderable, propertyId: result.id, propertyName: result.name },
+            // });
           }}
           withSelectSpace={false}
           advanced={false}
@@ -332,14 +297,6 @@ type RelationsGroupProps = {
 export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
   const { storage } = useMutate();
-
-  const send = useAction({
-    context: {
-      entityId: id,
-      spaceId,
-      entityName: name ?? '',
-    },
-  });
 
   const typeOfId = relations[0].propertyId;
   const typeOfName = relations[0].propertyName;
@@ -417,72 +374,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
         }
 
         if (renderableType === 'RELATION' && r.placeholder === true) {
-          if (r.propertyId === SystemIds.TYPES_PROPERTY) {
-            return (
-              <div key={`relation-select-entity-${relationId}`} data-testid="select-entity">
-                <SelectEntityAsPopover
-                  key={JSON.stringify(relationValueTypes)}
-                  trigger={<AddTypeButton icon={<Create className="h-3 w-3" color="grey-04" />} label="type" />}
-                  spaceId={spaceId}
-                  relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
-                  // placeholder="+ type"
-                  onCreateEntity={result => {
-                    if (property?.relationValueTypeId) {
-                      send({
-                        type: 'UPSERT_RELATION',
-                        payload: {
-                          fromEntityId: result.id,
-                          fromEntityName: result.name,
-                          toEntityId: property.relationValueTypeId,
-                          toEntityName: property.relationValueTypeName ?? null,
-                          typeOfId: SystemIds.TYPES_ATTRIBUTE,
-                          typeOfName: 'Types',
-                        },
-                      });
-                    }
-                  }}
-                  onDone={result => {
-                    const newRelationId = ID.createEntityId();
-                    // @TODO(migration): lightweight relation pointing to entity id
-                    const newEntityId = ID.createEntityId();
-
-                    const newRelation: Relation = {
-                      id: newRelationId,
-                      spaceId: spaceId,
-                      position: INITIAL_RELATION_INDEX_VALUE,
-                      renderableType: 'RELATION',
-                      verified: false,
-                      entityId: newEntityId,
-                      type: {
-                        id: EntityId(r.propertyId),
-                        name: r.propertyName,
-                      },
-                      fromEntity: {
-                        id: EntityId(id),
-                        name: name,
-                      },
-                      toEntity: {
-                        id: EntityId(result.id),
-                        name: result.name,
-                        value: EntityId(result.id),
-                      },
-                    };
-
-                    if (result.space) {
-                      newRelation.toSpaceId = result.space;
-                    }
-
-                    if (result.verified) {
-                      newRelation.verified = true;
-                    }
-
-                    storage.relations.set(newRelation);
-                  }}
-                />
-              </div>
-            );
-          }
-
           return (
             <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
@@ -510,15 +401,25 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                   });
 
                   if (valueType) {
-                    send({
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: result.id,
-                        fromEntityName: result.name,
-                        toEntityId: valueType.typeId,
-                        toEntityName: valueType.typeName ?? null,
-                        typeOfId: SystemIds.TYPES_ATTRIBUTE,
-                        typeOfName: 'Types',
+                    storage.relations.set({
+                      id: Id.generate(),
+                      entityId: Id.generate(),
+                      spaceId,
+                      renderableType: 'RELATION',
+                      verified: result.verified,
+                      toSpaceId: result.space,
+                      type: {
+                        id: SystemIds.TYPES_PROPERTY,
+                        name: 'Types',
+                      },
+                      fromEntity: {
+                        id: result.id,
+                        name: result.name,
+                      },
+                      toEntity: {
+                        id: valueType.typeId,
+                        name: valueType.typeName,
+                        value: valueType.typeId,
                       },
                     });
                   }
@@ -571,14 +472,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             <div key={`relation-${relationId}-${relationValue}`}>
               <LinkableRelationChip
                 isEditing
-                onDelete={() => {
-                  send({
-                    type: 'DELETE_RELATION',
-                    payload: {
-                      renderable: r,
-                    },
-                  });
-                }}
+                onDelete={() => storage.renderables.relations.delete(r)}
                 currentSpaceId={spaceId}
                 entityId={relationValue}
                 relationId={relationId}
@@ -623,15 +517,24 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
               });
 
               if (valueType) {
-                send({
-                  type: 'UPSERT_RELATION',
-                  payload: {
-                    fromEntityId: result.id,
-                    fromEntityName: result.name,
-                    toEntityId: valueType.typeId,
-                    toEntityName: valueType.typeName ?? null,
-                    typeOfId: SystemIds.TYPES_ATTRIBUTE,
-                    typeOfName: 'Types',
+                storage.relations.set({
+                  id: Id.generate(),
+                  entityId: Id.generate(),
+                  spaceId,
+                  renderableType: 'RELATION',
+                  toSpaceId: result.space,
+                  type: {
+                    id: SystemIds.TYPES_PROPERTY,
+                    name: 'Types',
+                  },
+                  fromEntity: {
+                    id: result.id,
+                    name: result.name,
+                  },
+                  toEntity: {
+                    id: valueType.typeId,
+                    name: valueType.typeName,
+                    value: valueType.typeId,
                   },
                 });
               }
@@ -686,15 +589,7 @@ type ValuesGroupProps = {
 };
 
 function ValuesGroup({ values }: ValuesGroupProps) {
-  const { id, name, spaceId } = useEntityPageStore();
-
-  const send = useAction({
-    context: {
-      entityId: id,
-      spaceId: spaceId,
-      entityName: name ?? '',
-    },
-  });
+  const { storage } = useMutate();
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -709,14 +604,8 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                 aria-label="text-field"
                 value={renderable.value}
                 onChange={value => {
-                  send({
-                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: {
-                      renderable,
-                      value: {
-                        value: value,
-                      },
-                    },
+                  storage.renderables.values.update(renderable, draft => {
+                    draft.value = value;
                   });
                 }}
               />
@@ -731,22 +620,11 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                 // @TODO(migration): Fix formatting. Now on property
                 // format={renderable.options?.format}
                 unitId={renderable.options?.unit}
-                onChange={value =>
-                  send({
-                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: {
-                      renderable,
-                      value: {
-                        value: value,
-                        options: {
-                          // @TODO(migration): Fix formatting. Now on property
-                          // format: renderable.options?.format,
-                          unit: renderable.options?.unit,
-                        },
-                      },
-                    },
-                  })
-                }
+                onChange={value => {
+                  storage.renderables.values.update(renderable, draft => {
+                    draft.value = value;
+                  });
+                }}
               />
             );
           case 'CHECKBOX': {
@@ -757,14 +635,8 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                 key={`checkbox-${renderable.propertyId}-${renderable.value}`}
                 checked={checked}
                 onChange={() => {
-                  send({
-                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: {
-                      renderable,
-                      value: {
-                        value: !checked ? '1' : '0',
-                      },
-                    },
+                  storage.renderables.values.update(renderable, draft => {
+                    draft.value = !checked ? '1' : '0';
                   });
                 }}
               />
@@ -774,25 +646,15 @@ function ValuesGroup({ values }: ValuesGroupProps) {
             return (
               <DateField
                 key={renderable.propertyId}
+                // format={renderable.options?.format}
                 onBlur={({ value, format }) =>
-                  send({
-                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: {
-                      value: {
-                        value,
-                        options: {
-                          // @TODO(migration): Fix formatting. Now on property
-                          // format,
-                        },
-                      },
-                      renderable,
-                    },
+                  storage.renderables.values.update(renderable, draft => {
+                    draft.value = value;
                   })
                 }
                 isEditing={true}
                 value={renderable.value}
                 // @TODO(migration): Fix formatting. Now on property
-                // format={renderable.options?.format}
               />
             );
           }
@@ -833,14 +695,8 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                     aria-label="text-field"
                     value={renderable.value}
                     onChange={value => {
-                      send({
-                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                        payload: {
-                          renderable,
-                          value: {
-                            value: value,
-                          },
-                        },
+                      storage.renderables.values.update(renderable, draft => {
+                        draft.value = value;
                       });
                     }}
                   />
@@ -852,14 +708,8 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                     aria-label="text-field"
                     value={renderable.value}
                     onChange={value => {
-                      send({
-                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                        payload: {
-                          renderable,
-                          value: {
-                            value: value,
-                          },
-                        },
+                      storage.renderables.values.update(renderable, draft => {
+                        draft.value = value;
                       });
                     }}
                   />

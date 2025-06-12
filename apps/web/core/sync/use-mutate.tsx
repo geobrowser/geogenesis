@@ -1,10 +1,12 @@
 import produce, { Draft } from 'immer';
 
 import { remove, removeRelation, upsert, upsertRelation } from '../database/write';
-import { Relation, Value } from '../v2.types';
+import { ID } from '../id';
+import { NativeRenderableProperty, Relation, RelationRenderableProperty, Value } from '../v2.types';
 import { store, useSyncEngine } from './use-sync-engine';
 
-type GeoProduceFn<T> = (base: T, recipe: (draft: Draft<T>) => void | T | undefined) => void;
+type Recipe<T> = (draft: Draft<T>) => void | T | undefined;
+type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
 
 export interface Mutator {
   values: {
@@ -18,6 +20,18 @@ export interface Mutator {
     set: (relation: Relation) => void;
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
+  };
+  renderables: {
+    values: {
+      set: (renderable: NativeRenderableProperty) => void;
+      update: (renderable: NativeRenderableProperty, draft: Recipe<Value>) => void;
+      delete: (renderable: NativeRenderableProperty) => void;
+    };
+    relations: {
+      set: (renderable: RelationRenderableProperty) => void;
+      update: (renderable: RelationRenderableProperty, draft: Recipe<Relation>) => void;
+      delete: (renderable: RelationRenderableProperty) => void;
+    };
   };
 }
 
@@ -76,6 +90,60 @@ export const storage: Mutator = {
       // legacy jotai events store. For now we interop between both,
       // but eventually we should migrate completely to the sync store.
       removeRelation({ relation: newRelation });
+    },
+  },
+  renderables: {
+    values: {
+      set: renderable => {
+        const valueFromRenderable = getValueFromRenderable(renderable);
+        store.setValue(valueFromRenderable);
+
+        // Currently we have two stores, the new sync store and the
+        // legacy jotai events store. For now we interop between both,
+        // but eventually we should migrate completely to the sync store.
+        upsert(valueFromRenderable);
+      },
+      update: (renderable, draft) => {
+        const valueFromRenderable = getValueFromRenderable(renderable);
+        const newRenderable = produce(valueFromRenderable, draft);
+        store.setValue(newRenderable);
+
+        // Currently we have two stores, the new sync store and the
+        // legacy jotai events store. For now we interop between both,
+        // but eventually we should migrate completely to the sync store.
+        upsert(valueFromRenderable);
+      },
+      delete: renderable => {
+        const valueFromRenderable = getValueFromRenderable(renderable);
+        store.deleteValue(valueFromRenderable);
+        remove(valueFromRenderable);
+      },
+    },
+    relations: {
+      set: renderable => {
+        const relation = getRelationFromRenderable(renderable);
+        store.setRelation(relation);
+
+        // Currently we have two stores, the new sync store and the
+        // legacy jotai events store. For now we interop between both,
+        // but eventually we should migrate completely to the sync store.
+        upsertRelation({ relation });
+      },
+      update: (renderable, draft) => {
+        const relation = getRelationFromRenderable(renderable);
+        const newRenderable = produce(relation, draft);
+        store.setRelation(newRenderable);
+
+        // Currently we have two stores, the new sync store and the
+        // legacy jotai events store. For now we interop between both,
+        // but eventually we should migrate completely to the sync store.
+        upsertRelation({ relation });
+      },
+      delete: renderable => {
+        const relation = getRelationFromRenderable(renderable);
+        store.deleteRelation(relation);
+        removeRelation({ relation });
+      },
     },
   },
 };
@@ -150,6 +218,60 @@ export function useMutate() {
         removeRelation({ relation: newRelation });
       },
     },
+    renderables: {
+      values: {
+        set: renderable => {
+          const valueFromRenderable = getValueFromRenderable(renderable);
+          store.setValue(valueFromRenderable);
+
+          // Currently we have two stores, the new sync store and the
+          // legacy jotai events store. For now we interop between both,
+          // but eventually we should migrate completely to the sync store.
+          upsert(valueFromRenderable);
+        },
+        update: (renderable, draft) => {
+          const valueFromRenderable = getValueFromRenderable(renderable);
+          const newRenderable = produce(valueFromRenderable, draft);
+          store.setValue(newRenderable);
+
+          // Currently we have two stores, the new sync store and the
+          // legacy jotai events store. For now we interop between both,
+          // but eventually we should migrate completely to the sync store.
+          upsert(valueFromRenderable);
+        },
+        delete: renderable => {
+          const valueFromRenderable = getValueFromRenderable(renderable);
+          store.deleteValue(valueFromRenderable);
+          remove(valueFromRenderable);
+        },
+      },
+      relations: {
+        set: renderable => {
+          const relation = getRelationFromRenderable(renderable);
+          store.setRelation(relation);
+
+          // Currently we have two stores, the new sync store and the
+          // legacy jotai events store. For now we interop between both,
+          // but eventually we should migrate completely to the sync store.
+          upsertRelation({ relation });
+        },
+        update: (renderable, draft) => {
+          const relation = getRelationFromRenderable(renderable);
+          const newRenderable = produce(relation, draft);
+          store.setRelation(newRenderable);
+
+          // Currently we have two stores, the new sync store and the
+          // legacy jotai events store. For now we interop between both,
+          // but eventually we should migrate completely to the sync store.
+          upsertRelation({ relation });
+        },
+        delete: renderable => {
+          const relation = getRelationFromRenderable(renderable);
+          store.deleteRelation(relation);
+          removeRelation({ relation });
+        },
+      },
+    },
   };
 
   return {
@@ -157,71 +279,49 @@ export function useMutate() {
   };
 }
 
-function Example() {
-  const { store } = useSyncEngine();
-  const { storage } = useMutate();
+function getValueFromRenderable(renderable: NativeRenderableProperty): Value {
+  return {
+    id: ID.createValueId({
+      entityId: renderable.entityId,
+      propertyId: renderable.propertyId,
+      spaceId: renderable.spaceId,
+    }),
+    spaceId: renderable.spaceId,
+    entity: {
+      id: renderable.entityId,
+      name: renderable.entityName,
+    },
+    property: {
+      id: renderable.propertyId,
+      name: renderable.propertyName,
+      dataType: renderable.type,
+      renderableType: renderable.type,
+    },
+    value: renderable.value,
+    options: renderable.options,
+  };
+}
 
-  /**
-   * Option 1: Explicit set/delete
-   *
-   * The events get called by the set + delete.
-   *
-   * Downside is that you always need the entire struct
-   * in order to write. Modifying an existing struct may
-   * be more cumbersome.
-   */
-  // db.relations.set(newRelation);
-  // db.values.delete(value);
-
-  /**
-   * Option 2: Draft-based mutations
-   *
-   * Benefit is that you can granularly change any struct without
-   * requiring the entire struct at the callsite.
-   *
-   * We would need a mechanism to send the sync events
-   * whenever data changes.
-   *
-   * The relation also may not exist in the store if it's not already
-   * hydrated or it's a brand new relation. How would that work?
-   *
-   * Using save() within the function might break the order of sync
-   * since we need to have the sync event fire _after_ the state is
-   * updated locally.
-   */
-  // const relation = db.relations.get('relation id');
-
-  // relation.verified = true;
-  // db.relations.save([relation.id]); // this could send the event
-
-  // const value = db.values.get('id');
-  // value.value = 'banana';
-  // db.values.save([value.id]);
-
-  /**
-   * Option 3: Combination of both
-   *
-   * You still need the old version of a value, but you don't have to
-   * spread properties as much and can do deeply nested things.
-   */
-  const entity = store.getEntity('id');
-
-  // How do we know when we're creating a new value vs updating
-  // an existing value
-  storage.values.set(entity!.values[0]);
-  // Updating an existing value
-
-  storage.values.update(entity!.values[0], draft => {
-    draft.value = 'banana';
-  });
-
-  storage.values.delete(entity!.values[0]);
-
-  storage.relations.set(entity!.relations[0]);
-  storage.relations.update(entity!.relations[0], draft => {
-    draft.verified = true;
-    draft.toEntity.value = 'banana';
-  });
-
-  return null;
+function getRelationFromRenderable(renderable: RelationRenderableProperty): Relation {
+  return {
+    id: renderable.relationId,
+    entityId: renderable.relationEntityId,
+    position: renderable.position,
+    verified: renderable.verified,
+    renderableType: renderable.type,
+    spaceId: renderable.spaceId,
+    fromEntity: {
+      id: renderable.fromEntityId,
+      name: renderable.fromEntityName,
+    },
+    type: {
+      id: renderable.propertyId,
+      name: renderable.propertyName,
+    },
+    toEntity: {
+      id: renderable.value, // is this right?
+      name: renderable.valueName,
+      value: renderable.value,
+    },
+  };
 }

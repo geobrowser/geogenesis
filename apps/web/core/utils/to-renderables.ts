@@ -43,8 +43,8 @@ export function toRenderables({
             type: 'RELATION',
             relationId: s.id,
             valueName: s.name,
-            entityId: entityId,
-            entityName: entityName,
+            fromEntityId: entityId,
+            fromEntityName: entityName,
             propertyId: s.id,
             propertyName: s.name,
             spaceId,
@@ -56,8 +56,8 @@ export function toRenderables({
             type: 'IMAGE',
             relationId: s.id,
             valueName: s.name,
-            entityId: entityId,
-            entityName: entityName,
+            fromEntityId: entityId,
+            fromEntityName: entityName,
             propertyId: s.id,
             propertyName: s.name,
             spaceId,
@@ -98,8 +98,8 @@ export function toRenderables({
     .map((r): RelationRenderableProperty => {
       return {
         type: r.renderableType as RelationRenderableProperty['type'], // We filter out data and text relations above
-        entityId: entityId,
-        entityName: null,
+        fromEntityId: entityId,
+        fromEntityName: null,
         propertyId: r.type.id,
         propertyName: r.type.name,
         spaceId: r.spaceId,

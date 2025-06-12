@@ -62,9 +62,7 @@ type UpsertRelationArgs = {
 
 type DeleteRelationArgs = {
   type: 'DELETE_RELATION';
-  relationId: string;
-  spaceId: string;
-  fromEntityId: string;
+  relation: Relation;
 };
 
 export const upsertRelation = (args: OmitStrict<UpsertRelationArgs, 'type'>) => {
@@ -86,14 +84,14 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
     return;
   }
 
-  const relationId = args.relationId;
+  const relationId = args.relation.id;
   const nonDeletedRelations = store.get(localRelationsAtom).filter(r => r.id !== relationId);
 
   store.set(localRelationsAtom, [
     ...nonDeletedRelations,
     // We can set a dummy relation here since we only care about the deleted state
     {
-      spaceId: args.spaceId,
+      spaceId: args.relation.spaceId,
       entityId: '',
       id: relationId as string,
       verified: false,
@@ -105,7 +103,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
         name: null,
       },
       fromEntity: {
-        id: args.fromEntityId,
+        id: args.relation.fromEntity.id,
         name: null,
       },
       toEntity: {
@@ -125,9 +123,7 @@ export async function removeEntity(entityId: string) {
 
     for (const relation of entity.relations) {
       removeRelation({
-        fromEntityId: relation.fromEntity.id,
-        relationId: relation.id,
-        spaceId: relation.spaceId,
+        relation,
       });
     }
   }

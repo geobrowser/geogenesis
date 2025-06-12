@@ -70,7 +70,7 @@ const ReadableNumberField = ({ value, format, unitId }: { value: string; format?
   const { entity } = useQueryEntity({ id: unitId });
 
   const currencySign = React.useMemo(
-    () => entity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value,
+    () => entity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
     [entity]
   );
 

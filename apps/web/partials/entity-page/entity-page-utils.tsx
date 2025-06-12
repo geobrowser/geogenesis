@@ -18,12 +18,12 @@ export function sortEntityPageTriples(visibleValues: Value[], schemaValues: Valu
       property: { id: propertyIdB, name: propertyNameB },
     } = tripleB;
 
-    const isNameA = propertyIdA === SystemIds.NAME_ATTRIBUTE;
-    const isNameB = propertyIdB === SystemIds.NAME_ATTRIBUTE;
-    const isDescriptionA = propertyIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isDescriptionB = propertyIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isTypesA = propertyIdA === SystemIds.TYPES_ATTRIBUTE;
-    const isTypesB = propertyIdB === SystemIds.TYPES_ATTRIBUTE;
+    const isNameA = propertyIdA === SystemIds.NAME_PROPERTY;
+    const isNameB = propertyIdB === SystemIds.NAME_PROPERTY;
+    const isDescriptionA = propertyIdA === SystemIds.DESCRIPTION_PROPERTY;
+    const isDescriptionB = propertyIdB === SystemIds.DESCRIPTION_PROPERTY;
+    const isTypesA = propertyIdA === SystemIds.TYPES_PROPERTY;
+    const isTypesB = propertyIdB === SystemIds.TYPES_PROPERTY;
 
     const aIndex = schemaPropertyIds.indexOf(propertyIdA);
     const bIndex = schemaPropertyIds.indexOf(propertyIdB);
@@ -66,22 +66,22 @@ export function sortRenderables(renderables: RenderableProperty[], isRelationPag
     const { propertyId: propertyIdA, propertyName: propertyNameA } = renderableA;
     const { propertyId: propertyIdB, propertyName: propertyNameB } = renderableB;
 
-    const isNameA = propertyIdA === SystemIds.NAME_ATTRIBUTE;
-    const isNameB = propertyIdB === SystemIds.NAME_ATTRIBUTE;
-    const isDescriptionA = propertyIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isDescriptionB = propertyIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isTypesA = propertyIdA === SystemIds.TYPES_ATTRIBUTE;
-    const isTypesB = propertyIdB === SystemIds.TYPES_ATTRIBUTE;
+    const isNameA = propertyIdA === SystemIds.NAME_PROPERTY;
+    const isNameB = propertyIdB === SystemIds.NAME_PROPERTY;
+    const isDescriptionA = propertyIdA === SystemIds.DESCRIPTION_PROPERTY;
+    const isDescriptionB = propertyIdB === SystemIds.DESCRIPTION_PROPERTY;
+    const isTypesA = propertyIdA === SystemIds.TYPES_PROPERTY;
+    const isTypesB = propertyIdB === SystemIds.TYPES_PROPERTY;
 
     if (isRelationPage) {
-      const isRelationTypeA = propertyIdA === SystemIds.RELATION_TYPE_ATTRIBUTE;
-      const isRelationTypeB = propertyIdB === SystemIds.RELATION_TYPE_ATTRIBUTE;
+      const isRelationTypeA = propertyIdA === SystemIds.RELATION_TYPE_PROPERTY;
+      const isRelationTypeB = propertyIdB === SystemIds.RELATION_TYPE_PROPERTY;
 
-      const isRelationFromA = propertyIdA === SystemIds.RELATION_FROM_ATTRIBUTE;
-      const isRelationFromB = propertyIdB === SystemIds.RELATION_FROM_ATTRIBUTE;
+      const isRelationFromA = propertyIdA === SystemIds.RELATION_FROM_PROPERTY;
+      const isRelationFromB = propertyIdB === SystemIds.RELATION_FROM_PROPERTY;
 
-      const isRelationToA = propertyIdA === SystemIds.RELATION_TO_ATTRIBUTE;
-      const isRelationToB = propertyIdB === SystemIds.RELATION_TO_ATTRIBUTE;
+      const isRelationToA = propertyIdA === SystemIds.RELATION_TO_PROPERTY;
+      const isRelationToB = propertyIdB === SystemIds.RELATION_TO_PROPERTY;
 
       const isRelationIndexA = propertyIdA === SystemIds.RELATION_INDEX;
       const isRelationIndexB = propertyIdB === SystemIds.RELATION_INDEX;
