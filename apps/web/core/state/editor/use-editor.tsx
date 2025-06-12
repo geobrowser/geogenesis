@@ -284,14 +284,14 @@ export function useEditorStore() {
         }
 
         if (toEntity?.type === 'DATA') {
-          // return {
-          //   type: 'tableNode',
-          //   attrs: {
-          //     id: block.block.id,
-          //     relationId: block.relationId,
-          //     spaceId,
-          //   },
-          // };
+          return {
+            type: 'tableNode',
+            attrs: {
+              id: block.block.id,
+              relationId: block.relationId,
+              spaceId,
+            },
+          };
         }
 
         const html = markdownValueForBlockId ? Parser.markdownToHtml(markdownValueForBlockId.value || '') : '';

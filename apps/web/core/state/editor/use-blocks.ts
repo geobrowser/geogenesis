@@ -1,6 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { useEntity } from '~/core/database/entities';
+import { useRelations } from '~/core/database/relations';
 import '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
@@ -25,11 +25,13 @@ export type RelationWithBlock = Relation & {
  *
  */
 export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
-  const entity = useEntity({
-    id: fromEntityId,
-    initialData: initialBlockRelations ? { relations: initialBlockRelations, spaces: [], values: [] } : undefined,
+  // @TODO: For some reason using useEntity or useQueryEntity here causes an infinite
+  // render loop. Continuing to use jotai-based hook for now.
+  const blocks = useRelations({
+    mergeWith: initialBlockRelations,
+    selector: r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS,
   });
-  const blocks = entity.relations.filter(r => r.type.id === SystemIds.BLOCKS);
+
   return blocks.map(relationToRelationWithBlock).sort(sortByIndex);
 }
 
