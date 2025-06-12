@@ -90,7 +90,11 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.pendingRelations.clear();
     this.pendingEntityDeletes.clear();
 
-    this.stream.emit({ type: GeoEventStream.CHANGES_CLEARED, entities: entitiesToSync });
+    this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entitiesToSync.map(e => e.id) });
+  }
+
+  public hydrate(entityIds: string[]) {
+    this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entityIds });
   }
 
   /**
@@ -404,6 +408,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     relation.isDeleted = true;
     relation.isLocal = true;
     relation.timestamp = new Date().toISOString();
+
     // Get or create the pending relations map for this entity
     if (!this.pendingRelations.has(entityId)) {
       this.pendingRelations.set(entityId, new Map());

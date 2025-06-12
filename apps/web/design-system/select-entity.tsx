@@ -18,7 +18,6 @@ import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { Space } from '~/core/io/dto/spaces';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { useMutate } from '~/core/sync/use-mutate';
 import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -88,7 +87,6 @@ export const SelectEntity = ({
   advanced = true,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
-  const { transaction } = useMutate();
 
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);

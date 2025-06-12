@@ -331,7 +331,7 @@ type RelationsGroupProps = {
 
 export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
-  const { transaction } = useMutate();
+  const { storage } = useMutate();
 
   const send = useAction({
     context: {
@@ -468,17 +468,15 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                       },
                     };
 
-                    transaction.commit(db => {
-                      if (result.space) {
-                        newRelation.toSpaceId = result.space;
-                      }
+                    if (result.space) {
+                      newRelation.toSpaceId = result.space;
+                    }
 
-                      if (result.verified) {
-                        newRelation.verified = true;
-                      }
+                    if (result.verified) {
+                      newRelation.verified = true;
+                    }
 
-                      db.relations.set(newRelation);
-                    });
+                    storage.relations.set(newRelation);
                   }}
                 />
               </div>
@@ -492,25 +490,23 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                 spaceId={spaceId}
                 relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
                 onCreateEntity={result => {
-                  transaction.commit(db => {
-                    db.values.set({
-                      id: ID.createValueId({
-                        entityId: result.id,
-                        propertyId: SystemIds.NAME_PROPERTY,
-                        spaceId,
-                      }),
-                      entity: {
-                        id: result.id,
-                        name: result.name,
-                      },
-                      property: {
-                        id: SystemIds.NAME_PROPERTY,
-                        name: 'Name',
-                        dataType: 'TEXT',
-                      },
+                  storage.values.set({
+                    id: ID.createValueId({
+                      entityId: result.id,
+                      propertyId: SystemIds.NAME_PROPERTY,
                       spaceId,
-                      value: result.name ?? '',
-                    });
+                    }),
+                    entity: {
+                      id: result.id,
+                      name: result.name,
+                    },
+                    property: {
+                      id: SystemIds.NAME_PROPERTY,
+                      name: 'Name',
+                      dataType: 'TEXT',
+                    },
+                    spaceId,
+                    value: result.name ?? '',
                   });
 
                   if (valueType) {
@@ -554,17 +550,15 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                     },
                   };
 
-                  transaction.commit(db => {
-                    if (result.space) {
-                      newRelation.toSpaceId = result.space;
-                    }
+                  if (result.space) {
+                    newRelation.toSpaceId = result.space;
+                  }
 
-                    if (result.verified) {
-                      newRelation.verified = true;
-                    }
+                  if (result.verified) {
+                    newRelation.verified = true;
+                  }
 
-                    db.relations.set(newRelation);
-                  });
+                  storage.relations.set(newRelation);
                 }}
                 variant="fixed"
               />
@@ -609,25 +603,23 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             }
             relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
-              transaction.commit(db => {
-                db.values.set({
-                  id: ID.createValueId({
-                    entityId: result.id,
-                    propertyId: SystemIds.NAME_PROPERTY,
-                    spaceId,
-                  }),
-                  entity: {
-                    id: result.id,
-                    name: result.name,
-                  },
-                  property: {
-                    id: SystemIds.NAME_PROPERTY,
-                    name: 'Name',
-                    dataType: 'TEXT',
-                  },
+              storage.values.set({
+                id: ID.createValueId({
+                  entityId: result.id,
+                  propertyId: SystemIds.NAME_PROPERTY,
                   spaceId,
-                  value: result.name ?? '',
-                });
+                }),
+                entity: {
+                  id: result.id,
+                  name: result.name,
+                },
+                property: {
+                  id: SystemIds.NAME_PROPERTY,
+                  name: 'Name',
+                  dataType: 'TEXT',
+                },
+                spaceId,
+                value: result.name ?? '',
               });
 
               if (valueType) {
@@ -671,17 +663,15 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                 },
               };
 
-              transaction.commit(db => {
-                if (result.space) {
-                  newRelation.toSpaceId = result.space;
-                }
+              if (result.space) {
+                newRelation.toSpaceId = result.space;
+              }
 
-                if (result.verified) {
-                  newRelation.verified = true;
-                }
+              if (result.verified) {
+                newRelation.verified = true;
+              }
 
-                db.relations.set(newRelation);
-              });
+              storage.relations.set(newRelation);
             }}
             spaceId={spaceId}
           />

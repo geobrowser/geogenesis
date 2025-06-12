@@ -6,7 +6,6 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
-import { useAction } from '~/core/events/edit-events';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { fetchHistoryVersions } from '~/core/io/subgraph/fetch-history-versions';
@@ -27,7 +26,7 @@ import { EntityPageContextMenu } from './entity-page-context-menu';
 export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   const { name } = useEntityPageStore();
   const isEditing = useUserIsEditing(spaceId);
-  const { transaction } = useMutate();
+  const { storage } = useMutate();
 
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 
@@ -55,25 +54,23 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
   const showMore = !isOnePage && !isLastPage;
 
   const onNameChange = (value: string) => {
-    transaction.commit(db => {
-      db.values.set({
-        id: ID.createValueId({
-          entityId,
-          propertyId: SystemIds.NAME_PROPERTY,
-          spaceId,
-        }),
+    storage.values.set({
+      id: ID.createValueId({
+        entityId,
+        propertyId: SystemIds.NAME_PROPERTY,
         spaceId,
-        entity: {
-          id: entityId,
-          name: value,
-        },
-        property: {
-          id: SystemIds.NAME_PROPERTY,
-          name: 'Name',
-          dataType: 'TEXT',
-        },
-        value,
-      });
+      }),
+      spaceId,
+      entity: {
+        id: entityId,
+        name: value,
+      },
+      property: {
+        id: SystemIds.NAME_PROPERTY,
+        name: 'Name',
+        dataType: 'TEXT',
+      },
+      value,
     });
   };
 

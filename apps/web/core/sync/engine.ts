@@ -60,9 +60,9 @@ export class SyncEngine {
       this.processSyncQueue(event);
     });
 
-    const onEntitiesRevalidated = this.stream.on(GeoEventStream.CHANGES_CLEARED, event => {
+    const onEntitiesRevalidated = this.stream.on(GeoEventStream.HYDRATE, event => {
       if (this.env === 'development') {
-        console.log(`queueing sync after ${GeoEventStream.CHANGES_CLEARED}`, event);
+        console.log(`queueing sync after ${GeoEventStream.HYDRATE}`, event);
       }
       this.processSyncQueue(event);
     });
@@ -121,8 +121,8 @@ export class SyncEngine {
         entityIds.push(...referencing);
         break;
       }
-      case GeoEventStream.CHANGES_CLEARED:
-        entityIds.push(...event.entities.map(e => e.id));
+      case GeoEventStream.HYDRATE:
+        entityIds.push(...event.entities);
         break;
       default:
         break;

@@ -15,7 +15,7 @@ export const AutomaticModeToggle = () => {
   const searchParams = useSearchParams();
 
   const { editable, setEditable } = useEditable();
-  const { transaction } = useMutate();
+  const { storage } = useMutate();
 
   useEffect(() => {
     const shouldStartInEditMode = searchParams?.get('edit') === 'true';
@@ -36,29 +36,27 @@ export const AutomaticModeToggle = () => {
       setEditable(true);
 
       if (spaceId && entityId && newEntityName) {
-        transaction.commit(db => {
-          db.values.set({
-            id: ID.createValueId({
-              entityId,
-              propertyId: SystemIds.NAME_PROPERTY,
-              spaceId,
-            }),
+        storage.values.set({
+          id: ID.createValueId({
+            entityId,
+            propertyId: SystemIds.NAME_PROPERTY,
             spaceId,
-            entity: {
-              id: entityId,
-              name: newEntityName,
-            },
-            property: {
-              id: SystemIds.NAME_PROPERTY,
-              name: 'Name',
-              dataType: 'TEXT',
-            },
-            value: newEntityName,
-          });
+          }),
+          spaceId,
+          entity: {
+            id: entityId,
+            name: newEntityName,
+          },
+          property: {
+            id: SystemIds.NAME_PROPERTY,
+            name: 'Name',
+            dataType: 'TEXT',
+          },
+          value: newEntityName,
         });
       }
     }, 500);
-  }, [editable, params, pathname, searchParams, setEditable, transaction]);
+  }, [editable, params, pathname, searchParams, setEditable, storage]);
 
   return null;
 };

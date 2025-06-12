@@ -27,12 +27,11 @@ type Props = {
 
 export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-
+  const { storage } = useMutate();
   const { isMember } = useAccessControl(spaceId);
 
   const { editable, setEditable } = useEditable();
   const { values, relations } = useEntityPageStore();
-  const { transaction } = useMutate();
 
   const onCopyEntityId = async () => {
     try {
@@ -45,20 +44,16 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
 
   const onDelete = () => {
     if (editable) {
-      transaction.commit(db => {
-        values.forEach(t => db.values.delete(t));
-        relations.forEach(r => db.relations.delete(r));
-      });
+      values.forEach(t => storage.values.delete(t));
+      relations.forEach(r => storage.relations.delete(r));
       setIsMenuOpen(false);
     } else {
       setEditable(true);
 
       // Why?
       setTimeout(() => {
-        transaction.commit(db => {
-          values.forEach(t => db.values.delete(t));
-          relations.forEach(r => db.relations.delete(r));
-        });
+        values.forEach(t => storage.values.delete(t));
+        relations.forEach(r => storage.relations.delete(r));
         setIsMenuOpen(false);
       }, 500);
     }

@@ -7,7 +7,7 @@ import { useMemo } from 'react';
 import { OmitStrict } from '~/core/types';
 
 import { ID } from '../id';
-import { Mutation, Transaction, mutator, useMutate } from '../sync/use-mutate';
+import { Mutator, storage, useMutate } from '../sync/use-mutate';
 import {
   BaseRelationRenderableProperty,
   ImageRelationRenderableProperty,
@@ -74,39 +74,37 @@ export interface EditEventContext {
 }
 
 interface ListenerConfig {
-  transaction: { commit: Transaction };
+  storage: Mutator;
   context: EditEventContext;
 }
 
 const listener =
-  ({ transaction, context }: ListenerConfig) =>
+  ({ storage, context }: ListenerConfig) =>
   (event: EditEvent) => {
     switch (event.type) {
       case 'UPSERT_RENDERABLE_TRIPLE_VALUE': {
         const { value, renderable } = event.payload;
 
-        transaction.commit(db => {
-          const newValue: Value = {
-            ...renderable,
-            ...value,
-            entity: {
-              id: renderable.entityId,
-              name: renderable.entityName,
-            },
-            id: ID.createValueId({
-              entityId: renderable.entityId,
-              propertyId: renderable.propertyId,
-              spaceId: renderable.spaceId,
-            }),
-            property: {
-              id: renderable.propertyId,
-              name: renderable.propertyName,
-              dataType: renderable.type,
-            },
-          };
+        const newValue: Value = {
+          ...renderable,
+          ...value,
+          entity: {
+            id: renderable.entityId,
+            name: renderable.entityName,
+          },
+          id: ID.createValueId({
+            entityId: renderable.entityId,
+            propertyId: renderable.propertyId,
+            spaceId: renderable.spaceId,
+          }),
+          property: {
+            id: renderable.propertyId,
+            name: renderable.propertyName,
+            dataType: renderable.type,
+          },
+        };
 
-          db.values.set(newValue);
-        });
+        storage.values.set(newValue);
 
         break;
       }
@@ -139,9 +137,7 @@ const listener =
           },
         };
 
-        transaction.commit(db => {
-          db.relations.set(newRelation);
-        });
+        storage.relations.set(newRelation);
 
         break;
       }
@@ -152,44 +148,42 @@ const listener =
         // When we change the attribute for a renderable we actually change
         // the id. We delete the previous renderable here so we don't still
         // render the old renderable.
-        transaction.commit(db => {
-          const valueId = ID.createValueId({
-            entityId: renderable.entityId,
-            propertyId: renderable.propertyId,
-            spaceId: renderable.spaceId,
-          });
-
-          const lastValue = db.values.get(valueId, renderable.entityId);
-
-          if (lastValue) {
-            db.values.delete(lastValue);
-          }
-
-          if (renderable.type === 'RELATION') {
-            // @TODO: Create lightweight relation
-          }
-
-          db.values.set({
-            id: valueId,
-            entity: {
-              id: renderable.entityId,
-              name: renderable.entityName,
-            },
-            spaceId: renderable.spaceId,
-            value: renderable.value,
-            property: {
-              id: propertyId,
-              name: propertyName,
-              dataType: 'TEXT',
-              // @TODO: Other fields
-            },
-          });
-
-          // @TODO(relations): Add support for IMAGE
-          if (renderable.type === 'IMAGE') {
-            return;
-          }
+        const valueId = ID.createValueId({
+          entityId: renderable.entityId,
+          propertyId: renderable.propertyId,
+          spaceId: renderable.spaceId,
         });
+
+        const lastValue = storage.values.get(valueId, renderable.entityId);
+
+        if (lastValue) {
+          storage.values.delete(lastValue);
+        }
+
+        if (renderable.type === 'RELATION') {
+          // @TODO: Create lightweight relation
+        }
+
+        storage.values.set({
+          id: valueId,
+          entity: {
+            id: renderable.entityId,
+            name: renderable.entityName,
+          },
+          spaceId: renderable.spaceId,
+          value: renderable.value,
+          property: {
+            id: propertyId,
+            name: propertyName,
+            dataType: 'TEXT',
+            // @TODO: Other fields
+          },
+        });
+
+        // @TODO(relations): Add support for IMAGE
+        if (renderable.type === 'IMAGE') {
+          return;
+        }
 
         break;
       }
@@ -198,13 +192,13 @@ const listener =
         const { renderable } = event.payload;
 
         if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
-          return transaction.commit(db => {
-            const lastRelation = db.relations.get(renderable.relationId, renderable.entityId);
+          const lastRelation = storage.relations.get(renderable.relationId, renderable.entityId);
 
-            if (lastRelation) {
-              db.relations.delete(lastRelation);
-            }
-          });
+          if (lastRelation) {
+            storage.relations.delete(lastRelation);
+          }
+
+          return;
         }
 
         const valueId = ID.createValueId({
@@ -213,13 +207,11 @@ const listener =
           spaceId: renderable.spaceId,
         });
 
-        transaction.commit(db => {
-          const lastValue = db.values.get(valueId, renderable.entityId);
+        const lastValue = storage.values.get(valueId, renderable.entityId);
 
-          if (lastValue) {
-            db.values.delete(lastValue);
-          }
-        });
+        if (lastValue) {
+          storage.values.delete(lastValue);
+        }
 
         break;
       }
@@ -229,37 +221,33 @@ const listener =
       case 'DELETE_RELATION': {
         const { renderable } = event.payload;
 
-        return transaction.commit(db => {
-          const lastRelation = db.relations.get(renderable.relationId, renderable.entityId);
+        const lastRelation = storage.relations.get(renderable.relationId, renderable.entityId);
 
-          if (lastRelation) {
-            db.relations.delete(lastRelation);
-          }
-        });
+        if (lastRelation) {
+          storage.relations.delete(lastRelation);
+        }
+
+        return;
       }
     }
   };
 
-export function useAction(config: OmitStrict<ListenerConfig, 'transaction'>) {
-  const { transaction } = useMutate();
+export function useAction(config: OmitStrict<ListenerConfig, 'storage'>) {
+  const { storage } = useMutate();
 
   const send = useMemo(() => {
     return listener({
       ...config,
-      transaction,
+      storage,
     });
-  }, [config, transaction]);
+  }, [config, storage]);
 
   return send;
 }
 
-export function action(config: OmitStrict<ListenerConfig, 'transaction'>) {
+export function action(config: OmitStrict<ListenerConfig, 'storage'>) {
   return listener({
     ...config,
-    transaction: {
-      commit: (fn: (store: Mutation) => void) => {
-        fn(mutator);
-      },
-    },
+    storage,
   });
 }
