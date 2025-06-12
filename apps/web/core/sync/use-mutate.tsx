@@ -11,17 +11,18 @@ type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
 
 /**
  * The Mutator interface defines common patterns for updating data
- * in the app local store. Currently we have three common data models
+ * in the app's local stores. Currently we have three common data models
  * that change:
  * 1. Values
  * 2. Relations
  * 3. Renderables – A unified representation of a Value OR a Relation
+ * 4. @TODO: Properties
  *
- * The Mutator API abstracts complexity for writing to stores directly.
- * The Mutator API orchestrates writes to the appropriate stores based
- * on the type of data model being changed. The stores handle internal
- * state and syncing behind-the-scenes, and update any components
- * subscribed to store state.
+ * The Mutator API abstracts complexity for writing to stores directly
+ * by orchestrating writes to the appropriate stores based on the type
+ * of data model being changed. The stores handle internal state, syncing,
+ * persistence, and other effects behind-the-scenes, and update any
+ * components subscribed to store state.
  */
 export interface Mutator {
   values: {
