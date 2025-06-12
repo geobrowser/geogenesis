@@ -76,7 +76,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   }
 
   static queryKeys(where: WhereCondition) {
-    return ['store', 'entities', where];
+    return ['store', 'entities', JSON.stringify(where)];
   }
 
   clear() {

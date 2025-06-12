@@ -1,16 +1,15 @@
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { Id, SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
-import { StoreRelation } from '~/core/database/types';
-import { DB } from '~/core/database/write';
-import { EntityId, SpaceId } from '~/core/io/schema';
+import { storage } from '~/core/sync/use-mutate';
+import { Relation } from '~/core/v2.types';
 
 type CreateCollectionItemRelationArgs = {
-  relationId?: EntityId;
-  collectionId: EntityId;
-  spaceId: SpaceId;
+  relationId?: string;
+  collectionId: string;
+  spaceId: string;
   toEntity: {
-    id: EntityId;
+    id: string;
     name: string | null;
   };
 };
@@ -30,25 +29,22 @@ export function upsertCollectionItemRelation({
   toEntity,
 }: CreateCollectionItemRelationArgs) {
   // Create a relation for the Collection Item pointing from the collection to the new entity
-  DB.upsertRelation({
-    relation: {
-      ...(relationId ? { id: relationId } : {}),
-      ...makeRelationForCollectionItem({
-        collectionId,
-        toEntityId: toEntity.id,
-        toEntityName: toEntity.name,
-        spaceId,
-      }),
-    },
-    spaceId,
+  storage.relations.set({
+    ...(relationId ? { id: relationId } : {}),
+    ...makeRelationForCollectionItem({
+      collectionId,
+      toEntityId: toEntity.id,
+      toEntityName: toEntity.name,
+      spaceId,
+    }),
   });
 }
 
 type UpsertSourceSpaceCollectionItemArgs = {
-  collectionItemId: EntityId;
-  spaceId: SpaceId;
+  collectionItemId: string;
+  spaceId: string;
   sourceSpaceId?: string;
-  toId: EntityId;
+  toId: string;
 };
 
 export function upsertSourceSpaceOnCollectionItem({
@@ -57,24 +53,19 @@ export function upsertSourceSpaceOnCollectionItem({
   toId,
   sourceSpaceId,
 }: UpsertSourceSpaceCollectionItemArgs) {
-  DB.upsert(
-    {
-      attributeId: SystemIds.RELATION_TO_PROPERTY,
-      attributeName: 'To Entity',
-      entityId: collectionItemId,
-      entityName: null,
-      value: {
-        type: 'URL',
-        value: sourceSpaceId ? GraphUrl.fromEntityId(toId, { spaceId: sourceSpaceId }) : GraphUrl.fromEntityId(toId),
-      },
-    },
-    spaceId
-  );
+  // @TODO(migration): Update source space
+  const relation = storage.relations.get('the-relation-id', 'the-entity-id');
+
+  if (relation) {
+    storage.relations.update(relation, draft => {
+      draft.toSpaceId = sourceSpaceId;
+    });
+  }
 }
 
 type UpsertVerifiedSourceCollectionItemArgs = {
-  collectionItemId: EntityId;
-  spaceId: SpaceId;
+  collectionItemId: string;
+  spaceId: string;
   verified?: boolean;
 };
 
@@ -83,24 +74,18 @@ export function upsertVerifiedSourceOnCollectionItem({
   spaceId,
   verified = true,
 }: UpsertVerifiedSourceCollectionItemArgs) {
-  DB.upsert(
-    {
-      attributeId: SystemIds.VERIFIED_SOURCE_PROPERTY,
-      attributeName: 'Verified Source',
-      entityId: collectionItemId,
-      entityName: null,
-      value: {
-        type: 'CHECKBOX',
-        value: verified ? '1' : '0',
-      },
-    },
-    spaceId
-  );
+  const relation = storage.relations.get('the-relation-id', 'the-entity-id');
+
+  if (relation) {
+    storage.relations.update(relation, draft => {
+      draft.verified = verified;
+    });
+  }
 }
 
-type GetRelationForCollectionItemArgs = {
-  collectionId: EntityId;
-  toEntityId: EntityId;
+type MakeRelationForCollectionItemArgs = {
+  collectionId: string;
+  toEntityId: string;
   toEntityName: string | null;
   spaceId: string;
 };
@@ -117,14 +102,18 @@ function makeRelationForCollectionItem({
   toEntityId,
   toEntityName,
   spaceId,
-}: GetRelationForCollectionItemArgs): StoreRelation {
+}: MakeRelationForCollectionItemArgs): Relation {
   // Create a relation that points from the collection to the entity with Relation Type -> CollectionItem
   // 1. Relation type -> CollectionItem
   return {
-    space: spaceId,
-    index: INITIAL_RELATION_INDEX_VALUE,
-    typeOf: {
-      id: EntityId(SystemIds.COLLECTION_ITEM_RELATION_TYPE),
+    id: Id.generate(),
+    // @TODO(migration): Potentially reuse relation entity
+    entityId: Id.generate(),
+    spaceId: spaceId,
+    position: INITIAL_RELATION_INDEX_VALUE,
+    renderableType: 'RELATION',
+    type: {
+      id: SystemIds.COLLECTION_ITEM_RELATION_TYPE,
       name: 'Collection Item',
     },
     fromEntity: {
@@ -134,7 +123,6 @@ function makeRelationForCollectionItem({
     toEntity: {
       id: toEntityId,
       name: toEntityName,
-      renderableType: 'RELATION',
       value: toEntityId,
     },
   };

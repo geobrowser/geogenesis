@@ -42,6 +42,7 @@ export function toRenderables({
           return {
             type: 'RELATION',
             relationId: s.id,
+            relationEntityId: '',
             valueName: s.name,
             fromEntityId: entityId,
             fromEntityName: entityName,
@@ -55,6 +56,7 @@ export function toRenderables({
           return {
             type: 'IMAGE',
             relationId: s.id,
+            relationEntityId: '',
             valueName: s.name,
             fromEntityId: entityId,
             fromEntityName: entityName,
@@ -96,17 +98,34 @@ export function toRenderables({
     // care about those in the property area.
     .filter(r => r.renderableType !== 'DATA' && r.renderableType !== 'TEXT')
     .map((r): RelationRenderableProperty => {
-      return {
-        type: r.renderableType as RelationRenderableProperty['type'], // We filter out data and text relations above
-        fromEntityId: entityId,
-        fromEntityName: null,
-        propertyId: r.type.id,
-        propertyName: r.type.name,
-        spaceId: r.spaceId,
-        relationId: r.id,
-        value: r.toEntity.value, // This is either the image URL or the entity ID
-        valueName: r.toEntity.name,
-      };
+      switch (r.renderableType) {
+        case 'IMAGE':
+          return {
+            type: 'IMAGE', // We filter out data and text relations above
+            relationEntityId: r.entityId,
+            fromEntityId: entityId,
+            fromEntityName: null,
+            propertyId: r.type.id,
+            propertyName: r.type.name,
+            spaceId: r.spaceId,
+            relationId: r.id,
+            value: r.toEntity.value, // This is either the image URL or the entity ID
+            valueName: r.toEntity.name,
+          };
+        default:
+          return {
+            type: 'RELATION', // We filter out data and text relations above
+            relationEntityId: r.entityId,
+            fromEntityId: entityId,
+            fromEntityName: null,
+            propertyId: r.type.id,
+            propertyName: r.type.name,
+            spaceId: r.spaceId,
+            relationId: r.id,
+            value: r.toEntity.value, // This is either the image URL or the entity ID
+            valueName: r.toEntity.name,
+          };
+      }
     });
 
   return [

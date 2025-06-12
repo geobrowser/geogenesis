@@ -65,6 +65,7 @@ export function useDataBlock() {
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     first: PAGE_SIZE + 1,
     skip: pageNumber * PAGE_SIZE,
+    placeholderData: keepPreviousData,
   });
 
   // Use the mapping to get the potential renderable properties.

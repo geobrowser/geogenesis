@@ -51,10 +51,6 @@ export function nameTriples(triples: ITriple[]): ITriple[] {
   return triples.filter(triple => triple.attributeId === SystemIds.NAME_PROPERTY);
 }
 
-export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
-  return triples.find(triple => triple.attributeId === SystemIds.VALUE_TYPE_PROPERTY);
-}
-
 /**
  * This function traverses through all the relations associated with an entity and attempts to find the avatar URL of the entity.
  */
