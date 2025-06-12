@@ -1,4 +1,4 @@
-import { EntitiesBatchQuery, EntityQuery, EntityTypesQuery } from '~/core/gql/graphql';
+import { EntitiesBatchQuery, EntityQuery, EntityTypesQuery, SpaceQuery } from '~/core/gql/graphql';
 import { Entity } from '~/core/v2.types';
 
 import { EntityDecoder, EntityTypeDecoder } from './entity';
@@ -34,6 +34,15 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
     query: entityTypesQuery,
     decoder: data => data.entity?.types.map(EntityTypeDecoder.decode).filter(e => e !== null) ?? [],
     variables: { id: entityId },
+    signal,
+  });
+}
+
+export function getSpace(spaceId: string, signal?: AbortController['signal']) {
+  return graphql<SpaceQuery, { id: string; name: string | null }[]>({
+    query: entityTypesQuery,
+    decoder: data => data.entity?.types.map(EntityTypeDecoder.decode).filter(e => e !== null) ?? [],
+    variables: { id: spaceId },
     signal,
   });
 }

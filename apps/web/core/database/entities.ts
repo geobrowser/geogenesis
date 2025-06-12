@@ -62,22 +62,22 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
 // if they aren't defined in the schema.
 export const DEFAULT_ENTITY_SCHEMA: PropertySchema[] = [
   {
-    id: SystemIds.NAME_ATTRIBUTE,
+    id: SystemIds.NAME_PROPERTY,
     name: 'Name',
     dataType: 'TEXT',
   },
   {
-    id: SystemIds.DESCRIPTION_ATTRIBUTE,
+    id: SystemIds.DESCRIPTION_PROPERTY,
     name: 'Description',
     dataType: 'TEXT',
   },
   {
-    id: SystemIds.TYPES_ATTRIBUTE,
+    id: SystemIds.TYPES_PROPERTY,
     name: 'Types',
     dataType: 'RELATION',
   },
   {
-    id: SystemIds.COVER_ATTRIBUTE,
+    id: SystemIds.COVER_PROPERTY,
     name: 'Cover',
     dataType: 'RELATION',
     renderableType: 'IMAGE',
@@ -137,7 +137,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
   });
 
   // const valueTypes = attributes.map(a => {
-  //   const valueTypeId = a.relations.find(r => r.type.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE))?.toEntity.id;
+  //   const valueTypeId = a.relations.find(r => r.type.id === EntityId(SystemIds.VALUE_TYPE_PROPERTY))?.toEntity.id;
   //   return {
   //     attributeId: a.id,
   //     valueTypeId,
@@ -178,8 +178,8 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
 }
 
 /**
- * Types are defined either a relation with a Relation type of SystemIds.TYPES_ATTRIBUTE,
- * or a triple with an attribute id of SystemIds.TYPES_ATTRIBUTE. We expect that only
+ * Types are defined either a relation with a Relation type of SystemIds.TYPES_PROPERTY,
+ * or a triple with an attribute id of SystemIds.TYPES_PROPERTY. We expect that only
  * system entities will use the triples approach, mostly to avoid recursive
  * type definitions.
  *

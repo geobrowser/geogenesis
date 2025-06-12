@@ -33,7 +33,7 @@ export function EntityDtoHistorical(substreamEntity: SubstreamEntityHistorical) 
   const relationsOut = networkRelations.map(RelationDtoHistorical);
 
   const entityTypes = relationsOut
-    .filter(relation => relation.typeOf.id === EntityId(SystemIds.TYPES_ATTRIBUTE))
+    .filter(relation => relation.typeOf.id === EntityId(SystemIds.TYPES_PROPERTY))
     .map(relation => {
       return {
         id: relation.toEntity.id,

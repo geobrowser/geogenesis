@@ -456,7 +456,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                         fromEntityName: result.name,
                         toEntityId: property.relationValueTypeId,
                         toEntityName: property.relationValueTypeName ?? null,
-                        typeOfId: SystemIds.TYPES_ATTRIBUTE,
+                        typeOfId: SystemIds.TYPES_PROPERTY,
                         typeOfName: 'Types',
                       },
                     });
@@ -519,7 +519,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                     fromEntityName: result.name,
                     toEntityId: property.relationValueTypeId,
                     toEntityName: property.relationValueTypeName ?? null,
-                    typeOfId: SystemIds.TYPES_ATTRIBUTE,
+                    typeOfId: SystemIds.TYPES_PROPERTY,
                     typeOfName: 'Types',
                   },
                 });

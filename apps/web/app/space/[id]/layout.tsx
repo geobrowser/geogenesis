@@ -138,7 +138,7 @@ const getData = async (spaceId: string) => {
 
   const spaces = entity?.spaces ?? [];
   const tabIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SystemIds.TABS_ATTRIBUTE))
+    .filter(r => r.typeOf.id === EntityId(SystemIds.TABS_PROPERTY))
     ?.map(r => r.toEntity.id);
 
   const tabEntities = tabIds ? await fetchEntitiesBatch({ spaceId, entityIds: tabIds }) : [];

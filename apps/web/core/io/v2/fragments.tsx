@@ -93,3 +93,27 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
     }
   }
 `);
+
+export const spaceFragment = graphql(/* GraphQL */ `
+  fragment FullSpace on Space {
+    id
+    type
+    daoAddress
+    spaceAddress
+    mainVotingAddress
+    membershipAddress
+    personalAddress
+
+    entity {
+      ...FullEntity
+    }
+  }
+`);
+
+export const spaceQuery = graphql(/* GraphQL */ `
+  query Space($id: String!) {
+    space(id: $id) {
+      ...FullSpace
+    }
+  }
+`);

@@ -16,9 +16,9 @@ export function RelationDtoLive(relation: RemoteRelation, from: { id: string; na
     id: relation.id,
     spaceId: relation.spaceId,
     entityId: relation.entityId,
-    position: relation.position,
-    verified: relation.verified ?? null,
-    toSpaceId: relation.toSpaceId ?? null,
+    position: relation.position ?? undefined,
+    verified: relation.verified ?? undefined,
+    toSpaceId: relation.toSpaceId ?? undefined,
     renderableType,
     type: {
       id: relation.type.id,
@@ -49,7 +49,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
   // the image URI for that image. We need to parse the triples to find the correct
   // triple URI value representing the image URI.
   const imageEntityUrlValue =
-    toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
+    toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_PROPERTY)?.value.value ?? null;
 
   const renderableType = getRenderableEntityType(toEntityTypes);
 

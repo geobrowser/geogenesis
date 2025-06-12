@@ -29,7 +29,7 @@ interface Props {
 }
 
 async function getTitleForRelation(entity: Entity | null): Promise<string | null> {
-  // const maybeRelation = entity?.values.find(t => t.property.id === SystemIds.TYPES_ATTRIBUTE);
+  // const maybeRelation = entity?.values.find(t => t.property.id === SystemIds.TYPES_PROPERTY);
   // const maybeType = maybeRelation?.value;
 
   // if (
@@ -37,8 +37,8 @@ async function getTitleForRelation(entity: Entity | null): Promise<string | null
   //   maybeType &&
   //   SystemIds.RELATION_TYPE === GraphUrl.toEntityId(maybeType as GraphUri)
   // ) {
-  //   const maybeFrom = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE);
-  //   const maybeTo = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE);
+  //   const maybeFrom = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_PROPERTY);
+  //   const maybeTo = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_TO_PROPERTY);
 
   //   if (maybeFrom?.value.type === 'URL' && maybeTo?.value.type === 'URL') {
   //     const [maybeFromEntity, maybeToEntity] = await Promise.all([

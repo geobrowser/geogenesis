@@ -30,7 +30,7 @@ export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProp
       DB.upsert(
         {
           entityId: newEntityId,
-          attributeId: SystemIds.NAME_ATTRIBUTE,
+          attributeId: SystemIds.NAME_PROPERTY,
           entityName: null,
           attributeName: 'Name',
           value: {
@@ -45,7 +45,7 @@ export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProp
         space: spaceId,
         index: INITIAL_RELATION_INDEX_VALUE,
         typeOf: {
-          id: EntityId(SystemIds.TYPES_ATTRIBUTE),
+          id: EntityId(SystemIds.TYPES_PROPERTY),
           name: 'Types',
         },
         fromEntity: {
@@ -69,7 +69,7 @@ export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProp
         space: spaceId,
         index: INITIAL_RELATION_INDEX_VALUE,
         typeOf: {
-          id: EntityId(SystemIds.PAGE_TYPE_ATTRIBUTE),
+          id: EntityId(SystemIds.PAGE_TYPE_PROPERTY),
           name: 'Page Type',
         },
         fromEntity: {

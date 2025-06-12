@@ -28,10 +28,10 @@ export type Filter = {
  * semantics.
  *
  * e.g.,
- * attribute: SystemIds.TYPES_ATTRIBUTE, is: SystemIds.PERSON_TYPE
+ * attribute: SystemIds.TYPES_PROPERTY, is: SystemIds.PERSON_TYPE
  * The above returns all entities that are type: Person
  *
- * entity: '1234', relationType: SystemIds.TYPES_ATTRIBUTE
+ * entity: '1234', relationType: SystemIds.TYPES_PROPERTY
  * The above returns all the type relations for entity 1234
  *
  * The latter is basically a "Relations View" on an entity where the latter
@@ -169,11 +169,11 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       )
     : [];
 
-  const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SystemIds.RELATION_FROM_ATTRIBUTE);
+  const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SystemIds.RELATION_FROM_PROPERTY);
   const unresolvedEntityFilter = maybeFromFilter ? getResolvedEntity(maybeFromFilter.is) : null;
 
   const unresolvedAttributeFilters = Promise.all(
-    filtersFromString.AND.filter(f => f.attribute !== SystemIds.RELATION_FROM_ATTRIBUTE).map(async filter => {
+    filtersFromString.AND.filter(f => f.attribute !== SystemIds.RELATION_FROM_PROPERTY).map(async filter => {
       return await getResolvedFilter(filter);
     })
   );
@@ -201,7 +201,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 
   if (!entity) {
     return {
-      columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+      columnId: SystemIds.RELATION_FROM_PROPERTY,
       columnName: 'From',
       valueType: 'RELATION',
       value: entityId,
@@ -210,7 +210,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
   }
 
   return {
-    columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+    columnId: SystemIds.RELATION_FROM_PROPERTY,
     columnName: 'From',
     valueType: 'RELATION',
     value: entityId,
@@ -221,7 +221,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
   const maybeAttributeEntity = await E.findOne({ store, cache: queryClient, id: filter.attribute });
   const valueType = maybeAttributeEntity?.relationsOut.find(
-    r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE)
+    r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_PROPERTY)
   )?.toEntity.id;
 
   if (valueType === EntityId(SystemIds.RELATION)) {

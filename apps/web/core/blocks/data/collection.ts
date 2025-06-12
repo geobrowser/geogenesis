@@ -59,7 +59,7 @@ export function upsertSourceSpaceOnCollectionItem({
 }: UpsertSourceSpaceCollectionItemArgs) {
   DB.upsert(
     {
-      attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
+      attributeId: SystemIds.RELATION_TO_PROPERTY,
       attributeName: 'To Entity',
       entityId: collectionItemId,
       entityName: null,
@@ -85,7 +85,7 @@ export function upsertVerifiedSourceOnCollectionItem({
 }: UpsertVerifiedSourceCollectionItemArgs) {
   DB.upsert(
     {
-      attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
+      attributeId: SystemIds.VERIFIED_SOURCE_PROPERTY,
       attributeName: 'Verified Source',
       entityId: collectionItemId,
       entityName: null,

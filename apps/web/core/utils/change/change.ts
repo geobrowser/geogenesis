@@ -536,11 +536,9 @@ export function aggregateChanges({
             after: `${afterTriple?.value?.value ?? ''}`,
           });
         } else if (isImageBlock) {
-          const beforeTriple = beforeBlock?.triples.find(
-            triple => triple.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE
-          );
+          const beforeTriple = beforeBlock?.triples.find(triple => triple.attributeId === SystemIds.IMAGE_URL_PROPERTY);
 
-          const afterTriple = afterBlock?.triples.find(triple => triple.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE);
+          const afterTriple = afterBlock?.triples.find(triple => triple.attributeId === SystemIds.IMAGE_URL_PROPERTY);
 
           blockChanges.push({
             type: 'imageBlock',
@@ -601,10 +599,10 @@ type TripleByAttributeMap = Record<string, Triple>;
 type EntityByAttributeMapMap = Record<string, TripleByAttributeMap>;
 
 const RELATION_TRIPLES = [
-  EntityId(SystemIds.RELATION_FROM_ATTRIBUTE),
-  EntityId(SystemIds.RELATION_TO_ATTRIBUTE),
+  EntityId(SystemIds.RELATION_FROM_PROPERTY),
+  EntityId(SystemIds.RELATION_TO_PROPERTY),
   EntityId(SystemIds.RELATION_INDEX),
-  EntityId(SystemIds.RELATION_TYPE_ATTRIBUTE),
+  EntityId(SystemIds.RELATION_TYPE_PROPERTY),
 ];
 
 function shouldFilterTriple(triple: Triple) {
@@ -615,7 +613,7 @@ function shouldFilterTriple(triple: Triple) {
   }
 
   if (
-    triple.attributeId === SystemIds.TYPES_ATTRIBUTE &&
+    triple.attributeId === SystemIds.TYPES_PROPERTY &&
     triple.value.type === 'URL' &&
     triple.value.value === GraphUrl.fromEntityId(SystemIds.RELATION_TYPE)
   ) {
@@ -684,7 +682,7 @@ const blockTypes = [
 // @TODO use attributes as a hint as well
 // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
 const blockAttributes = [
-  SystemIds.DATA_SOURCE_ATTRIBUTE,
+  SystemIds.DATA_SOURCE_PROPERTY,
   SystemIds.ENTITY_FILTER,
   SystemIds.FILTER,
   SystemIds.SHOWN_COLUMNS,

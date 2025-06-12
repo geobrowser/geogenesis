@@ -46,7 +46,7 @@ const ColumnHeader = ({
   spaceId: string;
   isLastColumn: boolean;
 }) => {
-  const isNameColumn = column.id === EntityId(SystemIds.NAME_ATTRIBUTE);
+  const isNameColumn = column.id === EntityId(SystemIds.NAME_PROPERTY);
 
   return isEditMode && !isNameColumn ? (
     <div className={cx(isLastColumn ? 'pr-12' : '')}>
@@ -69,7 +69,7 @@ const formatColumns = (
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
-        const isNameColumn = column.id === EntityId(SystemIds.NAME_ATTRIBUTE);
+        const isNameColumn = column.id === EntityId(SystemIds.NAME_PROPERTY);
 
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
@@ -114,13 +114,13 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const filterableRelationTypeName = maybePropertiesSchema?.relationValueTypeName;
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
-    const isNameCell = propertyId === SystemIds.NAME_ATTRIBUTE;
-    const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_ATTRIBUTE]?.space ?? space) : space;
+    const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
+    const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space) : space;
 
     const renderables = cellData.renderables;
 
     const entityId = row.original.entityId;
-    const nameCell = row.original.columns[SystemIds.NAME_ATTRIBUTE];
+    const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
     const name = getName(nameCell, space);
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
@@ -307,10 +307,10 @@ export const TableBlockTable = ({
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
                     const firstRenderable = cell.getValue<Cell>()?.renderables[0];
 
-                    const isNameCell = Boolean(firstRenderable?.attributeId === SystemIds.NAME_ATTRIBUTE);
+                    const isNameCell = Boolean(firstRenderable?.attributeId === SystemIds.NAME_PROPERTY);
                     const isShown = shownColumnIds.includes(cell.column.id);
 
-                    const nameCell = row.original.columns[SystemIds.NAME_ATTRIBUTE];
+                    const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
                     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
 
                     return (

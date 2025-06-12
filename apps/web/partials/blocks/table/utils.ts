@@ -70,7 +70,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
 export const getName = (nameCell: Cell, currentSpaceId: string) => {
   let name = nameCell?.name;
   const maybeNameInSpaceRenderable = nameCell.renderables.find(
-    r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
+    r => r.attributeId === SystemIds.NAME_PROPERTY && r.spaceId === currentSpaceId
   );
 
   let maybeNameInSpace = maybeNameInSpaceRenderable?.value;
@@ -79,7 +79,7 @@ export const getName = (nameCell: Cell, currentSpaceId: string) => {
     maybeNameInSpace = maybeNameInSpaceRenderable?.valueName ?? maybeNameInSpace;
   }
 
-  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE);
+  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_PROPERTY);
 
   let maybeOtherName = maybeNameRenderable?.value;
 

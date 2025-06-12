@@ -43,9 +43,9 @@ export function TableBlockListItem({
   relationId,
   source,
 }: Props) {
-  const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
-  const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
-  const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_ATTRIBUTE];
+  const nameCell = columns[SystemIds.NAME_PROPERTY];
+  const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_PROPERTY];
+  const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_PROPERTY];
 
   const { cellId, verified } = nameCell;
   let { description, image } = nameCell;
@@ -53,18 +53,18 @@ export function TableBlockListItem({
   const name = getName(nameCell, currentSpaceId);
 
   const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
-    r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE && r.spaceId === currentSpaceId
+    r => r.attributeId === SystemIds.DESCRIPTION_PROPERTY && r.spaceId === currentSpaceId
   )?.value;
 
   const maybeDescription =
     maybeDescriptionInSpace ??
-    maybeDescriptionData?.renderables.find(r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE)?.value;
+    maybeDescriptionData?.renderables.find(r => r.attributeId === SystemIds.DESCRIPTION_PROPERTY)?.value;
 
   if (maybeDescription) {
     description = maybeDescription;
   }
 
-  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === ContentIds.AVATAR_ATTRIBUTE)?.value;
+  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === ContentIds.AVATAR_PROPERTY)?.value;
 
   if (maybeAvatarUrl) {
     image = maybeAvatarUrl;
@@ -74,10 +74,10 @@ export function TableBlockListItem({
 
   const otherPropertyData = Object.values(columns).filter(
     c =>
-      c.slotId !== SystemIds.NAME_ATTRIBUTE &&
-      c.slotId !== ContentIds.AVATAR_ATTRIBUTE &&
-      c.slotId !== SystemIds.COVER_ATTRIBUTE &&
-      c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
+      c.slotId !== SystemIds.NAME_PROPERTY &&
+      c.slotId !== ContentIds.AVATAR_PROPERTY &&
+      c.slotId !== SystemIds.COVER_PROPERTY &&
+      c.slotId !== SystemIds.DESCRIPTION_PROPERTY
   );
 
   if (isEditing && source.type !== 'RELATIONS') {
@@ -151,7 +151,7 @@ export function TableBlockListItem({
                 //             fromEntityName: name,
                 //             toEntityId: imageId,
                 //             toEntityName: null,
-                //             typeOfId: ContentIds.AVATAR_ATTRIBUTE,
+                //             typeOfId: ContentIds.AVATAR_PROPERTY,
                 //             typeOfName: 'Avatar',
                 //             renderableType: 'IMAGE',
                 //             value: setTripleOp.triple.value.value,
@@ -230,7 +230,7 @@ export function TableBlockListItem({
                             type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                             payload: {
                               renderable: {
-                                attributeId: SystemIds.NAME_ATTRIBUTE,
+                                attributeId: SystemIds.NAME_PROPERTY,
                                 entityId: rowEntityId,
                                 spaceId: currentSpaceId,
                                 attributeName: 'Name',
@@ -273,7 +273,7 @@ export function TableBlockListItem({
                               type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                               payload: {
                                 renderable: {
-                                  attributeId: SystemIds.NAME_ATTRIBUTE,
+                                  attributeId: SystemIds.NAME_PROPERTY,
                                   entityId: rowEntityId,
                                   spaceId: currentSpaceId,
                                   attributeName: 'Name',
@@ -310,7 +310,7 @@ export function TableBlockListItem({
                       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                       payload: {
                         renderable: {
-                          attributeId: SystemIds.DESCRIPTION_ATTRIBUTE,
+                          attributeId: SystemIds.DESCRIPTION_PROPERTY,
                           entityId: rowEntityId,
                           spaceId: currentSpaceId,
                           attributeName: 'Description',

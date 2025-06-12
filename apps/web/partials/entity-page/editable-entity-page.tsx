@@ -269,7 +269,7 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
             // @TODO(migration): Change functionality based on property data type
 
             // .send({
-            //   type: 'UPSERT_ATTRIBUTE',
+            //   type: 'UPSERT_PROPERTY',
             //   payload: { renderable, propertyId: result.id, propertyName: result.name },
             // });
           }}

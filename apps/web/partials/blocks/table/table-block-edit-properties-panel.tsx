@@ -76,12 +76,12 @@ function RelationsPropertySelector() {
   }
 
   // @TODO: This should be stored as a data structure somewhere
-  const filteredPropertyId = filterState.find(r => r.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE)?.value;
+  const filteredPropertyId = filterState.find(r => r.columnId === SystemIds.RELATION_TYPE_PROPERTY)?.value;
   const relationIds = sourceEntity.relationsOut.filter(r => r.typeOf.id === filteredPropertyId).map(r => r.id);
   const toIds = sourceEntity.relationsOut.filter(r => r.typeOf.id === filteredPropertyId).map(r => r.toEntity.id);
 
   const maybeSourceEntityImage = sourceEntity.relationsOut.find(
-    r => r.typeOf.id === EntityId(ContentIds.AVATAR_ATTRIBUTE)
+    r => r.typeOf.id === EntityId(ContentIds.AVATAR_PROPERTY)
   )?.toEntity.value;
 
   const onBack = () => {
@@ -157,7 +157,7 @@ function DefaultPropertySelector() {
     queryKey: ['available-columns', filterState],
     queryFn: async () => {
       const schema = await getSchemaFromTypeIds(
-        filterState.filter(f => f.columnId === SystemIds.TYPES_ATTRIBUTE).map(f => f.value)
+        filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value)
       );
 
       return schema;

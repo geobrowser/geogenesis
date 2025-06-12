@@ -27,7 +27,7 @@ describe('to-query-string', () => {
 
     const nameFilter = queryStringFromFilters([
       {
-        columnId: SystemIds.NAME_ATTRIBUTE,
+        columnId: SystemIds.NAME_PROPERTY,
         value: 'id 1',
         valueType: 'TEXT',
       },
@@ -47,7 +47,7 @@ describe('to-query-string', () => {
         valueType: 'RELATION',
       },
       {
-        columnId: SystemIds.NAME_ATTRIBUTE,
+        columnId: SystemIds.NAME_PROPERTY,
         value: 'id 1',
         valueType: 'TEXT',
       },

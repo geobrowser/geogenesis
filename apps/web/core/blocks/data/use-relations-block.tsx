@@ -25,7 +25,7 @@ export function useRelationsBlock() {
 }
 
 function getRelevantRelationsForRelationBlock(relations: Relation[], filterState: Filter[]) {
-  const maybeFilter = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE);
+  const maybeFilter = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY);
   const relationType = maybeFilter?.value;
 
   return relations.filter(r => r.type.id === relationType);

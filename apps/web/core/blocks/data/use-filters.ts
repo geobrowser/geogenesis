@@ -55,7 +55,7 @@ export function useFilters() {
     enabled: filterState !== undefined,
     queryKey: ['blocks', 'data', 'filterable-properties', filterState],
     queryFn: async () => {
-      const typesInFilter = filterState?.filter(f => f.columnId === SystemIds.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
+      const typesInFilter = filterState?.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value) ?? [];
       return await getSchemaFromTypeIds(typesInFilter);
     },
   });

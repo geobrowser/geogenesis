@@ -10,11 +10,11 @@ describe('filters', () => {
         spaces: ['0x0000000000000000000000000000000000000000'],
         AND: [
           {
-            attribute: SystemIds.TYPES_ATTRIBUTE,
+            attribute: SystemIds.TYPES_PROPERTY,
             is: SystemIds.SCHEMA_TYPE,
           },
           {
-            attribute: SystemIds.NAME_ATTRIBUTE,
+            attribute: SystemIds.NAME_PROPERTY,
             is: 'name',
           },
         ],
@@ -32,14 +32,14 @@ describe('filters', () => {
         valueName: null,
       },
       {
-        columnId: SystemIds.TYPES_ATTRIBUTE,
+        columnId: SystemIds.TYPES_PROPERTY,
         columnName: 'Types',
         value: SystemIds.SCHEMA_TYPE,
         valueType: 'RELATION',
         valueName: 'Type',
       },
       {
-        columnId: SystemIds.NAME_ATTRIBUTE,
+        columnId: SystemIds.NAME_PROPERTY,
         columnName: 'Name',
         value: 'name',
         valueType: 'TEXT',

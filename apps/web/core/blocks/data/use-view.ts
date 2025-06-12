@@ -31,7 +31,7 @@ export function useView() {
     id: relationId,
   });
 
-  const viewRelation = blockRelation?.relations.find(relation => relation.type.id === SystemIds.VIEW_ATTRIBUTE);
+  const viewRelation = blockRelation?.relations.find(relation => relation.type.id === SystemIds.VIEW_PROPERTY);
 
   const shownColumnRelations =
     blockRelation?.relations.filter(
@@ -46,7 +46,7 @@ export function useView() {
 
   // @TODO: We shouldn't need the name attribute here since it's automatically
   // added in useMapping if it's not already part of the properties list.
-  const shownColumnIds = [...Object.keys(mapping), SystemIds.NAME_ATTRIBUTE];
+  const shownColumnIds = [...Object.keys(mapping), SystemIds.NAME_PROPERTY];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
@@ -63,7 +63,7 @@ export function useView() {
         space: spaceId,
         index: INITIAL_RELATION_INDEX_VALUE,
         typeOf: {
-          id: EntityId(SystemIds.VIEW_ATTRIBUTE),
+          id: EntityId(SystemIds.VIEW_PROPERTY),
           name: 'View',
         },
         fromEntity: {
@@ -115,7 +115,7 @@ export function useView() {
 
         DB.upsert(
           {
-            attributeId: SystemIds.SELECTOR_ATTRIBUTE,
+            attributeId: SystemIds.SELECTOR_PROPERTY,
             attributeName: 'Selector',
             entityId: newId,
             entityName: null,

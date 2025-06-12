@@ -11,7 +11,7 @@ export async function fetchSpaceTypeTriples(spaceId: string): Promise<Triple[]> 
     skip: 0,
     first: 1000,
     filter: [
-      { field: 'attribute-id', value: SystemIds.TYPES_ATTRIBUTE },
+      { field: 'attribute-id', value: SystemIds.TYPES_PROPERTY },
       {
         field: 'linked-to',
         value: SystemIds.SCHEMA_TYPE,
@@ -44,7 +44,7 @@ export async function fetchForeignTypeTriples(space: Space): Promise<Triple[]> {
         first: 1000,
         filter: [
           { field: 'entity-id', value: entityId },
-          { field: 'attribute-id', value: SystemIds.TYPES_ATTRIBUTE },
+          { field: 'attribute-id', value: SystemIds.TYPES_PROPERTY },
           { field: 'linked-to', value: SystemIds.SCHEMA_TYPE },
         ],
       })

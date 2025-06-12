@@ -173,7 +173,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
           space: spaceId,
           entityId: newEntityId,
           entityName: entity[entityNameIndex],
-          attributeId: SystemIds.NAME_ATTRIBUTE,
+          attributeId: SystemIds.NAME_PROPERTY,
           attributeName: 'Name',
           value: {
             type: 'TEXT',
@@ -593,7 +593,7 @@ const getAttributes = (entityType: Entity | undefined) => {
   if (entityType) {
     entityType?.triples.forEach((triple: TripleType) => {
       if (triple.attributeName === 'Attributes') {
-        // if (triple.value.type === 'ENTITY' && triple.value.name && UNSUPPORTED_ATTRIBUTES.includes(triple.value.name)) {
+        // if (triple.value.type === 'ENTITY' && triple.value.name && UNSUPPORTED_PROPERTYS.includes(triple.value.name)) {
         //   unsupportedAttributes.push(triple);
         // } else {
         //   supportedAttributes.push(triple);
@@ -605,4 +605,4 @@ const getAttributes = (entityType: Entity | undefined) => {
   return { supportedAttributes, unsupportedAttributes };
 };
 
-const UNSUPPORTED_ATTRIBUTES = ['Avatar', 'Cover'];
+const UNSUPPORTED_PROPERTYS = ['Avatar', 'Cover'];

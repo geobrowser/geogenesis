@@ -35,13 +35,13 @@ export function useSource() {
     upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 
     if (newSource.type === 'RELATIONS') {
-      const maybeExistingRelationType = filterState.filter(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE);
+      const maybeExistingRelationType = filterState.filter(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY);
 
       setFilterState(
         [
           ...maybeExistingRelationType,
           {
-            columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+            columnId: SystemIds.RELATION_FROM_PROPERTY,
             columnName: 'From',
             valueType: 'RELATION',
             value: newSource.value,
@@ -56,7 +56,7 @@ export function useSource() {
       // if (fromEntityName && blockEntity?.name !== undefined && blockEntity?.name !== null) {
       //   upsert(
       //     {
-      //       attributeId: SystemIds.NAME_ATTRIBUTE,
+      //       attributeId: SystemIds.NAME_PROPERTY,
       //       entityId: entityId,
       //       entityName: fromEntityName,
       //       attributeName: 'Name',
@@ -72,27 +72,27 @@ export function useSource() {
        * relation then we create it.
        */
       const maybeExistingNamePropertyRelation = shownColumnRelations.find(
-        t => t.toEntity.id === EntityId(SystemIds.NAME_ATTRIBUTE)
+        t => t.toEntity.id === EntityId(SystemIds.NAME_PROPERTY)
       );
 
       if (maybeExistingNamePropertyRelation) {
         upsert(
           {
-            attributeId: SystemIds.SELECTOR_ATTRIBUTE,
+            attributeId: SystemIds.SELECTOR_PROPERTY,
             attributeName: 'Selector',
             entityId: maybeExistingNamePropertyRelation.id,
             entityName: null,
-            value: { type: 'TEXT', value: `->[${SystemIds.RELATION_TO_ATTRIBUTE}]` },
+            value: { type: 'TEXT', value: `->[${SystemIds.RELATION_TO_PROPERTY}]` },
           },
           spaceId
         );
       } else {
         toggleProperty(
           {
-            id: SystemIds.NAME_ATTRIBUTE,
+            id: SystemIds.NAME_PROPERTY,
             name: 'Name',
           },
-          `->[${SystemIds.RELATION_TO_ATTRIBUTE}]`
+          `->[${SystemIds.RELATION_TO_PROPERTY}]`
         );
       }
     }

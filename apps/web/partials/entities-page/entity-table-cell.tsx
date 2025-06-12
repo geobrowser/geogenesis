@@ -48,7 +48,7 @@ export const EntityTableCell = ({
   onLinkEntry,
   source,
 }: Props) => {
-  const isNameCell = columnId === SystemIds.NAME_ATTRIBUTE;
+  const isNameCell = columnId === SystemIds.NAME_PROPERTY;
 
   if (isNameCell) {
     return (

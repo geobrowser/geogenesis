@@ -64,12 +64,12 @@ export function useRenderables(serverValues: Value[], spaceId: string, isRelatio
   //     });
 
   //     // @TODO(migration): SystemIds
-  //     const IS_TYPE_PROPERTY_ATTRIBUTE = 'T2TRBTBe5NS8vR94PLhzce';
+  //     const IS_TYPE_PROPERTY_PROPERTY = 'T2TRBTBe5NS8vR94PLhzce';
 
   //     const typeProperties = possibleTypePropertyAttributeEntities
   //       ? possibleTypePropertyAttributeEntities
   //           .filter(
-  //             entity => entity?.values?.find(value => value.property.id === IS_TYPE_PROPERTY_ATTRIBUTE)?.value === '1'
+  //             entity => entity?.values?.find(value => value.property.id === IS_TYPE_PROPERTY_PROPERTY)?.value === '1'
   //           )
   //           .map(entity => entity.id)
   //       : [];
@@ -105,7 +105,7 @@ export function useRenderables(serverValues: Value[], spaceId: string, isRelatio
 
   const SKIPPED_PROPERTIES = !isRelationPage
     ? [EntityId(SystemIds.BLOCKS)]
-    : [EntityId(SystemIds.BLOCKS), EntityId(SystemIds.TYPES_ATTRIBUTE)];
+    : [EntityId(SystemIds.BLOCKS), EntityId(SystemIds.TYPES_PROPERTY)];
 
   const renderables = toRenderables({
     entityId: id,

@@ -31,7 +31,7 @@ export const generateOpsForSpaceType = async ({
   ops.push(
     Ops.create({
       entity: newEntityId,
-      attribute: SystemIds.NAME_ATTRIBUTE,
+      attribute: SystemIds.NAME_PROPERTY,
       value: {
         type: 'TEXT',
         value: spaceName,
@@ -44,7 +44,7 @@ export const generateOpsForSpaceType = async ({
     Relation.make({
       fromId: newEntityId,
       toId: SystemIds.SPACE_TYPE,
-      relationTypeId: SystemIds.TYPES_ATTRIBUTE,
+      relationTypeId: SystemIds.TYPES_PROPERTY,
     })
   );
 
@@ -66,7 +66,7 @@ export const generateOpsForSpaceType = async ({
       ops.push(
         Relation.make({
           fromId: newEntityId,
-          relationTypeId: SystemIds.ACCOUNTS_ATTRIBUTE,
+          relationTypeId: SystemIds.ACCOUNTS_PROPERTY,
           toId: accountId,
         })
       );
@@ -115,7 +115,7 @@ export const generateOpsForSpaceType = async ({
         Relation.make({
           fromId: newEntityId,
           toId: SystemIds.GOVERNMENT_ORG_TYPE,
-          relationTypeId: SystemIds.TYPES_ATTRIBUTE,
+          relationTypeId: SystemIds.TYPES_PROPERTY,
         })
       );
       break;
@@ -175,7 +175,7 @@ export const generateOpsForSpaceType = async ({
       Relation.make({
         fromId: newEntityId,
         toId: imageId, // Set the avatar relation to point to the entity id of the new entity
-        relationTypeId: ContentIds.AVATAR_ATTRIBUTE,
+        relationTypeId: ContentIds.AVATAR_PROPERTY,
       })
     );
   }
@@ -191,7 +191,7 @@ export const generateOpsForSpaceType = async ({
       Relation.make({
         fromId: newEntityId,
         toId: imageId, // Set the avatar relation to point to the entity id of the new entity
-        relationTypeId: SystemIds.COVER_ATTRIBUTE,
+        relationTypeId: SystemIds.COVER_PROPERTY,
       })
     );
   }

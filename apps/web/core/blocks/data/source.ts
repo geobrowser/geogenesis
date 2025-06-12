@@ -65,7 +65,7 @@ type GetSourceArgs = {
 export function getSource({ blockId, dataEntityRelations, currentSpaceId, filterState }: GetSourceArgs): Source {
   const sourceType = dataEntityRelations.find(r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE)?.toEntity.id;
 
-  const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_ATTRIBUTE);
+  const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_PROPERTY);
 
   if (maybeEntityFilter) {
     return {

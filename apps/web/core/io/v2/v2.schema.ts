@@ -2,7 +2,7 @@
 // Entity
 // Value
 // Relation
-import { Schema } from 'effect';
+import { Brand, Schema } from 'effect';
 
 // Need a more ergonomic querying system besides the graphql and shitty
 // variable mechanism we have now
@@ -98,3 +98,27 @@ export const Entity = Schema.Struct({
 });
 
 export type RemoteEntity = Schema.Schema.Type<typeof Entity>;
+
+export type Address = string & Brand.Brand<'Address'>;
+export const Address = Brand.nominal<Address>();
+export const AddressWithValidation = Schema.String.pipe(
+  Schema.length(42),
+  Schema.startsWith('0x'),
+  Schema.fromBrand(Address)
+);
+
+const SpaceGovernanceType = Schema.Union(Schema.Literal('PUBLIC'), Schema.Literal('PERSONAL'));
+type SpaceGovernanceType = Schema.Schema.Type<typeof SpaceGovernanceType>;
+
+export const Space = Schema.Struct({
+  id: Schema.UUID,
+  type: SpaceGovernanceType,
+  daoAddress: AddressWithValidation,
+  spaceAddress: AddressWithValidation,
+  mainVotingAddress: Schema.NullOr(AddressWithValidation),
+  membershipAddress: Schema.NullOr(AddressWithValidation),
+  personalAddress: Schema.NullOr(AddressWithValidation),
+  entity: Schema.NullOr(Entity),
+});
+
+export type RemoteSpace = Schema.Schema.Type<typeof Space>;

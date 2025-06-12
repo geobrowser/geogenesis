@@ -162,7 +162,7 @@ export function useDataBlock() {
 
   const setName = (newName: string) => {
     upsert({
-      attributeId: SystemIds.NAME_ATTRIBUTE,
+      attributeId: SystemIds.NAME_PROPERTY,
       entityId: entityId,
       entityName: newName,
       attributeName: 'Name',

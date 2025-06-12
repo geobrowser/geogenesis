@@ -30,7 +30,7 @@ export type EditEvent =
       };
     }
   | {
-      type: 'UPSERT_ATTRIBUTE';
+      type: 'UPSERT_PROPERTY';
       payload: {
         renderable: RenderableProperty;
         propertyId: string;
@@ -142,7 +142,7 @@ const listener =
         break;
       }
 
-      case 'UPSERT_ATTRIBUTE': {
+      case 'UPSERT_PROPERTY': {
         const { renderable, propertyId, propertyName } = event.payload;
 
         // When we change the attribute for a renderable we actually change

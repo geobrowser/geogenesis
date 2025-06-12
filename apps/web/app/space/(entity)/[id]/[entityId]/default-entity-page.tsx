@@ -117,7 +117,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   // }
 
   const tabIds = entity?.relations
-    .filter(r => r.type.id === EntityId(SystemIds.TABS_ATTRIBUTE))
+    .filter(r => r.type.id === EntityId(SystemIds.TABS_PROPERTY))
     ?.map(r => r.toEntity.id);
 
   const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];

@@ -9,7 +9,7 @@ import { Relation, Value } from '~/core/v2.types';
  * description of the entity.
  *
  * We assume that the Description triple's attribute for an Entity will match the expected
- * system Description attribute ID at SystemIds.DESCRIPTION_ATTRIBUTE. However, anybody can
+ * system Description attribute ID at SystemIds.DESCRIPTION_PROPERTY. However, anybody can
  * set up a triple that references _any_ attribute whose name is "Description."
  *
  * We currently handle this in the UI by checking the system ID for Description as well
@@ -52,7 +52,7 @@ export function nameTriples(triples: ITriple[]): ITriple[] {
 }
 
 export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
-  return triples.find(triple => triple.attributeId === SystemIds.VALUE_TYPE_ATTRIBUTE);
+  return triples.find(triple => triple.attributeId === SystemIds.VALUE_TYPE_PROPERTY);
 }
 
 /**

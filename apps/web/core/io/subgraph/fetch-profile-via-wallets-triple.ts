@@ -34,13 +34,13 @@ const query = (address: string) => {
             }
             relationsByFromVersionId: {
               some: {
-                typeOf: { id: { equalTo: "${SystemIds.ACCOUNTS_ATTRIBUTE}" } }
+                typeOf: { id: { equalTo: "${SystemIds.ACCOUNTS_PROPERTY}" } }
                 toEntity: {
                   currentVersion: {
                     version: {
                       triples: {
                         some: {
-                          attributeId: { equalTo: "${SystemIds.ADDRESS_ATTRIBUTE}" }
+                          attributeId: { equalTo: "${SystemIds.ADDRESS_PROPERTY}" }
                           textValue: {
                             equalTo: "${address}"
                           }

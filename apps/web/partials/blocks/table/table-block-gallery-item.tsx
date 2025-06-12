@@ -43,10 +43,10 @@ export function TableBlockGalleryItem({
   relationId,
   source,
 }: Props) {
-  const nameCell: Cell | undefined = columns[SystemIds.NAME_ATTRIBUTE];
-  const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_ATTRIBUTE];
-  const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
-  const maybeCoverData: Cell | undefined = columns[SystemIds.COVER_ATTRIBUTE];
+  const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
+  const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_PROPERTY];
+  const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_PROPERTY];
+  const maybeCoverData: Cell | undefined = columns[SystemIds.COVER_PROPERTY];
 
   const { cellId, verified } = nameCell;
   let { image, description } = nameCell;
@@ -54,20 +54,20 @@ export function TableBlockGalleryItem({
   const name = getName(nameCell, currentSpaceId);
 
   const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
-    r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE && r.spaceId === currentSpaceId
+    r => r.attributeId === SystemIds.DESCRIPTION_PROPERTY && r.spaceId === currentSpaceId
   )?.value;
 
   const maybeDescription =
     maybeDescriptionInSpace ??
-    maybeDescriptionData?.renderables.find(r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE)?.value;
+    maybeDescriptionData?.renderables.find(r => r.attributeId === SystemIds.DESCRIPTION_PROPERTY)?.value;
 
   if (maybeDescription) {
     description = maybeDescription;
   }
 
-  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === ContentIds.AVATAR_ATTRIBUTE)?.value;
+  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === ContentIds.AVATAR_PROPERTY)?.value;
 
-  const maybeCoverUrl = maybeCoverData?.renderables.find(r => r.attributeId === SystemIds.COVER_ATTRIBUTE)?.value;
+  const maybeCoverUrl = maybeCoverData?.renderables.find(r => r.attributeId === SystemIds.COVER_PROPERTY)?.value;
 
   if (maybeAvatarUrl) {
     image = maybeAvatarUrl;
@@ -81,9 +81,9 @@ export function TableBlockGalleryItem({
 
   const otherPropertyData = Object.values(columns).filter(
     c =>
-      c.slotId !== SystemIds.NAME_ATTRIBUTE &&
-      c.slotId !== ContentIds.AVATAR_ATTRIBUTE &&
-      c.slotId !== SystemIds.COVER_ATTRIBUTE
+      c.slotId !== SystemIds.NAME_PROPERTY &&
+      c.slotId !== ContentIds.AVATAR_PROPERTY &&
+      c.slotId !== SystemIds.COVER_PROPERTY
   );
 
   /**
@@ -93,7 +93,7 @@ export function TableBlockGalleryItem({
    * To do this we read description data from the row like every other optional data, but filter it
    * out of rendering at read-time. Then we can render it it's unique way.
    */
-  const propertyDataHasDescription = otherPropertyData.some(c => c.slotId === SystemIds.DESCRIPTION_ATTRIBUTE);
+  const propertyDataHasDescription = otherPropertyData.some(c => c.slotId === SystemIds.DESCRIPTION_PROPERTY);
 
   if (isEditing && source.type !== 'RELATIONS') {
     return (
@@ -166,7 +166,7 @@ export function TableBlockGalleryItem({
                 //             fromEntityName: name,
                 //             toEntityId: imageId,
                 //             toEntityName: null,
-                //             typeOfId: ContentIds.AVATAR_ATTRIBUTE,
+                //             typeOfId: ContentIds.AVATAR_PROPERTY,
                 //             typeOfName: 'Avatar',
                 //             renderableType: 'IMAGE',
                 //             value: setTripleOp.triple.value.value,
@@ -245,7 +245,7 @@ export function TableBlockGalleryItem({
                             type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                             payload: {
                               renderable: {
-                                attributeId: SystemIds.NAME_ATTRIBUTE,
+                                attributeId: SystemIds.NAME_PROPERTY,
                                 entityId: rowEntityId,
                                 spaceId: currentSpaceId,
                                 attributeName: 'Name',
@@ -289,7 +289,7 @@ export function TableBlockGalleryItem({
                               type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                               payload: {
                                 renderable: {
-                                  attributeId: SystemIds.NAME_ATTRIBUTE,
+                                  attributeId: SystemIds.NAME_PROPERTY,
                                   entityId: rowEntityId,
                                   spaceId: currentSpaceId,
                                   attributeName: 'Name',

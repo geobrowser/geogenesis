@@ -112,11 +112,11 @@ export function prepareTriplesForPublishing(triples: Triple[], relations: Stored
   };
 }
 
-const RELATION_ATTRIBUTES = [
-  EntityId(SystemIds.TYPES_ATTRIBUTE),
-  EntityId(SystemIds.RELATION_FROM_ATTRIBUTE),
-  EntityId(SystemIds.RELATION_TO_ATTRIBUTE),
-  EntityId(SystemIds.RELATION_TYPE_ATTRIBUTE),
+const RELATION_PROPERTYS = [
+  EntityId(SystemIds.TYPES_PROPERTY),
+  EntityId(SystemIds.RELATION_FROM_PROPERTY),
+  EntityId(SystemIds.RELATION_TO_PROPERTY),
+  EntityId(SystemIds.RELATION_TYPE_PROPERTY),
   EntityId(SystemIds.RELATION_INDEX),
 ];
 
@@ -127,7 +127,7 @@ function getTriplesForRelations(triples: Triple[], relations: Relation[]): Tripl
     .filter(t => {
       const isForRelationEntity = relationIds.includes(EntityId(t.entityId));
 
-      if (isForRelationEntity && RELATION_ATTRIBUTES.includes(EntityId(t.attributeId))) {
+      if (isForRelationEntity && RELATION_PROPERTYS.includes(EntityId(t.attributeId))) {
         // For triples defining the RELATION_TO_PROPERTY we don't want to filter it out
         // if it contains an optional space id.
         if (t.attributeId === SystemIds.RELATION_TO_PROPERTY) {

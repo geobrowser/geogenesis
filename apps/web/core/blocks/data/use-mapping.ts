@@ -19,7 +19,7 @@ import { PathSegment } from './data-selectors';
  * for a given data block.
  *
  * Reading the keys of the mapping should map to the property used
- * for the UI slot. e.g., NAME_ATTRIBUTE -> name data.
+ * for the UI slot. e.g., NAME_PROPERTY -> name data.
  */
 export type Mapping = {
   [slotId: string]: string | null;
@@ -46,7 +46,7 @@ export type Mapping = {
  */
 
 const initialData = {
-  [SystemIds.NAME_ATTRIBUTE]: null,
+  [SystemIds.NAME_PROPERTY]: null,
 };
 
 export function useMapping(
@@ -91,8 +91,8 @@ export function useMapping(
 
       // Currently require the name attribute to be rendered for every view and every query mode. Rendering
       // the data block will break otherwise.
-      if (!mapping[SystemIds.NAME_ATTRIBUTE]) {
-        mapping[SystemIds.NAME_ATTRIBUTE] = null;
+      if (!mapping[SystemIds.NAME_PROPERTY]) {
+        mapping[SystemIds.NAME_PROPERTY] = null;
       }
 
       return mapping;
@@ -149,7 +149,7 @@ export function mappingToRows(
           placeholderRenderables: [placeholder],
         });
 
-        const isNameCell = slotId === SystemIds.NAME_ATTRIBUTE;
+        const isNameCell = slotId === SystemIds.NAME_PROPERTY;
 
         if (isNameCell) {
           cell.description = description;
@@ -237,11 +237,8 @@ export function mappingToCell(
     const cellRelations = relations.filter(t => t.type.id === propertyToFilter);
     const entityName = Entities.name(cellTriples);
 
-    if (
-      propertyToFilter === SystemIds.RELATION_TO_ATTRIBUTE ||
-      propertyToFilter === SystemIds.RELATION_FROM_ATTRIBUTE
-    ) {
-      const imageEntityUrlValue = values.find(v => v.property.id === SystemIds.IMAGE_URL_ATTRIBUTE)?.value ?? null;
+    if (propertyToFilter === SystemIds.RELATION_TO_PROPERTY || propertyToFilter === SystemIds.RELATION_FROM_PROPERTY) {
+      const imageEntityUrlValue = values.find(v => v.property.id === SystemIds.IMAGE_URL_PROPERTY)?.value ?? null;
 
       return entity.types.some(t => t.id === EntityId(SystemIds.IMAGE_TYPE))
         ? [
@@ -302,7 +299,7 @@ export function mappingToCell(
     });
   });
 
-  const isNameCell = propertyId === SystemIds.NAME_ATTRIBUTE;
+  const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
 
   if (isNameCell) {
     const relations = entities.flatMap(e => e.relations);

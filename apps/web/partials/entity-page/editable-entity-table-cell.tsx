@@ -56,7 +56,7 @@ export function EditableEntityTableCell({
 }: Props) {
   const entityName = Entities.nameFromRenderable(renderables) ?? '';
 
-  const isNameCell = attributeId === SystemIds.NAME_ATTRIBUTE;
+  const isNameCell = attributeId === SystemIds.NAME_PROPERTY;
 
   if (isNameCell) {
     // We only allow FOC for collections.
@@ -127,7 +127,7 @@ export function EditableEntityTableCell({
                     type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                     payload: {
                       renderable: {
-                        attributeId: SystemIds.NAME_ATTRIBUTE,
+                        attributeId: SystemIds.NAME_PROPERTY,
                         entityId,
                         spaceId: currentSpaceId,
                         attributeName: 'Name',
@@ -172,7 +172,7 @@ export function EditableEntityTableCell({
                       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                       payload: {
                         renderable: {
-                          attributeId: SystemIds.NAME_ATTRIBUTE,
+                          attributeId: SystemIds.NAME_PROPERTY,
                           entityId,
                           spaceId: currentSpaceId,
                           attributeName: 'Name',

@@ -86,7 +86,7 @@ export async function mapSelectorLexiconToSourceEntity(
 
     // @TODO: Need to handle if the entity is an image
     if (segment.type === 'RELATION') {
-      if (segment.property === SystemIds.RELATION_TO_ATTRIBUTE) {
+      if (segment.property === SystemIds.RELATION_TO_PROPERTY) {
         const newInputId = input?.values.find(t => t.property.id === SystemIds.RELATION_TO_PROPERTY)?.value;
 
         if (!newInputId) {
@@ -102,8 +102,8 @@ export async function mapSelectorLexiconToSourceEntity(
         continue;
       }
 
-      if (segment.property === SystemIds.RELATION_FROM_ATTRIBUTE) {
-        const newInputId = input?.values.find(t => t.property.id === SystemIds.RELATION_FROM_ATTRIBUTE)?.value;
+      if (segment.property === SystemIds.RELATION_FROM_PROPERTY) {
+        const newInputId = input?.values.find(t => t.property.id === SystemIds.RELATION_FROM_PROPERTY)?.value;
 
         if (!newInputId) {
           continue;
@@ -157,33 +157,33 @@ export function generateSelector(
     }
 
     if (where === 'TO') {
-      selector = `->[${SystemIds.RELATION_TO_ATTRIBUTE}]->.[${property.id}]`;
+      selector = `->[${SystemIds.RELATION_TO_PROPERTY}]->.[${property.id}]`;
 
-      if (property.id === SystemIds.NAME_ATTRIBUTE) {
-        selector = `->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
+      if (property.id === SystemIds.NAME_PROPERTY) {
+        selector = `->[${SystemIds.RELATION_TO_PROPERTY}]`;
       }
     }
 
     if (where === 'FROM') {
-      selector = `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]->.[${property.id}]`;
+      selector = `->[${SystemIds.RELATION_FROM_PROPERTY}]->.[${property.id}]`;
 
-      if (property.id === SystemIds.NAME_ATTRIBUTE) {
-        selector = `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]`;
+      if (property.id === SystemIds.NAME_PROPERTY) {
+        selector = `->[${SystemIds.RELATION_FROM_PROPERTY}]`;
       }
     }
   }
 
   if (property.renderableType === 'RELATION' || property.renderableType === 'IMAGE') {
     if (where === 'SOURCE') {
-      selector = `->[${property.id}]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
+      selector = `->[${property.id}]->[${SystemIds.RELATION_TO_PROPERTY}]`;
     }
 
     if (where === 'TO') {
-      selector = `->[${SystemIds.RELATION_TO_ATTRIBUTE}]->[${property.id}]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
+      selector = `->[${SystemIds.RELATION_TO_PROPERTY}]->[${property.id}]->[${SystemIds.RELATION_TO_PROPERTY}]`;
     }
 
     if (where === 'FROM') {
-      selector = `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]->[${property.id}]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
+      selector = `->[${SystemIds.RELATION_FROM_PROPERTY}]->[${property.id}]->[${SystemIds.RELATION_TO_PROPERTY}]`;
     }
   }
 
@@ -203,12 +203,12 @@ export function getIsSelected(
     const generatedSelector = generateSelector(property, where);
 
     // Render the name field of a TO selector to use the name
-    if (where === 'TO' && property.id === SystemIds.NAME_ATTRIBUTE) {
-      return s === `->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
+    if (where === 'TO' && property.id === SystemIds.NAME_PROPERTY) {
+      return s === `->[${SystemIds.RELATION_TO_PROPERTY}]`;
     }
 
-    if (where === 'FROM' && property.id === SystemIds.NAME_ATTRIBUTE) {
-      return s === `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]`;
+    if (where === 'FROM' && property.id === SystemIds.NAME_PROPERTY) {
+      return s === `->[${SystemIds.RELATION_FROM_PROPERTY}]`;
     }
 
     return s === generatedSelector;

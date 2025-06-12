@@ -37,7 +37,7 @@ export function TableBlockBulletedListItem({
   relationId,
   source,
 }: Props) {
-  const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
+  const nameCell = columns[SystemIds.NAME_PROPERTY];
   const { cellId, verified } = nameCell;
 
   const name = getName(nameCell, currentSpaceId);
@@ -106,7 +106,7 @@ export function TableBlockBulletedListItem({
                           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                           payload: {
                             renderable: {
-                              attributeId: SystemIds.NAME_ATTRIBUTE,
+                              attributeId: SystemIds.NAME_PROPERTY,
                               entityId: rowEntityId,
                               spaceId: currentSpaceId,
                               attributeName: 'Name',
@@ -149,7 +149,7 @@ export function TableBlockBulletedListItem({
                             type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                             payload: {
                               renderable: {
-                                attributeId: SystemIds.NAME_ATTRIBUTE,
+                                attributeId: SystemIds.NAME_PROPERTY,
                                 entityId: rowEntityId,
                                 spaceId: currentSpaceId,
                                 attributeName: 'Name',

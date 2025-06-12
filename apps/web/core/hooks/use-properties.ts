@@ -57,12 +57,12 @@ function sortProperties(renderables: PropertySchema[]) {
     const { id: attributeIdA, name: attributeNameA } = renderableA;
     const { id: attributeIdB, name: attributeNameB } = renderableB;
 
-    const isNameA = attributeIdA === EntityId(SystemIds.NAME_ATTRIBUTE);
-    const isNameB = attributeIdB === EntityId(SystemIds.NAME_ATTRIBUTE);
-    const isDescriptionA = attributeIdA === EntityId(SystemIds.DESCRIPTION_ATTRIBUTE);
-    const isDescriptionB = attributeIdB === EntityId(SystemIds.DESCRIPTION_ATTRIBUTE);
-    const isTypesA = attributeIdA === EntityId(SystemIds.TYPES_ATTRIBUTE);
-    const isTypesB = attributeIdB === EntityId(SystemIds.TYPES_ATTRIBUTE);
+    const isNameA = attributeIdA === EntityId(SystemIds.NAME_PROPERTY);
+    const isNameB = attributeIdB === EntityId(SystemIds.NAME_PROPERTY);
+    const isDescriptionA = attributeIdA === EntityId(SystemIds.DESCRIPTION_PROPERTY);
+    const isDescriptionB = attributeIdB === EntityId(SystemIds.DESCRIPTION_PROPERTY);
+    const isTypesA = attributeIdA === EntityId(SystemIds.TYPES_PROPERTY);
+    const isTypesB = attributeIdB === EntityId(SystemIds.TYPES_PROPERTY);
 
     if (isNameA && !isNameB) return -1;
     if (!isNameA && isNameB) return 1;

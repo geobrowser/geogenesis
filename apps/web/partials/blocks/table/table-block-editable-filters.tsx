@@ -25,7 +25,7 @@ export function TableBlockEditableFilters() {
           // @TODO(data blocks): We should add the default filters to the data model
           // itself instead of manually here.
           // {
-          //   columnId: SystemIds.NAME_ATTRIBUTE,
+          //   columnId: SystemIds.NAME_PROPERTY,
           //   columnName: 'Name',
           //   valueType: valueTypes[SystemIds.TEXT],
           //   value: '',
@@ -47,14 +47,14 @@ export function TableBlockEditableFilters() {
         ]
       : [
           {
-            columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+            columnId: SystemIds.RELATION_FROM_PROPERTY,
             columnName: 'From',
             valueType: 'RELATION',
             value: '',
             valueName: null,
           },
           {
-            columnId: SystemIds.RELATION_TYPE_ATTRIBUTE,
+            columnId: SystemIds.RELATION_TYPE_PROPERTY,
             columnName: 'Relation type',
             valueType: 'RELATION',
             value: '',
@@ -109,12 +109,12 @@ function sortFilters(filters: RenderableFilter[]): RenderableFilter[] {
     const { columnId: attributeIdA, columnName: attributeNameA } = renderableA;
     const { columnId: attributeIdB, columnName: attributeNameB } = renderableB;
 
-    const isNameA = attributeIdA === SystemIds.NAME_ATTRIBUTE;
-    const isNameB = attributeIdB === SystemIds.NAME_ATTRIBUTE;
-    const isDescriptionA = attributeIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isDescriptionB = attributeIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isTypesA = attributeIdA === SystemIds.TYPES_ATTRIBUTE;
-    const isTypesB = attributeIdB === SystemIds.TYPES_ATTRIBUTE;
+    const isNameA = attributeIdA === SystemIds.NAME_PROPERTY;
+    const isNameB = attributeIdB === SystemIds.NAME_PROPERTY;
+    const isDescriptionA = attributeIdA === SystemIds.DESCRIPTION_PROPERTY;
+    const isDescriptionB = attributeIdB === SystemIds.DESCRIPTION_PROPERTY;
+    const isTypesA = attributeIdA === SystemIds.TYPES_PROPERTY;
+    const isTypesB = attributeIdB === SystemIds.TYPES_PROPERTY;
 
     if (isNameA && !isNameB) return -1;
     if (!isNameA && isNameB) return 1;

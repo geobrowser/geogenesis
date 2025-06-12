@@ -15,19 +15,19 @@ export const useRelationship = (entityId: string, spaceId: string) => {
   // const entity = useEntity({ id: EntityId(entityId), spaceId });
 
   const isRelation = false;
-  // const isRelation = entity?.values.some(value => value.value === SystemIds.RELATION_TYPE_ATTRIBUTE) ?? false;
+  // const isRelation = entity?.values.some(value => value.value === SystemIds.RELATION_TYPE_PROPERTY) ?? false;
 
   // const from =
-  //   entity?.triples.find(triple => triple.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE)?.value.value ?? '';
+  //   entity?.triples.find(triple => triple.attributeId === SystemIds.RELATION_FROM_PROPERTY)?.value.value ?? '';
   // const fromEntityId = GraphUrl.isValid(from) ? GraphUrl.toEntityId(from) : '';
   // const fromEntity = useEntity({ id: EntityId(fromEntityId) });
 
-  // const to = entity?.triples.find(triple => triple.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)?.value.value ?? '';
+  // const to = entity?.triples.find(triple => triple.attributeId === SystemIds.RELATION_TO_PROPERTY)?.value.value ?? '';
   // const toEntityId = GraphUrl.isValid(to) ? GraphUrl.toEntityId(to) : '';
   // const toEntity = useEntity({ id: EntityId(toEntityId) });
 
   // const relationType =
-  //   entity?.triples.find(triple => triple.attributeId === SystemIds.RELATION_TYPE_ATTRIBUTE)?.value.value ?? '';
+  //   entity?.triples.find(triple => triple.attributeId === SystemIds.RELATION_TYPE_PROPERTY)?.value.value ?? '';
   // const relationTypeEntityId = GraphUrl.isValid(relationType) ? GraphUrl.toEntityId(relationType) : '';
   // const relationTypeEntity = useEntity({ id: EntityId(relationTypeEntityId) });
 

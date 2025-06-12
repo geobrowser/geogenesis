@@ -38,10 +38,10 @@ export const cloneEntity = async (
   const newEntityName = entityName;
   const newOps: Array<Op> = [];
 
-  const triplesToClone = oldEntity.triples.filter(triple => !SKIPPED_ATTRIBUTES.includes(EntityId(triple.attributeId)));
-  const relationsToClone = oldEntity.relationsOut.filter(relation => !SKIPPED_ATTRIBUTES.includes(relation.typeOf.id));
+  const triplesToClone = oldEntity.triples.filter(triple => !SKIPPED_PROPERTYS.includes(EntityId(triple.attributeId)));
+  const relationsToClone = oldEntity.relationsOut.filter(relation => !SKIPPED_PROPERTYS.includes(relation.typeOf.id));
   const tabsToClone = oldEntity.relationsOut.filter(
-    relation => relation.typeOf.id === EntityId(SystemIds.TABS_ATTRIBUTE)
+    relation => relation.typeOf.id === EntityId(SystemIds.TABS_PROPERTY)
   );
   const blocksToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS));
 
@@ -49,7 +49,7 @@ export const cloneEntity = async (
     newOps.push(
       Ops.create({
         entity: newEntityId,
-        attribute: SystemIds.NAME_ATTRIBUTE,
+        attribute: SystemIds.NAME_PROPERTY,
         value: {
           type: 'TEXT',
           value: newEntityName,
@@ -170,11 +170,11 @@ const cloneRelatedEntities = async (
   return [allOps.flat(), allSeenEntityIds] as const;
 };
 
-const SKIPPED_ATTRIBUTES = [
-  EntityId(SystemIds.NAME_ATTRIBUTE),
-  EntityId(SystemIds.DESCRIPTION_ATTRIBUTE),
-  EntityId(ContentIds.AVATAR_ATTRIBUTE),
-  EntityId(SystemIds.TABS_ATTRIBUTE),
+const SKIPPED_PROPERTYS = [
+  EntityId(SystemIds.NAME_PROPERTY),
+  EntityId(SystemIds.DESCRIPTION_PROPERTY),
+  EntityId(ContentIds.AVATAR_PROPERTY),
+  EntityId(SystemIds.TABS_PROPERTY),
   EntityId(SystemIds.BLOCKS),
 ];
 

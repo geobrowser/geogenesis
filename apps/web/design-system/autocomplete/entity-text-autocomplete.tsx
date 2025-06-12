@@ -55,7 +55,7 @@ export function EntityTextAutocomplete({
     upsert(
       {
         entityId: newEntityId,
-        attributeId: SystemIds.NAME_ATTRIBUTE,
+        attributeId: SystemIds.NAME_PROPERTY,
         entityName: query,
         attributeName: 'Name',
         value: {
@@ -71,7 +71,7 @@ export function EntityTextAutocomplete({
         upsert(
           {
             entityId: newEntityId,
-            attributeId: SystemIds.TYPES_ATTRIBUTE,
+            attributeId: SystemIds.TYPES_PROPERTY,
             entityName: query,
             attributeName: 'Types',
             value: {
@@ -91,7 +91,7 @@ export function EntityTextAutocomplete({
     //       {
     //         type: 'SET_TRIPLE',
     //         entityId: newEntityId,
-    //         attributeId: SystemIds.TYPES_ATTRIBUTE,
+    //         attributeId: SystemIds.TYPES_PROPERTY,
     //         entityName: query,
     //         attributeName: 'Types',
     //         value: {

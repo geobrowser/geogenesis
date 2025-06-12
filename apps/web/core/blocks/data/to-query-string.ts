@@ -12,14 +12,14 @@ export function queryStringFromFilters(
   const filtersAsStrings = filters
     .map(filter => {
       // Assume we can only filter by one type at a time for now
-      if (filter.columnId === SystemIds.TYPES_ATTRIBUTE && filter.valueType === 'RELATION') {
+      if (filter.columnId === SystemIds.TYPES_PROPERTY && filter.valueType === 'RELATION') {
         return `versionTypes: { some: { type: { entityId: {equalTo: "${filter.value}" } } } }`;
       }
 
       // We treat Name and Space as special filters even though they are not always
       // columns on the type schema for a table. We allow users to be able to filter
       // by name and space.
-      if (filter.columnId === SystemIds.NAME_ATTRIBUTE && filter.valueType === 'TEXT') {
+      if (filter.columnId === SystemIds.NAME_PROPERTY && filter.valueType === 'TEXT') {
         // For the name we can just search for the name based on the indexed GeoEntity name
         return `name: { startsWithInsensitive: "${filter.value}" }`;
       }

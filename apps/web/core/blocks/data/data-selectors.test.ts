@@ -91,18 +91,18 @@ describe('generateSelector', () => {
       'TO'
     );
 
-    expect(selector).toEqual(`->[${SystemIds.RELATION_TO_ATTRIBUTE}]->.[1]`);
+    expect(selector).toEqual(`->[${SystemIds.RELATION_TO_PROPERTY}]->.[1]`);
 
     // Name triple's default to the entity itself rather than its name
     const nameSelector = generateSelector(
       {
-        id: SystemIds.NAME_ATTRIBUTE,
+        id: SystemIds.NAME_PROPERTY,
         renderableType: 'TEXT',
       },
       'TO'
     );
 
-    expect(nameSelector).toEqual(`->[${SystemIds.RELATION_TO_ATTRIBUTE}]`);
+    expect(nameSelector).toEqual(`->[${SystemIds.RELATION_TO_PROPERTY}]`);
   });
 
   it('TO entity with relation', () => {
@@ -114,7 +114,7 @@ describe('generateSelector', () => {
       'TO'
     );
 
-    expect(selector).toEqual(`->[${SystemIds.RELATION_TO_ATTRIBUTE}]->[1]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`);
+    expect(selector).toEqual(`->[${SystemIds.RELATION_TO_PROPERTY}]->[1]->[${SystemIds.RELATION_TO_PROPERTY}]`);
   });
 
   it('FROM entity with triple', () => {
@@ -126,18 +126,18 @@ describe('generateSelector', () => {
       'FROM'
     );
 
-    expect(selector).toEqual(`->[${SystemIds.RELATION_FROM_ATTRIBUTE}]->.[1]`);
+    expect(selector).toEqual(`->[${SystemIds.RELATION_FROM_PROPERTY}]->.[1]`);
 
     // Name triple's default to the entity itself rather than its name
     const nameSelector = generateSelector(
       {
-        id: SystemIds.NAME_ATTRIBUTE,
+        id: SystemIds.NAME_PROPERTY,
         renderableType: 'TEXT',
       },
       'FROM'
     );
 
-    expect(nameSelector).toEqual(`->[${SystemIds.RELATION_FROM_ATTRIBUTE}]`);
+    expect(nameSelector).toEqual(`->[${SystemIds.RELATION_FROM_PROPERTY}]`);
   });
 
   it('FROM entity with relation', () => {
@@ -149,7 +149,7 @@ describe('generateSelector', () => {
       'FROM'
     );
 
-    expect(selector).toEqual(`->[${SystemIds.RELATION_FROM_ATTRIBUTE}]->[1]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`);
+    expect(selector).toEqual(`->[${SystemIds.RELATION_FROM_PROPERTY}]->[1]->[${SystemIds.RELATION_TO_PROPERTY}]`);
   });
 
   it('SOURCE entity with name', () => {
@@ -173,6 +173,6 @@ describe('generateSelector', () => {
       'SOURCE'
     );
 
-    expect(selector).toEqual(`->[1]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`);
+    expect(selector).toEqual(`->[1]->[${SystemIds.RELATION_TO_PROPERTY}]`);
   });
 });

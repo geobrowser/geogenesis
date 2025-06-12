@@ -1,7 +1,7 @@
 import type { CodegenConfig } from '@graphql-codegen/cli';
 
 const config: CodegenConfig = {
-  schema: 'https://hypergraph-v2.up.railway.app/graphql',
+  schema: 'http://localhost:3000/graphql',
   documents: ['./**/*.tsx'],
   generates: {
     './core/gql/': {

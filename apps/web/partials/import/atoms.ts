@@ -27,7 +27,7 @@ export const entityCountAtom = atom(get => {
 export const entityCountByTypeAtom = atom(get => {
   const actions = get(triplesAtom);
 
-  const typeActions = actions.filter(action => action.attributeId === SystemIds.TYPES_ATTRIBUTE);
+  const typeActions = actions.filter(action => action.attributeId === SystemIds.TYPES_PROPERTY);
 
   const entitySetByType: Record<string, Set<string>> = {};
 

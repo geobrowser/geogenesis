@@ -59,8 +59,8 @@ interface Props {
 function makePlaceholderRow(entityId: string, spaceId: string, properties: PropertySchema[]) {
   const columns: Record<string, Cell> = {};
 
-  columns[SystemIds.NAME_ATTRIBUTE] = {
-    slotId: SystemIds.NAME_ATTRIBUTE,
+  columns[SystemIds.NAME_PROPERTY] = {
+    slotId: SystemIds.NAME_PROPERTY,
     cellId: ID.createEntityId(),
     name: null,
     renderables: [],
@@ -68,7 +68,7 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
 
   for (const p of properties) {
     // Why were we skipping the name attribute?
-    // if (p.id === EntityId(SystemIds.NAME_ATTRIBUTE)) {
+    // if (p.id === EntityId(SystemIds.NAME_PROPERTY)) {
     //   continue;
     // }
 
@@ -358,7 +358,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               onChangeEntry={onChangeEntry}
               onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
+              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
               source={source}
             />
           );
@@ -382,7 +382,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               onChangeEntry={onChangeEntry}
               onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
+              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
               source={source}
             />
           );
@@ -406,7 +406,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               onLinkEntry={onLinkEntry}
               isPlaceholder={Boolean(row.placeholder)}
               properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
+              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
               source={source}
             />
           );
