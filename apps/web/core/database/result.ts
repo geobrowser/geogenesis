@@ -41,7 +41,7 @@ export async function mergeSearchResult(args: FetchResultOptions) {
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
 
-  const localEntitySpacesBySpaceId = Object.fromEntries(localEntitySpaces.map(s => [s.id, s.spaceConfig]));
+  const localEntitySpacesBySpaceId = Object.fromEntries(localEntitySpaces.map(s => [s.id, s.entity]));
 
   const hasLocalEntitySpaces = Object.keys(localEntitySpacesBySpaceId).length !== 0;
 

@@ -55,8 +55,8 @@ export default async function Layout(props0: LayoutProps) {
   const props = await getData(spaceId);
   const coverUrl = Entities.cover(props.relationsOut);
 
-  const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
-  const tabs = buildTabsForSpacePage(props.tabEntities, props.space.spaceConfig?.types ?? [], params);
+  const typeNames = props.space.entity?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
+  const tabs = buildTabsForSpacePage(props.tabEntities, props.space.entity?.types ?? [], params);
 
   return (
     <EntityStoreProvider
@@ -129,7 +129,7 @@ function MembersSkeleton() {
 const getData = async (spaceId: string) => {
   // @TODO: If there's no space we should 404
   const space = await cachedFetchSpace(spaceId);
-  const entity = space?.spaceConfig;
+  const entity = space?.entity;
 
   if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);

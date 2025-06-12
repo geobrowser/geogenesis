@@ -171,12 +171,13 @@ export type SearchResult = {
   id: string;
   name: string | null;
   description: string | null;
-  spaces: SpaceConfigEntity[];
+  spaces: SpaceEntity[];
   types: { id: string; name: string | null }[];
 };
 
-export type SpaceConfigEntity = Entity & {
+export type SpaceEntity = Entity & {
   spaceId: string;
+  // @TODO: Image should be handled in the API server
   image: string;
 };
 

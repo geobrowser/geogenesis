@@ -32,7 +32,7 @@ export async function SubspaceProposal({ proposal }: Props) {
   }
 
   const isAddSubspace = proposal.type === 'ADD_SUBSPACE';
-  const spaceImage = space?.spaceConfig?.image ? getImagePath(space.spaceConfig.image) : PLACEHOLDER_SPACE_IMAGE;
+  const spaceImage = space?.entity?.image ? getImagePath(space.entity.image) : PLACEHOLDER_SPACE_IMAGE;
   const subspaceImage = subspace?.spaceConfig?.image
     ? getImagePath(subspace?.spaceConfig?.image)
     : PLACEHOLDER_SPACE_IMAGE;
@@ -45,14 +45,14 @@ export async function SubspaceProposal({ proposal }: Props) {
             <div className="relative h-[72px] w-[72px] overflow-hidden rounded-lg border border-white object-cover shadow-lg">
               <Image
                 src={spaceImage}
-                alt={`Space cover image for ${space?.spaceConfig?.name ?? space?.id}`}
+                alt={`Space cover image for ${space?.entity?.name ?? space?.id}`}
                 className="h-[72px] w-[72px] rounded-lg"
                 objectFit="cover"
                 layout="fill"
               />
             </div>
             <div className="space-y-5">
-              <h2 className="break-all text-mainPage">{space?.spaceConfig?.name ?? space?.id}</h2>
+              <h2 className="break-all text-mainPage">{space?.entity?.name ?? space?.id}</h2>
               <div className="flex items-center justify-center gap-2">
                 <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">
                   Space

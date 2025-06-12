@@ -25,8 +25,8 @@ export const getMembersForSpace = cache(async (spaceId: string): Promise<Members
   return {
     allMembers: memberProfiles,
     totalMembers: space.members.length,
-    votingPluginAddress: space.mainVotingPluginAddress,
-    spacePluginAddress: space.spacePluginAddress,
-    memberPluginAddress: space.memberAccessPluginAddress,
+    votingPluginAddress: space.mainVotingAddress,
+    spacePluginAddress: space.spaceAddress,
+    memberPluginAddress: space.membershipAddress,
   };
 });

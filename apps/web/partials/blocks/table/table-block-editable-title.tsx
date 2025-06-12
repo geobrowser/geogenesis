@@ -46,7 +46,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
             return (
               <img
                 key={selectedSpace.id}
-                src={getImagePath(selectedSpace.spaceConfig?.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
+                src={getImagePath(selectedSpace.entity?.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
                 className="-ml-1.5 block !size-[16px] flex-shrink-0 overflow-clip !rounded-sm border border-white object-cover first:-ml-0"
               />
             );
@@ -70,11 +70,11 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
                   <div key={space.id} className="flex items-center gap-1.5">
                     <div className="flex-shrink-0">
                       <img
-                        src={getImagePath(space.spaceConfig?.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
+                        src={getImagePath(space.entity?.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
                         className="!size-[16px] !rounded-sm"
                       />
                     </div>
-                    <div className="flex-grow truncate text-button text-text">{space.spaceConfig?.name}</div>
+                    <div className="flex-grow truncate text-button text-text">{space.entity?.name}</div>
                   </div>
                 );
               })}

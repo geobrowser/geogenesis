@@ -17,5 +17,5 @@ export default async function Activity(props: Props) {
   const params = await props.params;
   const space = await cachedFetchSpace(params.id);
 
-  return <ActivityPage entityId={space?.spaceConfig?.id ?? null} searchParams={searchParams} />;
+  return <ActivityPage entityId={space?.entity?.id ?? null} searchParams={searchParams} />;
 }

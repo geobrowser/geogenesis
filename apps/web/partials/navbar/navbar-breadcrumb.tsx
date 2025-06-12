@@ -42,12 +42,12 @@ type SpaceBreadcrumbProps = {
 const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
   const { space, isLoading } = useSpace(spaceId);
 
-  if (isLoading || !space || !space.spaceConfig) {
+  if (isLoading || !space || !space.entity) {
     return null;
   }
 
-  const spaceName = space.spaceConfig.name ?? '';
-  const spaceImage = space.spaceConfig.image;
+  const spaceName = space.entity.name ?? '';
+  const spaceImage = space.entity.image;
 
   return (
     <Link href={NavUtils.toSpace(spaceId)} className="flex items-center justify-center gap-1.5">
@@ -78,12 +78,12 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
   const entity = useEntity({ id: entityId });
   const { spaces } = useSpaces();
 
-  if (isLoading || !space || !space.spaceConfig) {
+  if (isLoading || !space || !space.entity) {
     return null;
   }
 
-  const spaceName = space.spaceConfig.name ?? '';
-  const spaceImage = space.spaceConfig.image;
+  const spaceName = space.entity.name ?? '';
+  const spaceImage = space.entity.image;
 
   const otherSpaces = spaces.filter(space => spaceId !== space.id && (entity?.spaces ?? []).includes(space.id));
 
@@ -91,9 +91,9 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
 
   const renderedSpaces = !query
     ? otherSpaces
-    : otherSpaces.filter(space => space.spaceConfig.name?.toLowerCase().startsWith(formattedQuery));
+    : otherSpaces.filter(space => space.entity.name?.toLowerCase().startsWith(formattedQuery));
 
-  const showCurrentSpace = space.spaceConfig.name?.toLowerCase().startsWith(formattedQuery);
+  const showCurrentSpace = space.entity.name?.toLowerCase().startsWith(formattedQuery);
 
   if (!entity || entity.spaces.length < 2) {
     return (
@@ -169,8 +169,8 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
               )}
               {renderedSpaces.map(space => {
                 const spaceId = space.id;
-                const spaceName = space.spaceConfig.name ?? '';
-                const spaceImage = space.spaceConfig.image;
+                const spaceName = space.entity.name ?? '';
+                const spaceImage = space.entity.image;
 
                 return (
                   <Link

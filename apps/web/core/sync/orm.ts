@@ -286,7 +286,7 @@ export class E {
         spaces: e.spaces.map(s => {
           const space = spacesById[s];
 
-          return space.spaceConfig;
+          return space.entity;
         }),
       };
     });

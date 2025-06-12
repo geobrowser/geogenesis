@@ -25,7 +25,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const selectedSpaceId = params?.get('spaceId');
 
   const initialSpace = spaces.find(space => space.id === selectedSpaceId);
-  const initialName = initialSpace?.spaceConfig?.name;
+  const initialName = initialSpace?.entity?.name;
 
   const [open, onOpenChange] = React.useState(false);
   const [name, setName] = React.useState('All');
@@ -49,7 +49,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
 
   const onSelect = (spaceIdToFilter: string) => {
     onOpenChange(false);
-    setName(spacesWithAll.find(space => space.id === spaceIdToFilter)?.spaceConfig?.name ?? 'All');
+    setName(spacesWithAll.find(space => space.id === spaceIdToFilter)?.entity?.name ?? 'All');
   };
 
   return (
@@ -79,12 +79,12 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
         >
           <div className="relative mt-[4.5px] h-3 w-3 overflow-hidden rounded-xs">
             <Image
-              src={space.spaceConfig?.image ? getImagePath(space.spaceConfig.image) : PLACEHOLDER_SPACE_IMAGE}
+              src={space.entity?.image ? getImagePath(space.entity.image) : PLACEHOLDER_SPACE_IMAGE}
               layout="fill"
               objectFit="cover"
             />
           </div>
-          {space.spaceConfig?.name}
+          {space.entity?.name}
         </Link>
       ))}
     </Menu>

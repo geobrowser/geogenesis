@@ -74,9 +74,9 @@ export function usePublish() {
           smartAccount,
           space: {
             id: space.id,
-            spacePluginAddress: space.spacePluginAddress,
-            mainVotingPluginAddress: space.mainVotingPluginAddress,
-            personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
+            spacePluginAddress: space.spaceAddress,
+            mainVotingPluginAddress: space.mainVotingAddress,
+            personalSpaceAdminPluginAddress: space.personalAddress,
             type: space.type,
           },
         });
@@ -174,7 +174,7 @@ export function useBulkPublish() {
       const space = await fetchSpace({ id: spaceId });
 
       const publish = Effect.gen(function* () {
-        if (!space || !space.mainVotingPluginAddress) {
+        if (!space || !space.mainVotingAddress) {
           return;
         }
 
@@ -189,9 +189,9 @@ export function useBulkPublish() {
           smartAccount,
           space: {
             id: space.id,
-            spacePluginAddress: space.spacePluginAddress,
-            mainVotingPluginAddress: space.mainVotingPluginAddress,
-            personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
+            spacePluginAddress: space.spaceAddress,
+            mainVotingPluginAddress: space.mainVotingAddress,
+            personalSpaceAdminPluginAddress: space.personalAddress,
             type: space.type,
           },
         });

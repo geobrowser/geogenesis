@@ -320,7 +320,7 @@ export const TableBlock = ({ spaceId }: Props) => {
       return {
         ...f,
         columnName: 'Space',
-        value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
+        value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.entity?.name ?? f.value,
       };
     }
 

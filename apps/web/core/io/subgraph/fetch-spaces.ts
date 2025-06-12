@@ -110,5 +110,5 @@ export async function fetchSpaces(args?: FetchSpacesArgs): Promise<Space[]> {
 
   // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
   // the query level when we index the space config entity as part of a Space.
-  return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
+  return spaces.flatMap(s => (s.entity ? [s] : []));
 }

@@ -290,7 +290,7 @@ const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: Cr
   const renderedSpaces =
     query.length === 0
       ? spaces
-      : spaces.filter(space => space?.spaceConfig?.name?.toLowerCase()?.startsWith(query.toLowerCase()));
+      : spaces.filter(space => space?.entity?.name?.toLowerCase()?.startsWith(query.toLowerCase()));
 
   return (
     <div>
@@ -319,12 +319,12 @@ const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: Cr
             >
               <div className="relative size-4 rounded bg-grey-01">
                 <img
-                  src={getImagePath(space.spaceConfig.image)}
+                  src={getImagePath(space.entity.image)}
                   alt=""
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               </div>
-              <div className="text-button text-text">{space.spaceConfig.name}</div>
+              <div className="text-button text-text">{space.entity.name}</div>
             </Command.Item>
           );
         })}

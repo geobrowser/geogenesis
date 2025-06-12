@@ -86,13 +86,13 @@ const ReviewChanges = () => {
     queryFn: async () => {
       const maybeSpaces = await fetchSpacesById(dedupedSpacesWithActions);
 
-      const spaces = maybeSpaces.filter(s => s.spaceConfig !== null);
+      const spaces = maybeSpaces.filter(s => s.entity !== null);
 
       const spacesMap = new Map<string, { id: string; name: string | null; image: string | null }>();
 
       for (const space of spaces) {
         const id = space.id;
-        const config = space.spaceConfig;
+        const config = space.entity;
         const image = config ? getImagePath(config.image) : PLACEHOLDER_SPACE_IMAGE;
 
         spacesMap.set(id, {

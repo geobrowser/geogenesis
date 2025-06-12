@@ -193,7 +193,7 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
 
 async function getSpaceName(spaceId: string) {
   const space = await fetchSpace({ id: spaceId });
-  return space?.spaceConfig.name ?? null;
+  return space?.entity.name ?? null;
 }
 
 async function getResolvedEntity(entityId: string): Promise<Filter> {

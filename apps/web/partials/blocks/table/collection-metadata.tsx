@@ -155,7 +155,7 @@ export const CollectionMetadata = ({
                             <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
                               {space ? (
                                 <div className="size-[8px] overflow-clip rounded-sm grayscale">
-                                  <Image fill src={getImagePath(space.spaceConfig.image)} alt="" />
+                                  <Image fill src={getImagePath(space.entity.image)} alt="" />
                                 </div>
                               ) : (
                                 <TopRanked />

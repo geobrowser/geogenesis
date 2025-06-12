@@ -10,9 +10,9 @@ export default async function SpacesPage(props: { params: Promise<{ id: string }
   const spaceId = params.id;
   const space = await cachedFetchSpace(spaceId);
 
-  if (!space || !space.spaceConfig) return null;
+  if (!space || !space.entity) return null;
 
-  const personEntityId = space.spaceConfig.id;
+  const personEntityId = space.entity.id;
   const address = await getAddress(personEntityId);
 
   if (!address) return null;

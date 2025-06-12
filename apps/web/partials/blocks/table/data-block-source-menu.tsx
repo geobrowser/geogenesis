@@ -65,7 +65,7 @@ export const DataBlockSourceMenu = ({
                         return (
                           <div key={selectedSpace.id} className="-ml-1.5 rounded-sm border border-white first:-ml-0">
                             <img
-                              src={getImagePath(selectedSpace.spaceConfig?.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
+                              src={getImagePath(selectedSpace.entity?.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
                               className="h-[12px] w-[12px] rounded-sm"
                             />
                           </div>

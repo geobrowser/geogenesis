@@ -520,14 +520,14 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
   const debouncedQuery = useDebouncedValue(query, 100);
   const { spaces } = useSpaces();
 
-  const results = spaces.filter(s => s.spaceConfig?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
+  const results = spaces.filter(s => s.entity?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
 
   const onSelectSpace = (space: Space) => {
     onQueryChange('');
 
     onSelect({
       id: space.id,
-      name: space.spaceConfig?.name ?? null,
+      name: space.entity?.name ?? null,
     });
   };
 
@@ -548,15 +548,13 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
                   <ResultItem onClick={() => onSelectSpace(result)}>
                     <div className="flex w-full items-center justify-between leading-[1rem]">
                       <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                        {result.spaceConfig?.name ?? result.id}
+                        {result.entity?.name ?? result.id}
                       </Text>
                     </div>
                     <Spacer height={4} />
                     <div className="flex items-center gap-1.5 overflow-hidden">
-                      {(result.spaceConfig?.name ?? result.id) && (
-                        <Breadcrumb img={result.spaceConfig?.image ?? ''}>
-                          {result.spaceConfig?.name ?? result.id}
-                        </Breadcrumb>
+                      {(result.entity?.name ?? result.id) && (
+                        <Breadcrumb img={result.entity?.image ?? ''}>{result.entity?.name ?? result.id}</Breadcrumb>
                       )}
                       <span style={{ rotate: '270deg' }}>
                         <ChevronDownSmall color="grey-04" />

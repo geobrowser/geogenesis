@@ -29,7 +29,7 @@ export async function fetchForeignTypeTriples(space: Space): Promise<Triple[]> {
     skip: 0,
     first: 1000,
     filter: [
-      { field: 'entity-id', value: space.spaceConfig?.id ?? '' },
+      { field: 'entity-id', value: space.entity?.id ?? '' },
       { field: 'attribute-id', value: SystemIds.FOREIGN_TYPES },
     ],
   });

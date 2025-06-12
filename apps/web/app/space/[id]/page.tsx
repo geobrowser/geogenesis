@@ -30,7 +30,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const spaceId = params.id;
 
   const space = await cachedFetchSpace(spaceId);
-  const entity = space?.spaceConfig;
+  const entity = space?.entity;
 
   if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
@@ -129,7 +129,7 @@ const SubspacesContainer = async ({ spaceId }: SubspacesContainerProps) => {
 
 const getData = async (spaceId: string) => {
   const space = await cachedFetchSpace(spaceId);
-  const entity = space?.spaceConfig;
+  const entity = space?.entity;
 
   if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
@@ -141,7 +141,7 @@ const getData = async (spaceId: string) => {
     triples: entity?.triples ?? [],
     id: entity.id,
     spaceId,
-    spaceTypes: space?.spaceConfig?.types ?? [],
+    spaceTypes: space?.entity?.types ?? [],
     subspaces: [],
     relationsOut: entity?.relationsOut ?? [],
   };

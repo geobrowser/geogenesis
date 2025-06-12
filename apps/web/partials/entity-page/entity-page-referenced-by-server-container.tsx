@@ -36,8 +36,8 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
       }
 
       const space = spaces.find(s => s.id === firstSpaceId);
-      const spaceName = space?.spaceConfig?.name ?? null;
-      const spaceImage = space?.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE;
+      const spaceName = space?.entity?.name ?? null;
+      const spaceImage = space?.entity?.image ?? PLACEHOLDER_SPACE_IMAGE;
 
       return {
         id: e.id,
