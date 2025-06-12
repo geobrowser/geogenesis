@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation';
 import { encodeFunctionData } from 'viem';
 
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { fetchSpace } from '~/core/io/subgraph';
+
+import { getSpace } from '../io/v2/queries';
 
 interface AddSubspaceArgs {
   spaceId: string;
@@ -19,7 +20,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
 
   const { data: space } = useQuery({
     queryKey: ['fetch-space', args.spaceId],
-    queryFn: () => fetchSpace({ id: args.spaceId }),
+    queryFn: () => Effect.runPromise(getSpace(args.spaceId)),
   });
 
   const tx = useSmartAccountTransaction({

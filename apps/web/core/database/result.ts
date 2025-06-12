@@ -1,8 +1,9 @@
-import { Duration } from 'effect';
+import { Duration, Effect } from 'effect';
 
 import { SearchResult } from '../io/dto/search';
 import { EntityId } from '../io/schema';
-import { fetchResult, fetchSpaces } from '../io/subgraph';
+import { fetchResult } from '../io/subgraph';
+import { getSpaces } from '../io/v2/queries';
 import { queryClient } from '../query-client';
 import { GeoStore } from '../sync/store';
 
@@ -33,11 +34,11 @@ export async function mergeSearchResult(args: FetchResultOptions) {
       ? localEntity
       : null;
 
-  const localOnlyEntitySpaceIds = !cachedRemoteResult ? (localEntity ? localEntity.nameTripleSpaces : []) : [];
+  const localOnlyEntitySpaceIds = !cachedRemoteResult ? (localEntity ? localEntity.spaces : []) : [];
 
   const localEntitySpaces = await queryClient.fetchQuery({
     queryKey: ['merge-local-entity-spaces', localOnlyEntitySpaceIds],
-    queryFn: () => fetchSpaces({ spaceIds: localOnlyEntitySpaceIds }),
+    queryFn: () => Effect.runPromise(getSpaces({ spaceIds: localOnlyEntitySpaceIds })),
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
 
@@ -48,7 +49,7 @@ export async function mergeSearchResult(args: FetchResultOptions) {
   if (localEntity && merged && hasLocalEntitySpaces) {
     merged = {
       ...merged,
-      spaces: localEntity.nameTripleSpaces
+      spaces: localEntity.spaces
         .map(spaceId => {
           return localEntitySpacesBySpaceId[spaceId] ?? null;
         })

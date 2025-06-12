@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 
-import { SpaceConfigEntity, SpaceMetadataDto } from '../dto/spaces';
+import { SpaceConfigEntity, SpaceEntityDto } from '../dto/spaces';
 import { SpaceId, SubstreamVersion } from '../schema';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
@@ -114,7 +114,7 @@ type SpaceWhereEditor = {
 };
 
 function SpaceWhereEditorDto(space: SpaceWhereEditorSchema) {
-  const spaceConfigWithImage = SpaceMetadataDto(space.id, space.spacesMetadatum?.version);
+  const spaceConfigWithImage = SpaceEntityDto(space.id, space.spacesMetadatum?.version);
 
   return {
     id: space.id,

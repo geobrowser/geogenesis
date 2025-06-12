@@ -117,3 +117,11 @@ export const spaceQuery = graphql(/* GraphQL */ `
     }
   }
 `);
+
+export const spacesQuery = graphql(/* GraphQL */ `
+  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {
+    spaces(filter: $filter, limit: $limit, offset: $offset) {
+      ...FullSpace
+    }
+  }
+`);

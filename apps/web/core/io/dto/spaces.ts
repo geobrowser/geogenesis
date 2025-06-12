@@ -8,26 +8,25 @@ import { EntityDtoLive } from './entities';
 
 export type Space = {
   id: string;
-  entityId: string;
   type: SpaceGovernanceType;
-  // editors: string[];
-  // members: string[];
   entity: SpaceEntity;
   daoAddress: Address;
   spaceAddress: Address;
   mainVotingAddress: Address | null;
   membershipAddress: Address | null;
   personalAddress: Address | null;
+
+  // editors: string[];
+  // members: string[];
 };
 
 export function SpaceDto(space: RemoteSpace): Space {
-  const spaceConfigEntity = SpaceMetadataDto(space.id, space.entity);
+  const spaceEntity = SpaceEntityDto(space.id, space.entity);
 
   return {
     id: space.id,
-    entityId: spaceConfigEntity.id,
     type: space.type,
-    entity: spaceConfigEntity,
+    entity: spaceEntity,
 
     daoAddress: space.daoAddress,
     mainVotingAddress: space.mainVotingAddress,
@@ -37,7 +36,7 @@ export function SpaceDto(space: RemoteSpace): Space {
   };
 }
 
-export function SpaceMetadataDto(spaceId: string, remoteEntity: RemoteEntity | null): SpaceEntity {
+export function SpaceEntityDto(spaceId: string, remoteEntity: RemoteEntity | null): SpaceEntity {
   const maybeEntity = remoteEntity ? EntityDtoLive(remoteEntity) : null;
 
   let entity = null;

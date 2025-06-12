@@ -11,7 +11,7 @@ import { getRelations } from '../database/relations';
 import { getValues } from '../database/v2.values';
 import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
-import { fetchSpace } from '../io/subgraph';
+import { getSpace } from '../io/v2/queries';
 import { useStatusBar } from '../state/status-bar-store';
 import { Triple as ITriple, Relation, ReviewState, SpaceGovernanceType } from '../types';
 import { Triples } from '../utils/triples';
@@ -45,7 +45,7 @@ export function usePublish() {
       if (!smartAccount) return;
       if (triplesToPublish.length === 0 && relations.length === 0) return;
 
-      const space = await fetchSpace({ id: spaceId });
+      const space = await Effect.runPromise(getSpace(spaceId));
 
       const publish = Effect.gen(function* () {
         if (!space) {
@@ -171,7 +171,7 @@ export function useBulkPublish() {
       // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
       // All of our contract calls rely on knowing plugin metadata so this is probably
       // something we need for all of them.
-      const space = await fetchSpace({ id: spaceId });
+      const space = await Effect.runPromise(getSpace(spaceId));
 
       const publish = Effect.gen(function* () {
         if (!space || !space.mainVotingAddress) {

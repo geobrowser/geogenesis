@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { Effect } from 'effect';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
@@ -11,8 +12,7 @@ import { useRelations } from '~/core/database/relations';
 import { useValues } from '~/core/database/v2.values';
 import { DB } from '~/core/database/write';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
-import { usePublish } from '~/core/hooks/use-publish';
-import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
+import { getSpaces } from '~/core/io/v2/queries';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -84,7 +84,7 @@ const ReviewChanges = () => {
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', dedupedSpacesWithActions],
     queryFn: async () => {
-      const maybeSpaces = await fetchSpacesById(dedupedSpacesWithActions);
+      const maybeSpaces = await Effect.runPromise(getSpaces({ spaceIds: dedupedSpacesWithActions }));
 
       const spaces = maybeSpaces.filter(s => s.entity !== null);
 

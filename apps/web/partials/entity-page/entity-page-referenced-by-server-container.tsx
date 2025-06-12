@@ -5,12 +5,12 @@ import { dedupeWith } from 'effect/Array';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { SubstreamVersionTypes } from '~/core/io/schema';
-import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { versionTypesFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 
 import { EntityPageReferencedBy } from './entity-page-referenced-by';
 import { ReferencedByEntity } from './types';
+import { cachedFetchSpacesById } from '~/app/cached-fetch-spaces-by-id';
 
 interface Props {
   entityId: string;
@@ -25,7 +25,7 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
     backlinks.flatMap(e => e.currentVersion.version.versionSpaces.nodes),
     (a, z) => a.spaceId === z.spaceId
   );
-  const spaces = await fetchSpacesById(referencedSpaces.map(s => s.spaceId));
+  const spaces = await cachedFetchSpacesById(referencedSpaces.map(s => s.spaceId));
 
   const referencedByEntities: ReferencedByEntity[] = backlinks
     .map(e => {

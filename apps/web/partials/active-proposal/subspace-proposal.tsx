@@ -7,9 +7,9 @@ import { Environment } from '~/core/environment';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubspaceDto } from '~/core/io/dto/subspaces';
 import { SubstreamSubspace } from '~/core/io/schema';
-import { fetchSpace } from '~/core/io/subgraph';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
+import { getSpace } from '~/core/io/v2/queries';
 import { getImagePath } from '~/core/utils/utils';
 
 import { AddTo } from '~/design-system/icons/add-to';
@@ -23,7 +23,7 @@ interface Props {
 export async function SubspaceProposal({ proposal }: Props) {
   const [subspace, space] = await Promise.all([
     fetchProposedSubspace(proposal.id, proposal.space.id),
-    fetchSpace({ id: proposal.space.id }),
+    Effect.runPromise(getSpace(proposal.space.id)),
   ]);
 
   if (!subspace) {

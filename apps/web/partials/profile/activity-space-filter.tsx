@@ -39,7 +39,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const spacesWithAll = [
     {
       id: 'all',
-      spaceConfig: {
+      entity: {
         name: 'All',
         image: ALL_SPACES_IMAGE,
       },

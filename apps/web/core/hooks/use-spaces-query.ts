@@ -12,7 +12,7 @@ import { SubstreamSpace, SubstreamSpaceEntityConfig } from '~/core/io/schema';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 
-import { SpaceMetadataDto } from '../io/dto/spaces';
+import { SpaceEntityDto } from '../io/dto/spaces';
 
 type NetworkResult = {
   spaces: {
@@ -106,7 +106,7 @@ export function useSpacesQuery() {
           return null;
         },
         onRight: space => {
-          return SpaceMetadataDto(space.id, space.spacesMetadatum?.version);
+          return SpaceEntityDto(space.id, space.spacesMetadatum?.version);
         },
       });
     })

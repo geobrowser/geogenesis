@@ -1,9 +1,9 @@
 import { Schema } from '@effect/schema';
 import { SystemIds } from '@graphprotocol/grc-20';
-import { Either } from 'effect';
+import { Effect, Either } from 'effect';
 
 import { EntityId } from '~/core/io/schema';
-import { fetchSpace } from '~/core/io/subgraph';
+import { getSpace } from '~/core/io/v2/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
@@ -192,7 +192,7 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
 }
 
 async function getSpaceName(spaceId: string) {
-  const space = await fetchSpace({ id: spaceId });
+  const space = await Effect.runPromise(getSpace(spaceId));
   return space?.entity.name ?? null;
 }
 
@@ -220,10 +220,8 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 
 async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
   const maybeAttributeEntity = await E.findOne({ store, cache: queryClient, id: filter.attribute });
-  const valueType = maybeAttributeEntity?.relationsOut.find(
-    r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_PROPERTY)
-  )?.toEntity.id;
 
+  // @TODO(migration): Fetch property
   if (valueType === EntityId(SystemIds.RELATION)) {
     const valueEntity = await E.findOne({ store, cache: queryClient, id: filter.is });
 

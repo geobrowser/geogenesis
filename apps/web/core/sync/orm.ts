@@ -7,8 +7,8 @@ import { Filter } from '../blocks/data/filters';
 import { queryStringFromFilters } from '../blocks/data/to-query-string';
 import { readTypes } from '../database/entities';
 import { EntityId } from '../io/schema';
-import { fetchResults, fetchSpaces, fetchTableRowEntities } from '../io/subgraph';
-import { getBatchEntities, getEntity } from '../io/v2/queries';
+import { fetchResults, fetchTableRowEntities } from '../io/subgraph';
+import { getBatchEntities, getEntity, getSpaces } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
 import { Values } from '../utils/value';
@@ -273,9 +273,11 @@ export class E {
     const spaces = await cache.fetchQuery({
       queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
       queryFn: () =>
-        fetchSpaces({
-          spaceIds,
-        }),
+        Effect.runPromise(
+          getSpaces({
+            spaceIds,
+          })
+        ),
     });
 
     const spacesById = Object.fromEntries(spaces.map(s => [s.id, s]));
