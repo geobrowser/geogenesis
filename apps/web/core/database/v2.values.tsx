@@ -22,8 +22,8 @@ function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeW
   return selectAtom(
     localValuesAtom,
     ops => {
-      const mergedTriples = Values.merge(ops, mergeWith);
-      return mergedTriples.filter(t => {
+      const mergedValues = Values.merge(ops, mergeWith);
+      return mergedValues.filter(t => {
         return (selector ? selector(t) : true) && (includeDeleted ? true : isNotDeletedSelector(t));
       });
     },

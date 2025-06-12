@@ -1,4 +1,3 @@
-import { ID } from '~/core/id';
 import type { Triple } from '~/core/types';
 import { Value } from '~/core/v2.types';
 
@@ -9,12 +8,8 @@ export function stringValue(triple?: Triple) {
 }
 
 export function merge(values: Value[], remoteValues: Value[]) {
-  const localTripleIds = new Set(
-    values.map(v => ID.createValueId({ spaceId: v.spaceId, entityId: v.entity.id, propertyId: v.property.id }))
-  );
-  const remoteTriplesWithoutLocalTriples = remoteValues.filter(
-    v => !localTripleIds.has(ID.createValueId({ spaceId: v.spaceId, entityId: v.entity.id, propertyId: v.property.id }))
-  );
+  const localTripleIds = new Set(values.map(v => v.id));
+  const remoteTriplesWithoutLocalTriples = remoteValues.filter(v => !localTripleIds.has(v.id));
 
   return [...remoteTriplesWithoutLocalTriples, ...values];
 }

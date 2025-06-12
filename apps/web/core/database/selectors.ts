@@ -5,5 +5,5 @@ export const activeTriplesForEntityIdSelector = (entityId: string) => (value: Va
 };
 
 export const isNotDeletedSelector = (value: Value) => {
-  return value.isDeleted === false;
+  return value.isDeleted === undefined || value.isDeleted === false;
 };
