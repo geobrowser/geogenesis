@@ -30,7 +30,9 @@ export function useCollection({ first, skip }: CollectionProps) {
 
   const orderedCollectionItemRelations = collectionItemsRelations.sort((a, z) => {
     // @TODO(migration): fix optional positions
-    return a.position.toLowerCase().localeCompare(z.position.toLowerCase());
+    const first = a.position ?? 'a5';
+    const second = z.position ?? 'a5';
+    return first.toLowerCase().localeCompare(second.toLowerCase());
   });
 
   const collectionItemIds = orderedCollectionItemRelations?.map(c => c.toEntity.id) ?? [];
