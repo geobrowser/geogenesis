@@ -1,8 +1,5 @@
 export type { ISubgraph } from './subgraph-interface';
 
-export { fetchTriples } from './fetch-triples';
-export type { FetchTriplesOptions } from './fetch-triples';
-
 export { fetchResult } from './fetch-result';
 export type { FetchResultOptions } from './fetch-result';
 export { fetchResults } from './fetch-results';
