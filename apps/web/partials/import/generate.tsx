@@ -4,6 +4,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import { parse } from 'csv/sync';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
+import { Effect } from 'effect';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { usePathname } from 'next/navigation';
 
@@ -12,10 +13,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
-import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/io/dto/entities';
 import { Space } from '~/core/io/dto/spaces';
 import { EntityId } from '~/core/io/schema';
+import { getEntity } from '~/core/io/v2/queries';
 import { Triple as TripleType } from '~/core/types';
 import type { Value } from '~/core/types';
 import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
@@ -146,7 +147,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       const relatedEntityIds: Array<string> = [...relatedEntityIdsSet.values()];
       const relatedEntities = await Promise.all(
         relatedEntityIds.map((entityId: string) => {
-          return Subgraph.fetchEntity({ id: entityId });
+          return Effect.runPromise(getEntity(entityId, SystemIds.ROOT_SPACE_ID));
         })
       );
 

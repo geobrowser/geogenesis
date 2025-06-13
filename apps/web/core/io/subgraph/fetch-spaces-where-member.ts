@@ -1,12 +1,14 @@
-import { Schema } from '@effect/schema';
+import { Schema } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
+import { SpaceEntity } from '~/core/v2.types';
 
-import { SpaceConfigEntity, SpaceEntityDto } from '../dto/spaces';
+import { SpaceEntityDto } from '../dto/spaces';
 import { SubstreamVersion } from '../schema';
+import { Entity } from '../v2/v2.schema';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -104,26 +106,26 @@ export async function fetchSpacesWhereMember(address?: string): Promise<SpaceWhe
 
   // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
   // the query level when we index the space config entity as part of a Space.
-  return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
+  return spaces.flatMap(s => (s.spaceEntity ? [s] : []));
 }
 
 const SpaceWhereMemberSchema = Schema.Struct({
   id: Schema.String,
-  spacesMetadatum: Schema.NullOr(Schema.Struct({ version: SubstreamVersion })),
+  entity: Schema.NullOr(Entity),
 });
 
 type SpaceWhereMemberSchema = Schema.Schema.Type<typeof SpaceWhereMemberSchema>;
 
-type SpaceWhereMember = {
+export type SpaceWhereMember = {
   id: string;
-  spaceConfig: SpaceConfigEntity;
+  entity: SpaceEntity;
 };
 
 function SpaceWhereMemberDto(space: SpaceWhereMemberSchema) {
-  const spaceConfigWithImage = SpaceEntityDto(space.id, space.spacesMetadatum?.version);
+  const spaceEntity = SpaceEntityDto(space.id, space.entity);
 
   return {
     id: space.id,
-    spaceConfig: spaceConfigWithImage,
+    spaceEntity: spaceEntity,
   };
 }

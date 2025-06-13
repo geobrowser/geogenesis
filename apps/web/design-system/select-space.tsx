@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
+import { Effect } from 'effect';
 
 import * as React from 'react';
 
 import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { useSearch } from '~/core/hooks/use-search';
 import { EntityId } from '~/core/io/schema';
-import { fetchEntity } from '~/core/io/subgraph';
+import { getEntity } from '~/core/io/v2/queries';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';
@@ -64,7 +65,7 @@ export const SelectSpace = ({
     queryFn: async () => {
       return await Promise.all(
         (result?.spaces ?? []).map(async space => {
-          const entity = await fetchEntity({ id: entityId, spaceId: space.spaceId });
+          const entity = await Effect.runPromise(getEntity(entityId, space.id));
           return { space, entity };
         })
       );

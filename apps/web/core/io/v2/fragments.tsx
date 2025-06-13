@@ -60,8 +60,8 @@ export const entityFragment = graphql(/* GraphQL */ `
 `);
 
 export const entitiesQuery = graphql(/* GraphQL */ `
-  query AllEntities($limit: Int, $offset: Int) {
-    entities(limit: $limit, offset: $offset) {
+  query AllEntities($spaceId: String, $limit: Int, $offset: Int) {
+    entities(spaceId: $spaceId, limit: $limit, offset: $offset) {
       ...FullEntity
     }
   }

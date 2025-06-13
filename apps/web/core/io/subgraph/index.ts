@@ -3,14 +3,10 @@ export type { ISubgraph } from './subgraph-interface';
 export { fetchTriples } from './fetch-triples';
 export type { FetchTriplesOptions } from './fetch-triples';
 
-export { fetchEntities } from './fetch-entities';
-export type { FetchEntitiesOptions } from './fetch-entities';
 export { fetchResult } from './fetch-result';
 export type { FetchResultOptions } from './fetch-result';
 export { fetchResults } from './fetch-results';
 export type { FetchResultsOptions } from './fetch-results';
-export { fetchEntity } from './fetch-entity';
-export type { FetchEntityOptions } from './fetch-entity';
 
 export { fetchProfile } from './fetch-profile';
 export type { FetchProfileOptions } from './fetch-profile';

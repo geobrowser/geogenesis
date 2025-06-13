@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
+import { Effect } from 'effect';
 
-import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
+import { getBatchEntities } from '../io/v2/queries';
 import { E } from './orm';
 import { GeoStore } from './store';
 import { GeoEvent, GeoEventStream } from './stream';
@@ -136,7 +137,7 @@ export class SyncEngine {
 
     const entities = await this.cache.fetchQuery({
       queryKey: ['entities-batch-sync', uniqueEntityIds],
-      queryFn: () => fetchEntitiesBatch({ entityIds: uniqueEntityIds }),
+      queryFn: () => Effect.runPromise(getBatchEntities(uniqueEntityIds)),
     });
 
     const merged = uniqueEntityIds

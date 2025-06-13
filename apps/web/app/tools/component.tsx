@@ -3,14 +3,14 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import * as Tabs from '@radix-ui/react-tabs';
 import cx from 'classnames';
+import { Effect } from 'effect';
 import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
 import { useEntity } from '~/core/database/entities';
 import { ID } from '~/core/id';
-import { Subgraph } from '~/core/io';
-import { FetchEntitiesOptions } from '~/core/io/subgraph';
+import { getAllEntities, getEntity } from '~/core/io/v2/queries';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 
 import { cloneOpsAtom, cloneSpaceIdAtom, cloneSpaceNameAtom } from './atoms';
@@ -100,7 +100,7 @@ const FetchEntity = () => {
   const handleFetchEntityId = async (event: any) => {
     event.preventDefault();
 
-    const newEntity = await Subgraph.fetchEntity({ id: entityId.trim() });
+    const newEntity = await Effect.runPromise(getEntity(entityId.trim()));
 
     if (newEntity) {
       setEntity(newEntity);
@@ -195,20 +195,7 @@ const FindEntities = () => {
   const handleFindEntities = async (event: any) => {
     event.preventDefault();
 
-    const fetchEntitiesOptions: FetchEntitiesOptions = {
-      filter: [],
-      first: 1_000,
-    };
-
-    if (spaceId) {
-      fetchEntitiesOptions.spaceId = spaceId;
-    }
-
-    if (typeId) {
-      fetchEntitiesOptions.typeIds = [typeId];
-    }
-
-    const allEntities = await Subgraph.fetchEntities(fetchEntitiesOptions);
+    const allEntities = await Effect.runPromise(getAllEntities(spaceId));
 
     if (allEntities) {
       const newEntities: any = allEntities

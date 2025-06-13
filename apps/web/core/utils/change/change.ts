@@ -9,7 +9,8 @@ import type { Entity } from '~/core/io/dto/entities';
 import { Proposal } from '~/core/io/dto/proposals';
 import { fetchParentEntityId } from '~/core/io/fetch-parent-entity-id';
 import { EntityId } from '~/core/io/schema';
-import { fetchEntitiesBatch, fetchEntitiesBatchCached } from '~/core/io/subgraph/fetch-entities-batch';
+import { getBatchEntities } from '~/core/io/v2/queries';
+import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
 import type { Relation, Triple } from '~/core/types';
@@ -28,22 +29,31 @@ import {
   TripleChangeValue,
 } from './types';
 
+async function fetchEntitiesBatchCached(options: { spaceId: string; entityIds: string[] }) {
+  const { spaceId, entityIds } = options;
+
+  return queryClient.fetchQuery({
+    queryKey: ['entities-batch', spaceId, entityIds],
+    queryFn: () => Effect.runPromise(getBatchEntities(options.entityIds, options.spaceId)),
+  });
+}
+
 export async function fromLocal(spaceId?: string) {
   const triples = getValues({
-    selector: t => (t.hasBeenPublished === false && spaceId ? t.space === spaceId : true),
+    selector: t => (t.hasBeenPublished === false && spaceId ? t.spaceId === spaceId : true),
     includeDeleted: true,
   });
 
   const localRelations = getRelations({
-    selector: r => (r.hasBeenPublished === false && spaceId ? r.space === spaceId : true),
+    selector: r => (r.hasBeenPublished === false && spaceId ? r.spaceId === spaceId : true),
     includeDeleted: true,
   });
 
   // @TODO Space id filtering isn't working  for local relations for some reason
-  const actualLocal = localRelations.filter(r => (spaceId ? r.space === spaceId : true));
+  const actualLocal = localRelations.filter(r => (spaceId ? r.spaceId === spaceId : true));
 
   const entityIds = new Set([
-    ...triples.map(t => t.entityId),
+    ...triples.map(t => t.entity.id),
     // Relations don't alter the `from` entity directly, so in cases where a relation
     // is modified we also need to query the `from` entity so we can render diffs
     // from the perspective of the `from` entity.
@@ -221,7 +231,12 @@ export async function fromActiveProposal(proposal: Proposal, spaceId: string): P
   const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId, spaceId });
 
   // Version entity ids are mapped to the version.id
-  const currentVersionsForEntityIds = await fetchEntitiesBatch({ spaceId, entityIds: versionsByEditId.map(v => v.id) });
+  const currentVersionsForEntityIds = await Effect.runPromise(
+    getBatchEntities(
+      versionsByEditId.map(v => v.id),
+      spaceId
+    )
+  );
 
   const beforeEntities = currentVersionsForEntityIds
     .filter(v => v !== null)
@@ -251,7 +266,7 @@ export async function fromActiveProposal(proposal: Proposal, spaceId: string): P
 
   const parentEntityIdsToFetch = [...parentEntityIdsSet.values()].filter(entityId => !beforeEntityIdsSet.has(entityId));
 
-  const beforeParentEntities = await fetchEntitiesBatch({ spaceId, entityIds: parentEntityIdsToFetch });
+  const beforeParentEntities = await Effect.runPromise(getBatchEntities(parentEntityIdsToFetch, spaceId));
 
   const parentEntityIds: Record<EntityId, EntityId | null> = {
     ...possibleBlockParentEntityIds,
@@ -313,7 +328,7 @@ export async function fromEndedProposal(proposal: Proposal, spaceId: string): Pr
 
   const parentEntityIdsToFetch = [...parentEntityIdsSet.values()].filter(entityId => !beforeEntityIdsSet.has(entityId));
 
-  const beforeParentEntities = await fetchEntitiesBatch({ spaceId, entityIds: parentEntityIdsToFetch });
+  const beforeParentEntities = await Effect.runPromise(getBatchEntities(parentEntityIdsToFetch, spaceId));
 
   const parentEntityIds: Record<EntityId, EntityId | null> = {
     ...possibleBlockParentEntityIds,
