@@ -3,7 +3,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import { Filter } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
-import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
+import { FilterableValueType } from '~/core/value-types';
 
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
@@ -36,7 +36,7 @@ export function TableBlockEditableFilters() {
               return {
                 columnId: c.id,
                 columnName: c.name ?? '',
-                valueType: VALUE_TYPES[c.valueType],
+                valueType: c.dataType,
                 value: '',
                 valueName: null,
                 relationValueTypes: c.relationValueTypes,

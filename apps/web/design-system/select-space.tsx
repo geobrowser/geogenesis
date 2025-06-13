@@ -21,7 +21,7 @@ import { ResizableContainer } from './resizable-container';
 import { Truncate } from './truncate';
 
 type SelectSpaceProps = {
-  onDone: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
+  onDone: (result: { id: string; name: string | null; space?: EntityId; verified?: boolean }) => void;
   entityId: string;
   spaceId?: string;
   verified?: boolean;

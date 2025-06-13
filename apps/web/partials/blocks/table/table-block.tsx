@@ -21,20 +21,11 @@ import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { SearchResult } from '~/core/io/dto/search';
-import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import {
-  BaseRelationRenderableProperty,
-  Cell,
-  DataType,
-  NativeRenderableProperty,
-  PropertySchema,
-  Row,
-} from '~/core/v2.types';
+import { Cell, NativeRenderableProperty, PropertySchema, Row, SearchResult } from '~/core/v2.types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -159,7 +150,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       const maybeHasCollectionItem = entries.find(e => e.entityId === context.entityId);
 
       if (!maybeHasCollectionItem) {
-        let to: (Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }) | null = null;
+        let to: (Pick<SearchResult, 'id' | 'name'> & { space?: string; verified?: boolean }) | null = null;
 
         if (event.type === 'Find') {
           to = event.data;
@@ -174,9 +165,9 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
         if (event.type === 'EVENT') {
           to = {
-            id: EntityId(context.entityId),
+            id: context.entityId,
             name: context.entityName,
-            space: EntityId(context.spaceId),
+            space: context.spaceId,
             verified: false,
           };
         }
@@ -185,11 +176,11 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
           const id = ID.createEntityId();
 
           upsertCollectionItemRelation({
-            relationId: EntityId(id),
-            collectionId: EntityId(source.value),
-            spaceId: SpaceId(spaceId),
+            relationId: id,
+            collectionId: source.value,
+            spaceId: spaceId,
             toEntity: {
-              id: EntityId(to.id),
+              id: to.id,
               name: to.name,
             },
           });
@@ -198,17 +189,17 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
           // to set the collection. We allow setting any data or using FOC.
           if (to.space) {
             upsertSourceSpaceOnCollectionItem({
-              collectionItemId: EntityId(id),
-              toId: EntityId(to.id),
-              spaceId: SpaceId(spaceId),
+              collectionItemId: id,
+              toId: to.id,
+              spaceId: spaceId,
               sourceSpaceId: to.space,
             });
           }
 
           if (to.space && to.verified) {
             upsertVerifiedSourceOnCollectionItem({
-              collectionItemId: EntityId(id),
-              spaceId: SpaceId(spaceId),
+              collectionItemId: id,
+              spaceId: spaceId,
               verified: true,
             });
           }
@@ -247,30 +238,30 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
   const onLinkEntry = (
     id: string,
     to: {
-      id: EntityId;
+      id: string;
       name: string | null;
-      space?: EntityId;
+      space?: string;
       verified?: boolean;
     },
     currentlyVerified?: boolean
   ) => {
     upsertSourceSpaceOnCollectionItem({
-      collectionItemId: EntityId(id),
-      toId: EntityId(to.id),
-      spaceId: SpaceId(spaceId),
+      collectionItemId: id,
+      toId: to.id,
+      spaceId: spaceId,
       sourceSpaceId: to.space,
     });
 
     if (to.space && to.verified) {
       upsertVerifiedSourceOnCollectionItem({
-        collectionItemId: EntityId(id),
-        spaceId: SpaceId(spaceId),
+        collectionItemId: id,
+        spaceId: spaceId,
         verified: true,
       });
     } else if (to.space && !to.verified && currentlyVerified) {
       upsertVerifiedSourceOnCollectionItem({
-        collectionItemId: EntityId(id),
-        spaceId: SpaceId(spaceId),
+        collectionItemId: id,
+        spaceId: spaceId,
         verified: false,
       });
     }

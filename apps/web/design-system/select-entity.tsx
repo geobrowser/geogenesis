@@ -15,11 +15,12 @@ import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { SearchResult } from '~/core/io/dto/search';
 import { Space } from '~/core/io/dto/spaces';
 import { EntityId, SpaceId } from '~/core/io/schema';
+import { useMutate } from '~/core/sync/use-mutate';
 import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
+import { SearchResult } from '~/core/v2.types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { ResultsList } from '~/design-system/autocomplete/results-list';
@@ -46,7 +47,7 @@ import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
   onDone?: (
-    result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean },
+    result: { id: string; name: string | null; space?: EntityId; verified?: boolean },
     // This is used to determine if the onDone is called from within the create function
     // internal to SelectEntity. Some consumers in the codebase want to either listen to
     // the onDone OR onCreateEntity callback but not both. This lets them bail out of
@@ -87,6 +88,7 @@ export const SelectEntity = ({
   advanced = true,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
+  const { storage } = useMutate();
 
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -142,26 +144,7 @@ export const SelectEntity = ({
       onCreateEntity({ id: newEntityId, name: query });
     } else {
       // Create new entity with name and types using internal id
-      transaction.commit(db => {
-        db.values.set({
-          id: ID.createValueId({
-            entityId: newEntityId,
-            propertyId: SystemIds.NAME_PROPERTY,
-            spaceId,
-          }),
-          spaceId,
-          entity: {
-            id: newEntityId,
-            name: query,
-          },
-          property: {
-            id: SystemIds.NAME_PROPERTY,
-            name: 'Name',
-            dataType: 'TEXT',
-          },
-          value: query,
-        });
-      });
+      storage.entities.name.set(newEntityId, spaceId, query);
     }
     onDone?.({ id: newEntityId, name: query }, true);
     onQueryChange('');
