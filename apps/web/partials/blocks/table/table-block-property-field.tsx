@@ -5,7 +5,6 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { action, useAction } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { PropertySchema, RelationRenderableProperty, RenderableProperty } from '~/core/types';

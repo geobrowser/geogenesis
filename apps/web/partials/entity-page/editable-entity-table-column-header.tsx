@@ -3,7 +3,6 @@
 import * as React from 'react';
 import { memo, useState } from 'react';
 
-import { useAction } from '~/core/events/edit-events';
 import { PropertySchema } from '~/core/types';
 
 import { RenderableTypeDropdown } from './renderable-type-dropdown';

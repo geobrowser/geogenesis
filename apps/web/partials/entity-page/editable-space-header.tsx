@@ -7,7 +7,6 @@ import { usePathname } from 'next/navigation';
 import * as React from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
-import { useAction } from '~/core/events/edit-events';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
