@@ -1,7 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { Cell } from '~/core/types';
-import { DataType, RenderableProperty } from '~/core/v2.types';
+import { Cell, DataType, RenderableProperty } from '~/core/v2.types';
 
 interface MakePlaceholderFromValueTypeArgs {
   dataType: DataType;
@@ -26,6 +25,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         valueName: null,
         value: '',
         relationId: '',
+        relationEntityId: '',
         placeholder: true,
       };
     case 'TIME':
@@ -70,7 +70,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
 export const getName = (nameCell: Cell, currentSpaceId: string) => {
   let name = nameCell?.name;
   const maybeNameInSpaceRenderable = nameCell.renderables.find(
-    r => r.attributeId === SystemIds.NAME_PROPERTY && r.spaceId === currentSpaceId
+    r => r.propertyId === SystemIds.NAME_PROPERTY && r.spaceId === currentSpaceId
   );
 
   let maybeNameInSpace = maybeNameInSpaceRenderable?.value;
@@ -79,7 +79,7 @@ export const getName = (nameCell: Cell, currentSpaceId: string) => {
     maybeNameInSpace = maybeNameInSpaceRenderable?.valueName ?? maybeNameInSpace;
   }
 
-  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_PROPERTY);
+  const maybeNameRenderable = nameCell?.renderables.find(r => r.propertyId === SystemIds.NAME_PROPERTY);
 
   let maybeOtherName = maybeNameRenderable?.value;
 

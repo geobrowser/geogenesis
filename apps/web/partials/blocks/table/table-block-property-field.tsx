@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { Id, SystemIds } from '@graphprotocol/grc-20';
 import cx from 'classnames';
 
 import type { ReactNode } from 'react';
@@ -7,8 +7,9 @@ import { useState } from 'react';
 import { Source } from '~/core/blocks/data/source';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { PropertySchema, RelationRenderableProperty, RenderableProperty } from '~/core/types';
+import { useMutate } from '~/core/sync/use-mutate';
 import { getImagePath } from '~/core/utils/utils';
+import { PropertySchema, RelationRenderableProperty, RenderableProperty } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -42,7 +43,7 @@ export function TableBlockPropertyField(props: {
     if (isRelation) {
       return (
         <div className="space-y-1">
-          <div className="text-metadata text-grey-04">{firstRenderable.attributeName}</div>
+          <div className="text-metadata text-grey-04">{firstRenderable.propertyName}</div>
           <RelationsGroup
             isPlaceholderEntry={true}
             entityId={entityId}
@@ -58,18 +59,19 @@ export function TableBlockPropertyField(props: {
     return (
       <div className="space-y-4">
         <div className="space-y-1">
-          <div className="text-metadata text-grey-04">{firstRenderable?.attributeName}</div>
+          <div className="text-metadata text-grey-04">{firstRenderable?.propertyName}</div>
           <div className="flex w-full flex-wrap gap-2">
             {renderables.map(renderable => {
               switch (renderable.type) {
                 case 'NUMBER':
                   return (
                     <NumberField
-                      key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                      key={`${renderable.entityId}-${renderable.propertyId}-${renderable.value}`}
                       variant="tableCell"
                       value={renderable.value}
                       unitId={renderable.options?.unit}
-                      format={renderable.options?.format}
+                      // @TODO(migration): Fix format
+                      // format={renderable.options?.format}
                       isEditing={isEditing}
                       onChange={value => {
                         onChangeEntry(
@@ -88,7 +90,7 @@ export function TableBlockPropertyField(props: {
                                   type: 'NUMBER',
                                   value: value,
                                   options: {
-                                    format: renderable.options?.format,
+                                    // format: renderable.options?.format,
                                     unit: renderable.options?.unit,
                                   },
                                 },
@@ -102,7 +104,7 @@ export function TableBlockPropertyField(props: {
                 case 'TEXT':
                   return (
                     <TableStringField
-                      key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                      key={`${renderable.entityId}-${renderable.propertyId}-${renderable.value}`}
                       variant="tableCell"
                       placeholder="Add value..."
                       value={renderable.value}
@@ -134,7 +136,7 @@ export function TableBlockPropertyField(props: {
                   const checked = getChecked(renderable.value);
                   return (
                     <Checkbox
-                      key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                      key={`checkbox-${renderable.propertyId}-${renderable.value}`}
                       checked={checked}
                       onChange={() => {
                         onChangeEntry(
@@ -164,10 +166,11 @@ export function TableBlockPropertyField(props: {
                 case 'TIME':
                   return (
                     <DateField
-                      key={renderable.attributeId}
+                      key={renderable.propertyId}
                       isEditing={true}
                       value={renderable.value}
-                      format={renderable.options?.format}
+                      // @TODO(migration): Fix format
+                      // format={renderable.options?.format}
                       onBlur={value => {
                         onChangeEntry(
                           {
@@ -195,39 +198,39 @@ export function TableBlockPropertyField(props: {
                       }}
                     />
                   );
-                case 'URL':
-                  return (
-                    <WebUrlField
-                      key={renderable.attributeId}
-                      variant="tableCell"
-                      placeholder="Add a URI"
-                      isEditing={true}
-                      spaceId={spaceId}
-                      value={renderable.value}
-                      onBlur={e => {
-                        onChangeEntry(
-                          {
-                            entityId: renderable.entityId,
-                            entityName: renderable.entityName,
-                            spaceId: renderable.spaceId,
-                          },
-                          {
-                            type: 'EVENT',
-                            data: {
-                              type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                              payload: {
-                                renderable,
-                                value: {
-                                  type: 'URL',
-                                  value: e.currentTarget.value,
-                                },
-                              },
-                            },
-                          }
-                        );
-                      }}
-                    />
-                  );
+                // case 'URL':
+                //   return (
+                //     <WebUrlField
+                //       key={renderable.propertyId}
+                //       variant="tableCell"
+                //       placeholder="Add a URI"
+                //       isEditing={true}
+                //       spaceId={spaceId}
+                //       value={renderable.value}
+                //       onBlur={e => {
+                //         onChangeEntry(
+                //           {
+                //             entityId: renderable.entityId,
+                //             entityName: renderable.entityName,
+                //             spaceId: renderable.spaceId,
+                //           },
+                //           {
+                //             type: 'EVENT',
+                //             data: {
+                //               type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                //               payload: {
+                //                 renderable,
+                //                 value: {
+                //                   type: 'URL',
+                //                   value: e.currentTarget.value,
+                //                 },
+                //               },
+                //             },
+                //           }
+                //         );
+                //       }}
+                //     />
+                //   );
               }
             })}
           </div>
@@ -245,7 +248,7 @@ export function TableBlockPropertyField(props: {
             case 'TEXT':
               return (
                 <Property
-                  key={`string-${renderable.attributeId}-${renderable.value}`}
+                  key={`string-${renderable.propertyId}-${renderable.value}`}
                   renderable={renderable}
                   className="mt-1"
                 >
@@ -257,14 +260,14 @@ export function TableBlockPropertyField(props: {
             case 'NUMBER':
               return (
                 <Property
-                  key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                  key={`${renderable.entityId}-${renderable.propertyId}-${renderable.value}`}
                   renderable={renderable}
                   className="mt-1"
                 >
                   <NumberField
                     variant="tableProperty"
                     value={renderable.value}
-                    format={renderable.options?.format}
+                    // format={renderable.options?.format}
                     unitId={renderable.options?.unit}
                     isEditing={false}
                   />
@@ -274,7 +277,7 @@ export function TableBlockPropertyField(props: {
               const checked = getChecked(renderable.value);
               return (
                 <Property
-                  key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                  key={`checkbox-${renderable.propertyId}-${renderable.value}`}
                   renderable={renderable}
                   className="mt-1"
                 >
@@ -285,7 +288,7 @@ export function TableBlockPropertyField(props: {
             case 'TIME': {
               return (
                 <Property
-                  key={`time-${renderable.attributeId}-${renderable.value}`}
+                  key={`time-${renderable.propertyId}-${renderable.value}`}
                   renderable={renderable}
                   className="mt-1"
                 >
@@ -293,34 +296,34 @@ export function TableBlockPropertyField(props: {
                     variant="tableProperty"
                     isEditing={false}
                     value={renderable.value}
-                    format={renderable.options?.format}
+                    // format={renderable.options?.format}
                   />
                 </Property>
               );
             }
-            case 'URL': {
-              return (
-                <Property
-                  key={`uri-${renderable.attributeId}-${renderable.value}`}
-                  renderable={renderable}
-                  className="mt-1"
-                >
-                  <WebUrlField
-                    variant="tableProperty"
-                    isEditing={false}
-                    spaceId={props.spaceId}
-                    value={renderable.value}
-                  />
-                </Property>
-              );
-            }
+            // case 'URL': {
+            //   return (
+            //     <Property
+            //       key={`uri-${renderable.propertyId}-${renderable.value}`}
+            //       renderable={renderable}
+            //       className="mt-1"
+            //     >
+            //       <WebUrlField
+            //         variant="tableProperty"
+            //         isEditing={false}
+            //         spaceId={props.spaceId}
+            //         value={renderable.value}
+            //       />
+            //     </Property>
+            //   );
+            // }
             case 'IMAGE':
               // We don't support rendering images in list or gallery views except the main image
               return null;
             case 'RELATION':
               return (
                 <Property
-                  key={`uri-${renderable.attributeId}-${renderable.value}`}
+                  key={`uri-${renderable.propertyId}-${renderable.value}`}
                   renderable={renderable}
                   className="mt-2"
                 >
@@ -364,7 +367,7 @@ const Property = ({ renderable, className = '', children }: PropertyProps) => {
             isHovered ? 'opacity-100 delay-700' : 'opacity-0'
           )}
         >
-          {renderable.attributeName}
+          {renderable.propertyName}
         </div>
       </div>
       {children}
@@ -382,22 +385,11 @@ type RelationsGroupProps = {
 };
 
 function RelationsGroup({ renderables, entityId, spaceId, entityName, properties }: RelationsGroupProps) {
-  // @TODO: What should these ids actually be? They can be from different entities and
-  // different spaces actually.
-  //
-  // @TODO: Makesure we write to the right entity and space.
-  const send = useAction({
-    context: {
-      entityId: entityId,
-      spaceId,
-      entityName: entityName,
-    },
-  });
-
   const firstRenderable = renderables[0];
   const hasPlaceholders = renderables.some(r => r.placeholder === true);
-  const typeOfId = firstRenderable.attributeId;
-  const typeOfName = firstRenderable.attributeName;
+  const typeOfId = firstRenderable.propertyId;
+  const typeOfName = firstRenderable.propertyName;
+  const { storage } = useMutate();
 
   const property = properties?.[PropertyId(typeOfId)];
   const filterSearchByTypes = property?.relationValueTypeId
@@ -417,18 +409,6 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
         const renderableType = r.type;
         const relationValue = r.value;
 
-        // The send API needs to be unique for each renderable as each renderable
-        // can potentially belong to different entities in different spaces. By
-        // default we try to use the renderable space. If the current user doesn't
-        // have access to the renderable's space we should use the local one.
-        const send = action({
-          context: {
-            entityId: r.entityId,
-            entityName: r.entityName,
-            spaceId: r.spaceId,
-          },
-        });
-
         if (renderableType === 'IMAGE') {
           return (
             <ImageZoom
@@ -441,36 +421,60 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
 
         if (r.placeholder === true) {
           return (
-            <div key={`${r.entityId}-${r.attributeId}-${r.value}`} data-testid="select-entity" className="w-full">
+            <div
+              key={`${r.relationEntityId}-${r.propertyId}-${r.value}`}
+              data-testid="select-entity"
+              className="w-full"
+            >
               <SelectEntity
                 key={JSON.stringify(filterSearchByTypes)}
                 spaceId={spaceId}
                 relationValueTypes={filterSearchByTypes}
                 onCreateEntity={result => {
                   if (property?.relationValueTypeId) {
-                    send({
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: result.id,
-                        fromEntityName: result.name,
-                        toEntityId: property.relationValueTypeId,
-                        toEntityName: property.relationValueTypeName ?? null,
-                        typeOfId: SystemIds.TYPES_PROPERTY,
-                        typeOfName: 'Types',
+                    storage.relations.set({
+                      id: Id.generate(),
+                      entityId: r.relationEntityId,
+                      spaceId,
+                      renderableType: 'RELATION',
+                      verified: result.verified,
+                      toSpaceId: result.space,
+                      type: {
+                        id: SystemIds.TYPES_PROPERTY,
+                        name: 'Types',
+                      },
+                      fromEntity: {
+                        id: result.id,
+                        name: result.name,
+                      },
+                      toEntity: {
+                        id: property.relationValueTypeId,
+                        name: property.relationValueTypeName ?? null,
+                        value: property.relationValueTypeId,
                       },
                     });
                   }
                 }}
                 onDone={result => {
-                  send({
-                    type: 'UPSERT_RELATION',
-                    payload: {
-                      fromEntityId: entityId,
-                      fromEntityName: entityName,
-                      toEntityId: result.id,
-                      toEntityName: result.name,
-                      typeOfId: r.attributeId,
-                      typeOfName: r.attributeName,
+                  storage.relations.set({
+                    id: Id.generate(),
+                    // @TODO(migration): Reuse entity?
+                    entityId: Id.generate(),
+                    spaceId,
+                    renderableType: 'RELATION',
+                    toSpaceId: result.space,
+                    type: {
+                      id: r.propertyId,
+                      name: r.propertyName,
+                    },
+                    fromEntity: {
+                      id: entityId,
+                      name: entityName,
+                    },
+                    toEntity: {
+                      id: result.id,
+                      name: result.name,
+                      value: result.id,
                     },
                   });
                 }}
@@ -486,12 +490,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
               <LinkableRelationChip
                 isEditing
                 onDelete={() => {
-                  send({
-                    type: 'DELETE_RELATION',
-                    payload: {
-                      renderable: r,
-                    },
-                  });
+                  storage.renderables.relations.delete(r);
                 }}
                 currentSpaceId={spaceId}
                 entityId={relationValue}
@@ -511,29 +510,49 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
             relationValueTypes={filterSearchByTypes}
             onCreateEntity={result => {
               if (property?.relationValueTypeId) {
-                send({
-                  type: 'UPSERT_RELATION',
-                  payload: {
-                    fromEntityId: result.id,
-                    fromEntityName: result.name,
-                    toEntityId: property.relationValueTypeId,
-                    toEntityName: property.relationValueTypeName ?? null,
-                    typeOfId: SystemIds.TYPES_PROPERTY,
-                    typeOfName: 'Types',
+                storage.relations.set({
+                  id: Id.generate(),
+                  // @TODO(migration): Reuse entity?
+                  entityId: Id.generate(),
+                  spaceId,
+                  renderableType: 'RELATION',
+                  toSpaceId: result.space,
+                  type: {
+                    id: SystemIds.TYPES_PROPERTY,
+                    name: 'Types',
+                  },
+                  fromEntity: {
+                    id: result.id,
+                    name: result.name,
+                  },
+                  toEntity: {
+                    id: property.relationValueTypeId,
+                    name: property.relationValueTypeName ?? null,
+                    value: property.relationValueTypeId,
                   },
                 });
               }
             }}
             onDone={result => {
-              send({
-                type: 'UPSERT_RELATION',
-                payload: {
-                  fromEntityId: entityId,
-                  fromEntityName: entityName,
-                  toEntityId: result.id,
-                  toEntityName: result.name,
-                  typeOfId: typeOfId,
-                  typeOfName: typeOfName,
+              storage.relations.set({
+                id: Id.generate(),
+                // @TODO(migration): Reuse entity?
+                entityId: Id.generate(),
+                spaceId,
+                renderableType: 'RELATION',
+                toSpaceId: result.space,
+                type: {
+                  id: typeOfId,
+                  name: typeOfName,
+                },
+                fromEntity: {
+                  id: entityId,
+                  name: entityName,
+                },
+                toEntity: {
+                  id: result.id,
+                  name: result.name,
+                  value: result.id,
                 },
               });
             }}

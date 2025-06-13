@@ -114,7 +114,7 @@ export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT' | 'POI
 // properties that ops mostly do in order to upsert or remove the renderable
 // fields.
 export type NativeRenderableProperty = {
-  type: DataType;
+  type: 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT';
   entityId: string;
   entityName: string | null;
   propertyId: string;

@@ -4,10 +4,9 @@ import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { action } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
-import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { Cell, PropertySchema } from '~/core/v2.types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -53,18 +52,18 @@ export function TableBlockListItem({
   const name = getName(nameCell, currentSpaceId);
 
   const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
-    r => r.attributeId === SystemIds.DESCRIPTION_PROPERTY && r.spaceId === currentSpaceId
+    r => r.propertyId === SystemIds.DESCRIPTION_PROPERTY && r.spaceId === currentSpaceId
   )?.value;
 
   const maybeDescription =
     maybeDescriptionInSpace ??
-    maybeDescriptionData?.renderables.find(r => r.attributeId === SystemIds.DESCRIPTION_PROPERTY)?.value;
+    maybeDescriptionData?.renderables.find(r => r.propertyId === SystemIds.DESCRIPTION_PROPERTY)?.value;
 
   if (maybeDescription) {
     description = maybeDescription;
   }
 
-  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === ContentIds.AVATAR_PROPERTY)?.value;
+  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.propertyId === ContentIds.AVATAR_PROPERTY)?.value;
 
   if (maybeAvatarUrl) {
     image = maybeAvatarUrl;

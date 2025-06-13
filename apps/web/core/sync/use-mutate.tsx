@@ -1,3 +1,4 @@
+import { SystemIds } from '@graphprotocol/grc-20';
 import produce, { Draft } from 'immer';
 
 import { remove, removeRelation, upsert, upsertRelation } from '../database/write';
@@ -25,6 +26,11 @@ type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
  * components subscribed to store state.
  */
 export interface Mutator {
+  entities: {
+    name: {
+      set: (entityId: string, spaceId: string, value: string) => void;
+    };
+  };
   values: {
     get: (id: string, entityId: string) => Value | null;
     set: (value: Value) => void;
@@ -64,6 +70,37 @@ export interface Mutator {
 
 function createMutator(store: GeoStore): Mutator {
   return {
+    entities: {
+      name: {
+        set: (entityId, spaceId, value) => {
+          const newValue: Value = {
+            id: ID.createValueId({
+              entityId: entityId,
+              propertyId: SystemIds.NAME_PROPERTY,
+              spaceId,
+            }),
+            entity: {
+              id: entityId,
+              name: value,
+            },
+            property: {
+              id: SystemIds.NAME_PROPERTY,
+              name: 'Name',
+              dataType: 'TEXT',
+              renderableType: 'TEXT',
+            },
+            spaceId,
+            value,
+          };
+
+          store.setValue(newValue);
+          // Currently we have two stores, the new sync store and the
+          // legacy jotai events store. For now we interop between both,
+          // but eventually we should migrate completely to the sync store.
+          upsert(newValue);
+        },
+      },
+    },
     values: {
       get: (id, entityId) => store.getValue(id, entityId),
       set: newValue => {

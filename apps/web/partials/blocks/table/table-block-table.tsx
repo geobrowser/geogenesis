@@ -18,8 +18,8 @@ import { Source } from '~/core/blocks/data/source';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { Cell, PropertySchema, Row } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
+import { Cell, PropertySchema, Row } from '~/core/v2.types';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';

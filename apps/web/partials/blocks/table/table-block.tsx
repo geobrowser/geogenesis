@@ -24,10 +24,10 @@ import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
-import { Cell, PropertySchema, Row } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
+import { Cell, DataType, PropertySchema, Row } from '~/core/v2.types';
 import { VALUE_TYPES } from '~/core/value-types';
 
 import { IconButton } from '~/design-system/button';
@@ -80,13 +80,13 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
         name: null,
         renderables: [
           {
-            type: VALUE_TYPES[p.valueType] ?? 'TEXT',
+            type: p.dataType as DataType,
             relationId: p.id,
             valueName: p.name,
             entityId: entityId,
             entityName: null,
-            attributeId: p.id,
-            attributeName: p.name,
+            propertyId: p.id,
+            propertyName: p.name,
             spaceId,
             value: '',
             placeholder: true,

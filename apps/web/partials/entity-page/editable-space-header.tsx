@@ -12,6 +12,7 @@ import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
 import { fetchCompletedProposals } from '~/core/io/subgraph/fetch-completed-proposals';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -95,21 +96,10 @@ export function EditableSpaceHeading({
     }
   };
 
-  const send = useAction({
-    context: {
-      entityId,
-      spaceId,
-      entityName: name ?? '',
-    },
-  });
+  const { storage } = useMutate();
 
   const onNameChange = (value: string) => {
-    send({
-      type: 'EDIT_ENTITY_NAME',
-      payload: {
-        name: value,
-      },
-    });
+    storage.entities.name.set(entityId, spaceId, value);
   };
 
   return (

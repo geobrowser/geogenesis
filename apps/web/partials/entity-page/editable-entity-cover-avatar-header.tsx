@@ -11,8 +11,14 @@ import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { getImagePath } from '~/core/utils/utils';
-import { RenderableProperty, Value } from '~/core/v2.types';
+import {
+  ImageRelationRenderableProperty,
+  RelationRenderableProperty,
+  RenderableProperty,
+  Value,
+} from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -123,13 +129,7 @@ const AvatarCoverInput = ({
 
   const editable = useUserIsEditing(spaceId);
 
-  const send = useAction({
-    context: {
-      entityId: id,
-      spaceId,
-      entityName: name ?? '',
-    },
-  });
+  const { storage } = useMutate();
 
   const onImageChange = (imageSrc: string) => {
     // const { id: imageId, ops } = Image.make({ cid: imageSrc });
@@ -185,7 +185,7 @@ const AvatarCoverInput = ({
         const imageSrc = await ipfs.uploadFile(file);
         // Only delete the old image after the new one is successfully uploaded
         if (imgUrl && firstRenderable) {
-          deleteProperty();
+          deleteProperty(firstRenderable as ImageRelationRenderableProperty);
         }
         onImageChange(imageSrc);
       } catch (error) {
@@ -197,8 +197,10 @@ const AvatarCoverInput = ({
     }
   };
 
-  const deleteProperty = () => {
-    if (firstRenderable) send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+  const deleteProperty = (renderable: RelationRenderableProperty) => {
+    if (firstRenderable) {
+      storage.renderables.relations.delete(renderable);
+    }
   };
 
   const openInput = () => {
@@ -255,7 +257,7 @@ const AvatarCoverInput = ({
                   <SquareButton
                     onMouseEnter={() => setHoveredIcon('Trash')}
                     onMouseLeave={() => setHoveredIcon('')}
-                    onClick={deleteProperty}
+                    onClick={() => deleteProperty(firstRenderable as ImageRelationRenderableProperty)}
                     icon={<Trash />}
                   />
                 </>

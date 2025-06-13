@@ -3,7 +3,8 @@
 import * as React from 'react';
 import { memo, useState } from 'react';
 
-import { PropertySchema } from '~/core/types';
+import { useMutate } from '~/core/sync/use-mutate';
+import { PropertySchema } from '~/core/v2.types';
 
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
@@ -13,7 +14,7 @@ interface Props {
   // We need the attribute spaceId to get the actions for the attribute
   // (since actions are grouped by spaceId) to be able to keep the updated
   // name in sync.
-  spaceId?: string;
+  spaceId: string;
   entityId: string;
   unpublishedColumns: PropertySchema[];
 }
@@ -28,13 +29,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   // around this issue by using local state.
   const [localName, setLocalName] = useState(column.name ?? '');
 
-  const send = useAction({
-    context: {
-      entityId,
-      spaceId: spaceId ?? '',
-      entityName: column.name ?? '',
-    },
-  });
+  const { storage } = useMutate();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -49,7 +44,9 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
         className="w-full bg-transparent text-smallTitle placeholder:text-grey-02 focus:outline-none"
         onChange={e => setLocalName(e.currentTarget.value)}
         placeholder="Column name..."
-        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { name: e.target.value } })}
+        onBlur={e => {
+          storage.entities.name.set(entityId, spaceId, e.currentTarget.value);
+        }}
         value={localName}
       />
 
