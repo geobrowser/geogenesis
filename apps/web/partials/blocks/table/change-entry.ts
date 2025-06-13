@@ -1,6 +1,6 @@
 import { EditEvent, EditEventContext } from '~/core/events/edit-events';
-import { SearchResult } from '~/core/io/dto/search';
 import { EntityId } from '~/core/io/schema';
+import { SearchResult } from '~/core/v2.types';
 
 export type ChangeEntryParams =
   | {

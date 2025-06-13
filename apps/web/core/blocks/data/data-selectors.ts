@@ -3,8 +3,7 @@ import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import { RenderableProperty } from '~/core/types';
-import { Entity } from '~/core/v2.types';
+import { Entity, RenderableProperty } from '~/core/v2.types';
 
 export type TripleSegment = {
   type: 'TRIPLE';
@@ -149,7 +148,7 @@ export function generateSelector(
   where: 'TO' | 'FROM' | 'SOURCE'
 ) {
   let selector: string | null = null;
-  const tripleRenderableTypes: RenderableProperty['type'][] = ['TEXT', 'URL', 'NUMBER', 'TIME', 'CHECKBOX'];
+  const tripleRenderableTypes: RenderableProperty['type'][] = ['TEXT', 'NUMBER', 'TIME', 'CHECKBOX'];
 
   if (tripleRenderableTypes.includes(property.renderableType)) {
     if (where === 'SOURCE') {

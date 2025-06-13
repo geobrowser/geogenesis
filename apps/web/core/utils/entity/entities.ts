@@ -1,7 +1,6 @@
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 
 import { EntityId } from '~/core/io/schema';
-import { Triple as ITriple } from '~/core/types';
 import { RenderableProperty } from '~/core/v2.types';
 import { Relation, Value } from '~/core/v2.types';
 
@@ -46,10 +45,6 @@ export function nameFromRenderable(renderables: RenderableProperty[]): string | 
 
 export function nameValue(values: Value[]): Value | undefined {
   return values.find(value => value.property.id === SystemIds.NAME_PROPERTY);
-}
-
-export function nameTriples(triples: ITriple[]): ITriple[] {
-  return triples.filter(triple => triple.attributeId === SystemIds.NAME_PROPERTY);
 }
 
 /**

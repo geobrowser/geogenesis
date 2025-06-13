@@ -27,7 +27,6 @@ export function EntityDtoHistorical(substreamEntity: SubstreamEntityHistorical) 
   const entity = substreamEntity.currentVersion.version;
   const networkTriples = entity.triples.nodes;
   const triples = networkTriples.map(TripleDto);
-  const nameTriples = Entities.nameTriples(triples);
 
   const networkRelations = entity.relationsByFromVersionId.nodes;
   const relationsOut = networkRelations.map(RelationDtoHistorical);
@@ -47,7 +46,7 @@ export function EntityDtoHistorical(substreamEntity: SubstreamEntityHistorical) 
     // @TODO: This Dto is using the legacy data model still, so we can't
     // correctly read description this way
     description: Entities.description([]),
-    nameTripleSpaces: nameTriples.map(t => t.space),
+    nameTripleSpaces: [],
     spaces: entity.versionSpaces.nodes.map(node => node.spaceId),
     types: entityTypes,
     relationsOut,

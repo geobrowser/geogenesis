@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { OmitStrict, SpaceId } from '~/core/types';
+import { OmitStrict } from '~/core/types';
 import { Relation, Value } from '~/core/v2.types';
 
 const EntityStoreContext = createContext<OmitStrict<Props, 'children'> | undefined>(undefined);
@@ -12,7 +12,7 @@ interface Props {
   id: string;
   spaceId: string;
   children: React.ReactNode;
-  initialSpaces: SpaceId[];
+  initialSpaces: string[];
   initialValues: Value[];
   initialRelations: Relation[];
 }

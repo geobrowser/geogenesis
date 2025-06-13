@@ -2,8 +2,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import { TripleDto } from '~/core/io/dto/triples';
 import { RemoteEntityType, RemoteRelation } from '~/core/io/v2/v2.schema';
-import { RenderableEntityType } from '~/core/types';
-import { Relation } from '~/core/v2.types';
+import { Relation, RenderableEntityType } from '~/core/v2.types';
 
 import { EntityId, SubstreamRelationHistorical, SubstreamRelationLive, SubstreamType } from '../schema';
 

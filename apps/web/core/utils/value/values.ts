@@ -1,11 +1,4 @@
-import type { Triple } from '~/core/types';
 import { Value } from '~/core/v2.types';
-
-export function stringValue(triple?: Triple) {
-  if (!triple) return null;
-
-  return triple.value.type === 'TEXT' ? triple.value.value : null;
-}
 
 export function merge(values: Value[], remoteValues: Value[]) {
   const localTripleIds = new Set(values.map(v => v.id));

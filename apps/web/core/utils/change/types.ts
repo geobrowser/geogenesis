@@ -1,6 +1,9 @@
-import { ValueOptions } from '~/core/v2.types';
-
-import { BaseRelationRenderableProperty, ImageRelationRenderableProperty, NativeRenderableProperty } from '../../types';
+import {
+  BaseRelationRenderableProperty,
+  ImageRelationRenderableProperty,
+  NativeRenderableProperty,
+  ValueOptions,
+} from '~/core/v2.types';
 
 export type BlockId = string;
 
