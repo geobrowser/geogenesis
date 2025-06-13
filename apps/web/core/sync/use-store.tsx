@@ -18,11 +18,10 @@ type QueryEntityOptions = {
 export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
-  const [entity, setEntity] = useState<Entity | undefined>(id ? store.getEntity(id, { spaceId }) : undefined);
 
-  const { isFetched } = useQuery({
+  const { isFetched, data: entity } = useQuery({
     enabled: !!id && enabled,
-    queryKey: [...GeoStore.queryKey(id)],
+    queryKey: GeoStore.queryKey(id),
     queryFn: async () => {
       // If the entity is in the store then it's already been synced and we can
       // skip this work
@@ -53,25 +52,25 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       if (event.entities.some(e => e.id === id)) {
         const entity = store.getEntity(id, { spaceId });
-        setEntity(entity);
+        cache.setQueryData(GeoStore.queryKey(id), entity);
       }
     });
 
     const onEntityDeletedSub = stream.on(GeoEventStream.ENTITY_DELETED, event => {
       if (event.entity.id === id) {
-        setEntity(undefined);
+        cache.setQueryData(GeoStore.queryKey(id), null);
       }
     });
 
     const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
       if (event.relation.fromEntity.id === id) {
-        setEntity(store.getEntity(id, { spaceId }));
+        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
       }
     });
 
     const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
       if (event.relation.fromEntity.id === id) {
-        setEntity(store.getEntity(id, { spaceId }));
+        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
       }
     });
 
@@ -102,7 +101,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
       }
 
       if (shouldUpdate) {
-        setEntity(store.getEntity(id, { spaceId }));
+        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
       }
     });
 
@@ -133,7 +132,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
       }
 
       if (shouldUpdate) {
-        setEntity(store.getEntity(id, { spaceId }));
+        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
       }
     });
 
@@ -145,7 +144,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [id, store, stream, spaceId, enabled, entity]);
+  }, [id, store, stream, spaceId, enabled, cache, entity]);
 
   return {
     entity,
