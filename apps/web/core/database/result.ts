@@ -1,11 +1,11 @@
 import { Duration, Effect } from 'effect';
 
-import { SearchResult } from '../io/dto/search';
 import { EntityId } from '../io/schema';
 import { fetchResult } from '../io/subgraph';
 import { getSpaces } from '../io/v2/queries';
 import { queryClient } from '../query-client';
 import { GeoStore } from '../sync/store';
+import { SearchResult } from '../v2.types';
 
 export interface FetchResultOptions {
   id: EntityId;

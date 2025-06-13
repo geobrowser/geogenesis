@@ -1,20 +1,17 @@
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { GraphUrl, Id, SystemIds } from '@graphprotocol/grc-20';
 import { Effect, Record } from 'effect';
 import equal from 'fast-deep-equal';
 
-import { EntityWithSchema } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
 import { getValues } from '~/core/database/v2.values';
-import type { Entity } from '~/core/io/dto/entities';
 import { Proposal } from '~/core/io/dto/proposals';
 import { fetchParentEntityId } from '~/core/io/fetch-parent-entity-id';
-import { EntityId } from '~/core/io/schema';
 import { getBatchEntities } from '~/core/io/v2/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import type { Relation, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { Entity, Relation, Value } from '~/core/v2.types';
 
 import { fetchPreviousVersionByCreatedAt } from './fetch-previous-version-by-created-at';
 import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';
@@ -39,7 +36,7 @@ async function fetchEntitiesBatchCached(options: { spaceId: string; entityIds: s
 }
 
 export async function fromLocal(spaceId?: string) {
-  const triples = getValues({
+  const values = getValues({
     selector: t => (t.hasBeenPublished === false && spaceId ? t.spaceId === spaceId : true),
     includeDeleted: true,
   });
@@ -53,7 +50,7 @@ export async function fromLocal(spaceId?: string) {
   const actualLocal = localRelations.filter(r => (spaceId ? r.spaceId === spaceId : true));
 
   const entityIds = new Set([
-    ...triples.map(t => t.entity.id),
+    ...values.map(t => t.entity.id),
     // Relations don't alter the `from` entity directly, so in cases where a relation
     // is modified we also need to query the `from` entity so we can render diffs
     // from the perspective of the `from` entity.
@@ -79,14 +76,13 @@ export async function fromLocal(spaceId?: string) {
           allEntities.push(localEntityWithRemoteData);
         } else {
           allEntities.push({
-            id: EntityId(entityId),
+            id: entityId,
             name: null,
             description: null,
-            nameTripleSpaces: [],
             spaces: [],
             types: [],
-            relationsOut: [],
-            triples: [],
+            relations: [],
+            values: [],
           });
         }
       });
@@ -129,7 +125,7 @@ export async function fromLocal(spaceId?: string) {
 
   const possibleBlockParentEntityIds = await getBlockParentEntityIds(possibleBlockIds, afterEntities);
 
-  const parentEntityIdsSet: Set<EntityId> = new Set();
+  const parentEntityIdsSet: Set<string> = new Set();
   [...Object.values(possibleBlockParentEntityIds).filter(Boolean)].forEach(entityId => {
     if (entityId && !entityIds.has(entityId)) {
       parentEntityIdsSet.add(entityId);
@@ -165,14 +161,13 @@ export async function fromLocal(spaceId?: string) {
           allParentEntities.push(localParentEntityWithRemoteData);
         } else {
           allParentEntities.push({
-            id: EntityId(entityId),
+            id: entityId,
             name: null,
             description: null,
-            nameTripleSpaces: [],
             spaces: [],
             types: [],
-            relationsOut: [],
-            triples: [],
+            relations: [],
+            values: [],
           });
         }
       });
@@ -207,7 +202,7 @@ export async function fromLocal(spaceId?: string) {
   const beforeParentEntities = remoteParentEntities.filter(entity => getIsRenderedAsEntity(entity));
   const afterParentEntities = localParentEntities.filter(entity => getIsRenderedAsEntity(entity));
 
-  const parentEntityIds: Record<EntityId, EntityId | null> = {
+  const parentEntityIds: Record<string, string | null> = {
     ...possibleBlockParentEntityIds,
     ...createdBlockParentEntityIds,
     ...deletedBlockParentEntityIds,
@@ -252,7 +247,7 @@ export async function fromActiveProposal(proposal: Proposal, spaceId: string): P
 
   const possibleBlockParentEntityIds = await getBlockParentEntityIds(possibleBlockIds, beforeEntities);
 
-  const parentEntityIdsSet: Set<EntityId> = new Set();
+  const parentEntityIdsSet: Set<string> = new Set();
   [...Object.values(possibleBlockParentEntityIds).filter(Boolean)].forEach(entityId => {
     if (entityId) {
       parentEntityIdsSet.add(entityId);
@@ -268,7 +263,7 @@ export async function fromActiveProposal(proposal: Proposal, spaceId: string): P
 
   const beforeParentEntities = await Effect.runPromise(getBatchEntities(parentEntityIdsToFetch, spaceId));
 
-  const parentEntityIds: Record<EntityId, EntityId | null> = {
+  const parentEntityIds: Record<string, string | null> = {
     ...possibleBlockParentEntityIds,
     ...createdBlockParentEntityIds,
     ...deletedBlockParentEntityIds,
@@ -314,7 +309,7 @@ export async function fromEndedProposal(proposal: Proposal, spaceId: string): Pr
 
   const possibleBlockParentEntityIds = await getBlockParentEntityIds(possibleBlockIds, beforeEntities);
 
-  const parentEntityIdsSet: Set<EntityId> = new Set();
+  const parentEntityIdsSet: Set<string> = new Set();
   [...Object.values(possibleBlockParentEntityIds).filter(Boolean)].forEach(entityId => {
     if (entityId) {
       parentEntityIdsSet.add(entityId);
@@ -330,7 +325,7 @@ export async function fromEndedProposal(proposal: Proposal, spaceId: string): Pr
 
   const beforeParentEntities = await Effect.runPromise(getBatchEntities(parentEntityIdsToFetch, spaceId));
 
-  const parentEntityIds: Record<EntityId, EntityId | null> = {
+  const parentEntityIds: Record<string, string | null> = {
     ...possibleBlockParentEntityIds,
     ...createdBlockParentEntityIds,
     ...deletedBlockParentEntityIds,
@@ -352,7 +347,7 @@ interface AggregateChangesArgs {
   beforeEntities: Entity[];
   afterBlocks: Entity[];
   beforeBlocks: Entity[];
-  parentEntityIds: Record<EntityId, EntityId | null>;
+  parentEntityIds: Record<string, string | null>;
 }
 
 export function aggregateChanges({
@@ -368,21 +363,21 @@ export function aggregateChanges({
   //
   // Additionally, make sure that we're filtering out triples that don't match the current space id.
   const afterTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
-    afterEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
+    afterEntities.flatMap(e => e.values).filter(t => (spaceId ? t.spaceId === spaceId : true))
   );
   const beforeTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
-    beforeEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
+    beforeEntities.flatMap(e => e.values).filter(t => (spaceId ? t.spaceId === spaceId : true))
   );
 
   const afterRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(
-    afterEntities.flatMap(e => e.relationsOut.filter(r => (spaceId ? r.space === spaceId : true)))
+    afterEntities.flatMap(e => e.relations.filter(r => (spaceId ? r.spaceId === spaceId : true)))
   );
   const beforeRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(
-    beforeEntities.flatMap(e => e.relationsOut.filter(r => (spaceId ? r.space === spaceId : true)))
+    beforeEntities.flatMap(e => e.relations.filter(r => (spaceId ? r.spaceId === spaceId : true)))
   );
 
   const afterEntityIds = afterEntities.map(entity => entity.id);
-  const changedEntitiesSet: Set<EntityId> = new Set();
+  const changedEntitiesSet: Set<string> = new Set();
   afterEntityIds.forEach(entityId => {
     changedEntitiesSet.add(entityId);
   });
@@ -391,21 +386,21 @@ export function aggregateChanges({
       changedEntitiesSet.add(entityId);
     }
   });
-  const changedEntities: EntityId[] = [...changedEntitiesSet.values()];
+  const changedEntities: string[] = [...changedEntitiesSet.values()];
 
   const afterBlockIds = afterBlocks.map(block => block.id);
-  const changedBlocksSet: Set<EntityId> = new Set();
+  const changedBlocksSet: Set<string> = new Set();
   afterBlockIds.forEach(blockId => {
     changedBlocksSet.add(blockId);
   });
   Object.keys(parentEntityIds).forEach(blockId => {
-    changedBlocksSet.add(EntityId(blockId));
+    changedBlocksSet.add(blockId);
   });
-  const changedBlocks: EntityId[] = [...changedBlocksSet.values()];
+  const changedBlocks: string[] = [...changedBlocksSet.values()];
 
   // This might be a performance bottleneck for large sets of ops, so we'll need
   // to monitor this over time.
-  const aggregatedChanges = changedEntities.map((entityId: EntityId): EntityChange => {
+  const aggregatedChanges = changedEntities.map((entityId: string): EntityChange => {
     const tripleChanges: TripleChange[] = [];
     const relationChanges: RelationChange[] = [];
 
@@ -418,16 +413,16 @@ export function aggregateChanges({
 
     if (afterEntityIds.includes(entityId)) {
       for (const afterTriple of Object.values(afterTriplesForEntity)) {
-        if (processedAttributes.has(afterTriple.attributeId)) continue;
+        if (processedAttributes.has(afterTriple.property.id)) continue;
 
-        const beforeTriple: Triple | null = beforeTriplesForEntity[afterTriple.attributeId] ?? null;
+        const beforeTriple: Value | null = beforeTriplesForEntity[afterTriple.property.id] ?? null;
         const beforeValue = beforeTriple ? beforeTriple.value : null;
         const before = AfterTripleDiff.diffBefore(afterTriple.value, beforeValue);
         const after = AfterTripleDiff.diffAfter(afterTriple.value, beforeValue);
 
         tripleChanges.push({
           attribute: {
-            id: afterTriple.attributeId,
+            id: afterTriple.property.id,
             name: afterTriple.attributeName,
           },
           type: afterTriple.value.type,
@@ -435,46 +430,46 @@ export function aggregateChanges({
           after,
         });
 
-        processedAttributes.add(afterTriple.attributeId);
+        processedAttributes.add(afterTriple.property.id);
       }
 
       for (const beforeTriple of Object.values(beforeTriplesForEntity)) {
-        if (processedAttributes.has(beforeTriple.attributeId)) continue;
+        if (processedAttributes.has(beforeTriple.property.id)) continue;
 
-        const afterTriple: Triple | null = afterTriplesForEntity[beforeTriple.attributeId] ?? null;
+        const afterTriple: Value | null = afterTriplesForEntity[beforeTriple.property.id] ?? null;
         const afterValue = afterTriple ? afterTriple.value : null;
         const before = BeforeTripleDiff.diffBefore(beforeTriple.value, afterValue);
         const after = BeforeTripleDiff.diffAfter(beforeTriple.value, afterValue);
 
         tripleChanges.push({
           attribute: {
-            id: beforeTriple.attributeId,
-            name: beforeTriple.attributeName,
+            id: beforeTriple.property.id,
+            name: beforeTriple.property.name,
           },
-          type: beforeTriple.value.type,
+          type: beforeTriple.property.dataType,
           before,
           after,
         });
 
-        processedAttributes.add(beforeTriple.attributeId);
+        processedAttributes.add(beforeTriple.property.id);
       }
 
       for (const relations of Object.values(afterRelationsForEntity)) {
-        const seenRelations: Set<EntityId> = new Set();
+        const seenRelations: Set<string> = new Set();
 
         for (const relation of relations) {
-          const beforeRelationsForAttributeId = beforeRelationsForEntity[relation.typeOf.id] ?? null;
+          const beforeRelationsForAttributeId = beforeRelationsForEntity[relation.type.id] ?? null;
           const before = AfterRelationDiff.diffBefore(relation, beforeRelationsForAttributeId);
           const after = AfterRelationDiff.diffAfter(relation, beforeRelationsForAttributeId);
 
           if (!seenRelations.has(relation.id)) {
             relationChanges.push({
               attribute: {
-                id: relation.typeOf.id,
-                name: relation.typeOf.name,
+                id: relation.type.id,
+                name: relation.type.name,
               },
               // Filter out the block-related relation types until we render blocks in the diff editor
-              type: relation.toEntity.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
+              type: relation.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
               before,
               after,
             });
@@ -486,17 +481,17 @@ export function aggregateChanges({
 
       for (const relations of Object.values(beforeRelationsForEntity)) {
         for (const relation of relations) {
-          const afterRelationsForPropertyId = afterRelationsForEntity[relation.typeOf.id] ?? null;
+          const afterRelationsForPropertyId = afterRelationsForEntity[relation.type.id] ?? null;
           const before = BeforeRelationDiff.diffBefore(relation, afterRelationsForPropertyId);
           const after = BeforeRelationDiff.diffAfter(relation, afterRelationsForPropertyId);
 
           relationChanges.push({
             attribute: {
-              id: relation.typeOf.id,
-              name: relation.typeOf.name,
+              id: relation.type.id,
+              name: relation.type.name,
             },
             // Filter out the block-related relation types until we render blocks in the diff editor
-            type: relation.toEntity.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
+            type: relation.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
             before: after,
             after: before,
           });
@@ -523,42 +518,42 @@ export function aggregateChanges({
         const afterBlock = afterBlocks.find(afterEntity => afterEntity.id === blockId);
 
         const isTextBlock =
-          (beforeBlock?.types.some(type => type.id === EntityId(SystemIds.TEXT_BLOCK)) ||
-            afterBlock?.types.some(type => type.id === EntityId(SystemIds.TEXT_BLOCK)) ||
-            afterBlock?.relationsOut.some(relation => relation.typeOf.id === EntityId(SystemIds.TEXT_BLOCK))) ??
+          (beforeBlock?.types.some(type => type.id === SystemIds.TEXT_BLOCK) ||
+            afterBlock?.types.some(type => type.id === SystemIds.TEXT_BLOCK) ||
+            afterBlock?.relations.some(relation => relation.type.id === SystemIds.TEXT_BLOCK)) ??
           false;
 
         const isImageBlock =
-          (beforeBlock?.types?.some(type => type.id === EntityId(SystemIds.IMAGE_TYPE)) ||
-            afterBlock?.types?.some(type => type.id === EntityId(SystemIds.IMAGE_TYPE)) ||
-            afterBlock?.relationsOut.some(relation => relation.typeOf.id === EntityId(SystemIds.IMAGE_TYPE))) ??
+          (beforeBlock?.types?.some(type => type.id === SystemIds.IMAGE_TYPE) ||
+            afterBlock?.types?.some(type => type.id === SystemIds.IMAGE_TYPE) ||
+            afterBlock?.relations.some(relation => relation.type.id === SystemIds.IMAGE_TYPE)) ??
           false;
 
         const isDataBlock =
-          (beforeBlock?.types?.some(type => type.id === EntityId(SystemIds.DATA_BLOCK)) ||
-            afterBlock?.types?.some(type => type.id === EntityId(SystemIds.DATA_BLOCK)) ||
-            afterBlock?.relationsOut.some(relation => relation.typeOf.id === EntityId(SystemIds.DATA_BLOCK))) ??
+          (beforeBlock?.types?.some(type => type.id === SystemIds.DATA_BLOCK) ||
+            afterBlock?.types?.some(type => type.id === SystemIds.DATA_BLOCK) ||
+            afterBlock?.relations.some(relation => relation.type.id === SystemIds.DATA_BLOCK)) ??
           false;
 
         if (isTextBlock) {
-          const beforeTriple = beforeBlock?.triples.find(triple => triple.attributeId === SystemIds.MARKDOWN_CONTENT);
+          const beforeTriple = beforeBlock?.values.find(triple => triple.property.id === SystemIds.MARKDOWN_CONTENT);
 
-          const afterTriple = afterBlock?.triples.find(triple => triple.attributeId === SystemIds.MARKDOWN_CONTENT);
+          const afterTriple = afterBlock?.values.find(triple => triple.property.id === SystemIds.MARKDOWN_CONTENT);
 
           blockChanges.push({
             type: 'textBlock',
-            before: `${beforeTriple?.value?.value ?? ''}`,
-            after: `${afterTriple?.value?.value ?? ''}`,
+            before: `${beforeTriple?.value ?? ''}`,
+            after: `${afterTriple?.value ?? ''}`,
           });
         } else if (isImageBlock) {
-          const beforeTriple = beforeBlock?.triples.find(triple => triple.attributeId === SystemIds.IMAGE_URL_PROPERTY);
+          const beforeTriple = beforeBlock?.values.find(triple => triple.property.id === SystemIds.IMAGE_URL_PROPERTY);
 
-          const afterTriple = afterBlock?.triples.find(triple => triple.attributeId === SystemIds.IMAGE_URL_PROPERTY);
+          const afterTriple = afterBlock?.values.find(triple => triple.property.id === SystemIds.IMAGE_URL_PROPERTY);
 
           blockChanges.push({
             type: 'imageBlock',
-            before: `${beforeTriple?.value?.value ?? ''}`,
-            after: `${afterTriple?.value?.value ?? ''}`,
+            before: `${beforeTriple?.value ?? ''}`,
+            after: `${afterTriple?.value ?? ''}`,
           });
         } else if (isDataBlock) {
           const beforeName = beforeBlock?.name ?? '';
@@ -576,7 +571,7 @@ export function aggregateChanges({
     return {
       id: entity.id,
       name: entity.name,
-      avatar: Entities.avatar(entity.relationsOut),
+      avatar: Entities.avatar(entity.relations),
       blockChanges,
       changes: realChanges,
     };
@@ -610,27 +605,14 @@ export function isRealChange(
   return true;
 }
 
-type TripleByAttributeMap = Record<string, Triple>;
+type TripleByAttributeMap = Record<string, Value>;
 type EntityByAttributeMapMap = Record<string, TripleByAttributeMap>;
 
-const RELATION_TRIPLES = [
-  EntityId(SystemIds.RELATION_FROM_PROPERTY),
-  EntityId(SystemIds.RELATION_TO_PROPERTY),
-  EntityId(SystemIds.RELATION_INDEX),
-  EntityId(SystemIds.RELATION_TYPE_PROPERTY),
-];
-
-function shouldFilterTriple(triple: Triple) {
-  // Filter out any triples for relation entities. This is to prevent
-  // the diffs from being noisy with metadata about the relation.
-  if (RELATION_TRIPLES.includes(EntityId(triple.attributeId))) {
-    return true;
-  }
-
+function shouldFilterTriple(value: Value) {
   if (
-    triple.attributeId === SystemIds.TYPES_PROPERTY &&
-    triple.value.type === 'URL' &&
-    triple.value.value === GraphUrl.fromEntityId(SystemIds.RELATION_TYPE)
+    value.property.id === SystemIds.TYPES_PROPERTY &&
+    value.property.renderableType === 'URL' &&
+    value.value === GraphUrl.fromEntityId(SystemIds.RELATION_TYPE)
   ) {
     return true;
   }
@@ -638,10 +620,10 @@ function shouldFilterTriple(triple: Triple) {
   return false;
 }
 
-function groupTriplesByEntityIdAndAttributeId(triples: Triple[]) {
-  return triples.reduce<EntityByAttributeMapMap>((acc, triple) => {
-    const entityId = triple.entityId;
-    const attributeId = triple.attributeId;
+function groupTriplesByEntityIdAndAttributeId(values: Value[]) {
+  return values.reduce<EntityByAttributeMapMap>((acc, triple) => {
+    const entityId = triple.entity.id;
+    const attributeId = triple.property.id;
 
     // Filter out any triples for relation entities. This is to prevent
     // the diffs from being noisy with metadata about the relation.
@@ -662,7 +644,7 @@ function groupTriplesByEntityIdAndAttributeId(triples: Triple[]) {
 function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
   return relations.reduce<Record<string, Record<string, Relation[]>>>((acc, relation) => {
     const entityId = relation.fromEntity.id;
-    const attributeId = relation.typeOf.id;
+    const attributeId = relation.type.id;
 
     if (!acc[entityId]) {
       acc[entityId] = {};
@@ -678,8 +660,8 @@ function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
   }, {});
 }
 
-const getIsRenderedAsEntity = (entity: Entity | EntityWithSchema) => {
-  if (entity.types.some(type => blockTypes.includes(type.id))) {
+const getIsRenderedAsEntity = (entity: Entity) => {
+  if (entity.types.some(type => blockTypes.includes(Id.Id(type.id)))) {
     return false;
   } else {
     return true;
@@ -687,11 +669,11 @@ const getIsRenderedAsEntity = (entity: Entity | EntityWithSchema) => {
 };
 
 const blockTypes = [
-  EntityId(SystemIds.DATA_BLOCK),
-  EntityId(SystemIds.IMAGE_BLOCK),
-  EntityId(SystemIds.IMAGE_TYPE),
-  EntityId(SystemIds.RELATION_TYPE),
-  EntityId(SystemIds.TEXT_BLOCK),
+  SystemIds.DATA_BLOCK,
+  SystemIds.IMAGE_BLOCK,
+  SystemIds.IMAGE_TYPE,
+  SystemIds.RELATION_TYPE,
+  SystemIds.TEXT_BLOCK,
 ];
 
 // @TODO use attributes as a hint as well
@@ -705,10 +687,10 @@ const blockAttributes = [
   SystemIds.VIEW_TYPE,
 ];
 
-const getBlockParentEntityIds = async (blockIds: EntityId[], entities: Entity[]) => {
-  const blockParentEntityIds: Record<EntityId, EntityId | null> = {};
+const getBlockParentEntityIds = async (blockIds: string[], entities: Entity[]) => {
+  const blockParentEntityIds: Record<string, string | null> = {};
 
-  const parentEntityIds: Array<EntityId | null> = await Promise.all(
+  const parentEntityIds: Array<string | null> = await Promise.all(
     blockIds.map(async blockId => {
       const possibleParentEntityId = await fetchParentEntityId(blockId);
 
@@ -716,35 +698,33 @@ const getBlockParentEntityIds = async (blockIds: EntityId[], entities: Entity[])
     })
   );
 
-  blockIds.forEach((blockId: EntityId, index: number) => {
+  blockIds.forEach((blockId: string, index: number) => {
     blockParentEntityIds[blockId] = parentEntityIds[index];
   });
 
   entities.forEach(entity => {
-    entity.relationsOut
-      .filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS))
-      .forEach(relation => {
-        blockParentEntityIds[relation.toEntity.id] = entity.id;
-      });
+    entity.relations.forEach(relation => {
+      blockParentEntityIds[relation.toEntity.id] = entity.id;
+    });
   });
 
   return blockParentEntityIds;
 };
 
 const getNewAndDeletedBlockParentEntityIds = (beforeEntities: Entity[], afterEntities: Entity[]) => {
-  const createdBlockParentEntityIds: Record<EntityId, EntityId> = {};
-  const deletedBlockParentEntityIds: Record<EntityId, EntityId> = {};
+  const createdBlockParentEntityIds: Record<string, string> = {};
+  const deletedBlockParentEntityIds: Record<string, string> = {};
 
   afterEntities.forEach(afterEntity => {
     const beforeEntity = beforeEntities.find(entity => entity.id === afterEntity.id);
 
     const beforeBlockIds =
-      beforeEntity?.relationsOut
-        .filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS))
+      beforeEntity?.relations
+        .filter(relation => relation.type.id === SystemIds.BLOCKS)
         .map(relation => relation.toEntity.id) ?? [];
 
-    const afterBlockIds = afterEntity.relationsOut
-      .filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS))
+    const afterBlockIds = afterEntity.relations
+      .filter(relation => relation.type.id === SystemIds.BLOCKS)
       .map(relation => relation.toEntity.id);
 
     const newlyCreatedBlockIds = afterBlockIds.filter(blockId => !beforeBlockIds.includes(blockId));
