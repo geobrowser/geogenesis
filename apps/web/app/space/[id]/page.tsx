@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import type { Metadata } from 'next';
 
+import { Subspace } from '~/core/io/dto/subspaces';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
@@ -90,9 +91,9 @@ export default async function SpacePage(props0: Props) {
           Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
           show any referenced by loading states but do want to stream it in
         */}
-        <React.Suspense fallback={<div />}>
+        {/* <React.Suspense fallback={<div />}>
           <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={spaceId} />
-        </React.Suspense>
+        </React.Suspense> */}
       </ErrorBoundary>
     </>
   );
@@ -117,7 +118,8 @@ type SubspacesContainerProps = {
 };
 
 const SubspacesContainer = async ({ spaceId }: SubspacesContainerProps) => {
-  const subspaces = await fetchSubspacesBySpaceId(spaceId);
+  // const subspaces = await fetchSubspacesBySpaceId(spaceId);
+  const subspaces: Subspace[] = [];
 
   if (subspaces.length === 0) {
     return null;
