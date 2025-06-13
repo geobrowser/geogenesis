@@ -2,14 +2,13 @@ import { Schema } from '@effect/schema';
 import { SystemIds } from '@graphprotocol/grc-20';
 import { Effect, Either } from 'effect';
 
-import { EntityId } from '~/core/io/schema';
 import { getSpace } from '~/core/io/v2/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import { OmitStrict, ValueTypeId } from '~/core/types';
+import { OmitStrict } from '~/core/types';
 import type { RelationValueType } from '~/core/types';
-import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
+import { FilterableValueType } from '~/core/value-types';
 
 import { Source } from './source';
 
@@ -219,27 +218,29 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 }
 
 async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
+  // @TODO(migration): Fetch property
   const maybeAttributeEntity = await E.findOne({ store, cache: queryClient, id: filter.attribute });
 
-  // @TODO(migration): Fetch property
-  if (valueType === EntityId(SystemIds.RELATION)) {
-    const valueEntity = await E.findOne({ store, cache: queryClient, id: filter.is });
+  // if (valueType === EntityId(SystemIds.RELATION)) {
+  //   const valueEntity = await E.findOne({ store, cache: queryClient, id: filter.is });
 
-    return {
-      columnId: filter.attribute,
-      columnName: maybeAttributeEntity?.name ?? null,
-      value: filter.is,
-      valueName: valueEntity?.name ?? null,
-      valueType: 'RELATION',
-    };
-  }
+  //   return {
+  //     columnId: filter.attribute,
+  //     columnName: maybeAttributeEntity?.name ?? null,
+  //     value: filter.is,
+  //     valueName: valueEntity?.name ?? null,
+  //     valueType: 'RELATION',
+  //   };
+  // }
 
   // @TODO: Can get property name here
+  // @TODO(migration): Get real property data type
   return {
     columnId: filter.attribute,
     columnName: maybeAttributeEntity?.name ?? null,
     value: filter.is,
     valueName: null,
-    valueType: VALUE_TYPES[(valueType ?? SystemIds.TEXT) as ValueTypeId] ?? SystemIds.TEXT,
+    // valueType: VALUE_TYPES[(valueType ?? SystemIds.TEXT) as ValueTypeId] ?? SystemIds.TEXT,
+    valueType: 'TEXT',
   };
 }

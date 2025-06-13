@@ -270,7 +270,7 @@ export const TableBlockTable = ({
                     ? 'hidden'
                     : '!bg-grey-01 !text-grey-03';
 
-                const isEditingDateTime = isEditing && DATETIME_VALUE_TYPES.includes(column.valueType);
+                const isEditingDateTime = column.dataType === 'TIME';
 
                 return (
                   <th
@@ -307,7 +307,7 @@ export const TableBlockTable = ({
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
                     const firstRenderable = cell.getValue<Cell>()?.renderables[0];
 
-                    const isNameCell = Boolean(firstRenderable?.attributeId === SystemIds.NAME_PROPERTY);
+                    const isNameCell = Boolean(firstRenderable?.propertyId === SystemIds.NAME_PROPERTY);
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
@@ -336,5 +336,5 @@ export const TableBlockTable = ({
   );
 };
 
-// @TODO replace with SystemIds when package is updated
-const DATETIME_VALUE_TYPES = ['3mswMrL91GuYTfBq29EuNE', 'WDD55r9x6FHTayQnEmTn5S'];
+// @TODO(migration): Do we still need these?
+// const DATETIME_VALUE_TYPES = ['3mswMrL91GuYTfBq29EuNE', 'WDD55r9x6FHTayQnEmTn5S'];

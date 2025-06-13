@@ -27,8 +27,14 @@ import { useEditable } from '~/core/state/editable-store';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { Cell, DataType, PropertySchema, Row } from '~/core/v2.types';
-import { VALUE_TYPES } from '~/core/value-types';
+import {
+  BaseRelationRenderableProperty,
+  Cell,
+  DataType,
+  NativeRenderableProperty,
+  PropertySchema,
+  Row,
+} from '~/core/v2.types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -80,11 +86,11 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
         name: null,
         renderables: [
           {
-            type: p.dataType as DataType,
+            type: p.dataType as NativeRenderableProperty['type'],
             relationId: p.id,
             valueName: p.name,
-            entityId: entityId,
-            entityName: null,
+            fromEntityId: entityId,
+            fromEntityName: null,
             propertyId: p.id,
             propertyName: p.name,
             spaceId,

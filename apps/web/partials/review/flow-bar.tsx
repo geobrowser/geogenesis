@@ -36,14 +36,14 @@ export const FlowBar = () => {
 
   const entitiesCount = pipe(
     triples,
-    A.groupBy(t => t.entityId),
+    A.groupBy(t => t.entity.id),
     D.keys,
     A.length
   );
 
   const spacesCount = pipe(
     triples,
-    A.groupBy(t => t.space),
+    A.groupBy(t => t.spaceId),
     D.keys,
     keys => new Set(keys).size
   );

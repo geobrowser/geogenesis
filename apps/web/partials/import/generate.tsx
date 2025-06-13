@@ -13,13 +13,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
-import { Entity } from '~/core/io/dto/entities';
 import { Space } from '~/core/io/dto/spaces';
 import { EntityId } from '~/core/io/schema';
 import { getEntity } from '~/core/io/v2/queries';
 import { Triple as TripleType } from '~/core/types';
 import type { Value } from '~/core/types';
 import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
+import { Entity } from '~/core/v2.types';
 
 import { Accordion } from '~/design-system/accordion';
 import { EntitySearchAutocomplete } from '~/design-system/autocomplete/entity-search-autocomplete';
@@ -591,19 +591,21 @@ const getAttributes = (entityType: Entity | undefined) => {
   const supportedAttributes: TripleType[] = [];
   const unsupportedAttributes: TripleType[] = [];
 
+  // @TODO(migration): Do we still need this?
   if (entityType) {
-    entityType?.triples.forEach((triple: TripleType) => {
-      if (triple.attributeName === 'Attributes') {
-        // if (triple.value.type === 'ENTITY' && triple.value.name && UNSUPPORTED_PROPERTYS.includes(triple.value.name)) {
-        //   unsupportedAttributes.push(triple);
-        // } else {
-        //   supportedAttributes.push(triple);
-        // }
-      }
-    });
+    // entityType?.values.forEach((triple: TripleType) => {
+    // if (triple.attributeName === 'Attributes') {
+    // if (triple.value.type === 'ENTITY' && triple.value.name && UNSUPPORTED_PROPERTYS.includes(triple.value.name)) {
+    //   unsupportedAttributes.push(triple);
+    // } else {
+    //   supportedAttributes.push(triple);
+    // }
+    // }
+    // });
   }
 
   return { supportedAttributes, unsupportedAttributes };
 };
 
-const UNSUPPORTED_PROPERTYS = ['Avatar', 'Cover'];
+// @TODO(migration): Do we still need this?
+// const UNSUPPORTED_PROPERTYS = ['Avatar', 'Cover'];

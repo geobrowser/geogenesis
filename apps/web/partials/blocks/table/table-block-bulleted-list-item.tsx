@@ -3,8 +3,8 @@ import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
 import { PropertyId } from '~/core/hooks/use-properties';
-import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
+import { Cell, PropertySchema } from '~/core/v2.types';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';

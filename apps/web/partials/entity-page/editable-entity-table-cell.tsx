@@ -1,10 +1,10 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { Source } from '~/core/blocks/data/source';
-import { RelationRenderableProperty, RenderableProperty } from '~/core/types';
-import type { RelationValueType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
+import { RelationRenderableProperty, RenderableProperty } from '~/core/v2.types';
+import type { RelationValueType } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -198,8 +198,8 @@ export function EditableEntityTableCell({
 
   if (isRelation) {
     const hasPlaceholders = renderables.some(r => r.placeholder === true);
-    const typeOfId = firstRenderable.attributeId;
-    const typeOfName = firstRenderable.attributeName;
+    const typeOfId = firstRenderable.propertyId;
+    const typeOfName = firstRenderable.propertyName;
     const relationRenderables = renderables as RelationRenderableProperty[];
 
     return (
@@ -222,7 +222,7 @@ export function EditableEntityTableCell({
 
           if (r.placeholder === true) {
             return (
-              <div key={`${r.entityId}-${r.attributeId}-${r.value}`} data-testid="select-entity" className="w-full">
+              <div key={`${r.fromEntityId}-${r.propertyId}-${r.value}`} data-testid="select-entity" className="w-full">
                 <SelectEntity
                   key={JSON.stringify(filterSearchByTypes)}
                   spaceId={spaceId}
@@ -243,8 +243,8 @@ export function EditableEntityTableCell({
                             fromEntityName: entityName,
                             toEntityId: result.id,
                             toEntityName: result.name,
-                            typeOfId: r.attributeId,
-                            typeOfName: r.attributeName,
+                            typeOfId: r.propertyId,
+                            typeOfName: r.propertyName,
                           },
                         },
                       }
@@ -335,9 +335,10 @@ export function EditableEntityTableCell({
               <NumberField
                 variant="tableCell"
                 isEditing={true}
-                key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                key={`${renderable.entityId}-${renderable.propertyId}-${renderable.value}`}
                 value={renderable.value}
-                format={renderable.options?.format}
+                // @TODO(migration): Fix formatting
+                // format={renderable.options?.format}
                 unitId={renderable.options?.unit}
                 onChange={value =>
                   onChangeEntry(
@@ -356,7 +357,7 @@ export function EditableEntityTableCell({
                             type: 'NUMBER',
                             value: value,
                             options: {
-                              format: renderable.options?.format,
+                              // format: renderable.options?.format,
                               unit: renderable.options?.unit,
                             },
                           },
@@ -370,7 +371,7 @@ export function EditableEntityTableCell({
           case 'TEXT':
             return (
               <TableStringField
-                key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
+                key={`${renderable.entityId}-${renderable.propertyId}-${renderable.value}`}
                 placeholder="Add value..."
                 value={renderable.value}
                 onChange={value =>
@@ -396,7 +397,7 @@ export function EditableEntityTableCell({
 
             return (
               <Checkbox
-                key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+                key={`checkbox-${renderable.propertyId}-${renderable.value}`}
                 checked={checked}
                 onChange={() => {
                   onChangeEntry(
@@ -426,10 +427,10 @@ export function EditableEntityTableCell({
           case 'TIME':
             return (
               <DateField
-                key={renderable.attributeId}
+                key={renderable.propertyId}
                 isEditing={true}
                 value={renderable.value}
-                format={renderable.options?.format}
+                // format={renderable.options?.format}
                 onBlur={value => {
                   onChangeEntry(
                     {
@@ -457,38 +458,38 @@ export function EditableEntityTableCell({
                 }}
               />
             );
-          case 'URL':
-            return (
-              <WebUrlField
-                key={renderable.attributeId}
-                placeholder="Add a URI"
-                isEditing={true}
-                spaceId={spaceId}
-                value={renderable.value}
-                onBlur={e => {
-                  onChangeEntry(
-                    {
-                      entityId,
-                      entityName,
-                      spaceId: renderable.spaceId,
-                    },
-                    {
-                      type: 'EVENT',
-                      data: {
-                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                        payload: {
-                          renderable,
-                          value: {
-                            type: 'URL',
-                            value: e.currentTarget.value,
-                          },
-                        },
-                      },
-                    }
-                  );
-                }}
-              />
-            );
+          // case 'URL':
+          //   return (
+          //     <WebUrlField
+          //       key={renderable.propertyId}
+          //       placeholder="Add a URI"
+          //       isEditing={true}
+          //       spaceId={spaceId}
+          //       value={renderable.value}
+          //       onBlur={e => {
+          //         onChangeEntry(
+          //           {
+          //             entityId,
+          //             entityName,
+          //             spaceId: renderable.spaceId,
+          //           },
+          //           {
+          //             type: 'EVENT',
+          //             data: {
+          //               type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+          //               payload: {
+          //                 renderable,
+          //                 value: {
+          //                   type: 'URL',
+          //                   value: e.currentTarget.value,
+          //                 },
+          //               },
+          //             },
+          //           }
+          //         );
+          //       }}
+          //     />
+          //   );
         }
       })}
     </div>

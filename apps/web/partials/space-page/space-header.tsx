@@ -8,7 +8,7 @@ import * as React from 'react';
 import { PLACEHOLDER_SPACE_IMAGE, ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { Services } from '~/core/services';
+import { fetchProposals } from '~/core/io/subgraph';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -28,7 +28,6 @@ interface Props {
 }
 
 export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props) {
-  const { subgraph } = Services.useServices();
   const isEditing = useUserIsEditing(spaceId);
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 
@@ -40,7 +39,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
   } = useInfiniteQuery({
     enabled: isHistoryOpen,
     queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
+    queryFn: ({ pageParam = 0 }) => fetchProposals({ spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
     initialPageParam: 0,
   });

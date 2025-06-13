@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { RenderableProperty } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
+import { RenderableProperty } from '~/core/v2.types';
 
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
@@ -107,17 +107,17 @@ export const EntityTableCell = ({
           );
         }
 
-        if (renderable.type === 'URL') {
-          return (
-            <WebUrlField
-              variant="tableCell"
-              isEditing={false}
-              key={renderable.value}
-              spaceId={spaceId}
-              value={renderable.value}
-            />
-          );
-        }
+        // if (renderable.type === 'URL') {
+        //   return (
+        //     <WebUrlField
+        //       variant="tableCell"
+        //       isEditing={false}
+        //       key={renderable.value}
+        //       spaceId={spaceId}
+        //       value={renderable.value}
+        //     />
+        //   );
+        // }
 
         if (renderable.type === 'TIME') {
           return (
@@ -126,7 +126,7 @@ export const EntityTableCell = ({
               isEditing={false}
               key={renderable.value}
               value={renderable.value}
-              format={renderable.options?.format}
+              // format={renderable.options?.format}
             />
           );
         }
@@ -135,7 +135,7 @@ export const EntityTableCell = ({
             <input
               type="checkbox"
               disabled
-              key={`checkbox-${renderable.attributeId}-${renderable.value}`}
+              key={`checkbox-${renderable.propertyId}-${renderable.value}`}
               checked={renderable.value === '1'}
             />
           );
@@ -148,7 +148,7 @@ export const EntityTableCell = ({
               isEditing={false}
               key={renderable.value}
               value={renderable.value}
-              format={renderable.options?.format}
+              // format={renderable.options?.format}
               unitId={renderable.options?.unit}
             />
           );

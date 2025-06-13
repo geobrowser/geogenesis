@@ -5,7 +5,7 @@ import { Triple } from '~/core/database/Triple';
 import { StoredRelation } from '~/core/database/types';
 import { EntityId } from '~/core/io/schema';
 
-import { prepareTriplesForPublishing } from './triples';
+import { prepareLocalDataForPublishing } from './publish';
 
 const TRIPLE = Triple.make({
   attributeId: 'test-attribute',
@@ -41,7 +41,7 @@ const RELATION: StoredRelation = {
 
 describe('prepareTriplesForPublishing', () => {
   it('maps created data to create ops', () => {
-    const result = prepareTriplesForPublishing([TRIPLE], [RELATION], TRIPLE.space);
+    const result = prepareLocalDataForPublishing([TRIPLE], [RELATION], TRIPLE.space);
 
     expect(result).toEqual({
       opsToPublish: [
@@ -69,7 +69,7 @@ describe('prepareTriplesForPublishing', () => {
   });
 
   it('maps deleted data to delete ops', () => {
-    const result = prepareTriplesForPublishing(
+    const result = prepareLocalDataForPublishing(
       [{ ...TRIPLE, isDeleted: true }],
       [{ ...RELATION, isDeleted: true }],
       TRIPLE.space
@@ -95,12 +95,12 @@ describe('prepareTriplesForPublishing', () => {
   });
 
   it('filters ops from different space', () => {
-    const { opsToPublish: result } = prepareTriplesForPublishing([TRIPLE], [RELATION], 'different test space');
+    const { opsToPublish: result } = prepareLocalDataForPublishing([TRIPLE], [RELATION], 'different test space');
     expect(result.length).toEqual(0);
   });
 
   it('filters already-published ops', () => {
-    const { opsToPublish: result } = prepareTriplesForPublishing(
+    const { opsToPublish: result } = prepareLocalDataForPublishing(
       [{ ...TRIPLE, hasBeenPublished: true }],
       [{ ...RELATION, hasBeenPublished: true }],
       TRIPLE.space
@@ -109,7 +109,7 @@ describe('prepareTriplesForPublishing', () => {
   });
 
   it('filters invalid ops where entity id is empty', () => {
-    const { opsToPublish: result } = prepareTriplesForPublishing(
+    const { opsToPublish: result } = prepareLocalDataForPublishing(
       [{ ...TRIPLE, entityId: '' }],
       [{ ...RELATION, fromEntity: { id: EntityId(''), name: null } }],
       TRIPLE.space
@@ -118,7 +118,7 @@ describe('prepareTriplesForPublishing', () => {
   });
 
   it('filters invalid ops with empty attribute id', () => {
-    const { opsToPublish: result } = prepareTriplesForPublishing(
+    const { opsToPublish: result } = prepareLocalDataForPublishing(
       [{ ...TRIPLE, attributeId: '' }],
       [{ ...RELATION, typeOf: { id: EntityId(''), name: null } }],
       TRIPLE.space
@@ -127,7 +127,7 @@ describe('prepareTriplesForPublishing', () => {
   });
 
   it('filters invalid ops with empty relation to entity id', () => {
-    const { opsToPublish: result } = prepareTriplesForPublishing(
+    const { opsToPublish: result } = prepareLocalDataForPublishing(
       [],
       [{ ...RELATION, toEntity: { id: EntityId(''), name: null, renderableType: 'DATA', value: EntityId('') } }],
       TRIPLE.space

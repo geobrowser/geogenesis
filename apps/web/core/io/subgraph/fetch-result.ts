@@ -4,8 +4,9 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
+import { SearchResult } from '~/core/v2.types';
 
-import { SearchResult, SearchResultDto } from '../dto/search';
+import { SearchResultDto } from '../dto/search';
 import { SubstreamSearchResult } from '../schema';
 import { resultEntityFragment } from './fragments';
 import { graphql } from './graphql';
