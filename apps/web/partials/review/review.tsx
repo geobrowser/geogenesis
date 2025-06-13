@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { Effect } from 'effect';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
@@ -8,15 +9,15 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useRelations } from '~/core/database/relations';
-import { useTriples } from '~/core/database/triples';
+import { useValues } from '~/core/database/v2.values';
 import { DB } from '~/core/database/write';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
-import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
+import { getSpaces } from '~/core/io/v2/queries';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { Triples } from '~/core/utils/triples';
+import { Publish } from '~/core/utils/publish';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -53,14 +54,14 @@ const ReviewChanges = () => {
   const [activeSpace, setActiveSpace] = useState<string>('');
   const { setIsReviewOpen } = useDiff();
 
-  const allSpacesWithTripleChanges = useTriples(
+  const allSpacesWithTripleChanges = useValues(
     React.useMemo(() => {
       return {
         selector: t => t.hasBeenPublished === false,
         includeDeleted: true,
       };
     }, [])
-  ).map(t => t.space);
+  ).map(t => t.spaceId);
 
   const allSpacesWithRelationChanges = useRelations(
     React.useMemo(() => {
@@ -69,7 +70,7 @@ const ReviewChanges = () => {
         includeDeleted: true,
       };
     }, [])
-  ).map(r => r.space);
+  ).map(r => r.spaceId);
 
   const dedupedSpacesWithActions = React.useMemo(() => {
     return [...new Set([...allSpacesWithTripleChanges, ...allSpacesWithRelationChanges]).values()];
@@ -84,15 +85,15 @@ const ReviewChanges = () => {
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', dedupedSpacesWithActions],
     queryFn: async () => {
-      const maybeSpaces = await fetchSpacesById(dedupedSpacesWithActions);
+      const maybeSpaces = await Effect.runPromise(getSpaces({ spaceIds: dedupedSpacesWithActions }));
 
-      const spaces = maybeSpaces.filter(s => s.spaceConfig !== null);
+      const spaces = maybeSpaces.filter(s => s.entity !== null);
 
       const spacesMap = new Map<string, { id: string; name: string | null; image: string | null }>();
 
       for (const space of spaces) {
         const id = space.id;
-        const config = space.spaceConfig;
+        const config = space.entity;
         const image = config ? getImagePath(config.image) : PLACEHOLDER_SPACE_IMAGE;
 
         spacesMap.set(id, {
@@ -144,10 +145,10 @@ const ReviewChanges = () => {
   // Entity Id -> Attribute Id -> boolean
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
 
-  const triplesFromSpace = useTriples(
+  const triplesFromSpace = useValues(
     React.useMemo(() => {
       return {
-        selector: t => t.space === activeSpace,
+        selector: t => t.spaceId === activeSpace,
         includeDeleted: true,
       };
     }, [activeSpace])
@@ -156,7 +157,7 @@ const ReviewChanges = () => {
   const relationsFromSpace = useRelations(
     React.useMemo(() => {
       return {
-        selector: r => r.space === activeSpace,
+        selector: r => r.spaceId === activeSpace,
         includeDeleted: true,
       };
     }, [activeSpace])
@@ -164,7 +165,7 @@ const ReviewChanges = () => {
 
   const isReadyToPublish =
     proposalName?.length > 0 &&
-    Triples.prepareTriplesForPublishing(triplesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
+    Publish.prepareLocalDataForPublishing(triplesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
 
   const [isPublishing, setIsPublishing] = useState(false);
   const { makeProposal } = usePublish();
@@ -207,7 +208,7 @@ const ReviewChanges = () => {
     // @TODO: Selectable publishing
 
     await makeProposal({
-      triples: triplesFromSpace,
+      values: triplesFromSpace,
       relations: relationsFromSpace,
       spaceId: activeSpace,
       name: proposalName,

@@ -142,7 +142,7 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     isLoading: isSearchLoading,
     results: searchResults,
   } = useSearch({
-    filterByTypes: [SystemIds.CURRENCY_ATTRIBUTE],
+    filterByTypes: [SystemIds.CURRENCY_PROPERTY],
   });
 
   const { entities, isLoading: isEntitiesLoading } = useQueryEntities({
@@ -153,8 +153,8 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     () =>
       entities.map(entity => ({
         name: entity.name,
-        symbol: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value,
-        sign: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+        symbol: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_PROPERTY)?.value?.value,
+        sign: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_PROPERTY)?.value?.value,
         id: entity.id,
       })),
     [entities]
@@ -173,17 +173,17 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
       {
         name: 'United States Dollar',
         symbol: 'USD',
-        id: SystemIds.CURRENCY_USD_ATTRIBUTE,
+        id: SystemIds.CURRENCY_USD_PROPERTY,
       },
       {
         name: 'Pound Sterling',
         symbol: 'GBP',
-        id: SystemIds.CURRENCY_GBP_ATTRIBUTE,
+        id: SystemIds.CURRENCY_GBP_PROPERTY,
       },
       {
         name: 'Euro',
         symbol: 'EUR',
-        id: SystemIds.CURRENCY_EUR_ATTRIBUTE,
+        id: SystemIds.CURRENCY_EUR_PROPERTY,
       },
     ],
     []
@@ -262,7 +262,7 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
 
   React.useEffect(() => {
     setSelectedCurrencySymbol(
-      (unitId && entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value) || null
+      (unitId && entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_PROPERTY)?.value?.value) || null
     );
   }, [unitId, entity]);
 

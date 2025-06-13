@@ -18,8 +18,8 @@ import { Source } from '~/core/blocks/data/source';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { Cell, PropertySchema, Row } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
+import { Cell, PropertySchema, Row } from '~/core/v2.types';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
@@ -46,7 +46,7 @@ const ColumnHeader = ({
   spaceId: string;
   isLastColumn: boolean;
 }) => {
-  const isNameColumn = column.id === EntityId(SystemIds.NAME_ATTRIBUTE);
+  const isNameColumn = column.id === EntityId(SystemIds.NAME_PROPERTY);
 
   return isEditMode && !isNameColumn ? (
     <div className={cx(isLastColumn ? 'pr-12' : '')}>
@@ -69,7 +69,7 @@ const formatColumns = (
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
-        const isNameColumn = column.id === EntityId(SystemIds.NAME_ATTRIBUTE);
+        const isNameColumn = column.id === EntityId(SystemIds.NAME_PROPERTY);
 
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
@@ -114,13 +114,13 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const filterableRelationTypeName = maybePropertiesSchema?.relationValueTypeName;
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
-    const isNameCell = propertyId === SystemIds.NAME_ATTRIBUTE;
-    const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_ATTRIBUTE]?.space ?? space) : space;
+    const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
+    const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space) : space;
 
     const renderables = cellData.renderables;
 
     const entityId = row.original.entityId;
-    const nameCell = row.original.columns[SystemIds.NAME_ATTRIBUTE];
+    const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
     const name = getName(nameCell, space);
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
@@ -270,7 +270,7 @@ export const TableBlockTable = ({
                     ? 'hidden'
                     : '!bg-grey-01 !text-grey-03';
 
-                const isEditingDateTime = isEditing && DATETIME_VALUE_TYPES.includes(column.valueType);
+                const isEditingDateTime = column.dataType === 'TIME';
 
                 return (
                   <th
@@ -307,10 +307,10 @@ export const TableBlockTable = ({
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
                     const firstRenderable = cell.getValue<Cell>()?.renderables[0];
 
-                    const isNameCell = Boolean(firstRenderable?.attributeId === SystemIds.NAME_ATTRIBUTE);
+                    const isNameCell = Boolean(firstRenderable?.propertyId === SystemIds.NAME_PROPERTY);
                     const isShown = shownColumnIds.includes(cell.column.id);
 
-                    const nameCell = row.original.columns[SystemIds.NAME_ATTRIBUTE];
+                    const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
                     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
 
                     return (
@@ -336,5 +336,5 @@ export const TableBlockTable = ({
   );
 };
 
-// @TODO replace with SystemIds when package is updated
-const DATETIME_VALUE_TYPES = ['3mswMrL91GuYTfBq29EuNE', 'WDD55r9x6FHTayQnEmTn5S'];
+// @TODO(migration): Do we still need these?
+// const DATETIME_VALUE_TYPES = ['3mswMrL91GuYTfBq29EuNE', 'WDD55r9x6FHTayQnEmTn5S'];

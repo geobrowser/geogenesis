@@ -31,8 +31,8 @@ type ChangedEntityProps = {
 
 const getIsNewRelation = (changes: RenderableChange[]) => {
   return (
-    changes.some(change => change.before === null && change.attribute.id === SystemIds.RELATION_FROM_ATTRIBUTE) &&
-    changes.some(change => change.before === null && change.attribute.id === SystemIds.RELATION_TO_ATTRIBUTE)
+    changes.some(change => change.before === null && change.attribute.id === SystemIds.RELATION_FROM_PROPERTY) &&
+    changes.some(change => change.before === null && change.attribute.id === SystemIds.RELATION_TO_PROPERTY)
   );
 };
 
@@ -607,9 +607,9 @@ const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
   const [currencySignBefore, currencySignAfter] = React.useMemo(
     () => [
       before?.options?.unit &&
-        beforeUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+        beforeUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_PROPERTY)?.value?.value,
       after?.options?.unit &&
-        afterUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+        afterUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_PROPERTY)?.value?.value,
     ],
     [before, beforeUnitEntity, after, afterUnitEntity]
   );
@@ -795,7 +795,7 @@ function parseMarkdown(markdownString: string) {
 //     typeIds: [],
 //   });
 //   const filtersWithColumnName = filters.map(f => {
-//     if (f.columnId === SystemIds.NAME_ATTRIBUTE) {
+//     if (f.columnId === SystemIds.NAME_PROPERTY) {
 //       return {
 //         ...f,
 //         columnName: 'Name',

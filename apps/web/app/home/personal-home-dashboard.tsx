@@ -278,7 +278,7 @@ const JoinSpaces = () => {
 
         if (!space) return null;
 
-        const spaceImage = space.spaceConfig?.image ? getImagePath(space.spaceConfig?.image) : PLACEHOLDER_SPACE_IMAGE;
+        const spaceImage = space.entity?.image ? getImagePath(space.entity?.image) : PLACEHOLDER_SPACE_IMAGE;
 
         return (
           <Link
@@ -289,7 +289,7 @@ const JoinSpaces = () => {
             <span className="relative h-3 w-3 overflow-hidden rounded-sm">
               <img src={spaceImage} className="absolute inset-0 h-full w-full object-cover object-center" alt="" />
             </span>
-            <span>{space.spaceConfig?.name ?? space.id}</span>
+            <span>{space.entity?.name ?? space.id}</span>
           </Link>
         );
       })}

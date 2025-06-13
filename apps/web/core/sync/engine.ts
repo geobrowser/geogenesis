@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
+import { Effect } from 'effect';
 
-import { fetchEntitiesBatch } from '../io/subgraph/fetch-entities-batch';
+import { getBatchEntities } from '../io/v2/queries';
 import { E } from './orm';
 import { GeoStore } from './store';
 import { GeoEvent, GeoEventStream } from './stream';
@@ -25,9 +26,9 @@ export class SyncEngine {
       this.processSyncQueue(event);
     });
 
-    const onTriplesUpdated = this.stream.on(GeoEventStream.TRIPLES_CREATED, event => {
+    const onTriplesUpdated = this.stream.on(GeoEventStream.VALUES_CREATED, event => {
       if (this.env === 'development') {
-        console.log(`queueing sync after ${GeoEventStream.TRIPLES_CREATED}`, event);
+        console.log(`queueing sync after ${GeoEventStream.VALUES_CREATED}`, event);
       }
       this.processSyncQueue(event);
     });
@@ -46,9 +47,9 @@ export class SyncEngine {
       this.processSyncQueue(event);
     });
 
-    const onTriplesDeleted = this.stream.on(GeoEventStream.TRIPLES_DELETED, event => {
+    const onTriplesDeleted = this.stream.on(GeoEventStream.VALUES_DELETED, event => {
       if (this.env === 'development') {
-        console.log(`queueing sync after ${GeoEventStream.TRIPLES_DELETED}`, event);
+        console.log(`queueing sync after ${GeoEventStream.VALUES_DELETED}`, event);
       }
       this.processSyncQueue(event);
     });
@@ -60,9 +61,9 @@ export class SyncEngine {
       this.processSyncQueue(event);
     });
 
-    const onEntitiesRevalidated = this.stream.on(GeoEventStream.CHANGES_CLEARED, event => {
+    const onEntitiesRevalidated = this.stream.on(GeoEventStream.HYDRATE, event => {
       if (this.env === 'development') {
-        console.log(`queueing sync after ${GeoEventStream.CHANGES_CLEARED}`, event);
+        console.log(`queueing sync after ${GeoEventStream.HYDRATE}`, event);
       }
       this.processSyncQueue(event);
     });
@@ -96,14 +97,14 @@ export class SyncEngine {
       case GeoEventStream.ENTITY_DELETED:
         entityIds.push(event.entity.id);
         break;
-      case GeoEventStream.TRIPLES_CREATED:
-      case GeoEventStream.TRIPLES_DELETED: {
-        entityIds.push(event.triple.entityId);
+      case GeoEventStream.VALUES_CREATED:
+      case GeoEventStream.VALUES_DELETED: {
+        entityIds.push(event.value.entity.id);
 
         // Update any entities in the store that reference the entity where the triple is
         // being added. This is so we can sync fields that derive from triples like name,
         // description, etc.
-        const referencing = this.store.findReferencingEntities(event.triple.entityId);
+        const referencing = this.store.findReferencingEntities(event.value.entity.id);
         entityIds.push(...referencing);
         break;
       }
@@ -111,7 +112,7 @@ export class SyncEngine {
       case GeoEventStream.RELATION_DELETED: {
         entityIds.push(event.relation.fromEntity.id);
         entityIds.push(event.relation.toEntity.id);
-        entityIds.push(event.relation.typeOf.id);
+        entityIds.push(event.relation.type.id);
         entityIds.push(event.relation.id);
 
         // Update any entities in the store that reference the entity where the relation is
@@ -121,8 +122,8 @@ export class SyncEngine {
         entityIds.push(...referencing);
         break;
       }
-      case GeoEventStream.CHANGES_CLEARED:
-        entityIds.push(...event.entities.map(e => e.id));
+      case GeoEventStream.HYDRATE:
+        entityIds.push(...event.entities);
         break;
       default:
         break;
@@ -136,7 +137,7 @@ export class SyncEngine {
 
     const entities = await this.cache.fetchQuery({
       queryKey: ['entities-batch-sync', uniqueEntityIds],
-      queryFn: () => fetchEntitiesBatch({ entityIds: uniqueEntityIds }),
+      queryFn: () => Effect.runPromise(getBatchEntities(uniqueEntityIds)),
     });
 
     const merged = uniqueEntityIds

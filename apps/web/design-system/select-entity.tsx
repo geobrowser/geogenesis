@@ -8,7 +8,6 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
-import { useWriteOps } from '~/core/database/write';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useKey } from '~/core/hooks/use-key';
 import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
@@ -16,11 +15,12 @@ import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { SearchResult } from '~/core/io/dto/search';
 import { Space } from '~/core/io/dto/spaces';
 import { EntityId, SpaceId } from '~/core/io/schema';
+import { useMutate } from '~/core/sync/use-mutate';
 import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
+import { SearchResult } from '~/core/v2.types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { ResultsList } from '~/design-system/autocomplete/results-list';
@@ -47,7 +47,7 @@ import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
   onDone?: (
-    result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean },
+    result: { id: string; name: string | null; space?: EntityId; verified?: boolean },
     // This is used to determine if the onDone is called from within the create function
     // internal to SelectEntity. Some consumers in the codebase want to either listen to
     // the onDone OR onCreateEntity callback but not both. This lets them bail out of
@@ -88,6 +88,7 @@ export const SelectEntity = ({
   advanced = true,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
+  const { storage } = useMutate();
 
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -129,7 +130,6 @@ export const SelectEntity = ({
   };
 
   const [, setToast] = useToast();
-  const { upsert } = useWriteOps();
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
@@ -144,19 +144,7 @@ export const SelectEntity = ({
       onCreateEntity({ id: newEntityId, name: query });
     } else {
       // Create new entity with name and types using internal id
-      upsert(
-        {
-          entityId: newEntityId,
-          attributeId: SystemIds.NAME_ATTRIBUTE,
-          entityName: query,
-          attributeName: 'Name',
-          value: {
-            type: 'TEXT',
-            value: query,
-          },
-        },
-        spaceId
-      );
+      storage.entities.name.set(newEntityId, spaceId, query);
     }
     onDone?.({ id: newEntityId, name: query }, true);
     onQueryChange('');
@@ -682,14 +670,14 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
   const debouncedQuery = useDebouncedValue(query, 100);
   const { spaces } = useSpaces();
 
-  const results = spaces.filter(s => s.spaceConfig?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
+  const results = spaces.filter(s => s.entity?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
 
   const onSelectSpace = (space: Space) => {
     onQueryChange('');
 
     onSelect({
       id: space.id,
-      name: space.spaceConfig?.name ?? null,
+      name: space.entity?.name ?? null,
     });
   };
 
@@ -716,14 +704,12 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
                       <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
                         <div className="flex w-full items-center justify-between leading-[1rem]">
                           <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                            {result.spaceConfig?.name ?? result.id}
+                            {result.entity?.name ?? result.id}
                           </Text>
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
-                          {(result.spaceConfig?.name ?? result.id) && (
-                            <Breadcrumb img={result.spaceConfig?.image ?? ''}>
-                              {result.spaceConfig?.name ?? result.id}
-                            </Breadcrumb>
+                          {(result.entity?.name ?? result.id) && (
+                            <Breadcrumb img={result.entity?.image ?? ''}>{result.entity?.name ?? result.id}</Breadcrumb>
                           )}
                           <span style={{ rotate: '270deg' }}>
                             <ChevronDownSmall color="grey-04" />

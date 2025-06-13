@@ -1,61 +1,63 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { Cell, RenderableProperty, ValueTypeId } from '~/core/types';
+import { Cell, DataType, RenderableProperty } from '~/core/v2.types';
 
 interface MakePlaceholderFromValueTypeArgs {
-  valueType: ValueTypeId;
-  attributeId: string;
-  attributeName: string | null;
+  dataType: DataType;
+  propertyId: string;
+  propertyName: string | null;
   spaceId: string;
   entityId: string;
 }
 
 export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeArgs): RenderableProperty {
-  const { attributeId, attributeName, entityId, valueType, spaceId } = args;
+  const { propertyId, propertyName, entityId, dataType, spaceId } = args;
 
-  switch (valueType) {
-    case SystemIds.RELATION:
+  switch (dataType) {
+    case 'RELATION':
       return {
         type: 'RELATION',
-        attributeId,
-        attributeName,
-        entityId,
-        entityName: null,
+        propertyId,
+        propertyName,
+        fromEntityId: entityId,
+        fromEntityName: null,
         spaceId,
         valueName: null,
         value: '',
         relationId: '',
+        relationEntityId: '',
         placeholder: true,
       };
-    case SystemIds.TIME:
+    case 'TIME':
       return {
         type: 'TIME',
-        attributeId,
-        attributeName,
+        propertyId,
+        propertyName,
         entityId,
         entityName: null,
         spaceId,
         value: '',
         placeholder: true,
       };
-    case SystemIds.URL:
-      return {
-        type: 'URL',
-        attributeId,
-        attributeName,
-        entityId,
-        entityName: null,
-        spaceId,
-        value: '',
-        placeholder: true,
-      };
+    // @TODO(migration): Fix renderable URL
+    // case SystemIds.URL:
+    //   return {
+    //     type: 'URL',
+    //     propertyId,
+    //     propertyName,
+    //     entityId,
+    //     entityName: null,
+    //     spaceId,
+    //     value: '',
+    //     placeholder: true,
+    //   };
 
-    case SystemIds.TEXT:
+    case 'TEXT':
     default:
       return {
         type: 'TEXT',
-        attributeId,
-        attributeName,
+        propertyId,
+        propertyName,
         entityId,
         entityName: null,
         spaceId,
@@ -68,7 +70,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
 export const getName = (nameCell: Cell, currentSpaceId: string) => {
   let name = nameCell?.name;
   const maybeNameInSpaceRenderable = nameCell.renderables.find(
-    r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
+    r => r.propertyId === SystemIds.NAME_PROPERTY && r.spaceId === currentSpaceId
   );
 
   let maybeNameInSpace = maybeNameInSpaceRenderable?.value;
@@ -77,7 +79,7 @@ export const getName = (nameCell: Cell, currentSpaceId: string) => {
     maybeNameInSpace = maybeNameInSpaceRenderable?.valueName ?? maybeNameInSpace;
   }
 
-  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE);
+  const maybeNameRenderable = nameCell?.renderables.find(r => r.propertyId === SystemIds.NAME_PROPERTY);
 
   let maybeOtherName = maybeNameRenderable?.value;
 

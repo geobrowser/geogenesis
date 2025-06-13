@@ -49,8 +49,8 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
   return {
     allEditors: editorProfiles,
     totalEditors: space.editors.length,
-    votingPluginAddress: space.mainVotingPluginAddress,
-    spacePluginAddress: space.spacePluginAddress,
-    memberPluginAddress: space.memberAccessPluginAddress,
+    votingPluginAddress: space.mainVotingAddress,
+    spacePluginAddress: space.spaceAddress,
+    memberPluginAddress: space.membershipAddress,
   };
 });

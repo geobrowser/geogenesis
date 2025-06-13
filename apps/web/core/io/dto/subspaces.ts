@@ -1,5 +1,5 @@
 import { Address, SpaceId, SubstreamSubspace } from '../schema';
-import { SpaceConfigEntity, SpaceMetadataDto } from './spaces';
+import { SpaceConfigEntity, SpaceEntityDto } from './spaces';
 
 export type Subspace = {
   id: SpaceId;
@@ -10,7 +10,7 @@ export type Subspace = {
 };
 
 export function SubspaceDto(subspace: SubstreamSubspace) {
-  const spaceConfigWithImage = SpaceMetadataDto(subspace.id, subspace.spacesMetadatum?.version);
+  const spaceConfigWithImage = SpaceEntityDto(subspace.id, subspace.spacesMetadatum?.version);
 
   return {
     id: subspace.id,

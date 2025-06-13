@@ -24,7 +24,7 @@ export function NavbarSpaceMetadata() {
       {spaceId && (
         <>
           <ChevronRight color="grey-03" />
-          <NavbarBreadcrumb spaceId={spaceId} entityId={entityId ?? (space?.spaceConfig?.id as EntityId) ?? ''} />
+          <NavbarBreadcrumb spaceId={spaceId} entityId={entityId ?? (space?.entity?.id as EntityId) ?? ''} />
         </>
       )}
     </div>

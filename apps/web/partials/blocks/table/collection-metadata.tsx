@@ -7,9 +7,9 @@ import { useState } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
-import { removeRelation, useWriteOps } from '~/core/database/write';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -56,39 +56,41 @@ export const CollectionMetadata = ({
 }: CollectionMetadataProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
+  const { storage } = useMutate();
 
   const { blockEntity } = useDataBlock();
   const { space } = useSpace(spaceId ?? '');
-  const { remove } = useWriteOps();
 
   const { entity: collectionEntity } = useQueryEntity({
     id: collectionId,
     spaceId,
   });
 
-  const { entity: relationEntity } = useQueryEntity({
-    id: relationId,
-    spaceId,
-  });
+  // @TODO(migration): Should we be deleting the relation entity?
+  // const { entity: relationEntity } = useQueryEntity({
+  //   id: relationId,
+  //   spaceId,
+  // });
 
   const onDeleteEntry = async () => {
     if (blockEntity) {
-      const blockRelation = blockEntity.relationsOut.find(r => r.toEntity.id === entityId);
+      const blockRelation = blockEntity.relations.find(r => r.toEntity.id === entityId);
 
       if (blockRelation) {
-        removeRelation({ relation: blockRelation, spaceId: currentSpaceId });
+        storage.relations.delete(blockRelation);
       }
     }
 
     if (collectionEntity) {
-      collectionEntity.triples.forEach(t => remove(t, t.space));
-      collectionEntity.relationsOut.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
+      collectionEntity.values.forEach(t => storage.values.delete(t));
+      collectionEntity.relations.forEach(r => storage.relations.delete(r));
     }
 
-    if (relationEntity) {
-      relationEntity.triples.forEach(t => remove(t, t.space));
-      relationEntity.relationsOut.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
-    }
+    // @TODO(migration): Should we be deleting the relation entity?
+    // if (relationEntity) {
+    //   relationEntity.values.forEach(t => remove(t, t.space));
+    //   relationEntity.relations.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
+    // }
   };
 
   return (
@@ -155,7 +157,7 @@ export const CollectionMetadata = ({
                             <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
                               {space ? (
                                 <div className="size-[8px] overflow-clip rounded-sm grayscale">
-                                  <Image fill src={getImagePath(space.spaceConfig.image)} alt="" />
+                                  <Image fill src={getImagePath(space.entity.image)} alt="" />
                                 </div>
                               ) : (
                                 <TopRanked />

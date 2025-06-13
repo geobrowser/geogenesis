@@ -203,13 +203,13 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
           <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
             <div className="relative h-3 w-3 overflow-hidden rounded-full">
               <Image
-                src={getImagePath(space.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE)}
-                alt={`Cover image for space ${space.spaceConfig?.name ?? space.id}`}
+                src={getImagePath(space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE)}
+                alt={`Cover image for space ${space.entity?.name ?? space.id}`}
                 layout="fill"
                 objectFit="cover"
               />
             </div>
-            <p>{space.spaceConfig?.name}</p>
+            <p>{space.entity?.name}</p>
           </div>
         </Link>
       </div>
@@ -218,7 +218,7 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
 
         <AcceptOrRejectMember
           onchainProposalId={proposal.onchainProposalId}
-          membershipContractAddress={space.memberAccessPluginAddress}
+          membershipContractAddress={space.membershipAddress}
         />
       </div>
     </div>
@@ -334,7 +334,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
 
         {process.env.NODE_ENV === 'development' && isProposalDone && (
           <Execute
-            contractAddress={space?.mainVotingPluginAddress as `0x${string}`}
+            contractAddress={space?.mainVotingAddress as `0x${string}`}
             onchainProposalId={proposal.onchainProposalId}
           >
             Execute
@@ -352,7 +352,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
             // doesn't exist we redirect the user. Eventually every space with governance
             // will have a main voting plugin address
             // @TODO(migration): This address will be different for the personal space plugin
-            votingContractAddress={space?.mainVotingPluginAddress as `0x${string}`}
+            votingContractAddress={space?.mainVotingAddress as `0x${string}`}
           />
         )}
       </div>

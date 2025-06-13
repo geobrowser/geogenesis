@@ -238,7 +238,7 @@ export function LinkableRelationChip({
 
                     DB.upsert(
                       {
-                        attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
+                        attributeId: SystemIds.RELATION_TO_PROPERTY,
                         attributeName: 'To Entity',
                         entityId: relationId,
                         entityName: null,
@@ -255,7 +255,7 @@ export function LinkableRelationChip({
                     if (verified && !result.verified) {
                       DB.upsert(
                         {
-                          attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
+                          attributeId: SystemIds.VERIFIED_SOURCE_PROPERTY,
                           attributeName: 'Verified Source',
                           entityId: relationId,
                           entityName: null,
@@ -269,7 +269,7 @@ export function LinkableRelationChip({
                     } else if (result.verified) {
                       DB.upsert(
                         {
-                          attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
+                          attributeId: SystemIds.VERIFIED_SOURCE_PROPERTY,
                           attributeName: 'Verified Source',
                           entityId: relationId,
                           entityName: null,

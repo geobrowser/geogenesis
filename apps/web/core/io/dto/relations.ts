@@ -1,45 +1,41 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { TripleDto } from '~/core/io/dto/triples';
-import { RenderableEntityType } from '~/core/types';
+import { RemoteEntityType, RemoteRelation } from '~/core/io/v2/v2.schema';
+import { Relation, RenderableEntityType } from '~/core/v2.types';
 
 import { EntityId, SubstreamRelationHistorical, SubstreamRelationLive, SubstreamType } from '../schema';
 
-export function RelationDtoLive(relation: SubstreamRelationLive) {
-  const toEntityTriples = relation.toEntity.currentVersion.version.triples.nodes.map(TripleDto);
-  const toEntityTypes = relation.toEntity.currentVersion.version.versionTypes.nodes.map(relation => relation.type);
-
-  // If the entity is an image then we should already have the triples used to define
-  // the image URI for that image. We need to parse the triples to find the correct
-  // triple URI value representing the image URI.
+export function RelationDtoLive(relation: RemoteRelation, from: { id: string; name: string | null }): Relation {
   const imageEntityUrlValue =
-    toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
-
-  const renderableType = getRenderableEntityType(toEntityTypes);
+    relation.to.values.find(relation => relation.propertyId === SystemIds.IMAGE_URL_PROPERTY)?.value ?? null;
+  const renderableType = v2_getRenderableEntityType(relation.to.types);
 
   return {
-    space: relation.spaceId,
-    id: relation.entityId,
-    index: getIndexFromRelationEntity(relation),
-    typeOf: {
-      id: relation.typeOf.currentVersion.version.entityId,
-      name: relation.typeOf.currentVersion.version.name,
+    id: relation.id,
+    spaceId: relation.spaceId,
+    entityId: relation.entityId,
+    position: relation.position ?? undefined,
+    verified: relation.verified ?? undefined,
+    toSpaceId: relation.toSpaceId ?? undefined,
+    renderableType,
+    type: {
+      id: relation.type.id,
+      name: relation.type.entity.name ?? null,
     },
     fromEntity: {
-      id: relation.fromEntity.currentVersion.version.entityId,
-      name: relation.fromEntity.currentVersion.version.name,
+      id: from.id,
+      name: from.name,
     },
     toEntity: {
-      id: relation.toEntity.currentVersion.version.entityId,
-      name: relation.toEntity.currentVersion.version.name,
+      id: relation.to.id,
+      name: relation.to.name,
 
       // The "Renderable Type" for an entity provides a hint to the consumer
       // of the entity to _what_ the entity is so they know how they should
       // render it depending on their use case.
-      renderableType,
       // Right now we only support images and entity ids as the value of the To entity.
-      value:
-        renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toEntity.currentVersion.version.entityId,
+      value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.to.id,
     },
   };
 }
@@ -52,7 +48,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
   // the image URI for that image. We need to parse the triples to find the correct
   // triple URI value representing the image URI.
   const imageEntityUrlValue =
-    toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
+    toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_PROPERTY)?.value.value ?? null;
 
   const renderableType = getRenderableEntityType(toEntityTypes);
 
@@ -80,6 +76,24 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
       value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toVersion.entityId,
     },
   };
+}
+
+function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): RenderableEntityType {
+  const typeIds = types.map(type => type.id);
+
+  if (typeIds.includes(EntityId(SystemIds.IMAGE_TYPE))) {
+    return 'IMAGE';
+  }
+
+  if (typeIds.includes(EntityId(SystemIds.DATA_BLOCK))) {
+    return 'DATA';
+  }
+
+  if (typeIds.includes(EntityId(SystemIds.TEXT_BLOCK))) {
+    return 'TEXT';
+  }
+
+  return 'RELATION';
 }
 
 function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {

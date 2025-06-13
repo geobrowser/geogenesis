@@ -1,13 +1,12 @@
-import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
 import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
-import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { Cell, PropertySchema } from '~/core/v2.types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -43,9 +42,9 @@ export function TableBlockListItem({
   relationId,
   source,
 }: Props) {
-  const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
-  const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
-  const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_ATTRIBUTE];
+  const nameCell = columns[SystemIds.NAME_PROPERTY];
+  const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_PROPERTY];
+  const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_PROPERTY];
 
   const { cellId, verified } = nameCell;
   let { description, image } = nameCell;
@@ -53,18 +52,18 @@ export function TableBlockListItem({
   const name = getName(nameCell, currentSpaceId);
 
   const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
-    r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE && r.spaceId === currentSpaceId
+    r => r.propertyId === SystemIds.DESCRIPTION_PROPERTY && r.spaceId === currentSpaceId
   )?.value;
 
   const maybeDescription =
     maybeDescriptionInSpace ??
-    maybeDescriptionData?.renderables.find(r => r.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE)?.value;
+    maybeDescriptionData?.renderables.find(r => r.propertyId === SystemIds.DESCRIPTION_PROPERTY)?.value;
 
   if (maybeDescription) {
     description = maybeDescription;
   }
 
-  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.attributeId === ContentIds.AVATAR_ATTRIBUTE)?.value;
+  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.propertyId === ContentIds.AVATAR_PROPERTY)?.value;
 
   if (maybeAvatarUrl) {
     image = maybeAvatarUrl;
@@ -74,10 +73,10 @@ export function TableBlockListItem({
 
   const otherPropertyData = Object.values(columns).filter(
     c =>
-      c.slotId !== SystemIds.NAME_ATTRIBUTE &&
-      c.slotId !== ContentIds.AVATAR_ATTRIBUTE &&
-      c.slotId !== SystemIds.COVER_ATTRIBUTE &&
-      c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
+      c.slotId !== SystemIds.NAME_PROPERTY &&
+      c.slotId !== ContentIds.AVATAR_PROPERTY &&
+      c.slotId !== SystemIds.COVER_PROPERTY &&
+      c.slotId !== SystemIds.DESCRIPTION_PROPERTY
   );
 
   if (isEditing && source.type !== 'RELATIONS') {
@@ -96,75 +95,71 @@ export function TableBlockListItem({
               variant="avatar"
               imageSrc={image ?? undefined}
               onImageChange={imageSrc => {
-                const { id: imageId, ops } = Image.make({ cid: imageSrc });
-                const [createRelationOp, setTripleOp] = ops;
-
-                if (createRelationOp.type === 'CREATE_RELATION') {
-                  const imageEntityDispatch = editEvent({
-                    context: {
-                      entityId: createRelationOp.relation.fromEntity,
-                      entityName: null,
-                      spaceId: currentSpaceId,
-                    },
-                  });
-
-                  imageEntityDispatch({
-                    type: 'UPSERT_RELATION',
-                    payload: {
-                      fromEntityId: createRelationOp.relation.fromEntity,
-                      fromEntityName: name,
-                      toEntityId: createRelationOp.relation.toEntity,
-                      toEntityName: null,
-                      typeOfId: createRelationOp.relation.type,
-                      typeOfName: 'Types',
-                    },
-                  });
-
-                  if (setTripleOp.type === 'SET_TRIPLE') {
-                    imageEntityDispatch({
-                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                      payload: {
-                        renderable: {
-                          attributeId: setTripleOp.triple.attribute,
-                          entityId: imageId,
-                          spaceId: currentSpaceId,
-                          attributeName: 'Image URL',
-                          entityName: null,
-                          type: 'URL',
-                          value: setTripleOp.triple.value.value,
-                        },
-                        value: {
-                          type: 'URL',
-                          value: setTripleOp.triple.value.value,
-                        },
-                      },
-                    });
-
-                    onChangeEntry(
-                      {
-                        entityId: rowEntityId,
-                        entityName: name,
-                        spaceId: currentSpaceId,
-                      },
-                      {
-                        type: 'EVENT',
-                        data: {
-                          type: 'UPSERT_RELATION',
-                          payload: {
-                            fromEntityId: rowEntityId,
-                            fromEntityName: name,
-                            toEntityId: imageId,
-                            toEntityName: null,
-                            typeOfId: ContentIds.AVATAR_ATTRIBUTE,
-                            typeOfName: 'Avatar',
-                            renderableType: 'IMAGE',
-                            value: setTripleOp.triple.value.value,
-                          },
-                        },
-                      }
-                    );
-                  }
-                }
+                // const { id: imageId, ops } = Image.make({ cid: imageSrc });
+                // const [createRelationOp, setTripleOp] = ops;
+                // if (createRelationOp.type === 'CREATE_RELATION') {
+                //   const imageEntityDispatch = editEvent({
+                //     context: {
+                //       entityId: createRelationOp.relation.fromEntity,
+                //       entityName: null,
+                //       spaceId: currentSpaceId,
+                //     },
+                //   });
+                //   imageEntityDispatch({
+                //     type: 'UPSERT_RELATION',
+                //     payload: {
+                //       fromEntityId: createRelationOp.relation.fromEntity,
+                //       fromEntityName: name,
+                //       toEntityId: createRelationOp.relation.toEntity,
+                //       toEntityName: null,
+                //       typeOfId: createRelationOp.relation.type,
+                //       typeOfName: 'Types',
+                //     },
+                //   });
+                //   if (setTripleOp.type === 'SET_TRIPLE') {
+                //     imageEntityDispatch({
+                //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                //       payload: {
+                //         renderable: {
+                //           attributeId: setTripleOp.triple.attribute,
+                //           entityId: imageId,
+                //           spaceId: currentSpaceId,
+                //           attributeName: 'Image URL',
+                //           entityName: null,
+                //           type: 'URL',
+                //           value: setTripleOp.triple.value.value,
+                //         },
+                //         value: {
+                //           type: 'URL',
+                //           value: setTripleOp.triple.value.value,
+                //         },
+                //       },
+                //     });
+                //     onChangeEntry(
+                //       {
+                //         entityId: rowEntityId,
+                //         entityName: name,
+                //         spaceId: currentSpaceId,
+                //       },
+                //       {
+                //         type: 'EVENT',
+                //         data: {
+                //           type: 'UPSERT_RELATION',
+                //           payload: {
+                //             fromEntityId: rowEntityId,
+                //             fromEntityName: name,
+                //             toEntityId: imageId,
+                //             toEntityName: null,
+                //             typeOfId: ContentIds.AVATAR_PROPERTY,
+                //             typeOfName: 'Avatar',
+                //             renderableType: 'IMAGE',
+                //             value: setTripleOp.triple.value.value,
+                //           },
+                //         },
+                //       }
+                //     );
+                //   }
+                // }
               }}
             />
           )}
@@ -234,7 +229,7 @@ export function TableBlockListItem({
                             type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                             payload: {
                               renderable: {
-                                attributeId: SystemIds.NAME_ATTRIBUTE,
+                                attributeId: SystemIds.NAME_PROPERTY,
                                 entityId: rowEntityId,
                                 spaceId: currentSpaceId,
                                 attributeName: 'Name',
@@ -277,7 +272,7 @@ export function TableBlockListItem({
                               type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                               payload: {
                                 renderable: {
-                                  attributeId: SystemIds.NAME_ATTRIBUTE,
+                                  attributeId: SystemIds.NAME_PROPERTY,
                                   entityId: rowEntityId,
                                   spaceId: currentSpaceId,
                                   attributeName: 'Name',
@@ -314,7 +309,7 @@ export function TableBlockListItem({
                       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                       payload: {
                         renderable: {
-                          attributeId: SystemIds.DESCRIPTION_ATTRIBUTE,
+                          attributeId: SystemIds.DESCRIPTION_PROPERTY,
                           entityId: rowEntityId,
                           spaceId: currentSpaceId,
                           attributeName: 'Description',

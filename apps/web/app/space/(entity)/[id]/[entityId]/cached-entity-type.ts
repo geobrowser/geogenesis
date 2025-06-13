@@ -1,7 +1,9 @@
+import { Effect } from 'effect';
+
 import { cache } from 'react';
 
-import { fetchEntityType } from '~/core/io/fetch-entity-type';
+import { getEntityTypes } from '~/core/io/v2/queries';
 
 export const cachedFetchEntityType = cache(async (entityId: string) => {
-  return fetchEntityType({ id: entityId });
+  return await Effect.runPromise(getEntityTypes(entityId));
 });

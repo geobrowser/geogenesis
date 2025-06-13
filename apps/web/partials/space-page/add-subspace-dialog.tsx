@@ -38,7 +38,10 @@ interface Props {
 export function AddSubspaceDialog({ trigger, spaceType, spaceId }: Props) {
   const { data: subspaces } = useQuery({
     queryKey: ['subspaces', spaceId],
-    queryFn: () => fetchSubspacesBySpaceId(spaceId),
+    queryFn: async () => {
+      return [] as Subspace[];
+      // fetchSubspacesBySpaceId(spaceId)
+    },
   });
 
   const { data: inflightSubspaces } = useQuery({

@@ -42,7 +42,7 @@ async function ActivityList({ searchParams, entityId }: Props) {
   // Fetch the activity based on the wallets defined on the entity's Wallets triple
   // Right now we assume it's set as an entity value but it might be a collection at
   // some point in the future.
-  const address = entity?.relationsOut.find(t => t.typeOf.id === EntityId(SystemIds.ACCOUNTS_ATTRIBUTE))?.toEntity.name;
+  const address = entity?.relationsOut.find(t => t.typeOf.id === EntityId(SystemIds.ACCOUNTS_PROPERTY))?.toEntity.name;
 
   const proposals = address
     ? await fetchProposalsByUser({

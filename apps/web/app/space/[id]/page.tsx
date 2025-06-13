@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import type { Metadata } from 'next';
 
+import { Subspace } from '~/core/io/dto/subspaces';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
@@ -30,7 +31,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const spaceId = params.id;
 
   const space = await cachedFetchSpace(spaceId);
-  const entity = space?.spaceConfig;
+  const entity = space?.entity;
 
   if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
@@ -71,29 +72,28 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 export default async function SpacePage(props0: Props) {
   const params = await props0.params;
   const spaceId = params.id;
-  const props = await getData(spaceId);
-  const entityId = props.id;
+  const props = await getSpaceFrontPage(spaceId);
   const spaceType = getSpaceType(props.spaceTypes);
 
   return (
     <>
-      {spaceType && <SpaceNotices spaceType={spaceType} spaceId={spaceId} entityId={entityId} />}
+      {spaceType && <SpaceNotices spaceType={spaceType} spaceId={spaceId} entityId={props.id} />}
       <React.Suspense fallback={<SubspacesSkeleton />}>
         <SubspacesContainer spaceId={params.id} />
       </React.Suspense>
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
       </React.Suspense>
-      <ToggleEntityPage {...props} />
+      <ToggleEntityPage id={props.id} spaceId={spaceId} values={props.values} />
       <Spacer height={40} />
       <ErrorBoundary fallback={<EmptyErrorComponent />}>
         {/*
           Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
           show any referenced by loading states but do want to stream it in
         */}
-        <React.Suspense fallback={<div />}>
+        {/* <React.Suspense fallback={<div />}>
           <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={spaceId} />
-        </React.Suspense>
+        </React.Suspense> */}
       </ErrorBoundary>
     </>
   );
@@ -118,7 +118,8 @@ type SubspacesContainerProps = {
 };
 
 const SubspacesContainer = async ({ spaceId }: SubspacesContainerProps) => {
-  const subspaces = await fetchSubspacesBySpaceId(spaceId);
+  // const subspaces = await fetchSubspacesBySpaceId(spaceId);
+  const subspaces: Subspace[] = [];
 
   if (subspaces.length === 0) {
     return null;
@@ -127,23 +128,26 @@ const SubspacesContainer = async ({ spaceId }: SubspacesContainerProps) => {
   return <Subspaces subspaces={subspaces} />;
 };
 
-const getData = async (spaceId: string) => {
+const getSpaceFrontPage = async (spaceId: string) => {
   const space = await cachedFetchSpace(spaceId);
-  const entity = space?.spaceConfig;
+  const entity = space?.entity;
 
   if (!entity) {
-    console.log(`Redirecting to /space/${spaceId}/entities`);
-    redirect(`/space/${spaceId}/entities`);
+    return {
+      id: '',
+      name: null,
+      values: [],
+      relations: [],
+      spaceTypes: [],
+    };
   }
 
   return {
     name: entity?.name ?? null,
-    triples: entity?.triples ?? [],
+    values: entity?.values ?? [],
     id: entity.id,
-    spaceId,
-    spaceTypes: space?.spaceConfig?.types ?? [],
-    subspaces: [],
-    relationsOut: entity?.relationsOut ?? [],
+    spaceTypes: space?.entity?.types ?? [],
+    relationsOut: entity?.relations ?? [],
   };
 };
 

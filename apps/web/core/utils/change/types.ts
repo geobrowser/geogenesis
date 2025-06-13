@@ -1,8 +1,9 @@
-import { TripleValueOptions } from '@graphprotocol/grc-20';
-
-import { EntityId } from '~/core/io/schema';
-
-import { BaseRelationRenderableProperty, ImageRelationRenderableProperty, NativeRenderableProperty } from '../../types';
+import {
+  BaseRelationRenderableProperty,
+  ImageRelationRenderableProperty,
+  NativeRenderableProperty,
+  ValueOptions,
+} from '~/core/v2.types';
 
 export type BlockId = string;
 
@@ -35,7 +36,7 @@ export type TripleChangeValue = {
   // mostly to make discriminated unions easier to handle at consumers by matching
   // the same shape as RelationValueChange
   valueName: null;
-  options?: TripleValueOptions;
+  options?: ValueOptions;
 } & ChangeType;
 
 type Attribute = {
@@ -76,7 +77,7 @@ type NativeTripleChange = {
 };
 
 export type EntityChange = {
-  id: EntityId;
+  id: string;
   name: string | null;
   avatar: string | null;
   blockChanges: BlockChange[];

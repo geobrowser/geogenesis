@@ -1,14 +1,13 @@
-import { Entity } from '../io/dto/entities';
-import { Relation, Triple } from '../types';
+import { Entity, Relation, Value } from '../v2.types';
 
 const ENTITY_UPDATED = 'entity:updated' as const;
 const ENTITY_DELETED = 'entity:deleted' as const;
-const TRIPLES_CREATED = 'triples:updated' as const;
-const TRIPLES_DELETED = 'triples:deleted' as const;
+const VALUES_CREATED = 'values:updated' as const;
+const VALUES_DELETED = 'values:deleted' as const;
 const RELATION_CREATED = 'relations:created' as const;
 const RELATION_DELETED = 'relations:deleted' as const;
 const ENTITIES_SYNCED = 'entities:synced' as const;
-const CHANGES_CLEARED = 'changes:cleared' as const;
+const HYDRATE = 'hydrate' as const;
 
 export type GeoEvent =
   | {
@@ -20,12 +19,12 @@ export type GeoEvent =
       entity: Entity;
     }
   | {
-      type: typeof TRIPLES_CREATED;
-      triple: Triple;
+      type: typeof VALUES_CREATED;
+      value: Value;
     }
   | {
-      type: typeof TRIPLES_DELETED;
-      triple: Triple;
+      type: typeof VALUES_DELETED;
+      value: Value;
     }
   | {
       type: typeof RELATION_CREATED;
@@ -47,8 +46,8 @@ export type GeoEvent =
   // All of the other events in the stream are things that have ALREADY happened,
   // but this event is a trigger to _DO_ something.
   | {
-      type: typeof CHANGES_CLEARED;
-      entities: Entity[];
+      type: typeof HYDRATE;
+      entities: string[];
     };
 
 // Extract event types that match a specific 'type' value
@@ -70,12 +69,13 @@ export type GeoEventByType<T extends GeoEvent['type']> = Extract<GeoEvent, { typ
 export class GeoEventStream {
   static ENTITY_UPDATED = ENTITY_UPDATED;
   static ENTITY_DELETED = ENTITY_DELETED;
-  static TRIPLES_CREATED = TRIPLES_CREATED;
-  static TRIPLES_DELETED = TRIPLES_DELETED;
+  static VALUES_CREATED = VALUES_CREATED;
+  static VALUES_DELETED = VALUES_DELETED;
   static RELATION_CREATED = RELATION_CREATED;
   static RELATION_DELETED = RELATION_DELETED;
+  // @TODO: Property created
   static ENTITIES_SYNCED = ENTITIES_SYNCED;
-  static CHANGES_CLEARED = CHANGES_CLEARED;
+  static HYDRATE = HYDRATE;
 
   private listeners: Record<string, Array<(event: GeoEvent) => void>> = {};
 

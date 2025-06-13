@@ -3,13 +3,13 @@
 import * as React from 'react';
 
 import { db } from '../database/indexeddb';
-import { localOpsAtom, localRelationsAtom } from '../database/write';
+import { localRelationsAtom, localValuesAtom } from '../database/write';
 import { store } from './jotai-store';
 
 export const Persistence = () => {
   React.useEffect(() => {
-    const unsubTriples = store.sub(localOpsAtom, async () => {
-      const newTriples = store.get(localOpsAtom);
+    const unsubTriples = store.sub(localValuesAtom, async () => {
+      const newTriples = store.get(localValuesAtom);
 
       // Dexie docs recommend putting all batched operations in a transaction scope
       // https://dexie.org/docs/Tutorial/Best-Practices#5-use-transaction-scopes-whenever-you-plan-to-make-more-than-one-operation

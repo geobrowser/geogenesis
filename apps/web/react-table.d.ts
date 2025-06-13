@@ -2,7 +2,7 @@ import '@tanstack/react-table';
 
 import { Source } from './core/blocks/data/source';
 import { PropertyId } from './core/hooks/use-properties';
-import { PropertySchema } from './core/types';
+import { PropertySchema } from './core/v2.types';
 import { onChangeEntryFn, onLinkEntryFn } from './partials/blocks/table/change-entry';
 
 // We declare a new function that we will define and pass into the useTable hook.

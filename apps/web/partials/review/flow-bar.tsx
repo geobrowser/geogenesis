@@ -6,7 +6,7 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 
-import { useTriples } from '~/core/database/triples';
+import { useValues } from '~/core/database/v2.values';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
@@ -27,7 +27,7 @@ export const FlowBar = () => {
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
-  const triples = useTriples(
+  const triples = useValues(
     React.useMemo(() => ({ selector: t => t.hasBeenPublished === false, includeDeleted: true }), [])
   );
 
@@ -36,14 +36,14 @@ export const FlowBar = () => {
 
   const entitiesCount = pipe(
     triples,
-    A.groupBy(t => t.entityId),
+    A.groupBy(t => t.entity.id),
     D.keys,
     A.length
   );
 
   const spacesCount = pipe(
     triples,
-    A.groupBy(t => t.space),
+    A.groupBy(t => t.spaceId),
     D.keys,
     keys => new Set(keys).size
   );

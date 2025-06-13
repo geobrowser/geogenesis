@@ -55,8 +55,8 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
                   name: p.name ?? p.id,
                   space: {
                     id: spaceId,
-                    name: space?.spaceConfig?.name ?? '',
-                    image: space?.spaceConfig?.image ?? '',
+                    name: space?.entity?.name ?? '',
+                    image: space?.entity?.image ?? '',
                   },
                 })}
               </h3>

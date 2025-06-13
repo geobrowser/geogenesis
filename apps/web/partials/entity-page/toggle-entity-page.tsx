@@ -1,14 +1,13 @@
 'use client';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import type { Relation, Triple } from '~/core/types';
+import { Value } from '~/core/v2.types';
 
 import { EditableEntityPage } from './editable-entity-page';
 import { ReadableEntityPage } from './readable-entity-page';
 
 type EntityPageProps = {
-  triples: Triple[];
-  relationsOut: Relation[];
+  values: Value[];
   id: string;
   spaceId: string;
 };
@@ -18,5 +17,5 @@ export function ToggleEntityPage(props: EntityPageProps) {
 
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
-  return <Page {...props} relations={props.relationsOut} />;
+  return <Page {...props} />;
 }

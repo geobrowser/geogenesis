@@ -1,15 +1,14 @@
 import { Schema } from '@effect/schema';
 import { SystemIds } from '@graphprotocol/grc-20';
-import { Either } from 'effect';
+import { Effect, Either } from 'effect';
 
-import { EntityId } from '~/core/io/schema';
-import { fetchSpace } from '~/core/io/subgraph';
+import { getSpace } from '~/core/io/v2/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import { OmitStrict, ValueTypeId } from '~/core/types';
+import { OmitStrict } from '~/core/types';
 import type { RelationValueType } from '~/core/types';
-import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
+import { FilterableValueType } from '~/core/value-types';
 
 import { Source } from './source';
 
@@ -28,10 +27,10 @@ export type Filter = {
  * semantics.
  *
  * e.g.,
- * attribute: SystemIds.TYPES_ATTRIBUTE, is: SystemIds.PERSON_TYPE
+ * attribute: SystemIds.TYPES_PROPERTY, is: SystemIds.PERSON_TYPE
  * The above returns all entities that are type: Person
  *
- * entity: '1234', relationType: SystemIds.TYPES_ATTRIBUTE
+ * entity: '1234', relationType: SystemIds.TYPES_PROPERTY
  * The above returns all the type relations for entity 1234
  *
  * The latter is basically a "Relations View" on an entity where the latter
@@ -169,11 +168,11 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       )
     : [];
 
-  const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SystemIds.RELATION_FROM_ATTRIBUTE);
+  const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SystemIds.RELATION_FROM_PROPERTY);
   const unresolvedEntityFilter = maybeFromFilter ? getResolvedEntity(maybeFromFilter.is) : null;
 
   const unresolvedAttributeFilters = Promise.all(
-    filtersFromString.AND.filter(f => f.attribute !== SystemIds.RELATION_FROM_ATTRIBUTE).map(async filter => {
+    filtersFromString.AND.filter(f => f.attribute !== SystemIds.RELATION_FROM_PROPERTY).map(async filter => {
       return await getResolvedFilter(filter);
     })
   );
@@ -192,8 +191,8 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
 }
 
 async function getSpaceName(spaceId: string) {
-  const space = await fetchSpace({ id: spaceId });
-  return space?.spaceConfig.name ?? null;
+  const space = await Effect.runPromise(getSpace(spaceId));
+  return space?.entity.name ?? null;
 }
 
 async function getResolvedEntity(entityId: string): Promise<Filter> {
@@ -201,7 +200,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 
   if (!entity) {
     return {
-      columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+      columnId: SystemIds.RELATION_FROM_PROPERTY,
       columnName: 'From',
       valueType: 'RELATION',
       value: entityId,
@@ -210,7 +209,7 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
   }
 
   return {
-    columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+    columnId: SystemIds.RELATION_FROM_PROPERTY,
     columnName: 'From',
     valueType: 'RELATION',
     value: entityId,
@@ -219,29 +218,29 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
 }
 
 async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
+  // @TODO(migration): Fetch property
   const maybeAttributeEntity = await E.findOne({ store, cache: queryClient, id: filter.attribute });
-  const valueType = maybeAttributeEntity?.relationsOut.find(
-    r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE)
-  )?.toEntity.id;
 
-  if (valueType === EntityId(SystemIds.RELATION)) {
-    const valueEntity = await E.findOne({ store, cache: queryClient, id: filter.is });
+  // if (valueType === EntityId(SystemIds.RELATION)) {
+  //   const valueEntity = await E.findOne({ store, cache: queryClient, id: filter.is });
 
-    return {
-      columnId: filter.attribute,
-      columnName: maybeAttributeEntity?.name ?? null,
-      value: filter.is,
-      valueName: valueEntity?.name ?? null,
-      valueType: 'RELATION',
-    };
-  }
+  //   return {
+  //     columnId: filter.attribute,
+  //     columnName: maybeAttributeEntity?.name ?? null,
+  //     value: filter.is,
+  //     valueName: valueEntity?.name ?? null,
+  //     valueType: 'RELATION',
+  //   };
+  // }
 
   // @TODO: Can get property name here
+  // @TODO(migration): Get real property data type
   return {
     columnId: filter.attribute,
     columnName: maybeAttributeEntity?.name ?? null,
     value: filter.is,
     valueName: null,
-    valueType: VALUE_TYPES[(valueType ?? SystemIds.TEXT) as ValueTypeId] ?? SystemIds.TEXT,
+    // valueType: VALUE_TYPES[(valueType ?? SystemIds.TEXT) as ValueTypeId] ?? SystemIds.TEXT,
+    valueType: 'TEXT',
   };
 }

@@ -1,6 +1,8 @@
+import { Effect } from 'effect';
+
 import { Suspense } from 'react';
 
-import { Subgraph } from '~/core/io';
+import { getSpace } from '~/core/io/v2/queries';
 
 import { Dots } from '~/design-system/dots';
 
@@ -13,7 +15,7 @@ type ImportPageProps = {
 export default async function ImportPage(props: ImportPageProps) {
   const params = await props.params;
   const spaceId = params.id;
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await Effect.runPromise(getSpace(spaceId));
 
   if (!space) return null;
 

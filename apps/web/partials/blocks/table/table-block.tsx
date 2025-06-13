@@ -17,19 +17,15 @@ import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
-import { editEvent } from '~/core/events/edit-events';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { SearchResult } from '~/core/io/dto/search';
-import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
-import { Cell, PropertySchema, Row } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { VALUE_TYPES } from '~/core/value-types';
+import { Cell, NativeRenderableProperty, PropertySchema, Row, SearchResult } from '~/core/v2.types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -59,8 +55,8 @@ interface Props {
 function makePlaceholderRow(entityId: string, spaceId: string, properties: PropertySchema[]) {
   const columns: Record<string, Cell> = {};
 
-  columns[SystemIds.NAME_ATTRIBUTE] = {
-    slotId: SystemIds.NAME_ATTRIBUTE,
+  columns[SystemIds.NAME_PROPERTY] = {
+    slotId: SystemIds.NAME_PROPERTY,
     cellId: ID.createEntityId(),
     name: null,
     renderables: [],
@@ -68,7 +64,7 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
 
   for (const p of properties) {
     // Why were we skipping the name attribute?
-    // if (p.id === EntityId(SystemIds.NAME_ATTRIBUTE)) {
+    // if (p.id === EntityId(SystemIds.NAME_PROPERTY)) {
     //   continue;
     // }
 
@@ -81,13 +77,13 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
         name: null,
         renderables: [
           {
-            type: VALUE_TYPES[p.valueType] ?? 'TEXT',
+            type: p.dataType as NativeRenderableProperty['type'],
             relationId: p.id,
             valueName: p.name,
-            entityId: entityId,
-            entityName: null,
-            attributeId: p.id,
-            attributeName: p.name,
+            fromEntityId: entityId,
+            fromEntityName: null,
+            propertyId: p.id,
+            propertyName: p.name,
             spaceId,
             value: '',
             placeholder: true,
@@ -141,7 +137,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
   const onChangeEntry: onChangeEntryFn = (context, event) => {
     if (event.type === 'EVENT') {
-      const send = editEvent({
+      const send = action({
         context,
       });
 
@@ -154,7 +150,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       const maybeHasCollectionItem = entries.find(e => e.entityId === context.entityId);
 
       if (!maybeHasCollectionItem) {
-        let to: (Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }) | null = null;
+        let to: (Pick<SearchResult, 'id' | 'name'> & { space?: string; verified?: boolean }) | null = null;
 
         if (event.type === 'Find') {
           to = event.data;
@@ -169,9 +165,9 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
         if (event.type === 'EVENT') {
           to = {
-            id: EntityId(context.entityId),
+            id: context.entityId,
             name: context.entityName,
-            space: EntityId(context.spaceId),
+            space: context.spaceId,
             verified: false,
           };
         }
@@ -180,11 +176,11 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
           const id = ID.createEntityId();
 
           upsertCollectionItemRelation({
-            relationId: EntityId(id),
-            collectionId: EntityId(source.value),
-            spaceId: SpaceId(spaceId),
+            relationId: id,
+            collectionId: source.value,
+            spaceId: spaceId,
             toEntity: {
-              id: EntityId(to.id),
+              id: to.id,
               name: to.name,
             },
           });
@@ -193,17 +189,17 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
           // to set the collection. We allow setting any data or using FOC.
           if (to.space) {
             upsertSourceSpaceOnCollectionItem({
-              collectionItemId: EntityId(id),
-              toId: EntityId(to.id),
-              spaceId: SpaceId(spaceId),
+              collectionItemId: id,
+              toId: to.id,
+              spaceId: spaceId,
               sourceSpaceId: to.space,
             });
           }
 
           if (to.space && to.verified) {
             upsertVerifiedSourceOnCollectionItem({
-              collectionItemId: EntityId(id),
-              spaceId: SpaceId(spaceId),
+              collectionItemId: id,
+              spaceId: spaceId,
               verified: true,
             });
           }
@@ -242,30 +238,30 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
   const onLinkEntry = (
     id: string,
     to: {
-      id: EntityId;
+      id: string;
       name: string | null;
-      space?: EntityId;
+      space?: string;
       verified?: boolean;
     },
     currentlyVerified?: boolean
   ) => {
     upsertSourceSpaceOnCollectionItem({
-      collectionItemId: EntityId(id),
-      toId: EntityId(to.id),
-      spaceId: SpaceId(spaceId),
+      collectionItemId: id,
+      toId: to.id,
+      spaceId: spaceId,
       sourceSpaceId: to.space,
     });
 
     if (to.space && to.verified) {
       upsertVerifiedSourceOnCollectionItem({
-        collectionItemId: EntityId(id),
-        spaceId: SpaceId(spaceId),
+        collectionItemId: id,
+        spaceId: spaceId,
         verified: true,
       });
     } else if (to.space && !to.verified && currentlyVerified) {
       upsertVerifiedSourceOnCollectionItem({
-        collectionItemId: EntityId(id),
-        spaceId: SpaceId(spaceId),
+        collectionItemId: id,
+        spaceId: spaceId,
         verified: false,
       });
     }
@@ -320,7 +316,7 @@ export const TableBlock = ({ spaceId }: Props) => {
       return {
         ...f,
         columnName: 'Space',
-        value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
+        value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.entity?.name ?? f.value,
       };
     }
 
@@ -358,7 +354,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               onChangeEntry={onChangeEntry}
               onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
+              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
               source={source}
             />
           );
@@ -382,7 +378,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               onChangeEntry={onChangeEntry}
               onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
+              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
               source={source}
             />
           );
@@ -406,7 +402,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               onLinkEntry={onLinkEntry}
               isPlaceholder={Boolean(row.placeholder)}
               properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
+              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
               source={source}
             />
           );
@@ -501,15 +497,27 @@ export const TableBlock = ({ spaceId }: Props) => {
           <>
             <Spacer height={12} />
             <PageNumberContainer>
-              {source.type === 'COLLECTION' ? getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
-                return page === PagesPaginationPlaceholder.skip ? (
-                  <Text key={`ellipsis-${index}`} color="grey-03" className="flex justify-center" variant="metadataMedium">
-                    ...
-                  </Text>
-                ) : (
-                  <PageNumber key={`page-${page}`} number={page} onClick={() => setPage(page - 1)} isActive={page === pageNumber + 1} />
-                );
-              }) : (
+              {source.type === 'COLLECTION' ? (
+                getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
+                  return page === PagesPaginationPlaceholder.skip ? (
+                    <Text
+                      key={`ellipsis-${index}`}
+                      color="grey-03"
+                      className="flex justify-center"
+                      variant="metadataMedium"
+                    >
+                      ...
+                    </Text>
+                  ) : (
+                    <PageNumber
+                      key={`page-${page}`}
+                      number={page}
+                      onClick={() => setPage(page - 1)}
+                      isActive={page === pageNumber + 1}
+                    />
+                  );
+                })
+              ) : (
                 <>
                   {pageNumber > 1 && (
                     <>

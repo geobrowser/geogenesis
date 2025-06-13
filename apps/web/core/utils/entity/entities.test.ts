@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import { Triple } from '~/core/types';
 
-import { description, descriptionTriple, name, nameTriple } from './entities';
+import { description, descriptionTriple, name, nameValue } from './entities';
 
 const triplesWithSystemDescriptionAttribute: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
-    attributeId: SystemIds.DESCRIPTION_ATTRIBUTE,
+    attributeId: SystemIds.DESCRIPTION_PROPERTY,
     attributeName: 'Description',
     value: {
       type: 'TEXT',
@@ -22,7 +22,7 @@ const triplesWithSystemDescriptionAttribute: Triple[] = [
 
 /**
  * We assume that the Description triple's attribute for an Entity will match the expected
- * system Description attribute ID at SystemIds.DESCRIPTION_ATTRIBUTE. However, anybody can
+ * system Description attribute ID at SystemIds.DESCRIPTION_PROPERTY. However, anybody can
  * set up a triple that references _any_ attribute whose name is "Description."
  *
  * We currently handle this in the UI by checking the system ID for Description as well
@@ -49,7 +49,7 @@ const triplesWithSystemNameAttribute: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
-    attributeId: SystemIds.NAME_ATTRIBUTE,
+    attributeId: SystemIds.NAME_PROPERTY,
     attributeName: 'Name',
     entityName: 'banana',
     space: 'spaceId',
@@ -66,10 +66,10 @@ describe('Entity name helpers', () => {
   });
 
   it('Entity.nameTriple should return the Name triple', () => {
-    expect(nameTriple(triplesWithSystemNameAttribute)).toBe(triplesWithSystemNameAttribute[0]);
+    expect(nameValue(triplesWithSystemNameAttribute)).toBe(triplesWithSystemNameAttribute[0]);
   });
 
   it('Entity.nameTriple should return undefined if there is no Name triple', () => {
-    expect(nameTriple([])).toBe(undefined);
+    expect(nameValue([])).toBe(undefined);
   });
 });
