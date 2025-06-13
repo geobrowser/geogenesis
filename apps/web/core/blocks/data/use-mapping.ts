@@ -252,6 +252,8 @@ export function mappingToCell(
               fromEntityName: entity.name,
               valueName: entity.name,
               relationId,
+              // @TODO(migration): not sure what this should be
+              relationEntityId: '',
             },
           ]
         : [
@@ -265,6 +267,8 @@ export function mappingToCell(
               fromEntityName: entity.name,
               valueName: entity.name,
               relationId,
+              // @TODO(migration): not sure what this should be
+              relationEntityId: '',
             },
           ];
     }

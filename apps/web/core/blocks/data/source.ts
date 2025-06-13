@@ -1,11 +1,9 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { Id, SystemIds } from '@graphprotocol/grc-20';
 import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { Match } from 'effect';
 
 import { Filter } from '~/core/blocks/data/filters';
-import { StoreRelation } from '~/core/database/types';
-import { DB } from '~/core/database/write';
-import { EntityId, SpaceId } from '~/core/io/schema';
+import { storage } from '~/core/sync/use-mutate';
 import { Relation } from '~/core/v2.types';
 
 type EntitySource = {
@@ -37,7 +35,7 @@ type AllOfGeoSource = {
 export type Source = CollectionSource | MultipleSources | AllOfGeoSource | EntitySource;
 
 type GetSourceArgs = {
-  blockId: EntityId;
+  blockId: string;
   dataEntityRelations: Relation[];
   currentSpaceId: string;
   filterState: Filter[];
@@ -91,7 +89,7 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
     };
   }
 
-  if (sourceType === EntityId(SystemIds.ALL_OF_GEO_DATA_SOURCE)) {
+  if (sourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE) {
     return {
       type: 'GEO',
     };
@@ -113,16 +111,13 @@ export function getSource({ blockId, dataEntityRelations, currentSpaceId, filter
  * @param relations - The relations to delete as an array of {@link Relation}
  * @param spaceId - The space id as a {@link SpaceId}
  */
-export function removeSourceType({ relations, spaceId }: { relations: Relation[]; spaceId: SpaceId }) {
+export function removeSourceType({ relations }: { relations: Relation[] }) {
   // Delete the existing source type relation. There should only be one source type
   // relation, but delete many just in case.
-  const sourceTypeRelations = relations.filter(r => r.type.id === EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE));
+  const sourceTypeRelations = relations.filter(r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE);
 
   for (const relation of sourceTypeRelations) {
-    DB.removeRelation({
-      relation: relation,
-      spaceId,
-    });
+    storage.relations.delete(relation);
   }
 }
 
@@ -136,20 +131,9 @@ export function removeSourceType({ relations, spaceId }: { relations: Relation[]
  * @param blockId - The id of the block that the source is associated with as an {@link EntityId}
  * @param spaceId - The space id as a {@link SpaceId}
  */
-export function upsertSourceType({
-  source,
-  blockId,
-  spaceId,
-}: {
-  source: Source;
-  blockId: EntityId;
-  spaceId: SpaceId;
-}) {
+export function upsertSourceType({ source, blockId, spaceId }: { source: Source; blockId: string; spaceId: string }) {
   const newSourceType = makeRelationForSourceType(source.type, blockId, spaceId); // Source: COLLECTION | SPACES | GEO | etc.
-  DB.upsertRelation({
-    relation: newSourceType,
-    spaceId,
-  });
+  storage.relations.set(newSourceType);
 }
 
 /**
@@ -167,11 +151,7 @@ export function upsertSourceType({
  *                  as an {@link EntityId}
  * @returns a {@link StoreRelation} representing the source type.
  */
-export function makeRelationForSourceType(
-  sourceType: Source['type'],
-  blockId: EntityId,
-  spaceId: string
-): StoreRelation {
+export function makeRelationForSourceType(sourceType: Source['type'], blockId: string, spaceId: string): Relation {
   // Get the source type system id based on the source type
   const sourceTypeId = Match.value(sourceType).pipe(
     Match.when('COLLECTION', () => SystemIds.COLLECTION_DATA_SOURCE),
@@ -182,20 +162,23 @@ export function makeRelationForSourceType(
   );
 
   return {
-    space: spaceId,
-    index: INITIAL_RELATION_INDEX_VALUE,
-    typeOf: {
-      id: EntityId(SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE),
+    id: Id.generate(),
+    // @TODO(migration): May want to reuse existing relation entity
+    entityId: Id.generate(),
+    spaceId: spaceId,
+    position: INITIAL_RELATION_INDEX_VALUE,
+    renderableType: 'RELATION',
+    type: {
+      id: SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE,
       name: 'Data Source Type',
     },
     toEntity: {
-      id: EntityId(sourceTypeId),
-      renderableType: 'RELATION',
+      id: sourceTypeId,
       name: getSourceTypeName(sourceTypeId),
-      value: EntityId(sourceTypeId),
+      value: sourceTypeId,
     },
     fromEntity: {
-      id: EntityId(blockId),
+      id: blockId,
       name: null,
     },
   };

@@ -1,7 +1,9 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import produce from 'immer';
 
-import { upsert } from '~/core/database/write';
+import { ID } from '~/core/id';
 import { EntityId, SpaceId } from '~/core/io/schema';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Source, getSource, removeSourceType, upsertSourceType } from './source';
@@ -12,6 +14,7 @@ import { useView } from './use-view';
 export function useSource() {
   const { entityId, spaceId } = useDataBlockInstance();
   const { shownColumnRelations, toggleProperty } = useView();
+  const { storage } = useMutate();
 
   const { filterState, setFilterState } = useFilters();
 
@@ -30,24 +33,20 @@ export function useSource() {
   const setSource = (newSource: Source) => {
     removeSourceType({
       relations: blockEntity?.relations ?? [],
-      spaceId: SpaceId(spaceId),
     });
     upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 
     if (newSource.type === 'RELATIONS') {
-      const maybeExistingRelationType = filterState.filter(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY);
-
       setFilterState(
-        [
-          ...maybeExistingRelationType,
-          {
+        produce(filterState, draft => {
+          draft.push({
             columnId: SystemIds.RELATION_FROM_PROPERTY,
             columnName: 'From',
             valueType: 'RELATION',
             value: newSource.value,
             valueName: newSource.name,
-          },
-        ],
+          });
+        }),
         newSource
       );
 
@@ -76,16 +75,24 @@ export function useSource() {
       );
 
       if (maybeExistingNamePropertyRelation) {
-        upsert(
-          {
-            attributeId: SystemIds.SELECTOR_PROPERTY,
-            attributeName: 'Selector',
-            entityId: maybeExistingNamePropertyRelation.id,
-            entityName: null,
-            value: { type: 'TEXT', value: `->[${SystemIds.RELATION_TO_PROPERTY}]` },
+        storage.values.set({
+          id: ID.createValueId({
+            entityId: maybeExistingNamePropertyRelation.entityId,
+            propertyId: SystemIds.SELECTOR_PROPERTY,
+            spaceId,
+          }),
+          entity: {
+            id: maybeExistingNamePropertyRelation.entityId,
+            name: null,
           },
-          spaceId
-        );
+          property: {
+            id: SystemIds.SELECTOR_PROPERTY,
+            name: 'Selector',
+            dataType: 'TEXT',
+          },
+          spaceId,
+          value: `->[${SystemIds.RELATION_TO_PROPERTY}]`,
+        });
       } else {
         toggleProperty(
           {

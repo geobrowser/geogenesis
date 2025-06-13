@@ -4,11 +4,12 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
+import { ID } from '~/core/id';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Cell, PropertySchema, Relation } from '~/core/v2.types';
 
-import { upsert } from '../../database/write';
 import { useProperties } from '../../hooks/use-properties';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter } from './filters';
@@ -37,6 +38,7 @@ const queryKeys = {
 
 export function useDataBlock() {
   const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
+  const { storage } = useMutate();
 
   const { entity, isLoading: isBlockEntityLoading } = useQueryEntity({
     spaceId: spaceId,
@@ -162,12 +164,23 @@ export function useDataBlock() {
   const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
 
   const setName = (newName: string) => {
-    upsert({
-      attributeId: SystemIds.NAME_PROPERTY,
-      entityId: entityId,
-      entityName: newName,
-      attributeName: 'Name',
-      value: { type: 'TEXT', value: newName },
+    storage.values.set({
+      id: ID.createValueId({
+        entityId,
+        propertyId: SystemIds.NAME_PROPERTY,
+        spaceId,
+      }),
+      spaceId,
+      entity: {
+        id: entityId,
+        name: newName,
+      },
+      property: {
+        id: SystemIds.NAME_PROPERTY,
+        name: 'Name',
+        dataType: 'TEXT',
+      },
+      value: newName,
     });
   };
 

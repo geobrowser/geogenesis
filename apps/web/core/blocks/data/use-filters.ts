@@ -4,7 +4,8 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
-import { upsert } from '~/core/database/write';
+import { ID } from '~/core/id';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Filter, fromGeoFilterState, toGeoFilterState } from './filters';
@@ -13,6 +14,7 @@ import { useDataBlockInstance } from './use-data-block';
 
 export function useFilters() {
   const { entityId, spaceId } = useDataBlockInstance();
+  const { storage } = useMutate();
 
   const { entity: blockEntity } = useQueryEntity({
     id: entityId,
@@ -69,21 +71,26 @@ export function useFilters() {
 
       const entityName = blockEntity?.name ?? '';
 
-      return upsert(
-        {
-          attributeId: SystemIds.FILTER,
-          attributeName: 'Filter',
+      storage.values.set({
+        id: ID.createValueId({
           entityId,
-          entityName,
-          value: {
-            type: 'TEXT',
-            value: newFiltersString,
-          },
+          propertyId: SystemIds.FILTER,
+          spaceId,
+        }),
+        spaceId,
+        entity: {
+          id: entityId,
+          name: entityName,
         },
-        spaceId
-      );
+        property: {
+          id: SystemIds.FILTER,
+          name: 'Filter',
+          dataType: 'TEXT',
+        },
+        value: newFiltersString,
+      });
     },
-    [entityId, spaceId, blockEntity?.name]
+    [entityId, spaceId, blockEntity?.name, storage.values]
   );
 
   return {
