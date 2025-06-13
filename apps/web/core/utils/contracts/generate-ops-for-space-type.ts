@@ -31,7 +31,7 @@ export const generateOpsForSpaceType = async ({
   ops.push(
     Ops.create({
       entity: newEntityId,
-      attribute: SystemIds.NAME_PROPERTY,
+      property: SystemIds.NAME_PROPERTY,
       value: {
         type: 'TEXT',
         value: spaceName,

@@ -1,11 +1,10 @@
-import { ContentIds, Op, Relation, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, Graph, Id, Op, SystemIds } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
 
 import { ID } from '~/core/id';
-import { EntityId } from '~/core/io/schema';
 import { getEntity } from '~/core/io/v2/queries';
-import { Relation as RelationType } from '~/core/types';
 import { Ops } from '~/core/utils/ops';
+import { Relation } from '~/core/v2.types';
 
 type Options = {
   oldEntityId: string;
@@ -39,20 +38,17 @@ export const cloneEntity = async (
   const newEntityName = entityName;
   const newOps: Array<Op> = [];
 
-  const triplesToClone = oldEntity.triples.filter(triple => !SKIPPED_PROPERTYS.includes(EntityId(triple.attributeId)));
-  const relationsToClone = oldEntity.relationsOut.filter(relation => !SKIPPED_PROPERTYS.includes(relation.typeOf.id));
-  const tabsToClone = oldEntity.relationsOut.filter(
-    relation => relation.typeOf.id === EntityId(SystemIds.TABS_PROPERTY)
-  );
-  const blocksToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS));
+  const triplesToClone = oldEntity.values.filter(triple => !SKIPPED_PROPERTYS.includes(Id.Id(triple.property.id)));
+  const relationsToClone = oldEntity.relations.filter(relation => !SKIPPED_PROPERTYS.includes(Id.Id(relation.type.id)));
+  const tabsToClone = oldEntity.relations.filter(relation => relation.type.id === SystemIds.TABS_PROPERTY);
+  const blocksToClone = oldEntity.relations.filter(relation => relation.type.id === SystemIds.BLOCKS);
 
   if (newEntityName) {
     newOps.push(
       Ops.create({
         entity: newEntityId,
-        attribute: SystemIds.NAME_PROPERTY,
         value: {
-          type: 'TEXT',
+          property: SystemIds.NAME_PROPERTY,
           value: newEntityName,
         },
       })
@@ -60,8 +56,8 @@ export const cloneEntity = async (
   }
 
   triplesToClone.forEach(triple => {
-    if (triple.value.type === 'TEXT' && hasVariable(triple.value.value)) {
-      const replacedValue = replaceVariables(triple.value.value, {
+    if (triple.property.dataType === 'TEXT' && hasVariable(triple.value)) {
+      const replacedValue = replaceVariables(triple.value, {
         entityId: parentEntityId ?? newEntityId,
         entityName: parentEntityName ?? newEntityName ?? '${entityName}',
       });
@@ -69,9 +65,8 @@ export const cloneEntity = async (
       newOps.push(
         Ops.create({
           entity: newEntityId,
-          attribute: triple.attributeId,
           value: {
-            type: triple.value.type,
+            property: Id.Id(triple.property.id),
             value: replacedValue,
           },
         })
@@ -80,10 +75,9 @@ export const cloneEntity = async (
       newOps.push(
         Ops.create({
           entity: newEntityId,
-          attribute: triple.attributeId,
           value: {
-            type: triple.value.type,
-            value: triple.value.value,
+            property: Id.Id(triple.property.id),
+            value: triple.value,
           },
         })
       );
@@ -91,14 +85,14 @@ export const cloneEntity = async (
   });
 
   relationsToClone.forEach(relation => {
-    newOps.push(
-      Relation.make({
-        fromId: newEntityId,
-        toId: relation.toEntity.id,
-        relationTypeId: relation.typeOf.id,
-        position: relation.index,
-      })
-    );
+    const { ops } = Graph.createRelation({
+      type: Id.Id(relation.type.id),
+      fromEntity: newEntityId,
+      toEntity: relation.toEntity.id,
+      position: relation.position,
+    });
+
+    newOps.push(...ops);
   });
 
   const [tabOps, newlySeenTabEntityIds] = await cloneRelatedEntities(
@@ -125,7 +119,7 @@ export const cloneEntity = async (
 };
 
 const cloneRelatedEntities = async (
-  relatedEntitiesToClone: Array<RelationType>,
+  relatedEntitiesToClone: Array<Relation>,
   newEntityId: string,
   previouslySeenEntityIds: Set<string>,
   parentEntityId: string | null,
@@ -145,11 +139,11 @@ const cloneRelatedEntities = async (
 
       const newRelatedEntityId = ID.createEntityId();
 
-      const relationshipOp = Relation.make({
-        fromId: newEntityId,
-        toId: newRelatedEntityId,
-        relationTypeId: relation.typeOf.id,
-        position: relation.index,
+      const { ops: relationshipOps } = Graph.createRelation({
+        type: Id.Id(relation.type.id),
+        fromEntity: newEntityId,
+        toEntity: newRelatedEntityId,
+        position: relation.position,
       });
 
       const [newRelatedEntityOps, newlySeenEntityIds] = await cloneEntity(
@@ -164,7 +158,7 @@ const cloneRelatedEntities = async (
       );
       newlySeenEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
 
-      return [relationshipOp, ...newRelatedEntityOps];
+      return [...relationshipOps, ...newRelatedEntityOps];
     })
   );
 
@@ -172,11 +166,11 @@ const cloneRelatedEntities = async (
 };
 
 const SKIPPED_PROPERTYS = [
-  EntityId(SystemIds.NAME_PROPERTY),
-  EntityId(SystemIds.DESCRIPTION_PROPERTY),
-  EntityId(ContentIds.AVATAR_PROPERTY),
-  EntityId(SystemIds.TABS_PROPERTY),
-  EntityId(SystemIds.BLOCKS),
+  SystemIds.NAME_PROPERTY,
+  SystemIds.DESCRIPTION_PROPERTY,
+  ContentIds.AVATAR_PROPERTY,
+  SystemIds.TABS_PROPERTY,
+  SystemIds.BLOCKS,
 ];
 
 const hasVariable = (value: string) => {
