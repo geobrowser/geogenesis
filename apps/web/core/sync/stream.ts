@@ -1,5 +1,6 @@
 import { Entity } from '../io/dto/entities';
 import { Relation, Triple } from '../types';
+import { WhereCondition } from './experimental_query-layer';
 
 const ENTITY_UPDATED = 'entity:updated' as const;
 const ENTITY_DELETED = 'entity:deleted' as const;
@@ -38,6 +39,7 @@ export type GeoEvent =
   | {
       type: typeof ENTITIES_SYNCED;
       entities: Entity[];
+      paginationKey?: string;
     }
   // Not sure if this revalidation event should be part of the stream or not.
   // We need a way to trigger re-syncs of data in some instances in order to
