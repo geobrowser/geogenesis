@@ -54,7 +54,7 @@ export function useDataBlock() {
     isLoading: isCollectionLoading,
     collectionLength,
   } = useCollection({
-    first: PAGE_SIZE + 1,
+    first: PAGE_SIZE,
     skip: pageNumber * PAGE_SIZE,
   });
 

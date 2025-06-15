@@ -24,6 +24,9 @@ export class GeoStore {
   private relations: Map<string, Relation[]> = new Map();
   private deletedEntities: Set<string> = new Set();
 
+  // Pagination based entityIds
+  private pagination: Map<string, EntityId[]> = new Map();
+
   // Pending optimistic updates
   // @TODO:
   // We don't need pending data since we don't actually _write_ anything
@@ -45,10 +48,10 @@ export class GeoStore {
      * complete it emits an event to the event stream to notify consumers that
      * syncing is complete.
      */
-    this.stream.on(GeoEventStream.ENTITIES_SYNCED, event => this.syncEntities(event.entities));
+    this.stream.on(GeoEventStream.ENTITIES_SYNCED, event => this.syncEntities(event.entities, event.paginationKey));
   }
 
-  private syncEntities(entities: Entity[]) {
+  private syncEntities(entities: Entity[], paginationKey?: string) {
     for (const entity of entities) {
       this.entities.set(entity.id, entity);
       this.triples.set(entity.id, entity.triples);
@@ -64,6 +67,13 @@ export class GeoStore {
       // }
 
       this.relations.set(entity.id, entity.relationsOut);
+    }
+
+    if (paginationKey) {
+      this.pagination.set(
+        paginationKey,
+        entities.map(e => e.id)
+      );
     }
 
     if (process.env.NODE_ENV === 'development') {
@@ -173,6 +183,16 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     resolvedEntity.relationsOut = resolvedRelations;
 
     return resolvedEntity;
+  }
+
+  /**
+   * Get multiple entities by paginationKey
+   */
+  getPaginatedEntities(paginationKey: string) {
+    const page = this.pagination.get(paginationKey);
+    if (!page) return [];
+
+    return page.map(id => this.entities.get(id)!);
   }
 
   /**

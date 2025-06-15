@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { useEffect, useRef, useState } from 'react';
 
 import { Entity } from '../io/dto/entities';
+import { createPaginationKey } from '../utils/utils';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E } from './orm';
 import { GeoStore } from './store';
@@ -472,15 +473,20 @@ export function useQueryEntitiesWithCount({
     queryKey: [...GeoStore.queryKeys(where), first, skip],
     queryFn: async () => {
       const { entities, totalCount } = await E.findManyWithCount({ store, cache, where, first, skip });
-      stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
+      stream.emit({
+        type: GeoEventStream.ENTITIES_SYNCED,
+        entities,
+        paginationKey: createPaginationKey(where, first, skip),
+      });
+      // setLocalEntities(entities);
       return { entities, totalCount };
     },
   });
 
   useEffect(() => {
     if (data) {
-      setLocalEntities(data.entities);
       setTotalEntitiesAmount(data.totalCount);
+      setLocalEntities(data.entities);
     }
   }, [data]);
 
@@ -496,7 +502,9 @@ export function useQueryEntitiesWithCount({
         .limit(first)
         .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' })
+        .paginationKey(createPaginationKey(where, first, skip))
         .execute();
+
       const latestQueriedEntitiesIds = latestQueriedEntities.map(e => e.id);
 
       /**

@@ -1,3 +1,5 @@
+import { withConsoleLog } from 'effect/Logger';
+
 import { Entity } from '~/core/io/dto/entities';
 import { GeoStore } from '~/core/sync/store';
 import { Relation, Triple } from '~/core/types';
@@ -91,6 +93,7 @@ export class EntityQuery {
   private sortByVal: SortBy[] = [];
   private includeDeletedVal: boolean = false;
   private selectFields: string[] = [];
+  private paginationKeyVal: string = '';
 
   constructor(store: GeoStore) {
     this.store = store;
@@ -187,6 +190,14 @@ export class EntityQuery {
   }
 
   /**
+   * Pagination key
+   */
+  paginationKey(n: string): EntityQuery {
+    this.paginationKeyVal = n;
+    return this;
+  }
+
+  /**
    * Skip a number of results
    */
   offset(n: number): EntityQuery {
@@ -214,20 +225,28 @@ export class EntityQuery {
    * Execute the query and return the results
    */
   execute(): Entity[] {
-    // Get all entities from the store
-    const allEntities = this.store.getEntities();
+    let allEntities;
+    let filteredEntities;
 
-    // Apply where conditions
-    let filteredEntities = this.applyWhereConditions(allEntities);
+    if (this.paginationKeyVal === '') {
+      // Get all entities from the store
+      allEntities = this.store.getEntities();
+      // Apply where conditions
+      filteredEntities = this.applyWhereConditions(allEntities);
+      // Apply pagination
+      if (this.offsetVal > 0 || this.limitVal !== undefined) {
+        filteredEntities = this.applyPagination(filteredEntities);
+      }
+    } else {
+      // Get entities by pagination key
+      allEntities = this.store.getPaginatedEntities(this.paginationKeyVal);
+      // Apply where conditions
+      filteredEntities = allEntities;
+    }
 
     // Apply sorting
     if (this.sortByVal.length > 0) {
       filteredEntities = this.applySorting(filteredEntities);
-    }
-
-    // Apply pagination
-    if (this.offsetVal > 0 || this.limitVal !== undefined) {
-      filteredEntities = this.applyPagination(filteredEntities);
     }
 
     // Select fields if specified

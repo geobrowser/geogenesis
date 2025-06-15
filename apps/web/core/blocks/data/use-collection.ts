@@ -1,8 +1,8 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import { keepPreviousData } from '@tanstack/react-query';
 
 import { EntityId } from '~/core/io/schema';
-import { keepPreviousData } from '@tanstack/react-query';
-import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { useQueryEntitiesWithCount, useQueryEntity } from '~/core/sync/use-store';
 
 import { useDataBlockInstance } from './use-data-block';
 import { useSource } from './use-source';
@@ -12,7 +12,7 @@ export interface CollectionProps {
   skip?: number;
 }
 
-export function useCollection({ first, skip }: CollectionProps) {
+export function useCollection({ first = 9, skip = 0 }: CollectionProps) {
   const { entityId, spaceId } = useDataBlockInstance();
   const { source } = useSource();
 
@@ -36,7 +36,7 @@ export function useCollection({ first, skip }: CollectionProps) {
   const collectionItemIds = orderedCollectionItemRelations?.map(c => c.toEntity.id) ?? [];
   const collectionRelationIds = orderedCollectionItemRelations?.map(c => c.id) ?? [];
 
-  const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
+  const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntitiesWithCount({
     enabled: collectionItemIds !== null,
     where: {
       id: {
@@ -48,7 +48,7 @@ export function useCollection({ first, skip }: CollectionProps) {
     placeholderData: keepPreviousData,
   });
 
-  const { entities: collectionRelations, isLoading: isCollectionRelationsLoading } = useQueryEntities({
+  const { entities: collectionRelations, isLoading: isCollectionRelationsLoading } = useQueryEntitiesWithCount({
     enabled: collectionRelationIds !== null,
     where: {
       id: {
@@ -74,7 +74,7 @@ export function useCollection({ first, skip }: CollectionProps) {
       return entity;
     })
     .filter(item => item !== undefined);
-    
+
   return {
     collectionItems: orderedCollectionItems,
     collectionRelations,

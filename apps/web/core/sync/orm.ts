@@ -261,7 +261,7 @@ export class E {
     skip: number;
   }) {
     if (where?.id?.in) {
-      const entityIds = where.id.in;
+      const entityIds = where.id.in.slice(skip, skip + first);
 
       const remoteEntities = await cache.fetchQuery({
         queryKey: ['network', 'entities', entityIds],

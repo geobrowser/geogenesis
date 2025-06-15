@@ -12,6 +12,7 @@ import { EntityId } from '~/core/io/schema';
 import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/schema';
+import { WhereCondition } from '../sync/experimental_query-layer';
 import { Entities } from './entity';
 
 export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
@@ -494,7 +495,7 @@ export const getTabSlug = (label: string) => {
     .toLowerCase();
 };
 
-//For pagination rendering
+// For pagination rendering
 export enum PagesPaginationPlaceholder {
   skip = '...',
 }
@@ -528,12 +529,12 @@ export const getPaginationPages = (totalPages: number, activePage: number) => {
   } else {
     // Current page is in the middle: show 1 2 ... (current-3) (current-2) (current-1) current ... last
     pages.push(PagesPaginationPlaceholder.skip);
-    
+
     // Show 3 pages before current and current page itself
     for (let i = activePage - 3; i <= activePage; i++) {
       pages.push(i);
     }
-    
+
     pages.push(PagesPaginationPlaceholder.skip);
   }
 
@@ -541,3 +542,8 @@ export const getPaginationPages = (totalPages: number, activePage: number) => {
   pages.push(totalPages);
   return pages;
 };
+
+// Creates pagination key
+export function createPaginationKey(where: WhereCondition, first: number, skip: number): string {
+  return JSON.stringify({ where, first, skip });
+}
