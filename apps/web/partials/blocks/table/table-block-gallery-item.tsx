@@ -167,7 +167,7 @@ export function TableBlockGalleryItem({
 
                     onChangeEntry(
                       {
-                        entityId: rowEntityId,
+                        entityId: source.type === 'RELATIONS' ? linkedEntityId : rowEntityId,
                         entityName: name,
                         spaceId: currentSpaceId,
                       },
@@ -176,7 +176,7 @@ export function TableBlockGalleryItem({
                         data: {
                           type: 'UPSERT_RELATION',
                           payload: {
-                            fromEntityId: rowEntityId,
+                            fromEntityId: source.type === 'RELATIONS' ? linkedEntityId : rowEntityId,
                             fromEntityName: name,
                             toEntityId: imageId,
                             toEntityName: null,
