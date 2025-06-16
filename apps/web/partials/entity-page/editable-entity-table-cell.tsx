@@ -1,6 +1,12 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 
+import type { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
+import { StoreRelation } from '~/core/database/types';
+import { DB } from '~/core/database/write';
+import { ID } from '~/core/id';
+import { EntityId } from '~/core/io/schema';
 import { RelationRenderableProperty, RenderableProperty } from '~/core/types';
 import type { RelationValueType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -31,11 +37,13 @@ type Props = {
   name: string | null;
   currentSpaceId: string;
   collectionId?: string;
+  linkedEntityId: string;
   relationId?: string;
   verified?: boolean;
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   source: Source;
+  filterState: Filter[];
 };
 
 export function EditableEntityTableCell({
@@ -48,17 +56,20 @@ export function EditableEntityTableCell({
   name,
   currentSpaceId,
   collectionId,
+  linkedEntityId,
   relationId,
   verified,
   onChangeEntry,
   onLinkEntry,
   source,
+  filterState,
 }: Props) {
   const entityName = Entities.nameFromRenderable(renderables) ?? '';
 
   const isNameCell = attributeId === SystemIds.NAME_ATTRIBUTE;
+  const isLinkedEntityCell = source.type === 'RELATIONS' && attributeId === SystemIds.RELATION_TO_ATTRIBUTE;
 
-  if (isNameCell) {
+  if (isNameCell || isLinkedEntityCell) {
     // We only allow FOC for collections.
     if (isPlaceholderRow && source.type === 'COLLECTION') {
       return (
@@ -107,9 +118,126 @@ export function EditableEntityTableCell({
       );
     }
 
+    if (isPlaceholderRow && source.type === 'RELATIONS') {
+      return (
+        <SelectEntity
+          onCreateEntity={result => {
+            const typeFilter = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE);
+
+            if (!typeFilter) return;
+
+            const newRelationId = ID.createEntityId();
+            const spaceId = currentSpaceId;
+            const id = source.value;
+            const typeOfId = typeFilter.value;
+            const typeOfName = typeFilter.valueName;
+
+            DB.upsert(
+              {
+                entityId: result.id,
+                attributeId: SystemIds.NAME_ATTRIBUTE,
+                entityName: result.name,
+                attributeName: 'Name',
+                value: {
+                  type: 'TEXT',
+                  value: result.name ?? '',
+                },
+              },
+              spaceId
+            );
+
+            const newRelation: StoreRelation = {
+              id: newRelationId,
+              space: spaceId,
+              index: INITIAL_RELATION_INDEX_VALUE,
+              typeOf: {
+                id: EntityId(typeOfId),
+                name: typeOfName,
+              },
+              fromEntity: {
+                id: EntityId(id),
+                name: name,
+              },
+              toEntity: {
+                id: EntityId(result.id),
+                name: result.name,
+                renderableType: 'RELATION',
+                value: EntityId(result.id),
+              },
+            };
+
+            DB.upsertRelation({
+              relation: newRelation,
+              spaceId,
+            });
+          }}
+          onDone={(result, fromCreateFn) => {
+            if (fromCreateFn) {
+              return;
+            }
+
+            // @TODO remove console.info for filterState
+            console.info('filterState', filterState);
+
+            const typeFilter = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE);
+
+            if (!typeFilter) return;
+
+            const newRelationId = ID.createEntityId();
+            const spaceId = currentSpaceId;
+            const id = source.value;
+            const typeOfId = typeFilter.value;
+            const typeOfName = typeFilter.valueName;
+
+            const newRelation: StoreRelation = {
+              id: newRelationId,
+              space: spaceId,
+              index: INITIAL_RELATION_INDEX_VALUE,
+              typeOf: {
+                id: EntityId(typeOfId),
+                name: typeOfName,
+              },
+              fromEntity: {
+                id: EntityId(id),
+                name: name,
+              },
+              toEntity: {
+                id: EntityId(result.id),
+                name: result.name,
+                renderableType: 'RELATION',
+                value: EntityId(result.id),
+              },
+            };
+
+            DB.upsertRelation({
+              relation: newRelation,
+              spaceId,
+            });
+
+            if (result.space) {
+              DB.upsert(
+                {
+                  attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
+                  attributeName: 'To Entity',
+                  entityId: newRelationId,
+                  entityName: null,
+                  value: {
+                    type: 'URL',
+                    value: GraphUrl.fromEntityId(result.id, { spaceId: result.space }),
+                  },
+                },
+                spaceId
+              );
+            }
+          }}
+          spaceId={currentSpaceId}
+        />
+      );
+    }
+
     return (
       <>
-        {source.type !== 'COLLECTION' ? (
+        {!['COLLECTION', 'RELATIONS'].includes(source.type) ? (
           <PageStringField
             variant="tableCell"
             placeholder="Entity name..."
@@ -162,7 +290,7 @@ export function EditableEntityTableCell({
               onChange={value => {
                 onChangeEntry(
                   {
-                    entityId,
+                    entityId: source.type === 'RELATIONS' ? linkedEntityId : entityId,
                     entityName: value,
                     spaceId: currentSpaceId,
                   },
@@ -173,7 +301,7 @@ export function EditableEntityTableCell({
                       payload: {
                         renderable: {
                           attributeId: SystemIds.NAME_ATTRIBUTE,
-                          entityId,
+                          entityId: source.type === 'RELATIONS' ? linkedEntityId : entityId,
                           spaceId: currentSpaceId,
                           attributeName: 'Name',
                           entityName: name,

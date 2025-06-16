@@ -14,6 +14,7 @@ import { useAtomValue } from 'jotai';
 import * as React from 'react';
 import { useState } from 'react';
 
+import type { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -101,6 +102,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const onLinkEntry = table.options.meta!.onLinkEntry;
     const propertiesSchema = table.options.meta!.propertiesSchema;
     const source = table.options.meta!.source;
+    const filterState = table.options.meta!.filterState;
 
     const cellData = getValue<Cell | undefined>();
 
@@ -126,9 +128,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
+    const linkedEntityId = nameCell?.cellId;
     const relationId = nameCell?.relationId;
 
-    if (isEditable && source.type !== 'RELATIONS') {
+    if (isEditable) {
       return (
         <EditableEntityTableCell
           key={entityId}
@@ -150,11 +153,13 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           name={name}
           currentSpaceId={space}
           collectionId={collectionId}
+          linkedEntityId={linkedEntityId}
           relationId={relationId}
           verified={verified}
           onChangeEntry={onChangeEntry}
           onLinkEntry={onLinkEntry}
           source={source}
+          filterState={filterState}
         />
       );
     }
@@ -191,6 +196,7 @@ type TableBlockTableProps = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   source: Source;
+  filterState: Filter[];
 };
 
 export const TableBlockTable = ({
@@ -203,6 +209,7 @@ export const TableBlockTable = ({
   onChangeEntry,
   onLinkEntry,
   source,
+  filterState,
 }: TableBlockTableProps) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
@@ -229,6 +236,7 @@ export const TableBlockTable = ({
       onLinkEntry,
       propertiesSchema,
       source,
+      filterState,
     },
   });
 

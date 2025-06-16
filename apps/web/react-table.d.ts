@@ -1,5 +1,6 @@
 import '@tanstack/react-table';
 
+import { Filter } from './core/blocks/data/filters';
 import { Source } from './core/blocks/data/source';
 import { PropertyId } from './core/hooks/use-properties';
 import { PropertySchema } from './core/types';
@@ -17,5 +18,6 @@ declare module '@tanstack/react-table' {
     onLinkEntry: onLinkEntryFn;
     propertiesSchema: Record<PropertyId, PropertySchema> | undefined;
     source: Source;
+    filterState: Filter[];
   }
 }

@@ -340,6 +340,7 @@ export const TableBlock = ({ spaceId }: Props) => {
       shownColumnIds={shownColumnIds}
       onChangeEntry={onChangeEntry}
       onLinkEntry={onLinkEntry}
+      filterState={filterState}
     />
   );
 
@@ -358,8 +359,10 @@ export const TableBlock = ({ spaceId }: Props) => {
               onChangeEntry={onChangeEntry}
               onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
+              linkedEntityId={row.columns[SystemIds.NAME_ATTRIBUTE]?.cellId}
               relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
               source={source}
+              filterState={filterState}
             />
           );
         })}
@@ -382,8 +385,10 @@ export const TableBlock = ({ spaceId }: Props) => {
               onChangeEntry={onChangeEntry}
               onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
+              linkedEntityId={row.columns[SystemIds.NAME_ATTRIBUTE]?.cellId}
               relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
               source={source}
+              filterState={filterState}
             />
           );
         })}
@@ -406,8 +411,10 @@ export const TableBlock = ({ spaceId }: Props) => {
               onLinkEntry={onLinkEntry}
               isPlaceholder={Boolean(row.placeholder)}
               properties={propertiesSchema}
+              linkedEntityId={row.columns[SystemIds.NAME_ATTRIBUTE]?.cellId}
               relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
               source={source}
+              filterState={filterState}
             />
           );
         })}
@@ -428,7 +435,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     );
   }
 
-  const renderPlusButtonAsInline = source.type !== 'RELATIONS' && canEdit;
+  const renderPlusButtonAsInline = canEdit;
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
@@ -501,15 +508,27 @@ export const TableBlock = ({ spaceId }: Props) => {
           <>
             <Spacer height={12} />
             <PageNumberContainer>
-              {source.type === 'COLLECTION' ? getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
-                return page === PagesPaginationPlaceholder.skip ? (
-                  <Text key={`ellipsis-${index}`} color="grey-03" className="flex justify-center" variant="metadataMedium">
-                    ...
-                  </Text>
-                ) : (
-                  <PageNumber key={`page-${page}`} number={page} onClick={() => setPage(page - 1)} isActive={page === pageNumber + 1} />
-                );
-              }) : (
+              {source.type === 'COLLECTION' ? (
+                getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
+                  return page === PagesPaginationPlaceholder.skip ? (
+                    <Text
+                      key={`ellipsis-${index}`}
+                      color="grey-03"
+                      className="flex justify-center"
+                      variant="metadataMedium"
+                    >
+                      ...
+                    </Text>
+                  ) : (
+                    <PageNumber
+                      key={`page-${page}`}
+                      number={page}
+                      onClick={() => setPage(page - 1)}
+                      isActive={page === pageNumber + 1}
+                    />
+                  );
+                })
+              ) : (
                 <>
                   {pageNumber > 1 && (
                     <>

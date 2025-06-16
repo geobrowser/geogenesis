@@ -1,11 +1,17 @@
-import { ContentIds, Image, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, GraphUrl, Image, SystemIds } from '@graphprotocol/grc-20';
+import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import NextImage from 'next/image';
 import Link from 'next/link';
 
+import type { Filter } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { StoreRelation } from '~/core/database/types';
+import { DB } from '~/core/database/write';
 import { editEvent } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
+import { ID } from '~/core/id';
+import { EntityId } from '~/core/io/schema';
 import { Cell, PropertySchema } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -27,8 +33,10 @@ type Props = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   properties?: Record<PropertyId, PropertySchema>;
+  linkedEntityId: string;
   relationId?: string;
   source: Source;
+  filterState: Filter[];
 };
 
 export function TableBlockListItem({
@@ -40,8 +48,10 @@ export function TableBlockListItem({
   onChangeEntry,
   onLinkEntry,
   properties,
+  linkedEntityId,
   relationId,
   source,
+  filterState,
 }: Props) {
   const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
   const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_ATTRIBUTE];
@@ -80,7 +90,7 @@ export function TableBlockListItem({
       c.slotId !== SystemIds.DESCRIPTION_ATTRIBUTE
   );
 
-  if (isEditing && source.type !== 'RELATIONS') {
+  if (isEditing) {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
         <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-[0.625rem] bg-grey-01">
@@ -172,49 +182,164 @@ export function TableBlockListItem({
         <div className="w-full space-y-3">
           <div>
             <div className="text-metadata text-grey-04">Name</div>
-            {isPlaceholder && source.type === 'COLLECTION' ? (
-              <SelectEntity
-                onCreateEntity={result => {
-                  // This actually works quite differently than other creates since
-                  // we want to use the existing placeholder entity id.
-                  onChangeEntry(
-                    {
-                      entityId: rowEntityId,
-                      entityName: result.name,
-                      spaceId: currentSpaceId,
-                    },
-                    {
-                      type: 'Create',
-                      data: result,
-                    }
-                  );
-                }}
-                onDone={(result, fromCreateFn) => {
-                  if (fromCreateFn) {
-                    // We bail out in the case that we're receiving the onDone
-                    // callback from within the create entity function internal
-                    // to SelectEntity.
-                    return;
-                  }
+            {isPlaceholder && ['COLLECTION', 'RELATIONS'].includes(source.type) ? (
+              <>
+                {source.type === 'COLLECTION' && (
+                  <SelectEntity
+                    onCreateEntity={result => {
+                      // This actually works quite differently than other creates since
+                      // we want to use the existing placeholder entity id.
+                      onChangeEntry(
+                        {
+                          entityId: rowEntityId,
+                          entityName: result.name,
+                          spaceId: currentSpaceId,
+                        },
+                        {
+                          type: 'Create',
+                          data: result,
+                        }
+                      );
+                    }}
+                    onDone={(result, fromCreateFn) => {
+                      if (fromCreateFn) {
+                        // We bail out in the case that we're receiving the onDone
+                        // callback from within the create entity function internal
+                        // to SelectEntity.
+                        return;
+                      }
 
-                  // This actually works quite differently than other creates since
-                  // we want to use the existing placeholder entity id.
-                  //
-                  // @TODO: When do we use the placeholder and when we use the real entity id?
-                  onChangeEntry(
-                    {
-                      entityId: rowEntityId,
-                      entityName: result.name,
-                      spaceId: currentSpaceId,
-                    },
-                    {
-                      type: 'Find',
-                      data: result,
-                    }
-                  );
-                }}
-                spaceId={currentSpaceId}
-              />
+                      // This actually works quite differently than other creates since
+                      // we want to use the existing placeholder entity id.
+                      //
+                      // @TODO: When do we use the placeholder and when we use the real entity id?
+                      onChangeEntry(
+                        {
+                          entityId: rowEntityId,
+                          entityName: result.name,
+                          spaceId: currentSpaceId,
+                        },
+                        {
+                          type: 'Find',
+                          data: result,
+                        }
+                      );
+                    }}
+                    spaceId={currentSpaceId}
+                  />
+                )}
+                {source.type === 'RELATIONS' && (
+                  <SelectEntity
+                    onCreateEntity={result => {
+                      const typeFilter = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE);
+
+                      if (!typeFilter) return;
+
+                      const newRelationId = ID.createEntityId();
+                      const spaceId = currentSpaceId;
+                      const id = source.value;
+                      const typeOfId = typeFilter.value;
+                      const typeOfName = typeFilter.valueName;
+
+                      DB.upsert(
+                        {
+                          entityId: result.id,
+                          attributeId: SystemIds.NAME_ATTRIBUTE,
+                          entityName: result.name,
+                          attributeName: 'Name',
+                          value: {
+                            type: 'TEXT',
+                            value: result.name ?? '',
+                          },
+                        },
+                        spaceId
+                      );
+
+                      const newRelation: StoreRelation = {
+                        id: newRelationId,
+                        space: spaceId,
+                        index: INITIAL_RELATION_INDEX_VALUE,
+                        typeOf: {
+                          id: EntityId(typeOfId),
+                          name: typeOfName,
+                        },
+                        fromEntity: {
+                          id: EntityId(id),
+                          name: name,
+                        },
+                        toEntity: {
+                          id: EntityId(result.id),
+                          name: result.name,
+                          renderableType: 'RELATION',
+                          value: EntityId(result.id),
+                        },
+                      };
+
+                      DB.upsertRelation({
+                        relation: newRelation,
+                        spaceId,
+                      });
+                    }}
+                    onDone={(result, fromCreateFn) => {
+                      if (fromCreateFn) {
+                        return;
+                      }
+
+                      const typeFilter = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE);
+
+                      if (!typeFilter) return;
+
+                      const newRelationId = ID.createEntityId();
+                      const spaceId = currentSpaceId;
+                      const id = source.value;
+                      const typeOfId = typeFilter.value;
+                      const typeOfName = typeFilter.valueName;
+
+                      const newRelation: StoreRelation = {
+                        id: newRelationId,
+                        space: spaceId,
+                        index: INITIAL_RELATION_INDEX_VALUE,
+                        typeOf: {
+                          id: EntityId(typeOfId),
+                          name: typeOfName,
+                        },
+                        fromEntity: {
+                          id: EntityId(id),
+                          name: name,
+                        },
+                        toEntity: {
+                          id: EntityId(result.id),
+                          name: result.name,
+                          renderableType: 'RELATION',
+                          value: EntityId(result.id),
+                        },
+                      };
+
+                      DB.upsertRelation({
+                        relation: newRelation,
+                        spaceId,
+                      });
+
+                      if (result.space) {
+                        DB.upsert(
+                          {
+                            attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
+                            attributeName: 'To Entity',
+                            entityId: newRelationId,
+                            entityName: null,
+                            value: {
+                              type: 'URL',
+                              value: GraphUrl.fromEntityId(result.id, { spaceId: result.space }),
+                            },
+                          },
+                          spaceId
+                        );
+                      }
+                    }}
+                    spaceId={currentSpaceId}
+                  />
+                )}
+              </>
             ) : (
               <>
                 {source.type !== 'COLLECTION' ? (
@@ -224,7 +349,7 @@ export function TableBlockListItem({
                     onChange={value => {
                       onChangeEntry(
                         {
-                          entityId: rowEntityId,
+                          entityId: source.type === 'RELATIONS' ? linkedEntityId : rowEntityId,
                           entityName: value,
                           spaceId: currentSpaceId,
                         },
@@ -235,7 +360,7 @@ export function TableBlockListItem({
                             payload: {
                               renderable: {
                                 attributeId: SystemIds.NAME_ATTRIBUTE,
-                                entityId: rowEntityId,
+                                entityId: source.type === 'RELATIONS' ? linkedEntityId : rowEntityId,
                                 spaceId: currentSpaceId,
                                 attributeName: 'Name',
                                 entityName: name,
@@ -297,44 +422,46 @@ export function TableBlockListItem({
               </>
             )}
           </div>
-          <div>
-            <div className="text-metadata text-grey-04">Description</div>
-            <PageStringField
-              placeholder="Add description..."
-              onChange={value => {
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'EVENT',
-                    data: {
-                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                      payload: {
-                        renderable: {
-                          attributeId: SystemIds.DESCRIPTION_ATTRIBUTE,
-                          entityId: rowEntityId,
-                          spaceId: currentSpaceId,
-                          attributeName: 'Description',
-                          entityName: name,
-                          type: 'TEXT',
-                          value: description ?? '',
-                        },
-                        value: { type: 'TEXT', value: value },
-                      },
+          {!isPlaceholder && (
+            <div>
+              <div className="text-metadata text-grey-04">Description</div>
+              <PageStringField
+                placeholder="Add description..."
+                onChange={value => {
+                  onChangeEntry(
+                    {
+                      entityId: source.type === 'RELATIONS' ? linkedEntityId : rowEntityId,
+                      entityName: name,
+                      spaceId: currentSpaceId,
                     },
-                  }
-                );
+                    {
+                      type: 'EVENT',
+                      data: {
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable: {
+                            attributeId: SystemIds.DESCRIPTION_ATTRIBUTE,
+                            entityId: source.type === 'RELATIONS' ? linkedEntityId : rowEntityId,
+                            spaceId: currentSpaceId,
+                            attributeName: 'Description',
+                            entityName: name,
+                            type: 'TEXT',
+                            value: description ?? '',
+                          },
+                          value: { type: 'TEXT', value: value },
+                        },
+                      },
+                    }
+                  );
 
-                return;
-              }}
-              value={description ?? ''}
-            />
-          </div>
-
+                  return;
+                }}
+                value={description ?? ''}
+              />
+            </div>
+          )}
           {!isPlaceholder &&
+            source.type !== 'RELATIONS' && // @TODO restore after GRC-20
             otherPropertyData.map(p => {
               return (
                 <div key={p.slotId}>
@@ -352,6 +479,12 @@ export function TableBlockListItem({
                 </div>
               );
             })}
+          {/* @TODO remove after GRC-20 */}
+          {!isPlaceholder && source.type === 'RELATIONS' && otherPropertyData.length > 0 && (
+            <span className="inline-block rounded border border-dashed border-grey-04 px-2 py-1 text-metadata text-grey-04">
+              Additional properties in browse mode.
+            </span>
+          )}
         </div>
       </div>
     );

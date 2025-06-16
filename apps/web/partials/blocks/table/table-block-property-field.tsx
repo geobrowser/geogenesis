@@ -33,10 +33,10 @@ export function TableBlockPropertyField(props: {
   onChangeEntry: onChangeEntryFn;
   source: Source;
 }) {
-  const { renderables, spaceId, entityId, properties, onChangeEntry, source } = props;
+  const { renderables, spaceId, entityId, properties, onChangeEntry } = props;
   const isEditing = useUserIsEditing(props.spaceId);
 
-  if (isEditing && source.type !== 'RELATIONS') {
+  if (isEditing) {
     const firstRenderable = renderables[0] as RenderableProperty | undefined;
     const isRelation = firstRenderable?.type === 'RELATION' || firstRenderable?.type === 'IMAGE';
 
