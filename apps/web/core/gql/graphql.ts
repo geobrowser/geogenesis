@@ -154,6 +154,7 @@ export type QueryPropertiesArgs = {
 
 
 export type QuerySearchArgs = {
+  filter?: InputMaybe<SearchFilter>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   query: Scalars['String']['input'];
@@ -207,6 +208,12 @@ export enum RenderableType {
   Image = 'IMAGE',
   Url = 'URL'
 }
+
+export type SearchFilter = {
+  NOT?: InputMaybe<SearchFilter>;
+  OR?: InputMaybe<Array<SearchFilter>>;
+  types?: InputMaybe<IdFilter>;
+};
 
 export type Space = {
   __typename?: 'Space';
