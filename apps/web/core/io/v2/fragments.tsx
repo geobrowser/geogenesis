@@ -131,12 +131,11 @@ export const resultFragment = graphql(/* GraphQL */ `
     id
     name
     description
-
+    spaces
     types {
       id
       name
     }
-    spaces
   }
 `);
 
