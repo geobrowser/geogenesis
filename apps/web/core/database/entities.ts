@@ -124,6 +124,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
       name: a.toEntity.name,
       // We add the correct value type below.
       valueType: SystemIds.TEXT,
+      relationIndex: a.index,
     }));
   });
 
@@ -173,6 +174,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
       relationValueTypeId: relationValueType?.relationValueTypeId,
       relationValueTypeName: relationValueType?.relationValueTypeName,
       relationValueTypes: relationValueType?.relationValueTypes,
+      relationIndex: s.relationIndex,
     };
   });
 

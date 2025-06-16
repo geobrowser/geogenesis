@@ -1,6 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { RenderableProperty, Triple } from '~/core/types';
+import { PropertySchema, RenderableProperty, Triple } from '~/core/types';
 
 /* Entity page sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> Triples in Schema -> Alphabetical */
 
@@ -52,7 +52,17 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
   });
 }
 
-export function sortRenderables(renderables: RenderableProperty[], isRelationPage?: boolean) {
+export function sortRenderables(renderables: RenderableProperty[], isRelationPage?: boolean, schema?: PropertySchema[]) {
+  // Create a map of attributeId to relationIndex for quick lookup
+  const schemaIndexMap = new Map<string, string>();
+  if (schema) {
+    schema.forEach((prop) => {
+      if (prop.relationIndex !== undefined) {
+        schemaIndexMap.set(prop.id, prop.relationIndex);
+      }
+    });
+  }
+
   /* Visible triples includes both real triples and placeholder triples */
   return renderables.sort((renderableA, renderableB) => {
     // Always put an empty, placeholder triple with no attribute id at the bottom
@@ -103,6 +113,26 @@ export function sortRenderables(renderables: RenderableProperty[], isRelationPag
     if (isTypesA && !isTypesB) return -1;
     if (!isTypesA && isTypesB) return 1;
 
+    // Check if both attributes have a relationIndex in the schema
+    const indexA = schemaIndexMap.get(attributeIdA);
+    const indexB = schemaIndexMap.get(attributeIdB);
+
+    // If both have indices, sort by index
+    if (indexA !== undefined && indexB !== undefined) {
+      return indexA.localeCompare(indexB, undefined, { numeric: true });
+    }
+
+    // If only A has an index, it comes first
+    if (indexA !== undefined && indexB === undefined) {
+      return -1;
+    }
+
+    // If only B has an index, it comes first
+    if (indexA === undefined && indexB !== undefined) {
+      return 1;
+    }
+
+    // If neither has an index, fall back to alphabetical sorting
     return (attributeNameA || '').localeCompare(attributeNameB || '');
   });
 }

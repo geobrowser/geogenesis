@@ -42,12 +42,14 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
+import { ReorderableRelationChips } from '~/design-system/reorderable-relation-chips';
 
 import { DateFormatDropdown } from './date-format-dropdown';
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { NumberOptionsDropdown } from './number-options-dropdown';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 import { editorHasContentAtom } from '~/atoms';
+import { ReorderableRelationChipsDnd } from '~/design-system/reorderable-relation-chips-dnd';
 
 interface Props {
   triples: ITriple[];
@@ -323,6 +325,8 @@ type RelationsGroupProps = {
 export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
 
+  // TODO: Remove debug logging once drag-and-drop is stable
+
   const send = useEditEvents({
     context: {
       entityId: id,
@@ -339,9 +343,78 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const hasPlaceholders = relations.some(r => r.placeholder === true);
   const valueType = relationValueTypes?.[0];
 
+  // Separate non-placeholder relations for reordering
+  const nonPlaceholderRelations = relations.filter(r => !r.placeholder && r.type === 'RELATION');
+  const placeholderRelations = relations.filter(r => r.placeholder);
+  const imageRelations = relations.filter(r => !r.placeholder && r.type === 'IMAGE');
+  
+  // TODO: Remove debug logging once drag-and-drop is stable
+
   return (
     <div className="flex flex-wrap items-center gap-1 pr-10">
-      {relations.map(r => {
+      {/* Render image relations (not reorderable) */}
+      {imageRelations.map(r => {
+        return <ImageZoom key={`image-${r.relationId}-${r.value}`} imageSrc={getImagePath(r.value)} />;
+      })}
+
+      {/* Render non-placeholder relation chips */}
+      {nonPlaceholderRelations.length > 0 && (
+        typeOfName !== 'Types' ? (
+          // <ReorderableRelationChips
+          //   relations={nonPlaceholderRelations}
+          //   attributeId={typeOfId}
+          //   attributeName={typeOfName}
+          //   spaceId={spaceId}
+          //   onDeleteRelation={r => {
+          //     send({
+          //       type: 'DELETE_RELATION',
+          //       payload: {
+          //         renderable: r,
+          //       },
+          //     });
+          //   }}
+          // />
+          <ReorderableRelationChipsDnd
+            relations={nonPlaceholderRelations}
+            attributeId={typeOfId}
+            attributeName={typeOfName}
+            spaceId={spaceId}
+            onDeleteRelation={r => {
+              send({
+                type: 'DELETE_RELATION',
+                payload: {
+                  renderable: r,
+                },
+              });
+            }}
+          />
+
+        ) : (
+          // Types relations are not reorderable
+          nonPlaceholderRelations.map(r => (
+            <div key={`relation-${r.relationId}-${r.value}`}>
+              <LinkableRelationChip
+                isEditing
+                onDelete={() => {
+                  send({
+                    type: 'DELETE_RELATION',
+                    payload: {
+                      renderable: r,
+                    },
+                  });
+                }}
+                entityHref={NavUtils.toEntity(spaceId, r.value ?? '')}
+                relationHref={NavUtils.toEntity(spaceId, r.relationId)}
+              >
+                {r.valueName ?? r.value}
+              </LinkableRelationChip>
+            </div>
+          ))
+        )
+      )}
+
+      {/* Render placeholder relations */}
+      {placeholderRelations.map(r => {
         const relationId = r.relationId;
         const relationName = r.valueName;
         const renderableType = r.type;
@@ -600,27 +673,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
           );
         }
 
-        if (relationName !== 'Types') {
-          return (
-            <div key={`relation-${relationId}-${relationValue}`}>
-              <LinkableRelationChip
-                isEditing
-                onDelete={() => {
-                  send({
-                    type: 'DELETE_RELATION',
-                    payload: {
-                      renderable: r,
-                    },
-                  });
-                }}
-                entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
-                relationHref={NavUtils.toEntity(spaceId, relationId)}
-              >
-                {relationName ?? relationValue}
-              </LinkableRelationChip>
-            </div>
-          );
-        }
       })}
 
       {!hasPlaceholders && typeOfRenderableType === 'RELATION' && (
