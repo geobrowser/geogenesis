@@ -6,15 +6,15 @@ import { RelationRenderableProperty } from '~/core/types';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { sortRelationsWithIndices, RelationWithIndex } from '~/core/utils/relations';
 
-interface UseSortedRelationsProps {
+interface UseRelationSortingProps {
   relations: RelationRenderableProperty[];
 }
 
 /**
- * Hook for sorting relations by their index for display purposes.
- * This is the read-only version of useReorderableRelations.
+ * Shared hook for sorting relations by their index values.
+ * Handles the common pattern of creating relation index map and sorting relations.
  */
-export function useSortedRelations({ relations }: UseSortedRelationsProps) {
+export function useRelationSorting({ relations }: UseRelationSortingProps) {
   const { relations: allRelations } = useEntityPageStore();
 
   const relationIndexMap = React.useMemo(() => {
@@ -31,5 +31,6 @@ export function useSortedRelations({ relations }: UseSortedRelationsProps) {
 
   return {
     sortedRelations,
+    relationIndexMap,
   };
 }

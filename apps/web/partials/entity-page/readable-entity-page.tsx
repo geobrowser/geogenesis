@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { useSortedRelations } from '~/core/hooks/use-sorted-relations';
+import { useRelationSorting } from '~/core/hooks/use-relation-sorting';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
@@ -169,7 +169,7 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
   const spaceId = relations[0].spaceId;
 
   // Use sorted relations hook to get relations in the correct order
-  const { sortedRelations } = useSortedRelations({ relations });
+  const { sortedRelations } = useRelationSorting({ relations });
 
   // hide cover, avatar, and type properties
   // they are already rendered in the avatar cover component

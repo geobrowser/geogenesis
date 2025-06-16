@@ -2,13 +2,11 @@
 
 import { Relation as R, SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-
 import { RelationRenderableProperty } from '~/core/types';
 import { useEditEvents } from '~/core/events/edit-events';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { sortRelationsWithIndices, RelationWithIndex } from '~/core/utils/relations';
-import { GeoStore } from '~/core/sync/store';
+import { RelationWithIndex } from '~/core/utils/relations';
+import { useRelationSorting } from './use-relation-sorting';
 
 /**
  * Helper function to fix indices for items in the new order
@@ -68,15 +66,6 @@ function fixItemIndices(
         // Track this relation as pending
         pendingRelationUpdatesRef.current.add(currentItem.relationId);
 
-        console.log('Fixing item index:', {
-          relationId: currentItem.relationId,
-          value: currentItem.valueName,
-          oldIndex: currentIndex,
-          newIndex: newTripleOrdering.triple.value.value,
-          position: i,
-          beforeIndex: validBeforeIndex,
-          afterIndex: validAfterIndex
-        });
         
         send({
           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
@@ -119,13 +108,10 @@ export function useReorderableRelations({
   attributeName,
   isDragging = false
 }: UseReorderableRelationsProps) {
-  const { id, name, spaceId, relations: allRelations } = useEntityPageStore();
+  const { id, name, spaceId } = useEntityPageStore();
   const [isReordering, setIsReordering] = React.useState(false);
   const lastProcessedOrderRef = React.useRef<string>('');
-  const queryClient = useQueryClient();
   const pendingRelationUpdatesRef = React.useRef<Set<string>>(new Set());
-  
-  console.log('SystemIds.RELATION_INDEX value:', SystemIds.RELATION_INDEX);
   
   const send = useEditEvents({
     context: {
@@ -135,21 +121,7 @@ export function useReorderableRelations({
     },
   });
 
-  const relationIndexMap = React.useMemo(() => {
-    const map = new Map<string, string>();
-    allRelations.forEach(relation => {
-      map.set(relation.id, relation.index);
-    });
-    
-    return map;
-  }, [allRelations, relations]);
-
-  const sortedRelations = React.useMemo(() => {
-    console.log('new sortedRelations in useReorderableRelations:', relations);
-    console.log(relationIndexMap);
-    // only re-sort if the relations are the same as relationIndexMap
-    return sortRelationsWithIndices(relations, relationIndexMap);
-  }, [relations, relationIndexMap]);
+  const { sortedRelations } = useRelationSorting({ relations });
 
   // UI state is source of truth - only initialize from database on first load
   const [currentOrder, setCurrentOrder] = React.useState<RelationWithIndex[]>(() => sortedRelations);
@@ -158,19 +130,11 @@ export function useReorderableRelations({
   // Only sync with database state on initial load
   React.useEffect(() => {
     if (!isInitialized && sortedRelations.length > 0) {
-      console.log('Initial load - setting order from database:', sortedRelations);
       setCurrentOrder(sortedRelations);
       setIsInitialized(true);
     }
   }, [sortedRelations, isInitialized]);
 
-  React.useEffect(() => {
-    console.log("1 - relations updated", relations )
-  }, [relations]);
-
-  React.useEffect(() => {
-    console.log("1 - allRelations updated", relations )
-  }, [allRelations]);
 
   // Handle UI-only reordering (during drag)
   const handleReorder = React.useCallback((newOrder: RelationWithIndex[]) => {
@@ -184,11 +148,8 @@ export function useReorderableRelations({
     
     // Prevent overlapping operations
     if (isReordering) {
-      console.log("Reorder operation already in progress, ignoring drop event");
       return;
     }
-
-    console.log('Handling drop with final order:', finalOrder);
 
     // Create a signature of the current order to detect duplicate events
     const orderSignature = finalOrder.map(r => r.relationId).join(',');
@@ -204,11 +165,6 @@ export function useReorderableRelations({
       return;
     }
 
-    console.log('Executing database write on drop for order:', {
-      orderSignature,
-      finalOrder: finalOrder.map(r => ({ id: r.relationId, index: r.index })),
-      databaseOrder: sortedRelations.map(r => ({ id: r.relationId, index: r.index }))
-    });
     
     lastProcessedOrderRef.current = orderSignature;
     setIsReordering(true);
@@ -225,7 +181,6 @@ export function useReorderableRelations({
       
       // Use a reasonable timeout to wait for database and refetch
       setTimeout(() => {
-        console.log('Clearing isReordering after timeout');
         setIsReordering(false);
         lastProcessedOrderRef.current = '';
       }, 1000);
@@ -235,7 +190,7 @@ export function useReorderableRelations({
       pendingRelationUpdatesRef.current.clear();
       setIsReordering(false);
     }
-  }, [send, spaceId, isReordering, sortedRelations, queryClient, id]);
+  }, [send, spaceId, isReordering, sortedRelations, id]);
 
   return {
     sortedRelations: currentOrder, // Return current order for UI display

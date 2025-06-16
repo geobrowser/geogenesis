@@ -42,7 +42,6 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
-import { ReorderableRelationChips } from '~/design-system/reorderable-relation-chips';
 
 import { DateFormatDropdown } from './date-format-dropdown';
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
@@ -360,20 +359,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
       {/* Render non-placeholder relation chips */}
       {nonPlaceholderRelations.length > 0 && (
         typeOfName !== 'Types' ? (
-          // <ReorderableRelationChips
-          //   relations={nonPlaceholderRelations}
-          //   attributeId={typeOfId}
-          //   attributeName={typeOfName}
-          //   spaceId={spaceId}
-          //   onDeleteRelation={r => {
-          //     send({
-          //       type: 'DELETE_RELATION',
-          //       payload: {
-          //         renderable: r,
-          //       },
-          //     });
-          //   }}
-          // />
           <ReorderableRelationChipsDnd
             relations={nonPlaceholderRelations}
             attributeId={typeOfId}

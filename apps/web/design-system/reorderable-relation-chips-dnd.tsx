@@ -22,18 +22,11 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 import { RelationRenderableProperty } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
-import { LinkableRelationChip } from './chip';
+import { ReorderableRelationChipsProps } from '~/core/types/reorderable-relations';
 import { useReorderableRelations } from '~/core/hooks/use-reorderable-relations';
 import { RelationWithIndex } from '~/core/utils/relations';
-
-interface ReorderableRelationChipsProps {
-  relations: RelationRenderableProperty[];
-  attributeId: string;
-  attributeName: string | null;
-  spaceId: string;
-  onDeleteRelation: (relation: RelationRenderableProperty) => void;
-}
+import { StaticRelationChips } from './static-relation-chips';
+import { RelationChipRenderer } from './relation-chip-renderer';
 
 interface SortableRelationChipProps {
   relation: RelationWithIndex;
@@ -66,14 +59,11 @@ function SortableRelationChip({ relation, spaceId, onDelete, isReordering }: Sor
       {...listeners}
       className="relative flex items-center"
     >
-      <LinkableRelationChip
-        isEditing
+      <RelationChipRenderer
+        relation={relation}
+        spaceId={spaceId}
         onDelete={onDelete}
-        entityHref={NavUtils.toEntity(spaceId, relation.value ?? '')}
-        relationHref={NavUtils.toEntity(spaceId, relation.relationId)}
-      >
-        {relation.valueName ?? relation.value}
-      </LinkableRelationChip>
+      />
     </div>
   );
 }
@@ -138,19 +128,11 @@ export function ReorderableRelationChipsDnd({
   // Don't render reorder component if there's only one or no relations
   if (sortedRelations.length <= 1) {
     return (
-      <>
-        {sortedRelations.map(relation => (
-          <LinkableRelationChip
-            key={`relation-${relation.relationId}-${relation.value}`}
-            isEditing
-            onDelete={() => onDeleteRelation(relation)}
-            entityHref={NavUtils.toEntity(spaceId, relation.value ?? '')}
-            relationHref={NavUtils.toEntity(spaceId, relation.relationId)}
-          >
-            {relation.valueName ?? relation.value}
-          </LinkableRelationChip>
-        ))}
-      </>
+      <StaticRelationChips
+        relations={sortedRelations}
+        spaceId={spaceId}
+        onDeleteRelation={onDeleteRelation}
+      />
     );
   }
 
@@ -181,14 +163,11 @@ export function ReorderableRelationChipsDnd({
       <DragOverlay>
         {activeId && activeRelation ? (
           <div style={{ cursor: 'grabbing' }}>
-            <LinkableRelationChip
-              isEditing
+            <RelationChipRenderer
+              relation={activeRelation}
+              spaceId={spaceId}
               onDelete={() => {}}
-              entityHref={NavUtils.toEntity(spaceId, activeRelation.value ?? '')}
-              relationHref={NavUtils.toEntity(spaceId, activeRelation.relationId)}
-            >
-              {activeRelation.valueName ?? activeRelation.value}
-            </LinkableRelationChip>
+            />
           </div>
         ) : null}
       </DragOverlay>
