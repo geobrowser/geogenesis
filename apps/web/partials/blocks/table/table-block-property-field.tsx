@@ -9,7 +9,7 @@ import { editEvent, useEditEvents } from '~/core/events/edit-events';
 import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { PropertySchema, RelationRenderableProperty, RenderableProperty } from '~/core/types';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { getImagePath } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -327,8 +327,10 @@ export function TableBlockPropertyField(props: {
                 >
                   <LinkableRelationChip
                     isEditing={false}
-                    entityHref={NavUtils.toEntity(renderable.spaceId, renderable.value)}
-                    relationHref={NavUtils.toEntity(renderable.spaceId, renderable.relationId)}
+                    currentSpaceId={spaceId}
+                    entityId={renderable.value}
+                    spaceId={renderable.spaceId}
+                    relationId={renderable.relationId}
                     small
                   >
                     {renderable.valueName ?? renderable.value}
@@ -492,8 +494,9 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                     },
                   });
                 }}
-                entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
-                relationHref={NavUtils.toEntity(spaceId, relationId)}
+                currentSpaceId={spaceId}
+                entityId={relationValue}
+                relationId={relationId}
                 small
               >
                 {relationName ?? relationValue}

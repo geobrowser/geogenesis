@@ -85,8 +85,14 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
   // 2. Cover/avatar exists, OR
   // 3. Types exist, OR
   // 4. Editor has content / blocks exist
+  // 5. If there are more than 0 properties
   const showPropertiesPanel =
-    (name && name?.length > 0) || coverUrl || types.length > 0 || (blockIds && blockIds.length > 0) || editorHasContent;
+    (name && name?.length > 0) ||
+    coverUrl ||
+    types.length > 0 ||
+    (blockIds && blockIds.length > 0) ||
+    editorHasContent ||
+    Object.entries(renderablesGroupedByAttributeId).length > 0;
 
   return (
     showPropertiesPanel && (
@@ -388,8 +394,9 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                     },
                   });
                 }}
-                entityHref={NavUtils.toEntity(spaceId, r.value ?? '')}
-                relationHref={NavUtils.toEntity(spaceId, r.relationId)}
+                currentSpaceId={spaceId}
+                entityId={r.entityId}
+                relationId={r.relationId}
               >
                 {r.valueName ?? r.value}
               </LinkableRelationChip>
@@ -657,7 +664,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
             </div>
           );
         }
-
       })}
 
       {!hasPlaceholders && typeOfRenderableType === 'RELATION' && (

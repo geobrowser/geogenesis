@@ -19,8 +19,9 @@ export function RelationChipRenderer({ relation, spaceId, onDelete }: RelationCh
     <LinkableRelationChip
       isEditing
       onDelete={onDelete}
-      entityHref={NavUtils.toEntity(spaceId, relation.value ?? '')}
-      relationHref={NavUtils.toEntity(spaceId, relation.relationId)}
+      currentSpaceId={spaceId}
+      entityId={relation.entityId}
+      relationId={relation.relationId}
     >
       {relation.valueName ?? relation.value}
     </LinkableRelationChip>

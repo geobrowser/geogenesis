@@ -30,7 +30,6 @@ type CollectionMetadataProps = {
   isEditing: boolean;
   name: string | null;
   placeholder?: string;
-  href: string;
   currentSpaceId: string;
   entityId: string;
   spaceId?: string;
