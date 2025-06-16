@@ -1,6 +1,5 @@
 import { Entity } from '../io/dto/entities';
 import { Relation, Triple } from '../types';
-import { WhereCondition } from './experimental_query-layer';
 
 const ENTITY_UPDATED = 'entity:updated' as const;
 const ENTITY_DELETED = 'entity:deleted' as const;
