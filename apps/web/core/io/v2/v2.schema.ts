@@ -122,3 +122,13 @@ export const Space = Schema.Struct({
 });
 
 export type RemoteSpace = Schema.Schema.Type<typeof Space>;
+
+export const SearchResult = Schema.Struct({
+  id: Schema.UUID,
+  name: Schema.NullOr(Schema.String),
+  description: Schema.NullOr(Schema.String),
+  spaces: Schema.Array(Schema.UUID),
+  types: Schema.Array(EntityType),
+});
+
+export type RemoteSearchResult = Schema.Schema.Type<typeof SearchResult>;

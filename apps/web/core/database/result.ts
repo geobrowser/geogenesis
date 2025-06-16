@@ -1,8 +1,7 @@
 import { Duration, Effect } from 'effect';
 
 import { EntityId } from '../io/schema';
-import { fetchResult } from '../io/subgraph';
-import { getSpaces } from '../io/v2/queries';
+import { getResult, getSpaces } from '../io/v2/queries';
 import { queryClient } from '../query-client';
 import { GeoStore } from '../sync/store';
 import { SearchResult } from '../v2.types';
@@ -18,11 +17,7 @@ export async function mergeSearchResult(args: FetchResultOptions) {
 
   const cachedRemoteResult = await queryClient.fetchQuery({
     queryKey: ['merge-search-result', args],
-    queryFn: () =>
-      fetchResult({
-        id: args.id,
-        signal: args.signal,
-      }),
+    queryFn: () => Effect.runPromise(getResult(args.id)),
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
 
@@ -41,6 +36,8 @@ export async function mergeSearchResult(args: FetchResultOptions) {
     queryFn: () => Effect.runPromise(getSpaces({ spaceIds: localOnlyEntitySpaceIds })),
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
+
+  console.log('spaces', localEntitySpaces);
 
   const localEntitySpacesBySpaceId = Object.fromEntries(localEntitySpaces.map(s => [s.id, s.entity]));
 

@@ -1,4 +1,4 @@
-import { Base58 } from '@graphprotocol/grc-20';
+import { Base58, Id } from '@graphprotocol/grc-20';
 import { SystemIds } from '@graphprotocol/grc-20';
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -473,19 +473,8 @@ export const uuidValidateV4 = (uuid: string) => {
 export const validateEntityId = (maybeEntityId: EntityId | string | null | undefined) => {
   if (typeof maybeEntityId !== 'string') return false;
 
-  if (!VALID_ENTITY_ID_LENGTHS.includes(maybeEntityId.length)) return false;
-
-  for (const char of maybeEntityId) {
-    const index = Base58.BASE58_ALLOWED_CHARS.indexOf(char);
-    if (index === -1) {
-      return false;
-    }
-  }
-
-  return true;
+  return Id.isValid(maybeEntityId);
 };
-
-const VALID_ENTITY_ID_LENGTHS = [21, 22];
 
 export const getTabSlug = (label: string) => {
   return label
@@ -528,12 +517,12 @@ export const getPaginationPages = (totalPages: number, activePage: number) => {
   } else {
     // Current page is in the middle: show 1 2 ... (current-3) (current-2) (current-1) current ... last
     pages.push(PagesPaginationPlaceholder.skip);
-    
+
     // Show 3 pages before current and current page itself
     for (let i = activePage - 3; i <= activePage; i++) {
       pages.push(i);
     }
-    
+
     pages.push(PagesPaginationPlaceholder.skip);
   }
 

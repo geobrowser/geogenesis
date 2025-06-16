@@ -1,8 +1,8 @@
 import { SearchResult } from '~/core/v2.types';
 
-import { RemoteResult } from '../v2/v2.schema';
+import { RemoteSearchResult } from '../v2/v2.schema';
 
-export function SearchResultDto(result: RemoteResult): SearchResult {
+export function SearchResultDto(result: RemoteSearchResult): SearchResult {
   const spaces = [...result.spaces]; // @TODO(migration): Richer spaces
 
   return {
@@ -10,6 +10,18 @@ export function SearchResultDto(result: RemoteResult): SearchResult {
     name: result.name,
     description: result.description,
     types: [...result.types],
-    spaces: spaces,
+    spaces: spaces.map(s => {
+      return {
+        id: s,
+        name: null,
+        description: null,
+        image: '',
+        relations: [],
+        spaceId: s,
+        spaces: [s],
+        values: [],
+        types: [],
+      };
+    }),
   };
 }

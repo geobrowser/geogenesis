@@ -38,6 +38,7 @@ export function useSearch({ filterByTypes, filterBySpace }: SearchOptions = {}) 
       const isValidEntityId = validateEntityId(maybeEntityId);
 
       if (isValidEntityId) {
+        console.log(`searching for entity id: ${maybeEntityId}`);
         const id = EntityId(maybeEntityId);
 
         const fetchResultEffect = Effect.either(
@@ -68,6 +69,8 @@ export function useSearch({ filterByTypes, filterBySpace }: SearchOptions = {}) 
               throw error;
           }
         }
+
+        console.log('result', resultOrError.right);
 
         return resultOrError.right ? [resultOrError.right] : [];
       }
