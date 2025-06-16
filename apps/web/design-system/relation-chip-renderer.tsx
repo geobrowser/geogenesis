@@ -1,6 +1,5 @@
 'use client';
 
-import { NavUtils } from '~/core/utils/utils';
 import { LinkableRelationChip } from './chip';
 import { RelationWithIndex } from '~/core/utils/relations';
 

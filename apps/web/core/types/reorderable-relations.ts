@@ -6,8 +6,6 @@ import { RelationRenderableProperty } from '../types';
  */
 export interface ReorderableRelationChipsProps {
   relations: RelationRenderableProperty[];
-  attributeId: string;
-  attributeName: string | null;
   spaceId: string;
   onDeleteRelation: (relation: RelationRenderableProperty) => void;
 }

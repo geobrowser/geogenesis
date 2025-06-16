@@ -14,8 +14,7 @@ import { useRelationSorting } from './use-relation-sorting';
 function fixItemIndices(
   newOrder: RelationWithIndex[],
   spaceId: string,
-  send: ReturnType<typeof useEditEvents>,
-  pendingRelationUpdatesRef: React.MutableRefObject<Set<string>>
+  send: ReturnType<typeof useEditEvents>
 ) {
   // Work through each item in the new order and check if its index is correct relative to neighbors
   for (let i = 0; i < newOrder.length; i++) {
@@ -48,7 +47,7 @@ function fixItemIndices(
     if (needsUpdate) {
       try {
         // Validate that beforeIndex < afterIndex to avoid R.reorder errors
-        let validBeforeIndex = beforeIndex;
+        const validBeforeIndex = beforeIndex;
         let validAfterIndex = afterIndex;
         
         // If both indices exist and beforeIndex >= afterIndex, skip one of them
@@ -63,8 +62,6 @@ function fixItemIndices(
           afterIndex: validAfterIndex,
         });
 
-        // Track this relation as pending
-        pendingRelationUpdatesRef.current.add(currentItem.relationId);
 
         
         send({
@@ -97,21 +94,14 @@ function fixItemIndices(
 
 interface UseReorderableRelationsProps {
   relations: RelationRenderableProperty[];
-  attributeId: string;
-  attributeName: string | null;
-  isDragging?: boolean;
 }
 
 export function useReorderableRelations({ 
-  relations, 
-  attributeId, 
-  attributeName,
-  isDragging = false
+  relations
 }: UseReorderableRelationsProps) {
   const { id, name, spaceId } = useEntityPageStore();
   const [isReordering, setIsReordering] = React.useState(false);
   const lastProcessedOrderRef = React.useRef<string>('');
-  const pendingRelationUpdatesRef = React.useRef<Set<string>>(new Set());
   
   const send = useEditEvents({
     context: {
@@ -174,7 +164,7 @@ export function useReorderableRelations({
 
     try {
       // Use unified algorithm to fix any items with incorrect indices
-      fixItemIndices(finalOrder, spaceId, send, pendingRelationUpdatesRef);
+      fixItemIndices(finalOrder, spaceId, send);
       
       // Note: We don't invalidate queries here to avoid overwriting UI state with stale DB state
       setIsReordering(false);
@@ -187,10 +177,9 @@ export function useReorderableRelations({
     } catch (error) {
       console.error('Error in reorder operation:', error);
       // On error, clear isReordering immediately
-      pendingRelationUpdatesRef.current.clear();
       setIsReordering(false);
     }
-  }, [send, spaceId, isReordering, sortedRelations, id]);
+  }, [send, spaceId, isReordering, sortedRelations]);
 
   return {
     sortedRelations: currentOrder, // Return current order for UI display

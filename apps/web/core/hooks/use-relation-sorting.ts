@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { RelationRenderableProperty } from '~/core/types';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { sortRelationsWithIndices, RelationWithIndex } from '~/core/utils/relations';
+import { sortRelationsWithIndices } from '~/core/utils/relations';
 
 interface UseRelationSortingProps {
   relations: RelationRenderableProperty[];

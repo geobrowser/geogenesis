@@ -330,8 +330,6 @@ type RelationsGroupProps = {
 export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
 
-  // TODO: Remove debug logging once drag-and-drop is stable
-
   const send = useEditEvents({
     context: {
       entityId: id,
@@ -352,8 +350,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const nonPlaceholderRelations = relations.filter(r => !r.placeholder && r.type === 'RELATION');
   const placeholderRelations = relations.filter(r => r.placeholder);
   const imageRelations = relations.filter(r => !r.placeholder && r.type === 'IMAGE');
-  
-  // TODO: Remove debug logging once drag-and-drop is stable
 
   return (
     <div className="flex flex-wrap items-center gap-1 pr-10">
@@ -367,8 +363,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
         typeOfName !== 'Types' ? (
           <ReorderableRelationChipsDnd
             relations={nonPlaceholderRelations}
-            attributeId={typeOfId}
-            attributeName={typeOfName}
             spaceId={spaceId}
             onDeleteRelation={r => {
               send({
@@ -408,7 +402,6 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
       {/* Render placeholder relations */}
       {placeholderRelations.map(r => {
         const relationId = r.relationId;
-        const relationName = r.valueName;
         const renderableType = r.type;
         const relationValue = r.value;
 

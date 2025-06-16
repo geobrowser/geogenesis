@@ -21,7 +21,6 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-import { RelationRenderableProperty } from '~/core/types';
 import { ReorderableRelationChipsProps } from '~/core/types/reorderable-relations';
 import { useReorderableRelations } from '~/core/hooks/use-reorderable-relations';
 import { RelationWithIndex } from '~/core/utils/relations';
@@ -32,10 +31,9 @@ interface SortableRelationChipProps {
   relation: RelationWithIndex;
   spaceId: string;
   onDelete: () => void;
-  isReordering: boolean;
 }
 
-function SortableRelationChip({ relation, spaceId, onDelete, isReordering }: SortableRelationChipProps) {
+function SortableRelationChip({ relation, spaceId, onDelete }: SortableRelationChipProps) {
   const {
     attributes,
     listeners,
@@ -70,19 +68,13 @@ function SortableRelationChip({ relation, spaceId, onDelete, isReordering }: Sor
 
 export function ReorderableRelationChipsDnd({
   relations,
-  attributeId,
-  attributeName,
   spaceId,
   onDeleteRelation,
 }: ReorderableRelationChipsProps) {
   const [activeId, setActiveId] = React.useState<string | null>(null);
-  const [isDragging, setIsDragging] = React.useState(false);
   
   const { sortedRelations, handleReorder, handleDrop, isReordering } = useReorderableRelations({
     relations,
-    attributeId,
-    attributeName,
-    isDragging,
   });
   const currentOrderRef = React.useRef<RelationWithIndex[]>(sortedRelations);
 
@@ -99,7 +91,6 @@ export function ReorderableRelationChipsDnd({
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
-    setIsDragging(true);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -116,7 +107,6 @@ export function ReorderableRelationChipsDnd({
       }
     }
     
-    setIsDragging(false);
     setActiveId(null);
     handleDrop(currentOrderRef.current);
   };
@@ -154,7 +144,6 @@ export function ReorderableRelationChipsDnd({
               relation={relation}
               spaceId={spaceId}
               onDelete={() => onDeleteRelation(relation)}
-              isReordering={isReordering}
             />
           ))}
         </div>
