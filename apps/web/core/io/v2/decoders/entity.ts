@@ -14,7 +14,8 @@ export class EntityDecoder {
       return null;
     }
 
-    return EntityDtoLive(decoded.right);
+    const result = EntityDtoLive(decoded.right);
+    return result;
   }
 }
 

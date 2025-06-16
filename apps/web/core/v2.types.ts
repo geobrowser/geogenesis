@@ -171,7 +171,8 @@ export type SearchResult = {
   id: string;
   name: string | null;
   description: string | null;
-  spaces: SpaceEntity[];
+  // spaces: SpaceEntity[];
+  spaces: string[]; // @TODO(migration): Richer space result
   types: { id: string; name: string | null }[];
 };
 

@@ -125,3 +125,25 @@ export const spacesQuery = graphql(/* GraphQL */ `
     }
   }
 `);
+
+export const resultFragment = graphql(/* GraphQL */ `
+  fragment Result on Entity {
+    id
+    name
+    description
+
+    types {
+      id
+      name
+    }
+    spaces
+  }
+`);
+
+export const resultQuery = graphql(/* GraphQL */ `
+  query Result($id: String!, $spaceId: String) {
+    entity(id: $id, spaceId: $spaceId) {
+      ...Result
+    }
+  }
+`);

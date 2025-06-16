@@ -1,23 +1,15 @@
 import { SearchResult } from '~/core/v2.types';
 
-import { SubstreamSearchResult } from '../schema';
-import { SpaceEntityDto } from './spaces';
+import { RemoteResult } from '../v2/v2.schema';
 
-export function SearchResultDto(result: SubstreamSearchResult): SearchResult {
-  const spaces = result.currentVersion.version.versionSpaces.nodes.flatMap(result =>
-    SpaceEntityDto(result.space.id, result.space.spacesMetadatum?.version)
-  );
+export function SearchResultDto(result: RemoteResult): SearchResult {
+  const spaces = [...result.spaces]; // @TODO(migration): Richer spaces
 
   return {
     id: result.id,
-    name: result.currentVersion.version.name,
-    description: result.currentVersion.version.description,
-    types: result.currentVersion.version.versionTypes.nodes.map(t => {
-      return {
-        id: t.type.entityId,
-        name: t.type.name,
-      };
-    }),
-    spaces,
+    name: result.name,
+    description: result.description,
+    types: [...result.types],
+    spaces: spaces,
   };
 }

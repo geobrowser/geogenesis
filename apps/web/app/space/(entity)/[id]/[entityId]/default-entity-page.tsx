@@ -1,15 +1,13 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
-import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
-import { EntityId } from '~/core/io/schema';
+import { getEntity } from '~/core/io/v2/queries';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
-import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
@@ -100,7 +98,7 @@ export default async function DefaultEntityPage({
 }
 
 const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
-  const entity = await cachedFetchEntity(entityId, spaceId);
+  const entity = await Effect.runPromise(getEntity(entityId, spaceId));
   const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
@@ -116,16 +114,14 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   //   return redirect(NavUtils.toEntity(newSpaceId, entityId));
   // }
 
-  const tabIds = entity?.relations
-    .filter(r => r.type.id === EntityId(SystemIds.TABS_PROPERTY))
-    ?.map(r => r.toEntity.id);
+  const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 
   const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
 
   // @TODO(migration): We can query blocks from entities now
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
-      const blockIds = entity?.relations.filter(r => r.type.id === EntityId(SystemIds.BLOCKS))?.map(r => r.toEntity.id);
+      const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
 
       const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
       return blocks;
@@ -135,7 +131,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const tabs: Tabs = {};
 
   tabEntities.forEach((entity, index) => {
-    tabs[entity.id as EntityId] = {
+    tabs[entity.id] = {
       entity,
       blocks: tabBlocks[index],
     };
@@ -144,7 +140,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const serverAvatarUrl = Entities.avatar(entity?.relations);
   const serverCoverUrl = Entities.cover(entity?.relations);
 
-  const blockRelations = entity?.relations.filter(r => r.type.id === EntityId(SystemIds.BLOCKS));
+  const blockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
   const blockIds = blockRelations?.map(r => r.toEntity.id);
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 

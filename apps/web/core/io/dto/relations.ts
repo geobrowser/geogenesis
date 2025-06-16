@@ -17,7 +17,8 @@ export function RelationDtoLive(relation: RemoteRelation, from: { id: string; na
     entityId: relation.entityId,
     position: relation.position ?? undefined,
     verified: relation.verified ?? undefined,
-    toSpaceId: relation.toSpaceId ?? undefined,
+    // toSpaceId: relation.toSpaceId ?? undefined,
+    toSpaceId: undefined,
     renderableType,
     type: {
       id: relation.type.id,

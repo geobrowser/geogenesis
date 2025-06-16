@@ -1,10 +1,17 @@
-import { EntitiesBatchQuery, EntityQuery, EntityTypesQuery, SpaceQuery, SpacesQuery } from '~/core/gql/graphql';
-import { Entity } from '~/core/v2.types';
+import {
+  EntitiesBatchQuery,
+  EntityQuery,
+  EntityTypesQuery,
+  ResultQuery,
+  SpaceQuery,
+  SpacesQuery,
+} from '~/core/gql/graphql';
+import { Entity, SearchResult } from '~/core/v2.types';
 
 import { Space } from '../dto/spaces';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { SpaceDecoder } from './decoders/space';
-import { entitiesBatchQuery, entitiesQuery, entityQuery, entityTypesQuery, spaceQuery } from './fragments';
+import { entitiesBatchQuery, entitiesQuery, entityQuery, entityTypesQuery, resultQuery, spaceQuery } from './fragments';
 import { graphql } from './graphql';
 
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
@@ -66,6 +73,15 @@ export function getSpaces(
     query: spaceQuery,
     decoder: data => data.spaces.map(SpaceDecoder.decode).filter(e => e !== null) ?? [],
     variables: { limit, offset, spaceIds },
+    signal,
+  });
+}
+
+export function getResult(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
+  return graphql<ResultQuery, SearchResult | null>({
+    query: resultQuery,
+    decoder: data => (data.entity ? EntityDecoder.decode(data.entity) : null),
+    variables: { id: entityId, spaceId },
     signal,
   });
 }
