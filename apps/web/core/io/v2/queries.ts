@@ -3,6 +3,7 @@ import {
   EntityQuery,
   EntityTypesQuery,
   ResultQuery,
+  ResultsQuery,
   SpaceQuery,
   SpacesQuery,
 } from '~/core/gql/graphql';
@@ -18,6 +19,7 @@ import {
   entityQuery,
   entityTypesQuery,
   resultQuery,
+  resultsQuery,
   spaceQuery,
   spacesQuery,
 } from './fragments';
@@ -90,10 +92,26 @@ export function getResult(entityId: string, spaceId?: string, signal?: AbortCont
   return graphql<ResultQuery, SearchResult | null>({
     query: resultQuery,
     decoder: data => {
-      console.log('data.entity', data.entity);
       return data.entity ? ResultDecoder.decode(data.entity) : null;
     },
     variables: { id: entityId, spaceId },
+    signal,
+  });
+}
+
+interface ResultsArgs {
+  query: string;
+  spaceIds?: string[];
+  typeIds?: string[];
+}
+
+export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
+  return graphql<ResultsQuery, SearchResult[]>({
+    query: resultsQuery,
+    decoder: data => {
+      return data.search.map(ResultDecoder.decode).filter(r => r !== null);
+    },
+    variables: { query: args.query },
     signal,
   });
 }

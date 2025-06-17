@@ -24,6 +24,7 @@ type Documents = {
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, limit: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpacesDocument,
     "\n  fragment Result on Entity {\n    id\n    name\n    description\n    spaces\n    types {\n      id\n      name\n    }\n  }\n": typeof types.ResultFragmentDoc,
     "\n  query Result($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...Result\n    }\n  }\n": typeof types.ResultDocument,
+    "\n  query Results($query: String!) {\n    search(query: $query) {\n      ...Result\n    }\n  }\n": typeof types.ResultsDocument,
 };
 const documents: Documents = {
     "\n  fragment FullEntity on Entity {\n    id\n    name\n    description\n\n    types {\n      id\n      name\n    }\n\n    values {\n      spaceId\n      property {\n        id\n        entity {\n          id\n          name\n        }\n        dataType\n        relationValueTypes {\n          id\n          name\n        }\n      }\n      value\n      language\n      unit\n    }\n    relations {\n      id\n      spaceId\n      position\n      verified\n      entityId\n      to {\n        id\n        name\n        types {\n          id\n          name\n        }\n        values {\n          propertyId\n          value\n        }\n      }\n      toSpaceId\n      type {\n        id\n        entity {\n          name\n        }\n        renderableType\n      }\n    }\n  }\n": types.FullEntityFragmentDoc,
@@ -36,6 +37,7 @@ const documents: Documents = {
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, limit: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": types.SpacesDocument,
     "\n  fragment Result on Entity {\n    id\n    name\n    description\n    spaces\n    types {\n      id\n      name\n    }\n  }\n": types.ResultFragmentDoc,
     "\n  query Result($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...Result\n    }\n  }\n": types.ResultDocument,
+    "\n  query Results($query: String!) {\n    search(query: $query) {\n      ...Result\n    }\n  }\n": types.ResultsDocument,
 };
 
 /**
@@ -92,6 +94,10 @@ export function graphql(source: "\n  fragment Result on Entity {\n    id\n    na
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query Result($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...Result\n    }\n  }\n"): (typeof documents)["\n  query Result($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...Result\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query Results($query: String!) {\n    search(query: $query) {\n      ...Result\n    }\n  }\n"): (typeof documents)["\n  query Results($query: String!) {\n    search(query: $query) {\n      ...Result\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

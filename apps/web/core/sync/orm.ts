@@ -7,8 +7,8 @@ import { Filter } from '../blocks/data/filters';
 import { queryStringFromFilters } from '../blocks/data/to-query-string';
 import { readTypes } from '../database/entities';
 import { EntityId } from '../io/schema';
-import { fetchResults, fetchTableRowEntities } from '../io/subgraph';
-import { getBatchEntities, getEntity, getSpaces } from '../io/v2/queries';
+import { fetchTableRowEntities } from '../io/subgraph';
+import { getBatchEntities, getEntity, getResults, getSpaces } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
 import { Values } from '../utils/value';
@@ -254,7 +254,18 @@ export class E {
     const remoteEntities = await cache.fetchQuery({
       queryKey: ['network', 'entities', 'fuzzy', where],
       queryFn: ({ signal }) =>
-        fetchResults({ first, skip, query: nameFilter, spaceId: spaceIdsFilter, typeIds: typeIdsFilter, signal }),
+        Effect.runPromise(
+          getResults(
+            {
+              // first,
+              // skip,
+              query: nameFilter!,
+              spaceIds: spaceIdsFilter ? [spaceIdsFilter] : undefined,
+              typeIds: typeIdsFilter,
+            },
+            signal
+          )
+        ),
     });
 
     const localEntities = new EntityQuery(store).where(where).execute();

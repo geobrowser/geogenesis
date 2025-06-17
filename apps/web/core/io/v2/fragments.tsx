@@ -146,3 +146,11 @@ export const resultQuery = graphql(/* GraphQL */ `
     }
   }
 `);
+
+export const resultsQuery = graphql(/* GraphQL */ `
+  query Results($query: String!) {
+    search(query: $query) {
+      ...Result
+    }
+  }
+`);
