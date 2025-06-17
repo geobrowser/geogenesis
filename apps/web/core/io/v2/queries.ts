@@ -101,8 +101,10 @@ export function getResult(entityId: string, spaceId?: string, signal?: AbortCont
 
 interface ResultsArgs {
   query: string;
-  spaceIds?: string[];
+  spaceId?: string;
   typeIds?: string[];
+  limit?: number;
+  offset?: number;
 }
 
 export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
@@ -111,7 +113,17 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
     decoder: data => {
       return data.search.map(ResultDecoder.decode).filter(r => r !== null);
     },
-    variables: { query: args.query },
+    variables: {
+      query: args.query,
+      spaceId: args.spaceId,
+      limit: args.limit,
+      offset: args.offset,
+      filter: args.typeIds
+        ? {
+            types: { in: args.typeIds },
+          }
+        : undefined,
+    },
     signal,
   });
 }

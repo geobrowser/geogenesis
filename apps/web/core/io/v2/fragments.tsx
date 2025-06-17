@@ -148,8 +148,8 @@ export const resultQuery = graphql(/* GraphQL */ `
 `);
 
 export const resultsQuery = graphql(/* GraphQL */ `
-  query Results($query: String!) {
-    search(query: $query) {
+  query Results($query: String!, $filter: SearchFilter, $spaceId: String, $limit: Int, $offset: Int) {
+    search(query: $query, filter: $filter, spaceId: $spaceId, limit: $limit, offset: $offset) {
       ...Result
     }
   }

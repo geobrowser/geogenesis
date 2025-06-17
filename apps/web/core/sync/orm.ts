@@ -248,6 +248,12 @@ export class E {
     skip: number;
   }): Promise<SearchResult[]> {
     const nameFilter = where.name?.fuzzy;
+
+    if (!nameFilter) {
+      console.error('findFuzzy requires a query. Received: ', nameFilter);
+      return [];
+    }
+
     const spaceIdsFilter = where.space?.id?.equals ? where.space.id.equals : undefined;
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
@@ -257,10 +263,10 @@ export class E {
         Effect.runPromise(
           getResults(
             {
-              // first,
-              // skip,
-              query: nameFilter!,
-              spaceIds: spaceIdsFilter ? [spaceIdsFilter] : undefined,
+              limit: first,
+              offset: skip,
+              query: nameFilter,
+              spaceId: spaceIdsFilter ? spaceIdsFilter : undefined,
               typeIds: typeIdsFilter,
             },
             signal
