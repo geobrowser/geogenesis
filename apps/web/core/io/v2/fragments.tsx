@@ -94,6 +94,16 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const propertyQuery = graphql(/* GraphQL */ `
+  query Property($id: String!) {
+    property(id: $id) {
+      id
+      dataType
+      renderableType
+    }
+  }
+`);
+
 export const spaceFragment = graphql(/* GraphQL */ `
   fragment FullSpace on Space {
     id
