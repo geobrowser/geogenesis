@@ -1,6 +1,6 @@
 'use client';
 
-import { A, D, pipe } from '@mobily/ts-belt';
+import { Array as A, Record as R, pipe } from 'effect';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
@@ -37,15 +37,15 @@ export const FlowBar = () => {
   const entitiesCount = pipe(
     triples,
     A.groupBy(t => t.entity.id),
-    D.keys,
+    R.keys,
     A.length
   );
 
   const spacesCount = pipe(
     triples,
     A.groupBy(t => t.spaceId),
-    D.keys,
-    keys => new Set(keys).size
+    R.keys,
+    A.length
   );
 
   // Don't show the flow bar if there are no actions, if the user is not in edit mode, if there is a toast,
