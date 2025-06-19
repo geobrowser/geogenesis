@@ -1,5 +1,5 @@
-import { Schema } from '@effect/schema';
 import { SystemIds } from '@graphprotocol/grc-20';
+import { Schema } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';

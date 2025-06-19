@@ -1,7 +1,7 @@
 'use client';
 
-import { Schema } from '@effect/schema';
 import { useQuery } from '@tanstack/react-query';
+import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 import { motion } from 'framer-motion';
 

@@ -15,7 +15,6 @@
     "gql:codegen": "graphql-codegen"
   },
   "dependencies": {
-    "@effect/schema": "^0.75.5",
     "@graphprotocol/grc-20": "^0.21.0",
     "@privy-io/react-auth": "^2.1.0",
     "@privy-io/wagmi": "^1.0.2",
