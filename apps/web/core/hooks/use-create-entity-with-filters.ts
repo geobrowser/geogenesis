@@ -1,5 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { Position, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -42,7 +41,7 @@ export function useCreateEntityWithFilters(spaceId: string) {
         upsertRelation({
           spaceId,
           relation: {
-            index: INITIAL_RELATION_INDEX_VALUE,
+            position: Position.generate(),
             space: spaceId,
             fromEntity: {
               id: EntityId(nextEntityId),
@@ -50,8 +49,8 @@ export function useCreateEntityWithFilters(spaceId: string) {
             },
             toEntity: {
               id: EntityId(filter.value),
-              name: filter.valueName,
               renderableType: 'RELATION',
+              name: filter.valueName,
               value: filter.value,
             },
             typeOf: {

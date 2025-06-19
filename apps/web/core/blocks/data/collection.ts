@@ -1,5 +1,4 @@
-import { Id, SystemIds } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
 
 import { storage } from '~/core/sync/use-mutate';
 import { Relation } from '~/core/v2.types';
@@ -110,7 +109,7 @@ function makeRelationForCollectionItem({
     // @TODO(migration): Potentially reuse relation entity
     entityId: Id.generate(),
     spaceId: spaceId,
-    position: INITIAL_RELATION_INDEX_VALUE,
+    position: Position.generate(),
     renderableType: 'RELATION',
     type: {
       id: SystemIds.COLLECTION_ITEM_RELATION_TYPE,

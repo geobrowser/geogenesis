@@ -1,8 +1,7 @@
 'use client';
 
-import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, Id, Position, SystemIds } from '@graphprotocol/grc-20';
 // import { Image } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { useAtom } from 'jotai';
 
 import * as React from 'react';
@@ -432,7 +431,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                   const newRelation: Relation = {
                     id: newRelationId,
                     spaceId: spaceId,
-                    position: INITIAL_RELATION_INDEX_VALUE,
+                    position: Position.generate(),
                     renderableType: 'RELATION',
                     verified: false,
                     entityId: newEntityId,
@@ -547,7 +546,7 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
               const newRelation: Relation = {
                 id: newRelationId,
                 spaceId: spaceId,
-                position: INITIAL_RELATION_INDEX_VALUE,
+                position: Position.generate(),
                 renderableType: 'RELATION',
                 verified: false,
                 entityId: newEntityId,

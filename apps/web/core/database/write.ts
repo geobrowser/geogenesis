@@ -1,6 +1,6 @@
 'use client';
 
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { Position } from '@graphprotocol/grc-20';
 import produce from 'immer';
 import { atom } from 'jotai';
 
@@ -95,7 +95,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
       entityId: '',
       id: relationId as string,
       verified: false,
-      position: INITIAL_RELATION_INDEX_VALUE, // @TODO(migration): default position
+      position: Position.generate(),
       isDeleted: true,
       renderableType: 'RELATION',
       type: {

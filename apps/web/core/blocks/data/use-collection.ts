@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { Position, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData } from '@tanstack/react-query';
 
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
@@ -29,10 +29,7 @@ export function useCollection({ first, skip }: CollectionProps) {
       : [];
 
   const orderedCollectionItemRelations = collectionItemsRelations.sort((a, z) => {
-    // @TODO(migration): fix optional positions
-    const first = a.position ?? 'a5';
-    const second = z.position ?? 'a5';
-    return first.toLowerCase().localeCompare(second.toLowerCase());
+    return Position.compare(a.position ?? null, z.position ?? null);
   });
 
   const collectionItemIds = orderedCollectionItemRelations?.map(c => c.toEntity.id) ?? [];

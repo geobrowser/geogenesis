@@ -1,5 +1,4 @@
-import { Id, SystemIds } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
 import { Match } from 'effect';
 
 import { Filter } from '~/core/blocks/data/filters';
@@ -166,7 +165,7 @@ export function makeRelationForSourceType(sourceType: Source['type'], blockId: s
     // @TODO(migration): May want to reuse existing relation entity
     entityId: Id.generate(),
     spaceId: spaceId,
-    position: INITIAL_RELATION_INDEX_VALUE,
+    position: Position.generate(),
     renderableType: 'RELATION',
     type: {
       id: SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE,
