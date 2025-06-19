@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@effect/schema": "^0.75.5",
-    "@graphprotocol/grc-20": "^0.20.1",
+    "@graphprotocol/grc-20": "^0.21.0",
     "@mobily/ts-belt": "^4.0.0-rc.2",
     "@privy-io/react-auth": "^2.1.0",
     "@privy-io/wagmi": "^1.0.2",
