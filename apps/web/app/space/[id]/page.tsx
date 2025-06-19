@@ -34,8 +34,10 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const entity = space?.entity;
 
   if (!entity) {
-    console.log(`Redirecting to /space/${spaceId}/entities`);
-    redirect(`/space/${spaceId}/entities`);
+    return {
+      title: `Space ${spaceId}`,
+      description: 'No entity found for this space.',
+    };
   }
 
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);

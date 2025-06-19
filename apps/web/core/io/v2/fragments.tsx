@@ -104,6 +104,14 @@ export const spaceFragment = graphql(/* GraphQL */ `
     membershipAddress
     personalAddress
 
+    members {
+      address
+    }
+
+    editors {
+      address
+    }
+
     entity {
       ...FullEntity
     }

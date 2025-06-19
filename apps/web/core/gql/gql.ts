@@ -19,7 +19,7 @@ type Documents = {
     "\n  query EntitiesBatch($ids: [String!]!, $spaceId: String) {\n    entities(spaceId: $spaceId, filter: { id: { in: $ids } }) {\n      ...FullEntity\n    }\n  }\n": typeof types.EntitiesBatchDocument,
     "\n  query Entity($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...FullEntity\n    }\n  }\n": typeof types.EntityDocument,
     "\n  query EntityTypes($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      types {\n        id\n        name\n      }\n    }\n  }\n": typeof types.EntityTypesDocument,
-    "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    entity {\n      ...FullEntity\n    }\n  }\n": typeof types.FullSpaceFragmentDoc,
+    "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    members {\n      address\n    }\n\n    editors {\n      address\n    }\n\n    entity {\n      ...FullEntity\n    }\n  }\n": typeof types.FullSpaceFragmentDoc,
     "\n  query Space($id: String!) {\n    space(id: $id) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpaceDocument,
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, limit: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpacesDocument,
     "\n  fragment Result on Entity {\n    id\n    name\n    description\n    spaces\n    types {\n      id\n      name\n    }\n  }\n": typeof types.ResultFragmentDoc,
@@ -32,7 +32,7 @@ const documents: Documents = {
     "\n  query EntitiesBatch($ids: [String!]!, $spaceId: String) {\n    entities(spaceId: $spaceId, filter: { id: { in: $ids } }) {\n      ...FullEntity\n    }\n  }\n": types.EntitiesBatchDocument,
     "\n  query Entity($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...FullEntity\n    }\n  }\n": types.EntityDocument,
     "\n  query EntityTypes($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      types {\n        id\n        name\n      }\n    }\n  }\n": types.EntityTypesDocument,
-    "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    entity {\n      ...FullEntity\n    }\n  }\n": types.FullSpaceFragmentDoc,
+    "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    members {\n      address\n    }\n\n    editors {\n      address\n    }\n\n    entity {\n      ...FullEntity\n    }\n  }\n": types.FullSpaceFragmentDoc,
     "\n  query Space($id: String!) {\n    space(id: $id) {\n      ...FullSpace\n    }\n  }\n": types.SpaceDocument,
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, limit: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": types.SpacesDocument,
     "\n  fragment Result on Entity {\n    id\n    name\n    description\n    spaces\n    types {\n      id\n      name\n    }\n  }\n": types.ResultFragmentDoc,
@@ -77,7 +77,7 @@ export function graphql(source: "\n  query EntityTypes($id: String!, $spaceId: S
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    entity {\n      ...FullEntity\n    }\n  }\n"): (typeof documents)["\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    entity {\n      ...FullEntity\n    }\n  }\n"];
+export function graphql(source: "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    members {\n      address\n    }\n\n    editors {\n      address\n    }\n\n    entity {\n      ...FullEntity\n    }\n  }\n"): (typeof documents)["\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    members {\n      address\n    }\n\n    editors {\n      address\n    }\n\n    entity {\n      ...FullEntity\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

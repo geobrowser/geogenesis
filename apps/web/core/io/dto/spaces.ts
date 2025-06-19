@@ -28,9 +28,8 @@ export function SpaceDto(space: RemoteSpace): Space {
     type: space.type,
     entity: spaceEntity,
 
-    // @TODO(migration): implement editors + members
-    editors: [],
-    members: [],
+    editors: space.editors.map(editor => editor.address),
+    members: space.members.map(member => member.address),
 
     daoAddress: space.daoAddress,
     mainVotingAddress: space.mainVotingAddress,
