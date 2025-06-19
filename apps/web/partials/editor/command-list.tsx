@@ -10,11 +10,11 @@ import { Text } from '~/design-system/text';
 
 import { CommandSuggestionItem } from './command-items';
 
-export interface CommandListRef {
+interface CommandListRef {
   onKeyDown: (o: { event: KeyboardEvent }) => boolean;
 }
 
-export interface CommandListProps {
+interface CommandListProps {
   items: CommandSuggestionItem[];
   screen?: ReactNode;
   editor: Editor;

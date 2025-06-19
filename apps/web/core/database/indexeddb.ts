@@ -5,7 +5,7 @@ import { Relation, Value } from '../v2.types';
 const DB_NAME = 'geogenesis';
 const VERSION = 2;
 
-export class Geo extends Dexie {
+class Geo extends Dexie {
   values!: Table<Value>;
   relations!: Table<Relation>;
 

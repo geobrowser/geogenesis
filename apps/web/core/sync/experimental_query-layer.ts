@@ -681,7 +681,7 @@ export class EntityQuery {
 /**
  * Entity Query Builder factory
  */
-export class EntityQueryBuilder {
+class EntityQueryBuilder {
   private store: GeoStore;
 
   constructor(store: GeoStore) {

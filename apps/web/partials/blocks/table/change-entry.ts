@@ -2,7 +2,7 @@ import { EditEvent, EditEventContext } from '~/core/events/edit-events';
 import { EntityId } from '~/core/io/schema';
 import { SearchResult } from '~/core/v2.types';
 
-export type ChangeEntryParams =
+type ChangeEntryParams =
   | {
       type: 'EVENT';
       data: EditEvent;

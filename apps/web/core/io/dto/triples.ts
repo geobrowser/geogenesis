@@ -2,7 +2,7 @@ import { Triple, Value } from '~/core/types';
 
 import { SubstreamTriple } from '../schema';
 
-export function extractValue(networkTriple: SubstreamTriple): Value {
+function extractValue(networkTriple: SubstreamTriple): Value {
   switch (networkTriple.valueType) {
     case 'TEXT':
       return { type: 'TEXT', value: networkTriple.textValue };

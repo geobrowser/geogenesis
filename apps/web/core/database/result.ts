@@ -6,7 +6,7 @@ import { queryClient } from '../query-client';
 import { GeoStore } from '../sync/store';
 import { SearchResult } from '../v2.types';
 
-export interface FetchResultOptions {
+interface FetchResultOptions {
   id: EntityId;
   store: GeoStore;
   signal?: AbortController['signal'];

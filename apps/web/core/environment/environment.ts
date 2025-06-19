@@ -13,7 +13,7 @@ import {
 
 type SupportedChainId = '31337' | '80451';
 
-export type AppConfig = {
+type AppConfig = {
   chainId: SupportedChainId;
   rpc: string;
   ipfs: string;

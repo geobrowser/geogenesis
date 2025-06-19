@@ -115,7 +115,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
   ]);
 };
 
-export async function removeEntity(entityId: string) {
+async function removeEntity(entityId: string) {
   const entity = await E.findOne({ store: geoStore, cache: queryClient, id: entityId });
 
   if (entity) {
@@ -139,7 +139,7 @@ export const upsert = (value: Value) => {
   writeMany([newValue]);
 };
 
-export const upsertMany = (values: Value[]) => {
+const upsertMany = (values: Value[]) => {
   const newValues = produce(values, draft => {
     for (const value of draft) {
       value.hasBeenPublished = false;
@@ -163,7 +163,7 @@ export const remove = (value: Value) => {
   writeMany([newValue]);
 };
 
-export const removeMany = (deletedValues: Value[]) => {
+const removeMany = (deletedValues: Value[]) => {
   const values = produce(deletedValues, draft => {
     for (const value of draft) {
       value.isDeleted = true;
