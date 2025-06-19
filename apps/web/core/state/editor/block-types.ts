@@ -1,5 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { Position, SystemIds } from '@graphprotocol/grc-20';
 
 import { StoreRelation } from '~/core/database/types';
 import { EntityId } from '~/core/io/schema';
@@ -13,7 +12,7 @@ export function getRelationForBlockType(
 ): StoreRelation {
   return {
     space: spaceId,
-    index: INITIAL_RELATION_INDEX_VALUE,
+    position: Position.generate(),
     typeOf: {
       id: EntityId(SystemIds.TYPES_PROPERTY),
       name: 'Types',

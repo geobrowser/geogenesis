@@ -1,5 +1,4 @@
-import { Id, SystemIds } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
@@ -61,7 +60,7 @@ export function useView() {
           // @TODO(migration): Reuse existing entity?
           entityId: Id.generate(),
           spaceId: spaceId,
-          position: INITIAL_RELATION_INDEX_VALUE,
+          position: Position.generate(),
           renderableType: 'RELATION',
           type: {
             id: SystemIds.VIEW_PROPERTY,
@@ -156,7 +155,7 @@ export function useView() {
           id: newId,
           entityId: newRelationEntityId,
           spaceId: spaceId,
-          position: INITIAL_RELATION_INDEX_VALUE,
+          position: Position.generate(),
           renderableType: 'RELATION',
           type: {
             id: SystemIds.PROPERTIES,
@@ -182,7 +181,7 @@ export function useView() {
         id: Id.generate(),
         entityId: newRelationEntityId,
         spaceId: spaceId,
-        position: INITIAL_RELATION_INDEX_VALUE,
+        position: Position.generate(),
         renderableType: 'RELATION',
         type: {
           id: SystemIds.PROPERTIES,

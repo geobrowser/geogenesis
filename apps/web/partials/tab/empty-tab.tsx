@@ -1,7 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { Position, SystemIds } from '@graphprotocol/grc-20';
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -43,7 +42,7 @@ export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProp
 
       const pageRelation: StoreRelation = {
         space: spaceId,
-        index: INITIAL_RELATION_INDEX_VALUE,
+        position: Position.generate(),
         typeOf: {
           id: EntityId(SystemIds.TYPES_PROPERTY),
           name: 'Types',
@@ -67,7 +66,7 @@ export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProp
 
       const pageTypeRelation: StoreRelation = {
         space: spaceId,
-        index: INITIAL_RELATION_INDEX_VALUE,
+        position: Position.generate(),
         typeOf: {
           id: EntityId(SystemIds.PAGE_TYPE_PROPERTY),
           name: 'Page Type',
