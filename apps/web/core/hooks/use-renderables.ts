@@ -155,3 +155,58 @@ function usePlaceholderRenderables(entityId: EntityId) {
     removeEmptyPlaceholderRenderable: onRemoveEmptyPlaceholderRenderable,
   };
 }
+
+export function sortRenderables(renderables: RenderableProperty[], isRelationPage?: boolean) {
+  /* Visible triples includes both real triples and placeholder triples */
+  return renderables.sort((renderableA, renderableB) => {
+    // Always put an empty, placeholder triple with no attribute id at the bottom
+    // of the list
+    if (renderableA.propertyId === '') return 1;
+
+    const { propertyId: propertyIdA, propertyName: propertyNameA } = renderableA;
+    const { propertyId: propertyIdB, propertyName: propertyNameB } = renderableB;
+
+    const isNameA = propertyIdA === SystemIds.NAME_PROPERTY;
+    const isNameB = propertyIdB === SystemIds.NAME_PROPERTY;
+    const isDescriptionA = propertyIdA === SystemIds.DESCRIPTION_PROPERTY;
+    const isDescriptionB = propertyIdB === SystemIds.DESCRIPTION_PROPERTY;
+    const isTypesA = propertyIdA === SystemIds.TYPES_PROPERTY;
+    const isTypesB = propertyIdB === SystemIds.TYPES_PROPERTY;
+
+    if (isRelationPage) {
+      const isRelationTypeA = propertyIdA === SystemIds.RELATION_TYPE_PROPERTY;
+      const isRelationTypeB = propertyIdB === SystemIds.RELATION_TYPE_PROPERTY;
+
+      const isRelationFromA = propertyIdA === SystemIds.RELATION_FROM_PROPERTY;
+      const isRelationFromB = propertyIdB === SystemIds.RELATION_FROM_PROPERTY;
+
+      const isRelationToA = propertyIdA === SystemIds.RELATION_TO_PROPERTY;
+      const isRelationToB = propertyIdB === SystemIds.RELATION_TO_PROPERTY;
+
+      const isRelationIndexA = propertyIdA === SystemIds.RELATION_INDEX;
+      const isRelationIndexB = propertyIdB === SystemIds.RELATION_INDEX;
+
+      if (isRelationTypeA && !isRelationTypeB) return -1;
+      if (!isRelationTypeA && isRelationTypeB) return 1;
+
+      if (isRelationFromA && !isRelationFromB) return -1;
+      if (!isRelationFromA && isRelationFromB) return 1;
+
+      if (isRelationToA && !isRelationToB) return -1;
+      if (!isRelationToA && isRelationToB) return 1;
+
+      if (isRelationIndexA && !isRelationIndexB) return 1;
+    }
+
+    if (isNameA && !isNameB) return -1;
+    if (!isNameA && isNameB) return 1;
+
+    if (isDescriptionA && !isDescriptionB) return -1;
+    if (!isDescriptionA && isDescriptionB) return 1;
+
+    if (isTypesA && !isTypesB) return -1;
+    if (!isTypesA && isTypesB) return 1;
+
+    return (propertyNameA || '').localeCompare(propertyNameB || '');
+  });
+}
