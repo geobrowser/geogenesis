@@ -5,8 +5,6 @@ import { atomFamily } from 'jotai/utils';
 
 import { EntityId } from '~/core/io/schema';
 
-import { sortRenderables } from '~/partials/entity-page/entity-page-utils';
-
 import { useValues } from '../database/v2.values';
 import { useEntityPageStore } from '../state/entity-page-store/entity-store';
 import { toRenderables } from '../utils/to-renderables';
