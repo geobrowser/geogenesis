@@ -10,13 +10,18 @@ import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
+import { Url } from '~/design-system/icons/url';
+import { Image } from '~/design-system/icons/image';
 import { ColorName } from '~/design-system/theme/colors';
-import { DataType } from '~/core/v2.types';
+import { DataType, RenderableType } from '~/core/v2.types';
 
 interface DataTypePillProps {
   dataType: DataType;
   dataTypeId?: string | null;
-  renderableType?: string | null;
+  renderableType?: {
+    id: string;
+    name: RenderableType
+  } | null;
   spaceId: string;
 }
 
@@ -30,14 +35,16 @@ const DATA_TYPE_MAPPING: Record<string, string> = {
   RELATION: '4b6d9fc1-fbfe-474c-861c-83398e1b50d9',
 };
 
-// Icon mapping for data types
-const DATA_TYPE_ICONS: Record<string, React.ComponentType<{ color?: ColorName }>> = {
+// Icon mapping for data types and renderable types
+const TYPE_ICONS: Record<string, React.ComponentType<{ color?: ColorName }>> = {
   TEXT: Text,
   NUMBER: Number, 
   CHECKBOX: CheckboxChecked,
   TIME: Date,
   POINT: GeoLocation,
   RELATION: Relation,
+  URL: Url,
+  IMAGE: Image,
 };
 
 export function DataTypePill({ 
@@ -46,34 +53,53 @@ export function DataTypePill({
   renderableType, 
   spaceId 
 }: DataTypePillProps) {
-  // Use dataTypeId if available, otherwise fall back to hard-coded mapping
-  const targetId = dataTypeId || DATA_TYPE_MAPPING[dataType];
-  const IconComponent = DATA_TYPE_ICONS[dataType];
+  // Determine what to display
+  const hasRenderableType = !!renderableType;
+  const displayTypeName = renderableType?.name || dataType;
   
-  // Format data type: capitalize first letter of each word
-  const formattedDataType = dataType
+  // Get the appropriate entity ID for linking
+  let targetId: string | undefined;
+  if (hasRenderableType && renderableType) {
+    // Use the renderable type entity ID directly
+    targetId = renderableType.id;
+  } else {
+    // Use data type entity ID
+    targetId = dataTypeId || DATA_TYPE_MAPPING[dataType];
+  }
+  
+  // Get the appropriate icon - renderableType.name is already typed as RenderableType
+  const iconKey = renderableType?.name || dataType;
+  const IconComponent = TYPE_ICONS[iconKey];
+  
+  // Format display type: capitalize first letter of each word
+  const formattedType = displayTypeName
     .toLowerCase()
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
   
-  if (!targetId) {
-    // If no mapping found, render as plain text
+  // Determine if the pill should be clickable
+  // Clickable only if it has a renderable type with a valid entity ID
+  const isClickable = hasRenderableType && !!targetId;
+  
+  if (!isClickable) {
+    // Non-clickable pill (data type only)
     return (
       <span className="inline-flex items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-0.5 text-metadata tabular-nums">
         {IconComponent && <IconComponent color="grey-04" />}
-        <span>{formattedDataType}</span>
+        <span>{formattedType}</span>
       </span>
     );
   }
 
+  // Clickable pill (renderable type with valid entity ID)
   return (
     <Link
       href={NavUtils.toEntity(spaceId, targetId)}
       className="group inline-flex items-center gap-1 rounded border border-grey-02 bg-white pl-1.5 py-0.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg"
     >
       {IconComponent && <IconComponent color="grey-04" />}
-      <span className="pr-1.5">{formattedDataType}</span>
+      <span className="pr-1.5">{formattedType}</span>
     </Link>
   );
 }

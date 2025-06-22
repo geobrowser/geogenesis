@@ -10,7 +10,7 @@ import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RelationRenderableProperty } from '~/core/v2.types';
+import { RelationRenderableProperty, RenderableType } from '~/core/v2.types';
 
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
@@ -22,7 +22,7 @@ interface EntityPageMetadataHeaderProps {
 }
 
 export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderProps) {
-  const { id: entityId, types } = useEntityPageStore();
+  const { id: entityId, types, relations } = useEntityPageStore();
 
   const editable = useUserIsEditing(spaceId);
 
@@ -55,13 +55,22 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
   const propertyDataType = React.useMemo(() => {
     if (!isPropertyEntity || !propertyData) return null;
 
+
+    // Find the renderable type from entity relations
+    const renderableTypeRelation = relations.find(relation => {
+      return relation.type.name === 'Renderable type'
+    });
+
     return {
       id: propertyData.id,
       dataType: propertyData.dataType,
       dataTypeId: propertyData.dataTypeId,
-      renderableType: propertyData.renderableType,
+      renderableType: renderableTypeRelation ? {
+        id: renderableTypeRelation.toEntity.id,
+        name: renderableTypeRelation.toEntity.name as RenderableType,
+      } : null,
     };
-  }, [isPropertyEntity, propertyData]);
+  }, [isPropertyEntity, propertyData, relations]);
 
   return (
     <div className="flex items-center gap-2 text-text">
