@@ -1,6 +1,6 @@
 'use client';
 
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { Position } from '@graphprotocol/grc-20';
 import produce from 'immer';
 import { atom } from 'jotai';
 
@@ -95,7 +95,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
       entityId: '',
       id: relationId as string,
       verified: false,
-      position: INITIAL_RELATION_INDEX_VALUE, // @TODO(migration): default position
+      position: Position.generate(),
       isDeleted: true,
       renderableType: 'RELATION',
       type: {
@@ -115,7 +115,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
   ]);
 };
 
-export async function removeEntity(entityId: string) {
+async function removeEntity(entityId: string) {
   const entity = await E.findOne({ store: geoStore, cache: queryClient, id: entityId });
 
   if (entity) {
@@ -139,7 +139,7 @@ export const upsert = (value: Value) => {
   writeMany([newValue]);
 };
 
-export const upsertMany = (values: Value[]) => {
+const upsertMany = (values: Value[]) => {
   const newValues = produce(values, draft => {
     for (const value of draft) {
       value.hasBeenPublished = false;
@@ -163,7 +163,7 @@ export const remove = (value: Value) => {
   writeMany([newValue]);
 };
 
-export const removeMany = (deletedValues: Value[]) => {
+const removeMany = (deletedValues: Value[]) => {
   const values = produce(deletedValues, draft => {
     for (const value of draft) {
       value.isDeleted = true;

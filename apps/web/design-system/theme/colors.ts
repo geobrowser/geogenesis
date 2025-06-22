@@ -1,8 +1,6 @@
-export type ColorScale = typeof colors;
-export type ColorTheme = keyof ColorScale;
-export type ColorThemeValue = ColorScale[ColorTheme];
+type ColorScale = typeof colors;
+type ColorTheme = keyof ColorScale;
 export type ColorName = keyof ColorScale[ColorTheme];
-export type ColorValue = ColorThemeValue[ColorName];
 
 export const colors = {
   light: {

@@ -1,4 +1,4 @@
-import { Base58, Id } from '@graphprotocol/grc-20';
+import { Id } from '@graphprotocol/grc-20';
 import { SystemIds } from '@graphprotocol/grc-20';
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -9,16 +9,10 @@ import { getAddress } from 'viem';
 import { IPFS_GATEWAY_READ_PATH } from '~/core/constants';
 import { EntityId } from '~/core/io/schema';
 
-import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/schema';
+import { Entity } from '../v2.types';
 import { Entities } from './entity';
-
-export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
-  return elements.flatMap((element, index) =>
-    index === 0 ? [element] : [separator instanceof Function ? separator({ index }) : separator, element]
-  );
-}
 
 export const NavUtils = {
   toRoot: () => '/root',
@@ -311,12 +305,12 @@ export const getOpenGraphImageUrl = (value: string) => {
 
 export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
   const entityName = entity?.name ?? null;
-  const serverAvatarUrl = Entities.avatar(entity?.relationsOut) ?? null;
-  const serverCoverUrl = Entities.cover(entity?.relationsOut);
+  const serverAvatarUrl = Entities.avatar(entity?.relations) ?? null;
+  const serverCoverUrl = Entities.cover(entity?.relations);
 
   const imageUrl = serverAvatarUrl ?? serverCoverUrl ?? '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entities.description(entity?.triples ?? []);
+  const description = Entities.description(entity?.values ?? []);
 
   return {
     entityName,

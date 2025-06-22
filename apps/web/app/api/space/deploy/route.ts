@@ -64,7 +64,6 @@ export async function GET(request: Request) {
         Schedule.tapInput(() => Effect.succeed(Telemetry.metric(Metrics.deploymentRetry))),
         Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.minutes(3)))
       ),
-      while: error => error._tag !== 'WaitForSpaceToBeIndexedError',
     }
   );
 

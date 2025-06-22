@@ -14,6 +14,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
+import { sortRenderables } from '~/core/hooks/use-renderables';
 import { EntityId } from '~/core/io/schema';
 import { useQueryEntitiesAsync, useQueryEntityAsync } from '~/core/sync/use-store';
 import { RenderableProperty } from '~/core/types';
@@ -28,8 +29,6 @@ import { EyeHide } from '~/design-system/icons/eye-hide';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { MenuItem } from '~/design-system/menu';
-
-import { sortRenderables } from '~/partials/entity-page/entity-page-utils';
 
 import { editingPropertiesAtom } from '~/atoms';
 

@@ -4,7 +4,7 @@ import { TripleDto } from '~/core/io/dto/triples';
 import { RemoteEntityType, RemoteRelation } from '~/core/io/v2/v2.schema';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
-import { EntityId, SubstreamRelationHistorical, SubstreamRelationLive, SubstreamType } from '../schema';
+import { EntityId, SubstreamRelationHistorical, SubstreamType } from '../schema';
 
 export function RelationDtoLive(relation: RemoteRelation, from: { id: string; name: string | null }): Relation {
   const imageEntityUrlValue =
@@ -56,7 +56,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
   return {
     space: relation.spaceId,
     id: relation.entityId,
-    index: getIndexFromRelationEntity(relation),
+    index: 'a0',
     typeOf: {
       id: relation.typeOfVersion.entityId,
       name: relation.typeOfVersion.name,
@@ -113,18 +113,4 @@ function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
   }
 
   return 'RELATION';
-}
-
-function getIndexFromRelationEntity(relation: SubstreamRelationLive | SubstreamRelationHistorical): string {
-  // @TODO: We don't have a good way to get the version that a given relation belongs to. This might be fixed
-  // when we migrate to the newer relation data model and new versioning model
-  const maybeIndexTriple = relation.entity.currentVersion?.version.triples.nodes.find(
-    t => t.attributeVersion.entityId === EntityId(SystemIds.RELATION_INDEX) && t.valueType === 'TEXT'
-  );
-
-  if (!maybeIndexTriple) {
-    return relation.index;
-  }
-
-  return TripleDto(maybeIndexTriple).value.value;
 }

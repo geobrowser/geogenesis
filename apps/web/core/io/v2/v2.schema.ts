@@ -118,6 +118,18 @@ export const Space = Schema.Struct({
   mainVotingAddress: Schema.NullOr(AddressWithValidation),
   membershipAddress: Schema.NullOr(AddressWithValidation),
   personalAddress: Schema.NullOr(AddressWithValidation),
+
+  members: Schema.Array(
+    Schema.Struct({
+      address: AddressWithValidation,
+    })
+  ),
+  editors: Schema.Array(
+    Schema.Struct({
+      address: AddressWithValidation,
+    })
+  ),
+
   entity: Schema.NullOr(Entity),
 });
 

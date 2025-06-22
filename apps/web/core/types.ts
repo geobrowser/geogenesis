@@ -18,8 +18,6 @@ export type RelationValueType = {
   spaceIdOfAttribute?: string;
 };
 
-export type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
-
 export type SpaceType =
   | 'default'
   | 'company'
@@ -42,20 +40,3 @@ export type ReviewState =
   | 'publishing-contract'
   | 'publish-complete'
   | 'publish-error';
-
-export type FilterField =
-  | 'entity-id'
-  | 'entity-name'
-  | 'attribute-id'
-  | 'attribute-name'
-  | 'value'
-  | 'linked-to'
-  | 'starts-with'
-  | 'not-space-id';
-
-export type FilterClause = {
-  field: FilterField;
-  value: string;
-};
-
-export type FilterState = FilterClause[];

@@ -39,7 +39,7 @@ function getFetchTabEntityIdQuery(spaceId: string, pageTypeEntityId: string) {
   }`;
 }
 
-export interface FetchTabEntityIdOptions {
+interface FetchTabEntityIdOptions {
   spaceId: string;
   pageTypeEntityId: string;
 }

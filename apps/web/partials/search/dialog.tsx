@@ -1,4 +1,3 @@
-import { A } from '@mobily/ts-belt';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -121,7 +120,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
             )}
             {view === 'selectEntity' && (
               <>
-                <div className={cx('relative p-1', A.isNotEmpty(autocomplete.results) && 'border-b border-grey-02')}>
+                <div className={cx('relative p-1', autocomplete.results.length > 0 && 'border-b border-grey-02')}>
                   <AnimatePresence mode="wait">
                     {autocomplete.isLoading ? (
                       <div className="absolute left-4 top-[50%] z-100">

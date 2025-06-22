@@ -5,12 +5,12 @@ import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
 import { Entity, RenderableProperty } from '~/core/v2.types';
 
-export type TripleSegment = {
+type TripleSegment = {
   type: 'TRIPLE';
   property: string;
 };
 
-export type RelationSegment = {
+type RelationSegment = {
   type: 'RELATION';
   property: string;
 };

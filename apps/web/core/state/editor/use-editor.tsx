@@ -1,6 +1,6 @@
 'use client';
 
-import { Position, SystemIds } from '@graphprotocol/grc-20';
+import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { useAtom } from 'jotai';
@@ -80,12 +80,10 @@ function makeNewBlockRelation({
     allRelations.find(c => c.toEntity.id === afterBlockIndex)?.position ??
     allRelations[allRelations.findIndex(c => c.position === beforeCollectionItemIndex) + 1]?.position;
 
-  // @TODO(migration): Fix
-  // const newTripleOrdering = R.reorder({
-  //   relationId: newRelationId,
-  //   beforeIndex: beforeCollectionItemIndex,
-  //   afterIndex: afterCollectionItemIndex,
-  // });
+  const newBlockOrdering = Position.generateBetween(
+    beforeCollectionItemIndex ?? null,
+    afterCollectionItemIndex ?? null
+  );
 
   const renderableType = ((): RenderableEntityType => {
     switch (tiptapBlock.type) {
@@ -106,11 +104,9 @@ function makeNewBlockRelation({
   const newRelation: Relation = {
     spaceId: spaceId,
     id: newRelationId,
-    // @TODO(migration): Fix position
-    position: 'a0',
+    position: newBlockOrdering,
     verified: false,
-    entityId: '',
-    // index: newTripleOrdering.triple.value.value,
+    entityId: Id.generate(),
     renderableType,
     type: {
       id: SystemIds.BLOCKS,

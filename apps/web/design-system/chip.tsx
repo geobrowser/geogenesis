@@ -1,25 +1,18 @@
 'use client';
 
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
-import Image from 'next/image';
 
 import * as React from 'react';
 import { useState } from 'react';
 
-import { DB } from '~/core/database/write';
 import { useSpace } from '~/core/hooks/use-space';
-import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
-import { getImagePath } from '~/core/utils/utils';
 
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { RelationSmall } from '~/design-system/icons/relation-small';
-import { TopRanked } from '~/design-system/icons/top-ranked';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 import { ColorName, colors } from '~/design-system/theme/colors';
 
 type LinkableChipProps = {
@@ -321,51 +314,6 @@ export function LinkableRelationChip({
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
-    </div>
-  );
-}
-
-type DeletableChipButtonProps = {
-  onClick?: () => void;
-  children: React.ReactNode;
-  href: string;
-};
-
-const deletableChipStyles = cva(
-  'group inline-flex min-h-[1.5rem] items-center gap-1 break-words rounded-sm bg-white px-2 py-1 text-left text-metadataMedium !font-normal !leading-[1.125rem] text-text shadow-inner shadow-text hover:cursor-pointer hover:bg-ctaTertiary hover:text-ctaPrimary hover:shadow-ctaPrimary focus:bg-ctaTertiary focus:text-ctaPrimary focus:shadow-inner-lg focus:shadow-ctaPrimary',
-  {
-    variants: {
-      isWarning: {
-        true: 'bg-red-02 text-red-01 shadow-red-01 hover:bg-red-02 hover:text-red-01 hover:shadow-red-01',
-      },
-    },
-  }
-);
-
-const deleteButtonStyles = cva('cursor-pointer hover:!opacity-100 group-hover:opacity-50', {
-  variants: {
-    isWarning: {
-      true: 'opacity-100',
-    },
-  },
-});
-
-export function DeletableChipButton({ onClick, children, href }: DeletableChipButtonProps) {
-  const [isWarning, setIsWarning] = useState(false);
-
-  return (
-    <div className={deletableChipStyles({ isWarning })}>
-      <Link href={href} className="text-current">
-        {children}
-      </Link>
-      <button
-        className={deleteButtonStyles({ isWarning })}
-        onClick={onClick}
-        onMouseOver={() => setIsWarning(true)}
-        onMouseOut={() => setIsWarning(false)}
-      >
-        <CheckCloseSmall />
-      </button>
     </div>
   );
 }

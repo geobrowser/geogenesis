@@ -329,10 +329,6 @@ function getCalldataForSpaceGovernanceType(args: GovernanceTypeCalldataArgs) {
   }
 }
 
-export function timestamp() {
-  return new Date().toISOString();
-}
-
 export function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string) {
   const validValues = values.filter(
     // Deleted ops have a value of ''. Make sure we don't filter those out
