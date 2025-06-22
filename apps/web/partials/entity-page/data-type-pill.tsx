@@ -25,16 +25,6 @@ interface DataTypePillProps {
   spaceId: string;
 }
 
-// Hard-coded mapping of data type names to their entity UUIDs
-const DATA_TYPE_MAPPING: Record<string, string> = {
-  TEXT: '9edb6fcc-e454-4aa5-8611-39d7f024c010',
-  NUMBER: '9b597aae-c31c-46c8-8565-a370da0c2a65', 
-  CHECKBOX: '7aa4792e-eacd-4186-8272-fa7fc18298ac',
-  TIME: 'ec8d6291-74f2-4289-b68e-09fcecfb1505',
-  POINT: 'df250d17-e364-413d-9779-2ddaae841e34',
-  RELATION: '4b6d9fc1-fbfe-474c-861c-83398e1b50d9',
-};
-
 // Icon mapping for data types and renderable types
 const TYPE_ICONS: Record<string, React.ComponentType<{ color?: ColorName }>> = {
   TEXT: Text,
@@ -63,8 +53,8 @@ export function DataTypePill({
     // Use the renderable type entity ID directly
     targetId = renderableType.id;
   } else {
-    // Use data type entity ID
-    targetId = dataTypeId || DATA_TYPE_MAPPING[dataType];
+    // Use data type entity ID if provided
+    targetId = dataTypeId || undefined;
   }
   
   // Get the appropriate icon - renderableType.name is already typed as RenderableType
@@ -79,8 +69,8 @@ export function DataTypePill({
     .join(' ');
   
   // Determine if the pill should be clickable
-  // Clickable only if it has a renderable type with a valid entity ID
-  const isClickable = hasRenderableType && !!targetId;
+  // Clickable only if we have a valid target ID
+  const isClickable = !!targetId;
   
   if (!isClickable) {
     // Non-clickable pill (data type only)
