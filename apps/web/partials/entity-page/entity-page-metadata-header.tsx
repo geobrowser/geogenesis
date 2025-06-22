@@ -52,8 +52,6 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
     enabled: isPropertyEntity 
   });
 
-  console.log('isPropertyEntity', isPropertyEntity, 'propertyData', propertyData);
-
   const propertyDataType = React.useMemo(() => {
     if (!isPropertyEntity || !propertyData) return null;
 

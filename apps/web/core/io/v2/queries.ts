@@ -2,15 +2,17 @@ import {
   EntitiesBatchQuery,
   EntityQuery,
   EntityTypesQuery,
+  PropertyQuery,
   ResultQuery,
   ResultsQuery,
   SpaceQuery,
   SpacesQuery,
 } from '~/core/gql/graphql';
-import { Entity, SearchResult } from '~/core/v2.types';
+import { Entity, Property, SearchResult } from '~/core/v2.types';
 
 import { Space } from '../dto/spaces';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
+import { PropertyDecoder } from './decoders/property';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import {
@@ -18,6 +20,7 @@ import {
   entitiesQuery,
   entityQuery,
   entityTypesQuery,
+  propertyQuery,
   resultQuery,
   resultsQuery,
   spaceQuery,
@@ -63,6 +66,15 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
     query: entityTypesQuery,
     decoder: data => data.entity?.types.map(EntityTypeDecoder.decode).filter(e => e !== null) ?? [],
     variables: { id: entityId },
+    signal,
+  });
+}
+
+export function getProperty(propertyId: string, signal?: AbortController['signal']) {
+  return graphql<PropertyQuery, Property | null>({
+    query: propertyQuery,
+    decoder: data => (data.property ? PropertyDecoder.decode(data.property) : null),
+    variables: { id: propertyId },
     signal,
   });
 }

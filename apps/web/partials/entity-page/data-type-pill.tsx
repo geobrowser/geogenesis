@@ -10,9 +10,11 @@ import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
+import { ColorName } from '~/design-system/theme/colors';
+import { DataType } from '~/core/v2.types';
 
 interface DataTypePillProps {
-  dataType: string;
+  dataType: DataType;
   dataTypeId?: string | null;
   renderableType?: string | null;
   spaceId: string;
@@ -29,7 +31,7 @@ const DATA_TYPE_MAPPING: Record<string, string> = {
 };
 
 // Icon mapping for data types
-const DATA_TYPE_ICONS: Record<string, React.ComponentType<{ color?: string }>> = {
+const DATA_TYPE_ICONS: Record<string, React.ComponentType<{ color?: ColorName }>> = {
   TEXT: Text,
   NUMBER: Number, 
   CHECKBOX: CheckboxChecked,
