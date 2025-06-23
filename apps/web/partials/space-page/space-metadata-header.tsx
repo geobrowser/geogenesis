@@ -1,5 +1,7 @@
 'use client';
 
+import { SystemIds } from '@graphprotocol/grc-20';
+
 import * as React from 'react';
 
 import { useProperties } from '~/core/hooks/use-properties';
@@ -7,12 +9,11 @@ import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RelationRenderableProperty } from '~/core/types';
+import { RelationRenderableProperty } from '~/core/v2.types';
 
 import { Create } from '~/design-system/icons/create';
 
 import { RelationsGroup } from '../entity-page/editable-entity-page';
-import { SystemIds } from '@graphprotocol/grc-20';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
@@ -48,16 +49,16 @@ export function SpacePageMetadataHeader({
 
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
-  const typesRenderable = Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
+  const typesRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];
     const renderableType = firstRenderable.type;
 
-    if (renderableType === 'RELATION' && firstRenderable.attributeId === SystemIds.TYPES_PROPERTY) {
+    if (renderableType === 'RELATION' && firstRenderable.propertyId === SystemIds.TYPES_PROPERTY) {
       return renderables;
     }
   });
 
-  const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.attributeId === SystemIds.TYPES_PROPERTY));
+  const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.propertyId === SystemIds.TYPES_PROPERTY));
 
   return (
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-4 text-text">
@@ -65,10 +66,7 @@ export function SpacePageMetadataHeader({
         {editable ? (
           <div className="box-border h-6">
             {(typesRenderableObj && types.length > 0) || (addTypeState && types.length === 0) ? (
-              <RelationsGroup
-                relations={typesRenderableObj as RelationRenderableProperty[]}
-                properties={properties}
-              />
+              <RelationsGroup relations={typesRenderableObj as RelationRenderableProperty[]} properties={properties} />
             ) : (
               <button
                 onClick={() => setAddTypeState(true)}

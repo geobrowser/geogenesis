@@ -1,13 +1,12 @@
 'use client';
 
-import { Position, SystemIds } from '@graphprotocol/grc-20';
+import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { StoreRelation } from '~/core/database/types';
-import { DB } from '~/core/database/write';
-import { EntityId } from '~/core/io/schema';
+import { useMutate } from '~/core/sync/use-mutate';
+import { Relation } from '~/core/v2.types';
 
 import { SmallButton } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';
@@ -21,72 +20,58 @@ type EmptyTabProps = {
 
 export const EmptyTab = ({ entityId, spaceId, pageType, children }: EmptyTabProps) => {
   const [hasCreatedEntity, setHasCreatedEntity] = useState<boolean>(false);
+  const { storage } = useMutate();
 
   const handleCreateEntity = () => {
     if (pageType) {
       const newEntityId = entityId;
+      storage.entities.name.set(newEntityId, spaceId, '');
 
-      DB.upsert(
-        {
-          entityId: newEntityId,
-          attributeId: SystemIds.NAME_PROPERTY,
-          entityName: null,
-          attributeName: 'Name',
-          value: {
-            type: 'TEXT',
-            value: '',
-          },
-        },
-        spaceId
-      );
-
-      const pageRelation: StoreRelation = {
-        space: spaceId,
+      const pageRelation: Relation = {
+        id: Id.generate(),
+        entityId: Id.generate(),
+        spaceId: spaceId,
         position: Position.generate(),
-        typeOf: {
-          id: EntityId(SystemIds.TYPES_PROPERTY),
+        renderableType: 'RELATION',
+        type: {
+          id: SystemIds.TYPES_PROPERTY,
           name: 'Types',
         },
         fromEntity: {
-          id: EntityId(newEntityId),
-          name: null,
+          id: newEntityId,
+          name: '',
         },
         toEntity: {
-          id: EntityId(SystemIds.PAGE_TYPE),
+          id: SystemIds.PAGE_TYPE,
           name: 'Page',
-          renderableType: 'RELATION',
-          value: EntityId(SystemIds.PAGE_TYPE),
+          value: SystemIds.PAGE_TYPE,
         },
       };
 
-      DB.upsertRelation({
-        relation: pageRelation,
-        spaceId,
-      });
+      storage.relations.set(pageRelation);
 
-      const pageTypeRelation: StoreRelation = {
-        space: spaceId,
+      const pageTypeRelation: Relation = {
+        id: Id.generate(),
+        entityId: Id.generate(),
+        spaceId: spaceId,
         position: Position.generate(),
-        typeOf: {
-          id: EntityId(SystemIds.PAGE_TYPE_PROPERTY),
+        renderableType: 'RELATION',
+        type: {
+          id: SystemIds.PAGE_TYPE_PROPERTY,
           name: 'Page Type',
         },
         fromEntity: {
-          id: EntityId(newEntityId),
-          name: null,
+          id: newEntityId,
+          name: '',
         },
         toEntity: {
-          id: EntityId(pageType.id),
+          id: pageType.id,
           name: pageType.name,
-          renderableType: 'RELATION',
-          value: EntityId(pageType.id),
+          value: pageType.id,
         },
       };
 
-      DB.upsertRelation({
-        relation: pageTypeRelation,
-        spaceId,
-      });
+      storage.relations.set(pageTypeRelation);
     }
 
     setHasCreatedEntity(true);
