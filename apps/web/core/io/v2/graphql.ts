@@ -8,16 +8,20 @@ class GraphqlRequestError extends Error {
   readonly _tag = 'GraphqlRequestError';
 }
 
-// Properly typed query + variables with inference
-export function graphql<TResult, TVariables extends Record<string, any>, Decoded>({
+// Type utilities for extracting types from TypedDocumentNode
+type QueryResult<T> = T extends TypedDocumentNode<infer TResult, any> ? TResult : never;
+type QueryVariables<T> = T extends TypedDocumentNode<any, infer TVariables> ? TVariables : never;
+
+// Automatically infer query result and variable types from TypedDocumentNode
+export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>({
   query,
   decoder,
   variables,
   signal,
 }: {
-  query: TypedDocumentNode<TResult, TVariables>;
-  decoder: (data: TResult) => Decoded;
-  variables?: TVariables;
+  query: TDocument;
+  decoder: (data: QueryResult<TDocument>) => Decoded;
+  variables?: QueryVariables<TDocument>;
   signal?: AbortController['signal'];
 }) {
   return Effect.gen(function* () {
@@ -28,7 +32,7 @@ export function graphql<TResult, TVariables extends Record<string, any>, Decoded
     // This could be an effect that returns a generic error type
     // that should get handled by callers
     const data = yield* Effect.tryPromise({
-      try: () => client.request<TResult>(query, variables),
+      try: () => client.request<QueryResult<TDocument>>(query, variables),
       catch: error => new GraphqlRequestError(String(error)),
     });
 
