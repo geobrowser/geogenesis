@@ -1,3 +1,4 @@
+import { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Effect } from 'effect';
 import { GraphQLClient } from 'graphql-request';
 
@@ -7,16 +8,16 @@ class GraphqlRequestError extends Error {
   readonly _tag = 'GraphqlRequestError';
 }
 
-// @TODO: Type query + variables
-export function graphql<GraphqlResponse, Decoded>({
+// Properly typed query + variables with inference
+export function graphql<TResult, TVariables extends Record<string, any>, Decoded>({
   query,
   decoder,
   variables,
   signal,
 }: {
-  query: string;
-  decoder: (data: GraphqlResponse) => Decoded;
-  variables?: Record<string, any>; // can we make this typesafe?
+  query: TypedDocumentNode<TResult, TVariables>;
+  decoder: (data: TResult) => Decoded;
+  variables?: TVariables;
   signal?: AbortController['signal'];
 }) {
   return Effect.gen(function* () {
@@ -27,7 +28,7 @@ export function graphql<GraphqlResponse, Decoded>({
     // This could be an effect that returns a generic error type
     // that should get handled by callers
     const data = yield* Effect.tryPromise({
-      try: () => client.request<GraphqlResponse>(query, variables),
+      try: () => client.request<TResult>(query, variables),
       catch: error => new GraphqlRequestError(String(error)),
     });
 
