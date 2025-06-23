@@ -4,7 +4,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
-import { getEntity } from '~/core/io/v2/queries';
+import { getEntityPage } from '~/core/io/v2/queries';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
@@ -16,11 +16,12 @@ import { TabGroup } from '~/design-system/tab-group';
 
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
+import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { EntityPageHeading } from '~/partials/entity-page/entity-page-heading';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
+import { EntityPageRelations } from '~/partials/entity-page/entity-page-relations';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntity } from './cached-fetch-entity';
@@ -47,6 +48,8 @@ export default async function DefaultEntityPage({
   const props = await getData(params.id, params.entityId, searchParams?.edit === 'true' ? true : false);
   const tabs = buildTabsForEntityPage(props.tabEntities, params);
 
+  const showRelations = props.isRelationEntity;
+
   return (
     <EntityStoreProvider
       id={props.id}
@@ -65,7 +68,8 @@ export default async function DefaultEntityPage({
         {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
         <EntityPageContentContainer>
           <div className="space-y-2">
-            {showHeading && <EntityPageHeading spaceId={props.spaceId} entityId={props.id} />}
+            {showRelations && <EntityPageRelations relations={props.relationEntityRelations} spaceId={props.spaceId} />}
+            {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
             {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
           </div>
           {tabs.length > 1 && (
@@ -98,7 +102,9 @@ export default async function DefaultEntityPage({
 }
 
 const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
-  const entity = await Effect.runPromise(getEntity(entityId, spaceId));
+  const entityPage = await Effect.runPromise(getEntityPage(entityId, spaceId));
+  const entity = entityPage?.entity;
+  const relationEntityRelations = entityPage?.relations ?? [];
   const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
@@ -158,6 +164,10 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
 
     tabs,
     tabEntities,
+
+    // For relation entity pages
+    relationEntityRelations,
+    isRelationEntity: relationEntityRelations.length > 0,
 
     // For entity page editor
     blockRelations: blockRelations ?? [],

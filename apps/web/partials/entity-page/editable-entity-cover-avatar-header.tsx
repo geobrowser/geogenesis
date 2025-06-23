@@ -6,7 +6,6 @@ import LegacyImage from 'next/legacy/image';
 import { ChangeEvent, useRef } from 'react';
 import { useState } from 'react';
 
-import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Services } from '~/core/services';
@@ -35,10 +34,8 @@ export const EditableCoverAvatarHeader = ({
   coverUrl: string | null;
 }) => {
   const { spaceId, id } = useEntityPageStore();
-  const entityId = id;
-  const [isRelationPage] = useRelationship(entityId, spaceId);
   const editable = useUserIsEditing(spaceId);
-  const { renderablesGroupedByAttributeId } = useRenderables(values ?? [], spaceId, isRelationPage);
+  const { renderablesGroupedByAttributeId } = useRenderables(values ?? [], spaceId);
 
   const coverAvatarRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];
@@ -221,10 +218,10 @@ const AvatarCoverInput = ({
           isCover
             ? imgUrl
               ? 'bg-transparent'
-              : 'bg-cover-default hover:bg-cover-hover bg-center bg-no-repeat'
+              : 'bg-cover-default bg-center bg-no-repeat hover:bg-cover-hover'
             : imgUrl
               ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-transparent shadow-lg'
-              : 'bg-avatar-default hover:bg-avatar-hover h-[80px] w-[80px] bg-center bg-no-repeat hover:bg-white'
+              : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-white hover:bg-avatar-hover'
         }`}
       >
         {imgUrl && (

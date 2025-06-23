@@ -1,9 +1,10 @@
 'use client';
 
+import { SystemIds } from '@graphprotocol/grc-20';
+
 import * as React from 'react';
 
 import { useProperties } from '~/core/hooks/use-properties';
-import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -12,7 +13,6 @@ import { RelationRenderableProperty } from '~/core/types';
 import { Create } from '~/design-system/icons/create';
 
 import { RelationsGroup } from '../entity-page/editable-entity-page';
-import { SystemIds } from '@graphprotocol/grc-20';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
@@ -42,9 +42,7 @@ export function SpacePageMetadataHeader({
 
   const editable = useUserIsEditing(spaceId);
 
-  const [isRelationPage] = useRelationship(entityId, spaceId);
-
-  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId, isRelationPage);
+  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
 
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
@@ -65,10 +63,7 @@ export function SpacePageMetadataHeader({
         {editable ? (
           <div className="box-border h-6">
             {(typesRenderableObj && types.length > 0) || (addTypeState && types.length === 0) ? (
-              <RelationsGroup
-                relations={typesRenderableObj as RelationRenderableProperty[]}
-                properties={properties}
-              />
+              <RelationsGroup relations={typesRenderableObj as RelationRenderableProperty[]} properties={properties} />
             ) : (
               <button
                 onClick={() => setAddTypeState(true)}

@@ -59,6 +59,10 @@ export const Relation = Schema.Struct({
   spaceId: Schema.UUID,
   position: Schema.NullOr(Schema.String),
   verified: Schema.NullOr(Schema.Boolean),
+  from: Schema.Struct({
+    id: Schema.UUID,
+    name: Schema.NullOr(Schema.String),
+  }),
   to: Schema.Struct({
     id: Schema.UUID,
     name: Schema.NullOr(Schema.String),
