@@ -1,6 +1,7 @@
 import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
+import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
@@ -12,6 +13,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
@@ -39,6 +41,7 @@ export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId
           SystemIds.NAME_PROPERTY,
           SystemIds.COVER_PROPERTY,
           ContentIds.AVATAR_PROPERTY,
+          RENDERABLE_TYPE_PROPERTY,
         ].includes(attributeId as Id.Id)
       ) {
         count++;
@@ -55,6 +58,11 @@ export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
       {Object.entries(renderables).map(([attributeId, renderable]) => {
         const isRelation = renderable[0].type === 'RELATION' || renderable[0].type === 'IMAGE';
+
+        // hide renderbale type, it's shown in the header
+        if (attributeId === RENDERABLE_TYPE_PROPERTY) {
+          return null
+        }
 
         if (isRelation) {
           return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableProperty[]} />;
@@ -78,6 +86,9 @@ const ReadableNumberField = ({ value, format, unitId }: { value: string; format?
 };
 
 function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRenderableProperty[] }) {
+  const spaceId = values[0].spaceId;
+  const attributeId = values[0].propertyId;
+
   return (
     <>
       {values.map((t, index) => {
@@ -87,18 +98,32 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
         }
         return (
           <div key={`${entityId}-${t.propertyId}-${index}`} className="break-words">
-            <Text as="p" variant="bodySemibold">
-              {values[0].propertyName || t.propertyId}
-            </Text>
+            <Link href={NavUtils.toEntity(spaceId, attributeId)}>
+              <Text as="p" variant="bodySemibold">
+                {values[0].propertyName || t.propertyId}
+              </Text>
+            </Link>
             <div className="flex flex-wrap gap-2">
               {values.map(renderable => {
                 switch (renderable.type) {
                   case 'TEXT': {
-                    return (
-                      <Text key={`string-${renderable.propertyId}-${renderable.value}`} as="p">
-                        {renderable.value}
-                      </Text>
-                    );
+                    switch (renderable.renderableType) {
+                      case 'URL':
+                        return (
+                          <WebUrlField
+                            key={`uri-${renderable.propertyId}-${renderable.value}`}
+                            isEditing={false}
+                            spaceId={renderable.spaceId}
+                            value={renderable.value}
+                          />
+                        );
+                      default:
+                        return (
+                          <Text key={`string-${renderable.propertyId}-${renderable.value}`} as="p">
+                            {renderable.value}
+                          </Text>
+                        );
+                    }
                   }
                   case 'POINT': {
                     if (renderable.propertyId === SystemIds.GEO_LOCATION_PROPERTY) {
@@ -148,16 +173,6 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
                       />
                     );
                   }
-                  // case 'URL': {
-                  //   return (
-                  //     <WebUrlField
-                  //       key={`uri-${renderable.propertyId}-${renderable.value}`}
-                  //       isEditing={false}
-                  //       spaceId={spaceId}
-                  //       value={renderable.value}
-                  //     />
-                  //   );
-                  // }
                 }
               })}
             </div>

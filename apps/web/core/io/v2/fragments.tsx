@@ -20,6 +20,7 @@ export const entityFragment = graphql(/* GraphQL */ `
           name
         }
         dataType
+        renderableType
         relationValueTypes {
           id
           name

@@ -70,6 +70,7 @@ export function toRenderables({
         default:
           return {
             type: s.dataType as NativeRenderableProperty['type'],
+            renderableType: s.renderableType,
             entityId: entityId,
             entityName: entityName,
             propertyId: s.id,
@@ -84,6 +85,7 @@ export function toRenderables({
   const valuesToRenderable = values.map((t): ValueRenderableProperty => {
     return {
       type: t.property.dataType as NativeRenderableProperty['type'],
+      renderableType: t.property.renderableType ?? undefined,
       entityId: t.entity.id,
       entityName: t.entity.name,
       propertyId: t.property.id,
