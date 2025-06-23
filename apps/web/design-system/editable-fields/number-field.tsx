@@ -50,7 +50,7 @@ export function NumberField({
   const { entity } = useQueryEntity({ id: unitId });
 
   const currencySign = React.useMemo(
-    () => unitId && entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_PROPERTY)?.value?.value,
+    () => unitId && entity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
     [unitId, entity]
   );
 
