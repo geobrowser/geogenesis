@@ -33,9 +33,9 @@ export async function ProfileEntityServerContainer({ params }: Props) {
     return (
       <ProfilePageComponent
         id={params.entityId}
-        triples={[]}
+        values={[]}
         spaceId={params.id}
-        relationsOut={[]}
+        relations={[]}
         referencedByComponent={null}
       />
     );
@@ -68,9 +68,9 @@ export async function ProfileEntityServerContainer({ params }: Props) {
   return (
     <ProfilePageComponent
       id={params.entityId}
-      triples={person.triples}
+      values={person.values}
       spaceId={params.id}
-      relationsOut={person.relationsOut}
+      relations={person.relations}
       referencedByComponent={
         <ErrorBoundary fallback={<EmptyErrorComponent />}>
           {/*

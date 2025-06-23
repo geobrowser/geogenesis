@@ -13,12 +13,7 @@ import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getImagePath } from '~/core/utils/utils';
-import {
-  ImageRelationRenderableProperty,
-  RelationRenderableProperty,
-  RenderableProperty,
-  Value,
-} from '~/core/v2.types';
+import { ImageRelationRenderableProperty, RelationRenderableProperty, RenderableProperty } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -27,18 +22,16 @@ import { Upload } from '~/design-system/icons/upload';
 
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
-  values,
   coverUrl,
 }: {
   avatarUrl: string | null;
-  values: Value[] | undefined;
   coverUrl: string | null;
 }) => {
   const { spaceId, id } = useEntityPageStore();
   const entityId = id;
   const [isRelationPage] = useRelationship(entityId, spaceId);
   const editable = useUserIsEditing(spaceId);
-  const { renderablesGroupedByAttributeId } = useRenderables(values ?? [], spaceId, isRelationPage);
+  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId, isRelationPage);
 
   const coverAvatarRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];
@@ -221,10 +214,10 @@ const AvatarCoverInput = ({
           isCover
             ? imgUrl
               ? 'bg-transparent'
-              : 'bg-cover-default hover:bg-cover-hover bg-center bg-no-repeat'
+              : 'bg-cover-default bg-center bg-no-repeat hover:bg-cover-hover'
             : imgUrl
               ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-transparent shadow-lg'
-              : 'bg-avatar-default hover:bg-avatar-hover h-[80px] w-[80px] bg-center bg-no-repeat hover:bg-white'
+              : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-white hover:bg-avatar-hover'
         }`}
       >
         {imgUrl && (

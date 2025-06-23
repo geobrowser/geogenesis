@@ -4,9 +4,11 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
+import { Entity } from '~/core/v2.types';
 
-import { Entity, EntityDtoLive } from '../dto/entities';
+import { EntityDtoLive } from '../dto/entities';
 import { SubstreamEntityLive } from '../schema';
+import { RemoteEntity } from '../v2/v2.schema';
 import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -106,7 +108,8 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
           return null;
         },
         onRight: entity => {
-          return EntityDtoLive(entity);
+          // @TODO(migration): Correct entity fetching for filters
+          return EntityDtoLive(entity as unknown as RemoteEntity);
         },
       });
     })

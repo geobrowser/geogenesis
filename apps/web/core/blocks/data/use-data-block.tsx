@@ -164,24 +164,7 @@ export function useDataBlock() {
   const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
 
   const setName = (newName: string) => {
-    storage.values.set({
-      id: ID.createValueId({
-        entityId,
-        propertyId: SystemIds.NAME_PROPERTY,
-        spaceId,
-      }),
-      spaceId,
-      entity: {
-        id: entityId,
-        name: newName,
-      },
-      property: {
-        id: SystemIds.NAME_PROPERTY,
-        name: 'Name',
-        dataType: 'TEXT',
-      },
-      value: newName,
-    });
+    storage.entities.name.set(entityId, spaceId, newName);
   };
 
   let isLoading = true;

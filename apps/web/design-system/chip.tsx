@@ -170,7 +170,7 @@ export function LinkableRelationChip({
 
   const shouldClamp = typeof children === 'string' && children.length >= 42;
 
-  const { space } = useSpace(spaceId ?? '');
+  const { space } = useSpace(spaceId);
 
   return (
     <div

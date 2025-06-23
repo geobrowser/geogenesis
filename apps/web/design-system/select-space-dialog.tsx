@@ -2,16 +2,14 @@ import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
-import { EntityId } from '~/core/io/schema';
-
 import { SelectSpace } from './select-space';
 
 type SelectEntityAsPopoverProps = {
   trigger: React.ReactNode;
-  entityId: EntityId;
+  entityId: string;
   spaceId?: string;
   verified?: boolean;
-  onDone: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
+  onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
 };
 
 export function SelectSpaceAsPopover({ trigger, onDone, entityId, spaceId, verified }: SelectEntityAsPopoverProps) {

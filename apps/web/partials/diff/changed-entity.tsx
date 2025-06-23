@@ -538,52 +538,52 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               </div>
             );
           }
-          case 'URL': {
-            return (
-              <div key={index} className="-mt-px flex gap-16">
-                <div className="flex-1 border border-grey-02 p-4">
-                  <div className="text-bodySemibold capitalize">{name}</div>
-                  <div className="truncate text-wrap text-ctaPrimary no-underline">
-                    {changes.map(c => {
-                      const checkedBefore = c.before ? c.before.value : '';
-                      const checkedAfter = c.after ? c.after.value : '';
-                      const differences = diffWords(checkedBefore, checkedAfter);
+          // case 'URL': {
+          //   return (
+          //     <div key={index} className="-mt-px flex gap-16">
+          //       <div className="flex-1 border border-grey-02 p-4">
+          //         <div className="text-bodySemibold capitalize">{name}</div>
+          //         <div className="truncate text-wrap text-ctaPrimary no-underline">
+          //           {changes.map(c => {
+          //             const checkedBefore = c.before ? c.before.value : '';
+          //             const checkedAfter = c.after ? c.after.value : '';
+          //             const differences = diffWords(checkedBefore, checkedAfter);
 
-                      return differences
-                        .filter(item => !item.added)
-                        .map((difference, index) => (
-                          <span
-                            key={index}
-                            className={cx(difference.removed && 'rounded bg-errorTertiary line-through')}
-                          >
-                            {difference.value}
-                          </span>
-                        ));
-                    })}
-                  </div>
-                </div>
-                <div className="group relative flex-1 border border-grey-02 p-4">
-                  {renderAttributeStagingComponent?.(attributeId)}
-                  <div className="text-bodySemibold capitalize">{name}</div>
-                  <div className="truncate text-wrap text-ctaPrimary no-underline">
-                    {changes.map(c => {
-                      const checkedBefore = c.before ? c.before.value : '';
-                      const checkedAfter = c.after ? c.after.value : '';
-                      const differences = diffWords(checkedBefore, checkedAfter);
+          //             return differences
+          //               .filter(item => !item.added)
+          //               .map((difference, index) => (
+          //                 <span
+          //                   key={index}
+          //                   className={cx(difference.removed && 'rounded bg-errorTertiary line-through')}
+          //                 >
+          //                   {difference.value}
+          //                 </span>
+          //               ));
+          //           })}
+          //         </div>
+          //       </div>
+          //       <div className="group relative flex-1 border border-grey-02 p-4">
+          //         {renderAttributeStagingComponent?.(attributeId)}
+          //         <div className="text-bodySemibold capitalize">{name}</div>
+          //         <div className="truncate text-wrap text-ctaPrimary no-underline">
+          //           {changes.map(c => {
+          //             const checkedBefore = c.before ? c.before.value : '';
+          //             const checkedAfter = c.after ? c.after.value : '';
+          //             const differences = diffWords(checkedBefore, checkedAfter);
 
-                      return differences
-                        .filter(item => !item.removed)
-                        .map((difference, index) => (
-                          <span key={index} className={cx(difference.added && 'rounded bg-successTertiary')}>
-                            {difference.value}
-                          </span>
-                        ));
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          }
+          //             return differences
+          //               .filter(item => !item.removed)
+          //               .map((difference, index) => (
+          //                 <span key={index} className={cx(difference.added && 'rounded bg-successTertiary')}>
+          //                   {difference.value}
+          //                 </span>
+          //               ));
+          //           })}
+          //         </div>
+          //       </div>
+          //     </div>
+          //   );
+          // }
           default: {
             return null;
           }
@@ -600,26 +600,29 @@ interface NumberDiffProps {
 }
 
 const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
-  const hasFormatChanged = before?.options?.format !== after?.options?.format;
+  // const hasFormatChanged = before?.options?.format !== after?.options?.format;
   const { entity: beforeUnitEntity } = useQueryEntity({ id: before?.options?.unit });
   const { entity: afterUnitEntity } = useQueryEntity({ id: after?.options?.unit });
 
   const [currencySignBefore, currencySignAfter] = React.useMemo(
     () => [
       before?.options?.unit &&
-        beforeUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_PROPERTY)?.value?.value,
+        beforeUnitEntity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
       after?.options?.unit &&
-        afterUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_PROPERTY)?.value?.value,
+        afterUnitEntity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
     ],
     [before, beforeUnitEntity, after, afterUnitEntity]
   );
 
-  const formattedNumberBefore = before?.value
-    ? GeoNumber.format(before.value, before?.options?.format, currencySignBefore)
-    : null;
-  const formattedNumberAfter = after?.value
-    ? GeoNumber.format(after.value, after?.options?.format, currencySignAfter)
-    : null;
+  const formattedNumberBefore = null;
+  // @TODO(migration): formatting lives on property now
+  // const formattedNumberBefore = before?.value
+  //   ? GeoNumber.format(before.value, before?.options?.format, currencySignBefore)
+  //   : null;
+  const formattedNumberAfter = null;
+  // const formattedNumberAfter = after?.value
+  // ? GeoNumber.format(after.value, after?.options?.format, currencySignAfter)
+  // : null;
 
   const [formattedNumber, rawNumber, highlightClassName] =
     mode === 'before'
@@ -651,8 +654,11 @@ type DateTimeType = {
 };
 
 export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
-  const formattedDateBefore = before?.value ? GeoDate.format(before.value, before?.options?.format) : null;
-  const formattedDateAfter = after?.value ? GeoDate.format(after.value, after?.options?.format) : null;
+  // @TODO(migration): format now lives on property
+  const formattedDateBefore = null;
+  // const formattedDateBefore = before?.value ? GeoDate.format(before.value, before?.options?.format) : null;
+  const formattedDateAfter = null;
+  // const formattedDateAfter = after?.value ? GeoDate.format(after.value, after?.options?.format) : null;
 
   const [formattedDate, highlightClassName] =
     mode === 'before'

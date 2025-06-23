@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 import * as React from 'react';
 
-import { Relation, Triple } from '~/core/types';
+import { Relation, Value } from '~/core/v2.types';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -14,8 +14,8 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 interface Props {
   id: string;
   spaceId: string;
-  triples: Triple[];
-  relationsOut: Relation[];
+  values: Value[];
+  relations: Relation[];
   referencedByComponent: React.ReactNode;
 }
 
@@ -35,12 +35,7 @@ export function ProfilePageComponent(props: Props) {
 
       <Spacer height={40} />
       <motion.div key="entity-page-entity-attributes" layout="position">
-        <ToggleEntityPage
-          id={props.id}
-          spaceId={props.spaceId}
-          triples={props.triples}
-          relationsOut={props.relationsOut}
-        />
+        <ToggleEntityPage id={props.id} spaceId={props.spaceId} values={props.values} />
       </motion.div>
       <Spacer height={40} />
       {props.referencedByComponent}

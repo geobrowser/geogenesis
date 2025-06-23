@@ -1,18 +1,18 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 
 import { useState } from 'react';
 
 import { Environment } from '~/core/environment';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
-import { SubstreamSpace, SubstreamSpaceEntityConfig } from '~/core/io/schema';
+import { SubstreamSpace } from '~/core/io/schema';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 
-import { SpaceEntityDto } from '../io/dto/spaces';
+import { Space } from '../io/dto/spaces';
+import { SpaceEntity } from '../v2.types';
 
 type NetworkResult = {
   spaces: {
@@ -96,25 +96,10 @@ export function useSpacesQuery() {
     };
   }
 
-  const spaceConfigEntities = data.spaces.nodes
-    .map(space => {
-      const decodedSpace = Schema.decodeEither(SubstreamSpaceEntityConfig)(space);
-
-      return Either.match(decodedSpace, {
-        onLeft: error => {
-          console.error(`Unable to decode space entity config: ${String(error)}`);
-          return null;
-        },
-        onRight: space => {
-          return SpaceEntityDto(space.id, space.spacesMetadatum?.version);
-        },
-      });
-    })
-    .filter(space => space !== null);
-
   return {
     query,
     setQuery,
-    spaces: spaceConfigEntities,
+    // @TODO(migration): Query for spaces by name
+    spaces: [] as SpaceEntity[],
   };
 }

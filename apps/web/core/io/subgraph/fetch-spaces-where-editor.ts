@@ -4,8 +4,9 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
+import { SpaceEntity } from '~/core/v2.types';
 
-import { SpaceConfigEntity, SpaceEntityDto } from '../dto/spaces';
+import { SpaceEntityDto } from '../dto/spaces';
 import { SpaceId, SubstreamVersion } from '../schema';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
@@ -80,44 +81,47 @@ export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWher
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const spaces = result.spaces.nodes
-    .map(space => {
-      const decodedSpace = Schema.decodeEither(SpaceWhereEditorSchema)(space);
+  return [] as SpaceWhereEditor[];
 
-      return Either.match(decodedSpace, {
-        onLeft: error => {
-          console.error(`Encountered error decoding space where editor. spaceId: ${space.id} error: ${error}`);
-          return null;
-        },
-        onRight: space => {
-          return SpaceWhereEditorDto(space);
-        },
-      });
-    })
-    .filter(s => s !== null);
+  // const spaces = result.spaces.nodes
+  //   .map(space => {
+  //     const decodedSpace = Schema.decodeEither(SpaceWhereEditorSchema)(space);
 
-  // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
-  // the query level when we index the space config entity as part of a Space.
-  return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
+  //     return Either.match(decodedSpace, {
+  //       onLeft: error => {
+  //         console.error(`Encountered error decoding space where editor. spaceId: ${space.id} error: ${error}`);
+  //         return null;
+  //       },
+  //       onRight: space => {
+  //         return SpaceWhereEditorDto(space);
+  //       },
+  //     });
+  //   })
+  //   .filter(s => s !== null);
+
+  // // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
+  // // the query level when we index the space config entity as part of a Space.
+  // return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
 }
 
-const SpaceWhereEditorSchema = Schema.Struct({
-  id: Schema.String.pipe(Schema.length(22), Schema.fromBrand(SpaceId)),
-  spacesMetadatum: Schema.NullOr(Schema.Struct({ version: SubstreamVersion })),
-});
+// const SpaceWhereEditorSchema = Schema.Struct({
+//   id: Schema.String.pipe(Schema.length(22), Schema.fromBrand(SpaceId)),
+//   spacesMetadatum: Schema.NullOr(Schema.Struct({ version: SubstreamVersion })),
+// });
 
-type SpaceWhereEditorSchema = Schema.Schema.Type<typeof SpaceWhereEditorSchema>;
+// type SpaceWhereEditorSchema = Schema.Schema.Type<typeof SpaceWhereEditorSchema>;
 
 type SpaceWhereEditor = {
   id: SpaceId;
-  spaceConfig: SpaceConfigEntity;
+  spaceConfig: SpaceEntity;
 };
 
-function SpaceWhereEditorDto(space: SpaceWhereEditorSchema) {
-  const spaceConfigWithImage = SpaceEntityDto(space.id, space.spacesMetadatum?.version);
+// function SpaceWhereEditorDto(space: SpaceWhereEditorSchema) {
+//   // @TODO(migration): Map space entity
+//   const spaceConfigWithImage = SpaceEntityDto(space.id, space);
 
-  return {
-    id: space.id,
-    spaceConfig: spaceConfigWithImage,
-  };
-}
+//   return {
+//     id: space.id,
+//     spaceConfig: spaceConfigWithImage,
+//   };
+// }

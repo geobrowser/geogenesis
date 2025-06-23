@@ -1,9 +1,9 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { makeRelationForSourceType } from '~/core/blocks/data/source';
-import { StoreRelation } from '~/core/database/types';
 import { EntityId } from '~/core/io/schema';
 import { getRelationForBlockType } from '~/core/state/editor/block-types';
+import { Relation } from '~/core/v2.types';
 
 /**
  * Returns the relations to create a data entity. Data entities require a type,
@@ -16,7 +16,7 @@ import { getRelationForBlockType } from '~/core/state/editor/block-types';
  * @param blockId the id of the new data block as an {@link EntityId}
  * @returns an array of {@link StoreRelation} representing the data entity relations.
  */
-export function makeInitialDataEntityRelations(blockId: EntityId, spaceId: string): [StoreRelation, StoreRelation] {
+export function makeInitialDataEntityRelations(blockId: EntityId, spaceId: string): [Relation, Relation] {
   return [
     // Create relation for the source type, e.g., Spaces, Collection, Geo, etc.
     makeRelationForSourceType('COLLECTION', blockId, spaceId),
