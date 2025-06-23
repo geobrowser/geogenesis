@@ -15,11 +15,10 @@ import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { sortRenderables } from '~/core/hooks/use-renderables';
-import { EntityId } from '~/core/io/schema';
 import { useQueryEntitiesAsync, useQueryEntityAsync } from '~/core/sync/use-store';
-import { RenderableProperty } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { getImagePath } from '~/core/utils/utils';
+import { RenderableProperty } from '~/core/v2.types';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { Dots } from '~/design-system/dots';
@@ -55,7 +54,7 @@ function RelationsPropertySelector() {
 
   const [selectedEntities, setSelectedEntities] = React.useState<{
     type: 'TO' | 'FROM' | 'SOURCE';
-    entityIds: EntityId[];
+    entityIds: string[];
   } | null>(null);
   const setIsEditingProperties = useSetAtom(editingPropertiesAtom);
 
@@ -76,12 +75,11 @@ function RelationsPropertySelector() {
 
   // @TODO: This should be stored as a data structure somewhere
   const filteredPropertyId = filterState.find(r => r.columnId === SystemIds.RELATION_TYPE_PROPERTY)?.value;
-  const relationIds = sourceEntity.relationsOut.filter(r => r.typeOf.id === filteredPropertyId).map(r => r.id);
-  const toIds = sourceEntity.relationsOut.filter(r => r.typeOf.id === filteredPropertyId).map(r => r.toEntity.id);
+  const relationIds = sourceEntity.relations.filter(r => r.type.id === filteredPropertyId).map(r => r.id);
+  const toIds = sourceEntity.relations.filter(r => r.type.id === filteredPropertyId).map(r => r.toEntity.id);
 
-  const maybeSourceEntityImage = sourceEntity.relationsOut.find(
-    r => r.typeOf.id === EntityId(ContentIds.AVATAR_PROPERTY)
-  )?.toEntity.value;
+  const maybeSourceEntityImage = sourceEntity.relations.find(r => r.type.id === ContentIds.AVATAR_PROPERTY)?.toEntity
+    .value;
 
   const onBack = () => {
     if (selectedEntities && selectedEntities.entityIds.length > 0) {
@@ -197,7 +195,7 @@ function DefaultPropertySelector() {
 }
 
 type PropertySelectorProps = {
-  entityIds: EntityId[];
+  entityIds: string[];
   where: 'TO' | 'FROM' | 'SOURCE';
 };
 
@@ -236,16 +234,16 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
             entityId: e.id,
             entityName: e.name,
             spaceId: e.spaces[0],
-            triples: e.triples,
-            relations: e.relationsOut,
+            values: e.values,
+            relations: e.relations,
           }),
           sortRenderables,
           renderables =>
             renderables
               .map(t => {
                 return {
-                  id: t.attributeId,
-                  name: t.attributeName,
+                  id: t.propertyId,
+                  name: t.propertyName,
                   renderableType: t.type,
                 };
               })

@@ -76,18 +76,19 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
         cellId: ID.createEntityId(),
         name: null,
         renderables: [
-          {
-            type: p.dataType as NativeRenderableProperty['type'],
-            relationId: p.id,
-            valueName: p.name,
-            fromEntityId: entityId,
-            fromEntityName: null,
-            propertyId: p.id,
-            propertyName: p.name,
-            spaceId,
-            value: '',
-            placeholder: true,
-          },
+          // @TODO(migration): Create placeholder renderable
+          // {
+          //   type: p.dataType as NativeRenderableProperty['type'],
+          //   relationId: p.id,
+          //   valueName: p.name,
+          //   fromEntityId: entityId,
+          //   fromEntityName: null,
+          //   propertyId: p.id,
+          //   propertyName: p.name,
+          //   spaceId,
+          //   value: '',
+          //   placeholder: true,
+          // },
         ],
       };
     }
@@ -137,11 +138,11 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
   const onChangeEntry: onChangeEntryFn = (context, event) => {
     if (event.type === 'EVENT') {
-      const send = action({
-        context,
-      });
-
-      send(event.data);
+      // @TODO(migration): Editable data block content
+      // const send = action({
+      //   context,
+      // });
+      // send(event.data);
     }
 
     // Adding a collection item shouldn't _only_ be for FOC. Should be for adding any data

@@ -11,6 +11,9 @@ import { SubstreamSpace } from '~/core/io/schema';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 
+import { Space } from '../io/dto/spaces';
+import { SpaceEntity } from '../v2.types';
+
 type NetworkResult = {
   spaces: {
     nodes: Array<Pick<SubstreamSpace, 'spacesMetadatum' | 'id'>>;
@@ -97,6 +100,6 @@ export function useSpacesQuery() {
     query,
     setQuery,
     // @TODO(migration): Query for spaces by name
-    spaces: [],
+    spaces: [] as SpaceEntity[],
   };
 }
