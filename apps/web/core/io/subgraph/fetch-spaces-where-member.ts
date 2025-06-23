@@ -88,25 +88,28 @@ export async function fetchSpacesWhereMember(address?: string): Promise<SpaceWhe
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const spaces = result.spaces.nodes
-    .map(space => {
-      const decodedSpace = Schema.decodeEither(SpaceWhereMemberSchema)(space);
+  // @TODO(migration): Fetch spaces where member
+  return [];
 
-      return Either.match(decodedSpace, {
-        onLeft: error => {
-          console.error(`Encountered error decoding space where member. spaceId: ${space.id} error: ${error}`);
-          return null;
-        },
-        onRight: space => {
-          return SpaceWhereMemberDto(space);
-        },
-      });
-    })
-    .filter(s => s !== null);
+  // const spaces = result.spaces.nodes
+  //   .map(space => {
+  //     const decodedSpace = Schema.decodeEither(SpaceWhereMemberSchema)(space);
 
-  // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
-  // the query level when we index the space config entity as part of a Space.
-  return spaces.flatMap(s => (s.spaceEntity ? [s] : []));
+  //     return Either.match(decodedSpace, {
+  //       onLeft: error => {
+  //         console.error(`Encountered error decoding space where member. spaceId: ${space.id} error: ${error}`);
+  //         return null;
+  //       },
+  //       onRight: space => {
+  //         return SpaceWhereMemberDto(space);
+  //       },
+  //     });
+  //   })
+  //   .filter(s => s !== null);
+
+  // // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
+  // // the query level when we index the space config entity as part of a Space.
+  // return spaces.flatMap(s => (s.spaceEntity ? [s] : []));
 }
 
 const SpaceWhereMemberSchema = Schema.Struct({

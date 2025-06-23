@@ -4,8 +4,9 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
+import { SpaceEntity } from '~/core/v2.types';
 
-import { SpaceConfigEntity, SpaceEntityDto } from '../dto/spaces';
+import { SpaceEntityDto } from '../dto/spaces';
 import { SpaceId, SubstreamVersion } from '../schema';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
@@ -110,11 +111,12 @@ type SpaceWhereEditorSchema = Schema.Schema.Type<typeof SpaceWhereEditorSchema>;
 
 type SpaceWhereEditor = {
   id: SpaceId;
-  spaceConfig: SpaceConfigEntity;
+  spaceConfig: SpaceEntity;
 };
 
 function SpaceWhereEditorDto(space: SpaceWhereEditorSchema) {
-  const spaceConfigWithImage = SpaceEntityDto(space.id, space.spacesMetadatum?.version);
+  // @TODO(migration): Map space entity
+  const spaceConfigWithImage = SpaceEntityDto(space.id, null);
 
   return {
     id: space.id,

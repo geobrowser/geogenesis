@@ -34,7 +34,7 @@ export interface Mutator {
   };
   values: {
     get: (id: string, entityId: string) => Value | null;
-    set: (value: OmitStrict<Value, 'id'>) => void;
+    set: (value: OmitStrict<Value, 'id'> & { id?: string }) => void;
     update: GeoProduceFn<Value>;
     delete: (value: Value) => void;
   };
