@@ -52,7 +52,7 @@ export const EntityPageRelations = ({ relations, spaceId }: EntityPageRelationsP
                   className="inline-flex flex-1 items-center gap-2 p-3"
                 >
                   {relation.toEntity.name}
-                  {true && (
+                  {relation.verified && (
                     <span className="inline-block">
                       <CheckCircle color="text" />
                     </span>
