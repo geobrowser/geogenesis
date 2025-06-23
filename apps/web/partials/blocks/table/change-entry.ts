@@ -1,11 +1,10 @@
-import { EditEvent, EditEventContext } from '~/core/events/edit-events';
 import { EntityId } from '~/core/io/schema';
 import { SearchResult } from '~/core/v2.types';
 
 type ChangeEntryParams =
   | {
       type: 'EVENT';
-      data: EditEvent;
+      data: any; // @TODO(migration): Correct type
     }
   | {
       type: 'Create';
@@ -16,7 +15,8 @@ type ChangeEntryParams =
       data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
     };
 
-export type onChangeEntryFn = (context: EditEventContext, event: ChangeEntryParams) => void;
+// @TODO(migration): Correct type
+export type onChangeEntryFn = (context: any, event: ChangeEntryParams) => void;
 
 export type onLinkEntryFn = (
   id: string,
