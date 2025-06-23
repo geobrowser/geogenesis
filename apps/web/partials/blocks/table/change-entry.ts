@@ -1,4 +1,3 @@
-import { EntityId } from '~/core/io/schema';
 import { SearchResult } from '~/core/v2.types';
 
 type ChangeEntryParams =
@@ -8,11 +7,11 @@ type ChangeEntryParams =
     }
   | {
       type: 'Create';
-      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
+      data: Pick<SearchResult, 'id' | 'name'> & { space?: string; verified?: boolean };
     }
   | {
       type: 'Find';
-      data: Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean };
+      data: Pick<SearchResult, 'id' | 'name'> & { space?: string; verified?: boolean };
     };
 
 // @TODO(migration): Correct type
@@ -21,9 +20,9 @@ export type onChangeEntryFn = (context: any, event: ChangeEntryParams) => void;
 export type onLinkEntryFn = (
   id: string,
   to: {
-    id: EntityId;
+    id: string;
     name: string | null;
-    space?: EntityId;
+    space?: string;
     verified?: boolean;
   },
   currentlyVerified?: boolean
