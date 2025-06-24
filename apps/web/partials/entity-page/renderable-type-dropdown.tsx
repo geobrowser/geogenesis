@@ -6,16 +6,16 @@ import cx from 'classnames';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { SwitchableRenderableType } from '~/core/types';
+import { SwitchableRenderableType } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
+import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
-import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Url } from '~/design-system/icons/url';
 import { ColorName } from '~/design-system/theme/colors';
 

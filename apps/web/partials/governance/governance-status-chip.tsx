@@ -1,5 +1,4 @@
-import { ProposalStatus } from '@graphprotocol/grc-20';
-
+import { ProposalStatus } from '~/core/io/schema';
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';

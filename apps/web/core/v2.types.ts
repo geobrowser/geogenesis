@@ -166,7 +166,7 @@ export type RenderableProperty =
 // The types of renderables don't map 1:1 to the triple value types. We might
 // also render relations with a specific type, e.g., an Image entity or a
 // Person entity, etc.
-// export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URL' | 'TIME' | 'IMAGE' | 'CHECKBOX' | 'NUMBER' | 'POINT';
+export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URL' | 'TIME' | 'IMAGE' | 'CHECKBOX' | 'NUMBER' | 'POINT';
 
 export type SearchResult = {
   id: string;
@@ -205,3 +205,5 @@ export type Row = {
   // attributeId -> Cell
   columns: Record<string, Cell>;
 };
+
+export type ProposalStatus = 'ACCEPTED' | 'PROPOSED' | 'REJECTED';

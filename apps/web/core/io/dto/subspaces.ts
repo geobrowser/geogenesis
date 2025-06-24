@@ -1,16 +1,19 @@
+import { SpaceEntity } from '~/core/v2.types';
+
 import { Address, SpaceId, SubstreamSubspace } from '../schema';
-import { SpaceConfigEntity, SpaceEntityDto } from './spaces';
+import { SpaceEntityDto } from './spaces';
 
 export type Subspace = {
   id: SpaceId;
   daoAddress: Address;
   totalEditors: number;
   totalMembers: number;
-  spaceConfig: SpaceConfigEntity;
+  spaceConfig: SpaceEntity;
 };
 
 export function SubspaceDto(subspace: SubstreamSubspace) {
-  const spaceConfigWithImage = SpaceEntityDto(subspace.id, subspace.spacesMetadatum?.version);
+  // @TODO(migration): Map subspaces
+  const spaceConfigWithImage = SpaceEntityDto(subspace.id, null);
 
   return {
     id: subspace.id,

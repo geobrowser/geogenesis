@@ -1,8 +1,5 @@
 export type { ISubgraph } from './subgraph-interface';
 
-export { fetchResults } from './fetch-results';
-export type { FetchResultsOptions } from './fetch-results';
-
 export { fetchProfile } from './fetch-profile';
 export type { FetchProfileOptions } from './fetch-profile';
 

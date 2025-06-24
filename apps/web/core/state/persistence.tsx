@@ -8,16 +8,16 @@ import { store } from './jotai-store';
 
 export const Persistence = () => {
   React.useEffect(() => {
-    const unsubTriples = store.sub(localValuesAtom, async () => {
-      const newTriples = store.get(localValuesAtom);
+    const unsubValues = store.sub(localValuesAtom, async () => {
+      const newValues = store.get(localValuesAtom);
 
       // Dexie docs recommend putting all batched operations in a transaction scope
       // https://dexie.org/docs/Tutorial/Best-Practices#5-use-transaction-scopes-whenever-you-plan-to-make-more-than-one-operation
-      db.transaction('rw', db.triples, () => {
-        db.triples.clear();
+      db.transaction('rw', db.values, () => {
+        db.values.clear();
         // Dexie docs recommend returning the last promise used in a transaction.
         // We don't need to await the promises in a transaction, either.
-        return db.triples.bulkPut(newTriples.filter(t => !t.hasBeenPublished));
+        return db.values.bulkPut(newValues.filter(t => !t.hasBeenPublished));
       });
     });
 
@@ -35,7 +35,7 @@ export const Persistence = () => {
     });
 
     return () => {
-      unsubTriples();
+      unsubValues();
       unsubRelations();
     };
   }, []);

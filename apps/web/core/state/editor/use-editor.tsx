@@ -9,13 +9,13 @@ import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { getValues } from '~/core/database/v2.values';
+import { storage } from '~/core/sync/use-mutate';
 import { getImageHash, getImagePath, validateEntityId } from '~/core/utils/utils';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
 
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
-import { DB } from '../../database/write';
 import { ID } from '../../id';
 import { EntityId } from '../../io/schema';
 import { getRelationForBlockType } from './block-types';
@@ -171,7 +171,7 @@ const makeBlocksRelations = async ({
       entityPageId,
     });
 
-    DB.upsertRelation({ relation: newRelation, spaceId });
+    storage.relations.set(newRelation);
     newBlocks.push(newRelation);
   }
 
@@ -179,20 +179,14 @@ const makeBlocksRelations = async ({
 
   for (const relation of relationIdsForRemovedBlocks) {
     // @TODO(performance) removeMany
-    DB.removeRelation({
-      relation: relation,
-      spaceId,
-    });
+    storage.relations.delete(relation);
   }
 
   for (const movedBlock of movedBlocks) {
     const relationForMovedBlock = blockRelations.find(r => r.block.id === movedBlock.id);
 
     if (relationForMovedBlock) {
-      DB.removeRelation({
-        relation: relationForMovedBlock,
-        spaceId,
-      });
+      storage.relations.delete(relationForMovedBlock);
     }
 
     const newRelation = makeNewBlockRelation({
@@ -205,7 +199,7 @@ const makeBlocksRelations = async ({
       entityPageId,
     });
 
-    DB.upsertRelation({ relation: newRelation, spaceId });
+    storage.relations.set(newRelation);
   }
 };
 
@@ -394,9 +388,11 @@ export function useEditorStore() {
         // Create an entity with Types -> XBlock
         // @TODO: ImageBlock
         switch (blockType) {
-          case SystemIds.TEXT_BLOCK:
-            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SystemIds.TEXT_BLOCK, spaceId), spaceId });
+          case SystemIds.TEXT_BLOCK: {
+            const relation = getRelationForBlockType(node.id, SystemIds.TEXT_BLOCK, spaceId);
+            storage.relations.set(relation);
             break;
+          }
           case SystemIds.IMAGE_TYPE: {
             const imageHash = getImageHash(node.attrs?.src);
             const imageUrl = `ipfs://${imageHash}`;
@@ -427,7 +423,7 @@ export function useEditorStore() {
           case SystemIds.DATA_BLOCK: {
             // @TODO(performance): upsertMany
             for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId)) {
-              DB.upsertRelation({ relation, spaceId });
+              storage.relations.set(relation);
             }
 
             break;
@@ -437,7 +433,7 @@ export function useEditorStore() {
 
       for (const removedBlockId of removed) {
         // @TODO(performance) removeMany
-        DB.removeEntity(removedBlockId, spaceId);
+        // @TODO(migration): Delete block entity
       }
 
       makeBlocksRelations({
@@ -472,8 +468,9 @@ export function useEditorStore() {
           case 'bulletList':
           case 'heading':
           case 'paragraph': {
-            const ops = TextEntity.getTextEntityOps(node);
-            DB.upsertMany(ops, spaceId);
+            const markdownValue = TextEntity.getTextEntityMarkdownValue(node);
+            storage.values.set(markdownValue);
+
             break;
           }
           case 'image':

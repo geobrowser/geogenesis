@@ -1,14 +1,4 @@
-import {
-  EntitiesBatchQuery,
-  EntityQuery,
-  EntityTypesQuery,
-  PropertyQuery,
-  ResultQuery,
-  ResultsQuery,
-  SpaceQuery,
-  SpacesQuery,
-} from '~/core/gql/graphql';
-import { Entity, Property, SearchResult } from '~/core/v2.types';
+import { Entity, SearchResult } from '~/core/v2.types';
 
 import { Space } from '../dto/spaces';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
@@ -35,25 +25,25 @@ import { graphql } from './graphql';
 // We also want to merge local data as much as possible
 
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
-  return graphql<EntitiesBatchQuery, Entity[]>({
+  return graphql({
     query: entitiesBatchQuery,
-    decoder: data => data.entities.map(EntityDecoder.decode).filter(e => e !== null),
+    decoder: data => data.entities.map(EntityDecoder.decode).filter((e): e is Entity => e !== null),
     variables: { ids: entityIds, spaceId },
     signal,
   });
 }
 
 export function getAllEntities(spaceId?: string, signal?: AbortController['signal']) {
-  return graphql<EntitiesBatchQuery, Entity[]>({
+  return graphql({
     query: entitiesQuery,
-    decoder: data => data.entities.map(EntityDecoder.decode).filter(e => e !== null),
+    decoder: data => data.entities.map(EntityDecoder.decode).filter((e): e is Entity => e !== null),
     variables: { spaceId },
     signal,
   });
 }
 
 export function getEntity(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
-  return graphql<EntityQuery, Entity | null>({
+  return graphql({
     query: entityQuery,
     decoder: data => (data.entity ? EntityDecoder.decode(data.entity) : null),
     variables: { id: entityId, spaceId },
@@ -62,16 +52,19 @@ export function getEntity(entityId: string, spaceId?: string, signal?: AbortCont
 }
 
 export function getEntityTypes(entityId: string, signal?: AbortController['signal']) {
-  return graphql<EntityTypesQuery, { id: string; name: string | null }[]>({
+  return graphql({
     query: entityTypesQuery,
-    decoder: data => data.entity?.types.map(EntityTypeDecoder.decode).filter(e => e !== null) ?? [],
+    decoder: data =>
+      data.entity?.types
+        .map(EntityTypeDecoder.decode)
+        .filter((e): e is { id: string; name: string | null } => e !== null) ?? [],
     variables: { id: entityId },
     signal,
   });
 }
 
 export function getProperty(propertyId: string, signal?: AbortController['signal']) {
-  return graphql<PropertyQuery, Property | null>({
+  return graphql({
     query: propertyQuery,
     decoder: data => (data.property ? PropertyDecoder.decode(data.property) : null),
     variables: { id: propertyId },
@@ -80,7 +73,7 @@ export function getProperty(propertyId: string, signal?: AbortController['signal
 }
 
 export function getSpace(spaceId: string, signal?: AbortController['signal']) {
-  return graphql<SpaceQuery, Space | null>({
+  return graphql({
     query: spaceQuery,
     decoder: data => (data.space ? SpaceDecoder.decode(data.space) : null),
     variables: { id: spaceId },
@@ -92,16 +85,20 @@ export function getSpaces(
   { limit, offset, spaceIds }: { limit?: number; offset?: number; spaceIds?: string[] } = {},
   signal?: AbortController['signal']
 ) {
-  return graphql<SpacesQuery, Space[]>({
+  return graphql({
     query: spacesQuery,
-    decoder: data => data.spaces.map(SpaceDecoder.decode).filter(e => e !== null) ?? [],
-    variables: { limit, offset, spaceIds },
+    decoder: data => data.spaces.map(SpaceDecoder.decode).filter((e): e is Space => e !== null) ?? [],
+    variables: {
+      limit,
+      offset,
+      filter: spaceIds ? { id: { in: spaceIds } } : undefined,
+    },
     signal,
   });
 }
 
 export function getResult(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
-  return graphql<ResultQuery, SearchResult | null>({
+  return graphql({
     query: resultQuery,
     decoder: data => {
       return data.entity ? ResultDecoder.decode(data.entity) : null;
@@ -120,10 +117,10 @@ interface ResultsArgs {
 }
 
 export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
-  return graphql<ResultsQuery, SearchResult[]>({
+  return graphql({
     query: resultsQuery,
     decoder: data => {
-      return data.search.map(ResultDecoder.decode).filter(r => r !== null);
+      return data.search.map(ResultDecoder.decode).filter((r): r is SearchResult => r !== null);
     },
     variables: {
       query: args.query,

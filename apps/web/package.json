@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@graphprotocol/grc-20": "^0.21.1",
+    "@graphql-typed-document-node/core": "^3.2.0",
     "@privy-io/react-auth": "^2.1.0",
     "@privy-io/wagmi": "^1.0.2",
     "@radix-ui/react-accordion": "^1.2.2",
