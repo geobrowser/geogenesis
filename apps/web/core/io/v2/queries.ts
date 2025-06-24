@@ -1,14 +1,28 @@
-import { Entity, SearchResult } from '~/core/v2.types';
+import {
+  EntitiesBatchQuery,
+  EntityPageQuery,
+  EntityQuery,
+  EntityTypesQuery,
+  RelationEntityRelationsQuery,
+  ResultQuery,
+  ResultsQuery,
+  SpaceQuery,
+  SpacesQuery,
+} from '~/core/gql/graphql';
+import { Entity, Relation, SearchResult } from '~/core/v2.types';
 
 import { Space } from '../dto/spaces';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
+import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import {
   entitiesBatchQuery,
   entitiesQuery,
+  entityPageQuery,
   entityQuery,
   entityTypesQuery,
+  relationEntityRelationsQuery,
   resultQuery,
   resultsQuery,
   spaceQuery,
@@ -44,6 +58,30 @@ export function getEntity(entityId: string, spaceId?: string, signal?: AbortCont
   return graphql({
     query: entityQuery,
     decoder: data => (data.entity ? EntityDecoder.decode(data.entity) : null),
+    variables: { id: entityId, spaceId },
+    signal,
+  });
+}
+
+export function getRelationEntityRelations(entityId: string, spaceId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: relationEntityRelationsQuery,
+    decoder: data => (data.relations ? data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null) : []),
+    variables: { id: entityId, spaceId },
+    signal,
+  });
+}
+
+export function getEntityPage(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: entityPageQuery,
+    decoder: data =>
+      data.entity
+        ? {
+            entity: EntityDecoder.decode(data.entity),
+            relations: data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null),
+          }
+        : null,
     variables: { id: entityId, spaceId },
     signal,
   });

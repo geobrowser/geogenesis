@@ -5,7 +5,6 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 
 import { useProperties } from '~/core/hooks/use-properties';
-import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -20,13 +19,11 @@ interface EntityPageMetadataHeaderProps {
 }
 
 export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderProps) {
-  const { id: entityId } = useEntityPageStore();
+  const { id } = useEntityPageStore();
 
   const editable = useUserIsEditing(spaceId);
 
-  const [isRelationPage] = useRelationship(entityId, spaceId);
-
-  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId, isRelationPage);
+  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
 
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 

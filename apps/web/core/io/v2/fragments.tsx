@@ -29,12 +29,17 @@ export const entityFragment = graphql(/* GraphQL */ `
       language
       unit
     }
+
     relations {
       id
       spaceId
       position
       verified
       entityId
+      from {
+        id
+        name
+      }
       to {
         id
         name
@@ -79,6 +84,59 @@ export const entityQuery = graphql(/* GraphQL */ `
   query Entity($id: String!, $spaceId: String) {
     entity(id: $id, spaceId: $spaceId) {
       ...FullEntity
+    }
+  }
+`);
+
+export const relationFragment = graphql(/* GraphQL */ `
+  fragment FullRelation on Relation {
+    id
+    spaceId
+    position
+    verified
+    entityId
+    from {
+      id
+      name
+    }
+    to {
+      id
+      name
+      types {
+        id
+        name
+      }
+      values {
+        propertyId
+        value
+      }
+    }
+    toSpaceId
+    type {
+      id
+      entity {
+        name
+      }
+      renderableType
+    }
+  }
+`);
+
+export const relationEntityRelationsQuery = graphql(/* GraphQL */ `
+  query RelationEntityRelations($id: String!, $spaceId: String) {
+    relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {
+      ...FullRelation
+    }
+  }
+`);
+
+export const entityPageQuery = graphql(/* GraphQL */ `
+  query EntityPage($id: String!, $spaceId: String) {
+    entity(id: $id, spaceId: $spaceId) {
+      ...FullEntity
+    }
+    relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {
+      ...FullRelation
     }
   }
 `);

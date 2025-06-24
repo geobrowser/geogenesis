@@ -7,7 +7,6 @@ import { useAtom } from 'jotai';
 import * as React from 'react';
 
 import { useProperties } from '~/core/hooks/use-properties';
-import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
@@ -52,12 +51,8 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, spaceId, values }: Props) {
-  const entityId = id;
-
-  const [isRelationPage] = useRelationship(entityId, spaceId);
-
   const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
-    useRenderables(values, spaceId, isRelationPage);
+    useRenderables(values, spaceId);
   const { name, relations, types } = useEntityPageStore();
   const { storage } = useMutate();
 
@@ -174,7 +169,7 @@ export function EditableEntityPage({ id, spaceId, values }: Props) {
                           }}
                         />
                       )}
-                      {/* 
+                      {/*
                         @TODO(migration): Renderable type is no longer selectable. Instead it's
                         defined on the Property
                       */}

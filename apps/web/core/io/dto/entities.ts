@@ -9,7 +9,7 @@ import { RemoteEntity } from '../v2/v2.schema';
 import { ValueDto } from './values';
 
 export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
-  const relationsOut = remoteEntity.relations.map(r => RelationDtoLive(r, remoteEntity));
+  const relationsOut = remoteEntity.relations.map(r => RelationDtoLive(r));
 
   return {
     id: remoteEntity.id,

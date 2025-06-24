@@ -52,6 +52,7 @@ type LinkableRelationChipProps = {
   currentSpaceId: string;
   entityId: string;
   spaceId?: string;
+  relationEntityId?: string;
   relationId?: string;
   verified?: boolean;
 
@@ -154,6 +155,7 @@ export function LinkableRelationChip({
   currentSpaceId,
   entityId,
   spaceId,
+  relationEntityId,
   relationId,
   verified,
   onDelete,
@@ -291,9 +293,9 @@ export function LinkableRelationChip({
                 />
               </div>
             )} */}
-            {relationId && (
+            {relationEntityId && (
               <Link
-                href={NavUtils.toEntity(currentSpaceId, relationId)}
+                href={NavUtils.toEntity(currentSpaceId, relationEntityId)}
                 onMouseEnter={() => setIsRelationHovered(true)}
                 onMouseLeave={() => setIsRelationHovered(false)}
                 className={relationChipRelationIconStyles({ isRelationHovered, isDeleteHovered })}

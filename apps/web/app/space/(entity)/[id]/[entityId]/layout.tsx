@@ -28,33 +28,6 @@ interface Props {
   children: React.ReactNode;
 }
 
-async function getTitleForRelation(entity: Entity | null): Promise<string | null> {
-  // const maybeRelation = entity?.values.find(t => t.property.id === SystemIds.TYPES_PROPERTY);
-  // const maybeType = maybeRelation?.value;
-
-  // if (
-  //   maybeRelation?.value.type === 'URL' &&
-  //   maybeType &&
-  //   SystemIds.RELATION_TYPE === GraphUrl.toEntityId(maybeType as GraphUri)
-  // ) {
-  //   const maybeFrom = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_PROPERTY);
-  //   const maybeTo = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_TO_PROPERTY);
-
-  //   if (maybeFrom?.value.type === 'URL' && maybeTo?.value.type === 'URL') {
-  //     const [maybeFromEntity, maybeToEntity] = await Promise.all([
-  //       cachedFetchEntity(GraphUrl.toEntityId(maybeFrom.value.value as GraphUri)),
-  //       cachedFetchEntity(GraphUrl.toEntityId(maybeTo.value.value as GraphUri)),
-  //     ]);
-
-  //     if (maybeFromEntity && maybeToEntity) {
-  //       return `${maybeFromEntity.name ?? maybeFromEntity.id} → ${maybeToEntity.name ?? maybeToEntity.id}`;
-  //     }
-  //   }
-  // }
-
-  return null;
-}
-
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const params = await props.params;
   const spaceId = params.id;
@@ -62,7 +35,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
   const entity = await cachedFetchEntity(entityId);
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
-  const title = (await getTitleForRelation(entity)) ?? entityName ?? 'New entity';
+  const title = entityName ?? 'Entity';
 
   return {
     title,
