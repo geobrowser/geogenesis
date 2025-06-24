@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   robots: 'follow, index',
 };
 
-export const revalidate = 60; // 1 minute
+export const dynamic = 'force-dynamic';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const params = new Promise<{ id: string }>(resolve => resolve({ id: ROOT_SPACE }));
