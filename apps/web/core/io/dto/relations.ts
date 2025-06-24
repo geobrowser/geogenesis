@@ -1,6 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { TripleDto } from '~/core/io/dto/triples';
 import { RemoteEntityType, RemoteRelation } from '~/core/io/v2/v2.schema';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
@@ -42,14 +41,14 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
 }
 
 export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
-  const toEntityTriples = relation.toVersion.triples.nodes.map(TripleDto);
   const toEntityTypes = relation.toVersion.versionTypes.nodes.map(relation => relation.type);
 
   // If the entity is an image then we should already have the triples used to define
   // the image URI for that image. We need to parse the triples to find the correct
   // triple URI value representing the image URI.
-  const imageEntityUrlValue =
-    toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_PROPERTY)?.value.value ?? null;
+  // const imageEntityUrlValue =
+  // toEntityTriples.find(relation => relation.attributeId === SystemIds.IMAGE_URL_PROPERTY)?.value.value ?? null;
+  const imageEntityUrlValue = undefined;
 
   const renderableType = getRenderableEntityType(toEntityTypes);
 

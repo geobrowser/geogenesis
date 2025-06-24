@@ -1,10 +1,9 @@
-import { Account, ContentIds, Image, Op, Relation, SystemIds } from '@graphprotocol/grc-20';
+import { Account, ContentIds, Graph, Op, SystemIds } from '@graphprotocol/grc-20';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
 import type { SpaceType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
-import { Ops } from '~/core/utils/ops';
 import { validateEntityId } from '~/core/utils/utils';
 
 type DeployArgs = {
@@ -27,26 +26,14 @@ export const generateOpsForSpaceType = async ({
   const ops: Op[] = [];
   const newEntityId = validateEntityId(entityId) ? (entityId as EntityId) : ID.createEntityId();
 
-  // Add name for all space types
-  ops.push(
-    Ops.create({
-      entity: newEntityId,
-      property: SystemIds.NAME_PROPERTY,
-      value: {
-        type: 'TEXT',
-        value: spaceName,
-      },
-    })
-  );
+  // Add name + space type for all space types
+  const newEntity = Graph.createEntity({
+    id: newEntityId,
+    name: spaceName,
+    types: [SystemIds.SPACE_TYPE],
+  });
 
-  // Add the space configuration type to every deployed space entity
-  ops.push(
-    Relation.make({
-      fromId: newEntityId,
-      toId: SystemIds.SPACE_TYPE,
-      relationTypeId: SystemIds.TYPES_PROPERTY,
-    })
-  );
+  ops.push(...newEntity.ops);
 
   // Add space type-specific ops
   switch (type) {
@@ -63,13 +50,13 @@ export const generateOpsForSpaceType = async ({
 
       ops.push(...accountOps);
 
-      ops.push(
-        Relation.make({
-          fromId: newEntityId,
-          relationTypeId: SystemIds.ACCOUNTS_PROPERTY,
-          toId: accountId,
-        })
-      );
+      const { ops: accountRelationOps } = Graph.createRelation({
+        fromEntity: newEntityId,
+        toEntity: accountId,
+        type: SystemIds.ACCOUNTS_PROPERTY,
+      });
+
+      ops.push(...accountRelationOps);
 
       break;
     }
@@ -108,17 +95,17 @@ export const generateOpsForSpaceType = async ({
       ops.push(...daoOps);
       break;
     }
-    case 'government-org':
+    case 'government-org': {
       // @TODO government org template
+      const { ops: imageRelationOps } = Graph.createRelation({
+        fromEntity: newEntityId,
+        toEntity: SystemIds.GOVERNMENT_ORG_TYPE,
+        type: SystemIds.TYPES_PROPERTY,
+      });
 
-      ops.push(
-        Relation.make({
-          fromId: newEntityId,
-          toId: SystemIds.GOVERNMENT_ORG_TYPE,
-          relationTypeId: SystemIds.TYPES_PROPERTY,
-        })
-      );
+      ops.push(...imageRelationOps);
       break;
+    }
     case 'industry': {
       const [industryOps] = await cloneEntity({
         oldEntityId: SystemIds.INDUSTRY_TEMPLATE,
@@ -165,35 +152,34 @@ export const generateOpsForSpaceType = async ({
   }
 
   if (spaceAvatarUri) {
-    const { id: imageId, ops: imageOps } = Image.make({ cid: spaceAvatarUri });
+    const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceAvatarUri });
 
     // Creates the image entity
     ops.push(...imageOps);
 
     // Creates the relation pointing to the image entity
-    ops.push(
-      Relation.make({
-        fromId: newEntityId,
-        toId: imageId, // Set the avatar relation to point to the entity id of the new entity
-        relationTypeId: ContentIds.AVATAR_PROPERTY,
-      })
-    );
+    const { ops: imageRelationOps } = Graph.createRelation({
+      fromEntity: newEntityId,
+      toEntity: imageId,
+      type: ContentIds.AVATAR_PROPERTY,
+    });
+
+    ops.push(...imageRelationOps);
   }
 
   if (spaceCoverUri) {
-    const { id: imageId, ops: imageOps } = Image.make({ cid: spaceCoverUri });
+    const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceCoverUri });
 
     // Creates the image entity
     ops.push(...imageOps);
 
     // Creates the relation pointing to the image entity
-    ops.push(
-      Relation.make({
-        fromId: newEntityId,
-        toId: imageId, // Set the avatar relation to point to the entity id of the new entity
-        relationTypeId: SystemIds.COVER_PROPERTY,
-      })
-    );
+    const { ops: imageRelationOps } = Graph.createRelation({
+      fromEntity: newEntityId,
+      toEntity: imageId,
+      type: SystemIds.COVER_PROPERTY,
+    });
+    ops.push(...imageRelationOps);
   }
 
   return ops;

@@ -2,7 +2,7 @@ import { colors } from './colors';
 
 type TypographyScale = typeof typography;
 type TypographyTheme = keyof TypographyScale;
-type TypographyName = keyof TypographyScale[TypographyTheme];
+export type TypographyName = keyof TypographyScale[TypographyTheme];
 
 const WEIGHTS = {
   regular: 400,

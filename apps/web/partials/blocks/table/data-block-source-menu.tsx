@@ -5,7 +5,6 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { SpaceId } from '~/core/io/schema';
 import { getImagePath } from '~/core/utils/utils';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
@@ -115,7 +114,7 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
   const handleToggleSpace = (spaceId: string) => {
     setSource({
       type: 'SPACES',
-      value: [SpaceId(spaceId)],
+      value: [spaceId],
     });
   };
 
@@ -132,10 +131,10 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
       </div>
       <div className="max-h-[273px] w-full overflow-y-auto">
         {queriedSpaces.map(space => {
-          const active = source.type === 'SPACES' && source.value.includes(SpaceId(space.id));
+          const active = source.type === 'SPACES' && source.value.includes(space.id);
 
           return (
-            <MenuItem key={space.id} onClick={() => handleToggleSpace(space.spaceId)} active={active} className="group">
+            <MenuItem key={space.id} onClick={() => handleToggleSpace(space.id)} active={active} className="group">
               <div className="flex items-center gap-2">
                 <div className="flex-shrink-0">
                   <img

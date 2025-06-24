@@ -3,6 +3,7 @@ import produce, { Draft } from 'immer';
 
 import { remove, removeRelation, upsert, upsertRelation } from '../database/write';
 import { ID } from '../id';
+import { OmitStrict } from '../types';
 import { NativeRenderableProperty, Relation, RelationRenderableProperty, Value } from '../v2.types';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
@@ -33,7 +34,7 @@ export interface Mutator {
   };
   values: {
     get: (id: string, entityId: string) => Value | null;
-    set: (value: Value) => void;
+    set: (value: OmitStrict<Value, 'id'> & { id?: string }) => void;
     update: GeoProduceFn<Value>;
     delete: (value: Value) => void;
   };
@@ -104,12 +105,23 @@ function createMutator(store: GeoStore): Mutator {
     values: {
       get: (id, entityId) => store.getValue(id, entityId),
       set: newValue => {
-        store.setValue(newValue);
+        const id = ID.createValueId({
+          entityId: newValue.entity.id,
+          propertyId: newValue.property.id,
+          spaceId: newValue.spaceId,
+        });
+
+        const next: Value = {
+          ...newValue,
+          id,
+        };
+
+        store.setValue(next);
 
         // Currently we have two stores, the new sync store and the
         // legacy jotai events store. For now we interop between both,
         // but eventually we should migrate completely to the sync store.
-        upsert(newValue);
+        upsert(next);
       },
       update: (base, recipe) => {
         const newValue = produce(base, recipe);

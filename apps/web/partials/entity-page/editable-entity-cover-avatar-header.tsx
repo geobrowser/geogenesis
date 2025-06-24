@@ -12,12 +12,7 @@ import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getImagePath } from '~/core/utils/utils';
-import {
-  ImageRelationRenderableProperty,
-  RelationRenderableProperty,
-  RenderableProperty,
-  Value,
-} from '~/core/v2.types';
+import { ImageRelationRenderableProperty, RelationRenderableProperty, RenderableProperty } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -26,11 +21,9 @@ import { Upload } from '~/design-system/icons/upload';
 
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
-  values,
   coverUrl,
 }: {
   avatarUrl: string | null;
-  values: Value[] | undefined;
   coverUrl: string | null;
 }) => {
   const { spaceId, id } = useEntityPageStore();

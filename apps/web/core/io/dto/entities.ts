@@ -1,7 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { RelationDtoHistorical, RelationDtoLive } from '~/core/io/dto/relations';
-import { TripleDto } from '~/core/io/dto/triples';
 import { Entities } from '~/core/utils/entity';
 import { Entity } from '~/core/v2.types';
 
@@ -25,8 +24,8 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
 
 export function EntityDtoHistorical(substreamEntity: SubstreamEntityHistorical) {
   const entity = substreamEntity.currentVersion.version;
-  const networkTriples = entity.triples.nodes;
-  const triples = networkTriples.map(TripleDto);
+  // const networkTriples = entity.triples.nodes;
+  const triples: any[] = [];
 
   const networkRelations = entity.relationsByFromVersionId.nodes;
   const relationsOut = networkRelations.map(RelationDtoHistorical);

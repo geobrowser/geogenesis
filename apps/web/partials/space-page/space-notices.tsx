@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 
-import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE, ROOT_SPACE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
@@ -232,7 +232,7 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
       <SelectEntity
         placeholder=""
         onDone={result => {
-          const destination = NavUtils.toEntity(SystemIds.ROOT_SPACE_ID, result.id);
+          const destination = NavUtils.toEntity(ROOT_SPACE, result.id);
           router.push(destination);
         }}
         spaceId={spaceId}

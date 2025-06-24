@@ -1,13 +1,9 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
-import { EntityDtoLive } from '../dto/entities';
 import { SubstreamEntityLive } from '../schema';
 import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
@@ -108,32 +104,35 @@ export async function fetchProfileViaWalletsTripleAddress(address: string): Prom
     return defaultProfile(address);
   }
 
-  const profile = entities[0];
+  // @TODO(migration): Use correct profile
+  return defaultProfile(address);
 
-  const parsedProfile = Either.match(Schema.decodeEither(SubstreamEntityLive)(profile), {
-    onLeft: error => {
-      console.error(`Unable to decode entity ${profile.id} with error ${error}`);
-      return null;
-    },
-    onRight: entity => {
-      return EntityDtoLive(entity);
-    },
-  });
+  // const profile = entities[0];
 
-  if (!parsedProfile) {
-    return defaultProfile(address);
-  }
+  // const parsedProfile = Either.match(Schema.decodeEither(SubstreamEntityLive)(profile), {
+  //   onLeft: error => {
+  //     console.error(`Unable to decode entity ${profile.id} with error ${error}`);
+  //     return null;
+  //   },
+  //   onRight: entity => {
+  //     return EntityDtoLive(entity);
+  //   },
+  // });
 
-  const space = parsedProfile.spaces[0];
+  // if (!parsedProfile) {
+  //   return defaultProfile(address);
+  // }
 
-  return {
-    id: parsedProfile.id,
-    name: parsedProfile.name,
-    avatarUrl: Entities.avatar(parsedProfile.relationsOut),
-    coverUrl: Entities.cover(parsedProfile.relationsOut),
-    profileLink: space ? NavUtils.toEntity(space, profile.id) : null,
-    address: address as `0x${string}`,
-  };
+  // const space = parsedProfile.spaces[0];
+
+  // return {
+  //   id: parsedProfile.id,
+  //   name: parsedProfile.name,
+  //   avatarUrl: Entities.avatar(parsedProfile.relationsOut),
+  //   coverUrl: Entities.cover(parsedProfile.relationsOut),
+  //   profileLink: space ? NavUtils.toEntity(space, profile.id) : null,
+  //   address: address as `0x${string}`,
+  // };
 }
 
 export function defaultProfile(address: string): Profile {

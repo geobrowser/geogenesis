@@ -153,8 +153,8 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     () =>
       entities.map(entity => ({
         name: entity.name,
-        symbol: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_PROPERTY)?.value?.value,
-        sign: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_PROPERTY)?.value?.value,
+        symbol: entity.values.find(t => t.property.id === SystemIds.CURRENCY_SYMBOL_PROPERTY)?.value,
+        sign: entity.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
         id: entity.id,
       })),
     [entities]
@@ -262,7 +262,7 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
 
   React.useEffect(() => {
     setSelectedCurrencySymbol(
-      (unitId && entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_PROPERTY)?.value?.value) || null
+      (unitId && entity?.values.find(t => t.property.id === SystemIds.CURRENCY_SYMBOL_PROPERTY)?.value) || null
     );
   }, [unitId, entity]);
 

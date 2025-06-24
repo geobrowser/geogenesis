@@ -8,7 +8,7 @@ import { useProperties } from '~/core/hooks/use-properties';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RelationRenderableProperty } from '~/core/types';
+import { RelationRenderableProperty } from '~/core/v2.types';
 
 import { Create } from '~/design-system/icons/create';
 
@@ -46,16 +46,16 @@ export function SpacePageMetadataHeader({
 
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
-  const typesRenderable = Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
+  const typesRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];
     const renderableType = firstRenderable.type;
 
-    if (renderableType === 'RELATION' && firstRenderable.attributeId === SystemIds.TYPES_PROPERTY) {
+    if (renderableType === 'RELATION' && firstRenderable.propertyId === SystemIds.TYPES_PROPERTY) {
       return renderables;
     }
   });
 
-  const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.attributeId === SystemIds.TYPES_PROPERTY));
+  const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.propertyId === SystemIds.TYPES_PROPERTY));
 
   return (
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-4 text-text">
