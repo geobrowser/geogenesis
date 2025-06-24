@@ -59,11 +59,6 @@ export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId
       {Object.entries(renderables).map(([attributeId, renderable]) => {
         const isRelation = renderable[0].type === 'RELATION' || renderable[0].type === 'IMAGE';
 
-        // hide renderbale type, it's shown in the header
-        if (attributeId === RENDERABLE_TYPE_PROPERTY) {
-          return null
-        }
-
         if (isRelation) {
           return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableProperty[]} />;
         }
@@ -194,7 +189,8 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
   if (
     attributeId === SystemIds.COVER_PROPERTY ||
     attributeId === ContentIds.AVATAR_PROPERTY ||
-    (attributeId === SystemIds.TYPES_PROPERTY && !isTypes)
+    (attributeId === SystemIds.TYPES_PROPERTY && !isTypes) ||
+    attributeId === RENDERABLE_TYPE_PROPERTY
   ) {
     return null;
   }
