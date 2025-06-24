@@ -26,9 +26,9 @@ export const EditableCoverAvatarHeader = ({
   avatarUrl: string | null;
   coverUrl: string | null;
 }) => {
-  const { spaceId, id } = useEntityPageStore();
+  const { spaceId } = useEntityPageStore();
   const editable = useUserIsEditing(spaceId);
-  const { renderablesGroupedByAttributeId } = useRenderables(values ?? [], spaceId);
+  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
 
   const coverAvatarRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];
