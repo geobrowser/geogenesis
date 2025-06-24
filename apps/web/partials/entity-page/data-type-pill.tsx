@@ -85,7 +85,7 @@ export function DataTypePill({
   // Clickable pill (renderable type with valid entity ID)
   return (
     <Link
-      href={NavUtils.toEntity(spaceId, targetId)}
+      href={NavUtils.toEntity(spaceId, targetId!)}
       className="group inline-flex items-center gap-1 rounded border border-grey-02 bg-white pl-1.5 py-0.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg"
     >
       {IconComponent && <IconComponent color="grey-04" />}
