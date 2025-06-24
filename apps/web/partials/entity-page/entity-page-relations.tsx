@@ -20,7 +20,7 @@ type EntityPageRelationsProps = {
 };
 
 export const EntityPageRelations = ({ relations, spaceId }: EntityPageRelationsProps) => {
-  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [isOpen, setIsOpen] = useState<boolean>(true);
 
   return (
     <div>
