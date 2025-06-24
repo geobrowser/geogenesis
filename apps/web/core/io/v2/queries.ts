@@ -64,7 +64,7 @@ export function getEntity(entityId: string, spaceId?: string, signal?: AbortCont
 }
 
 export function getRelationEntityRelations(entityId: string, spaceId: string, signal?: AbortController['signal']) {
-  return graphql<RelationEntityRelationsQuery, Relation[]>({
+  return graphql({
     query: relationEntityRelationsQuery,
     decoder: data => (data.relations ? data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null) : []),
     variables: { id: entityId, spaceId },
@@ -73,7 +73,7 @@ export function getRelationEntityRelations(entityId: string, spaceId: string, si
 }
 
 export function getEntityPage(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
-  return graphql<EntityPageQuery, { entity: Entity | null; relations: Relation[] } | null>({
+  return graphql({
     query: entityPageQuery,
     decoder: data =>
       data.entity
