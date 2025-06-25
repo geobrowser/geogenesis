@@ -5,9 +5,6 @@ import { useQueryProperties } from '~/core/sync/use-store';
 
 import { Property } from '../v2.types';
 
-export type PropertyId = string & Brand.Brand<'PropertyId'>;
-export const PropertyId = Brand.nominal<PropertyId>();
-
 export function useProperties(propertyIds: string[]): Record<string, Property> | undefined {
   const { properties } = useQueryProperties({ ids: propertyIds });
 
