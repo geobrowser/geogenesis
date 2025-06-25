@@ -296,7 +296,6 @@ export function TableBlockPropertyField(props: {
                     isEditing={false}
                     value={renderable.value}
                     propertyId={renderable.propertyId}
-                    // format={renderable.options?.format}
                   />
                 </Property>
               );
