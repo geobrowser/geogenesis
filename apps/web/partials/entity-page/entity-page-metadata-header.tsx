@@ -14,6 +14,7 @@ import { RelationRenderableProperty, RenderableType } from '~/core/v2.types';
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
 import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
+import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -21,7 +22,7 @@ interface EntityPageMetadataHeaderProps {
 }
 
 export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderProps) {
-  const { id: entityId, types, relations } = useEntityPageStore();
+  const { id: entityId, relations } = useEntityPageStore();
 
   const editable = useUserIsEditing(spaceId);
 
@@ -39,23 +40,20 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
   });
 
   const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.propertyId === SystemIds.TYPES_PROPERTY));
-
-  // Check if this entity is a Property
-  const isPropertyEntity = types.some(type => type.id === SystemIds.PROPERTY);
   
-  // Fetch property data type if this is a property entity
+  // Fetch property data type to see if this is a property entity
   const { data: propertyData } = useProperty({ 
     id: entityId, 
-    enabled: isPropertyEntity 
+    enabled: true 
   });
 
   const propertyDataType = React.useMemo(() => {
-    if (!isPropertyEntity || !propertyData) return null;
+    if (!propertyData) return null;
 
 
     // Find the renderable type from entity relations
     const renderableTypeRelation = relations.find(relation => {
-      return relation.type.name === 'Renderable type'
+      return relation.type.id === RENDERABLE_TYPE_PROPERTY
     });
 
     return {
@@ -66,11 +64,11 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
         name: renderableTypeRelation.toEntity.name as RenderableType,
       } : null,
     };
-  }, [isPropertyEntity, propertyData, relations]);
+  }, [propertyData, relations]);
 
   return (
     <div className="flex items-center gap-2 text-text">
-      {isPropertyEntity && propertyDataType && (
+      {propertyDataType && (
         <div className="mt-1 h-100 items-end flex">
           <DataTypePill
             dataType={propertyDataType.dataType}
