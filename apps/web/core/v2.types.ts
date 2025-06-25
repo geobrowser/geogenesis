@@ -1,10 +1,12 @@
 export type DataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
-export type RenderableType = DataType | 'URL' | 'IMAGE';
+export type ExtraRenderableType = 'URL' | 'IMAGE';
+export type RenderableType = DataType | ExtraRenderableType;
 
 export type Property = {
   id: string;
   name: string | null;
   dataType: DataType;
+  isDataTypeEditable?: boolean;
   relationValueTypes?: { id: string; name: string | null }[];
   renderableType?: RenderableType | null;
 };

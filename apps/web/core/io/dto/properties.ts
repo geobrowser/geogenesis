@@ -1,19 +1,15 @@
 import { Property } from '~/core/v2.types';
 
-// Since propertyQuery returns a minimal subset of Property data,
-// we need a custom type for the query result
-type PropertyQueryResult = {
-  id: string;
-  dataType: string;
-  renderableType: string | null;
-};
+import { RemoteProperty } from '../v2/v2.schema';
 
-export function PropertyDtoLive(queryResult: PropertyQueryResult): Property {
+export function PropertyDto(queryResult: RemoteProperty): Property {
   return {
     id: queryResult.id,
-    name: null, // Not available from propertyQuery
-    dataType: queryResult.dataType as Property['dataType'],
-    relationValueTypes: undefined, // Not available from propertyQuery
-    renderableType: queryResult.renderableType as Property['renderableType'],
+    name: queryResult.entity.name,
+    dataType: queryResult.dataType,
+    relationValueTypes: [...queryResult.relationValueTypes],
+    renderableType: queryResult.renderableType
+      ? (queryResult.renderableType as Property['renderableType'])
+      : queryResult.dataType,
   };
 }

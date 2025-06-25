@@ -6,7 +6,6 @@ import LegacyImage from 'next/legacy/image';
 import { ChangeEvent, useRef } from 'react';
 import { useState } from 'react';
 
-import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Services } from '~/core/services';
@@ -27,11 +26,9 @@ export const EditableCoverAvatarHeader = ({
   avatarUrl: string | null;
   coverUrl: string | null;
 }) => {
-  const { spaceId, id } = useEntityPageStore();
-  const entityId = id;
-  const [isRelationPage] = useRelationship(entityId, spaceId);
+  const { spaceId } = useEntityPageStore();
   const editable = useUserIsEditing(spaceId);
-  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId, isRelationPage);
+  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
 
   const coverAvatarRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];

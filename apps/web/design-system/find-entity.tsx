@@ -1,10 +1,10 @@
-import { SystemIds } from '@graphprotocol/grc-20';
 import * as Popover from '@radix-ui/react-popover';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
 import { startTransition, useState } from 'react';
 
+import { ROOT_SPACE } from '~/core/constants';
 import { useSearch } from '~/core/hooks/use-search';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { SearchResult } from '~/core/v2.types';
@@ -124,7 +124,7 @@ export const FindEntity = ({
                                     <button
                                       onClick={event => {
                                         event.stopPropagation();
-                                        window.open(NavUtils.toEntity(SystemIds.ROOT_SPACE_ID, result.id));
+                                        window.open(NavUtils.toEntity(ROOT_SPACE, result.id));
                                       }}
                                       className="relative text-text hover:text-ctaPrimary"
                                     >

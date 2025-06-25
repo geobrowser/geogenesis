@@ -1,26 +1,20 @@
 import { Either, Schema } from 'effect';
 
-import { Property as PropertyType } from '~/core/v2.types';
+import { Property } from '~/core/v2.types';
 
-import { PropertyDtoLive } from '../../dto/properties';
-
-// Define a schema that matches what the propertyQuery actually returns
-const PropertyQueryResult = Schema.Struct({
-  id: Schema.String,
-  dataType: Schema.String,
-  renderableType: Schema.NullOr(Schema.String),
-});
+import { PropertyDto } from '../../dto/properties';
+import { Property as PropertySchema } from '../v2.schema';
 
 export class PropertyDecoder {
-  static decode(data: unknown): PropertyType | null {
-    const decoded = Schema.decodeUnknownEither(PropertyQueryResult)(data);
+  static decode(data: unknown): Property | null {
+    const decoded = Schema.decodeUnknownEither(PropertySchema)(data);
 
     if (Either.isLeft(decoded)) {
       // @TODO: Error handling when decoding
       return null;
     }
 
-    const result = PropertyDtoLive(decoded.right);
+    const result = PropertyDto(decoded.right);
     return result;
   }
 }

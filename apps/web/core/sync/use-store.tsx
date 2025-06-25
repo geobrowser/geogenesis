@@ -1,8 +1,10 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Effect } from 'effect';
 
 import { useEffect, useRef, useState } from 'react';
 
-import { Entity } from '../v2.types';
+import { getProperty } from '../io/v2/queries';
+import { Entity, Property } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E } from './orm';
 import { GeoStore } from './store';
@@ -418,6 +420,28 @@ export function useQueryEntities({
   return {
     entities: localEntities,
     isLoading: !isFetched && enabled && isLoading,
+  };
+}
+
+export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOptions) {
+  // const cache = useQueryClient();
+  // const { store, stream } = useSyncEngine();
+
+  const { data: property, isFetched } = useQuery({
+    enabled: enabled && Boolean(id),
+    queryKey: ['store', 'property', JSON.stringify({ id, spaceId, enabled })],
+    queryFn: async (): Promise<Property | null> => {
+      if (!id) {
+        return null;
+      }
+
+      return await Effect.runPromise(getProperty(id));
+    },
+  });
+
+  return {
+    property,
+    isLoading: !isFetched && Boolean(id) && enabled,
   };
 }
 

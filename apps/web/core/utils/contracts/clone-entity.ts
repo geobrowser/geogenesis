@@ -1,6 +1,7 @@
 import { ContentIds, Graph, Id, Op, SystemIds } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
 
+import { ROOT_SPACE } from '~/core/constants';
 import { ID } from '~/core/id';
 import { getEntity } from '~/core/io/v2/queries';
 import { Ops } from '~/core/utils/ops';
@@ -24,7 +25,7 @@ export const cloneEntity = async (
 
   const { oldEntityId, entityId = null, entityName, parentEntityId = null, parentEntityName = null } = options;
 
-  const oldEntity = await Effect.runPromise(getEntity(oldEntityId, SystemIds.ROOT_SPACE_ID));
+  const oldEntity = await Effect.runPromise(getEntity(oldEntityId, ROOT_SPACE));
 
   if (!oldEntity) return [[], previouslySeenEntityIds ?? new Set()];
 

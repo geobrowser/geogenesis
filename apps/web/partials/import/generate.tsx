@@ -147,7 +147,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   //     const relatedEntityIds: Array<string> = [...relatedEntityIdsSet.values()];
   //     const relatedEntities = await Promise.all(
   //       relatedEntityIds.map((entityId: string) => {
-  //         return Effect.runPromise(getEntity(entityId, SystemIds.ROOT_SPACE_ID));
+  //         return Effect.runPromise(getEntity(entityId, ROOT_SPACE));
   //       })
   //     );
 

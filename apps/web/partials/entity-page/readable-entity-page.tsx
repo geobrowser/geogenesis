@@ -3,9 +3,8 @@ import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 
-import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { useQueryEntity } from '~/core/sync/use-store';
+import { useQueryEntity, useQueryProperty } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 import { RelationRenderableProperty, RenderableProperty, Value, ValueRenderableProperty } from '~/core/v2.types';
 
@@ -27,9 +26,7 @@ interface Props {
 }
 
 export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId }: Props) {
-  const [isRelationPage] = useRelationship(entityId, spaceId);
-
-  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverValues, spaceId, isRelationPage);
+  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverValues, spaceId);
 
   function countRenderableProperty(renderables: Renderables): number {
     let count = 0;
@@ -210,25 +207,29 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
 
         <div className="flex flex-wrap gap-2">
           {relations.map(r => {
-            const relationId = r.relationId;
-            const relationName = r.valueName;
+            const linkedEntityId = r.value;
+            const linkedSpaceId = r.spaceId;
             const renderableType = r.type;
-            const relationValue = r.value;
+            const relationName = r.valueName;
+            const relationEntityId = r.relationEntityId;
+            const relationId = r.relationId;
 
             if (renderableType === 'IMAGE') {
-              const imagePath = getImagePath(relationValue ?? '');
-              return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={imagePath} />;
+              const imagePath = getImagePath(linkedEntityId ?? '');
+              return <ImageZoom key={`image-${relationId}-${linkedEntityId}`} imageSrc={imagePath} />;
             }
 
             return (
-              <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
+              <div key={`relation-${relationId}-${linkedEntityId}`} className="mt-1">
                 <LinkableRelationChip
                   isEditing={false}
                   currentSpaceId={spaceId}
-                  entityId={relationValue}
+                  entityId={linkedEntityId}
+                  spaceId={linkedSpaceId}
+                  relationEntityId={relationEntityId}
                   relationId={relationId}
                 >
-                  {relationName ?? relationValue}
+                  {relationName ?? linkedEntityId}
                 </LinkableRelationChip>
               </div>
             );

@@ -5,7 +5,6 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 
 import { useProperties } from '~/core/hooks/use-properties';
-import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -18,34 +17,26 @@ import { RelationsGroup } from '../entity-page/editable-entity-page';
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement<any>;
-  typeNames: string[];
   entityId: string;
 }
 
-export function SpacePageMetadataHeader({
-  spaceId,
-  membersComponent,
-  typeNames,
-  entityId,
-}: SpacePageMetadataHeaderProps) {
-  const additionalTypeChips = typeNames.map((typeName, i) => (
-    <span
-      key={i}
-      className="flex h-6 items-center rounded border border-grey-02 bg-white px-1.5 text-metadata text-text"
-    >
-      {typeName}
-    </span>
-  ));
-
+export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePageMetadataHeaderProps) {
   const [addTypeState, setAddTypeState] = React.useState(false);
 
   const { types } = useEntityPageStore();
 
+  const additionalTypeChips = types.map((type, i) => (
+    <span
+      key={i}
+      className="flex h-6 items-center rounded border border-grey-02 bg-white px-1.5 text-metadata text-text"
+    >
+      {type.name ?? type.id}
+    </span>
+  ));
+
   const editable = useUserIsEditing(spaceId);
 
-  const [isRelationPage] = useRelationship(entityId, spaceId);
-
-  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId, isRelationPage);
+  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
 
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 

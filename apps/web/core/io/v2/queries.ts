@@ -3,14 +3,17 @@ import { Entity, SearchResult } from '~/core/v2.types';
 import { Space } from '../dto/spaces';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
+import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import {
   entitiesBatchQuery,
   entitiesQuery,
+  entityPageQuery,
   entityQuery,
   entityTypesQuery,
   propertyQuery,
+  relationEntityRelationsQuery,
   resultQuery,
   resultsQuery,
   spaceQuery,
@@ -51,6 +54,30 @@ export function getEntity(entityId: string, spaceId?: string, signal?: AbortCont
   });
 }
 
+export function getRelationEntityRelations(entityId: string, spaceId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: relationEntityRelationsQuery,
+    decoder: data => (data.relations ? data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null) : []),
+    variables: { id: entityId, spaceId },
+    signal,
+  });
+}
+
+export function getEntityPage(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: entityPageQuery,
+    decoder: data =>
+      data.entity
+        ? {
+            entity: EntityDecoder.decode(data.entity),
+            relations: data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null),
+          }
+        : null,
+    variables: { id: entityId, spaceId },
+    signal,
+  });
+}
+
 export function getEntityTypes(entityId: string, signal?: AbortController['signal']) {
   return graphql({
     query: entityTypesQuery,
@@ -59,15 +86,6 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
         .map(EntityTypeDecoder.decode)
         .filter((e): e is { id: string; name: string | null } => e !== null) ?? [],
     variables: { id: entityId },
-    signal,
-  });
-}
-
-export function getProperty(propertyId: string, signal?: AbortController['signal']) {
-  return graphql({
-    query: propertyQuery,
-    decoder: data => (data.property ? PropertyDecoder.decode(data.property) : null),
-    variables: { id: propertyId },
     signal,
   });
 }
@@ -132,6 +150,19 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
             types: { in: args.typeIds },
           }
         : undefined,
+    },
+    signal,
+  });
+}
+
+export function getProperty(id: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: propertyQuery,
+    decoder: data => {
+      return data.property ? PropertyDecoder.decode(data.property) : null;
+    },
+    variables: {
+      id,
     },
     signal,
   });

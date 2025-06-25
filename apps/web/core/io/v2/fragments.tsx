@@ -14,28 +14,23 @@ export const entityFragment = graphql(/* GraphQL */ `
     values {
       spaceId
       property {
-        id
-        entity {
-          id
-          name
-        }
-        dataType
-        renderableType
-        relationValueTypes {
-          id
-          name
-        }
+        ...PropertyFragment
       }
       value
       language
       unit
     }
+
     relations {
       id
       spaceId
       position
       verified
       entityId
+      from {
+        id
+        name
+      }
       to {
         id
         name
@@ -84,6 +79,59 @@ export const entityQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const relationFragment = graphql(/* GraphQL */ `
+  fragment FullRelation on Relation {
+    id
+    spaceId
+    position
+    verified
+    entityId
+    from {
+      id
+      name
+    }
+    to {
+      id
+      name
+      types {
+        id
+        name
+      }
+      values {
+        propertyId
+        value
+      }
+    }
+    toSpaceId
+    type {
+      id
+      entity {
+        name
+      }
+      renderableType
+    }
+  }
+`);
+
+export const relationEntityRelationsQuery = graphql(/* GraphQL */ `
+  query RelationEntityRelations($id: String!, $spaceId: String) {
+    relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {
+      ...FullRelation
+    }
+  }
+`);
+
+export const entityPageQuery = graphql(/* GraphQL */ `
+  query EntityPage($id: String!, $spaceId: String) {
+    entity(id: $id, spaceId: $spaceId) {
+      ...FullEntity
+    }
+    relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {
+      ...FullRelation
+    }
+  }
+`);
+
 export const entityTypesQuery = graphql(/* GraphQL */ `
   query EntityTypes($id: String!, $spaceId: String) {
     entity(id: $id, spaceId: $spaceId) {
@@ -91,16 +139,6 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
         id
         name
       }
-    }
-  }
-`);
-
-export const propertyQuery = graphql(/* GraphQL */ `
-  query Property($id: String!) {
-    property(id: $id) {
-      id
-      dataType
-      renderableType
     }
   }
 `);
@@ -154,6 +192,30 @@ export const resultFragment = graphql(/* GraphQL */ `
     types {
       id
       name
+    }
+  }
+`);
+
+export const propertyFragment = graphql(/* GraphQL */ `
+  fragment PropertyFragment on Property {
+    id
+    dataType
+    renderableType
+    relationValueTypes {
+      id
+      name
+    }
+    entity {
+      id
+      name
+    }
+  }
+`);
+
+export const propertyQuery = graphql(/* GraphQL */ `
+  query Property($id: String!) {
+    property(id: $id) {
+      ...PropertyFragment
     }
   }
 `);

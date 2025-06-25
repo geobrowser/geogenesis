@@ -1,10 +1,11 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
+import { RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { readTypes } from '../database/entities';
 import { ID } from '../id';
 import { EntityId } from '../io/schema';
 import { Entities } from '../utils/entity';
-import { Entity, Relation, Value } from '../v2.types';
+import { DataType, Entity, ExtraRenderableType, Property, Relation, RenderableType, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
@@ -24,14 +25,37 @@ export class GeoStore {
   private deletedEntities: Set<string> = new Set();
 
   // TODO(migration): We can use the pending data to represent what hasn't been
-  // published yet. Right now when we sync we do put the synced
-  // data directly in the values and relations though.
+  // published yet.
+  //
+  // Right now when we sync we do put the synced data directly in the values and
+  // relations though.
   private pendingValues: Map<string, Map<string, Value>> = new Map();
   private pendingRelations: Map<string, Map<string, Relation>> = new Map();
   private pendingEntityDeletes: Set<string> = new Set();
 
-  // Need to also store the ops. We can emit an event to create ops based on events
-  // here
+  // Properties are entities, but with a required dataType field. The property's
+  // dataType is unique across the entire knowledge graph. The other fields of
+  // the property are space-specific, and derived from the data of an entity.
+  //
+  // @NOTE that properties can't be deleted
+  //
+  // @TODO: Should we model relation value types, renderable types as data on
+  // the property? Or should it be derived from the entity representation of
+  // the property? Probably the latter to avoid having multiple sources of truth
+  /**
+   * How should we model writing and syncing properties? Are they basically the
+   * same as writing and syncing entities?
+   */
+  private properties: Map<string, Property> = new Map();
+
+  /**
+   * @TODO
+   * - [ ] Set/delete relation value types
+   * - [ ] Set/delete renderable type
+   */
+  private dataTypes: Map<string, DataType> = new Map();
+  private pendingDataTypes: Map<string, DataType> = new Map();
+
   private stream: GeoEventStream;
 
   constructor(stream: GeoEventStream) {
@@ -89,6 +113,9 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.pendingValues.clear();
     this.pendingRelations.clear();
     this.pendingEntityDeletes.clear();
+
+    this.properties.clear();
+    this.pendingDataTypes.clear();
 
     this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entitiesToSync.map(e => e.id) });
   }
@@ -267,6 +294,66 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
   getRelation(id: string, entityId: string): Relation | null {
     return this.getResolvedRelations(entityId).find(r => r.id === id) ?? null;
+  }
+
+  public setDataType(id: string, dataType: DataType) {
+    this.pendingDataTypes.set(id, dataType);
+
+    this.stream.emit({ type: GeoEventStream.DATA_TYPE_CREATED, property: { id, dataType } });
+  }
+
+  public getProperty(id: string): Property | null {
+    const entity = this.getEntity(id);
+
+    const stableDataType = this.getStableDataType(id);
+    const pendingDataType = this.pendingDataTypes.get(id);
+
+    /**
+     * Always favor the stable data type. The stable data type should
+     * come from the server. If the property already exists in the
+     * knowledge graph then the data type is immutable.
+     */
+    const dataType = stableDataType ?? pendingDataType ?? null;
+
+    if (!dataType) {
+      return null;
+    }
+
+    const relationValueTypes = entity?.relations
+      .filter(t => t.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
+      .map(r => ({
+        id: r.toEntity.id,
+        name: r.toEntity.name,
+      }));
+
+    const renderableType = entity?.relations.find(t => t.type.id === RENDERABLE_TYPE_PROPERTY);
+
+    /**
+     * @TODO
+     * Move to higher-order file
+     */
+    const mapping: Record<string, ExtraRenderableType> = {
+      [SystemIds.URL]: 'URL',
+      [SystemIds.IMAGE]: 'IMAGE',
+    };
+
+    return {
+      id,
+      name: entity?.name ?? null,
+      dataType: dataType,
+      relationValueTypes,
+      renderableType: renderableType ? mapping[renderableType.toEntity.id] : dataType,
+
+      /**
+       * A data type is still editable as long as there's no
+       * stable representation of the property on the server.
+       */
+      isDataTypeEditable: !stableDataType,
+    };
+  }
+
+  getStableDataType(id: string): DataType | null {
+    return this.dataTypes.get(id) ?? null;
   }
 
   /**

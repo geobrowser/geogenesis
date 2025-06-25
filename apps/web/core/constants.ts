@@ -8,3 +8,4 @@ export const IPFS_GATEWAY_PATH = 'https://node.lighthouse.storage';
 export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`;
 
 export const RENDERABLE_TYPE_PROPERTY = '2316bbe1-c76f-4635-83f2-3e03b4f1fe46';
+export const ROOT_SPACE = '64ed9ffa-e7b3-40f6-ae99-fbf6112d10f8';
