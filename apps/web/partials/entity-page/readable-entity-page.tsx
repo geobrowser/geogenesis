@@ -25,9 +25,6 @@ interface Props {
 
 export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId }: Props) {
   const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverValues, spaceId);
-  const { property } = useQueryProperty({ id: entityId });
-
-  console.log('property', property);
 
   function countRenderableProperty(renderables: Renderables): number {
     let count = 0;
