@@ -12,12 +12,6 @@ export type Profile = {
 
 export type AppEnv = 'development' | 'testnet' | 'production';
 
-export type RelationValueType = {
-  typeId: string;
-  typeName: string | null;
-  spaceIdOfAttribute?: string;
-};
-
 export type SpaceType =
   | 'default'
   | 'company'

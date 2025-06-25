@@ -18,7 +18,6 @@ import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useMutate } from '~/core/sync/use-mutate';
-import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 import { Property, SearchResult } from '~/core/v2.types';
 
