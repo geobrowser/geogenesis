@@ -1,8 +1,6 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
-import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { getProperty } from '~/core/io/v2/queries';
 import { DataType } from '../v2.types';
 
@@ -19,18 +17,11 @@ interface PropertyData {
 }
 
 export function useProperty({ id, enabled = true }: UsePropertyOptions) {
-  const { store, stream } = useSyncEngine();
-  const cache = useQueryClient();
-
   const queryResult = useQuery({
     queryKey: ['property', id],
     enabled: enabled && !!id,
     queryFn: async ({ signal }) => {
       console.log('useProperty queryFn called with id:', id);
-      
-      // Properties are entities, so first check if we have it in the entity store
-      const localEntity = store.getEntity(id);
-      console.log('localEntity found:', !!localEntity);
       
       // Always fetch from the server for now to debug
       try {
@@ -52,22 +43,6 @@ export function useProperty({ id, enabled = true }: UsePropertyOptions) {
       }
     },
   });
-
-  // Subscribe to sync events for real-time updates
-  useEffect(() => {
-    if (!enabled || !id) return;
-
-    const unsubscribe = stream.on('entity:updated', event => {
-      // Handle entity updates that might affect this property
-      if (event.entity.id === id) {
-        cache.invalidateQueries({ queryKey: ['property', id] });
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [id, enabled, stream, cache]);
 
   // Return the full query result object to match useQuery's return type
   return queryResult;

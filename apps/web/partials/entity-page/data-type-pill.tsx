@@ -39,7 +39,6 @@ const TYPE_ICONS: Record<string, React.ComponentType<{ color?: ColorName }>> = {
 
 export function DataTypePill({ 
   dataType, 
-  dataTypeId,
   renderableType, 
   spaceId 
 }: DataTypePillProps) {
@@ -48,13 +47,13 @@ export function DataTypePill({
   const displayTypeName = renderableType?.name || dataType;
   
   // Get the appropriate entity ID for linking
-  let targetId: string | undefined;
+  let targetId: string | null;
   if (hasRenderableType && renderableType) {
     // Use the renderable type entity ID directly
     targetId = renderableType.id;
   } else {
     // Use data type entity ID if provided
-    targetId = dataTypeId || undefined;
+    targetId = null;
   }
   
   // Get the appropriate icon - renderableType.name is already typed as RenderableType

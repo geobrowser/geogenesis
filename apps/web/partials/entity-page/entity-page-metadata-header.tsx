@@ -64,7 +64,6 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
     return {
       id: propertyData.id,
       dataType: propertyData.dataType,
-      dataTypeId: propertyData.dataTypeId,
       renderableType: renderableTypeRelation ? {
         id: renderableTypeRelation.toEntity.id,
         name: renderableTypeRelation.toEntity.name as RenderableType,
@@ -78,7 +77,6 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
         <div className="mt-1 h-100 items-end flex">
           <DataTypePill
             dataType={propertyDataType.dataType}
-            dataTypeId={propertyDataType.dataTypeId}
             renderableType={propertyDataType.renderableType}
             spaceId={spaceId}
           />

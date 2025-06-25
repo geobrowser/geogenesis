@@ -83,6 +83,8 @@ const ReadableNumberField = ({ value, format, unitId }: { value: string; format?
 function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRenderableProperty[] }) {
   const spaceId = values[0].spaceId;
   const attributeId = values[0].propertyId;
+  const propertyId = values[0].propertyId;
+  const propertyName = values[0].propertyName;
 
   return (
     <>
@@ -95,7 +97,7 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
           <div key={`${entityId}-${t.propertyId}-${index}`} className="break-words">
             <Link href={NavUtils.toEntity(spaceId, attributeId)}>
               <Text as="p" variant="bodySemibold">
-                {values[0].propertyName || t.propertyId}
+                {propertyName || propertyId}
               </Text>
             </Link>
             <div className="flex flex-wrap gap-2">
