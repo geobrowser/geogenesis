@@ -1,11 +1,4 @@
-// @TODO:
-// Entity
-// Value
-// Relation
 import { Brand, Schema } from 'effect';
-
-// Need a more ergonomic querying system besides the graphql and shitty
-// variable mechanism we have now
 
 export const DataType = Schema.Union(
   Schema.Literal('TEXT'),
@@ -29,7 +22,10 @@ export const Property = Schema.Struct({
       name: Schema.NullOr(Schema.String),
     })
   ),
+  renderableType: Schema.NullOr(Schema.String),
 });
+
+export type RemoteProperty = Schema.Schema.Type<typeof Property>;
 
 export const Type = Schema.Struct({
   id: Schema.UUID,

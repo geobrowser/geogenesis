@@ -3,7 +3,7 @@ import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { useQueryEntity } from '~/core/sync/use-store';
+import { useQueryEntity, useQueryProperty } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 import { RelationRenderableProperty, RenderableProperty, Value, ValueRenderableProperty } from '~/core/v2.types';
 
@@ -25,6 +25,9 @@ interface Props {
 
 export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId }: Props) {
   const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverValues, spaceId);
+  const { property } = useQueryProperty({ id: entityId });
+
+  console.log('property', property);
 
   function countRenderableProperty(renderables: Renderables): number {
     let count = 0;

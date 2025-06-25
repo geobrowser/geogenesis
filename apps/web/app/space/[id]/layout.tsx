@@ -53,7 +53,6 @@ export default async function Layout(props0: LayoutProps) {
   const props = await getSpaceFrontPage(spaceId);
   const coverUrl = Entities.cover(props.relations);
 
-  const typeNames = props.space?.entity?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
   const tabs = buildTabsForSpacePage(props.tabEntities, props.space?.entity?.types ?? [], params);
 
   return (
@@ -91,7 +90,6 @@ export default async function Layout(props0: LayoutProps) {
               }
             />
             <SpacePageMetadataHeader
-              typeNames={typeNames}
               spaceId={spaceId}
               entityId={props.id}
               membersComponent={

@@ -14,16 +14,7 @@ export const entityFragment = graphql(/* GraphQL */ `
     values {
       spaceId
       property {
-        id
-        entity {
-          id
-          name
-        }
-        dataType
-        relationValueTypes {
-          id
-          name
-        }
+        ...PropertyFragment
       }
       value
       language
@@ -201,6 +192,30 @@ export const resultFragment = graphql(/* GraphQL */ `
     types {
       id
       name
+    }
+  }
+`);
+
+export const propertyFragment = graphql(/* GraphQL */ `
+  fragment PropertyFragment on Property {
+    id
+    dataType
+    renderableType
+    relationValueTypes {
+      id
+      name
+    }
+    entity {
+      id
+      name
+    }
+  }
+`);
+
+export const propertyQuery = graphql(/* GraphQL */ `
+  query Property($id: String!) {
+    property(id: $id) {
+      ...PropertyFragment
     }
   }
 `);

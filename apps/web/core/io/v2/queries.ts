@@ -1,18 +1,8 @@
-import {
-  EntitiesBatchQuery,
-  EntityPageQuery,
-  EntityQuery,
-  EntityTypesQuery,
-  RelationEntityRelationsQuery,
-  ResultQuery,
-  ResultsQuery,
-  SpaceQuery,
-  SpacesQuery,
-} from '~/core/gql/graphql';
-import { Entity, Relation, SearchResult } from '~/core/v2.types';
+import { Entity, SearchResult } from '~/core/v2.types';
 
 import { Space } from '../dto/spaces';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
+import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
@@ -22,6 +12,7 @@ import {
   entityPageQuery,
   entityQuery,
   entityTypesQuery,
+  propertyQuery,
   relationEntityRelationsQuery,
   resultQuery,
   resultsQuery,
@@ -159,6 +150,19 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
             types: { in: args.typeIds },
           }
         : undefined,
+    },
+    signal,
+  });
+}
+
+export function getProperty(id: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: propertyQuery,
+    decoder: data => {
+      return data.property ? PropertyDecoder.decode(data.property) : null;
+    },
+    variables: {
+      id,
     },
     signal,
   });

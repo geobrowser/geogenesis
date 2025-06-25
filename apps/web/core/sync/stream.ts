@@ -1,4 +1,4 @@
-import { Entity, Relation, Value } from '../v2.types';
+import { DataType, Entity, Relation, Value } from '../v2.types';
 
 const ENTITY_UPDATED = 'entity:updated' as const;
 const ENTITY_DELETED = 'entity:deleted' as const;
@@ -7,6 +7,7 @@ const VALUES_DELETED = 'values:deleted' as const;
 const RELATION_CREATED = 'relations:created' as const;
 const RELATION_DELETED = 'relations:deleted' as const;
 const ENTITIES_SYNCED = 'entities:synced' as const;
+const DATA_TYPE_CREATED = 'datatype:created' as const;
 const HYDRATE = 'hydrate' as const;
 
 export type GeoEvent =
@@ -48,6 +49,13 @@ export type GeoEvent =
   | {
       type: typeof HYDRATE;
       entities: string[];
+    }
+  | {
+      type: typeof DATA_TYPE_CREATED;
+      property: {
+        id: string;
+        dataType: DataType;
+      };
     };
 
 // Extract event types that match a specific 'type' value
@@ -73,7 +81,7 @@ export class GeoEventStream {
   static VALUES_DELETED = VALUES_DELETED;
   static RELATION_CREATED = RELATION_CREATED;
   static RELATION_DELETED = RELATION_DELETED;
-  // @TODO: Property created
+  static DATA_TYPE_CREATED = DATA_TYPE_CREATED;
   static ENTITIES_SYNCED = ENTITIES_SYNCED;
   static HYDRATE = HYDRATE;
 
