@@ -435,16 +435,13 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
         return null;
       }
 
-      const maybeProperty = await Effect.runPromise(getProperty(id));
-      console.log('maybeProperty', maybeProperty);
-
-      return maybeProperty;
+      return await Effect.runPromise(getProperty(id));
     },
   });
 
   return {
     property,
-    isLoading: !isFetched && !!id && enabled,
+    isLoading: !isFetched && Boolean(id) && enabled,
   };
 }
 
