@@ -3,16 +3,21 @@
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 
+// import Image from 'next/image';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { useSpace } from '~/core/hooks/use-space';
+// import { useSpace } from '~/core/hooks/use-space';
+// import { EntityId } from '~/core/io/schema';
+// import { getImagePath } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { RelationSmall } from '~/design-system/icons/relation-small';
+// import { TopRanked } from '~/design-system/icons/top-ranked';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+// import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 import { ColorName, colors } from '~/design-system/theme/colors';
 
 type LinkableChipProps = {
@@ -156,7 +161,7 @@ export function LinkableRelationChip({
   entityId,
   spaceId,
   relationEntityId,
-  relationId,
+  // relationId,
   verified,
   onDelete,
   small = false,
@@ -172,10 +177,11 @@ export function LinkableRelationChip({
 
   const shouldClamp = typeof children === 'string' && children.length >= 42;
 
-  const { space } = useSpace(spaceId);
+  // const { space } = useSpace(spaceId);
 
   return (
     <div
+      onMouseLeave={() => setIsPopoverOpen(false)}
       className={linkableRelationChipStyles({
         shouldClamp,
         isDotsHovered,
@@ -230,59 +236,14 @@ export function LinkableRelationChip({
                   verified={verified}
                   onDone={result => {
                     if (!relationId) return;
-
-                    DB.upsert(
-                      {
-                        attributeId: SystemIds.RELATION_TO_PROPERTY,
-                        attributeName: 'To Entity',
-                        entityId: relationId,
-                        entityName: null,
-                        value: {
-                          type: 'URL',
-                          value: result.space
-                            ? GraphUrl.fromEntityId(result.id, { spaceId: result.space })
-                            : GraphUrl.fromEntityId(result.id),
-                        },
-                      },
-                      currentSpaceId
-                    );
-
-                    if (verified && !result.verified) {
-                      DB.upsert(
-                        {
-                          attributeId: SystemIds.VERIFIED_SOURCE_PROPERTY,
-                          attributeName: 'Verified Source',
-                          entityId: relationId,
-                          entityName: null,
-                          value: {
-                            type: 'CHECKBOX',
-                            value: '0',
-                          },
-                        },
-                        currentSpaceId
-                      );
-                    } else if (result.verified) {
-                      DB.upsert(
-                        {
-                          attributeId: SystemIds.VERIFIED_SOURCE_PROPERTY,
-                          attributeName: 'Verified Source',
-                          entityId: relationId,
-                          entityName: null,
-                          value: {
-                            type: 'CHECKBOX',
-                            value: '1',
-                          },
-                        },
-                        currentSpaceId
-                      );
-                    }
+                    console.info('result', result);
                   }}
                   trigger={
                     <button className="inline-flex items-center p-1">
                       <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
                         {space ? (
                           <div className="size-[8px] overflow-clip rounded-sm grayscale">
-                            <Image fill src={getImagePath(space.spaceConfig.image)} alt="" />
+                            <Image fill src={getImagePath(space.entity.image)} alt="" />
                           </div>
                         ) : (
                           <TopRanked />
