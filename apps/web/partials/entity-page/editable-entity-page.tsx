@@ -648,7 +648,7 @@ function ValuesGroup({ values }: ValuesGroupProps) {
                 }
                 isEditing={true}
                 value={renderable.value}
-                // @TODO(migration): Fix formatting. Now on property
+                propertyId={renderable.propertyId}
               />
             );
           }

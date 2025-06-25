@@ -140,8 +140,7 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
                         key={`time-${renderable.propertyId}-${renderable.value}`}
                         isEditing={false}
                         value={renderable.value}
-                        // @TODO(migration) fix formatting
-                        // format={renderable.options?.format}
+                        propertyId={renderable.propertyId}
                       />
                     );
                   }
