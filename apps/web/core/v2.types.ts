@@ -89,23 +89,7 @@ export type Entity = {
   values: Value[];
 };
 
-export type RelationValueType = {
-  typeId: string;
-  typeName: string | null;
-  spaceIdOfProperty?: string;
-};
-
-export interface PropertySchema {
-  id: string;
-  name: string | null;
-  dataType: DataType;
-  renderableType?: RenderableType;
-  relationValueTypeId?: string;
-  relationValueTypeName?: string | null;
-  relationValueTypes?: RelationValueType[];
-}
-
-export type EntityWithSchema = Entity & { schema: PropertySchema[] };
+export type EntityWithSchema = Entity & { schema: Property[] };
 
 export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT';
 

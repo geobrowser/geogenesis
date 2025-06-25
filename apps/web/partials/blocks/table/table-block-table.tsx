@@ -15,11 +15,9 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { EntityId, SpaceId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
-import { Cell, PropertySchema, Row } from '~/core/v2.types';
+import { Cell, Property, Row } from '~/core/v2.types';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
@@ -41,12 +39,12 @@ const ColumnHeader = ({
   spaceId,
   isLastColumn,
 }: {
-  column: PropertySchema;
+  column: Property;
   isEditMode: boolean;
   spaceId: string;
   isLastColumn: boolean;
 }) => {
-  const isNameColumn = column.id === EntityId(SystemIds.NAME_PROPERTY);
+  const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
 
   return isEditMode && !isNameColumn ? (
     <div className={cx(isLastColumn ? 'pr-12' : '')}>
@@ -58,10 +56,10 @@ const ColumnHeader = ({
 };
 
 const formatColumns = (
-  columns: PropertySchema[] = [],
+  columns: { id: string; name: string | null }[] = [],
   isEditMode: boolean,
-  unpublishedColumns: PropertySchema[],
-  spaceId: SpaceId
+  unpublishedColumns: { id: string }[],
+  spaceId: string
 ) => {
   const columnSize = 880 / columns.length;
 
@@ -69,7 +67,7 @@ const formatColumns = (
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
-        const isNameColumn = column.id === EntityId(SystemIds.NAME_PROPERTY);
+        const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
 
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
@@ -109,9 +107,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
-    const maybePropertiesSchema = propertiesSchema?.[PropertyId(cellData.slotId)];
-    const filterableRelationTypeId = maybePropertiesSchema?.relationValueTypeId;
-    const filterableRelationTypeName = maybePropertiesSchema?.relationValueTypeName;
+    const maybePropertiesSchema = propertiesSchema?.[cellData.slotId];
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
     const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
@@ -136,16 +132,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           spaceId={spaceId}
           attributeId={propertyId}
           renderables={renderables}
-          filterSearchByTypes={
-            filterableRelationTypeId
-              ? [
-                  {
-                    typeId: filterableRelationTypeId,
-                    typeName: filterableRelationTypeName ?? null,
-                  },
-                ]
-              : undefined
-          }
+          filterSearchByTypes={maybePropertiesSchema?.relationValueTypes}
           isPlaceholderRow={Boolean(row.original.placeholder)}
           name={name}
           currentSpaceId={space}
@@ -183,8 +170,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 type TableBlockTableProps = {
   space: string;
-  properties: PropertySchema[];
-  propertiesSchema?: Record<PropertyId, PropertySchema>;
+  properties: Property[];
+  propertiesSchema?: Record<string, Property>;
   rows: Row[];
   shownColumnIds: string[];
   placeholder: { text: string; image: string };
@@ -210,7 +197,7 @@ export const TableBlockTable = ({
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(properties, isEditing, [], SpaceId(space)),
+    columns: formatColumns(properties, isEditing, [], space),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

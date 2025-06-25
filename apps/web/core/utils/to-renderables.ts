@@ -1,6 +1,6 @@
 import {
   NativeRenderableProperty,
-  PropertySchema,
+  Property,
   Relation,
   RelationRenderableProperty,
   RenderableProperty,
@@ -14,7 +14,7 @@ interface ToRenderablesArgs {
   values: Value[];
   relations: Relation[];
   spaceId: string;
-  schema?: PropertySchema[];
+  schema?: Property[];
   placeholderRenderables?: RenderableProperty[];
 }
 

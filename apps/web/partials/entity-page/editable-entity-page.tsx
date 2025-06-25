@@ -17,7 +17,7 @@ import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import {
   NativeRenderableProperty,
-  PropertySchema,
+  Property,
   Relation,
   RelationRenderableProperty,
   RenderableProperty,
@@ -223,7 +223,7 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
         <SelectEntity
           placeholder="Add property..."
           spaceId={spaceId}
-          relationValueTypes={[{ typeId: SystemIds.PROPERTY, typeName: 'Property' }]}
+          relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
           onCreateEntity={result => {
             storage.renderables.values.set({
               propertyId: SystemIds.NAME_PROPERTY,
@@ -285,7 +285,7 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
 
 type RelationsGroupProps = {
   relations: RelationRenderableProperty[];
-  properties?: Record<string, PropertySchema>;
+  properties?: Record<string, Property>;
 };
 
 export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
@@ -411,9 +411,9 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                         name: result.name,
                       },
                       toEntity: {
-                        id: valueType.typeId,
-                        name: valueType.typeName,
-                        value: valueType.typeId,
+                        id: valueType.id,
+                        name: valueType.name,
+                        value: valueType.id,
                       },
                     });
                   }
@@ -526,9 +526,9 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
                     name: result.name,
                   },
                   toEntity: {
-                    id: valueType.typeId,
-                    name: valueType.typeName,
-                    value: valueType.typeId,
+                    id: valueType.id,
+                    name: valueType.name,
+                    value: valueType.id,
                   },
                 });
               }

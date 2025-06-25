@@ -18,9 +18,8 @@ import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useMutate } from '~/core/sync/use-mutate';
-import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
-import { SearchResult } from '~/core/v2.types';
+import { Property, SearchResult } from '~/core/v2.types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { ResultsList } from '~/design-system/autocomplete/results-list';
@@ -58,7 +57,7 @@ type SelectEntityProps = {
   ) => void;
   onCreateEntity?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
   spaceId: string;
-  relationValueTypes?: RelationValueType[];
+  relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
   containerClassName?: string;
   inputClassName?: string;
@@ -93,7 +92,9 @@ export const SelectEntity = ({
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
-  const [allowedTypes, setAllowedTypes] = useState<RelationValueType[]>(() => relationValueTypes ?? []);
+  const [allowedTypes, setAllowedTypes] = useState<NonNullable<Property['relationValueTypes']>>(
+    () => relationValueTypes ?? []
+  );
 
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
   const [isAddingFilter, setIsAddingFilter] = useState<boolean>(false);
@@ -105,9 +106,9 @@ export const SelectEntity = ({
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 
   const filterByTypes = typeFilter
-    ? [typeFilter.typeId, ...(allowedTypes.length > 0 ? allowedTypes.map(r => r.typeId) : [])]
+    ? [typeFilter.typeId, ...(allowedTypes.length > 0 ? allowedTypes.map(r => r.id) : [])]
     : allowedTypes.length > 0
-      ? allowedTypes.map(r => r.typeId)
+      ? allowedTypes.map(r => r.id)
       : undefined;
 
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
@@ -299,13 +300,11 @@ export const SelectEntity = ({
                                     {allowedTypes.map(allowedType => {
                                       return (
                                         <FilterPill
-                                          key={allowedType.typeId}
+                                          key={allowedType.id}
                                           filterType="Relation value type"
-                                          name={allowedType.typeName ?? ''}
+                                          name={allowedType.name ?? ''}
                                           onDelete={() =>
-                                            setAllowedTypes([
-                                              ...allowedTypes.filter(r => r.typeId !== allowedType.typeId),
-                                            ])
+                                            setAllowedTypes([...allowedTypes.filter(r => r.id !== allowedType.id)])
                                           }
                                         />
                                       );

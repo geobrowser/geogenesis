@@ -7,7 +7,6 @@ import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
 import { OmitStrict } from '~/core/types';
-import type { RelationValueType } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
 import { Source } from './source';
@@ -18,7 +17,7 @@ export type Filter = {
   valueType: FilterableValueType;
   value: string;
   valueName: string | null;
-  relationValueTypes?: RelationValueType[];
+  relationValueTypes?: { id: string; name: string | null }[];
 };
 
 /**

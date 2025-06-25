@@ -7,7 +7,6 @@ import * as React from 'react';
 import { useProperties } from '~/core/hooks/use-properties';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { RelationRenderableProperty } from '~/core/v2.types';
 
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
@@ -19,8 +18,6 @@ interface EntityPageMetadataHeaderProps {
 }
 
 export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderProps) {
-  const { id } = useEntityPageStore();
-
   const editable = useUserIsEditing(spaceId);
 
   const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
