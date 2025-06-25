@@ -649,7 +649,9 @@ export function DateField({ value, isEditing, variant, onBlur, className = '', p
   const [intervalError, setIntervalError] = React.useState<string | null>(null);
 
   const { entity } = useQueryEntity({ id: propertyId });
-  const format = entity?.values.find(value => value.property.id === '396f8c72-dfd0-4b57-91ea-09c1b9321b2f')?.value;
+
+  const FORMAT_PROPERTY_ID = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f'; // should replace with systemIds
+  const format = entity?.values.find(value => value.property.id === FORMAT_PROPERTY_ID)?.value;
 
   const [startDate, endDate] = React.useMemo(() => {
     if (isDateInterval && value) {
