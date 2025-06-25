@@ -220,6 +220,14 @@ export const propertyQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const propertiesBatchQuery = graphql(/* GraphQL */ `
+  query PropertiesBatch($ids: [String!]!) {
+    properties(filter: { id: { in: $ids } }) {
+      ...PropertyFragment
+    }
+  }
+`);
+
 export const resultQuery = graphql(/* GraphQL */ `
   query Result($id: String!, $spaceId: String) {
     entity(id: $id, spaceId: $spaceId) {

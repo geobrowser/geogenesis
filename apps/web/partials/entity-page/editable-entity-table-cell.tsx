@@ -26,7 +26,7 @@ type Props = {
   spaceId: string;
   attributeId: string;
   renderables: RenderableProperty[];
-  filterSearchByTypes?: RelationValueType[];
+  filterSearchByTypes?: { id: string; name: string | null }[];
   isPlaceholderRow: boolean;
   name: string | null;
   currentSpaceId: string;

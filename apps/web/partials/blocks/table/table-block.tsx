@@ -25,7 +25,7 @@ import { useEditable } from '~/core/state/editable-store';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { Cell, NativeRenderableProperty, PropertySchema, Row, SearchResult } from '~/core/v2.types';
+import { Cell, Row, SearchResult } from '~/core/v2.types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -52,7 +52,7 @@ interface Props {
   spaceId: string;
 }
 
-function makePlaceholderRow(entityId: string, spaceId: string, properties: PropertySchema[]) {
+function makePlaceholderRow(entityId: string, spaceId: string, properties: { id: string; name: string | null }[]) {
   const columns: Record<string, Cell> = {};
 
   columns[SystemIds.NAME_PROPERTY] = {
@@ -106,7 +106,12 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
 //
 // We might want a way to store this in some local state so changes are optimistic
 // and we don't have to enter loading states when adding/removing entries
-function useEntries(entries: Row[], properties: PropertySchema[], spaceId: string, filterState: Filter[]) {
+function useEntries(
+  entries: Row[],
+  properties: { id: string; name: string | null }[],
+  spaceId: string,
+  filterState: Filter[]
+) {
   const isEditing = useUserIsEditing(spaceId);
   const { source } = useSource();
   const { setEditable } = useEditable();

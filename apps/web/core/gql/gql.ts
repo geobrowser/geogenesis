@@ -28,6 +28,7 @@ type Documents = {
     "\n  fragment Result on Entity {\n    id\n    name\n    description\n    spaces\n    types {\n      id\n      name\n    }\n  }\n": typeof types.ResultFragmentDoc,
     "\n  fragment PropertyFragment on Property {\n    id\n    dataType\n    renderableType\n    relationValueTypes {\n      id\n      name\n    }\n    entity {\n      id\n      name\n    }\n  }\n": typeof types.PropertyFragmentFragmentDoc,
     "\n  query Property($id: String!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n": typeof types.PropertyDocument,
+    "\n  query PropertiesBatch($ids: [String!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n": typeof types.PropertiesBatchDocument,
     "\n  query Result($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...Result\n    }\n  }\n": typeof types.ResultDocument,
     "\n  query Results($query: String!, $filter: SearchFilter, $spaceId: String, $limit: Int, $offset: Int) {\n    search(query: $query, filter: $filter, spaceId: $spaceId, limit: $limit, offset: $offset) {\n      ...Result\n    }\n  }\n": typeof types.ResultsDocument,
 };
@@ -46,6 +47,7 @@ const documents: Documents = {
     "\n  fragment Result on Entity {\n    id\n    name\n    description\n    spaces\n    types {\n      id\n      name\n    }\n  }\n": types.ResultFragmentDoc,
     "\n  fragment PropertyFragment on Property {\n    id\n    dataType\n    renderableType\n    relationValueTypes {\n      id\n      name\n    }\n    entity {\n      id\n      name\n    }\n  }\n": types.PropertyFragmentFragmentDoc,
     "\n  query Property($id: String!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n": types.PropertyDocument,
+    "\n  query PropertiesBatch($ids: [String!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n": types.PropertiesBatchDocument,
     "\n  query Result($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...Result\n    }\n  }\n": types.ResultDocument,
     "\n  query Results($query: String!, $filter: SearchFilter, $spaceId: String, $limit: Int, $offset: Int) {\n    search(query: $query, filter: $filter, spaceId: $spaceId, limit: $limit, offset: $offset) {\n      ...Result\n    }\n  }\n": types.ResultsDocument,
 };
@@ -120,6 +122,10 @@ export function graphql(source: "\n  fragment PropertyFragment on Property {\n  
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query Property($id: String!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n"): (typeof documents)["\n  query Property($id: String!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query PropertiesBatch($ids: [String!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n"): (typeof documents)["\n  query PropertiesBatch($ids: [String!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

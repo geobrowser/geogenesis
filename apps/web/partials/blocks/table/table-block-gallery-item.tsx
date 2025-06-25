@@ -4,9 +4,8 @@ import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { PropertyId } from '~/core/hooks/use-properties';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
-import { Cell, PropertySchema } from '~/core/v2.types';
+import { Cell, Property } from '~/core/v2.types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -25,7 +24,7 @@ type Props = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   isPlaceholder: boolean;
-  properties?: Record<PropertyId, PropertySchema>;
+  properties?: Record<string, Property>;
   relationId?: string;
   source: Source;
 };
