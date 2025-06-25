@@ -8,6 +8,8 @@ export function PropertyDto(queryResult: RemoteProperty): Property {
     name: queryResult.entity.name,
     dataType: queryResult.dataType,
     relationValueTypes: [...queryResult.relationValueTypes],
-    renderableType: queryResult.renderableType ? (queryResult.renderableType as Property['renderableType']) : undefined,
+    renderableType: queryResult.renderableType
+      ? (queryResult.renderableType as Property['renderableType'])
+      : queryResult.dataType,
   };
 }
