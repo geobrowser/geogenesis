@@ -13,14 +13,13 @@ import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
 import { Image } from '~/design-system/icons/image';
 import { ColorName } from '~/design-system/theme/colors';
-import { DataType, RenderableType } from '~/core/v2.types';
+import { DataType } from '~/core/v2.types';
 
 interface DataTypePillProps {
   dataType: DataType;
-  dataTypeId?: string | null;
   renderableType?: {
     id: string;
-    name: RenderableType
+    name: string | null;
   } | null;
   spaceId: string;
 }
@@ -44,7 +43,7 @@ export function DataTypePill({
 }: DataTypePillProps) {
   // Determine what to display
   const hasRenderableType = !!renderableType;
-  const displayTypeName = renderableType?.name || dataType;
+  const displayTypeName = (renderableType?.name?.toUpperCase()) || dataType;
   
   // Get the appropriate entity ID for linking
   let targetId: string | null;
@@ -56,9 +55,9 @@ export function DataTypePill({
     targetId = null;
   }
   
-  // Get the appropriate icon - renderableType.name is already typed as RenderableType
-  const iconKey = renderableType?.name || dataType;
-  const IconComponent = TYPE_ICONS[iconKey];
+  // Get the appropriate icon - normalize the name to uppercase to match TYPE_ICONS keys
+  const iconKey = (renderableType?.name?.toUpperCase()) || dataType;
+  const IconComponent = TYPE_ICONS[iconKey] || TYPE_ICONS[dataType];
   
   // Format display type: capitalize first letter of each word
   const formattedType = displayTypeName

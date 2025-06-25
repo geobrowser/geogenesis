@@ -9,7 +9,7 @@ import { useProperty } from '~/core/hooks/use-property';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RelationRenderableProperty, RenderableType } from '~/core/v2.types';
+import { RelationRenderableProperty } from '~/core/v2.types';
 
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
@@ -61,7 +61,7 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
       dataType: propertyData.dataType,
       renderableType: renderableTypeRelation ? {
         id: renderableTypeRelation.toEntity.id,
-        name: renderableTypeRelation.toEntity.name as RenderableType,
+        name: renderableTypeRelation.toEntity.name
       } : null,
     };
   }, [propertyData, relations]);
