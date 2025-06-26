@@ -14,7 +14,7 @@ import { TabGroup } from '~/design-system/tab-group';
 
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
-import { Backlinks } from '~/partials/entity-page/backlinks';
+import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
@@ -84,7 +84,9 @@ export default async function DefaultEntityPage({
           <ToggleEntityPage {...props} />
           <AutomaticModeToggle />
           <Spacer height={40} />
-          <Backlinks backlinks={props.backlinks} />
+          <React.Suspense fallback={null}>
+            <BacklinksServerContainer entityId={params.entityId} />
+          </React.Suspense>
         </EntityPageContentContainer>
       </EditorProvider>
     </EntityStoreProvider>
@@ -95,7 +97,6 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const entityPage = await Effect.runPromise(getEntityPage(entityId, spaceId));
   const entity = entityPage?.entity;
   const relationEntityRelations = entityPage?.relations ?? [];
-  const backlinks = entityPage?.backlinks;
   const spaces = entity?.spaces ?? [];
 
   // Redirect from space configuration page to space page
@@ -163,9 +164,6 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     // For entity page editor
     blockRelations: blockRelations ?? [],
     blocks,
-
-    // For references
-    backlinks: backlinks ?? [],
   };
 };
 

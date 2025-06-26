@@ -7,7 +7,7 @@ import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-b
 import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Backlinks } from '~/partials/entity-page/backlinks';
+import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
 import { ProfilePageComponent } from './profile-entity-page';
@@ -26,7 +26,6 @@ export async function ProfileEntityServerContainer({ params }: Props) {
   ]);
 
   const person = entityPage?.entity;
-  const backlinks = entityPage?.backlinks ?? [];
 
   // @TODO: Real error handling
   if (!person) {
@@ -36,7 +35,11 @@ export async function ProfileEntityServerContainer({ params }: Props) {
         values={[]}
         spaceId={params.id}
         relations={[]}
-        referencedByComponent={null}
+        referencedByComponent={
+          <React.Suspense fallback={null}>
+            <BacklinksServerContainer entityId={params.entityId} />
+          </React.Suspense>
+        }
       />
     );
   }
@@ -71,7 +74,7 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       values={person.values}
       spaceId={params.id}
       relations={person.relations}
-      referencedByComponent={<Backlinks backlinks={backlinks} />}
+      referencedByComponent={null}
     />
   );
 }

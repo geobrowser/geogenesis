@@ -9,6 +9,7 @@ import { SpaceDecoder } from './decoders/space';
 import {
   entitiesBatchQuery,
   entitiesQuery,
+  entityBacklinksQuery,
   entityPageQuery,
   entityQuery,
   entityTypesQuery,
@@ -72,7 +73,6 @@ export function getEntityPage(entityId: string, spaceId?: string, signal?: Abort
         ? {
             entity: EntityDecoder.decode(data.entity),
             relations: data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null),
-            backlinks: data.entity.backlinks.map(e => e?.from).filter(e => !!e) ?? [],
           }
         : null,
     variables: { id: entityId, spaceId },
@@ -88,6 +88,15 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
         .map(EntityTypeDecoder.decode)
         .filter((e): e is { id: string; name: string | null } => e !== null) ?? [],
     variables: { id: entityId },
+    signal,
+  });
+}
+
+export function getEntityBacklinks(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: entityBacklinksQuery,
+    decoder: data => (data.entity?.backlinks ? (data.entity.backlinks.map(e => e?.from).filter(e => !!e) ?? []) : []),
+    variables: { id: entityId, spaceId },
     signal,
   });
 }

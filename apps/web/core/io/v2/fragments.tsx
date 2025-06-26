@@ -125,13 +125,6 @@ export const entityPageQuery = graphql(/* GraphQL */ `
   query EntityPage($id: String!, $spaceId: String) {
     entity(id: $id, spaceId: $spaceId) {
       ...FullEntity
-      backlinks {
-        from {
-          id
-          name
-          spaces
-        }
-      }
     }
     relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {
       ...FullRelation
@@ -145,6 +138,20 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
       types {
         id
         name
+      }
+    }
+  }
+`);
+
+export const entityBacklinksQuery = graphql(/* GraphQL */ `
+  query EntityBacklinksPage($id: String!, $spaceId: String) {
+    entity(id: $id, spaceId: $spaceId) {
+      backlinks {
+        from {
+          id
+          name
+          spaces
+        }
       }
     }
   }
