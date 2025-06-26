@@ -15,6 +15,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
 import { Editor } from '~/partials/editor/editor';
+import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { SpaceNotices } from '~/partials/space-page/space-notices';
 import { Subspaces } from '~/partials/space-page/subspaces';
@@ -87,6 +88,16 @@ export default async function SpacePage(props0: Props) {
       </React.Suspense>
       <ToggleEntityPage id={props.id} spaceId={spaceId} values={props.values} />
       <Spacer height={40} />
+      {/*
+        Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
+        boundary. We don't want to show any referenced by loading states but do want to
+        stream it in
+      */}
+      <ErrorBoundary fallback={<EmptyErrorComponent />}>
+        <React.Suspense fallback={<div />}>
+          <BacklinksServerContainer entityId={props.id} />
+        </React.Suspense>
+      </ErrorBoundary>
     </>
   );
 }

@@ -1,11 +1,14 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { redirect } from 'next/navigation';
+import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
+
+import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 
@@ -36,9 +39,11 @@ export async function ProfileEntityServerContainer({ params }: Props) {
         spaceId={params.id}
         relations={[]}
         referencedByComponent={
-          <React.Suspense fallback={null}>
-            <BacklinksServerContainer entityId={params.entityId} />
-          </React.Suspense>
+          <ErrorBoundary fallback={<EmptyErrorComponent />}>
+            <React.Suspense fallback={<div />}>
+              <BacklinksServerContainer entityId={params.entityId} />
+            </React.Suspense>
+          </ErrorBoundary>
         }
       />
     );
@@ -75,9 +80,11 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       spaceId={params.id}
       relations={person.relations}
       referencedByComponent={
-        <React.Suspense fallback={null}>
-          <BacklinksServerContainer entityId={params.entityId} />
-        </React.Suspense>
+        <ErrorBoundary fallback={<EmptyErrorComponent />}>
+          <React.Suspense fallback={<div />}>
+            <BacklinksServerContainer entityId={params.entityId} />
+          </React.Suspense>
+        </ErrorBoundary>
       }
     />
   );
