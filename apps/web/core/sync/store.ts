@@ -5,7 +5,7 @@ import { readTypes } from '../database/entities';
 import { ID } from '../id';
 import { EntityId } from '../io/schema';
 import { Entities } from '../utils/entity';
-import { DataType, Entity, ExtraRenderableType, Property, Relation, RenderableType, Value } from '../v2.types';
+import { DataType, Entity, ExtraRenderableType, Property, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
