@@ -1,7 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { useRelations } from '~/core/database/relations';
-import '~/core/io/schema';
+import { useEntity } from '~/core/database/entities';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
 export type RelationWithBlock = Relation & {
@@ -25,14 +24,15 @@ export type RelationWithBlock = Relation & {
  *
  */
 export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
-  // @TODO: For some reason using useEntity or useQueryEntity here causes an infinite
-  // render loop. Continuing to use jotai-based hook for now.
-  const blocks = useRelations({
-    mergeWith: initialBlockRelations,
-    selector: r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS,
+  const entity = useEntity({
+    id: fromEntityId,
+    initialData: { relations: initialBlockRelations ?? [], spaces: [], values: [] },
   });
 
-  return blocks.map(relationToRelationWithBlock).sort(sortByIndex);
+  return (entity?.relations ?? [])
+    .filter(r => r.type.id === SystemIds.BLOCKS)
+    .map(relationToRelationWithBlock)
+    .sort(sortByIndex);
 }
 
 function relationToRelationWithBlock(r: Relation): RelationWithBlock {

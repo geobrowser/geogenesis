@@ -28,6 +28,8 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
   const isEditing = useUserIsEditing(spaceId);
   const { storage } = useMutate();
 
+  console.log('name', name);
+
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 
   const {
@@ -54,24 +56,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
   const showMore = !isOnePage && !isLastPage;
 
   const onNameChange = (value: string) => {
-    storage.values.set({
-      id: ID.createValueId({
-        entityId,
-        propertyId: SystemIds.NAME_PROPERTY,
-        spaceId,
-      }),
-      spaceId,
-      entity: {
-        id: entityId,
-        name: value,
-      },
-      property: {
-        id: SystemIds.NAME_PROPERTY,
-        name: 'Name',
-        dataType: 'TEXT',
-      },
-      value,
-    });
+    storage.entities.name.set(entityId, spaceId, value);
   };
 
   return (

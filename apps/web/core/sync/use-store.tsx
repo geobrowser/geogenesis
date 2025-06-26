@@ -209,6 +209,14 @@ export function useQueryEntities({
     queryKey: [...GeoStore.queryKeys(where), first, skip],
     queryFn: async () => {
       const entities = await E.findMany({ store, cache, where, first, skip });
+
+      /**
+       * @TODO
+       * Do we need to actually sync the results since we're returning it?
+       * One benefit of syncing is that all of the entities end up in the
+       * store, so any components subscribed to the store can hook into
+       * the new synced data as needed.
+       */
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
       return entities;
     },
