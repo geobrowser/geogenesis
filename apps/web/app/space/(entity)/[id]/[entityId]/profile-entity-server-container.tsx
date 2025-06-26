@@ -74,7 +74,11 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       values={person.values}
       spaceId={params.id}
       relations={person.relations}
-      referencedByComponent={null}
+      referencedByComponent={
+        <React.Suspense fallback={null}>
+          <BacklinksServerContainer entityId={params.entityId} />
+        </React.Suspense>
+      }
     />
   );
 }
