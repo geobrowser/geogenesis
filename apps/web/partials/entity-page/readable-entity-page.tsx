@@ -71,8 +71,12 @@ export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId
   );
 }
 
-const ReadableNumberField = ({ value, format, unitId }: { value: string; format?: string; unitId?: string }) => {
+const ReadableNumberField = ({ value, unitId, propertyId }: { value: string; unitId?: string; propertyId: string }) => {
   const { entity } = useQueryEntity({ id: unitId });
+  const { entity: propertyEntity } = useQueryEntity({ id: propertyId });
+
+  const FORMAT_PROPERTY_ID = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f'; // should replace with systemIds
+  const format = propertyEntity?.values.find(value => value.property.id === FORMAT_PROPERTY_ID)?.value;
 
   const currencySign = React.useMemo(
     () => entity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
@@ -147,8 +151,7 @@ function ValuesGroup({
                     return (
                       <ReadableNumberField
                         value={renderable.value}
-                        // @TODO(migration): fix formatting
-                        // format={renderable.options?.format}
+                        propertyId={renderable.propertyId}
                         unitId={renderable.options?.unit ?? undefined}
                       />
                     );
