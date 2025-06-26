@@ -20,6 +20,7 @@ export function ValueDto(entity: { id: string; name: string | null }, remoteValu
       name: remoteValue.property.entity.name ?? null,
       dataType: remoteValue.property.dataType,
       relationValueTypes: [...remoteValue.property.relationValueTypes],
+      renderableType: remoteValue.property.renderableType,
     },
     value: remoteValue.value,
     options: {

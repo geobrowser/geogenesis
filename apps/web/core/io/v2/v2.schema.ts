@@ -9,6 +9,17 @@ export const DataType = Schema.Union(
   Schema.Literal('RELATION')
 );
 
+export const RenderableDataType = Schema.Union(
+  Schema.Literal('TEXT'),
+  Schema.Literal('NUMBER'),
+  Schema.Literal('CHECKBOX'),
+  Schema.Literal('TIME'),
+  Schema.Literal('POINT'),
+  Schema.Literal('RELATION'),
+  Schema.Literal('URL'),
+  Schema.Literal('IMAGE')
+);
+
 export const Property = Schema.Struct({
   id: Schema.UUID,
   entity: Schema.Struct({
@@ -22,7 +33,7 @@ export const Property = Schema.Struct({
       name: Schema.NullOr(Schema.String),
     })
   ),
-  renderableType: Schema.NullOr(Schema.String),
+  renderableType: Schema.NullOr(RenderableDataType),
 });
 
 export type RemoteProperty = Schema.Schema.Type<typeof Property>;

@@ -3,7 +3,7 @@ import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { useQueryEntity, useQueryProperty } from '~/core/sync/use-store';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 import { RelationRenderableProperty, RenderableProperty, Value, ValueRenderableProperty } from '~/core/v2.types';
 
@@ -11,6 +11,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
@@ -57,7 +58,14 @@ export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId
           return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableProperty[]} />;
         }
 
-        return <ValuesGroup key={attributeId} entityId={entityId} values={renderable as ValueRenderableProperty[]} />;
+        return (
+          <ValuesGroup
+            key={attributeId}
+            spaceId={spaceId}
+            entityId={entityId}
+            values={renderable as ValueRenderableProperty[]}
+          />
+        );
       })}
     </div>
   );
@@ -74,7 +82,15 @@ const ReadableNumberField = ({ value, format, unitId }: { value: string; format?
   return <Text as="p">{GeoNumber.format(value, format, currencySign)}</Text>;
 };
 
-function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRenderableProperty[] }) {
+function ValuesGroup({
+  entityId,
+  values,
+  spaceId,
+}: {
+  entityId: string;
+  values: ValueRenderableProperty[];
+  spaceId: string;
+}) {
   return (
     <>
       {values.map((t, index) => {
@@ -91,7 +107,14 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
               {values.map(renderable => {
                 switch (renderable.type) {
                   case 'TEXT': {
-                    return (
+                    return renderable.renderableType === 'URL' ? (
+                      <WebUrlField
+                        key={`uri-${renderable.propertyId}-${renderable.value}`}
+                        isEditing={false}
+                        spaceId={spaceId}
+                        value={renderable.value}
+                      />
+                    ) : (
                       <Text key={`string-${renderable.propertyId}-${renderable.value}`} as="p">
                         {renderable.value}
                       </Text>
@@ -144,16 +167,6 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
                       />
                     );
                   }
-                  // case 'URL': {
-                  //   return (
-                  //     <WebUrlField
-                  //       key={`uri-${renderable.propertyId}-${renderable.value}`}
-                  //       isEditing={false}
-                  //       spaceId={spaceId}
-                  //       value={renderable.value}
-                  //     />
-                  //   );
-                  // }
                 }
               })}
             </div>

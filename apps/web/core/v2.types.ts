@@ -117,6 +117,7 @@ export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT' | 'POI
 // fields.
 export type NativeRenderableProperty = {
   type: 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT';
+  renderableType?: RenderableType | null;
   entityId: string;
   entityName: string | null;
   propertyId: string;

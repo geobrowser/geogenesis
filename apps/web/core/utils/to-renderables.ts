@@ -67,6 +67,18 @@ export function toRenderables({
             value: '',
             placeholder: true,
           };
+        case 'URL':
+          return {
+            type: s.dataType as NativeRenderableProperty['type'],
+            renderableType: s.renderableType,
+            entityId: entityId,
+            entityName: entityName,
+            propertyId: s.id,
+            propertyName: s.name,
+            spaceId,
+            value: '',
+            placeholder: true,
+          };
         default:
           return {
             type: s.dataType as NativeRenderableProperty['type'],
@@ -88,6 +100,7 @@ export function toRenderables({
       entityName: t.entity.name,
       propertyId: t.property.id,
       propertyName: t.property.name,
+      renderableType: t.property.renderableType,
       spaceId: t.spaceId,
       value: t.value,
       options: t.options ?? undefined,
