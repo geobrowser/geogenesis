@@ -144,6 +144,10 @@ export class SyncEngine {
     // Don't resync an entity if it already has been synced
     const uniqueEntityIds = [...new Set(entityIds.filter(e => !this.syncedEntities.has(e)))];
 
+    if (uniqueEntityIds.length === 0) {
+      return;
+    }
+
     const entities = await this.cache.fetchQuery({
       queryKey: ['entities-batch-sync', uniqueEntityIds],
       queryFn: async () => {
