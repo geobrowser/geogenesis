@@ -5,7 +5,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 
 import { useProperties } from '~/core/hooks/use-properties';
-import { useProperty } from '~/core/hooks/use-property';
+import { useQueryProperty } from '~/core/sync/use-store';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -42,8 +42,9 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
   const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.propertyId === SystemIds.TYPES_PROPERTY));
   
   // Fetch property data type to see if this is a property entity
-  const { data: propertyData } = useProperty({ 
+  const { property: propertyData } = useQueryProperty({ 
     id: entityId, 
+    spaceId,
     enabled: true 
   });
 
