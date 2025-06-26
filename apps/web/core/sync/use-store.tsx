@@ -224,7 +224,7 @@ export function useQueryEntities({
   } = useQuery({
     enabled,
     placeholderData,
-    queryKey: [...GeoStore.queryKeys(where), first, skip],
+    queryKey: GeoStore.queryKeys(where, first, skip),
     queryFn: async () => {
       const entities = await E.findMany({ store, cache, where, first, skip });
 
@@ -263,7 +263,7 @@ export function useQueryEntities({
        * end up with an empty query result.
        */
       if (syncedEntitiesIds.length === 0 && latestQueriedEntitiesIds.length === 0) {
-        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], []);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), []);
         return;
       }
 
@@ -310,7 +310,7 @@ export function useQueryEntities({
       }
 
       if (shouldUpdate) {
-        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], latestQueriedEntities);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), latestQueriedEntities);
       }
     });
 
@@ -324,7 +324,7 @@ export function useQueryEntities({
       const ids: string[] = entities.map(e => e.id);
 
       if (ids.includes(event.relation.fromEntity.id)) {
-        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], entities);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
       }
     });
 
@@ -341,7 +341,7 @@ export function useQueryEntities({
 
       // This means the queried list has changed as a result of the deleted relation
       if (previousListHasFromEntity && newListDoesNotHaveFromEntity) {
-        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], entities);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
       }
     });
 
@@ -380,7 +380,7 @@ export function useQueryEntities({
       }
 
       if (shouldUpdate) {
-        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], entities);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
       }
     });
 
@@ -432,7 +432,7 @@ export function useQueryEntities({
       }
 
       if (shouldUpdate) {
-        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], entities);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
       }
     });
 

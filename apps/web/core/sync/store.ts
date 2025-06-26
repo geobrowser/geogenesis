@@ -99,8 +99,8 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     return ['store', 'entity', id];
   }
 
-  static queryKeys(where: WhereCondition) {
-    return ['store', 'entities', JSON.stringify(where)];
+  static queryKeys(where: WhereCondition, first?: number, skip?: number) {
+    return ['store', 'entities', JSON.stringify(where), first, skip];
   }
 
   clear() {
