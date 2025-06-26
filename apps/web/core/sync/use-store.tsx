@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 
 import { useEffect, useRef, useState } from 'react';
 
-import { getProperty } from '../io/v2/queries';
+import { getProperties, getProperty } from '../io/v2/queries';
 import { Entity, Property } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E } from './orm';
@@ -442,6 +442,29 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
   return {
     property,
     isLoading: !isFetched && Boolean(id) && enabled,
+  };
+}
+
+type QueryPropertiesOptions = {
+  ids: string[];
+  enabled?: boolean;
+};
+
+export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptions) {
+  // const cache = useQueryClient();
+  // const { store, stream } = useSyncEngine();
+
+  const { data: properties, isFetched } = useQuery({
+    enabled: enabled,
+    queryKey: ['store', 'properties', JSON.stringify({ ids, enabled })],
+    queryFn: async (): Promise<Property[]> => {
+      return await Effect.runPromise(getProperties(ids));
+    },
+  });
+
+  return {
+    properties: properties,
+    isLoading: !isFetched && enabled,
   };
 }
 

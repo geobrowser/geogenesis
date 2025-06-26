@@ -4,7 +4,6 @@ import { Source } from '~/core/blocks/data/source';
 import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
 import { RelationRenderableProperty, RenderableProperty } from '~/core/v2.types';
-import type { RelationValueType } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -26,7 +25,7 @@ type Props = {
   spaceId: string;
   attributeId: string;
   renderables: RenderableProperty[];
-  filterSearchByTypes?: RelationValueType[];
+  filterSearchByTypes?: { id: string; name: string | null }[];
   isPlaceholderRow: boolean;
   name: string | null;
   currentSpaceId: string;

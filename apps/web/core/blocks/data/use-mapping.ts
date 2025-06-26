@@ -3,12 +3,11 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { getRelations } from '~/core/database/relations';
 import { getValues } from '~/core/database/v2.values';
-import { PropertyId } from '~/core/hooks/use-properties';
 import { EntityId } from '~/core/io/schema';
 import { useQueryEntitiesAsync } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
-import { Cell, Entity, PropertySchema, RenderableProperty, Row } from '~/core/v2.types';
+import { Cell, Entity, Property, RenderableProperty, Row } from '~/core/v2.types';
 
 import { makePlaceholderFromValueType } from '~/partials/blocks/table/utils';
 
@@ -111,7 +110,7 @@ export function mappingToRows(
   slotIds: string[],
   collectionItems: Entity[],
   spaceId: string,
-  properties?: Record<PropertyId, PropertySchema>
+  properties?: Record<string, Property>
 ): Row[] {
   /**
    * Take each row, take each mapping, take each "slot" in the mapping
@@ -130,7 +129,7 @@ export function mappingToRows(
           name,
         };
 
-        const maybeProperty = properties?.[PropertyId(slotId)];
+        const maybeProperty = properties?.[slotId];
 
         const placeholder = makePlaceholderFromValueType({
           propertyId: slotId,

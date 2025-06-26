@@ -248,15 +248,16 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
 
 const projectValueTypes = [
   {
-    typeId: SystemIds.SPACE_TYPE,
-    typeName: 'Space',
+    id: SystemIds.SPACE_TYPE,
+    name: 'Space',
   },
   {
-    typeId: SystemIds.PROJECT_TYPE,
-    typeName: 'Project',
+    id: SystemIds.PROJECT_TYPE,
+    name: 'Project',
   },
 ];
 
+// @TODO(migration): Correct space ids
 const spaces: SpaceData[] = [
   {
     id: 'BDuZwkjCg3nPWMDshoYtpS',

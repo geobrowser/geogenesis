@@ -5,11 +5,10 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getImagePath } from '~/core/utils/utils';
-import { PropertySchema, RelationRenderableProperty, RenderableProperty } from '~/core/v2.types';
+import { Property, RelationRenderableProperty, RenderableProperty } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -29,7 +28,7 @@ export function TableBlockPropertyField(props: {
   renderables: RenderableProperty[];
   spaceId: string;
   entityId: string;
-  properties?: Record<PropertyId, PropertySchema>;
+  properties?: Record<string, Property>;
   onChangeEntry: onChangeEntryFn;
   source: Source;
 }) {
@@ -247,7 +246,7 @@ export function TableBlockPropertyField(props: {
           switch (renderable.type) {
             case 'TEXT':
               return (
-                <Property
+                <RenderedProperty
                   key={`string-${renderable.propertyId}-${renderable.value}`}
                   renderable={renderable}
                   className="mt-1"
@@ -255,11 +254,11 @@ export function TableBlockPropertyField(props: {
                   <Text variant="tableProperty" color="grey-04" as="p">
                     {renderable.value}
                   </Text>
-                </Property>
+                </RenderedProperty>
               );
             case 'NUMBER':
               return (
-                <Property
+                <RenderedProperty
                   key={`${renderable.entityId}-${renderable.propertyId}-${renderable.value}`}
                   renderable={renderable}
                   className="mt-1"
@@ -271,23 +270,23 @@ export function TableBlockPropertyField(props: {
                     unitId={renderable.options?.unit}
                     isEditing={false}
                   />
-                </Property>
+                </RenderedProperty>
               );
             case 'CHECKBOX': {
               const checked = getChecked(renderable.value);
               return (
-                <Property
+                <RenderedProperty
                   key={`checkbox-${renderable.propertyId}-${renderable.value}`}
                   renderable={renderable}
                   className="mt-1"
                 >
                   <Checkbox checked={checked} />
-                </Property>
+                </RenderedProperty>
               );
             }
             case 'TIME': {
               return (
-                <Property
+                <RenderedProperty
                   key={`time-${renderable.propertyId}-${renderable.value}`}
                   renderable={renderable}
                   className="mt-1"
@@ -298,7 +297,7 @@ export function TableBlockPropertyField(props: {
                     value={renderable.value}
                     // format={renderable.options?.format}
                   />
-                </Property>
+                </RenderedProperty>
               );
             }
             // case 'URL': {
@@ -322,7 +321,7 @@ export function TableBlockPropertyField(props: {
               return null;
             case 'RELATION':
               return (
-                <Property
+                <RenderedProperty
                   key={`uri-${renderable.propertyId}-${renderable.value}`}
                   renderable={renderable}
                   className="mt-2"
@@ -337,7 +336,7 @@ export function TableBlockPropertyField(props: {
                   >
                     {renderable.valueName ?? renderable.value}
                   </LinkableRelationChip>
-                </Property>
+                </RenderedProperty>
               );
           }
         })}
@@ -351,7 +350,7 @@ type PropertyProps = {
   children: ReactNode;
 };
 
-const Property = ({ renderable, className = '', children }: PropertyProps) => {
+const RenderedProperty = ({ renderable, className = '', children }: PropertyProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
 
   return (
@@ -381,7 +380,7 @@ type RelationsGroupProps = {
   entityName: string | null;
   renderables: RelationRenderableProperty[];
   isPlaceholderEntry: boolean;
-  properties?: Record<PropertyId, PropertySchema>;
+  properties?: Record<string, Property>;
 };
 
 function RelationsGroup({ renderables, entityId, spaceId, entityName, properties }: RelationsGroupProps) {
@@ -391,15 +390,10 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
   const typeOfName = firstRenderable.propertyName;
   const { storage } = useMutate();
 
-  const property = properties?.[PropertyId(typeOfId)];
-  const filterSearchByTypes = property?.relationValueTypeId
-    ? [
-        {
-          typeId: property.relationValueTypeId,
-          typeName: property?.relationValueTypeName ?? null,
-        },
-      ]
-    : [];
+  const property = properties?.[typeOfId];
+  const filterSearchByTypes = property?.relationValueTypes ? property?.relationValueTypes : [];
+
+  const firstRelationValueType = property?.relationValueTypes?.[0];
 
   return (
     <div className="flex flex-wrap items-center gap-x-2">
@@ -431,7 +425,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                 spaceId={spaceId}
                 relationValueTypes={filterSearchByTypes}
                 onCreateEntity={result => {
-                  if (property?.relationValueTypeId) {
+                  if (firstRelationValueType) {
                     storage.relations.set({
                       id: Id.generate(),
                       entityId: r.relationEntityId,
@@ -448,9 +442,9 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                         name: result.name,
                       },
                       toEntity: {
-                        id: property.relationValueTypeId,
-                        name: property.relationValueTypeName ?? null,
-                        value: property.relationValueTypeId,
+                        id: firstRelationValueType.id,
+                        name: firstRelationValueType.name,
+                        value: firstRelationValueType.id,
                       },
                     });
                   }
@@ -509,7 +503,7 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
             trigger={<SquareButton icon={<Create />} />}
             relationValueTypes={filterSearchByTypes}
             onCreateEntity={result => {
-              if (property?.relationValueTypeId) {
+              if (firstRelationValueType) {
                 storage.relations.set({
                   id: Id.generate(),
                   // @TODO(migration): Reuse entity?
@@ -526,9 +520,9 @@ function RelationsGroup({ renderables, entityId, spaceId, entityName, properties
                     name: result.name,
                   },
                   toEntity: {
-                    id: property.relationValueTypeId,
-                    name: property.relationValueTypeName ?? null,
-                    value: property.relationValueTypeId,
+                    id: firstRelationValueType.id,
+                    name: firstRelationValueType.name,
+                    value: firstRelationValueType.id,
                   },
                 });
               }

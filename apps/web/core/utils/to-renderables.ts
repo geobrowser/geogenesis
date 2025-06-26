@@ -1,6 +1,6 @@
 import {
   NativeRenderableProperty,
-  PropertySchema,
+  Property,
   Relation,
   RelationRenderableProperty,
   RenderableProperty,
@@ -14,7 +14,7 @@ interface ToRenderablesArgs {
   values: Value[];
   relations: Relation[];
   spaceId: string;
-  schema?: PropertySchema[];
+  schema?: Property[];
   placeholderRenderables?: RenderableProperty[];
 }
 
@@ -70,7 +70,7 @@ export function toRenderables({
         default:
           return {
             type: s.dataType as NativeRenderableProperty['type'],
-            renderableType: s.renderableType,
+            renderableType: s.renderableType ?? undefined,
             entityId: entityId,
             entityName: entityName,
             propertyId: s.id,

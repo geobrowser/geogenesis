@@ -12,6 +12,7 @@ import {
   entityPageQuery,
   entityQuery,
   entityTypesQuery,
+  propertiesBatchQuery,
   propertyQuery,
   relationEntityRelationsQuery,
   resultQuery,
@@ -163,6 +164,19 @@ export function getProperty(id: string, signal?: AbortController['signal']) {
     },
     variables: {
       id,
+    },
+    signal,
+  });
+}
+
+export function getProperties(ids: string[], signal?: AbortController['signal']) {
+  return graphql({
+    query: propertiesBatchQuery,
+    decoder: data => {
+      return data.properties.map(PropertyDecoder.decode).filter(e => e !== null);
+    },
+    variables: {
+      ids,
     },
     signal,
   });
