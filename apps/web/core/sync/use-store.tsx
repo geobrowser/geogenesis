@@ -1,10 +1,10 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { getProperties, getProperty } from '../io/v2/queries';
-import { Entity, Property } from '../v2.types';
+import { Property } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E } from './orm';
 import { GeoStore } from './store';
@@ -22,7 +22,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
   const { store, stream } = useSyncEngine();
 
   const { isFetched, data: entity } = useQuery({
-    enabled: !!id && enabled,
+    enabled: Boolean(id) && enabled,
     queryKey: GeoStore.queryKey(id),
     queryFn: async () => {
       // If the entity is in the store then it's already been synced and we can
@@ -171,7 +171,6 @@ export function useQueryEntities({
 }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
-  const [localEntities, setLocalEntities] = useState<Entity[]>([]);
 
   const prevWhere = useRef(where);
 
@@ -200,7 +199,11 @@ export function useQueryEntities({
    * To prevent flicker when adding new items to collections, callers should explicitly
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const { isFetched, isLoading } = useQuery({
+  const {
+    isFetched,
+    isLoading,
+    data: localEntities,
+  } = useQuery({
     enabled,
     placeholderData,
     queryKey: [...GeoStore.queryKeys(where), first, skip],
@@ -232,7 +235,7 @@ export function useQueryEntities({
        * end up with an empty query result.
        */
       if (syncedEntitiesIds.length === 0 && latestQueriedEntitiesIds.length === 0) {
-        setLocalEntities([]);
+        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], []);
         return;
       }
 
@@ -257,7 +260,7 @@ export function useQueryEntities({
        * updated local state. This happens because triple/relation events are optimistic
        * so run before syncing completes.
        */
-      const localEntitiesList = localEntities;
+      const localEntitiesList = localEntities ?? [];
       const previousListHasEntity = localEntitiesList.some(e => syncedEntitiesIds.includes(e.id));
       const newListDoesNotHaveEntity = !latestQueriedEntities.some(e => syncedEntitiesIds.includes(e.id));
 
@@ -280,7 +283,7 @@ export function useQueryEntities({
       }
 
       if (shouldUpdate) {
-        setLocalEntities(latestQueriedEntities);
+        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], latestQueriedEntities);
       }
     });
 
@@ -294,7 +297,7 @@ export function useQueryEntities({
       const ids: string[] = entities.map(e => e.id);
 
       if (ids.includes(event.relation.fromEntity.id)) {
-        setLocalEntities(entities);
+        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], entities);
       }
     });
 
@@ -305,14 +308,14 @@ export function useQueryEntities({
         .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
-      const localEntitiesList = localEntities;
 
+      const localEntitiesList = localEntities ?? [];
       const previousListHasFromEntity = localEntitiesList.some(e => e.id === event.relation.fromEntity.id);
       const newListDoesNotHaveFromEntity = !entities.some(e => e.id === event.relation.fromEntity.id);
 
       // This means the queried list has changed as a result of the deleted relation
       if (previousListHasFromEntity && newListDoesNotHaveFromEntity) {
-        setLocalEntities(entities);
+        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], entities);
       }
     });
 
@@ -351,7 +354,7 @@ export function useQueryEntities({
       }
 
       if (shouldUpdate) {
-        setLocalEntities(entities);
+        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], entities);
       }
     });
 
@@ -373,7 +376,7 @@ export function useQueryEntities({
         .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
-      const localEntitiesList = localEntities;
+      const localEntitiesList = localEntities ?? [];
 
       const previousListHasChangedEntity = localEntitiesList.some(e => e.id === event.value.entity.id);
       const newListDoesNotHaveChangedEntity = !entities.some(e => e.id === event.value.entity.id);
@@ -404,7 +407,7 @@ export function useQueryEntities({
       }
 
       if (shouldUpdate) {
-        setLocalEntities(entities);
+        cache.setQueryData([...GeoStore.queryKeys(where), first, skip], entities);
       }
     });
 
@@ -415,10 +418,10 @@ export function useQueryEntities({
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [where, stream, store, localEntities, enabled, first, skip]);
+  }, [where, stream, store, localEntities, enabled, first, skip, cache]);
 
   return {
-    entities: localEntities,
+    entities: localEntities ?? [],
     isLoading: !isFetched && enabled && isLoading,
   };
 }

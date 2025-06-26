@@ -11,6 +11,16 @@ export class SyncEngine {
   private cache: QueryClient;
   private store: GeoStore;
 
+  /**
+   * We track already-synced entities so we don't sync them
+   * again unnecessarily. This gets reset with new user sessions.
+   *
+   * We could handle this through our caching layer, but since we
+   * batch fetch entities for syncing it's not straight forward to
+   * manage the cache for an array of entities to sync. It's simpler
+   * to just manage them outside of the cache and avoid fetching
+   * them at all.
+   */
   private syncedEntities: Set<string> = new Set();
 
   private subs: (() => void)[] = [];
@@ -79,10 +89,6 @@ export class SyncEngine {
       onRelationsDeleted,
       onEntitiesRevalidated,
     ];
-  }
-
-  public start() {
-    // this.processSyncQueue();
   }
 
   public stop() {

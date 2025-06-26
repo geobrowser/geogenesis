@@ -10,50 +10,9 @@ import { E } from '../sync/orm';
 import { store as geoStore } from '../sync/use-sync-engine';
 import { OmitStrict } from '../types';
 import { Relation, Value } from '../v2.types';
-import { db } from './indexeddb';
 
-const opsWithPersistence = () => {
-  const baseAtom = atom<Value[]>([]);
-
-  baseAtom.onMount = setValue => {
-    (async () => {
-      const stored = await db.values.toArray();
-
-      // @TODO: Move this to hydration layer based on change stream
-      for (const value of stored) {
-        if (value.isDeleted) geoStore.deleteValue(value);
-        else geoStore.setValue(value);
-      }
-
-      setValue(stored);
-    })();
-  };
-
-  return baseAtom;
-};
-
-const relationsWithPersistence = () => {
-  const baseAtom = atom<Relation[]>([]);
-
-  baseAtom.onMount = setValue => {
-    (async () => {
-      const stored = await db.relations.toArray();
-
-      // @TODO: Move this to hydration layer based on change stream
-      for (const relation of stored) {
-        if (relation.isDeleted) geoStore.deleteRelation(relation);
-        else geoStore.setRelation(relation);
-      }
-
-      setValue(stored);
-    })();
-  };
-
-  return baseAtom;
-};
-
-export const localValuesAtom = opsWithPersistence();
-export const localRelationsAtom = relationsWithPersistence();
+export const localValuesAtom = atom<Value[]>([]);
+export const localRelationsAtom = atom<Relation[]>([]);
 
 type UpsertRelationArgs = {
   type: 'SET_RELATION';
