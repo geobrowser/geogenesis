@@ -14,15 +14,6 @@ export type RelationWithBlock = Relation & {
   };
 };
 
-/**
- * Blocks are defined via relations with relation type of {@link SystemIds.BLOCKS}.
- * These relations point to entities which are renderable by the content editor. The
- * currently renderable block types are:
- * 1) Text
- * 2) Data
- * 3) Image
- *
- */
 export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
   const entity = useEntity({
     id: fromEntityId,
@@ -39,7 +30,7 @@ function relationToRelationWithBlock(r: Relation): RelationWithBlock {
   return {
     ...r,
     typeOfId: r.type.id,
-    // @TODO(migration): default position
+    // @TODO(migration): default position.
     index: r.position ?? 'a0',
     block: {
       id: r.toEntity.id,
