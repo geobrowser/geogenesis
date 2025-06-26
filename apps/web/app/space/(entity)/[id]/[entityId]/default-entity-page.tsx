@@ -1,6 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
-import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
@@ -10,7 +9,6 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
-import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
 import { TabGroup } from '~/design-system/tab-group';
 
@@ -86,9 +84,7 @@ export default async function DefaultEntityPage({
           <ToggleEntityPage {...props} />
           <AutomaticModeToggle />
           <Spacer height={40} />
-          <ErrorBoundary fallback={<EmptyErrorComponent />}>
-            <Backlinks backlinks={props.backlinks} />
-          </ErrorBoundary>
+          <Backlinks backlinks={props.backlinks} />
         </EntityPageContentContainer>
       </EditorProvider>
     </EntityStoreProvider>
