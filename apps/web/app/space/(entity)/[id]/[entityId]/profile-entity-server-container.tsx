@@ -1,6 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { redirect } from 'next/navigation';
-import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
@@ -8,11 +7,9 @@ import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-b
 import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
 
-import { EmptyErrorComponent } from '~/design-system/empty-error-component';
+import { Backlinks } from '~/partials/entity-page/backlinks';
 
-import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
-
-import { cachedFetchEntity } from './cached-fetch-entity';
+import { cachedFetchEntityPage } from './cached-fetch-entity';
 import { ProfilePageComponent } from './profile-entity-page';
 
 interface Props {
@@ -23,10 +20,13 @@ export async function ProfileEntityServerContainer({ params }: Props) {
   const spaceId = params.id;
   const entityId = params.entityId;
 
-  const [person, profile] = await Promise.all([
-    cachedFetchEntity(entityId, spaceId),
+  const [entityPage, profile] = await Promise.all([
+    cachedFetchEntityPage(entityId, spaceId),
     fetchOnchainProfileByEntityId(entityId),
   ]);
+
+  const person = entityPage?.entity;
+  const backlinks = entityPage?.backlinks ?? [];
 
   // @TODO: Real error handling
   if (!person) {
@@ -71,17 +71,7 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       values={person.values}
       spaceId={params.id}
       relations={person.relations}
-      referencedByComponent={
-        <ErrorBoundary fallback={<EmptyErrorComponent />}>
-          {/*
-              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
-              show any referenced by loading states but do want to stream it in
-            */}
-          <React.Suspense fallback={<div />}>
-            <EntityReferencedByServerContainer entityId={params.entityId} name={person.name} spaceId={params.id} />
-          </React.Suspense>
-        </ErrorBoundary>
-      }
+      referencedByComponent={<Backlinks backlinks={backlinks} />}
     />
   );
 }

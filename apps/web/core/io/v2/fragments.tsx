@@ -125,6 +125,13 @@ export const entityPageQuery = graphql(/* GraphQL */ `
   query EntityPage($id: String!, $spaceId: String) {
     entity(id: $id, spaceId: $spaceId) {
       ...FullEntity
+      backlinks {
+        from {
+          id
+          name
+          spaces
+        }
+      }
     }
     relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {
       ...FullRelation

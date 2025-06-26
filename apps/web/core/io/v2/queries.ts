@@ -72,6 +72,7 @@ export function getEntityPage(entityId: string, spaceId?: string, signal?: Abort
         ? {
             entity: EntityDecoder.decode(data.entity),
             relations: data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null),
+            backlinks: data.entity.backlinks.map(e => e?.from).filter(e => !!e) ?? [],
           }
         : null,
     variables: { id: entityId, spaceId },
