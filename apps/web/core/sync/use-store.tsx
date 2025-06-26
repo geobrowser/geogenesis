@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 import { getProperties, getProperty } from '../io/v2/queries';
 import { Property } from '../v2.types';
@@ -172,16 +172,27 @@ export function useQueryEntities({
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
 
-  const prevWhere = useRef(where);
-
-  useEffect(() => {
-    // We need to compare by hash since there's no guarantee that the
-    // where clause is actually stable.
-    // @TODO: We could hash this instead, but stringify works for now
-    if (JSON.stringify(prevWhere.current) !== JSON.stringify(where)) {
-      prevWhere.current = where;
-    }
-  }, [where]);
+  /**
+   * What would a reactive approach to queried entities look like?
+   * Currently we listen to the event stream and execute some heuristics
+   * to see if we should update the existing state.
+   *
+   * There's a few approaches we could take
+   * 1. Keep the heuristics, but instead of setting state, just update
+   *    the cache by invalidating it. (how we used to do it)
+   * 2. Keep the heuristics, but instead of settubg state, just set
+   *    the cache state directly. (how we currently do it)
+   * 3. Introduce some other reactive system that automatically updates
+   *    when its dependencies are updated. This would require that its
+   *    dependencies are themselves reactive. The filter could also be
+   *    reactive, so when the filter changes it causes the reactive result
+   *    to also update.
+   *
+   * Benefits of moving to the cache-based system is that we get "view sharing."
+   * Different callers get the same data back as long as the parameters are
+   * the same. Q: But what happens if one of them mutates? We might end up
+   * with multiple cache updates simultaneously.
+   */
 
   /**
    * This query runs behind the scenes to sync any remote entities that match
