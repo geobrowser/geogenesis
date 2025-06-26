@@ -36,9 +36,11 @@ export const Backlinks = ({ backlinks }: BacklinksProps) => {
             {backlinks.slice(0, 3).map(backlink => (
               <Backlink key={backlink.id} backlink={backlink} />
             ))}
-            <SmallButton variant="secondary" onClick={() => setIsExpanded(true)}>
-              Show more
-            </SmallButton>
+            <div>
+              <SmallButton variant="secondary" onClick={() => setIsExpanded(true)}>
+                Show more
+              </SmallButton>
+            </div>
           </>
         )}
       </div>
