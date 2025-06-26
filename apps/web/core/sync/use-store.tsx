@@ -51,6 +51,13 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
       return;
     }
 
+    // const trackedRelationIds = new Set(entity?.relations.map(r => r.id) ?? []);
+    const trackedRelationToEntities = new Set(entity?.relations.map(r => r.toEntity.id) ?? []);
+
+    const isEntityTracked = (id: string) => {
+      return trackedRelationToEntities.has(id);
+    };
+
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       if (event.entities.some(e => e.id === id)) {
         const entity = store.getEntity(id, { spaceId });
@@ -90,13 +97,13 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationToChanged = entity?.relations.some(r => r.toEntity.id === event.value.entity.id);
+      const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
 
       if (maybeRelationToChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entity?.relations.some(r => r.id === event.value.entity.id);
+      const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;
@@ -121,13 +128,13 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationToChanged = entity?.relations.some(r => r.toEntity.id === event.value.entity.id);
+      const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
 
       if (maybeRelationToChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entity?.relations.some(r => r.id === event.value.entity.id);
+      const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;
@@ -150,7 +157,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
 
   return {
     entity,
-    isLoading: !isFetched && !!id && enabled,
+    isLoading: !isFetched && Boolean(id) && enabled,
   };
 }
 
@@ -236,6 +243,8 @@ export function useQueryEntities({
   useEffect(() => {
     if (!enabled) return;
 
+    const localEntitiesList = localEntities ?? [];
+
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       let shouldUpdate = false;
       const syncedEntitiesIds = event.entities.map(e => e.id);
@@ -279,7 +288,6 @@ export function useQueryEntities({
        * updated local state. This happens because triple/relation events are optimistic
        * so run before syncing completes.
        */
-      const localEntitiesList = localEntities ?? [];
       const previousListHasEntity = localEntitiesList.some(e => syncedEntitiesIds.includes(e.id));
       const newListDoesNotHaveEntity = !latestQueriedEntities.some(e => syncedEntitiesIds.includes(e.id));
 
@@ -328,7 +336,6 @@ export function useQueryEntities({
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
 
-      const localEntitiesList = localEntities ?? [];
       const previousListHasFromEntity = localEntitiesList.some(e => e.id === event.relation.fromEntity.id);
       const newListDoesNotHaveFromEntity = !entities.some(e => e.id === event.relation.fromEntity.id);
 
@@ -395,7 +402,6 @@ export function useQueryEntities({
         .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
-      const localEntitiesList = localEntities ?? [];
 
       const previousListHasChangedEntity = localEntitiesList.some(e => e.id === event.value.entity.id);
       const newListDoesNotHaveChangedEntity = !entities.some(e => e.id === event.value.entity.id);
