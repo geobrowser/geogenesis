@@ -1,5 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
+import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
@@ -8,6 +9,7 @@ import { getEntityPage } from '~/core/io/v2/queries';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
+import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
@@ -108,21 +110,41 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const relationEntityRelations = entityPage?.relations ?? [];
   const spaces = entity?.spaces ?? [];
 
-  // Redirect from space configuration page to space page
-  // if (entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE))) {
-  //   console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
-  //   return redirect(NavUtils.toSpace(spaceId));
-  // }
+  /**
+   * Redirect from an invalid space to a valid one. Additionally,
+   * redirect to the space front page if the entity is a space.
+   */
+  if (entity && !spaces.includes(spaceId) && !preventRedirect) {
+    const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
+    console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
 
-  // Redirect from an invalid space to a valid one
-  // if (entity && !spaces.includes(spaceId) && !preventRedirect) {
-  //   const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
-  //   console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
-  //   return redirect(NavUtils.toEntity(newSpaceId, entityId));
-  // }
+    /**
+     * If we're not in a valid space for the entity AND the entity
+     * is a space, redirect to the space front page directly.
+     */
+    if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
+      console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
+      return redirect(NavUtils.toSpace(newSpaceId));
+    }
+
+    /**
+     * If the entity isn't a space we can redirect to the entity route
+     */
+    return redirect(NavUtils.toEntity(newSpaceId, entityId));
+  }
+
+  /**
+   * If we're in a valid space for the entity and the entity is
+   * a space, redirect to the space front page directly.
+   */
+  if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
+    console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
+    return redirect(NavUtils.toSpace(spaceId));
+  }
 
   const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 
+  // @TODO: For performance can we wait to fetch tabs until we're on the client?
   const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
 
   // @TODO(migration): We can query blocks from entities now
