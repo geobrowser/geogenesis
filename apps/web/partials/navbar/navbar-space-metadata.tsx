@@ -16,7 +16,7 @@ export function NavbarSpaceMetadata() {
   const entityId: string | undefined = params?.['entityId'] as string | undefined;
 
 
-  const { space } = useSpace(spaceId ?? '');
+  const { space } = useSpace(spaceId);
 
   return (
     <div className="flex items-center gap-2">
