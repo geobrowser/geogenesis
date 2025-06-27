@@ -10,15 +10,16 @@ import { ValueDto } from './values';
 
 export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
   const relationsOut = remoteEntity.relations.map(r => RelationDtoLive(r));
+  const values = remoteEntity.values.map(v => ValueDto(remoteEntity, v));
 
   return {
     id: remoteEntity.id,
     name: remoteEntity.name,
     description: remoteEntity.description,
-    spaces: [],
+    spaces: [...remoteEntity.spaces],
     types: [...remoteEntity.types],
     relations: relationsOut,
-    values: remoteEntity.values.map(v => ValueDto(remoteEntity, v)),
+    values: values,
   };
 }
 

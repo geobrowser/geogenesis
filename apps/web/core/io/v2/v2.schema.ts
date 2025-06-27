@@ -88,7 +88,7 @@ export const Entity = Schema.Struct({
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
   types: Schema.Array(EntityType),
-  // spaces
+  spaces: Schema.Array(Schema.String),
   // cover
   // blocks: Schema.
   values: Schema.Array(Value),
