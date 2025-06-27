@@ -28,7 +28,7 @@ type NavbarBreadcrumbProps = {
 
 const MotionContent = motion(Popover.Content);
 
-export function NavbarBreadcrumb({ spaceId, entityId,  }: NavbarBreadcrumbProps) {
+export function NavbarBreadcrumb({ spaceId, entityId }: NavbarBreadcrumbProps) {
   if (!entityId) return <SpaceBreadcrumb spaceId={spaceId} />;
 
   return <EntityBreadcrumb spaceId={spaceId} entityId={entityId} />;
@@ -94,7 +94,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
 
   const showCurrentSpace = space.entity.name?.toLowerCase().startsWith(formattedQuery);
 
-  if (!entity || entity.spaces.length < 2) {
+  if (!entity || otherSpaces.length < 1) {
     return (
       <Link href={NavUtils.toSpace(spaceId)} className="flex items-center justify-center gap-1.5">
         <div className="relative h-4 w-4 overflow-hidden rounded-sm">
