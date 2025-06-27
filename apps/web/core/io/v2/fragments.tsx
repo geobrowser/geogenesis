@@ -143,6 +143,20 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const entityBacklinksQuery = graphql(/* GraphQL */ `
+  query EntityBacklinksPage($id: String!, $spaceId: String) {
+    entity(id: $id, spaceId: $spaceId) {
+      backlinks {
+        from {
+          id
+          name
+          spaces
+        }
+      }
+    }
+  }
+`);
+
 export const spaceFragment = graphql(/* GraphQL */ `
   fragment FullSpace on Space {
     id

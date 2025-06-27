@@ -16,11 +16,11 @@ import { TabGroup } from '~/design-system/tab-group';
 
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
+import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
-import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { EntityPageRelations } from '~/partials/entity-page/entity-page-relations';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
@@ -86,14 +86,15 @@ export default async function DefaultEntityPage({
           <ToggleEntityPage {...props} />
           <AutomaticModeToggle />
           <Spacer height={40} />
+          {/*
+             Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
+             boundary. We don't want to show any referenced by loading states but do want to
+             stream it in
+          */}
           <ErrorBoundary fallback={<EmptyErrorComponent />}>
-            {/*
-              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
-              show any referenced by loading states but do want to stream it in
-            */}
-            {/* <React.Suspense fallback={<div />}>
-              <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
-            </React.Suspense> */}
+            <React.Suspense fallback={<div />}>
+              <BacklinksServerContainer entityId={params.entityId} />
+            </React.Suspense>
           </ErrorBoundary>
         </EntityPageContentContainer>
       </EditorProvider>

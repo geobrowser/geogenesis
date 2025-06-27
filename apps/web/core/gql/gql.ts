@@ -22,6 +22,7 @@ type Documents = {
     "\n  query RelationEntityRelations($id: String!, $spaceId: String) {\n    relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {\n      ...FullRelation\n    }\n  }\n": typeof types.RelationEntityRelationsDocument,
     "\n  query EntityPage($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...FullEntity\n    }\n    relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {\n      ...FullRelation\n    }\n  }\n": typeof types.EntityPageDocument,
     "\n  query EntityTypes($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      types {\n        id\n        name\n      }\n    }\n  }\n": typeof types.EntityTypesDocument,
+    "\n  query EntityBacklinksPage($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      backlinks {\n        from {\n          id\n          name\n          spaces\n        }\n      }\n    }\n  }\n": typeof types.EntityBacklinksPageDocument,
     "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    members {\n      address\n    }\n\n    editors {\n      address\n    }\n\n    entity {\n      ...FullEntity\n    }\n  }\n": typeof types.FullSpaceFragmentDoc,
     "\n  query Space($id: String!) {\n    space(id: $id) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpaceDocument,
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, limit: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpacesDocument,
@@ -41,6 +42,7 @@ const documents: Documents = {
     "\n  query RelationEntityRelations($id: String!, $spaceId: String) {\n    relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {\n      ...FullRelation\n    }\n  }\n": types.RelationEntityRelationsDocument,
     "\n  query EntityPage($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      ...FullEntity\n    }\n    relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {\n      ...FullRelation\n    }\n  }\n": types.EntityPageDocument,
     "\n  query EntityTypes($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      types {\n        id\n        name\n      }\n    }\n  }\n": types.EntityTypesDocument,
+    "\n  query EntityBacklinksPage($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      backlinks {\n        from {\n          id\n          name\n          spaces\n        }\n      }\n    }\n  }\n": types.EntityBacklinksPageDocument,
     "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    members {\n      address\n    }\n\n    editors {\n      address\n    }\n\n    entity {\n      ...FullEntity\n    }\n  }\n": types.FullSpaceFragmentDoc,
     "\n  query Space($id: String!) {\n    space(id: $id) {\n      ...FullSpace\n    }\n  }\n": types.SpaceDocument,
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, limit: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": types.SpacesDocument,
@@ -98,6 +100,10 @@ export function graphql(source: "\n  query EntityPage($id: String!, $spaceId: St
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query EntityTypes($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      types {\n        id\n        name\n      }\n    }\n  }\n"): (typeof documents)["\n  query EntityTypes($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      types {\n        id\n        name\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query EntityBacklinksPage($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      backlinks {\n        from {\n          id\n          name\n          spaces\n        }\n      }\n    }\n  }\n"): (typeof documents)["\n  query EntityBacklinksPage($id: String!, $spaceId: String) {\n    entity(id: $id, spaceId: $spaceId) {\n      backlinks {\n        from {\n          id\n          name\n          spaces\n        }\n      }\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
