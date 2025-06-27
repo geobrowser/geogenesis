@@ -144,6 +144,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
 
   const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 
+  // @TODO: For performance can we wait to fetch tabs until we're on the client?
   const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
 
   // @TODO(migration): We can query blocks from entities now
