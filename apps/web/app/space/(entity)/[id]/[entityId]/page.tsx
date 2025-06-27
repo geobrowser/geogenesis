@@ -12,11 +12,11 @@ interface Props {
 export default async function EntityTemplateStrategy(props: Props) {
   const params = await props.params;
   const searchParams = await props.searchParams;
-  const types = await cachedFetchEntityType(params.entityId);
+  // const types = await cachedFetchEntityType(params.entityId);
 
-  if (types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
-    return <ProfileEntityServerContainer params={params} />;
-  }
+  // if (types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
+  //   return <ProfileEntityServerContainer params={params} />;
+  // }
 
   return <DefaultEntityPage params={params} searchParams={searchParams} />;
 }

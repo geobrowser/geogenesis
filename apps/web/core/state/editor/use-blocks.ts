@@ -1,6 +1,8 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
+import { useEntity } from '~/core/database/entities';
 import { useRelations } from '~/core/database/relations';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
 export type RelationWithBlock = Relation & {
@@ -15,12 +17,26 @@ export type RelationWithBlock = Relation & {
 };
 
 export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
-  const blocks = useRelations({
-    mergeWith: initialBlockRelations,
-    selector: r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS,
+  const { entity } = useQueryEntity({
+    id: fromEntityId,
   });
 
-  return blocks?.map(relationToRelationWithBlock).sort(sortByIndex) ?? [];
+  // const blocks = useRelations({
+  //   mergeWith: initialBlockRelations,
+  //   selector: r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS,
+  // });
+  //
+  console.log(
+    'blocks',
+    entity?.relations.filter(t => t.type.id === SystemIds.BLOCKS)
+  );
+
+  return (
+    entity?.relations
+      .filter(t => t.type.id === SystemIds.BLOCKS)
+      .map(relationToRelationWithBlock)
+      .sort(sortByIndex) ?? []
+  );
 }
 
 function relationToRelationWithBlock(r: Relation): RelationWithBlock {

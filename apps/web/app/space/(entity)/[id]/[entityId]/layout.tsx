@@ -34,7 +34,9 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const spaceId = params.id;
   const entityId = params.entityId;
 
-  const entity = await cachedFetchEntity(entityId);
+  // @TODO(migration). Need a "fetch metadata" call instead
+  // const entity = await cachedFetchEntity(entityId);
+  const entity = null;
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
   const title = entityName ?? 'Entity';
 
@@ -74,94 +76,95 @@ export default async function ProfileLayout(props: Props) {
   const types = await cachedFetchEntityType(entityId);
   const typeIds = types.map(t => t.id);
 
-  if (!typeIds.includes(SystemIds.PERSON_TYPE)) {
-    return <>{children}</>;
-  }
+  // if (!typeIds.includes(SystemIds.PERSON_TYPE)) {
+  return <>{children}</>;
+  // }
 
-  const profile = await getProfilePage(entityId);
+  // const profile = await getProfilePage(entityId);
+  return null;
 
-  return (
-    <EntityStoreProvider
-      id={entityId}
-      spaceId={params.id}
-      initialSpaces={profile.spaces}
-      initialValues={profile.values}
-      initialRelations={profile.relations}
-    >
-      <EditorProvider
-        id={profile.id}
-        spaceId={params.id}
-        initialBlocks={profile.blocks}
-        initialBlockRelations={profile.blockRelations}
-      >
-        <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-        <EntityPageContentContainer>
-          <div className="space-y-2">
-            <EditableHeading spaceId={params.id} entityId={entityId} />
-            <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
-          </div>
+  // return (
+  //   <EntityStoreProvider
+  //     id={entityId}
+  //     spaceId={params.id}
+  //     initialSpaces={profile.spaces}
+  //     initialValues={profile.values}
+  //     initialRelations={profile.relations}
+  //   >
+  //     <EditorProvider
+  //       id={profile.id}
+  //       spaceId={params.id}
+  //       initialBlocks={profile.blocks}
+  //       initialBlockRelations={profile.blockRelations}
+  //     >
+  //       <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+  //       <EntityPageContentContainer>
+  //         <div className="space-y-2">
+  //           <EditableHeading spaceId={params.id} entityId={entityId} />
+  //           <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
+  //         </div>
 
-          <Spacer height={40} />
-          <React.Suspense fallback={null}>
-            <TabGroup
-              tabs={TABS.map(label => {
-                const href =
-                  label === 'Overview'
-                    ? `${NavUtils.toEntity(params.id, entityId)}`
-                    : `${NavUtils.toEntity(params.id, entityId)}/${label.toLowerCase()}`;
-                return {
-                  href,
-                  label,
-                };
-              })}
-            />
-          </React.Suspense>
+  //         <Spacer height={40} />
+  //         <React.Suspense fallback={null}>
+  //           <TabGroup
+  //             tabs={TABS.map(label => {
+  //               const href =
+  //                 label === 'Overview'
+  //                   ? `${NavUtils.toEntity(params.id, entityId)}`
+  //                   : `${NavUtils.toEntity(params.id, entityId)}/${label.toLowerCase()}`;
+  //               return {
+  //                 href,
+  //                 label,
+  //               };
+  //             })}
+  //           />
+  //         </React.Suspense>
 
-          <Spacer height={20} />
+  //         <Spacer height={20} />
 
-          {children}
-        </EntityPageContentContainer>
-      </EditorProvider>
-    </EntityStoreProvider>
-  );
+  //         {children}
+  //       </EntityPageContentContainer>
+  //     </EditorProvider>
+  //   </EntityStoreProvider>
+  // );
 }
 
-async function getProfilePage(entityId: string): Promise<
-  Entity & {
-    avatarUrl: string | null;
-    coverUrl: string | null;
-    blocks: Entity[];
-    blockRelations: Relation[];
-  }
-> {
-  const person = await cachedFetchEntity(entityId);
+// async function getProfilePage(entityId: string): Promise<
+//   Entity & {
+//     avatarUrl: string | null;
+//     coverUrl: string | null;
+//     blocks: Entity[];
+//     blockRelations: Relation[];
+//   }
+// > {
+//   const person = await cachedFetchEntity(entityId);
 
-  // @TODO: Real error handling
-  if (!person) {
-    return {
-      id: entityId,
-      name: null,
-      spaces: [],
-      avatarUrl: null,
-      coverUrl: null,
-      values: [],
-      types: [],
-      description: null,
-      relations: [],
-      blocks: [],
-      blockRelations: [],
-    };
-  }
+//   // @TODO: Real error handling
+//   if (!person) {
+//     return {
+//       id: entityId,
+//       name: null,
+//       spaces: [],
+//       avatarUrl: null,
+//       coverUrl: null,
+//       values: [],
+//       types: [],
+//       description: null,
+//       relations: [],
+//       blocks: [],
+//       blockRelations: [],
+//     };
+//   }
 
-  const blockRelations = person?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
-  const blockIds = blockRelations?.map(r => r.toEntity.id);
-  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+//   const blockRelations = person?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
+//   const blockIds = blockRelations?.map(r => r.toEntity.id);
+//   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
-  return {
-    ...person,
-    avatarUrl: Entities.avatar(person.relations),
-    coverUrl: Entities.cover(person.relations),
-    blockRelations: blockRelations,
-    blocks,
-  };
-}
+//   return {
+//     ...person,
+//     avatarUrl: Entities.avatar(person.relations),
+//     coverUrl: Entities.cover(person.relations),
+//     blockRelations: blockRelations,
+//     blocks,
+//   };
+// }

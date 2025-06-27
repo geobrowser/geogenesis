@@ -47,32 +47,24 @@ export default async function DefaultEntityPage({
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
-  const props = await getData(params.id, params.entityId, searchParams?.edit === 'true' ? true : false);
-  const tabs = buildTabsForEntityPage(props.tabEntities, params);
+  // const props = await getData(params.id, params.entityId, searchParams?.edit === 'true' ? true : false);
+  // const tabs = buildTabsForEntityPage(props.tabEntities, params);
 
-  const showRelations = props.isRelationEntity;
+  // const showRelations = props.isRelationEntity;
+  const showRelations = false;
+  const entityId = params.entityId;
+  const spaceId = params.id;
+  const tabs: any[] = [];
 
   return (
-    <EntityStoreProvider
-      id={props.id}
-      spaceId={props.spaceId}
-      initialSpaces={props.spaces}
-      initialValues={props.values}
-      initialRelations={props.relations}
-    >
-      <EditorProvider
-        id={props.id}
-        spaceId={props.spaceId}
-        initialBlocks={props.blocks}
-        initialBlockRelations={props.blockRelations}
-        initialTabs={props.tabs}
-      >
-        {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
+    <EntityStoreProvider id={entityId} spaceId={spaceId} initialSpaces={[]} initialValues={[]} initialRelations={[]}>
+      <EditorProvider id={entityId} spaceId={spaceId} initialBlocks={[]} initialBlockRelations={[]} initialTabs={{}}>
+        {showCover && <EntityPageCover avatarUrl={null} coverUrl={null} />}
         <EntityPageContentContainer>
           <div className="space-y-2">
-            {showRelations && <EntityPageRelations relations={props.relationEntityRelations} spaceId={props.spaceId} />}
-            {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
-            {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
+            {showRelations && <EntityPageRelations relations={[]} spaceId={spaceId} />}
+            {showHeading && <EditableHeading spaceId={spaceId} entityId={entityId} />}
+            {showHeader && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />}
           </div>
           {tabs.length > 1 && (
             <>
@@ -84,8 +76,8 @@ export default async function DefaultEntityPage({
           )}
           {notice}
           {(showSpacer || !!notice) && <Spacer height={40} />}
-          <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-          <ToggleEntityPage {...props} />
+          <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+          <ToggleEntityPage id={entityId} spaceId={spaceId} values={[]} />
           <AutomaticModeToggle />
           <Spacer height={40} />
           {/*
@@ -104,99 +96,99 @@ export default async function DefaultEntityPage({
   );
 }
 
-const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
-  const entityPage = await Effect.runPromise(getEntityPage(entityId, spaceId));
-  const entity = entityPage?.entity;
-  const relationEntityRelations = entityPage?.relations ?? [];
-  const spaces = entity?.spaces ?? [];
+// const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
+//   const entityPage = await Effect.runPromise(getEntityPage(entityId, spaceId));
+//   const entity = entityPage?.entity;
+//   const relationEntityRelations = entityPage?.relations ?? [];
+//   const spaces = entity?.spaces ?? [];
 
-  /**
-   * Redirect from an invalid space to a valid one. Additionally,
-   * redirect to the space front page if the entity is a space.
-   */
-  if (entity && !spaces.includes(spaceId) && !preventRedirect) {
-    const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
-    console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
+//   /**
+//    * Redirect from an invalid space to a valid one. Additionally,
+//    * redirect to the space front page if the entity is a space.
+//    */
+//   if (entity && !spaces.includes(spaceId) && !preventRedirect) {
+//     const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
+//     console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
 
-    /**
-     * If we're not in a valid space for the entity AND the entity
-     * is a space, redirect to the space front page directly.
-     */
-    if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
-      console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
-      return redirect(NavUtils.toSpace(newSpaceId));
-    }
+//     /**
+//      * If we're not in a valid space for the entity AND the entity
+//      * is a space, redirect to the space front page directly.
+//      */
+//     if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
+//       console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
+//       return redirect(NavUtils.toSpace(newSpaceId));
+//     }
 
-    /**
-     * If the entity isn't a space we can redirect to the entity route
-     */
-    return redirect(NavUtils.toEntity(newSpaceId, entityId));
-  }
+//     /**
+//      * If the entity isn't a space we can redirect to the entity route
+//      */
+//     return redirect(NavUtils.toEntity(newSpaceId, entityId));
+//   }
 
-  /**
-   * If we're in a valid space for the entity and the entity is
-   * a space, redirect to the space front page directly.
-   */
-  if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
-    console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
-    return redirect(NavUtils.toSpace(spaceId));
-  }
+//   /**
+//    * If we're in a valid space for the entity and the entity is
+//    * a space, redirect to the space front page directly.
+//    */
+//   if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
+//     console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
+//     return redirect(NavUtils.toSpace(spaceId));
+//   }
 
-  const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
+//   // const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 
-  // @TODO: For performance can we wait to fetch tabs until we're on the client?
-  const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
+//   // @TODO: For performance can we wait to fetch tabs until we're on the client?
+//   // const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
 
-  // @TODO(migration): We can query blocks from entities now
-  const tabBlocks = await Promise.all(
-    tabEntities.map(async entity => {
-      const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
+//   // @TODO(migration): We can query blocks from entities now
+//   // const tabBlocks = await Promise.all(
+//   //   tabEntities.map(async entity => {
+//   //     const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
 
-      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
-      return blocks;
-    })
-  );
+//   //     const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+//   //     return blocks;
+//   //   })
+//   // );
 
-  const tabs: Tabs = {};
+//   // const tabs: Tabs = {};
 
-  tabEntities.forEach((entity, index) => {
-    tabs[entity.id] = {
-      entity,
-      blocks: tabBlocks[index],
-    };
-  });
+//   // tabEntities.forEach((entity, index) => {
+//   //   tabs[entity.id] = {
+//   //     entity,
+//   //     blocks: tabBlocks[index],
+//   //   };
+//   // });
 
-  const serverAvatarUrl = Entities.avatar(entity?.relations);
-  const serverCoverUrl = Entities.cover(entity?.relations);
+//   const serverAvatarUrl = Entities.avatar(entity?.relations);
+//   const serverCoverUrl = Entities.cover(entity?.relations);
 
-  const blockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
-  const blockIds = blockRelations?.map(r => r.toEntity.id);
-  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+//   const blockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
+//   const blockIds = blockRelations?.map(r => r.toEntity.id);
+//   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
-  return {
-    values: entity?.values ?? [],
-    id: entityId,
-    name: entity?.name ?? null,
-    description: Entities.description(entity?.values ?? []),
-    spaceId,
-    spaces,
-    serverAvatarUrl,
-    serverCoverUrl,
-    relations: entity?.relations ?? [],
-    types: entity?.types ?? [],
+//   return {
+//     values: entity?.values ?? [],
+//     id: entityId,
+//     name: entity?.name ?? null,
+//     description: Entities.description(entity?.values ?? []),
+//     spaceId,
+//     spaces,
+//     serverAvatarUrl,
+//     serverCoverUrl,
+//     relations: entity?.relations ?? [],
+//     types: entity?.types ?? [],
 
-    tabs,
-    tabEntities,
+//     tabs: {},
+//     tabEntities: [],
 
-    // For relation entity pages
-    relationEntityRelations,
-    isRelationEntity: relationEntityRelations.length > 0,
+//     // For relation entity pages
+//     relationEntityRelations,
+//     isRelationEntity: relationEntityRelations.length > 0,
 
-    // For entity page editor
-    blockRelations: blockRelations ?? [],
-    blocks,
-  };
-};
+//     // For entity page editor
+//     blockRelations: blockRelations ?? [],
+//     blocks,
+//   };
+// };
 
 type EntityType = {
   id: string;

@@ -46,114 +46,114 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
     },
   });
 
-  useEffect(() => {
-    if (!id || !enabled) {
-      return;
-    }
+  // useEffect(() => {
+  //   if (!id || !enabled) {
+  //     return;
+  //   }
 
-    // const trackedRelationIds = new Set(entity?.relations.map(r => r.id) ?? []);
-    const trackedRelationToEntities = new Set(entity?.relations.map(r => r.toEntity.id) ?? []);
+  //   // const trackedRelationIds = new Set(entity?.relations.map(r => r.id) ?? []);
+  //   const trackedRelationToEntities = new Set(entity?.relations.map(r => r.toEntity.id) ?? []);
 
-    const isEntityTracked = (id: string) => {
-      return trackedRelationToEntities.has(id);
-    };
+  //   const isEntityTracked = (id: string) => {
+  //     return trackedRelationToEntities.has(id);
+  //   };
 
-    const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
-      if (event.entities.some(e => e.id === id)) {
-        const entity = store.getEntity(id, { spaceId });
-        cache.setQueryData(GeoStore.queryKey(id), entity);
-      }
-    });
+  //   const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
+  //     if (event.entities.some(e => e.id === id)) {
+  //       const entity = store.getEntity(id, { spaceId });
+  //       cache.setQueryData(GeoStore.queryKey(id), entity);
+  //     }
+  //   });
 
-    const onEntityDeletedSub = stream.on(GeoEventStream.ENTITY_DELETED, event => {
-      if (event.entity.id === id) {
-        cache.setQueryData(GeoStore.queryKey(id), null);
-      }
-    });
+  //   const onEntityDeletedSub = stream.on(GeoEventStream.ENTITY_DELETED, event => {
+  //     if (event.entity.id === id) {
+  //       cache.setQueryData(GeoStore.queryKey(id), null);
+  //     }
+  //   });
 
-    const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
-      if (event.relation.fromEntity.id === id) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
+  //   const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
+  //     if (event.relation.fromEntity.id === id) {
+  //       cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
+  //     }
+  //   });
 
-    const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
-      if (event.relation.fromEntity.id === id) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
+  //   const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
+  //     if (event.relation.fromEntity.id === id) {
+  //       cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
+  //     }
+  //   });
 
-    const onTripleCreatedSub = stream.on(GeoEventStream.VALUES_CREATED, event => {
-      let shouldUpdate = false;
+  //   const onTripleCreatedSub = stream.on(GeoEventStream.VALUES_CREATED, event => {
+  //     let shouldUpdate = false;
 
-      if (event.value.entity.id === id) {
-        shouldUpdate = true;
-      }
+  //     if (event.value.entity.id === id) {
+  //       shouldUpdate = true;
+  //     }
 
-      /**
-       * If the changed triple is for one of the relations of the subscribed entities
-       * changed we need to re-pull the entity to get the latest state of its relation.
-       *
-       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
-       * re-pull Byron to get the latest name for Geo, PBC.
-       */
-      const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
+  //     /**
+  //      * If the changed triple is for one of the relations of the subscribed entities
+  //      * changed we need to re-pull the entity to get the latest state of its relation.
+  //      *
+  //      * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
+  //      * re-pull Byron to get the latest name for Geo, PBC.
+  //      */
+  //     const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
 
-      if (maybeRelationToChanged) {
-        shouldUpdate = true;
-      }
+  //     if (maybeRelationToChanged) {
+  //       shouldUpdate = true;
+  //     }
 
-      const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
+  //     const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
 
-      if (maybeRelationEntityChanged) {
-        shouldUpdate = true;
-      }
+  //     if (maybeRelationEntityChanged) {
+  //       shouldUpdate = true;
+  //     }
 
-      if (shouldUpdate) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
+  //     if (shouldUpdate) {
+  //       cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
+  //     }
+  //   });
 
-    const onTripleDeletedSub = stream.on(GeoEventStream.VALUES_DELETED, event => {
-      let shouldUpdate = false;
+  //   const onTripleDeletedSub = stream.on(GeoEventStream.VALUES_DELETED, event => {
+  //     let shouldUpdate = false;
 
-      if (event.value.entity.id === id) {
-        shouldUpdate = true;
-      }
+  //     if (event.value.entity.id === id) {
+  //       shouldUpdate = true;
+  //     }
 
-      /**
-       * If the changed triple is for one of the relations of the subscribed entities
-       * changed we need to re-pull the entity to get the latest state of its relation.
-       *
-       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
-       * re-pull Byron to get the latest name for Geo, PBC.
-       */
-      const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
+  //     /**
+  //      * If the changed triple is for one of the relations of the subscribed entities
+  //      * changed we need to re-pull the entity to get the latest state of its relation.
+  //      *
+  //      * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
+  //      * re-pull Byron to get the latest name for Geo, PBC.
+  //      */
+  //     const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
 
-      if (maybeRelationToChanged) {
-        shouldUpdate = true;
-      }
+  //     if (maybeRelationToChanged) {
+  //       shouldUpdate = true;
+  //     }
 
-      const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
+  //     const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
 
-      if (maybeRelationEntityChanged) {
-        shouldUpdate = true;
-      }
+  //     if (maybeRelationEntityChanged) {
+  //       shouldUpdate = true;
+  //     }
 
-      if (shouldUpdate) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
+  //     if (shouldUpdate) {
+  //       cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
+  //     }
+  //   });
 
-    return () => {
-      onEntitySyncedSub();
-      onEntityDeletedSub();
-      onRelationCreatedSub();
-      onRelationDeletedSub();
-      onTripleCreatedSub();
-      onTripleDeletedSub();
-    };
-  }, [id, store, stream, spaceId, enabled, cache, entity]);
+  //   return () => {
+  //     onEntitySyncedSub();
+  //     onEntityDeletedSub();
+  //     onRelationCreatedSub();
+  //     onRelationDeletedSub();
+  //     onTripleCreatedSub();
+  //     onTripleDeletedSub();
+  //   };
+  // }, [id, store, stream, spaceId, enabled, cache, entity]);
 
   return {
     entity,

@@ -1,6 +1,7 @@
 'use client';
 
 import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
+import { keepPreviousData } from '@tanstack/react-query';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { useAtom } from 'jotai';
@@ -8,8 +9,8 @@ import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { getValues } from '~/core/database/v2.values';
 import { storage } from '~/core/sync/use-mutate';
+import { useQueryEntities } from '~/core/sync/use-store';
 import { getImageHash, getImagePath, validateEntityId } from '~/core/utils/utils';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
@@ -223,19 +224,28 @@ export function useEditorStore() {
   const isTab = React.useMemo(() => tabId && !!initialTabs && Object.hasOwn(initialTabs, tabId), [initialTabs, tabId]);
 
   const blockRelations = useBlocks(
-    activeEntityId,
-    isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
+    activeEntityId
+    // isTab ? initialTabs![tabId as EntityId].entity.relations : relations.filter(r => r.type.id === SystemIds.BLOCKS)
   );
 
   const blockIds = React.useMemo(() => {
     return blockRelations.map(b => b.block.id);
   }, [blockRelations]);
 
-  const initialBlockValues = React.useMemo(() => {
-    const blocks = isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
+  const { entities: blocks, isLoading } = useQueryEntities({
+    where: {
+      id: {
+        in: blockIds,
+      },
+    },
+    // placeholderData: keepPreviousData,
+  });
 
-    return blocks.flatMap(b => b.values);
-  }, [initialBlocks, initialTabs, isTab, tabId]);
+  // const initialBlockValues = React.useMemo(() => {
+  //   const blocks = isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
+
+  //   return blocks.flatMap(b => b.values);
+  // }, [initialBlocks, initialTabs, isTab, tabId]);
 
   /**
    * Tiptap expects a JSON representation of the editor state, but we store our block state
@@ -249,10 +259,15 @@ export function useEditorStore() {
         // @TODO(migration): We should be using the sync store to read all data for
         // the app. We need to be able to pre-hydrate the store with values based
         // on the data from the server or else the store won't have any data.
-        const markdownValuesForBlockId = getValues({
-          mergeWith: initialBlockValues,
-          selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,
-        });
+
+        const markdownValuesForBlockId = blocks
+          ?.find(b => b.id === block.block.id)
+          ?.values.filter(value => value.property.id === SystemIds.MARKDOWN_CONTENT);
+
+        // const markdownValuesForBlockId = getValues({
+        //   mergeWith: initialBlockValues,
+        //   selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,
+        // });
 
         const markdownValueForBlockId = markdownValuesForBlockId?.[0];
         const relationForBlockId = blockRelations.find(r => r.block.id === block.block.id);
@@ -316,7 +331,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockRelations, spaceId, initialBlockValues]);
+  }, [blockRelations, spaceId, blocks]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
