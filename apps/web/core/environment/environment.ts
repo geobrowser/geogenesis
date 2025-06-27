@@ -57,7 +57,7 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '80451',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
-    api: 'https://hypergraph-v2-testnet.up.railway.app/graphql',
+    api: 'https://api-testnet.geobrowser.io/graphql',
     bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   testnet: {
