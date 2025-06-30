@@ -1,5 +1,5 @@
 export type DataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
-export type ExtraRenderableType = 'URL' | 'IMAGE';
+export type ExtraRenderableType = string; // UUIDs of renderable types
 export type RenderableType = DataType | ExtraRenderableType;
 
 export type Property = {

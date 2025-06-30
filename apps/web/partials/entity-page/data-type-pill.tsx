@@ -46,13 +46,10 @@ export function DataTypePill({
   const displayTypeName = (renderableType?.name?.toUpperCase()) || dataType;
   
   // Get the appropriate entity ID for linking
-  let targetId: string | null;
-  if (hasRenderableType && renderableType) {
-    // Use the renderable type entity ID directly
+  let targetId: string | null = null;
+  if (hasRenderableType && renderableType && renderableType.id) {
+    // Use the renderable type entity ID directly if it's not null
     targetId = renderableType.id;
-  } else {
-    // Use data type entity ID if provided
-    targetId = null;
   }
   
   // Get the appropriate icon - normalize the name to uppercase to match TYPE_ICONS keys

@@ -10,11 +10,6 @@ export const DataType = Schema.Union(
   Schema.Literal('RELATION')
 );
 
-export const RenderableType = Schema.Union(
-  Schema.Literal('IMAGE'),
-  Schema.Literal('URL'),
-)
-
 export const Property = Schema.Struct({
   id: Schema.UUID,
   entity: Schema.Struct({
@@ -22,7 +17,9 @@ export const Property = Schema.Struct({
     name: Schema.NullOr(Schema.String),
   }),
   dataType: DataType,
-  renderableType: Schema.NullOr(RenderableType),
+  renderableType: Schema.NullOr(
+    Schema.UUID,
+  ),
   relationValueTypes: Schema.Array(
     Schema.Struct({
       id: Schema.String,
@@ -83,26 +80,7 @@ export const Relation = Schema.Struct({
       name: Schema.NullOr(Schema.String),
     }),
     renderableType: Schema.NullOr(
-      Schema.transform(
-        Schema.Union(Schema.Literal(SystemIds.IMAGE), Schema.Literal(SystemIds.URL)),
-        Schema.Union(Schema.Literal('IMAGE'), Schema.Literal('URL')),
-        {
-          strict: true,
-          decode: id => {
-            switch (id) {
-              case SystemIds.IMAGE:
-                return 'IMAGE' as const;
-              case SystemIds.URL:
-                return 'URL' as const;
-              default:
-                throw new Error();
-            }
-          },
-          encode: () => {
-            throw new Error();
-          },
-        }
-      )
+      Schema.UUID
     ),
   }),
   entityId: Schema.UUID,

@@ -4,7 +4,7 @@ import * as React from 'react';
 import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { useQueryEntity, useQueryProperty } from '~/core/sync/use-store';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 import { RelationRenderableProperty, RenderableProperty, Value, ValueRenderableProperty } from '~/core/v2.types';
 

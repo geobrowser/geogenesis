@@ -5,7 +5,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 
 import { useProperties } from '~/core/hooks/use-properties';
-import { useQueryProperty } from '~/core/sync/use-store';
+import { useQueryProperty, useQueryEntity } from '~/core/sync/use-store';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -48,24 +48,32 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
     enabled: true 
   });
 
-  const propertyDataType = React.useMemo(() => {
+  const { entity: renderableTypeEntity } = useQueryEntity({
+    id: propertyData?.renderableType || undefined,
+    spaceId,
+    enabled: !!propertyData?.renderableType
+  });
+
+  const propertyDataType = React.useMemo(() => {    
     if (!propertyData) return null;
 
-
-    // Find the renderable type from entity relations
-    const renderableTypeRelation = relations.find(relation => {
-      return relation.type.id === RENDERABLE_TYPE_PROPERTY
-    });
+    let renderableType = null;
+    if (propertyData.renderableType) {
+      if (renderableTypeEntity) {
+        // It's a UUID, use the entity data
+        renderableType = {
+          id: renderableTypeEntity.id,
+          name: renderableTypeEntity.name
+        };
+      } 
+    }
 
     return {
-      id: propertyData.id,
-      dataType: propertyData.dataType,
-      renderableType: renderableTypeRelation ? {
-        id: renderableTypeRelation.toEntity.id,
-        name: renderableTypeRelation.toEntity.name
-      } : null,
+      id: propertyData.id || '',
+      dataType: propertyData.dataType || '',
+      renderableType
     };
-  }, [propertyData, relations]);
+  }, [propertyData, renderableTypeEntity]);
 
   return (
     <div className="flex items-center gap-2 text-text">

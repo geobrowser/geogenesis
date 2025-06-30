@@ -148,7 +148,7 @@ export type Property = {
   entity?: Maybe<Entity>;
   id: Scalars['ID']['output'];
   relationValueTypes?: Maybe<Array<Maybe<Type>>>;
-  renderableType?: Maybe<RenderableType>;
+  renderableType?: Maybe<Scalars['String']['output']>;
 };
 
 export type PropertyFilter = {
@@ -273,11 +273,6 @@ export type RelationFilter = {
   typeId?: InputMaybe<Scalars['String']['input']>;
 };
 
-export enum RenderableType {
-  Image = 'IMAGE',
-  Url = 'URL'
-}
-
 export type SearchFilter = {
   not?: InputMaybe<SearchFilter>;
   or?: InputMaybe<Array<SearchFilter>>;
@@ -353,7 +348,7 @@ export type ValueFilter = {
 export type FullEntityFragment = { __typename?: 'Entity', id: string, name?: string | null, description?: string | null, spaces: Array<string | null>, types: Array<{ __typename?: 'Entity', id: string, name?: string | null } | null>, values: Array<{ __typename?: 'Value', spaceId: string, value?: string | null, language?: string | null, unit?: string | null, property?: (
       { __typename?: 'Property' }
       & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
-    ) | null } | null>, relations: Array<{ __typename?: 'Relation', id: string, spaceId: string, position?: string | null, verified?: boolean | null, entityId: string, toSpaceId?: string | null, from?: { __typename?: 'Entity', id: string, name?: string | null } | null, to?: { __typename?: 'Entity', id: string, name?: string | null, types: Array<{ __typename?: 'Entity', id: string, name?: string | null } | null>, values: Array<{ __typename?: 'Value', propertyId: string, value?: string | null } | null> } | null, type?: { __typename?: 'Property', id: string, renderableType?: RenderableType | null, entity?: { __typename?: 'Entity', name?: string | null } | null } | null } | null> } & { ' $fragmentName'?: 'FullEntityFragment' };
+    ) | null } | null>, relations: Array<{ __typename?: 'Relation', id: string, spaceId: string, position?: string | null, verified?: boolean | null, entityId: string, toSpaceId?: string | null, from?: { __typename?: 'Entity', id: string, name?: string | null } | null, to?: { __typename?: 'Entity', id: string, name?: string | null, types: Array<{ __typename?: 'Entity', id: string, name?: string | null } | null>, values: Array<{ __typename?: 'Value', propertyId: string, value?: string | null } | null> } | null, type?: { __typename?: 'Property', id: string, renderableType?: string | null, entity?: { __typename?: 'Entity', name?: string | null } | null } | null } | null> } & { ' $fragmentName'?: 'FullEntityFragment' };
 
 export type AllEntitiesQueryVariables = Exact<{
   spaceId?: InputMaybe<Scalars['String']['input']>;
@@ -389,7 +384,7 @@ export type EntityQuery = { __typename?: 'Query', entity?: (
     & { ' $fragmentRefs'?: { 'FullEntityFragment': FullEntityFragment } }
   ) | null };
 
-export type FullRelationFragment = { __typename?: 'Relation', id: string, spaceId: string, position?: string | null, verified?: boolean | null, entityId: string, toSpaceId?: string | null, from?: { __typename?: 'Entity', id: string, name?: string | null } | null, to?: { __typename?: 'Entity', id: string, name?: string | null, types: Array<{ __typename?: 'Entity', id: string, name?: string | null } | null>, values: Array<{ __typename?: 'Value', propertyId: string, value?: string | null } | null> } | null, type?: { __typename?: 'Property', id: string, renderableType?: RenderableType | null, entity?: { __typename?: 'Entity', name?: string | null } | null } | null } & { ' $fragmentName'?: 'FullRelationFragment' };
+export type FullRelationFragment = { __typename?: 'Relation', id: string, spaceId: string, position?: string | null, verified?: boolean | null, entityId: string, toSpaceId?: string | null, from?: { __typename?: 'Entity', id: string, name?: string | null } | null, to?: { __typename?: 'Entity', id: string, name?: string | null, types: Array<{ __typename?: 'Entity', id: string, name?: string | null } | null>, values: Array<{ __typename?: 'Value', propertyId: string, value?: string | null } | null> } | null, type?: { __typename?: 'Property', id: string, renderableType?: string | null, entity?: { __typename?: 'Entity', name?: string | null } | null } | null } & { ' $fragmentName'?: 'FullRelationFragment' };
 
 export type RelationEntityRelationsQueryVariables = Exact<{
   id: Scalars['String']['input'];
@@ -461,7 +456,7 @@ export type SpacesQuery = { __typename?: 'Query', spaces: Array<(
 
 export type ResultFragment = { __typename?: 'Entity', id: string, name?: string | null, description?: string | null, spaces: Array<string | null>, types: Array<{ __typename?: 'Entity', id: string, name?: string | null } | null> } & { ' $fragmentName'?: 'ResultFragment' };
 
-export type PropertyFragmentFragment = { __typename?: 'Property', id: string, dataType: DataType, renderableType?: RenderableType | null, relationValueTypes?: Array<{ __typename?: 'Type', id: string, name?: string | null } | null> | null, entity?: { __typename?: 'Entity', id: string, name?: string | null } | null } & { ' $fragmentName'?: 'PropertyFragmentFragment' };
+export type PropertyFragmentFragment = { __typename?: 'Property', id: string, dataType: DataType, renderableType?: string | null, relationValueTypes?: Array<{ __typename?: 'Type', id: string, name?: string | null } | null> | null, entity?: { __typename?: 'Entity', id: string, name?: string | null } | null } & { ' $fragmentName'?: 'PropertyFragmentFragment' };
 
 export type PropertyQueryVariables = Exact<{
   id: Scalars['String']['input'];
