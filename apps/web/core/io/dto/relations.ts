@@ -35,7 +35,7 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
       // of the entity to _what_ the entity is so they know how they should
       // render it depending on their use case.
       // Right now we only support images and entity ids as the value of the To entity.
-      value: renderableType === SystemIds.IMAGE_TYPE ? (imageEntityUrlValue ?? '') : relation.to.id,
+      value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.to.id,
     },
   };
 }
@@ -73,7 +73,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
       // render it depending on their use case.
       renderableType,
       // Right now we only support images and entity ids as the value of the To entity.
-      value: renderableType === SystemIds.IMAGE_TYPE ? (imageEntityUrlValue ?? '') : relation.toVersion.entityId,
+      value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toVersion.entityId,
     },
   };
 }
