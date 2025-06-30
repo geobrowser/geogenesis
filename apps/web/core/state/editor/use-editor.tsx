@@ -93,11 +93,11 @@ function makeNewBlockRelation({
       case 'listItem':
       case 'bulletList':
       case 'orderedList':
-        return SystemIds.TEXT_BLOCK;
+        return 'TEXT';
       case 'tableNode':
-        return SystemIds.DATA_BLOCK;
+        return 'DATA';
       case 'image':
-        return SystemIds.IMAGE_TYPE;
+        return 'IMAGE';
     }
   })();
 

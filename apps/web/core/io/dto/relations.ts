@@ -82,34 +82,34 @@ function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): Rendera
   const typeIds = types.map(type => type.id);
 
   if (typeIds.includes(EntityId(SystemIds.IMAGE_TYPE))) {
-    return SystemIds.IMAGE_TYPE;
+    return 'IMAGE';
   }
 
   if (typeIds.includes(EntityId(SystemIds.DATA_BLOCK))) {
-    return SystemIds.DATA_BLOCK;
+    return 'DATA';
   }
 
   if (typeIds.includes(EntityId(SystemIds.TEXT_BLOCK))) {
-    return SystemIds.TEXT_BLOCK;
+    return 'TEXT';
   }
 
-  return SystemIds.RELATION_TYPE;
+  return 'RELATION';
 }
 
 function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
   const typeIds = types.map(relation => relation.entityId);
 
   if (typeIds.includes(EntityId(SystemIds.IMAGE_TYPE))) {
-    return SystemIds.IMAGE_TYPE;
+    return 'IMAGE';
   }
 
   if (typeIds.includes(EntityId(SystemIds.DATA_BLOCK))) {
-    return SystemIds.DATA_BLOCK;
+    return 'DATA';
   }
 
   if (typeIds.includes(EntityId(SystemIds.TEXT_BLOCK))) {
-    return SystemIds.TEXT_BLOCK;
+    return 'TEXT';
   }
 
-  return SystemIds.RELATION_TYPE;
+  return 'RELATION';
 }
