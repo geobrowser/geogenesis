@@ -60,46 +60,46 @@ export default async function DefaultEntityPage({
       initialValues={props.values}
       initialRelations={props.relations}
     >
-      <EditorProvider
-        id={props.id}
-        spaceId={props.spaceId}
-        initialBlocks={props.blocks}
-        initialBlockRelations={props.blockRelations}
-        initialTabs={props.tabs}
-      >
-        {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
-        <EntityPageContentContainer>
-          <div className="space-y-2">
-            {showRelations && <EntityPageRelations relations={props.relationEntityRelations} spaceId={props.spaceId} />}
-            {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
-            {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
-          </div>
-          {tabs.length > 1 && (
-            <>
-              <Spacer height={40} />
-              <React.Suspense fallback={null}>
-                <TabGroup tabs={tabs} />
-              </React.Suspense>
-            </>
-          )}
-          {notice}
-          {(showSpacer || !!notice) && <Spacer height={40} />}
+      {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
+      <EntityPageContentContainer>
+        <div className="space-y-2">
+          {showRelations && <EntityPageRelations relations={props.relationEntityRelations} spaceId={props.spaceId} />}
+          {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
+          {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
+        </div>
+        {tabs.length > 1 && (
+          <>
+            <Spacer height={40} />
+            <React.Suspense fallback={null}>
+              <TabGroup tabs={tabs} />
+            </React.Suspense>
+          </>
+        )}
+        {notice}
+        {(showSpacer || !!notice) && <Spacer height={40} />}
+        <EditorProvider
+          id={props.id}
+          spaceId={props.spaceId}
+          initialBlocks={props.blocks}
+          initialBlockRelations={props.blockRelations}
+          initialTabs={props.tabs}
+        >
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-          <ToggleEntityPage {...props} />
-          <AutomaticModeToggle />
-          <Spacer height={40} />
-          {/*
+        </EditorProvider>
+        <ToggleEntityPage {...props} />
+        <AutomaticModeToggle />
+        <Spacer height={40} />
+        {/*
              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
              boundary. We don't want to show any referenced by loading states but do want to
              stream it in
           */}
-          <ErrorBoundary fallback={<EmptyErrorComponent />}>
-            <React.Suspense fallback={<div />}>
-              <BacklinksServerContainer entityId={params.entityId} />
-            </React.Suspense>
-          </ErrorBoundary>
-        </EntityPageContentContainer>
-      </EditorProvider>
+        <ErrorBoundary fallback={<EmptyErrorComponent />}>
+          <React.Suspense fallback={<div />}>
+            <BacklinksServerContainer entityId={params.entityId} />
+          </React.Suspense>
+        </ErrorBoundary>
+      </EntityPageContentContainer>
     </EntityStoreProvider>
   );
 }

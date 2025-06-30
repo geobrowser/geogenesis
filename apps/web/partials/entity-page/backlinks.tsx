@@ -1,7 +1,6 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
 
 import { useState } from 'react';
 
@@ -10,6 +9,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
+import { PrefetchLink } from '~/design-system/prefetch-link';
 import { Tag } from '~/design-system/tag';
 
 type BacklinksProps = {
@@ -59,7 +59,12 @@ const Backlink = ({ backlink }: BacklinkProps) => {
 
   return (
     <div>
-      <Link href={NavUtils.toEntity(space.id, backlink.id)} className="inline-flex flex-col">
+      <PrefetchLink
+        href={NavUtils.toEntity(space.id, backlink.id)}
+        entityId={backlink.id}
+        spaceId={space.id}
+        className="inline-flex flex-col"
+      >
         <span className="text-metadataMedium">{backlink.name}</span>
         <span className="mt-1.5 inline-flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5">
@@ -77,7 +82,7 @@ const Backlink = ({ backlink }: BacklinkProps) => {
             ))}
           </span>
         </span>
-      </Link>
+      </PrefetchLink>
     </div>
   );
 };
