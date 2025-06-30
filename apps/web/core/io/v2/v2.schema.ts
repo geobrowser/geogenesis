@@ -1,3 +1,4 @@
+import { SystemIds } from '@graphprotocol/grc-20';
 import { Brand, Schema } from 'effect';
 
 export const DataType = Schema.Union(
@@ -81,7 +82,28 @@ export const Relation = Schema.Struct({
     entity: Schema.Struct({
       name: Schema.NullOr(Schema.String),
     }),
-    renderableType: Schema.NullOr(RenderableType),
+    renderableType: Schema.NullOr(
+      Schema.transform(
+        Schema.Union(Schema.Literal(SystemIds.IMAGE), Schema.Literal(SystemIds.URL)),
+        Schema.Union(Schema.Literal('IMAGE'), Schema.Literal('URL')),
+        {
+          strict: true,
+          decode: id => {
+            switch (id) {
+              case SystemIds.IMAGE:
+                return 'IMAGE' as const;
+              case SystemIds.URL:
+                return 'URL' as const;
+              default:
+                throw new Error();
+            }
+          },
+          encode: () => {
+            throw new Error();
+          },
+        }
+      )
+    ),
   }),
   entityId: Schema.UUID,
 });
@@ -93,7 +115,7 @@ export const Entity = Schema.Struct({
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
   types: Schema.Array(EntityType),
-  // spaces
+  spaces: Schema.Array(Schema.String),
   // cover
   // blocks: Schema.
   values: Schema.Array(Value),

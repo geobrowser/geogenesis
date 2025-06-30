@@ -29,7 +29,7 @@ export async function mergeSearchResult(args: FetchResultOptions) {
       ? localEntity
       : null;
 
-  const localOnlyEntitySpaceIds = !cachedRemoteResult ? (localEntity ? localEntity.spaces : []) : [];
+  const localOnlyEntitySpaceIds = cachedRemoteResult ? (localEntity && localEntity.spaces) : [];
 
   const localEntitySpaces = await queryClient.fetchQuery({
     queryKey: ['merge-local-entity-spaces', localOnlyEntitySpaceIds],

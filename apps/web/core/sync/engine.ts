@@ -11,6 +11,18 @@ export class SyncEngine {
   private cache: QueryClient;
   private store: GeoStore;
 
+  /**
+   * We track already-synced entities so we don't sync them
+   * again unnecessarily. This gets reset with new user sessions.
+   *
+   * We could handle this through our caching layer, but since we
+   * batch fetch entities for syncing it's not straight forward to
+   * manage the cache for an array of entities to sync. It's simpler
+   * to just manage them outside of the cache and avoid fetching
+   * them at all.
+   */
+  private syncedEntities: Set<string> = new Set();
+
   private subs: (() => void)[] = [];
   private env = process.env.NODE_ENV;
 
@@ -79,10 +91,6 @@ export class SyncEngine {
     ];
   }
 
-  public start() {
-    // this.processSyncQueue();
-  }
-
   public stop() {
     this.subs.forEach(unsub => unsub());
   }
@@ -133,18 +141,37 @@ export class SyncEngine {
       return;
     }
 
-    const uniqueEntityIds = [...new Set(entityIds)];
+    // Don't resync an entity if it already has been synced
+    const uniqueEntityIds = [...new Set(entityIds.filter(e => !this.syncedEntities.has(e)))];
+
+    if (uniqueEntityIds.length === 0) {
+      return;
+    }
 
     const entities = await this.cache.fetchQuery({
       queryKey: ['entities-batch-sync', uniqueEntityIds],
-      queryFn: () => Effect.runPromise(getBatchEntities(uniqueEntityIds)),
+      queryFn: async () => {
+        const entities = await Effect.runPromise(getBatchEntities(uniqueEntityIds));
+        return Object.fromEntries(entities.map(e => [e.id, e]));
+      },
     });
 
     const merged = uniqueEntityIds
-      .map(e => E.merge({ id: e, store: this.store, mergeWith: entities.find(remoteEntity => remoteEntity.id === e) }))
+      .map(e => E.merge({ id: e, store: this.store, mergeWith: entities[e] }))
       .filter(e => e !== null);
 
     if (merged.length > 0) {
+      /**
+       * We track the synced entities that have actually been merged instead of
+       * using the uniqueEntityIds we calculate above. This is to ensure that
+       * we only track synced entities that have a valid state after merging.
+       * Otherwise we can get in a state where an entity failed syncing in the past,
+       * and now can no longer be synced in the future.
+       */
+      for (const entity of merged) {
+        this.syncedEntities.add(entity.id);
+      }
+
       this.stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged });
     }
   }

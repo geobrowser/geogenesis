@@ -10,9 +10,9 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 
-import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
+import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 
-import { cachedFetchEntity } from './cached-fetch-entity';
+import { cachedFetchEntityPage } from './cached-fetch-entity';
 import { ProfilePageComponent } from './profile-entity-page';
 
 interface Props {
@@ -23,10 +23,12 @@ export async function ProfileEntityServerContainer({ params }: Props) {
   const spaceId = params.id;
   const entityId = params.entityId;
 
-  const [person, profile] = await Promise.all([
-    cachedFetchEntity(entityId, spaceId),
+  const [entityPage, profile] = await Promise.all([
+    cachedFetchEntityPage(entityId, spaceId),
     fetchOnchainProfileByEntityId(entityId),
   ]);
+
+  const person = entityPage?.entity;
 
   // @TODO: Real error handling
   if (!person) {
@@ -36,7 +38,13 @@ export async function ProfileEntityServerContainer({ params }: Props) {
         values={[]}
         spaceId={params.id}
         relations={[]}
-        referencedByComponent={null}
+        referencedByComponent={
+          <ErrorBoundary fallback={<EmptyErrorComponent />}>
+            <React.Suspense fallback={<div />}>
+              <BacklinksServerContainer entityId={params.entityId} />
+            </React.Suspense>
+          </ErrorBoundary>
+        }
       />
     );
   }
@@ -73,12 +81,8 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       relations={person.relations}
       referencedByComponent={
         <ErrorBoundary fallback={<EmptyErrorComponent />}>
-          {/*
-              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
-              show any referenced by loading states but do want to stream it in
-            */}
           <React.Suspense fallback={<div />}>
-            <EntityReferencedByServerContainer entityId={params.entityId} name={person.name} spaceId={params.id} />
+            <BacklinksServerContainer entityId={params.entityId} />
           </React.Suspense>
         </ErrorBoundary>
       }

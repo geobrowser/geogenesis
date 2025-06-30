@@ -1,10 +1,10 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 
 import { getProperties, getProperty } from '../io/v2/queries';
-import { Entity, Property } from '../v2.types';
+import { Property } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E } from './orm';
 import { GeoStore } from './store';
@@ -22,7 +22,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
   const { store, stream } = useSyncEngine();
 
   const { isFetched, data: entity } = useQuery({
-    enabled: !!id && enabled,
+    enabled: Boolean(id) && enabled,
     queryKey: GeoStore.queryKey(id),
     queryFn: async () => {
       // If the entity is in the store then it's already been synced and we can
@@ -50,6 +50,13 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
     if (!id || !enabled) {
       return;
     }
+
+    // const trackedRelationIds = new Set(entity?.relations.map(r => r.id) ?? []);
+    const trackedRelationToEntities = new Set(entity?.relations.map(r => r.toEntity.id) ?? []);
+
+    const isEntityTracked = (id: string) => {
+      return trackedRelationToEntities.has(id);
+    };
 
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       if (event.entities.some(e => e.id === id)) {
@@ -90,13 +97,13 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationToChanged = entity?.relations.some(r => r.toEntity.id === event.value.entity.id);
+      const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
 
       if (maybeRelationToChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entity?.relations.some(r => r.id === event.value.entity.id);
+      const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;
@@ -121,13 +128,13 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
        * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
        * re-pull Byron to get the latest name for Geo, PBC.
        */
-      const maybeRelationToChanged = entity?.relations.some(r => r.toEntity.id === event.value.entity.id);
+      const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
 
       if (maybeRelationToChanged) {
         shouldUpdate = true;
       }
 
-      const maybeRelationEntityChanged = entity?.relations.some(r => r.id === event.value.entity.id);
+      const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
 
       if (maybeRelationEntityChanged) {
         shouldUpdate = true;
@@ -150,7 +157,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
 
   return {
     entity,
-    isLoading: !isFetched && !!id && enabled,
+    isLoading: !isFetched && Boolean(id) && enabled,
   };
 }
 
@@ -171,18 +178,28 @@ export function useQueryEntities({
 }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
-  const [localEntities, setLocalEntities] = useState<Entity[]>([]);
 
-  const prevWhere = useRef(where);
-
-  useEffect(() => {
-    // We need to compare by hash since there's no guarantee that the
-    // where clause is actually stable.
-    // @TODO: We could hash this instead, but stringify works for now
-    if (JSON.stringify(prevWhere.current) !== JSON.stringify(where)) {
-      prevWhere.current = where;
-    }
-  }, [where]);
+  /**
+   * What would a reactive approach to queried entities look like?
+   * Currently we listen to the event stream and execute some heuristics
+   * to see if we should update the existing state.
+   *
+   * There's a few approaches we could take
+   * 1. Keep the heuristics, but instead of setting state, just update
+   *    the cache by invalidating it. (how we used to do it)
+   * 2. Keep the heuristics, but instead of settubg state, just set
+   *    the cache state directly. (how we currently do it)
+   * 3. Introduce some other reactive system that automatically updates
+   *    when its dependencies are updated. This would require that its
+   *    dependencies are themselves reactive. The filter could also be
+   *    reactive, so when the filter changes it causes the reactive result
+   *    to also update.
+   *
+   * Benefits of moving to the cache-based system is that we get "view sharing."
+   * Different callers get the same data back as long as the parameters are
+   * the same. Q: But what happens if one of them mutates? We might end up
+   * with multiple cache updates simultaneously.
+   */
 
   /**
    * This query runs behind the scenes to sync any remote entities that match
@@ -200,12 +217,24 @@ export function useQueryEntities({
    * To prevent flicker when adding new items to collections, callers should explicitly
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const { isFetched, isLoading } = useQuery({
+  const {
+    isFetched,
+    isLoading,
+    data: localEntities,
+  } = useQuery({
     enabled,
     placeholderData,
-    queryKey: [...GeoStore.queryKeys(where), first, skip],
+    queryKey: GeoStore.queryKeys(where, first, skip),
     queryFn: async () => {
       const entities = await E.findMany({ store, cache, where, first, skip });
+
+      /**
+       * @TODO
+       * Do we need to actually sync the results since we're returning it?
+       * One benefit of syncing is that all of the entities end up in the
+       * store, so any components subscribed to the store can hook into
+       * the new synced data as needed.
+       */
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
       return entities;
     },
@@ -213,6 +242,8 @@ export function useQueryEntities({
 
   useEffect(() => {
     if (!enabled) return;
+
+    const localEntitiesList = localEntities ?? [];
 
     const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
       let shouldUpdate = false;
@@ -232,7 +263,7 @@ export function useQueryEntities({
        * end up with an empty query result.
        */
       if (syncedEntitiesIds.length === 0 && latestQueriedEntitiesIds.length === 0) {
-        setLocalEntities([]);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), []);
         return;
       }
 
@@ -257,7 +288,6 @@ export function useQueryEntities({
        * updated local state. This happens because triple/relation events are optimistic
        * so run before syncing completes.
        */
-      const localEntitiesList = localEntities;
       const previousListHasEntity = localEntitiesList.some(e => syncedEntitiesIds.includes(e.id));
       const newListDoesNotHaveEntity = !latestQueriedEntities.some(e => syncedEntitiesIds.includes(e.id));
 
@@ -280,7 +310,7 @@ export function useQueryEntities({
       }
 
       if (shouldUpdate) {
-        setLocalEntities(latestQueriedEntities);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), latestQueriedEntities);
       }
     });
 
@@ -294,7 +324,7 @@ export function useQueryEntities({
       const ids: string[] = entities.map(e => e.id);
 
       if (ids.includes(event.relation.fromEntity.id)) {
-        setLocalEntities(entities);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
       }
     });
 
@@ -305,14 +335,13 @@ export function useQueryEntities({
         .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
-      const localEntitiesList = localEntities;
 
       const previousListHasFromEntity = localEntitiesList.some(e => e.id === event.relation.fromEntity.id);
       const newListDoesNotHaveFromEntity = !entities.some(e => e.id === event.relation.fromEntity.id);
 
       // This means the queried list has changed as a result of the deleted relation
       if (previousListHasFromEntity && newListDoesNotHaveFromEntity) {
-        setLocalEntities(entities);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
       }
     });
 
@@ -351,7 +380,7 @@ export function useQueryEntities({
       }
 
       if (shouldUpdate) {
-        setLocalEntities(entities);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
       }
     });
 
@@ -373,7 +402,6 @@ export function useQueryEntities({
         .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
-      const localEntitiesList = localEntities;
 
       const previousListHasChangedEntity = localEntitiesList.some(e => e.id === event.value.entity.id);
       const newListDoesNotHaveChangedEntity = !entities.some(e => e.id === event.value.entity.id);
@@ -404,7 +432,7 @@ export function useQueryEntities({
       }
 
       if (shouldUpdate) {
-        setLocalEntities(entities);
+        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
       }
     });
 
@@ -415,10 +443,10 @@ export function useQueryEntities({
       onTripleCreatedSub();
       onTripleDeletedSub();
     };
-  }, [where, stream, store, localEntities, enabled, first, skip]);
+  }, [where, stream, store, localEntities, enabled, first, skip, cache]);
 
   return {
-    entities: localEntities,
+    entities: localEntities ?? [],
     isLoading: !isFetched && enabled && isLoading,
   };
 }

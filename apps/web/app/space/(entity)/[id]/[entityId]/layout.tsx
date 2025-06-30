@@ -1,4 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -71,8 +72,9 @@ export default async function ProfileLayout(props: Props) {
   const entityId = params.entityId;
   const { children } = props;
   const types = await cachedFetchEntityType(entityId);
+  const typeIds = types.map(t => t.id);
 
-  if (!types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
+  if (!typeIds.includes(SystemIds.PERSON_TYPE)) {
     return <>{children}</>;
   }
 

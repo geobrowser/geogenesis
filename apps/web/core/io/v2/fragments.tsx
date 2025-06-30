@@ -5,6 +5,7 @@ export const entityFragment = graphql(/* GraphQL */ `
     id
     name
     description
+    spaces
 
     types {
       id
@@ -138,6 +139,20 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
       types {
         id
         name
+      }
+    }
+  }
+`);
+
+export const entityBacklinksQuery = graphql(/* GraphQL */ `
+  query EntityBacklinksPage($id: String!, $spaceId: String) {
+    entity(id: $id, spaceId: $spaceId) {
+      backlinks {
+        from {
+          id
+          name
+          spaces
+        }
       }
     }
   }
