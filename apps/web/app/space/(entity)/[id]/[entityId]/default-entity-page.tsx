@@ -147,29 +147,35 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     return redirect(NavUtils.toSpace(spaceId));
   }
 
-  // const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
+  const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 
   // @TODO: For performance can we wait to fetch tabs until we're on the client?
-  // const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
+  start = Date.now();
+  const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
+  end = Date.now();
+  console.log('[Entity] Tabs fetch time', end - start);
 
   // @TODO(migration): We can query blocks from entities now
-  // const tabBlocks = await Promise.all(
-  //   tabEntities.map(async entity => {
-  //     const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
+  start = Date.now();
+  const tabBlocks = await Promise.all(
+    tabEntities.map(async entity => {
+      const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
 
-  //     const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
-  //     return blocks;
-  //   })
-  // );
+      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+      return blocks;
+    })
+  );
+  end = Date.now();
+  console.log('[Entity] Tab blocks fetch time', end - start);
 
   const tabs: Tabs = {};
 
-  // tabEntities.forEach((entity, index) => {
-  //   tabs[entity.id] = {
-  //     entity,
-  //     blocks: tabBlocks[index],
-  //   };
-  // });
+  tabEntities.forEach((entity, index) => {
+    tabs[entity.id] = {
+      entity,
+      blocks: tabBlocks[index],
+    };
+  });
 
   const serverAvatarUrl = Entities.avatar(entity?.relations);
   const serverCoverUrl = Entities.cover(entity?.relations);

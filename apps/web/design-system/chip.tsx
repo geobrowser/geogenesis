@@ -192,7 +192,7 @@ export function LinkableRelationChip({
         className,
       })}
     >
-      <Link entityId={entityId} spaceId={spaceId} href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}>
+      <Link entityId={entityId} href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}>
         {children}
       </Link>
       {verified && (
