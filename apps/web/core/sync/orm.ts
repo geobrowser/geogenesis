@@ -348,7 +348,7 @@ function mergeSearchResult({
   // Use the merged triples to derive the name instead of the remote entity
   // `name` property in case the name was deleted/changed locally.
   const name = Entities.name(values) ?? remoteEntity.name;
-  const description = Entities.description(values) ?? remoteEntity.name;
+  const description = Entities.description(values) ?? remoteEntity.description;
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
 
   return {
