@@ -1,3 +1,4 @@
+import { SystemIds } from '@graphprotocol/grc-20';
 import {
   NativeRenderableProperty,
   Property,
@@ -39,7 +40,7 @@ export function toRenderables({
     .filter(renderable => !attributesWithAValue.has(renderable.id) && !placeholders.has(renderable.id))
     .map((s): ValueRenderableProperty | RelationRenderableProperty => {
       switch (s.renderableType) {
-        case 'RELATION':
+        case SystemIds.RELATION_TYPE:
           return {
             type: 'RELATION',
             relationId: s.id,
@@ -53,7 +54,7 @@ export function toRenderables({
             value: '',
             placeholder: true,
           };
-        case 'IMAGE':
+        case SystemIds.IMAGE_TYPE:
           return {
             type: 'IMAGE',
             relationId: s.id,
@@ -99,10 +100,10 @@ export function toRenderables({
   const relationsToRenderable = relations
     // DATA and TEXT relations are mostly consumed by components rendering blocks. We don't
     // care about those in the property area.
-    .filter(r => r.renderableType !== 'DATA' && r.renderableType !== 'TEXT')
+    .filter(r => r.renderableType !== SystemIds.DATA_BLOCK && r.renderableType !== SystemIds.TEXT_BLOCK)
     .map((r): RelationRenderableProperty => {
       switch (r.renderableType) {
-        case 'IMAGE':
+        case SystemIds.IMAGE_TYPE:
           return {
             type: 'IMAGE', // We filter out data and text relations above
             relationEntityId: r.entityId,

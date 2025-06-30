@@ -102,7 +102,7 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
                 switch (renderable.type) {
                   case 'TEXT': {
                     switch (renderable.renderableType) {
-                      case 'URL':
+                      case SystemIds.URL:
                         return (
                           <WebUrlField
                             key={`uri-${renderable.propertyId}-${renderable.value}`}
@@ -214,7 +214,7 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
             const relationEntityId = r.relationEntityId;
             const relationId = r.relationId;
 
-            if (renderableType === 'IMAGE') {
+            if (renderableType === SystemIds.IMAGE_TYPE) {
               const imagePath = getImagePath(linkedEntityId ?? '');
               return <ImageZoom key={`image-${relationId}-${linkedEntityId}`} imageSrc={imagePath} />;
             }

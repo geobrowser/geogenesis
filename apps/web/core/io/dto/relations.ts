@@ -35,7 +35,7 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
       // of the entity to _what_ the entity is so they know how they should
       // render it depending on their use case.
       // Right now we only support images and entity ids as the value of the To entity.
-      value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.to.id,
+      value: renderableType === SystemIds.IMAGE_TYPE ? (imageEntityUrlValue ?? '') : relation.to.id,
     },
   };
 }
@@ -73,7 +73,7 @@ export function RelationDtoHistorical(relation: SubstreamRelationHistorical) {
       // render it depending on their use case.
       renderableType,
       // Right now we only support images and entity ids as the value of the To entity.
-      value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toVersion.entityId,
+      value: renderableType === SystemIds.IMAGE_TYPE ? (imageEntityUrlValue ?? '') : relation.toVersion.entityId,
     },
   };
 }
@@ -82,34 +82,34 @@ function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): Rendera
   const typeIds = types.map(type => type.id);
 
   if (typeIds.includes(EntityId(SystemIds.IMAGE_TYPE))) {
-    return 'IMAGE';
+    return SystemIds.IMAGE_TYPE;
   }
 
   if (typeIds.includes(EntityId(SystemIds.DATA_BLOCK))) {
-    return 'DATA';
+    return SystemIds.DATA_BLOCK;
   }
 
   if (typeIds.includes(EntityId(SystemIds.TEXT_BLOCK))) {
-    return 'TEXT';
+    return SystemIds.TEXT_BLOCK;
   }
 
-  return 'RELATION';
+  return SystemIds.RELATION_TYPE;
 }
 
 function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
   const typeIds = types.map(relation => relation.entityId);
 
   if (typeIds.includes(EntityId(SystemIds.IMAGE_TYPE))) {
-    return 'IMAGE';
+    return SystemIds.IMAGE_TYPE;
   }
 
   if (typeIds.includes(EntityId(SystemIds.DATA_BLOCK))) {
-    return 'DATA';
+    return SystemIds.DATA_BLOCK;
   }
 
   if (typeIds.includes(EntityId(SystemIds.TEXT_BLOCK))) {
-    return 'TEXT';
+    return SystemIds.TEXT_BLOCK;
   }
 
-  return 'RELATION';
+  return SystemIds.RELATION_TYPE;
 }
