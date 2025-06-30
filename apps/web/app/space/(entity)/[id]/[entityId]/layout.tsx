@@ -1,5 +1,4 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -19,7 +18,6 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 
-import { cachedFetchEntityType } from './cached-entity-type';
 import { cachedFetchEntitiesBatch, cachedFetchEntity, cachedFetchEntityPage } from './cached-fetch-entity';
 
 const TABS = ['Overview', 'Activity'] as const;
@@ -34,10 +32,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const spaceId = params.id;
   const entityId = params.entityId;
 
-  const start = Date.now();
   const result = await cachedFetchEntityPage(entityId, params.id);
-  const end = Date.now();
-  console.log('[Layout][Meta] Entityfetch time', end - start);
 
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(result?.entity ?? null);
   const title = entityName ?? 'Entity';
@@ -75,10 +70,7 @@ export default async function ProfileLayout(props: Props) {
   const params = await props.params;
   const entityId = params.entityId;
   const { children } = props;
-  const start = Date.now();
   const result = await cachedFetchEntityPage(entityId, params.id);
-  const end = Date.now();
-  console.log('[Layout] Entity type fetch time', end - start);
   const typeIds = result?.entity?.types.map(t => t.id) ?? [];
 
   if (!typeIds.includes(SystemIds.PERSON_TYPE)) {

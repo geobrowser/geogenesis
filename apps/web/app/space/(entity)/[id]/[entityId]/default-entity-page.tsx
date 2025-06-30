@@ -105,11 +105,7 @@ export default async function DefaultEntityPage({
 }
 
 const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
-  let start = Date.now();
-
   const entityPage = await cachedFetchEntityPage(entityId, spaceId);
-  let end = Date.now();
-  console.log('[Entity] Entity fetch time', end - start);
 
   const entity = entityPage?.entity;
   const relationEntityRelations = entityPage?.relations ?? [];
@@ -150,13 +146,9 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 
   // @TODO: For performance can we wait to fetch tabs until we're on the client?
-  start = Date.now();
   const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
-  end = Date.now();
-  console.log('[Entity] Tabs fetch time', end - start);
 
   // @TODO(migration): We can query blocks from entities now
-  start = Date.now();
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
       const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
@@ -165,8 +157,6 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
       return blocks;
     })
   );
-  end = Date.now();
-  console.log('[Entity] Tab blocks fetch time', end - start);
 
   const tabs: Tabs = {};
 
@@ -183,10 +173,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const blockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
   const blockIds = blockRelations?.map(r => r.toEntity.id);
 
-  start = Date.now();
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
-  end = Date.now();
-  console.log('[Entity] Blocks fetch time', end - start);
 
   return {
     values: entity?.values ?? [],
