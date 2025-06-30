@@ -26,7 +26,7 @@ import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-met
 import { EntityPageRelations } from '~/partials/entity-page/entity-page-relations';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
-import { cachedFetchEntitiesBatch, cachedFetchEntity } from './cached-fetch-entity';
+import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -105,7 +105,12 @@ export default async function DefaultEntityPage({
 }
 
 const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
-  const entityPage = await Effect.runPromise(getEntityPage(entityId, spaceId));
+  let start = Date.now();
+
+  const entityPage = await cachedFetchEntityPage(entityId, spaceId);
+  let end = Date.now();
+  console.log('[Entity] Entity fetch time', end - start);
+
   const entity = entityPage?.entity;
   const relationEntityRelations = entityPage?.relations ?? [];
   const spaces = entity?.spaces ?? [];
@@ -116,7 +121,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
    */
   if (entity && !spaces.includes(spaceId) && !preventRedirect) {
     const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
-    console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
+    console.log(`Redirecting from invalid space ${spaceId} to valid space ${newSpaceId}`);
 
     /**
      * If we're not in a valid space for the entity AND the entity
@@ -142,36 +147,40 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     return redirect(NavUtils.toSpace(spaceId));
   }
 
-  const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
+  // const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 
   // @TODO: For performance can we wait to fetch tabs until we're on the client?
-  const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
+  // const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
 
   // @TODO(migration): We can query blocks from entities now
-  const tabBlocks = await Promise.all(
-    tabEntities.map(async entity => {
-      const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
+  // const tabBlocks = await Promise.all(
+  //   tabEntities.map(async entity => {
+  //     const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
 
-      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
-      return blocks;
-    })
-  );
+  //     const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+  //     return blocks;
+  //   })
+  // );
 
   const tabs: Tabs = {};
 
-  tabEntities.forEach((entity, index) => {
-    tabs[entity.id] = {
-      entity,
-      blocks: tabBlocks[index],
-    };
-  });
+  // tabEntities.forEach((entity, index) => {
+  //   tabs[entity.id] = {
+  //     entity,
+  //     blocks: tabBlocks[index],
+  //   };
+  // });
 
   const serverAvatarUrl = Entities.avatar(entity?.relations);
   const serverCoverUrl = Entities.cover(entity?.relations);
 
   const blockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
   const blockIds = blockRelations?.map(r => r.toEntity.id);
+
+  start = Date.now();
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
+  end = Date.now();
+  console.log('[Entity] Blocks fetch time', end - start);
 
   return {
     values: entity?.values ?? [],
@@ -186,7 +195,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     types: entity?.types ?? [],
 
     tabs,
-    tabEntities,
+    tabEntities: [],
 
     // For relation entity pages
     relationEntityRelations,

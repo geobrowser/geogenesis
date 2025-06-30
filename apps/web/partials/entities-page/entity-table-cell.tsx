@@ -1,5 +1,4 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import Link from 'next/link';
 
 import { Fragment } from 'react';
 
@@ -12,6 +11,7 @@ import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { CellContent } from '~/design-system/table/cell-content';
 
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
@@ -54,7 +54,12 @@ export const EntityTableCell = ({
     return (
       <Fragment key={entityId}>
         {source.type !== 'COLLECTION' ? (
-          <Link href={href} className="text-tableCell text-ctaHover hover:underline">
+          <Link
+            entityId={entityId}
+            spaceId={spaceId}
+            href={href}
+            className="text-tableCell text-ctaHover hover:underline"
+          >
             {name || entityId}
           </Link>
         ) : (
@@ -70,7 +75,12 @@ export const EntityTableCell = ({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <Link href={href} className="text-tableCell text-ctaHover hover:underline">
+            <Link
+              entityId={entityId}
+              spaceId={spaceId}
+              href={href}
+              className="text-tableCell text-ctaHover hover:underline"
+            >
               {name || entityId}
             </Link>
           </CollectionMetadata>

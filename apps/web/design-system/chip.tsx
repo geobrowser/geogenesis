@@ -192,7 +192,13 @@ export function LinkableRelationChip({
         className,
       })}
     >
-      <Link href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}>{children}</Link>
+      <Link
+        entityId={entityId}
+        spaceId={spaceId ?? currentSpaceId}
+        href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
+      >
+        {children}
+      </Link>
       {verified && (
         <span className="inline-block pl-1.5">
           <CheckCircle color="current" />
@@ -256,6 +262,8 @@ export function LinkableRelationChip({
             )} */}
             {relationEntityId && (
               <Link
+                entityId={relationEntityId}
+                spaceId={spaceId ?? currentSpaceId}
                 href={NavUtils.toEntity(currentSpaceId, relationEntityId)}
                 onMouseEnter={() => setIsRelationHovered(true)}
                 onMouseLeave={() => setIsRelationHovered(false)}

@@ -12,6 +12,7 @@ const SyncEngineContext = createContext<{
   stream: GeoEventStream;
   store: GeoStore;
   query: EntityQuery;
+  hydrate: (entityIds?: string[]) => void;
 } | null>(null);
 
 export function useSyncEngine() {
@@ -28,5 +29,13 @@ const query = new EntityQuery(store);
 export const engine = new SyncEngine(stream, queryClient, store);
 
 export function SyncEngineProvider({ children }: { children: ReactNode }) {
-  return <SyncEngineContext.Provider value={{ store, stream, query }}>{children}</SyncEngineContext.Provider>;
+  const hydrate = (entityIds?: string[]) => {
+    if (!entityIds || entityIds.length === 0) {
+      return;
+    }
+
+    stream.emit({ type: 'hydrate', entities: entityIds });
+  };
+
+  return <SyncEngineContext.Provider value={{ store, stream, query, hydrate }}>{children}</SyncEngineContext.Provider>;
 }
