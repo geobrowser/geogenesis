@@ -12,11 +12,11 @@ type Props = React.ComponentPropsWithoutRef<typeof Link> & { entityId?: string; 
 
 export function PrefetchLink({ children, entityId, spaceId, ...rest }: Props) {
   const { hydrate } = useSyncEngine();
-  const router = useRouter();
+  // const router = useRouter();
 
   const prefetch = () => {
     if (spaceId && entityId) {
-      router.prefetch(NavUtils.toEntity(spaceId, entityId));
+      // router.prefetch(NavUtils.toEntity(spaceId, entityId));
     }
 
     if (entityId) {
@@ -25,10 +25,7 @@ export function PrefetchLink({ children, entityId, spaceId, ...rest }: Props) {
   };
 
   return (
-    // Nextjs prefetch is for any link that's in view. We only
-    // want to prefetch on hover. In the future we can prefetch
-    // on intent which is better than hover.
-    <Link {...rest} prefetch={false} onMouseEnter={prefetch}>
+    <Link {...rest} prefetch={true} onMouseEnter={prefetch}>
       {children}
     </Link>
   );
