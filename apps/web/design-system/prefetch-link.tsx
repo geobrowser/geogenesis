@@ -1,12 +1,24 @@
+'use client';
+
 import Link from 'next/link';
 
 import * as React from 'react';
 
-type Props = React.ComponentPropsWithoutRef<typeof Link>;
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
-export function PrefetchLink({ children, ...rest }: Props) {
+type Props = React.ComponentPropsWithoutRef<typeof Link> & { entityId?: string };
+
+export function PrefetchLink({ children, entityId, ...rest }: Props) {
+  const { hydrate } = useSyncEngine();
+
+  const prefetch = () => {
+    if (entityId) {
+      hydrate([entityId]);
+    }
+  };
+
   return (
-    <Link {...rest} prefetch={false}>
+    <Link {...rest} prefetch={true} onMouseEnter={prefetch}>
       {children}
     </Link>
   );
