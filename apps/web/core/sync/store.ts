@@ -3,7 +3,6 @@ import { createAtom } from '@xstate/store';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { readTypes } from '../database/entities';
-import { ID } from '../id';
 import { Entities } from '../utils/entity';
 import { DataType, Entity, ExtraRenderableType, Property, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
@@ -32,7 +31,6 @@ export class GeoStore {
   //
   // Right now when we sync we do put the synced data directly in the values and
   // relations though.
-  private pendingValues: Map<string, Map<string, Value>> = new Map();
   private pendingRelations: Map<string, Map<string, Relation>> = new Map();
   private pendingEntityDeletes: Set<string> = new Set();
 
@@ -124,7 +122,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.values.clear();
     this.relations.clear();
     this.deletedEntities.clear();
-    this.pendingValues.clear();
     this.pendingRelations.clear();
     this.pendingEntityDeletes.clear();
 
@@ -225,53 +222,16 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   }
 
   /**
-   * Get triples for an entity (without pending changes)
-   */
-  private getBaseTriples(entityId: string): Value[] {
-    return this.values.get(entityId) || [];
-  }
-
-  /**
    * Get all triples for an entity including optimistic updates
    */
   public getResolvedValues(entityId: string, includeDeleted = false): Value[] {
-    const baseTriples = this.getBaseTriples(entityId);
-    const pendingTripleMap = this.pendingValues.get(entityId);
+    const values = reactiveValues.get().filter(v => v.entity.id === entityId);
 
-    if (!pendingTripleMap || pendingTripleMap.size === 0) {
-      return baseTriples;
+    if (!includeDeleted) {
+      return values.filter(v => Boolean(v.isDeleted) === false);
     }
 
-    // Create a map of base value for easier merging
-    const valueMap = new Map<string, Value>();
-
-    // Add base value to the map
-    baseTriples.forEach(value => {
-      valueMap.set(
-        ID.createValueId({
-          propertyId: value.property.id,
-          entityId: value.entity.id,
-          spaceId: value.spaceId,
-        }),
-        value
-      );
-    });
-
-    // Apply pending value changes
-    pendingTripleMap.forEach(pendingValue => {
-      const key = ID.createValueId({
-        propertyId: pendingValue.property.id,
-        entityId: pendingValue.entity.id,
-        spaceId: pendingValue.spaceId,
-      });
-      if (pendingValue.isDeleted && !includeDeleted) {
-        valueMap.delete(key);
-      } else {
-        valueMap.set(key, pendingValue);
-      }
-    });
-
-    return Array.from(valueMap.values());
+    return values;
   }
 
   getValue(id: string, entityId: string): Value | null {
@@ -343,41 +303,16 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   }
 
   /**
-   * Get relations for an entity (without pending changes)
-   */
-  private getBaseRelations(entityId: string): Relation[] {
-    return this.relations.get(entityId) || [];
-  }
-
-  /**
    * Get all relations for an entity including optimistic updates
    */
   private getResolvedRelations(entityId: string, includeDeleted = false): Relation[] {
-    const baseRelations = this.getBaseRelations(entityId);
-    const pendingRelationMap = this.pendingRelations.get(entityId);
+    const relations = reactiveRelations.get().filter(r => r.fromEntity.id === entityId);
 
-    if (!pendingRelationMap || pendingRelationMap.size === 0) {
-      return baseRelations;
+    if (!includeDeleted) {
+      return relations.filter(r => Boolean(r.isDeleted) === false);
     }
 
-    // Create a map of base relations for easier merging
-    const relationMap = new Map<string, Relation>();
-
-    // Add base relations to the map
-    baseRelations.forEach(relation => {
-      relationMap.set(relation.id, relation);
-    });
-
-    // Apply pending relation changes
-    pendingRelationMap.forEach(pendingRelation => {
-      if (pendingRelation.isDeleted && !includeDeleted) {
-        relationMap.delete(pendingRelation.id);
-      } else {
-        relationMap.set(pendingRelation.id, pendingRelation);
-      }
-    });
-
-    return Array.from(relationMap.values());
+    return relations;
   }
 
   /**
@@ -391,27 +326,10 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Add or update a value with optimistic updates
    */
   public setValue(value: Value): void {
-    const entityId = value.entity.id;
-
-    // Create a composite key for the value
-    const tripleKey = ID.createValueId({
-      propertyId: value.property.id,
-      entityId: value.entity.id,
-      spaceId: value.spaceId,
-    });
-
     value.hasBeenPublished = false;
     value.isDeleted = false;
     value.isLocal = true;
     value.timestamp = new Date().toISOString();
-
-    // Get or create the pending triples map for this entity
-    if (!this.pendingValues.has(entityId)) {
-      this.pendingValues.set(entityId, new Map());
-    }
-
-    // Add to pending changes
-    this.pendingValues.get(entityId)!.set(tripleKey, value);
 
     reactiveValues.set(prev => {
       const unchangedValues = prev.filter(t => {
@@ -429,26 +347,10 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Delete a value with optimistic updates
    */
   public deleteValue(value: Value): void {
-    // Mark the value as deleted in pending changes
-    const entityId = value.entity.id;
-    const valueKey = ID.createValueId({
-      propertyId: value.property.id,
-      entityId: value.entity.id,
-      spaceId: value.spaceId,
-    });
-
     value.hasBeenPublished = false;
     value.isDeleted = true;
     value.isLocal = true;
     value.timestamp = new Date().toISOString();
-
-    // Get or create the pending triples map for this entity
-    if (!this.pendingValues.has(entityId)) {
-      this.pendingValues.set(entityId, new Map());
-    }
-
-    // Add a deleted version to pending changes
-    this.pendingValues.get(entityId)!.set(valueKey, value);
 
     // Remove from reactive values
     reactiveValues.set(prev => {
