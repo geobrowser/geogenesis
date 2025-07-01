@@ -83,7 +83,7 @@ type SortBy = SortByField | { field: SortByField; direction: SortDirection };
  * EntityQuery class for building and executing entity queries
  */
 export class EntityQuery {
-  private store: GeoStore;
+  private store: { getEntities: () => Entity[]; isEntityDeleted: (id: string) => boolean };
   private whereConditions: WhereCondition[] = [];
   private limitVal: number | undefined;
   private offsetVal: number = 0;

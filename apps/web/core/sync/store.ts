@@ -12,6 +12,9 @@ import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
+export const reactiveValues = createAtom<Value[]>([]);
+export const reactiveRelations = createAtom<Relation[]>([]);
+
 /**
  * The GeoStore is a local cache of data representing entities in the application.
  * When users write local data it is written to the store. In the background
@@ -24,9 +27,6 @@ export class GeoStore {
   private values: Map<string, Value[]> = new Map();
   private relations: Map<string, Relation[]> = new Map();
   private deletedEntities: Set<string> = new Set();
-
-  private reactiveValues = createAtom<Map<string, Map<string, Value>>>(new Map());
-  private reactiveRelations = createAtom<Map<string, Map<string, Relation>>>(new Map());
 
   // TODO(migration): We can use the pending data to represent what hasn't been
   // published yet.
@@ -78,19 +78,15 @@ export class GeoStore {
     for (const entity of entities) {
       this.entities.set(entity.id, entity);
       this.values.set(entity.id, entity.values);
-      this.reactiveValues.set(prev => {
-        // Convert Value[] to Map<string, Value> indexed by tripleKey
-        const valueMap = new Map<string, Value>();
-        entity.values.forEach(value => {
-          const tripleKey = ID.createValueId({
-            propertyId: value.property.id,
-            entityId: value.entity.id,
-            spaceId: value.spaceId,
-          });
-          valueMap.set(tripleKey, value);
+
+      reactiveValues.set(prev => {
+        const valueIdsToWrite = new Set(entity.values.map(t => t.id));
+
+        const unchangedValues = prev.filter(t => {
+          return !valueIdsToWrite.has(t.id);
         });
-        prev.set(entity.id, valueMap);
-        return prev;
+
+        return [...unchangedValues, ...entity.values];
       });
 
       // @TODO: Do we still need this? Or is merging handled correctly before syncing here?
@@ -104,14 +100,14 @@ export class GeoStore {
       // }
 
       this.relations.set(entity.id, entity.relations);
-      this.reactiveRelations.set(prev => {
-        // Convert Relation[] to Map<string, Relation> indexed by relation.id
-        const relationMap = new Map<string, Relation>();
-        entity.relations.forEach(relation => {
-          relationMap.set(relation.id, relation);
+      reactiveRelations.set(prev => {
+        const relationIdsToWrite = new Set(entity.relations.map(t => t.id));
+
+        const unchangedRelations = prev.filter(t => {
+          return !relationIdsToWrite.has(t.id);
         });
-        prev.set(entity.id, relationMap);
-        return prev;
+
+        return [...unchangedRelations, ...entity.relations];
       });
     }
 
@@ -158,7 +154,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const { includeDeleted = false } = options;
 
     // Check if the entity is deleted
-    if (this.isEntityDeleted(id) && !options.includeDeleted) return undefined;
+    // if (this.isEntityDeleted(id) && !options.includeDeleted) return undefined;
 
     // Get the base entity
     const entity = this.entities.get(id);
@@ -454,15 +450,12 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     // Add to pending changes
     this.pendingValues.get(entityId)!.set(tripleKey, value);
 
-    this.reactiveValues.set(prev => {
-      if (!prev.has(entityId)) {
-        prev.set(entityId, new Map());
-      }
+    reactiveValues.set(prev => {
+      const unchangedValues = prev.filter(t => {
+        return t.id !== value.id;
+      });
 
-      // Set/replace the value directly using tripleKey as the key
-      prev.get(entityId)!.set(tripleKey, value);
-
-      return prev;
+      return [...unchangedValues, value];
     });
 
     // Emit update event
@@ -495,12 +488,12 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.pendingValues.get(entityId)!.set(valueKey, value);
 
     // Remove from reactive values
-    this.reactiveValues.set(prev => {
-      const entityValues = prev.get(entityId);
-      if (entityValues) {
-        entityValues.delete(valueKey);
-      }
-      return prev;
+    reactiveValues.set(prev => {
+      const unchangedValues = prev.filter(t => {
+        return t.id !== value.id;
+      });
+
+      return [...unchangedValues, value];
     });
 
     // Emit update event
@@ -528,15 +521,12 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     // Add to pending changes
     this.pendingRelations.get(entityId)!.set(relation.id, relation);
 
-    this.reactiveRelations.set(prev => {
-      if (!prev.has(entityId)) {
-        prev.set(entityId, new Map());
-      }
+    reactiveRelations.set(prev => {
+      const unchangedRelations = prev.filter(t => {
+        return t.id !== relation.id;
+      });
 
-      // Set/replace the relation directly using relation.id as the key
-      prev.get(entityId)!.set(relation.id, relation);
-
-      return prev;
+      return [...unchangedRelations, relation];
     });
 
     // Emit update event
@@ -565,12 +555,12 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.pendingRelations.get(entityId)!.set(relation.id, relation);
 
     // Remove from reactive relations
-    this.reactiveRelations.set(prev => {
-      const entityRelations = prev.get(entityId);
-      if (entityRelations) {
-        entityRelations.delete(relation.id);
-      }
-      return prev;
+    reactiveRelations.set(prev => {
+      const unchangedRelations = prev.filter(t => {
+        return t.id !== relation.id;
+      });
+
+      return [...unchangedRelations, relation];
     });
 
     // Emit update event

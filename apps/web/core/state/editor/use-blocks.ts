@@ -1,6 +1,8 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import { useSelector } from '@xstate/store/react';
 
 import { useRelations } from '~/core/database/relations';
+import { reactiveRelations } from '~/core/sync/store';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
 export type RelationWithBlock = Relation & {
@@ -15,10 +17,11 @@ export type RelationWithBlock = Relation & {
 };
 
 export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
-  const blocks = useRelations({
-    mergeWith: initialBlockRelations,
-    selector: r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS,
-  });
+  const blocks = useSelector(
+    reactiveRelations,
+    relations => relations.filter(r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS),
+    (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  );
 
   return blocks?.map(relationToRelationWithBlock).sort(sortByIndex) ?? [];
 }

@@ -2,15 +2,18 @@
 
 import { SystemIds } from '@graphprotocol/grc-20';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { useSelector } from '@xstate/store/react';
+import equal from 'fast-deep-equal';
 
 import * as React from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { ID } from '~/core/id';
 import { fetchHistoryVersions } from '~/core/io/subgraph/fetch-history-versions';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { reactive } from '~/core/sync/hooks';
+import { reactiveValues } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -24,7 +27,21 @@ import { HistoryPanel } from '../history/history-panel';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 
 export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
-  const { name } = useEntityPageStore();
+  // const name = useSelector(reactiveValues, s => {
+  //   console.log('rerunning', s);
+  //   return s.find(v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === SystemIds.NAME_PROPERTY)
+  //     ?.value;
+  // });
+  const { store } = useSyncEngine();
+
+  const name = useSelector(
+    reactive,
+    () => {
+      return store.getEntity(entityId, { spaceId })?.name;
+    },
+    equal
+  );
+
   const isEditing = useUserIsEditing(spaceId);
   const { storage } = useMutate();
 

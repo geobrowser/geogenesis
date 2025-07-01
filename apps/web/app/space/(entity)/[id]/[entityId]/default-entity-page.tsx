@@ -1,11 +1,9 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { Effect } from 'effect';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
-import { getEntityPage } from '~/core/io/v2/queries';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
@@ -60,46 +58,47 @@ export default async function DefaultEntityPage({
       initialValues={props.values}
       initialRelations={props.relations}
     >
-      {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
-      <EntityPageContentContainer>
-        <div className="space-y-2">
-          {showRelations && <EntityPageRelations relations={props.relationEntityRelations} spaceId={props.spaceId} />}
-          {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
-          {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
-        </div>
-        {tabs.length > 1 && (
-          <>
-            <Spacer height={40} />
-            <React.Suspense fallback={null}>
-              <TabGroup tabs={tabs} />
-            </React.Suspense>
-          </>
-        )}
-        {notice}
-        {(showSpacer || !!notice) && <Spacer height={40} />}
-        <EditorProvider
-          id={props.id}
-          spaceId={props.spaceId}
-          initialBlocks={props.blocks}
-          initialBlockRelations={props.blockRelations}
-          initialTabs={props.tabs}
-        >
+      <EditorProvider
+        id={props.id}
+        spaceId={props.spaceId}
+        initialBlocks={props.blocks}
+        initialBlockRelations={props.blockRelations}
+        initialTabs={props.tabs}
+      >
+        {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
+        <EntityPageContentContainer>
+          <div className="space-y-2">
+            {showRelations && <EntityPageRelations relations={props.relationEntityRelations} spaceId={props.spaceId} />}
+            {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
+            {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
+          </div>
+          {tabs.length > 1 && (
+            <>
+              <Spacer height={40} />
+              <React.Suspense fallback={null}>
+                <TabGroup tabs={tabs} />
+              </React.Suspense>
+            </>
+          )}
+          {notice}
+          {(showSpacer || !!notice) && <Spacer height={40} />}
+
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-        </EditorProvider>
-        <ToggleEntityPage {...props} />
-        <AutomaticModeToggle />
-        <Spacer height={40} />
-        {/*
+          <ToggleEntityPage {...props} />
+          <AutomaticModeToggle />
+          <Spacer height={40} />
+          {/*
              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
              boundary. We don't want to show any referenced by loading states but do want to
              stream it in
           */}
-        <ErrorBoundary fallback={<EmptyErrorComponent />}>
-          <React.Suspense fallback={<div />}>
-            <BacklinksServerContainer entityId={params.entityId} />
-          </React.Suspense>
-        </ErrorBoundary>
-      </EntityPageContentContainer>
+          <ErrorBoundary fallback={<EmptyErrorComponent />}>
+            <React.Suspense fallback={<div />}>
+              <BacklinksServerContainer entityId={params.entityId} />
+            </React.Suspense>
+          </ErrorBoundary>
+        </EntityPageContentContainer>
+      </EditorProvider>
     </EntityStoreProvider>
   );
 }
