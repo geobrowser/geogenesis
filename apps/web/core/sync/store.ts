@@ -1,4 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import { createAtom } from '@xstate/store';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { readTypes } from '../database/entities';
@@ -23,6 +24,9 @@ export class GeoStore {
   private values: Map<string, Value[]> = new Map();
   private relations: Map<string, Relation[]> = new Map();
   private deletedEntities: Set<string> = new Set();
+
+  private reactiveValues = createAtom<Map<string, Map<string, Value>>>(new Map());
+  private reactiveRelations = createAtom<Map<string, Map<string, Relation>>>(new Map());
 
   // TODO(migration): We can use the pending data to represent what hasn't been
   // published yet.
@@ -74,6 +78,20 @@ export class GeoStore {
     for (const entity of entities) {
       this.entities.set(entity.id, entity);
       this.values.set(entity.id, entity.values);
+      this.reactiveValues.set(prev => {
+        // Convert Value[] to Map<string, Value> indexed by tripleKey
+        const valueMap = new Map<string, Value>();
+        entity.values.forEach(value => {
+          const tripleKey = ID.createValueId({
+            propertyId: value.property.id,
+            entityId: value.entity.id,
+            spaceId: value.spaceId,
+          });
+          valueMap.set(tripleKey, value);
+        });
+        prev.set(entity.id, valueMap);
+        return prev;
+      });
 
       // @TODO: Do we still need this? Or is merging handled correctly before syncing here?
       // const newRelations: Relation[] = [];
@@ -86,6 +104,15 @@ export class GeoStore {
       // }
 
       this.relations.set(entity.id, entity.relations);
+      this.reactiveRelations.set(prev => {
+        // Convert Relation[] to Map<string, Relation> indexed by relation.id
+        const relationMap = new Map<string, Relation>();
+        entity.relations.forEach(relation => {
+          relationMap.set(relation.id, relation);
+        });
+        prev.set(entity.id, relationMap);
+        return prev;
+      });
     }
 
     if (process.env.NODE_ENV === 'development') {
@@ -427,6 +454,17 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     // Add to pending changes
     this.pendingValues.get(entityId)!.set(tripleKey, value);
 
+    this.reactiveValues.set(prev => {
+      if (!prev.has(entityId)) {
+        prev.set(entityId, new Map());
+      }
+
+      // Set/replace the value directly using tripleKey as the key
+      prev.get(entityId)!.set(tripleKey, value);
+
+      return prev;
+    });
+
     // Emit update event
     this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value: value });
   }
@@ -456,6 +494,15 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     // Add a deleted version to pending changes
     this.pendingValues.get(entityId)!.set(valueKey, value);
 
+    // Remove from reactive values
+    this.reactiveValues.set(prev => {
+      const entityValues = prev.get(entityId);
+      if (entityValues) {
+        entityValues.delete(valueKey);
+      }
+      return prev;
+    });
+
     // Emit update event
     this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: value });
   }
@@ -481,6 +528,17 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     // Add to pending changes
     this.pendingRelations.get(entityId)!.set(relation.id, relation);
 
+    this.reactiveRelations.set(prev => {
+      if (!prev.has(entityId)) {
+        prev.set(entityId, new Map());
+      }
+
+      // Set/replace the relation directly using relation.id as the key
+      prev.get(entityId)!.set(relation.id, relation);
+
+      return prev;
+    });
+
     // Emit update event
     this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation });
   }
@@ -505,6 +563,15 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     // Add a deleted version to pending changes
     this.pendingRelations.get(entityId)!.set(relation.id, relation);
+
+    // Remove from reactive relations
+    this.reactiveRelations.set(prev => {
+      const entityRelations = prev.get(entityId);
+      if (entityRelations) {
+        entityRelations.delete(relation.id);
+      }
+      return prev;
+    });
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation });

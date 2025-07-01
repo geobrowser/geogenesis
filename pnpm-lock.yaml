@@ -140,6 +140,9 @@ importers:
       '@vercel/og':
         specifier: ^0.6.4
         version: 0.6.5
+      '@xstate/store':
+        specifier: ^3.8.0
+        version: 3.8.0(react@19.0.0)
       babel-plugin-react-compiler:
         specifier: 19.1.0-rc.2
         version: 19.1.0-rc.2
@@ -523,10 +526,10 @@ importers:
         version: 1.21.4(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
       vite:
         specifier: ^5.2.11
-        version: 5.4.14(@types/node@24.0.3)
+        version: 5.4.14(@types/node@24.0.7)
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@24.0.3)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+        version: 1.6.0(@types/node@24.0.7)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
     devDependencies:
       '@bufbuild/buf':
         specifier: ^1.31.0
@@ -593,7 +596,7 @@ importers:
         version: 14.0.0
       dotenv:
         specifier: latest
-        version: 16.5.0
+        version: 17.0.0
       effect:
         specifier: ^2.4.19
         version: 2.4.19
@@ -639,7 +642,7 @@ importers:
         version: 4.3.0(prettier@3.4.2)
       '@types/node':
         specifier: latest
-        version: 24.0.3
+        version: 24.0.7
       '@types/pg':
         specifier: ^8.10.9
         version: 8.11.11
@@ -681,10 +684,10 @@ importers:
         version: 5.7.3
       vite:
         specifier: ^5.2.10
-        version: 5.4.14(@types/node@24.0.3)
+        version: 5.4.14(@types/node@24.0.7)
       vitest:
         specifier: ^1.5.2
-        version: 1.6.0(@types/node@24.0.3)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+        version: 1.6.0(@types/node@24.0.7)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
 
 packages:
 
@@ -978,8 +981,8 @@ packages:
   '@bufbuild/protobuf@1.10.1':
     resolution: {integrity: sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ==}
 
-  '@bufbuild/protobuf@2.5.2':
-    resolution: {integrity: sha512-foZ7qr0IsUBjzWIq+SuBLfdQCpJ1j8cTuNNT4owngTHoN5KsJb8L9t65fzz7SCeSWzescoOil/0ldqiL041ABg==}
+  '@bufbuild/protobuf@2.6.0':
+    resolution: {integrity: sha512-6cuonJVNOIL7lTj5zgo/Rc2bKAo4/GvN+rKCrUj7GdEHRzCk8zKOfFwUsL9nAVk5rSIsRmlgcpLzTRysopEeeg==}
 
   '@bufbuild/protoc-gen-es@1.10.0':
     resolution: {integrity: sha512-zBYBsVT/ul4uZb6F+kD7/k4sWNHVVbEPfJwKi0FDr+9VJo8MKIofI6pkr5ksBLr4fi/74r+e/75Xi/0clL5dXg==}
@@ -4081,8 +4084,8 @@ packages:
   '@types/node@20.17.16':
     resolution: {integrity: sha512-vOTpLduLkZXePLxHiHsBLp98mHGnl8RptV4YAO3HfKO5UHjDvySGbxKtpYfy8Sx5+WKcgc45qNreJJRVM3L6mw==}
 
-  '@types/node@24.0.3':
-    resolution: {integrity: sha512-R4I/kzCYAdRLzfiCabn9hxWfbuHS573x+r0dJMkkzThEa7pbrcDWK+9zu3e7aBOouf+rQAciqPFMnxwr0aWgKg==}
+  '@types/node@24.0.7':
+    resolution: {integrity: sha512-YIEUUr4yf8q8oQoXPpSlnvKNVKDQlPMWrmOcgzoduo7kvA2UF0/BwJ/eMKFTiTtkNL17I0M6Xe2tvwFU7be6iw==}
 
   '@types/pbf@3.0.5':
     resolution: {integrity: sha512-j3pOPiEcWZ34R6a6mN07mUkM4o4Lwf6hPNt8eilOeZhTFbxFXmKhvXl9Y28jotFPaI1bpPDJsbCprUoNke6OrA==}
@@ -4476,6 +4479,17 @@ packages:
   '@whatwg-node/promise-helpers@1.3.2':
     resolution: {integrity: sha512-Nst5JdK47VIl9UcGwtv2Rcgyn5lWtZ0/mhRQ4G8NN2isxpq2TO30iqHzmwoJycjWuyUfg3GFXqP/gFHXeV57IA==}
     engines: {node: '>=16.0.0'}
+
+  '@xstate/store@3.8.0':
+    resolution: {integrity: sha512-VO9/qAJmXrGNkT8hyOM/jgGtNzbUOwCIpnor5vnFGrQUUCo46pB5jtYuYcW2yQy2XfCuYAqD9A4J3PG6v+uO2A==}
+    peerDependencies:
+      react: ^18.2.0 || ^19.0.0
+      solid-js: ^1.7.6
+    peerDependenciesMeta:
+      react:
+        optional: true
+      solid-js:
+        optional: true
 
   abab@2.0.6:
     resolution: {integrity: sha512-j2afSsaIENvHZN2B8GOpF566vZ5WVk5opAiMTvWgaQT8DkbOqsTfvNAvHoRGU2zzP8cPoqys+xHTRDWW8L+/BA==}
@@ -5380,6 +5394,10 @@ packages:
 
   dotenv@16.5.0:
     resolution: {integrity: sha512-m/C+AwOAr9/W1UOIZUo232ejMNnJAJtYQjUbHoNTBNTJSvqzzDh7vnrei3o3r3m9blf6ZoDkvcw0VmozNRFJxg==}
+    engines: {node: '>=12'}
+
+  dotenv@17.0.0:
+    resolution: {integrity: sha512-A0BJ5lrpJVSfnMMXjmeO0xUnoxqsBHWCoqqTnGwGYVdnctqXXUEhJOO7LxmgxJon9tEZFGpe0xPRX0h2v3AANQ==}
     engines: {node: '>=12'}
 
   dset@3.1.4:
@@ -10025,7 +10043,7 @@ snapshots:
 
   '@bufbuild/protobuf@1.10.1': {}
 
-  '@bufbuild/protobuf@2.5.2': {}
+  '@bufbuild/protobuf@2.6.0': {}
 
   '@bufbuild/protoc-gen-es@1.10.0(@bufbuild/protobuf@1.10.0)':
     dependencies:
@@ -10360,23 +10378,23 @@ snapshots:
       '@connectrpc/connect': 1.6.1(@bufbuild/protobuf@1.10.0)
       undici: 5.28.5
 
-  '@connectrpc/connect-node@2.0.2(@bufbuild/protobuf@2.5.2)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.5.2))':
+  '@connectrpc/connect-node@2.0.2(@bufbuild/protobuf@2.6.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.6.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.5.2
-      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.5.2)
+      '@bufbuild/protobuf': 2.6.0
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.6.0)
 
-  '@connectrpc/connect-web@2.0.2(@bufbuild/protobuf@2.5.2)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.5.2))':
+  '@connectrpc/connect-web@2.0.2(@bufbuild/protobuf@2.6.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.6.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.5.2
-      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.5.2)
+      '@bufbuild/protobuf': 2.6.0
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.6.0)
 
   '@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0)':
     dependencies:
       '@bufbuild/protobuf': 1.10.0
 
-  '@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.5.2)':
+  '@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.6.0)':
     dependencies:
-      '@bufbuild/protobuf': 2.5.2
+      '@bufbuild/protobuf': 2.6.0
 
   '@discoveryjs/json-ext@0.5.7': {}
 
@@ -11930,7 +11948,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 17.0.45
+      '@types/node': 20.17.16
       '@types/yargs': 17.0.33
       chalk: 4.1.2
 
@@ -13451,10 +13469,10 @@ snapshots:
       '@bufbuild/protobuf': 1.10.0
       '@connectrpc/connect': 1.6.1(@bufbuild/protobuf@1.10.0)
 
-  '@substreams/core@0.17.0(@bufbuild/protobuf@2.5.2)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.5.2))':
+  '@substreams/core@0.17.0(@bufbuild/protobuf@2.6.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.6.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.5.2
-      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.5.2)
+      '@bufbuild/protobuf': 2.6.0
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.6.0)
 
   '@substreams/manifest@0.15.0(@bufbuild/buf@1.50.0)(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0))(@effect/schema@0.63.4(effect@2.4.19)(fast-check@3.13.2))(effect@2.4.19)(yaml@2.7.0)':
     dependencies:
@@ -13469,11 +13487,11 @@ snapshots:
 
   '@substreams/node@0.6.2':
     dependencies:
-      '@bufbuild/protobuf': 2.5.2
-      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.5.2)
-      '@connectrpc/connect-node': 2.0.2(@bufbuild/protobuf@2.5.2)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.5.2))
-      '@connectrpc/connect-web': 2.0.2(@bufbuild/protobuf@2.5.2)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.5.2))
-      '@substreams/core': 0.17.0(@bufbuild/protobuf@2.5.2)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.5.2))
+      '@bufbuild/protobuf': 2.6.0
+      '@connectrpc/connect': 2.0.2(@bufbuild/protobuf@2.6.0)
+      '@connectrpc/connect-node': 2.0.2(@bufbuild/protobuf@2.6.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.6.0))
+      '@connectrpc/connect-web': 2.0.2(@bufbuild/protobuf@2.6.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.6.0))
+      '@substreams/core': 0.17.0(@bufbuild/protobuf@2.6.0)(@connectrpc/connect@2.0.2(@bufbuild/protobuf@2.6.0))
       eventemitter3: 5.0.1
 
   '@substreams/sink@0.14.1(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0))(effect@2.4.19)':
@@ -13708,7 +13726,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 17.0.45
+      '@types/node': 20.17.16
 
   '@types/cookie@0.6.0': {}
 
@@ -13814,7 +13832,7 @@ snapshots:
     dependencies:
       undici-types: 6.19.8
 
-  '@types/node@24.0.3':
+  '@types/node@24.0.7':
     dependencies:
       undici-types: 7.8.0
 
@@ -13892,11 +13910,11 @@ snapshots:
 
   '@types/ws@7.4.7':
     dependencies:
-      '@types/node': 17.0.45
+      '@types/node': 20.17.16
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 17.0.45
+      '@types/node': 20.17.16
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -14757,6 +14775,10 @@ snapshots:
   '@whatwg-node/promise-helpers@1.3.2':
     dependencies:
       tslib: 2.8.1
+
+  '@xstate/store@3.8.0(react@19.0.0)':
+    optionalDependencies:
+      react: 19.0.0
 
   abab@2.0.6: {}
 
@@ -15641,6 +15663,8 @@ snapshots:
   dotenv@16.4.7: {}
 
   dotenv@16.5.0: {}
+
+  dotenv@17.0.0: {}
 
   dset@3.1.4: {}
 
@@ -17425,7 +17449,7 @@ snapshots:
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 17.0.45
+      '@types/node': 20.17.16
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -20047,13 +20071,13 @@ snapshots:
       - utf-8-validate
       - zod
 
-  vite-node@1.6.0(@types/node@24.0.3):
+  vite-node@1.6.0(@types/node@24.0.7):
     dependencies:
       cac: 6.7.14
       debug: 4.4.0
       pathe: 1.1.2
       picocolors: 1.1.1
-      vite: 5.4.14(@types/node@24.0.3)
+      vite: 5.4.14(@types/node@24.0.7)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -20096,13 +20120,13 @@ snapshots:
       '@types/node': 17.0.45
       fsevents: 2.3.3
 
-  vite@5.4.14(@types/node@24.0.3):
+  vite@5.4.14(@types/node@24.0.7):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.5.1
       rollup: 4.32.1
     optionalDependencies:
-      '@types/node': 24.0.3
+      '@types/node': 24.0.7
       fsevents: 2.3.3
 
   vite@6.2.5(@types/node@17.0.45)(jiti@2.4.2)(tsx@4.19.2)(yaml@2.7.0):
@@ -20117,7 +20141,7 @@ snapshots:
       tsx: 4.19.2
       yaml: 2.7.0
 
-  vitest@1.6.0(@types/node@24.0.3)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
+  vitest@1.6.0(@types/node@24.0.7)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
     dependencies:
       '@vitest/expect': 1.6.0
       '@vitest/runner': 1.6.0
@@ -20136,11 +20160,11 @@ snapshots:
       strip-literal: 2.1.1
       tinybench: 2.9.0
       tinypool: 0.8.4
-      vite: 5.4.14(@types/node@24.0.3)
-      vite-node: 1.6.0(@types/node@24.0.3)
+      vite: 5.4.14(@types/node@24.0.7)
+      vite-node: 1.6.0(@types/node@24.0.7)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 24.0.3
+      '@types/node': 24.0.7
       jsdom: 20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - less
