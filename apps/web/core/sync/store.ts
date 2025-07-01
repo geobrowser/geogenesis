@@ -21,19 +21,6 @@ export const syncedEntities = new Map<string, Entity>();
  * These synced changes get written back to the GeoStore asynchronously.
  */
 export class GeoStore {
-  // Core data storage
-  private values: Map<string, Value[]> = new Map();
-  private relations: Map<string, Relation[]> = new Map();
-  private deletedEntities: Set<string> = new Set();
-
-  // TODO(migration): We can use the pending data to represent what hasn't been
-  // published yet.
-  //
-  // Right now when we sync we do put the synced data directly in the values and
-  // relations though.
-  private pendingRelations: Map<string, Map<string, Relation>> = new Map();
-  private pendingEntityDeletes: Set<string> = new Set();
-
   // Properties are entities, but with a required dataType field. The property's
   // dataType is unique across the entire knowledge graph. The other fields of
   // the property are space-specific, and derived from the data of an entity.
@@ -73,13 +60,6 @@ export class GeoStore {
 
   private syncEntities(entities: Entity[]) {
     for (const entity of entities) {
-      /**
-       * @TODO these are legacy state trackers. Delete once we
-       * move to the reactive system
-       */
-      this.values.set(entity.id, entity.values);
-      this.relations.set(entity.id, entity.relations);
-
       syncedEntities.set(entity.id, entity);
       reactiveValues.set(prev => {
         const valueIdsToWrite = new Set(entity.values.map(t => t.id));
@@ -118,12 +98,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
   clear() {
     const entitiesToSync = this.getEntities();
-
-    this.values.clear();
-    this.relations.clear();
-    this.deletedEntities.clear();
-    this.pendingRelations.clear();
-    this.pendingEntityDeletes.clear();
 
     this.properties.clear();
     this.pendingDataTypes.clear();
@@ -216,7 +190,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    */
   public getEntities(options: ReadOptions = {}): Entity[] {
     return Array.from(syncedEntities.keys())
-      .filter(id => (options.includeDeleted ? true : this.isEntityDeleted(id) === false))
       .map(id => this.getEntity(id, options))
       .filter(entity => entity !== undefined);
   }
@@ -316,13 +289,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   }
 
   /**
-   * Check if entity is marked as deleted (including pending deletes)
-   */
-  public isEntityDeleted(id: string): boolean {
-    return this.deletedEntities.has(id) || this.pendingEntityDeletes.has(id);
-  }
-
-  /**
    * Add or update a value with optimistic updates
    */
   public setValue(value: Value): void {
@@ -369,22 +335,10 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Add or update a relation with optimistic updates
    */
   public setRelation(relation: Relation): void {
-    const entityId = relation.fromEntity.id;
-
     relation.hasBeenPublished = false;
     relation.isDeleted = false;
     relation.isLocal = true;
     relation.timestamp = new Date().toISOString();
-
-    // Get or create the pending relations map for this entity
-    if (!this.pendingRelations.has(entityId)) {
-      this.pendingRelations.set(entityId, new Map());
-    }
-
-    // @TODO: Optimistically set types
-
-    // Add to pending changes
-    this.pendingRelations.get(entityId)!.set(relation.id, relation);
 
     reactiveRelations.set(prev => {
       const unchangedRelations = prev.filter(t => {
@@ -402,22 +356,10 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Delete a relation with optimistic updates
    */
   public deleteRelation(relation: Relation): void {
-    const entityId = relation.fromEntity.id;
-
     relation.hasBeenPublished = false;
     relation.isDeleted = true;
     relation.isLocal = true;
     relation.timestamp = new Date().toISOString();
-
-    // Get or create the pending relations map for this entity
-    if (!this.pendingRelations.has(entityId)) {
-      this.pendingRelations.set(entityId, new Map());
-    }
-
-    // @TODO: Optimistically set types
-
-    // Add a deleted version to pending changes
-    this.pendingRelations.get(entityId)!.set(relation.id, relation);
 
     // Remove from reactive relations
     reactiveRelations.set(prev => {
@@ -438,25 +380,13 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   public findReferencingEntities(id: string): string[] {
     const referencingEntities: string[] = [];
 
-    // Check base relations
-    this.relations.forEach((relationsArray, entityId) => {
-      for (const relation of relationsArray) {
-        if (relation.toEntity.id === id) {
-          referencingEntities.push(entityId);
-          break;
-        }
-      }
-    });
+    const relations = reactiveRelations.get();
 
-    // Check pending relations
-    this.pendingRelations.forEach((pendingMap, entityId) => {
-      pendingMap.forEach(relation => {
-        if (relation.toEntity.id === id && !relation.isDeleted) {
-          if (!referencingEntities.includes(entityId)) {
-            referencingEntities.push(entityId);
-          }
-        }
-      });
+    // Check base relations
+    relations.forEach(relation => {
+      if (relation.toEntity.id === id) {
+        referencingEntities.push(relation.fromEntity.id);
+      }
     });
 
     return referencingEntities;

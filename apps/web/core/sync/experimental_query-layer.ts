@@ -83,7 +83,7 @@ type SortBy = SortByField | { field: SortByField; direction: SortDirection };
  * EntityQuery class for building and executing entity queries
  */
 export class EntityQuery {
-  private store: { getEntities: () => Entity[]; isEntityDeleted: (id: string) => boolean };
+  private store: { getEntities: () => Entity[] };
   private whereConditions: WhereCondition[] = [];
   private limitVal: number | undefined;
   private offsetVal: number = 0;
@@ -291,7 +291,7 @@ export class EntityQuery {
 
     return entities.filter(entity => {
       // Only include non-deleted entities unless includeDeleted is true
-      if (!this.includeDeletedVal && this.store.isEntityDeleted(entity.id)) {
+      if (!this.includeDeletedVal) {
         return false;
       }
 
