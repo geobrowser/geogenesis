@@ -58,26 +58,30 @@ export class E {
   }): Entity | null {
     const remoteEntity = mergeWith;
 
-    // We need to include the deleted to correctly merge with remote data
-    const localEntity = store.getEntity(id, { spaceId, includeDeleted: true });
+    const localValues = store.getResolvedValues(id, true);
+    const localRelations = store.getResolvedRelations(id, true);
+
+    const localEntity = localValues.length > 0 && localRelations.length > 0;
 
     if (!localEntity && !remoteEntity) {
       return null;
     }
 
     if (!remoteEntity) {
-      return localEntity ?? null;
+      return store.getEntity(id) ?? null;
     }
 
     if (!localEntity) {
       return remoteEntity;
     }
 
-    const mergedValues = Values.merge(localEntity.values, remoteEntity.values);
+    console.log('localValues', localValues);
+
+    const mergedValues = Values.merge(localValues, remoteEntity.values);
 
     const values = mergedValues.filter(v => (Boolean(v.isDeleted) === false && spaceId ? v.spaceId === spaceId : true));
 
-    const mergedRelations = mergeRelations(localEntity.relations, remoteEntity.relations);
+    const mergedRelations = mergeRelations(localRelations, remoteEntity.relations);
     const relations = mergedRelations.filter(r =>
       Boolean(r.isDeleted) === false && spaceId ? r.spaceId === spaceId : true
     );
@@ -87,11 +91,12 @@ export class E {
     const name = Entities.name(values);
     const description = Entities.description(values);
     const types = readTypes(relations);
+    const spaces = Entities.spaces(values, relations);
 
     return {
       id: EntityId(id),
       name,
-      spaces: [...(localEntity?.spaces ?? []), ...(remoteEntity?.spaces ?? [])],
+      spaces,
       description,
       types,
       values: values,

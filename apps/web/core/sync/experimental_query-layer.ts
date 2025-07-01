@@ -1,7 +1,11 @@
+import { useSelector } from '@xstate/store/react';
+import equals from 'fast-deep-equal';
+
 import { GeoStore } from '~/core/sync/store';
 
 import { EntityId } from '../io/schema';
 import { Entity, Relation, Value } from '../v2.types';
+import { reactive } from './hooks';
 
 const compareOperators = {
   string: {
@@ -78,6 +82,16 @@ export type WhereCondition = {
 type SortDirection = 'asc' | 'desc';
 type SortByField = 'id' | 'name' | 'description' | 'createdAt' | 'updatedAt';
 type SortBy = SortByField | { field: SortByField; direction: SortDirection };
+
+export function useReactiveQuery(query: EntityQuery) {
+  return useSelector(
+    reactive,
+    () => {
+      query.execute();
+    },
+    equals
+  );
+}
 
 /**
  * EntityQuery class for building and executing entity queries

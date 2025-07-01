@@ -63,6 +63,10 @@ export class GeoStore {
       syncedEntities.set(entity.id, entity);
       reactiveValues.set(prev => {
         const valueIdsToWrite = new Set(entity.values.map(t => t.id));
+        console.log('data', {
+          prev,
+          values: entity.values,
+        });
 
         const unchangedValues = prev.filter(t => {
           return !valueIdsToWrite.has(t.id);
@@ -155,9 +159,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             spaces,
             nameTripleSpaces: spaces,
           }),
-      values: values.filter(t =>
-        includeDeleted ? true : Boolean(t.isDeleted) === false && options.spaceId ? t.spaceId === options.spaceId : true
-      ),
+      values: values.filter(t => (options.spaceId ? t.spaceId === options.spaceId : true)),
       relations: relations.filter(r =>
         includeDeleted ? true : Boolean(r.isDeleted) === false && options.spaceId ? r.spaceId === options.spaceId : true
       ),
@@ -200,8 +202,8 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   public getResolvedValues(entityId: string, includeDeleted = false): Value[] {
     const values = reactiveValues.get().filter(v => v.entity.id === entityId);
 
-    if (!includeDeleted) {
-      return values.filter(v => Boolean(v.isDeleted) === false);
+    if (includeDeleted) {
+      return values.filter(v => v.isDeleted === true);
     }
 
     return values;
@@ -278,11 +280,11 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   /**
    * Get all relations for an entity including optimistic updates
    */
-  private getResolvedRelations(entityId: string, includeDeleted = false): Relation[] {
+  public getResolvedRelations(entityId: string, includeDeleted = false): Relation[] {
     const relations = reactiveRelations.get().filter(r => r.fromEntity.id === entityId);
 
-    if (!includeDeleted) {
-      return relations.filter(r => Boolean(r.isDeleted) === false);
+    if (includeDeleted) {
+      return relations.filter(r => r.isDeleted === true);
     }
 
     return relations;
