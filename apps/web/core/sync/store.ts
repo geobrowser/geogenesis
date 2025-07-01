@@ -4,7 +4,6 @@ import { createAtom } from '@xstate/store';
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { readTypes } from '../database/entities';
 import { ID } from '../id';
-import { EntityId } from '../io/schema';
 import { Entities } from '../utils/entity';
 import { DataType, Entity, ExtraRenderableType, Property, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
@@ -14,6 +13,7 @@ type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
 export const reactiveValues = createAtom<Value[]>([]);
 export const reactiveRelations = createAtom<Relation[]>([]);
+export const syncedEntities = new Map<string, Entity>();
 
 /**
  * The GeoStore is a local cache of data representing entities in the application.
@@ -23,7 +23,6 @@ export const reactiveRelations = createAtom<Relation[]>([]);
  */
 export class GeoStore {
   // Core data storage
-  private entities: Map<string, Entity> = new Map();
   private values: Map<string, Value[]> = new Map();
   private relations: Map<string, Relation[]> = new Map();
   private deletedEntities: Set<string> = new Set();
@@ -76,9 +75,14 @@ export class GeoStore {
 
   private syncEntities(entities: Entity[]) {
     for (const entity of entities) {
-      this.entities.set(entity.id, entity);
+      /**
+       * @TODO these are legacy state trackers. Delete once we
+       * move to the reactive system
+       */
       this.values.set(entity.id, entity.values);
+      this.relations.set(entity.id, entity.relations);
 
+      syncedEntities.set(entity.id, entity);
       reactiveValues.set(prev => {
         const valueIdsToWrite = new Set(entity.values.map(t => t.id));
 
@@ -88,18 +92,6 @@ export class GeoStore {
 
         return [...unchangedValues, ...entity.values];
       });
-
-      // @TODO: Do we still need this? Or is merging handled correctly before syncing here?
-      // const newRelations: Relation[] = [];
-      // const existingRelationIds = new Set(this.getResolvedRelations(entity.id)?.map(r => r.id) ?? []);
-
-      // for (const relation of entity.relationsOut) {
-      //   if (!existingRelationIds.has(relation.id)) {
-      //     newRelations.push(relation);
-      //   }
-      // }
-
-      this.relations.set(entity.id, entity.relations);
       reactiveRelations.set(prev => {
         const relationIdsToWrite = new Set(entity.relations.map(t => t.id));
 
@@ -129,7 +121,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   clear() {
     const entitiesToSync = this.getEntities();
 
-    this.entities.clear();
     this.values.clear();
     this.relations.clear();
     this.deletedEntities.clear();
@@ -157,7 +148,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     // if (this.isEntityDeleted(id) && !options.includeDeleted) return undefined;
 
     // Get the base entity
-    const entity = this.entities.get(id);
+    const entity = syncedEntities.get(id);
 
     // Get triples including any pending optimistic updates
     const values = this.getResolvedValues(id, options.includeDeleted);
@@ -186,7 +177,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             description: description ?? entity.description,
           }
         : {
-            id: EntityId(id),
+            id: id,
             name,
             description,
             types,
@@ -203,18 +194,14 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     const resolvedRelations = resolvedEntity.relations.map(r => {
       let maybeToEntity: Entity | null = null;
-      let maybeRelationEntity: Entity | null = null;
 
       if (r.toEntity.id !== id) {
-        maybeToEntity = this.entities.get(r.toEntity.id) ?? null;
-        maybeRelationEntity = this.entities.get(r.id) ?? null;
+        maybeToEntity = syncedEntities.get(r.toEntity.id) ?? null;
       }
 
       return {
         ...r,
-        position:
-          maybeRelationEntity?.values.find(t => t.property.id === EntityId(SystemIds.RELATION_INDEX))?.value ??
-          r.position,
+        position: r.position,
         toEntity: {
           ...r.toEntity,
           name: maybeToEntity?.name ?? r.toEntity.name,
@@ -231,34 +218,10 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Get multiple entities by ID with full resolution
    */
   public getEntities(options: ReadOptions = {}): Entity[] {
-    return Array.from(this.entities.keys())
+    return Array.from(syncedEntities.keys())
       .filter(id => (options.includeDeleted ? true : this.isEntityDeleted(id) === false))
       .map(id => this.getEntity(id, options))
       .filter(entity => entity !== undefined);
-  }
-
-  /**
-   * Set or update an entity's base properties (without triples or relations)
-   */
-  public setEntity(entity: Entity): void {
-    const baseEntity = { ...entity, triples: [], relationsOut: [] };
-    this.entities.set(entity.id as string, baseEntity);
-
-    // Set entity triples
-    if (entity.values && entity.values.length > 0) {
-      entity.values.forEach(value => {
-        this.setValue(value);
-      });
-    }
-
-    // Set entity relations
-    if (entity.relations && entity.relations.length > 0) {
-      entity.relations.forEach(relation => {
-        this.setRelation(relation);
-      });
-    }
-
-    this.stream.emit({ type: GeoEventStream.ENTITY_UPDATED, entity });
   }
 
   /**
