@@ -1,11 +1,9 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { Effect } from 'effect';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
-import { getEntityPage } from '~/core/io/v2/queries';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
