@@ -192,7 +192,11 @@ export function LinkableRelationChip({
         className,
       })}
     >
-      <Link entityId={entityId} href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}>
+      <Link
+        entityId={entityId}
+        spaceId={spaceId ?? currentSpaceId}
+        href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
+      >
         {children}
       </Link>
       {verified && (
@@ -259,6 +263,7 @@ export function LinkableRelationChip({
             {relationEntityId && (
               <Link
                 entityId={relationEntityId}
+                spaceId={currentSpaceId}
                 href={NavUtils.toEntity(currentSpaceId, relationEntityId)}
                 onMouseEnter={() => setIsRelationHovered(true)}
                 onMouseLeave={() => setIsRelationHovered(false)}

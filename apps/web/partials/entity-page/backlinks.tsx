@@ -62,6 +62,7 @@ const Backlink = ({ backlink }: BacklinkProps) => {
       <PrefetchLink
         href={NavUtils.toEntity(space.id, backlink.id)}
         entityId={backlink.id}
+        spaceId={space.id}
         className="inline-flex flex-col"
       >
         <span className="text-metadataMedium">{backlink.name}</span>
