@@ -16,7 +16,7 @@ type BacklinksProps = {
   backlinks: Backlink[];
 };
 
-type Backlink = { id: string; name?: string | null; spaces: Array<string | null> };
+export type Backlink = { id: string; name?: string | null; spaceIds: Array<string> };
 
 export const Backlinks = ({ backlinks }: BacklinksProps) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
@@ -53,7 +53,7 @@ type BacklinkProps = {
 };
 
 const Backlink = ({ backlink }: BacklinkProps) => {
-  const { space } = useSpace(backlink.spaces[0] ?? '');
+  const { space } = useSpace(backlink.spaceIds[0] ?? '');
 
   if (!space) return;
 

@@ -5,7 +5,7 @@ import { RemoteProperty } from '../v2/v2.schema';
 export function PropertyDto(queryResult: RemoteProperty): Property {
   return {
     id: queryResult.id,
-    name: queryResult.entity.name,
+    name: queryResult.name,
     dataType: queryResult.dataType,
     relationValueTypes: [...queryResult.relationValueTypes],
     renderableType: queryResult.renderableType

@@ -17,7 +17,7 @@ export function ValueDto(entity: { id: string; name: string | null }, remoteValu
     spaceId: remoteValue.spaceId,
     property: {
       id: remoteValue.property.id,
-      name: remoteValue.property.entity.name ?? null,
+      name: remoteValue.property.name ?? null,
       dataType: remoteValue.property.dataType,
       relationValueTypes: [...remoteValue.property.relationValueTypes],
     },

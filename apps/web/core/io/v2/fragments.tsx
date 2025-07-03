@@ -5,14 +5,14 @@ export const entityFragment = graphql(/* GraphQL */ `
     id
     name
     description
-    spaces
+    spaceIds
 
     types {
       id
       name
     }
 
-    values {
+    valuesList {
       spaceId
       property {
         ...PropertyFragment
@@ -22,24 +22,24 @@ export const entityFragment = graphql(/* GraphQL */ `
       unit
     }
 
-    relations {
+    relationsList {
       id
       spaceId
       position
       verified
       entityId
-      from {
+      fromEntity {
         id
         name
       }
-      to {
+      toEntity {
         id
         name
         types {
           id
           name
         }
-        values {
+        valuesList {
           propertyId
           value
         }
@@ -47,9 +47,7 @@ export const entityFragment = graphql(/* GraphQL */ `
       toSpaceId
       type {
         id
-        entity {
-          name
-        }
+        name
         renderableType
       }
     }
@@ -57,25 +55,169 @@ export const entityFragment = graphql(/* GraphQL */ `
 `);
 
 export const entitiesQuery = graphql(/* GraphQL */ `
-  query AllEntities($spaceId: String, $limit: Int, $offset: Int) {
-    entities(spaceId: $spaceId, limit: $limit, offset: $offset) {
-      ...FullEntity
+  query AllEntities($spaceId: UUID, $limit: Int, $offset: Int) {
+    entities(first: $limit, offset: $offset) {
+      id
+      name
+      description
+      spaceIds
+
+      types {
+        id
+        name
+      }
+
+      valuesList(filter: { spaceId: { is: $spaceId } }) {
+        spaceId
+        property {
+          ...PropertyFragment
+        }
+        value
+        language
+        unit
+      }
+
+      relationsList(filter: { spaceId: { is: $spaceId } }) {
+        id
+        spaceId
+        position
+        verified
+        entityId
+        fromEntity {
+          id
+          name
+        }
+        toEntity {
+          id
+          name
+          types {
+            id
+            name
+          }
+          valuesList {
+            propertyId
+            value
+          }
+        }
+        toSpaceId
+        type {
+          id
+          name
+          renderableType
+        }
+      }
     }
   }
 `);
 
 export const entitiesBatchQuery = graphql(/* GraphQL */ `
-  query EntitiesBatch($ids: [String!]!, $spaceId: String) {
-    entities(spaceId: $spaceId, filter: { id: { in: $ids } }) {
-      ...FullEntity
+  query EntitiesBatch($filter: EntityFilter, $spaceId: UUID) {
+    entities(filter: $filter) {
+      id
+      name
+      description
+      spaceIds
+
+      types {
+        id
+        name
+      }
+
+      valuesList(filter: { spaceId: { is: $spaceId } }) {
+        spaceId
+        property {
+          ...PropertyFragment
+        }
+        value
+        language
+        unit
+      }
+
+      relationsList(filter: { spaceId: { is: $spaceId } }) {
+        id
+        spaceId
+        position
+        verified
+        entityId
+        fromEntity {
+          id
+          name
+        }
+        toEntity {
+          id
+          name
+          types {
+            id
+            name
+          }
+          valuesList {
+            propertyId
+            value
+          }
+        }
+        toSpaceId
+        type {
+          id
+          name
+          renderableType
+        }
+      }
     }
   }
 `);
 
 export const entityQuery = graphql(/* GraphQL */ `
-  query Entity($id: String!, $spaceId: String) {
-    entity(id: $id, spaceId: $spaceId) {
-      ...FullEntity
+  query Entity($id: UUID!, $spaceId: UUID) {
+    entity(id: $id) {
+      id
+      name
+      description
+      spaceIds
+
+      types {
+        id
+        name
+      }
+
+      valuesList(filter: { spaceId: { is: $spaceId } }) {
+        spaceId
+        property {
+          ...PropertyFragment
+        }
+        value
+        language
+        unit
+      }
+
+      relationsList(filter: { spaceId: { is: $spaceId } }) {
+        id
+        spaceId
+        position
+        verified
+        entityId
+        fromEntity {
+          id
+          name
+        }
+        toEntity {
+          id
+          name
+          types {
+            id
+            name
+          }
+          valuesList {
+            propertyId
+            value
+          }
+        }
+        toSpaceId
+        type {
+          id
+          name
+          renderableType
+        }
+      }
     }
   }
 `);
@@ -87,18 +229,18 @@ export const relationFragment = graphql(/* GraphQL */ `
     position
     verified
     entityId
-    from {
+    entity {
       id
       name
     }
-    to {
+    toEntity {
       id
       name
       types {
         id
         name
       }
-      values {
+      valuesList {
         propertyId
         value
       }
@@ -106,37 +248,83 @@ export const relationFragment = graphql(/* GraphQL */ `
     toSpaceId
     type {
       id
-      entity {
-        name
-      }
+      name
       renderableType
     }
   }
 `);
 
 export const relationEntityRelationsQuery = graphql(/* GraphQL */ `
-  query RelationEntityRelations($id: String!, $spaceId: String) {
-    relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {
+  query RelationEntityRelations($id: UUID!, $spaceId: UUID) {
+    relations(filter: { entityId: { is: $id }, spaceId: { is: $spaceId } }) {
       ...FullRelation
     }
   }
 `);
 
 export const entityPageQuery = graphql(/* GraphQL */ `
-  query EntityPage($id: String!, $spaceId: String) {
-    entity(id: $id, spaceId: $spaceId) {
-      ...FullEntity
+  query EntityPage($id: UUID!, $spaceId: UUID) {
+    entity(id: $id) {
+      id
+      name
+      description
+      spaceIds
+
+      types {
+        id
+        name
+      }
+
+      valuesList(filter: { spaceId: { is: $spaceId } }) {
+        spaceId
+        property {
+          ...PropertyFragment
+        }
+        value
+        language
+        unit
+      }
+
+      relationsList(filter: { spaceId: { is: $spaceId } }) {
+        id
+        spaceId
+        position
+        verified
+        entityId
+        fromEntity {
+          id
+          name
+        }
+        toEntity {
+          id
+          name
+          types {
+            id
+            name
+          }
+          valuesList {
+            propertyId
+            value
+          }
+        }
+        toSpaceId
+        type {
+          id
+          name
+          renderableType
+        }
+      }
     }
-    relations(filter: { relationEntityId: $id }, spaceId: $spaceId) {
+    relations(filter: { entityId: { is: $id }, spaceId: { is: $spaceId } }) {
       ...FullRelation
     }
   }
 `);
 
 export const entityTypesQuery = graphql(/* GraphQL */ `
-  query EntityTypes($id: String!, $spaceId: String) {
-    entity(id: $id, spaceId: $spaceId) {
-      types {
+  query EntityTypes($id: UUID!, $spaceId: UUID) {
+    entity(id: $id) {
+      types(filter: { spaceIds: { in: [$spaceId] } }) {
         id
         name
       }
@@ -145,13 +333,13 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
 `);
 
 export const entityBacklinksQuery = graphql(/* GraphQL */ `
-  query EntityBacklinksPage($id: String!, $spaceId: String) {
-    entity(id: $id, spaceId: $spaceId) {
-      backlinks {
-        from {
+  query EntityBacklinksPage($id: UUID!, $spaceId: UUID) {
+    entity(id: $id) {
+      backlinksList(filter: { spaceId: { is: $spaceId } }) {
+        fromEntity {
           id
           name
-          spaces
+          spaceIds
         }
       }
     }
@@ -168,22 +356,22 @@ export const spaceFragment = graphql(/* GraphQL */ `
     membershipAddress
     personalAddress
 
-    members {
+    membersList {
       address
     }
 
-    editors {
+    editorsList {
       address
     }
 
-    entity {
+    page {
       ...FullEntity
     }
   }
 `);
 
 export const spaceQuery = graphql(/* GraphQL */ `
-  query Space($id: String!) {
+  query Space($id: UUID!) {
     space(id: $id) {
       ...FullSpace
     }
@@ -192,21 +380,8 @@ export const spaceQuery = graphql(/* GraphQL */ `
 
 export const spacesQuery = graphql(/* GraphQL */ `
   query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {
-    spaces(filter: $filter, limit: $limit, offset: $offset) {
+    spaces(filter: $filter, first: $limit, offset: $offset) {
       ...FullSpace
-    }
-  }
-`);
-
-export const resultFragment = graphql(/* GraphQL */ `
-  fragment Result on Entity {
-    id
-    name
-    description
-    spaces
-    types {
-      id
-      name
     }
   }
 `);
@@ -214,13 +389,10 @@ export const resultFragment = graphql(/* GraphQL */ `
 export const propertyFragment = graphql(/* GraphQL */ `
   fragment PropertyFragment on Property {
     id
+    name
     dataType
     renderableType
     relationValueTypes {
-      id
-      name
-    }
-    entity {
       id
       name
     }
@@ -228,7 +400,7 @@ export const propertyFragment = graphql(/* GraphQL */ `
 `);
 
 export const propertyQuery = graphql(/* GraphQL */ `
-  query Property($id: String!) {
+  query Property($id: UUID!) {
     property(id: $id) {
       ...PropertyFragment
     }
@@ -236,7 +408,7 @@ export const propertyQuery = graphql(/* GraphQL */ `
 `);
 
 export const propertiesBatchQuery = graphql(/* GraphQL */ `
-  query PropertiesBatch($ids: [String!]!) {
+  query PropertiesBatch($ids: [UUID!]!) {
     properties(filter: { id: { in: $ids } }) {
       ...PropertyFragment
     }
@@ -244,17 +416,31 @@ export const propertiesBatchQuery = graphql(/* GraphQL */ `
 `);
 
 export const resultQuery = graphql(/* GraphQL */ `
-  query Result($id: String!, $spaceId: String) {
-    entity(id: $id, spaceId: $spaceId) {
-      ...Result
+  query Result($id: UUID!, $spaceId: UUID) {
+    entity(id: $id) {
+      id
+      name
+      description
+      spaceIds
+      types {
+        id
+        name
+      }
     }
   }
 `);
 
 export const resultsQuery = graphql(/* GraphQL */ `
-  query Results($query: String!, $filter: SearchFilter, $spaceId: String, $limit: Int, $offset: Int) {
-    search(query: $query, filter: $filter, spaceId: $spaceId, limit: $limit, offset: $offset) {
-      ...Result
+  query Results($query: String!, $filter: EntityFilter, $spaceId: UUID, $limit: Int, $offset: Int) {
+    search(query: $query, filter: $filter, spaceId: $spaceId, first: $limit, offset: $offset) {
+      id
+      name
+      description
+      spaceIds
+      types {
+        id
+        name
+      }
     }
   }
 `);

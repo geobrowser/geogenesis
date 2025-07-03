@@ -7,8 +7,8 @@ import { EntityId, SubstreamRelationHistorical, SubstreamType } from '../schema'
 
 export function RelationDtoLive(relation: RemoteRelation): Relation {
   const imageEntityUrlValue =
-    relation.to.values.find(relation => relation.propertyId === SystemIds.IMAGE_URL_PROPERTY)?.value ?? null;
-  const renderableType = v2_getRenderableEntityType(relation.to.types);
+    relation.toEntity.valuesList.find(relation => relation.propertyId === SystemIds.IMAGE_URL_PROPERTY)?.value ?? null;
+  const renderableType = v2_getRenderableEntityType(relation.toEntity.types);
 
   return {
     id: relation.id,
@@ -21,21 +21,21 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
     renderableType,
     type: {
       id: relation.type.id,
-      name: relation.type.entity.name ?? null,
+      name: relation.type.name ?? null,
     },
     fromEntity: {
-      id: relation.from.id,
-      name: relation.from.name,
+      id: relation.fromEntity.id,
+      name: relation.fromEntity.name,
     },
     toEntity: {
-      id: relation.to.id,
-      name: relation.to.name,
+      id: relation.toEntity.id,
+      name: relation.toEntity.name,
 
       // The "Renderable Type" for an entity provides a hint to the consumer
       // of the entity to _what_ the entity is so they know how they should
       // render it depending on their use case.
       // Right now we only support images and entity ids as the value of the To entity.
-      value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.to.id,
+      value: renderableType === 'IMAGE' ? (imageEntityUrlValue ?? '') : relation.toEntity.id,
     },
   };
 }
