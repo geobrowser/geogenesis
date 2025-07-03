@@ -13,19 +13,22 @@ import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
 import { Image } from '~/design-system/icons/image';
 import { ColorName } from '~/design-system/theme/colors';
-import { DataType } from '~/core/v2.types';
+import { DataType, RawRenderableType, FlattenedRenderType } from '~/core/v2.types';
 
 interface DataTypePillProps {
   dataType: DataType;
   renderableType?: {
-    id: string;
+    id: RawRenderableType | null;
     name: string | null;
   } | null;
   spaceId: string;
 }
 
+// Type for all possible uppercase display types
+type UppercaseDisplayType = Uppercase<FlattenedRenderType>;
+
 // Icon mapping for data types and renderable types
-const TYPE_ICONS: Record<string, React.ComponentType<{ color?: ColorName }>> = {
+const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: ColorName }>> = {
   TEXT: Text,
   NUMBER: Number, 
   CHECKBOX: CheckboxChecked,
@@ -34,6 +37,7 @@ const TYPE_ICONS: Record<string, React.ComponentType<{ color?: ColorName }>> = {
   RELATION: Relation,
   URL: Url,
   IMAGE: Image,
+  GEO_LOCATION: GeoLocation,
 };
 
 export function DataTypePill({ 
@@ -53,8 +57,12 @@ export function DataTypePill({
   }
   
   // Get the appropriate icon - normalize the name to uppercase to match TYPE_ICONS keys
-  const iconKey = (renderableType?.name?.toUpperCase()) || dataType;
-  const IconComponent = TYPE_ICONS[iconKey] || TYPE_ICONS[dataType];
+  const iconKey = ((renderableType?.name?.toUpperCase()) || dataType) as UppercaseDisplayType;
+  
+  // Safe lookup with fallback
+  const IconComponent = iconKey in TYPE_ICONS 
+    ? TYPE_ICONS[iconKey]
+    : TYPE_ICONS[dataType.toUpperCase() as UppercaseDisplayType] || TYPE_ICONS.TEXT;
   
   // Format display type: capitalize first letter of each word
   const formattedType = displayTypeName

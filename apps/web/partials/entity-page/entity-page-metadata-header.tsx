@@ -14,7 +14,6 @@ import { RelationRenderableProperty } from '~/core/v2.types';
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
 import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
-import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 
 interface EntityPageMetadataHeaderProps {
   id: string;

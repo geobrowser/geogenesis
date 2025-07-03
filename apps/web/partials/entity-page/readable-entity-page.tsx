@@ -100,47 +100,42 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
             <div className="flex flex-wrap gap-2">
               {values.map(renderable => {
                 switch (renderable.type) {
-                  case 'TEXT': {
-                    switch (renderable.renderableType) {
-                      case SystemIds.URL:
-                        return (
-                          <WebUrlField
-                            key={`uri-${renderable.propertyId}-${renderable.value}`}
-                            isEditing={false}
-                            spaceId={renderable.spaceId}
-                            value={renderable.value}
-                          />
-                        );
-                      default:
-                        return (
-                          <Text key={`string-${renderable.propertyId}-${renderable.value}`} as="p">
-                            {renderable.value}
-                          </Text>
-                        );
-                    }
+                  case 'URL':
+                    return (
+                      <WebUrlField
+                        key={`uri-${renderable.propertyId}-${renderable.value}`}
+                        isEditing={false}
+                        spaceId={renderable.spaceId}
+                        value={renderable.value}
+                      />
+                    );
+                  case 'TEXT':
+                    return (
+                      <Text key={`string-${renderable.propertyId}-${renderable.value}`} as="p">
+                        {renderable.value}
+                      </Text>
+                    );
+                  case 'GEO_LOCATION': {
+                    // Parse the coordinates using the GeoPoint utility
+                    const coordinates = GeoPoint.parseCoordinates(renderable.value);
+                    return (
+                      <div
+                        key={`string-${renderable.propertyId}-${renderable.value}`}
+                        className="flex w-full flex-col gap-2"
+                      >
+                        <Text as="p">({renderable.value})</Text>
+                        <Map latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
+                      </div>
+                    );
                   }
                   case 'POINT': {
-                    if (renderable.propertyId === SystemIds.GEO_LOCATION_PROPERTY) {
-                      // Parse the coordinates using the GeoPoint utility
-                      const coordinates = GeoPoint.parseCoordinates(renderable.value);
-                      return (
-                        <div
-                          key={`string-${renderable.propertyId}-${renderable.value}`}
-                          className="flex w-full flex-col gap-2"
-                        >
-                          <Text as="p">({renderable.value})</Text>
-                          <Map latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
-                        </div>
-                      );
-                    } else {
-                      return (
-                        <div className="flex w-full flex-col gap-2">
-                          <Text key={`string-${renderable.propertyId}-${renderable.value}`} as="p">
-                            ({renderable.value})
-                          </Text>
-                        </div>
-                      );
-                    }
+                    return (
+                      <div className="flex w-full flex-col gap-2">
+                        <Text key={`string-${renderable.propertyId}-${renderable.value}`} as="p">
+                          ({renderable.value})
+                        </Text>
+                      </div>
+                    );
                   }
                   case 'NUMBER':
                     return (
@@ -214,7 +209,7 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
             const relationEntityId = r.relationEntityId;
             const relationId = r.relationId;
 
-            if (renderableType === SystemIds.IMAGE_TYPE) {
+            if (renderableType === 'IMAGE') {
               const imagePath = getImagePath(linkedEntityId ?? '');
               return <ImageZoom key={`image-${relationId}-${linkedEntityId}`} imageSrc={imagePath} />;
             }

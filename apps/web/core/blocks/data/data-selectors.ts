@@ -172,7 +172,7 @@ export function generateSelector(
     }
   }
 
-  if (property.renderableType === SystemIds.RELATION_TYPE || property.renderableType === SystemIds.IMAGE_TYPE) {
+  if (property.renderableType === 'RELATION' || property.renderableType === 'IMAGE') {
     if (where === 'SOURCE') {
       selector = `->[${property.id}]->[${SystemIds.RELATION_TO_PROPERTY}]`;
     }
