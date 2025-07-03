@@ -133,7 +133,7 @@ export function getResult(entityId: string, spaceId?: string, signal?: AbortCont
     decoder: data => {
       return data.entity ? ResultDecoder.decode(data.entity) : null;
     },
-    variables: { id: entityId, spaceId },
+    variables: { id: entityId },
     signal,
   });
 }
