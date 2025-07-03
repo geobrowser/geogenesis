@@ -3,7 +3,7 @@ import { SearchResult } from '~/core/v2.types';
 import { RemoteSearchResult } from '../v2/v2.schema';
 
 export function SearchResultDto(result: RemoteSearchResult): SearchResult {
-  const spaces = [...result.spaces]; // @TODO(migration): Richer spaces
+  const spaces = [...result.spaceIds]; // @TODO(migration): Richer spaces
 
   return {
     id: result.id,

@@ -11,6 +11,7 @@ import { useSearch } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/schema';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { getImagePath, validateEntityId } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -38,6 +39,7 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 const SearchDialogComponent = ({ open, onDone }: Props) => {
   const router = useRouter();
   const autocomplete = useSearch();
+  const { hydrate } = useSyncEngine();
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [openSpacesIndex, setOpenSpacesIndex] = useState<number | null>(null);
@@ -175,6 +177,10 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                       >
                         <div>
                           <Command.Item
+                            onMouseEnter={() => {
+                              router.prefetch(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
+                              hydrate([result.id]);
+                            }}
                             onSelect={() => {
                               router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
                               autocomplete.onQueryChange('');

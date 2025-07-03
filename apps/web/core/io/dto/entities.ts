@@ -9,14 +9,14 @@ import { RemoteEntity } from '../v2/v2.schema';
 import { ValueDto } from './values';
 
 export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
-  const relationsOut = remoteEntity.relations.map(r => RelationDtoLive(r));
-  const values = remoteEntity.values.map(v => ValueDto(remoteEntity, v));
+  const relationsOut = remoteEntity.relationsList.map(r => RelationDtoLive(r));
+  const values = remoteEntity.valuesList.map(v => ValueDto(remoteEntity, v));
 
   return {
     id: remoteEntity.id,
     name: remoteEntity.name,
     description: remoteEntity.description,
-    spaces: [...remoteEntity.spaces],
+    spaces: [...remoteEntity.spaceIds],
     types: [...remoteEntity.types],
     relations: relationsOut,
     values: values,

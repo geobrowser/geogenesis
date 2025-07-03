@@ -1,5 +1,4 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
@@ -7,7 +6,6 @@ import * as React from 'react';
 import type { Metadata } from 'next';
 
 import { Subspace } from '~/core/io/dto/subspaces';
-import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';

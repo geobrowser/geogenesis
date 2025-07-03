@@ -8,6 +8,7 @@ export class SpaceDecoder {
     const decoded = Schema.decodeUnknownEither(SpaceSchema)(data);
 
     if (Either.isLeft(decoded)) {
+      console.error('Failed decoding Space', decoded.left);
       // @TODO: Error handling when decoding
       return null;
     }
