@@ -1,13 +1,12 @@
 import { Duration, Effect } from 'effect';
 
-import { EntityId } from '../io/schema';
 import { getResult, getSpaces } from '../io/v2/queries';
 import { queryClient } from '../query-client';
 import { GeoStore } from '../sync/store';
 import { SearchResult } from '../v2.types';
 
 interface FetchResultOptions {
-  id: EntityId;
+  id: string;
   store: GeoStore;
   signal?: AbortController['signal'];
 }
@@ -20,6 +19,8 @@ export async function mergeSearchResult(args: FetchResultOptions) {
     queryFn: () => Effect.runPromise(getResult(args.id)),
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
+
+  console.log('remote', cachedRemoteResult);
 
   let merged = cachedRemoteResult
     ? localEntity
@@ -36,7 +37,7 @@ export async function mergeSearchResult(args: FetchResultOptions) {
   // Collect all space IDs from both local and remote entities
   const allSpaceIds = [
     ...(localEntity?.spaces || []),
-    ...(cachedRemoteResult?.spaces?.map(s => typeof s === 'string' ? s : s.spaceId) || [])
+    ...(cachedRemoteResult?.spaces?.map(s => (typeof s === 'string' ? s : s.spaceId)) || []),
   ];
   const uniqueSpaceIds = [...new Set(allSpaceIds)];
 
@@ -54,9 +55,7 @@ export async function mergeSearchResult(args: FetchResultOptions) {
   // Map space IDs to space entities
   merged = {
     ...merged,
-    spaces: uniqueSpaceIds
-      .map(spaceId => spaceEntitiesBySpaceId[spaceId])
-      .filter(s => s !== undefined),
+    spaces: uniqueSpaceIds.map(spaceId => spaceEntitiesBySpaceId[spaceId]).filter(s => s !== undefined),
   };
 
   return merged as SearchResult;

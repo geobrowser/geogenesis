@@ -416,7 +416,7 @@ export const propertiesBatchQuery = graphql(/* GraphQL */ `
 `);
 
 export const resultQuery = graphql(/* GraphQL */ `
-  query Result($id: UUID!, $spaceId: UUID) {
+  query Result($id: UUID!) {
     entity(id: $id) {
       id
       name

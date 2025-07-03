@@ -8,7 +8,6 @@ import * as Either from 'effect/Either';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
-import { EntityId } from '~/core/io/schema';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { mergeSearchResult } from '../database/result';
@@ -38,8 +37,7 @@ export function useSearch({ filterByTypes, filterBySpace }: SearchOptions = {}) 
       const isValidEntityId = validateEntityId(maybeEntityId);
 
       if (isValidEntityId) {
-        console.log(`searching for entity id: ${maybeEntityId}`);
-        const id = EntityId(maybeEntityId);
+        const id = maybeEntityId;
 
         const fetchResultEffect = Effect.either(
           Effect.tryPromise({
@@ -69,8 +67,6 @@ export function useSearch({ filterByTypes, filterBySpace }: SearchOptions = {}) 
               throw error;
           }
         }
-
-        console.log('result', resultOrError.right);
 
         return resultOrError.right ? [resultOrError.right] : [];
       }
