@@ -233,6 +233,10 @@ export const relationFragment = graphql(/* GraphQL */ `
       id
       name
     }
+    fromEntity {
+      id
+      name
+    }
     toEntity {
       id
       name
