@@ -1,7 +1,7 @@
 import type { CodegenConfig } from '@graphql-codegen/cli';
 
 const config: CodegenConfig = {
-  schema: 'http://localhost:3000/graphql',
+  schema: 'https://v2-postgraphile.up.railway.app/graphql',
   documents: ['./**/*.tsx'],
   generates: {
     './core/gql/': {
