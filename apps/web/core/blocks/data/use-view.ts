@@ -2,8 +2,9 @@ import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
+import { getRelationEntityRelations } from '~/core/io/v2/queries';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useQueryEntity } from '~/core/sync/use-store';
+import { useQueryEntity, useQueryRelation } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 import { Entity, Relation } from '~/core/v2.types';
 
@@ -25,7 +26,7 @@ export function useView() {
     id: entityId,
   });
 
-  const { entity: blockRelation } = useQueryEntity({
+  const { entity: blockRelation } = useQueryRelation({
     spaceId: spaceId,
     id: relationId,
   });

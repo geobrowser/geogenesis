@@ -35,7 +35,8 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
        * We explicitly don't query by space id here and let the sync
        * engine handle filtering it as the hook receives events
        */
-      const merged = await E.findOne({ id, store, cache });
+
+      const merged = await E.findOne({ id, spaceId, store, cache });
 
       if (merged) {
         stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: [merged] });
@@ -154,6 +155,38 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
       onTripleDeletedSub();
     };
   }, [id, store, stream, spaceId, enabled, cache, entity]);
+
+  return {
+    entity,
+    isLoading: !isFetched && Boolean(id) && enabled,
+  };
+}
+
+export function useQueryRelation({ id, spaceId, enabled = true }: QueryEntityOptions) {
+  const cache = useQueryClient();
+  const { store, stream } = useSyncEngine();
+
+  const { isFetched, data: entity } = useQuery({
+    enabled: Boolean(id) && enabled,
+    queryKey: GeoStore.queryKey(id),
+    queryFn: async () => {
+      // If the entity is in the store then it's already been synced and we can
+      // skip this work
+      if (!id) {
+        return null;
+      }
+
+      /**
+       * We explicitly don't query by space id here and let the sync
+       * engine handle filtering it as the hook receives events
+       */
+      const merged = await E.findOneRelation({ id, spaceId, cache });
+
+      console.log('mergedmerged', merged);
+
+      return merged;
+    },
+  });
 
   return {
     entity,

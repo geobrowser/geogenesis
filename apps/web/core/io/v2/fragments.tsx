@@ -444,3 +444,69 @@ export const resultsQuery = graphql(/* GraphQL */ `
     }
   }
 `);
+
+export const relationEntityQuery = graphql(/* GraphQL */ `
+  query RelationEntityMinimal($id: UUID!, $spaceId: UUID) {
+    relation(id: $id) {
+      id
+      entity {
+        id
+        name
+        description
+        spaceIds
+
+        types {
+          id
+          name
+        }
+
+        valuesList(filter: { spaceId: { is: $spaceId } }) {
+          spaceId
+          property {
+            id
+            name
+            dataType
+            renderableType
+            relationValueTypes {
+              id
+              name
+            }
+          }
+          value
+          language
+          unit
+        }
+        relationsList {
+          verified
+          toSpaceId
+          position
+          spaceId
+          id
+          entityId
+          fromEntity {
+            id
+            name
+          }
+          toEntity {
+            id
+            name
+            types {
+              id
+              name
+            }
+            valuesList {
+              propertyId
+              value
+            }
+          }
+          type {
+            id
+            name
+            description
+            renderableType
+          }
+        }
+      }
+    }
+  }
+`);

@@ -15,6 +15,7 @@ import {
   entityTypesQuery,
   propertiesBatchQuery,
   propertyQuery,
+  relationEntityQuery,
   relationEntityRelationsQuery,
   resultQuery,
   resultsQuery,
@@ -56,10 +57,24 @@ export function getEntity(entityId: string, spaceId?: string, signal?: AbortCont
   });
 }
 
+export function getRelation(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: relationEntityQuery,
+    decoder: data => {
+      return data.relation?.entity ? EntityDecoder.decode(data.relation.entity) : null;
+    },
+    variables: { id: entityId, spaceId },
+    signal,
+  });
+}
+
 export function getRelationEntityRelations(entityId: string, spaceId: string, signal?: AbortController['signal']) {
   return graphql({
     query: relationEntityRelationsQuery,
-    decoder: data => (data.relations ? data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null) : []),
+    decoder: data => {
+      console.log('data123', data);
+      return data.relations ? data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null) : [];
+    },
     variables: { id: entityId, spaceId },
     signal,
   });
