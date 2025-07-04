@@ -71,10 +71,7 @@ export function getRelation(entityId: string, spaceId?: string, signal?: AbortCo
 export function getRelationEntityRelations(entityId: string, spaceId: string, signal?: AbortController['signal']) {
   return graphql({
     query: relationEntityRelationsQuery,
-    decoder: data => {
-      console.log('data123', data);
-      return data.relations ? data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null) : [];
-    },
+    decoder: data => (data.relations ? data.relations.map(r => RelationDecoder.decode(r)).filter(r => r !== null) : []),
     variables: { id: entityId, spaceId },
     signal,
   });

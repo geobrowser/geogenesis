@@ -77,7 +77,6 @@ export type Relation = LocalMetadata & {
   verified?: boolean;
   spaceId: string;
   toSpaceId?: string;
-  entity?: Entity;
 };
 
 export type Entity = {

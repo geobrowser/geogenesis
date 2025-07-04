@@ -35,8 +35,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
        * We explicitly don't query by space id here and let the sync
        * engine handle filtering it as the hook receives events
        */
-
-      const merged = await E.findOne({ id, spaceId, store, cache });
+      const merged = await E.findOne({ id, store, cache });
 
       if (merged) {
         stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: [merged] });
