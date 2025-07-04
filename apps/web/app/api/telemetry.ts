@@ -9,7 +9,7 @@ const exporter = ServerEnvironment.telemetryToken
       url: 'https://api.axiom.co/v1/traces', // Axiom API endpoint for trace data
       headers: {
         Authorization: ServerEnvironment.telemetryToken,
-        'X-Axiom-Dataset': 'gaia.api',
+        'X-Axiom-Dataset': 'gaia.web',
       },
     })
   : undefined;
