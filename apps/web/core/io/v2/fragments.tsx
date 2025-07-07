@@ -55,8 +55,8 @@ export const entityFragment = graphql(/* GraphQL */ `
 `);
 
 export const entitiesQuery = graphql(/* GraphQL */ `
-  query AllEntities($spaceId: UUID, $limit: Int, $offset: Int) {
-    entities(first: $limit, offset: $offset) {
+  query AllEntities($spaceId: UUID, $limit: Int, $offset: Int, $filter: EntityFilter) {
+    entities(first: $limit, offset: $offset, filter: $filter) {
       id
       name
       description

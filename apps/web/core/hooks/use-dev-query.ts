@@ -27,5 +27,5 @@ export const useDevQuery = (args: QueryArgs) => {
     fetchData();
   }, [queryFn]);
 
-  return { data, isLoading } as const;
+  return { data, isLoading, isFetched: isLoading } as const;
 };

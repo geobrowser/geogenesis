@@ -1,7 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { describe, expect, it } from 'vitest';
 
-import { FilterString, fromGeoFilterState } from './filters';
+import { FilterString, fromGeoFilterString } from './filters';
 
 describe('filters', () => {
   it('Builds the TableBlockStore filters data structure from the Geo filter string', async () => {
@@ -21,7 +21,7 @@ describe('filters', () => {
       },
     };
 
-    const stringFilter = await fromGeoFilterState(JSON.stringify(filter));
+    const stringFilter = await fromGeoFilterString(JSON.stringify(filter));
 
     expect(stringFilter).toEqual([
       {
