@@ -107,7 +107,7 @@ export type FlattenedRenderType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POI
 
 export type NativeRenderableProperty = {
   type: Extract<FlattenedRenderType, 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'URL' | 'GEO_LOCATION'>;
-  renderableType?: string; // Raw UUID string from API
+  renderableType?: RawRenderableType;
   entityId: string;
   entityName: string | null;
   propertyId: string;
