@@ -255,13 +255,11 @@ async function getResolvedFilter(filter: PropertyFilter): Promise<Filter> {
   //   };
   // }
 
-  // @TODO(migration): Get real property data type
   return {
     columnId: filter.property,
     columnName: maybePropertyEntity?.name ?? null,
     value: filter.is,
     valueName: maybeValueEntity?.name ?? null,
-    // @TODO change to dataType, add support for "text" filters
     valueType: 'RELATION',
   };
 }
