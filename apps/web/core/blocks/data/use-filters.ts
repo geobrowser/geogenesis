@@ -8,7 +8,7 @@ import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 
-import { Filter, fromGeoFilterState, toGeoFilterState } from './filters';
+import { Filter, fromGeoFilterString, toGeoFilterState } from './filters';
 import { Source } from './source';
 import { useDataBlockInstance } from './use-data-block';
 
@@ -49,7 +49,7 @@ export function useFilters() {
     placeholderData: keepPreviousData,
     queryKey: ['blocks', 'data', 'filter-state', geoFilterString],
     queryFn: async () => {
-      return await fromGeoFilterState(geoFilterString);
+      return await fromGeoFilterString(geoFilterString);
     },
   });
 

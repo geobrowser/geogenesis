@@ -35,21 +35,29 @@ export type Filter = {
  * The latter is basically a "Relations View" on an entity where the latter
  * is a query across the knowledge graph data set.
  */
-const AttributeFilter = Schema.Struct({
-  attribute: Schema.String,
+const PropertyFilter = Schema.Struct({
+  property: Schema.String,
   is: Schema.String,
 });
 
-type AttributeFilter = Schema.Schema.Type<typeof AttributeFilter>;
+type PropertyFilter = Schema.Schema.Type<typeof PropertyFilter>;
 
-const Property = Schema.Union(AttributeFilter);
+// const Property = Schema.Union(PropertyFilter);
 
 const FilterString = Schema.Struct({
-  where: Schema.Struct({
-    spaces: Schema.optional(Schema.Array(Schema.String)),
-    AND: Schema.optional(Schema.Array(Property)),
-    OR: Schema.optional(Schema.Array(Property)),
-  }),
+  spaceId: Schema.optional(
+    Schema.Struct({
+      in: Schema.Array(Schema.String),
+    })
+  ),
+  filter: Schema.optional(
+    Schema.Record({
+      key: Schema.String,
+      value: Schema.Struct({
+        is: Schema.String,
+      }),
+    })
+  ),
 });
 
 export type FilterString = Schema.Schema.Type<typeof FilterString>;
@@ -60,46 +68,46 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
   switch (source.type) {
     case 'RELATIONS':
       filter = {
-        where: {
-          AND: filters
-            .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
-            .map(f => {
-              return {
-                attribute: f.columnId,
-                is: f.value,
-              };
-            }),
-        },
+        // where: {
+        //   AND: filters
+        //     .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
+        //     .map(f => {
+        //       return {
+        //         attribute: f.columnId,
+        //         is: f.value,
+        //       };
+        //     }),
+        // },
       };
       break;
     case 'SPACES':
       filter = {
-        where: {
-          spaces: filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value),
-          AND: filters
-            .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
-            .map(f => {
-              return {
-                attribute: f.columnId,
-                is: f.value,
-              };
-            }),
-        },
+        // where: {
+        //   spaces: filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value),
+        //   AND: filters
+        //     .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
+        //     .map(f => {
+        //       return {
+        //         attribute: f.columnId,
+        //         is: f.value,
+        //       };
+        //     }),
+        // },
       };
       break;
     case 'COLLECTION':
     case 'GEO':
       filter = {
-        where: {
-          AND: filters
-            .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
-            .map(f => {
-              return {
-                attribute: f.columnId,
-                is: f.value,
-              };
-            }),
-        },
+        // where: {
+        //   AND: filters
+        //     .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
+        //     .map(f => {
+        //       return {
+        //         attribute: f.columnId,
+        //         is: f.value,
+        //       };
+        //     }),
+        // },
       };
       break;
   }
@@ -122,7 +130,13 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
   });
 }
 
-export async function fromGeoFilterState(filterString: string | null): Promise<Filter[]> {
+type FilterObject = {
+  [key: string]: {
+    is: string;
+  };
+};
+
+export async function fromGeoFilterString(filterString: string | null): Promise<Filter[]> {
   if (!filterString) {
     return [];
   }
@@ -138,8 +152,11 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
     },
     onRight: value => {
       return {
-        spaces: value.where.spaces,
-        AND: value.where.AND ?? [],
+        spaces: value.spaceId?.in ?? [],
+        filters: Object.entries((where?.filter ?? {}) as FilterObject).map(([key, value]) => ({
+          property: key,
+          is: value.is,
+        })),
       };
     },
   });
@@ -167,24 +184,28 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       )
     : [];
 
-  const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SystemIds.RELATION_FROM_PROPERTY);
-  const unresolvedEntityFilter = maybeFromFilter ? getResolvedEntity(maybeFromFilter.is) : null;
+  // const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SystemIds.RELATION_FROM_PROPERTY);
+  // const unresolvedEntityFilter = maybeFromFilter ? getResolvedEntity(maybeFromFilter.is) : null;
 
   const unresolvedAttributeFilters = Promise.all(
-    filtersFromString.AND.filter(f => f.attribute !== SystemIds.RELATION_FROM_PROPERTY).map(async filter => {
+    filtersFromString.filters.map(async filter => {
       return await getResolvedFilter(filter);
     })
   );
 
-  const [spaceFilters, attributeFilters, entityFilter] = await Promise.all([
+  const [
+    spaceFilters,
+    attributeFilters,
+    // entityFilter
+  ] = await Promise.all([
     unresolvedSpaceFilters,
     unresolvedAttributeFilters,
-    unresolvedEntityFilter,
+    // unresolvedEntityFilter,
   ]);
 
   filters.push(...spaceFilters);
   filters.push(...attributeFilters);
-  if (entityFilter) filters.push(entityFilter);
+  // if (entityFilter) filters.push(entityFilter);
 
   return filters;
 }
@@ -216,9 +237,11 @@ async function getResolvedEntity(entityId: string): Promise<Filter> {
   };
 }
 
-async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
-  // @TODO(migration): Fetch property
-  const maybeAttributeEntity = await E.findOne({ store, cache: queryClient, id: filter.attribute });
+async function getResolvedFilter(filter: PropertyFilter): Promise<Filter> {
+  const [maybePropertyEntity, maybeValueEntity] = await Promise.all([
+    E.findOne({ store, cache: queryClient, id: filter.property }),
+    E.findOne({ store, cache: queryClient, id: filter.is }),
+  ]);
 
   // if (valueType === EntityId(SystemIds.RELATION)) {
   //   const valueEntity = await E.findOne({ store, cache: queryClient, id: filter.is });
@@ -232,14 +255,13 @@ async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
   //   };
   // }
 
-  // @TODO: Can get property name here
   // @TODO(migration): Get real property data type
   return {
-    columnId: filter.attribute,
-    columnName: maybeAttributeEntity?.name ?? null,
+    columnId: filter.property,
+    columnName: maybePropertyEntity?.name ?? null,
     value: filter.is,
-    valueName: null,
-    // valueType: VALUE_TYPES[(valueType ?? SystemIds.TEXT) as ValueTypeId] ?? SystemIds.TEXT,
-    valueType: 'TEXT',
+    valueName: maybeValueEntity?.name ?? null,
+    // @TODO change to dataType, add support for "text" filters
+    valueType: 'RELATION',
   };
 }
