@@ -181,8 +181,6 @@ export function useQueryRelation({ id, spaceId, enabled = true }: QueryEntityOpt
        */
       const merged = await E.findOneRelation({ id, spaceId, cache });
 
-      console.log('mergedmerged', merged);
-
       return merged;
     },
   });

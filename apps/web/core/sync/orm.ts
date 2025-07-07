@@ -5,7 +5,6 @@ import { dedupeWith } from 'effect/Array';
 import { convertWhereConditionToEntityFilter } from '~/core/io/v2/converters';
 
 import { readTypes } from '../database/entities';
-import { EntityId } from '../io/schema';
 import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
@@ -14,7 +13,7 @@ import { Entity, Relation, SearchResult } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
 
-function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
+export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
   const locallyDeletedRelations = localRelations.filter(r => r.isDeleted).map(r => r.id);
 
   const deletedRelationIds = new Set(locallyDeletedRelations);
@@ -56,10 +55,7 @@ export class E {
   }): Entity | null {
     const remoteEntity = mergeWith;
 
-    const localValues = store.getResolvedValues(id, true);
-    const localRelations = store.getResolvedRelations(id, true);
-
-    const localEntity = localValues.length > 0 && localRelations.length > 0;
+    const localEntity = store.getEntity(id, { includeDeleted: true });
 
     if (!localEntity && !remoteEntity) {
       return null;
@@ -73,13 +69,11 @@ export class E {
       return remoteEntity;
     }
 
-    console.log('localValues', localValues);
-
-    const mergedValues = Values.merge(localValues, remoteEntity.values);
+    const mergedValues = Values.merge(localEntity.values, remoteEntity.values);
 
     const values = mergedValues.filter(v => (Boolean(v.isDeleted) === false && spaceId ? v.spaceId === spaceId : true));
 
-    const mergedRelations = mergeRelations(localRelations, remoteEntity.relations);
+    const mergedRelations = mergeRelations(localEntity.relations, remoteEntity.relations);
     const relations = mergedRelations.filter(r =>
       Boolean(r.isDeleted) === false && spaceId ? r.spaceId === spaceId : true
     );
@@ -92,7 +86,7 @@ export class E {
     const spaces = Entities.spaces(values, relations);
 
     return {
-      id: EntityId(id),
+      id: id,
       name,
       spaces,
       description,
@@ -315,7 +309,7 @@ function mergeSearchResult({
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
 
   return {
-    id: EntityId(id),
+    id: id,
     name,
     description,
     types,

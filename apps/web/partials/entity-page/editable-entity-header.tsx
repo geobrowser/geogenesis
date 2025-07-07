@@ -3,7 +3,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSelector } from '@xstate/store/react';
-import equal from 'fast-deep-equal';
 
 import * as React from 'react';
 
@@ -27,19 +26,14 @@ import { EntityPageContextMenu } from './entity-page-context-menu';
 export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   const { values } = useSyncEngine();
 
-  const name = useSelector(
-    values,
-    v => {
-      return v.find(v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === SystemIds.NAME_PROPERTY)
-        ?.value;
-    },
-    equal
-  );
+  const name = useSelector(values, v => {
+    return v.find(v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === SystemIds.NAME_PROPERTY)
+      ?.value;
+  });
+
 
   const isEditing = useUserIsEditing(spaceId);
   const { storage } = useMutate();
-
-  console.log('name', name);
 
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 

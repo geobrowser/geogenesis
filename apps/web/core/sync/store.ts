@@ -63,10 +63,6 @@ export class GeoStore {
       syncedEntities.set(entity.id, entity);
       reactiveValues.set(prev => {
         const valueIdsToWrite = new Set(entity.values.map(t => t.id));
-        console.log('data', {
-          prev,
-          values: entity.values,
-        });
 
         const unchangedValues = prev.filter(t => {
           return !valueIdsToWrite.has(t.id);
@@ -202,8 +198,8 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   public getResolvedValues(entityId: string, includeDeleted = false): Value[] {
     const values = reactiveValues.get().filter(v => v.entity.id === entityId);
 
-    if (includeDeleted) {
-      return values.filter(v => v.isDeleted === true);
+    if (!includeDeleted) {
+      return values.filter(v => Boolean(v.isDeleted === false));
     }
 
     return values;
@@ -283,8 +279,8 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   public getResolvedRelations(entityId: string, includeDeleted = false): Relation[] {
     const relations = reactiveRelations.get().filter(r => r.fromEntity.id === entityId);
 
-    if (includeDeleted) {
-      return relations.filter(r => r.isDeleted === true);
+    if (!includeDeleted) {
+      return relations.filter(r => Boolean(r.isDeleted === false));
     }
 
     return relations;
