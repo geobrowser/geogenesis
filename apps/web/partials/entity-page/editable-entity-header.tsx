@@ -10,8 +10,6 @@ import * as React from 'react';
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { fetchHistoryVersions } from '~/core/io/subgraph/fetch-history-versions';
-import { reactive } from '~/core/sync/hooks';
-import { reactiveValues } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
@@ -27,17 +25,13 @@ import { HistoryPanel } from '../history/history-panel';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 
 export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
-  // const name = useSelector(reactiveValues, s => {
-  //   console.log('rerunning', s);
-  //   return s.find(v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === SystemIds.NAME_PROPERTY)
-  //     ?.value;
-  // });
-  const { store } = useSyncEngine();
+  const { values } = useSyncEngine();
 
   const name = useSelector(
-    reactive,
-    () => {
-      return store.getEntity(entityId, { spaceId })?.name;
+    values,
+    v => {
+      return v.find(v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === SystemIds.NAME_PROPERTY)
+        ?.value;
     },
     equal
   );
