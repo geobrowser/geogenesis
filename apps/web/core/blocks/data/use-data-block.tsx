@@ -255,7 +255,7 @@ export function useDataBlockInstance() {
   return context;
 }
 
-function filterStateToWhere(filterState: Filter[]): WhereCondition {
+export function filterStateToWhere(filterState: Filter[]): WhereCondition {
   const where: WhereCondition = {};
 
   for (const filter of filterState) {

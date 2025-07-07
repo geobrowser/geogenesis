@@ -26,7 +26,7 @@ const compareOperators = {
 /**
  * Types for query conditions
  */
-type StringCondition = {
+export type StringCondition = {
   equals?: string;
   fuzzy?: string;
   contains?: string;
@@ -35,7 +35,7 @@ type StringCondition = {
   in?: string[];
 };
 
-type NumberCondition = {
+export type NumberCondition = {
   equals?: number;
   gt?: number;
   gte?: number;
@@ -44,9 +44,9 @@ type NumberCondition = {
   between?: [number, number];
 };
 
-type BooleanCondition = { equals: boolean };
+export type BooleanCondition = { equals: boolean };
 
-type ValueCondition = {
+export type ValueCondition = {
   propertyName?: StringCondition;
   propertyId?: StringCondition;
   value?: StringCondition | NumberCondition | BooleanCondition;
@@ -54,7 +54,7 @@ type ValueCondition = {
   space?: StringCondition;
 };
 
-type RelationCondition = {
+export type RelationCondition = {
   typeOf?: { id?: StringCondition; name?: StringCondition };
   toEntity?: { id?: StringCondition; name?: StringCondition };
   space?: StringCondition;

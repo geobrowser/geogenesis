@@ -55,8 +55,8 @@ export const entityFragment = graphql(/* GraphQL */ `
 `);
 
 export const entitiesQuery = graphql(/* GraphQL */ `
-  query AllEntities($spaceId: UUID, $limit: Int, $offset: Int) {
-    entities(first: $limit, offset: $offset) {
+  query AllEntities($spaceId: UUID, $limit: Int, $offset: Int, $filter: EntityFilter) {
+    entities(first: $limit, offset: $offset, filter: $filter) {
       id
       name
       description
@@ -230,6 +230,10 @@ export const relationFragment = graphql(/* GraphQL */ `
     verified
     entityId
     entity {
+      id
+      name
+    }
+    fromEntity {
       id
       name
     }
@@ -440,6 +444,72 @@ export const resultsQuery = graphql(/* GraphQL */ `
       types {
         id
         name
+      }
+    }
+  }
+`);
+
+export const relationEntityQuery = graphql(/* GraphQL */ `
+  query RelationEntityMinimal($id: UUID!, $spaceId: UUID) {
+    relation(id: $id) {
+      id
+      entity {
+        id
+        name
+        description
+        spaceIds
+
+        types {
+          id
+          name
+        }
+
+        valuesList(filter: { spaceId: { is: $spaceId } }) {
+          spaceId
+          property {
+            id
+            name
+            dataType
+            renderableType
+            relationValueTypes {
+              id
+              name
+            }
+          }
+          value
+          language
+          unit
+        }
+        relationsList {
+          verified
+          toSpaceId
+          position
+          spaceId
+          id
+          entityId
+          fromEntity {
+            id
+            name
+          }
+          toEntity {
+            id
+            name
+            types {
+              id
+              name
+            }
+            valuesList {
+              propertyId
+              value
+            }
+          }
+          type {
+            id
+            name
+            description
+            renderableType
+          }
+        }
       }
     }
   }
