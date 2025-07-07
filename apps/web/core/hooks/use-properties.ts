@@ -1,5 +1,4 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { Brand } from 'effect';
 
 import { useQueryProperties } from '~/core/sync/use-store';
 
