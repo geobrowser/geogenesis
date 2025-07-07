@@ -113,8 +113,11 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   /**
    * Redirect from an invalid space to a valid one. Additionally,
    * redirect to the space front page if the entity is a space.
+   *
+   * We need to check that spaces has data. We could be navigating
+   * to an entity with no data like a relation entity page.
    */
-  if (entity && !spaces.includes(spaceId) && !preventRedirect) {
+  if (entity && spaces.length > 0 && !spaces.includes(spaceId) && !preventRedirect) {
     const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
     console.log(`Redirecting from invalid space ${spaceId} to valid space ${newSpaceId}`);
 

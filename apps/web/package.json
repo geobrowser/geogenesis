@@ -15,8 +15,12 @@
     "gql:codegen": "graphql-codegen"
   },
   "dependencies": {
+    "@effect/opentelemetry": "^0.53.2",
     "@graphprotocol/grc-20": "^0.21.1",
     "@graphql-typed-document-node/core": "^3.2.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.202.0",
+    "@opentelemetry/sdk-trace-base": "^2.0.1",
+    "@opentelemetry/sdk-trace-node": "^2.0.1",
     "@privy-io/react-auth": "^2.1.0",
     "@privy-io/wagmi": "^1.0.2",
     "@radix-ui/react-accordion": "^1.2.2",

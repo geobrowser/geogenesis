@@ -8,7 +8,7 @@ import { queryStringFromFilters } from '../blocks/data/to-query-string';
 import { readTypes } from '../database/entities';
 import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
-import { getBatchEntities, getEntity, getResults, getSpaces } from '../io/v2/queries';
+import { getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
 import { Values } from '../utils/value';
@@ -121,6 +121,23 @@ export class E {
     });
 
     return this.merge({ id, store, spaceId, mergeWith: cachedEntity });
+  }
+
+  static async findOneRelation({
+    id,
+    spaceId,
+    cache,
+  }: {
+    id: string;
+    spaceId?: string;
+    cache: QueryClient;
+  }): Promise<Entity | null> {
+    const cachedEntity = await cache.fetchQuery({
+      queryKey: ['network', 'relation', id, spaceId],
+      queryFn: ({ signal }) => Effect.runPromise(getRelation(id, spaceId, signal)),
+    });
+
+    return cachedEntity;
   }
 
   static async findMany({
@@ -353,7 +370,7 @@ function mergeSearchResult({
   // Use the merged triples to derive the name instead of the remote entity
   // `name` property in case the name was deleted/changed locally.
   const name = Entities.name(values) ?? remoteEntity.name;
-  const description = Entities.description(values) ?? remoteEntity.name;
+  const description = Entities.description(values) ?? remoteEntity.description;
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
 
   return {

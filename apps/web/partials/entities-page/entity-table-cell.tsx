@@ -70,7 +70,12 @@ export const EntityTableCell = ({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <Link entityId={entityId} href={href} className="text-tableCell text-ctaHover hover:underline">
+            <Link
+              entityId={entityId}
+              spaceId={spaceId}
+              href={href}
+              className="text-tableCell text-ctaHover hover:underline"
+            >
               {name || entityId}
             </Link>
           </CollectionMetadata>
