@@ -58,6 +58,13 @@ export default async function DefaultEntityPage({
       initialValues={props.values}
       initialRelations={props.relations}
     >
+      <EditorProvider
+        id={props.id}
+        spaceId={props.spaceId}
+        initialBlocks={props.blocks}
+        initialBlockRelations={props.blockRelations}
+        initialTabs={props.tabs}
+      >
       {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
       <EntityPageContentContainer>
         <div className="space-y-2">
@@ -75,15 +82,8 @@ export default async function DefaultEntityPage({
         )}
         {notice}
         {(showSpacer || !!notice) && <Spacer height={40} />}
-        <EditorProvider
-          id={props.id}
-          spaceId={props.spaceId}
-          initialBlocks={props.blocks}
-          initialBlockRelations={props.blockRelations}
-          initialTabs={props.tabs}
-        >
+
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-        </EditorProvider>
         <ToggleEntityPage {...props} />
         <AutomaticModeToggle />
         <Spacer height={40} />
@@ -98,6 +98,7 @@ export default async function DefaultEntityPage({
           </React.Suspense>
         </ErrorBoundary>
       </EntityPageContentContainer>
+      </EditorProvider>
     </EntityStoreProvider>
   );
 }
