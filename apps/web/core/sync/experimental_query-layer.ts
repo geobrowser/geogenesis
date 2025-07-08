@@ -1,6 +1,3 @@
-import { GeoStore } from '~/core/sync/store';
-
-import { EntityId } from '../io/schema';
 import { Entity, Relation, Value } from '../v2.types';
 
 const compareOperators = {
@@ -83,16 +80,15 @@ type SortBy = SortByField | { field: SortByField; direction: SortDirection };
  * EntityQuery class for building and executing entity queries
  */
 export class EntityQuery {
-  private store: { getEntities: () => Entity[] };
+  private entities: Entity[];
   private whereConditions: WhereCondition[] = [];
   private limitVal: number | undefined;
   private offsetVal: number = 0;
   private sortByVal: SortBy[] = [];
-  private includeDeletedVal: boolean = false;
   private selectFields: string[] = [];
 
-  constructor(store: GeoStore) {
-    this.store = store;
+  constructor(entities: typeof this.entities) {
+    this.entities = entities;
   }
 
   /**
@@ -124,56 +120,6 @@ export class EntityQuery {
    */
   not(condition: WhereCondition): EntityQuery {
     this.whereConditions.push({ NOT: condition });
-    return this;
-  }
-
-  /**
-   * Filter by ID
-   */
-  whereId(condition: StringCondition): EntityQuery {
-    return this.where({ id: condition });
-  }
-
-  /**
-   * Filter by name
-   */
-  whereName(condition: StringCondition): EntityQuery {
-    return this.where({ name: condition });
-  }
-
-  /**
-   * Filter by description
-   */
-  whereDescription(condition: StringCondition): EntityQuery {
-    return this.where({ description: condition });
-  }
-
-  /**
-   * Filter by types
-   */
-  whereType(condition: { id?: StringCondition; name?: StringCondition }): EntityQuery {
-    return this.where({ types: [condition] });
-  }
-
-  /**
-   * Filter by value (property)
-   */
-  whereValue(condition: ValueCondition): EntityQuery {
-    return this.where({ values: [condition] });
-  }
-
-  /**
-   * Filter by relation
-   */
-  whereRelation(condition: RelationCondition): EntityQuery {
-    return this.where({ relations: [condition] });
-  }
-
-  /**
-   * Include deleted entities in the results
-   */
-  includeDeleted(include: boolean = true): EntityQuery {
-    this.includeDeletedVal = include;
     return this;
   }
 
@@ -214,7 +160,7 @@ export class EntityQuery {
    */
   execute(): Entity[] {
     // Get all entities from the store
-    const allEntities = this.store.getEntities();
+    const allEntities = this.entities;
 
     // Apply where conditions
     let filteredEntities = this.applyWhereConditions(allEntities);
@@ -227,11 +173,6 @@ export class EntityQuery {
     // Apply pagination
     if (this.offsetVal > 0 || this.limitVal !== undefined) {
       filteredEntities = this.applyPagination(filteredEntities);
-    }
-
-    // Select fields if specified
-    if (this.selectFields.length > 0) {
-      filteredEntities = this.applyFieldSelection(filteredEntities);
     }
 
     return filteredEntities;
@@ -265,15 +206,6 @@ export class EntityQuery {
   }
 
   /**
-   * Get an entity by ID
-   */
-  findById(id: EntityId): Entity | null {
-    return this.whereId({
-      equals: id,
-    }).findFirst();
-  }
-
-  /**
    * Check if any entities match the query
    */
   exists(): boolean {
@@ -290,11 +222,6 @@ export class EntityQuery {
     }
 
     return entities.filter(entity => {
-      // Only include non-deleted entities unless includeDeleted is true
-      if (!this.includeDeletedVal) {
-        return false;
-      }
-
       // Check all conditions (implicit AND between multiple where calls)
       return this.whereConditions.every(condition => this.matchesCondition(entity, condition));
     });
@@ -304,6 +231,8 @@ export class EntityQuery {
    * Check if an entity matches a condition
    */
   private matchesCondition(entity: Entity, condition: WhereCondition): boolean {
+    // @TODO: We can just filter _all_ fields individually then return entities rather than M*N filtering we're currently
+    // doing where we filter entities and their relations one at a time
     // Handle OR conditions
     if (condition.OR) {
       return condition.OR.some(subCondition => this.matchesCondition(entity, subCondition));
@@ -348,15 +277,17 @@ export class EntityQuery {
         return this.matchesStringCondition(entity.description || '', condition);
 
       case 'spaces':
-        if (condition === undefined) {
-          return true;
-        }
+        // Temporarily disabled until we have property space ids
+        return true;
+      // if (condition === undefined) {
+      //   return true;
+      // }
 
-        if (Array.isArray(condition)) {
-          const clause = condition as StringCondition[];
-          return clause.some(space => space.equals && entity.spaces.includes(space.equals));
-        }
-        return false;
+      // if (Array.isArray(condition)) {
+      //   const clause = condition as StringCondition[];
+      //   return clause.some(space => space.equals && entity.spaces.includes(space.equals));
+      // }
+      // return false;
 
       case 'types':
         if (condition === undefined) {
@@ -639,173 +570,4 @@ export class EntityQuery {
     const end = this.limitVal ? start + this.limitVal : undefined;
     return entities.slice(start, end);
   }
-
-  /**
-   * Apply field selection to entities
-   */
-  private applyFieldSelection(entities: Entity[]): any[] {
-    return entities.map(entity => {
-      const result: any = {};
-
-      for (const field of this.selectFields) {
-        switch (field) {
-          case 'id':
-            result.id = entity.id;
-            break;
-          case 'name':
-            result.name = entity.name;
-            break;
-          case 'description':
-            result.description = entity.description;
-            break;
-          case 'types':
-            result.types = entity.types;
-            break;
-          case 'spaces':
-            result.spaces = entity.spaces;
-            break;
-          case 'values':
-            result.values = entity.values;
-            break;
-          case 'relations':
-            result.relations = entity.relations;
-            break;
-        }
-      }
-
-      return result;
-    });
-  }
 }
-
-/**
- * Entity Query Builder factory
- */
-class EntityQueryBuilder {
-  private store: GeoStore;
-
-  constructor(store: GeoStore) {
-    this.store = store;
-  }
-
-  /**
-   * Create a new query
-   */
-  query(): EntityQuery {
-    return new EntityQuery(this.store);
-  }
-
-  /**
-   * Find all entities
-   */
-  findAll(): Entity[] {
-    return this.query().execute();
-  }
-
-  /**
-   * Find an entity by ID
-   */
-  findById(id: EntityId): Entity | null {
-    return this.query().findById(id);
-  }
-
-  /**
-   * Find entities by name
-   */
-  findByName(name: string): Entity[] {
-    return this.query().whereName({ contains: name }).execute();
-  }
-
-  /**
-   * Find entities by full-text search across name and description
-   */
-  search(text: string): Entity[] {
-    return this.query()
-      .orWhere([
-        { name: { contains: text } },
-        { description: { contains: text } },
-        { values: [{ value: { contains: text } }] },
-      ])
-      .execute();
-  }
-
-  /**
-   * Find entities by type name
-   */
-  findByType(typeName: string): Entity[] {
-    return this.query()
-      .whereType({ name: { contains: typeName } })
-      .execute();
-  }
-
-  /**
-   * Find entities that have a specific property (triple)
-   */
-  findByProperty(propertyName: string, value?: string): Entity[] {
-    const condition: ValueCondition = { propertyName: { contains: propertyName } };
-    if (value !== undefined) {
-      condition.value = { contains: value };
-    }
-    return this.query().whereValue(condition).execute();
-  }
-
-  /**
-   * Find entities that have a relation to another entity
-   */
-  findByRelation(targetEntityId: EntityId): Entity[] {
-    return this.query()
-      .whereRelation({ toEntity: { id: { equals: targetEntityId } } })
-      .execute();
-  }
-
-  /**
-   * Find entities that have a specific relation type
-   */
-  findByRelationType(relationTypeName: string): Entity[] {
-    return this.query()
-      .whereRelation({ typeOf: { name: { contains: relationTypeName } } })
-      .execute();
-  }
-}
-
-/**
- * Create a query builder for the given store
- */
-export function createQueryBuilder(store: GeoStore): EntityQueryBuilder {
-  return new EntityQueryBuilder(store);
-}
-
-/**
- * Usage examples:
- *
- * const { store } = useSyncEngine();
- * const queryBuilder = createQueryBuilder(store);
- *
- * // Find all entities
- * const allEntities = await queryBuilder.findAll();
- *
- * // Find an entity by ID
- * const entity = await queryBuilder.findById('entity1');
- *
- * // Find entities by name
- * const companies = await queryBuilder.findByName('Company');
- *
- * // Search entities by text
- * const searchResults = await queryBuilder.search('sample');
- *
- * // Complex query
- * const results = await queryBuilder.query()
- *   .whereType({ name: 'Person' })
- *   .whereTriple({ attributeName: 'role', value: 'CEO' })
- *   .sortBy('name')
- *   .limit(10)
- *   .execute();
- *
- * // Query with OR condition
- * const nameOrDescriptionMatches = await queryBuilder.query()
- *   .orWhere([
- *     { name: { contains: 'Company' } },
- *     { description: { contains: 'Project' } }
- *   ])
- *   .execute();
- */

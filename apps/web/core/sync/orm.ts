@@ -178,7 +178,7 @@ export class E {
       })
     );
 
-    const localEntities = new EntityQuery(store).where(where).execute();
+    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
     const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
 
@@ -231,7 +231,7 @@ export class E {
         ),
     });
 
-    const localEntities = new EntityQuery(store).where(where).execute();
+    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
     const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
