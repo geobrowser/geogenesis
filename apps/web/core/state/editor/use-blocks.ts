@@ -21,9 +21,8 @@ export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation
   const blocks = useSelector(
     reactiveRelations,
     relations =>
-      mergeRelations(
-        initialBlockRelations ?? [],
-        relations.filter(r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS)
+      mergeRelations(initialBlockRelations ?? [], relations).filter(
+        r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS
       ),
     equals
   );
