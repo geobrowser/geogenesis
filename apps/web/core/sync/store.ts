@@ -199,7 +199,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const values = reactiveValues.get().filter(v => v.entity.id === entityId);
 
     if (!includeDeleted) {
-      return values.filter(v => Boolean(v.isDeleted === false));
+      return values.filter(v => Boolean(v.isDeleted) === false);
     }
 
     return values;
@@ -280,7 +280,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const relations = reactiveRelations.get().filter(r => r.fromEntity.id === entityId);
 
     if (!includeDeleted) {
-      return relations.filter(r => Boolean(r.isDeleted === false));
+      relations.filter(r => Boolean(r.isDeleted) === false);
     }
 
     return relations;

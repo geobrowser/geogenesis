@@ -1,5 +1,8 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createAtom } from '@xstate/store';
+import { useSelector } from '@xstate/store/react';
 import { Effect } from 'effect';
+import equal from 'fast-deep-equal';
 
 import { useEffect } from 'react';
 
@@ -7,7 +10,7 @@ import { getProperties, getProperty } from '../io/v2/queries';
 import { Property } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E } from './orm';
-import { GeoStore } from './store';
+import { GeoStore, reactiveRelations, reactiveValues } from './store';
 import { GeoEventStream } from './stream';
 import { useSyncEngine } from './use-sync-engine';
 
@@ -17,11 +20,16 @@ type QueryEntityOptions = {
   enabled?: boolean;
 };
 
+const reactive = createAtom(() => ({
+  values: reactiveValues.get(),
+  relations: reactiveRelations.get(),
+}));
+
 export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
 
-  const { isFetched, data: entity } = useQuery({
+  const { isFetched } = useQuery({
     enabled: Boolean(id) && enabled,
     queryKey: GeoStore.queryKey(id),
     queryFn: async () => {
@@ -46,114 +54,126 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
     },
   });
 
-  useEffect(() => {
-    if (!id || !enabled) {
-      return;
-    }
-
-    // const trackedRelationIds = new Set(entity?.relations.map(r => r.id) ?? []);
-    const trackedRelationToEntities = new Set(entity?.relations.map(r => r.toEntity.id) ?? []);
-
-    const isEntityTracked = (id: string) => {
-      return trackedRelationToEntities.has(id);
-    };
-
-    const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
-      if (event.entities.some(e => e.id === id)) {
-        const entity = store.getEntity(id, { spaceId });
-        cache.setQueryData(GeoStore.queryKey(id), entity);
-      }
-    });
-
-    const onEntityDeletedSub = stream.on(GeoEventStream.ENTITY_DELETED, event => {
-      if (event.entity.id === id) {
-        cache.setQueryData(GeoStore.queryKey(id), null);
-      }
-    });
-
-    const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
-      if (event.relation.fromEntity.id === id) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
-
-    const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
-      if (event.relation.fromEntity.id === id) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
-
-    const onTripleCreatedSub = stream.on(GeoEventStream.VALUES_CREATED, event => {
-      let shouldUpdate = false;
-
-      if (event.value.entity.id === id) {
-        shouldUpdate = true;
+  const entity = useSelector(
+    reactive,
+    () => {
+      if (!id || !enabled) {
+        return null;
       }
 
-      /**
-       * If the changed triple is for one of the relations of the subscribed entities
-       * changed we need to re-pull the entity to get the latest state of its relation.
-       *
-       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
-       * re-pull Byron to get the latest name for Geo, PBC.
-       */
-      const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
+      return store.getEntity(id, { spaceId }) ?? null;
+    },
+    equal
+  );
 
-      if (maybeRelationToChanged) {
-        shouldUpdate = true;
-      }
+  // useEffect(() => {
+  //   if (!id || !enabled) {
+  //     return;
+  //   }
 
-      const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
+  //   // const trackedRelationIds = new Set(entity?.relations.map(r => r.id) ?? []);
+  //   const trackedRelationToEntities = new Set(entity?.relations.map(r => r.toEntity.id) ?? []);
 
-      if (maybeRelationEntityChanged) {
-        shouldUpdate = true;
-      }
+  //   const isEntityTracked = (id: string) => {
+  //     return trackedRelationToEntities.has(id);
+  //   };
 
-      if (shouldUpdate) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
+  //   const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
+  //     if (event.entities.some(e => e.id === id)) {
+  //       const entity = store.getEntity(id, { spaceId });
+  //       cache.setQueryData(GeoStore.queryKey(id), entity);
+  //     }
+  //   });
 
-    const onTripleDeletedSub = stream.on(GeoEventStream.VALUES_DELETED, event => {
-      let shouldUpdate = false;
+  //   const onEntityDeletedSub = stream.on(GeoEventStream.ENTITY_DELETED, event => {
+  //     if (event.entity.id === id) {
+  //       cache.setQueryData(GeoStore.queryKey(id), null);
+  //     }
+  //   });
 
-      if (event.value.entity.id === id) {
-        shouldUpdate = true;
-      }
+  //   const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
+  //     if (event.relation.fromEntity.id === id) {
+  //       cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
+  //     }
+  //   });
 
-      /**
-       * If the changed triple is for one of the relations of the subscribed entities
-       * changed we need to re-pull the entity to get the latest state of its relation.
-       *
-       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
-       * re-pull Byron to get the latest name for Geo, PBC.
-       */
-      const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
+  //   const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
+  //     if (event.relation.fromEntity.id === id) {
+  //       cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
+  //     }
+  //   });
 
-      if (maybeRelationToChanged) {
-        shouldUpdate = true;
-      }
+  //   const onTripleCreatedSub = stream.on(GeoEventStream.VALUES_CREATED, event => {
+  //     let shouldUpdate = false;
 
-      const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
+  //     if (event.value.entity.id === id) {
+  //       shouldUpdate = true;
+  //     }
 
-      if (maybeRelationEntityChanged) {
-        shouldUpdate = true;
-      }
+  //     /**
+  //      * If the changed triple is for one of the relations of the subscribed entities
+  //      * changed we need to re-pull the entity to get the latest state of its relation.
+  //      *
+  //      * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
+  //      * re-pull Byron to get the latest name for Geo, PBC.
+  //      */
+  //     const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
 
-      if (shouldUpdate) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
+  //     if (maybeRelationToChanged) {
+  //       shouldUpdate = true;
+  //     }
 
-    return () => {
-      onEntitySyncedSub();
-      onEntityDeletedSub();
-      onRelationCreatedSub();
-      onRelationDeletedSub();
-      onTripleCreatedSub();
-      onTripleDeletedSub();
-    };
-  }, [id, store, stream, spaceId, enabled, cache, entity]);
+  //     const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
+
+  //     if (maybeRelationEntityChanged) {
+  //       shouldUpdate = true;
+  //     }
+
+  //     if (shouldUpdate) {
+  //       cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
+  //     }
+  //   });
+
+  //   const onTripleDeletedSub = stream.on(GeoEventStream.VALUES_DELETED, event => {
+  //     let shouldUpdate = false;
+
+  //     if (event.value.entity.id === id) {
+  //       shouldUpdate = true;
+  //     }
+
+  //     /**
+  //      * If the changed triple is for one of the relations of the subscribed entities
+  //      * changed we need to re-pull the entity to get the latest state of its relation.
+  //      *
+  //      * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
+  //      * re-pull Byron to get the latest name for Geo, PBC.
+  //      */
+  //     const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
+
+  //     if (maybeRelationToChanged) {
+  //       shouldUpdate = true;
+  //     }
+
+  //     const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
+
+  //     if (maybeRelationEntityChanged) {
+  //       shouldUpdate = true;
+  //     }
+
+  //     if (shouldUpdate) {
+  //       cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
+  //     }
+  //   });
+
+  //   return () => {
+  //     onEntitySyncedSub();
+  //     onEntityDeletedSub();
+  //     onRelationCreatedSub();
+  //     onRelationDeletedSub();
+  //     onTripleCreatedSub();
+  //     onTripleDeletedSub();
+  //   };
+  // }, [id, store, stream, spaceId, enabled, cache, entity]);
 
   return {
     entity,
