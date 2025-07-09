@@ -8,8 +8,11 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
+import { fromGeoFilterString } from '~/core/blocks/data/filters';
+import { filterStateToWhere } from '~/core/blocks/data/use-data-block';
 import { useEntity } from '~/core/database/entities';
 import { ID } from '~/core/id';
+import { convertWhereConditionToEntityFilter } from '~/core/io/v2/converters';
 import { getAllEntities, getEntity } from '~/core/io/v2/queries';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 
@@ -25,6 +28,7 @@ export const Tools = () => {
           <Trigger value="generateEntityIds">generate entity IDs</Trigger>
           <Trigger value="findEntities">find entities by space/type</Trigger>
           <Trigger value="cloneEntity">clone entity into space</Trigger>
+          <Trigger value="convertFilter">convert filter</Trigger>
         </Tabs.List>
         <div className="mt-8 px-2">
           <Tabs.Content value="fetchEntity">
@@ -38,6 +42,9 @@ export const Tools = () => {
           </Tabs.Content>
           <Tabs.Content value="cloneEntity">
             <CloneEntity />
+          </Tabs.Content>
+          <Tabs.Content value="convertFilter">
+            <ConvertFilter />
           </Tabs.Content>
         </div>
       </Tabs.Root>
@@ -75,6 +82,23 @@ const Input = ({ label, className = '', ...rest }: any) => {
   );
 };
 
+const Textarea = ({ label, rows = 6, className = '', ...rest }: any) => {
+  return (
+    <label className="flex max-w-lg flex-col">
+      <span>{label}</span>
+      <textarea
+        rows={rows}
+        placeholder={`enter ${label}...`}
+        className={cx(
+          'appearance-none border border-black bg-grey-01/50 px-2 py-1 font-mono text-xs placeholder:text-grey-04 focus:outline-none',
+          className
+        )}
+        {...rest}
+      />
+    </label>
+  );
+};
+
 const Button = ({ type = 'button', className = '', ...rest }: any) => {
   return (
     <button
@@ -87,7 +111,7 @@ const Button = ({ type = 'button', className = '', ...rest }: any) => {
 
 const Block = ({ format = true, className = '', children, ...rest }: any) => {
   return (
-    <pre className={cx('mt-2 bg-grey-01 p-2 text-xs', className)} {...rest}>
+    <pre className={cx('mt-2 overflow-clip bg-grey-01 p-2 text-[11px]', className)} {...rest}>
       {format ? JSON.stringify(children, null, 2) : children}
     </pre>
   );
@@ -137,7 +161,6 @@ const FetchEntity = () => {
 const Entity = ({ entityId }: any) => {
   const entity = useEntity({ id: entityId as any });
 
-  return <Block>{entity ?? ''}</Block>;
   return <Block>{entity ?? ''}</Block>;
 };
 
@@ -195,7 +218,7 @@ const FindEntities = () => {
   const handleFindEntities = async (event: any) => {
     event.preventDefault();
 
-    const allEntities = await Effect.runPromise(getAllEntities(spaceId));
+    const allEntities = (await Effect.runPromise(getAllEntities({ spaceId }))) as any[];
 
     if (allEntities) {
       const newEntities: any = allEntities
@@ -264,5 +287,76 @@ const CloneEntity = () => {
         <Block className="aspect-[21/9] w-full overflow-y-scroll">{ops}</Block>
       </div>
     </div>
+  );
+};
+
+const ConvertFilter = () => {
+  const [filterString, setFilterString] = React.useState<string>('');
+
+  const [filterState, setFilterState] = React.useState<any>(null);
+  const [where, setWhere] = React.useState<any>(null);
+  const [spaceId, setSpaceId] = React.useState<any>(null);
+  const [entityFilter, setEntityFilter] = React.useState<any>(null);
+
+  const handleConvertFilter = async (event: any) => {
+    event.preventDefault();
+
+    const newFilterState = await fromGeoFilterString(filterString.trim());
+    const newWhere = filterStateToWhere(newFilterState);
+    const newEntityFilter = convertWhereConditionToEntityFilter(newWhere);
+
+    setFilterState(newFilterState);
+    setWhere(newWhere);
+    setEntityFilter(newEntityFilter);
+  };
+
+  const handleReset = () => {
+    // setFilterString('');
+    setSpaceId(null);
+    setFilterState(null);
+    setWhere(null);
+    setEntityFilter(null);
+  };
+
+  return (
+    <form onSubmit={handleConvertFilter} className="space-y-4">
+      <div className="uppercase">raw filter string → filter state → where condition → entity GraphQL filter</div>
+      <Textarea
+        label="filter string"
+        value={filterString}
+        onChange={({ currentTarget: { value } }: React.ChangeEvent<HTMLInputElement>) => setFilterString(value)}
+      />
+
+      <div className="flex items-center gap-4">
+        <Button type="submit">convert</Button>
+        <Button onClick={handleReset} className="bg-grey-03">
+          reset
+        </Button>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        {filterState && (
+          <div>
+            <div>filter state</div>
+            <Block>{filterState}</Block>
+          </div>
+        )}
+        {where && (
+          <div>
+            <div>where condition</div>
+            <Block>{where}</Block>
+          </div>
+        )}
+        {spaceId || entityFilter ? (
+          <div className="space-y-4">
+            {entityFilter && (
+              <div>
+                <div>entity filter</div>
+                <Block>{entityFilter}</Block>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </form>
   );
 };

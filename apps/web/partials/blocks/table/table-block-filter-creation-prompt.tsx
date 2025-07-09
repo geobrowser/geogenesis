@@ -376,7 +376,7 @@ function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
           ) : selectedOption?.valueType === 'RELATION' ? (
             <TableBlockEntityFilterInput
               filterByTypes={
-                selectedOption.relationValueTypes ? selectedOption.relationValueTypes.map(r => r.typeId) : undefined
+                selectedOption.relationValueTypes ? selectedOption.relationValueTypes.map(r => r.id) : undefined
               }
               selectedValue={getFilterValueName(state.value) ?? ''}
               onSelect={onSelectEntityValue}

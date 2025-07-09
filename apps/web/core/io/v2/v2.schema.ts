@@ -1,3 +1,4 @@
+import { SystemIds } from '@graphprotocol/grc-20';
 import { Brand, Schema } from 'effect';
 
 export const DataType = Schema.Union(
@@ -9,31 +10,17 @@ export const DataType = Schema.Union(
   Schema.Literal('RELATION')
 );
 
-export const RenderableDataType = Schema.Union(
-  Schema.Literal('TEXT'),
-  Schema.Literal('NUMBER'),
-  Schema.Literal('CHECKBOX'),
-  Schema.Literal('TIME'),
-  Schema.Literal('POINT'),
-  Schema.Literal('RELATION'),
-  Schema.Literal('URL'),
-  Schema.Literal('IMAGE')
-);
-
 export const Property = Schema.Struct({
   id: Schema.UUID,
-  entity: Schema.Struct({
-    id: Schema.UUID,
-    name: Schema.NullOr(Schema.String),
-  }),
+  name: Schema.NullOr(Schema.String),
   dataType: DataType,
+  renderableType: Schema.NullOr(Schema.UUID),
   relationValueTypes: Schema.Array(
     Schema.Struct({
       id: Schema.String,
       name: Schema.NullOr(Schema.String),
     })
   ),
-  renderableType: Schema.NullOr(RenderableDataType),
 });
 
 export type RemoteProperty = Schema.Schema.Type<typeof Property>;
@@ -66,15 +53,15 @@ export const Relation = Schema.Struct({
   spaceId: Schema.UUID,
   position: Schema.NullOr(Schema.String),
   verified: Schema.NullOr(Schema.Boolean),
-  from: Schema.Struct({
+  fromEntity: Schema.Struct({
     id: Schema.UUID,
     name: Schema.NullOr(Schema.String),
   }),
-  to: Schema.Struct({
+  toEntity: Schema.Struct({
     id: Schema.UUID,
     name: Schema.NullOr(Schema.String),
     types: Schema.Array(EntityType),
-    values: Schema.Array(
+    valuesList: Schema.Array(
       Schema.Struct({
         propertyId: Schema.UUID,
         value: Schema.String,
@@ -84,10 +71,8 @@ export const Relation = Schema.Struct({
   toSpaceId: Schema.NullOr(Schema.String),
   type: Schema.Struct({
     id: Schema.UUID,
-    entity: Schema.Struct({
-      name: Schema.NullOr(Schema.String),
-    }),
-    renderableType: Schema.NullOr(Schema.Union(Schema.Literal('IMAGE'), Schema.Literal('URL'))),
+    name: Schema.NullOr(Schema.String),
+    renderableType: Schema.NullOr(Schema.UUID),
   }),
   entityId: Schema.UUID,
 });
@@ -99,11 +84,11 @@ export const Entity = Schema.Struct({
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
   types: Schema.Array(EntityType),
-  // spaces
+  spaceIds: Schema.Array(Schema.String),
   // cover
   // blocks: Schema.
-  values: Schema.Array(Value),
-  relations: Schema.Array(Relation),
+  valuesList: Schema.Array(Value),
+  relationsList: Schema.Array(Relation),
   // createdAt
   // updatedAt
 });
@@ -130,18 +115,18 @@ export const Space = Schema.Struct({
   membershipAddress: Schema.NullOr(AddressWithValidation),
   personalAddress: Schema.NullOr(AddressWithValidation),
 
-  members: Schema.Array(
+  membersList: Schema.Array(
     Schema.Struct({
       address: AddressWithValidation,
     })
   ),
-  editors: Schema.Array(
+  editorsList: Schema.Array(
     Schema.Struct({
       address: AddressWithValidation,
     })
   ),
 
-  entity: Schema.NullOr(Entity),
+  page: Schema.NullOr(Entity),
 });
 
 export type RemoteSpace = Schema.Schema.Type<typeof Space>;
@@ -150,7 +135,7 @@ export const SearchResult = Schema.Struct({
   id: Schema.UUID,
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
-  spaces: Schema.Array(Schema.UUID),
+  spaceIds: Schema.Array(Schema.UUID),
   types: Schema.Array(EntityType),
 });
 

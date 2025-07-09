@@ -21,15 +21,15 @@ export type Space = {
 };
 
 export function SpaceDto(space: RemoteSpace): Space {
-  const spaceEntity = SpaceEntityDto(space.id, space.entity);
+  const spaceEntity = SpaceEntityDto(space.id, space.page);
 
   return {
     id: space.id,
     type: space.type,
     entity: spaceEntity,
 
-    editors: space.editors.map(editor => editor.address),
-    members: space.members.map(member => member.address),
+    editors: space.editorsList.map(editor => editor.address),
+    members: space.membersList.map(member => member.address),
 
     daoAddress: space.daoAddress,
     mainVotingAddress: space.mainVotingAddress,

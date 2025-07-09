@@ -8,7 +8,4 @@ export type { FetchProposalsOptions } from './fetch-proposals';
 export { fetchProposal } from './fetch-proposal';
 export type { FetchProposalOptions } from './fetch-proposal';
 
-export { fetchTableRowEntities } from './fetch-table-row-entities';
-export type { FetchTableRowEntitiesOptions } from './fetch-table-row-entities';
-
 export * as Errors from './errors';

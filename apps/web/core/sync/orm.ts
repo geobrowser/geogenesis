@@ -1,14 +1,12 @@
-import { SystemIds } from '@graphprotocol/grc-20';
 import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { Filter } from '../blocks/data/filters';
-import { queryStringFromFilters } from '../blocks/data/to-query-string';
+import { convertWhereConditionToEntityFilter } from '~/core/io/v2/converters';
+
 import { readTypes } from '../database/entities';
 import { EntityId } from '../io/schema';
-import { fetchTableRowEntities } from '../io/subgraph';
-import { getBatchEntities, getEntity, getResults, getSpaces } from '../io/v2/queries';
+import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
 import { Values } from '../utils/value';
@@ -118,6 +116,23 @@ export class E {
     return this.merge({ id, store, spaceId, mergeWith: cachedEntity });
   }
 
+  static async findOneRelation({
+    id,
+    spaceId,
+    cache,
+  }: {
+    id: string;
+    spaceId?: string;
+    cache: QueryClient;
+  }): Promise<Entity | null> {
+    const cachedEntity = await cache.fetchQuery({
+      queryKey: ['network', 'relation', id, spaceId],
+      queryFn: ({ signal }) => Effect.runPromise(getRelation(id, spaceId, signal)),
+    });
+
+    return cachedEntity;
+  }
+
   static async findMany({
     store,
     cache,
@@ -152,74 +167,17 @@ export class E {
       return entities.filter(e => e !== null);
     }
 
-    const filters: Filter[] = [];
+    const limit = first;
+    const offset = skip;
+    const filter = convertWhereConditionToEntityFilter(where);
 
-    if (where.relations) {
-      const relationConditions = where.relations
-        .map((r): Filter | null => {
-          if (r.typeOf?.id?.equals && r.toEntity?.id?.equals) {
-            return {
-              columnId: r.typeOf.id.equals,
-              columnName: null,
-              value: r.toEntity.id.equals,
-              valueName: null,
-              valueType: 'RELATION',
-            };
-          }
-
-          return null;
-        })
-        .filter(f => f !== null);
-
-      filters.push(...relationConditions);
-    }
-
-    if (where.values) {
-      const tripleConditions = where.values
-        .map((t): Filter | null => {
-          if (t.propertyId?.equals && t.value?.equals) {
-            return {
-              columnId: t.propertyId.equals,
-              columnName: null,
-              value: t.value.equals.toString(),
-              valueName: null,
-              valueType: 'TEXT', // SUPPORT OTHER TYPES
-            };
-          }
-
-          return null;
-        })
-        .filter(f => f !== null);
-
-      filters.push(...tripleConditions);
-    }
-
-    if (where.spaces) {
-      const relationConditions = where.spaces
-        .map((s): Filter | null => {
-          if (s.equals) {
-            return {
-              columnId: SystemIds.SPACE_FILTER,
-              columnName: null,
-              value: s.equals,
-              valueName: null,
-              valueType: 'RELATION',
-            };
-          }
-
-          return null;
-        })
-        .filter(f => f !== null);
-
-      filters.push(...relationConditions);
-    }
-
-    const filterString = queryStringFromFilters(filters);
-
-    const remoteEntities = await cache.fetchQuery({
-      queryKey: ['network', 'entities', filters],
-      queryFn: ({ signal }) => fetchTableRowEntities({ filter: filterString, signal, first, skip }),
-    });
+    const remoteEntities = await Effect.runPromise(
+      getAllEntities({
+        limit,
+        offset,
+        filter,
+      })
+    );
 
     const localEntities = new EntityQuery(store).where(where).execute();
 
@@ -348,7 +306,7 @@ function mergeSearchResult({
   // Use the merged triples to derive the name instead of the remote entity
   // `name` property in case the name was deleted/changed locally.
   const name = Entities.name(values) ?? remoteEntity.name;
-  const description = Entities.description(values) ?? remoteEntity.name;
+  const description = Entities.description(values) ?? remoteEntity.description;
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
 
   return {

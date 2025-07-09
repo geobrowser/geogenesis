@@ -9,7 +9,7 @@ import { useValues } from '../database/v2.values';
 import { useEntityPageStore } from '../state/entity-page-store/entity-store';
 import { toRenderables } from '../utils/to-renderables';
 import { groupBy } from '../utils/utils';
-import { PropertySchema, RenderableProperty, Value } from '../v2.types';
+import { Property, RenderableProperty, Value } from '../v2.types';
 import { useUserIsEditing } from './use-user-is-editing';
 
 /**
@@ -99,7 +99,7 @@ export function useRenderables(serverValues: Value[], spaceId: string, isRelatio
   // });
   const typePropertySchema = undefined;
 
-  const fullSchema: PropertySchema[] = [...schema, ...(typePropertySchema ?? [])];
+  const fullSchema: Property[] = [...schema, ...(typePropertySchema ?? [])];
 
   const SKIPPED_PROPERTIES = !isRelationPage
     ? [EntityId(SystemIds.BLOCKS)]

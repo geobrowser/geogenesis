@@ -11,7 +11,6 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { EntityId, SpaceId } from '~/core/io/schema';
 import { getImagePath } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -23,8 +22,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 type NavbarBreadcrumbProps = {
-  spaceId: SpaceId;
-  entityId?: EntityId;
+  spaceId: string;
+  entityId?: string;
 };
 
 const MotionContent = motion(Popover.Content);
@@ -36,7 +35,7 @@ export function NavbarBreadcrumb({ spaceId, entityId }: NavbarBreadcrumbProps) {
 }
 
 type SpaceBreadcrumbProps = {
-  spaceId: SpaceId;
+  spaceId: string;
 };
 
 const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
@@ -65,8 +64,8 @@ const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
 };
 
 type EntityBreadcrumbProps = {
-  spaceId: SpaceId;
-  entityId: EntityId;
+  spaceId: string;
+  entityId: string;
 };
 
 const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
@@ -95,7 +94,7 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
 
   const showCurrentSpace = space.entity.name?.toLowerCase().startsWith(formattedQuery);
 
-  if (!entity || entity.spaces.length < 2) {
+  if (!entity || otherSpaces.length < 1) {
     return (
       <Link href={NavUtils.toSpace(spaceId)} className="flex items-center justify-center gap-1.5">
         <div className="relative h-4 w-4 overflow-hidden rounded-sm">

@@ -1,13 +1,12 @@
 import { Duration, Effect } from 'effect';
 
-import { EntityId } from '../io/schema';
 import { getResult, getSpaces } from '../io/v2/queries';
 import { queryClient } from '../query-client';
 import { GeoStore } from '../sync/store';
 import { SearchResult } from '../v2.types';
 
 interface FetchResultOptions {
-  id: EntityId;
+  id: string;
   store: GeoStore;
   signal?: AbortController['signal'];
 }
@@ -21,6 +20,8 @@ export async function mergeSearchResult(args: FetchResultOptions) {
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
 
+  console.log('remote', cachedRemoteResult);
+
   let merged = cachedRemoteResult
     ? localEntity
       ? { ...localEntity, spaces: cachedRemoteResult.spaces }
@@ -29,30 +30,33 @@ export async function mergeSearchResult(args: FetchResultOptions) {
       ? localEntity
       : null;
 
-  const localOnlyEntitySpaceIds = !cachedRemoteResult ? (localEntity ? localEntity.spaces : []) : [];
+  if (!merged) {
+    return null;
+  }
 
-  const localEntitySpaces = await queryClient.fetchQuery({
-    queryKey: ['merge-local-entity-spaces', localOnlyEntitySpaceIds],
-    queryFn: () => Effect.runPromise(getSpaces({ spaceIds: localOnlyEntitySpaceIds })),
+  // Collect all space IDs from both local and remote entities
+  const allSpaceIds = [
+    ...(localEntity?.spaces || []),
+    ...(cachedRemoteResult?.spaces?.map(s => (typeof s === 'string' ? s : s.spaceId)) || []),
+  ];
+  const uniqueSpaceIds = [...new Set(allSpaceIds)];
+
+  // Fetch space entities for all space IDs
+  const spaceEntities = await queryClient.fetchQuery({
+    queryKey: ['merge-search-result-spaces', uniqueSpaceIds],
+    queryFn: () => Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds })),
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
 
-  console.log('spaces', localEntitySpaces);
+  console.log('spaces', spaceEntities);
 
-  const localEntitySpacesBySpaceId = Object.fromEntries(localEntitySpaces.map(s => [s.id, s.entity]));
+  const spaceEntitiesBySpaceId = Object.fromEntries(spaceEntities.map(s => [s.id, s.entity]));
 
-  const hasLocalEntitySpaces = Object.keys(localEntitySpacesBySpaceId).length !== 0;
+  // Map space IDs to space entities
+  merged = {
+    ...merged,
+    spaces: uniqueSpaceIds.map(spaceId => spaceEntitiesBySpaceId[spaceId]).filter(s => s !== undefined),
+  };
 
-  if (localEntity && merged && hasLocalEntitySpaces) {
-    merged = {
-      ...merged,
-      spaces: localEntity.spaces
-        .map(spaceId => {
-          return localEntitySpacesBySpaceId[spaceId] ?? null;
-        })
-        .filter(s => s !== null),
-    };
-  }
-
-  return merged as SearchResult | null;
+  return merged as SearchResult;
 }

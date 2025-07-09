@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
-import type { RelationValueType } from '~/core/types';
+import { Property } from '~/core/v2.types';
 
 import { SelectEntity } from './select-entity';
 
@@ -13,7 +13,7 @@ type SelectEntityAsPopoverProps = {
   spaceId: string;
   onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
   onCreateEntity?: (result: { id: string; name: string | null; space?: string }) => void;
-  relationValueTypes?: RelationValueType[];
+  relationValueTypes?: Property['relationValueTypes'];
 };
 
 export function SelectEntityAsPopover({

@@ -4,11 +4,10 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
-import { ID } from '~/core/id';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
-import { Cell, PropertySchema, Relation } from '~/core/v2.types';
+import { Cell, Property, Relation } from '~/core/v2.types';
 
 import { useProperties } from '../../hooks/use-properties';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
@@ -33,7 +32,7 @@ interface RenderablesQueryKey {
 
 const queryKeys = {
   relationQuery: (args: RenderablesQueryKey) => ['blocks', 'data', 'renderables', args],
-  columnsSchema: (columns?: PropertySchema[]) => ['blocks', 'data', 'columns-schema', columns],
+  columnsSchema: (columns?: Property[]) => ['blocks', 'data', 'columns-schema', columns],
 };
 
 export function useDataBlock() {
@@ -256,7 +255,7 @@ export function useDataBlockInstance() {
   return context;
 }
 
-function filterStateToWhere(filterState: Filter[]): WhereCondition {
+export function filterStateToWhere(filterState: Filter[]): WhereCondition {
   const where: WhereCondition = {};
 
   for (const filter of filterState) {

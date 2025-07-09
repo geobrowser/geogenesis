@@ -2,9 +2,8 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
-import { PropertyId } from '~/core/hooks/use-properties';
 import { NavUtils } from '~/core/utils/utils';
-import { Cell, PropertySchema } from '~/core/v2.types';
+import { Cell, Property } from '~/core/v2.types';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -21,7 +20,7 @@ type Props = {
   isPlaceholder: boolean;
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
-  properties?: Record<PropertyId, PropertySchema>;
+  properties?: Record<string, Property>;
   relationId?: string;
   source: Source;
 };

@@ -1,6 +1,10 @@
+import { SystemIds } from '@graphprotocol/grc-20';
+
+import { GEO_LOCATION } from './constants';
+
 export type DataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
-export type ExtraRenderableType = 'URL' | 'IMAGE';
-export type RenderableType = DataType | ExtraRenderableType;
+export type RenderableType = typeof SystemIds.IMAGE | typeof SystemIds.URL | typeof GEO_LOCATION; // GEO_LOCATION needs to be migrated to SDK
+export type RawRenderableType = string; // UUIDs of renderable types
 
 export type Property = {
   id: string;
@@ -8,7 +12,7 @@ export type Property = {
   dataType: DataType;
   isDataTypeEditable?: boolean;
   relationValueTypes?: { id: string; name: string | null }[];
-  renderableType?: RenderableType | null;
+  renderableType?: RawRenderableType | null; // Raw UUID from API, gets converted in to-renderables.ts
 };
 
 // @TODO: Relation renderable types + values
@@ -89,23 +93,7 @@ export type Entity = {
   values: Value[];
 };
 
-export type RelationValueType = {
-  typeId: string;
-  typeName: string | null;
-  spaceIdOfProperty?: string;
-};
-
-export interface PropertySchema {
-  id: string;
-  name: string | null;
-  dataType: DataType;
-  renderableType?: RenderableType;
-  relationValueTypeId?: string;
-  relationValueTypeName?: string | null;
-  relationValueTypes?: RelationValueType[];
-}
-
-export type EntityWithSchema = Entity & { schema: PropertySchema[] };
+export type EntityWithSchema = Entity & { schema: Property[] };
 
 export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT';
 
@@ -115,9 +103,21 @@ export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT' | 'POI
 // Editing these values mostly works the same way as ops, so we need the same
 // properties that ops mostly do in order to upsert or remove the renderable
 // fields.
+// All possible flattened render types
+export type FlattenedRenderType =
+  | 'TEXT'
+  | 'NUMBER'
+  | 'CHECKBOX'
+  | 'TIME'
+  | 'POINT'
+  | 'URL'
+  | 'GEO_LOCATION'
+  | 'RELATION'
+  | 'IMAGE';
+
 export type NativeRenderableProperty = {
-  type: 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT';
-  renderableType?: RenderableType | null;
+  type: Extract<FlattenedRenderType, 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'URL' | 'GEO_LOCATION'>;
+  renderableType?: RawRenderableType;
   entityId: string;
   entityName: string | null;
   propertyId: string;
@@ -145,15 +145,15 @@ type RelationPropertyProperties = {
 };
 
 export type BaseRelationRenderableProperty = {
-  type: 'RELATION';
+  type: Extract<FlattenedRenderType, 'RELATION'>;
 } & RelationPropertyProperties;
 
 export type ImageRelationRenderableProperty = {
-  type: 'IMAGE';
+  type: Extract<FlattenedRenderType, 'IMAGE'>;
 } & RelationPropertyProperties;
 
 export type PointRelationRenderableProperty = {
-  type: 'POINT';
+  type: Extract<FlattenedRenderType, 'POINT'>;
 } & NativeRenderableProperty;
 
 export type RelationRenderableProperty = BaseRelationRenderableProperty | ImageRelationRenderableProperty;
@@ -168,7 +168,16 @@ export type RenderableProperty =
 // The types of renderables don't map 1:1 to the triple value types. We might
 // also render relations with a specific type, e.g., an Image entity or a
 // Person entity, etc.
-export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URL' | 'TIME' | 'IMAGE' | 'CHECKBOX' | 'NUMBER' | 'POINT';
+export type SwitchableRenderableType =
+  | 'TEXT'
+  | 'RELATION'
+  | 'URL'
+  | 'TIME'
+  | 'IMAGE'
+  | 'CHECKBOX'
+  | 'NUMBER'
+  | 'POINT'
+  | 'GEO_LOCATION';
 
 export type SearchResult = {
   id: string;
