@@ -3,7 +3,7 @@ import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { useQueryEntity, useQueryProperty } from '~/core/sync/use-store';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 import { RelationRenderableProperty, RenderableProperty, Value, ValueRenderableProperty } from '~/core/v2.types';
 
@@ -123,6 +123,7 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
                   case 'NUMBER':
                     return (
                       <ReadableNumberField
+                        key={`number-${renderable.propertyId}-${renderable.value}`}
                         value={renderable.value}
                         // @TODO(migration): fix formatting
                         // format={renderable.options?.format}
