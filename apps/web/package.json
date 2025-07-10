@@ -57,6 +57,7 @@
     "@tiptap/suggestion": "2.4.0",
     "@vercel/analytics": "^1.4.1",
     "@vercel/og": "^0.6.4",
+    "@xstate/store": "^3.8.0",
     "babel-plugin-react-compiler": "19.1.0-rc.2",
     "boring-avatars": "^1.10.1",
     "class-variance-authority": "^0.7.0",

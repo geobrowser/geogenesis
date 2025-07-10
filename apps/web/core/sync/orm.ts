@@ -5,7 +5,6 @@ import { dedupeWith } from 'effect/Array';
 import { convertWhereConditionToEntityFilter } from '~/core/io/v2/converters';
 
 import { readTypes } from '../database/entities';
-import { EntityId } from '../io/schema';
 import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
@@ -14,7 +13,7 @@ import { Entity, Relation, SearchResult } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
 
-function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
+export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
   const locallyDeletedRelations = localRelations.filter(r => r.isDeleted).map(r => r.id);
 
   const deletedRelationIds = new Set(locallyDeletedRelations);
@@ -56,15 +55,14 @@ export class E {
   }): Entity | null {
     const remoteEntity = mergeWith;
 
-    // We need to include the deleted to correctly merge with remote data
-    const localEntity = store.getEntity(id, { spaceId, includeDeleted: true });
+    const localEntity = store.getEntity(id, { includeDeleted: true, spaceId });
 
     if (!localEntity && !remoteEntity) {
       return null;
     }
 
     if (!remoteEntity) {
-      return localEntity ?? null;
+      return store.getEntity(id) ?? null;
     }
 
     if (!localEntity) {
@@ -85,11 +83,12 @@ export class E {
     const name = Entities.name(values);
     const description = Entities.description(values);
     const types = readTypes(relations);
+    const spaces = Entities.spaces(values, relations);
 
     return {
-      id: EntityId(id),
+      id: id,
       name,
-      spaces: [...(localEntity?.spaces ?? []), ...(remoteEntity?.spaces ?? [])],
+      spaces,
       description,
       types,
       values: values,
@@ -179,7 +178,7 @@ export class E {
       })
     );
 
-    const localEntities = new EntityQuery(store).where(where).execute();
+    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
     const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
 
@@ -232,7 +231,7 @@ export class E {
         ),
     });
 
-    const localEntities = new EntityQuery(store).where(where).execute();
+    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
     const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
@@ -310,7 +309,7 @@ function mergeSearchResult({
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
 
   return {
-    id: EntityId(id),
+    id: id,
     name,
     description,
     types,

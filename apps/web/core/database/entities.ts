@@ -52,7 +52,7 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
     spaces,
     description,
     schema: schema ?? DEFAULT_ENTITY_SCHEMA,
-    values: data?.values ?? [],
+    values: values,
     relations: relations,
     types,
   };

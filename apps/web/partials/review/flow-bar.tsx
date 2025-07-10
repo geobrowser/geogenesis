@@ -6,11 +6,11 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 
-import { useValues } from '~/core/database/v2.values';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { useValues } from '~/core/sync/use-store';
 import { ReviewState } from '~/core/types';
 
 import { SmallButton } from '~/design-system/button';

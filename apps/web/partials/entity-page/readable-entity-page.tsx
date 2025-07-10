@@ -140,6 +140,7 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
                   case 'NUMBER':
                     return (
                       <ReadableNumberField
+                        key={`number-${renderable.propertyId}-${renderable.value}`}
                         value={renderable.value}
                         // @TODO(migration): fix formatting
                         // format={renderable.options?.format}

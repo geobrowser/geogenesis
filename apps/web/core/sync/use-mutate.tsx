@@ -1,7 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import produce, { Draft } from 'immer';
 
-import { remove, removeRelation, upsert, upsertRelation } from '../database/write';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
 import { DataType, FlattenedRenderType, NativeRenderableProperty, Relation, RelationRenderableProperty, Value } from '../v2.types';
@@ -95,10 +94,6 @@ function createMutator(store: GeoStore): Mutator {
           };
 
           store.setValue(newValue);
-          // Currently we have two stores, the new sync store and the
-          // legacy jotai events store. For now we interop between both,
-          // but eventually we should migrate completely to the sync store.
-          upsert(newValue);
         },
       },
     },
@@ -117,56 +112,26 @@ function createMutator(store: GeoStore): Mutator {
         };
 
         store.setValue(next);
-
-        // Currently we have two stores, the new sync store and the
-        // legacy jotai events store. For now we interop between both,
-        // but eventually we should migrate completely to the sync store.
-        upsert(next);
       },
       update: (base, recipe) => {
         const newValue = produce(base, recipe);
         store.setValue(newValue);
-
-        // Currently we have two stores, the new sync store and the
-        // legacy jotai events store. For now we interop between both,
-        // but eventually we should migrate completely to the sync store.
-        upsert(newValue);
       },
       delete: newValue => {
         store.deleteValue(newValue);
-
-        // Currently we have two stores, the new sync store and the
-        // legacy jotai events store. For now we interop between both,
-        // but eventually we should migrate completely to the sync store.
-        remove(newValue);
       },
     },
     relations: {
       get: (id, entityId) => store.getRelation(id, entityId),
       set: newRelation => {
         store.setRelation(newRelation);
-
-        // Currently we have two stores, the new sync store and the
-        // legacy jotai events store. For now we interop between both,
-        // but eventually we should migrate completely to the sync store.
-        upsertRelation({ relation: newRelation });
       },
       update: (base, recipe) => {
         const newRelation = produce(base, recipe);
         store.setRelation(newRelation);
-
-        // Currently we have two stores, the new sync store and the
-        // legacy jotai events store. For now we interop between both,
-        // but eventually we should migrate completely to the sync store.
-        upsertRelation({ relation: newRelation });
       },
       delete: newRelation => {
         store.deleteRelation(newRelation);
-
-        // Currently we have two stores, the new sync store and the
-        // legacy jotai events store. For now we interop between both,
-        // but eventually we should migrate completely to the sync store.
-        removeRelation({ relation: newRelation });
       },
     },
     renderables: {
@@ -174,52 +139,30 @@ function createMutator(store: GeoStore): Mutator {
         set: renderable => {
           const valueFromRenderable = getValueFromRenderable(renderable);
           store.setValue(valueFromRenderable);
-
-          // Currently we have two stores, the new sync store and the
-          // legacy jotai events store. For now we interop between both,
-          // but eventually we should migrate completely to the sync store.
-          upsert(valueFromRenderable);
         },
         update: (renderable, draft) => {
           const valueFromRenderable = getValueFromRenderable(renderable);
           const newRenderable = produce(valueFromRenderable, draft);
           store.setValue(newRenderable);
-
-          // Currently we have two stores, the new sync store and the
-          // legacy jotai events store. For now we interop between both,
-          // but eventually we should migrate completely to the sync store.
-          upsert(valueFromRenderable);
         },
         delete: renderable => {
           const valueFromRenderable = getValueFromRenderable(renderable);
           store.deleteValue(valueFromRenderable);
-          remove(valueFromRenderable);
         },
       },
       relations: {
         set: renderable => {
           const relation = getRelationFromRenderable(renderable);
           store.setRelation(relation);
-
-          // Currently we have two stores, the new sync store and the
-          // legacy jotai events store. For now we interop between both,
-          // but eventually we should migrate completely to the sync store.
-          upsertRelation({ relation });
         },
         update: (renderable, draft) => {
           const relation = getRelationFromRenderable(renderable);
           const newRenderable = produce(relation, draft);
           store.setRelation(newRenderable);
-
-          // Currently we have two stores, the new sync store and the
-          // legacy jotai events store. For now we interop between both,
-          // but eventually we should migrate completely to the sync store.
-          upsertRelation({ relation });
         },
         delete: renderable => {
           const relation = getRelationFromRenderable(renderable);
           store.deleteRelation(relation);
-          removeRelation({ relation });
         },
       },
     },

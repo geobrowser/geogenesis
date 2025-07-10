@@ -1,27 +1,53 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createAtom } from '@xstate/store';
+import { useSelector } from '@xstate/store/react';
 import { Effect } from 'effect';
-
-import { useEffect } from 'react';
+import equal from 'fast-deep-equal';
 
 import { getProperties, getProperty } from '../io/v2/queries';
-import { Property } from '../v2.types';
+import { Values } from '../utils/value';
+import { Property, Relation, Value } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
-import { E } from './orm';
-import { GeoStore } from './store';
+import { E, mergeRelations } from './orm';
+import { GeoStore, reactiveRelations, reactiveValues } from './store';
 import { GeoEventStream } from './stream';
 import { useSyncEngine } from './use-sync-engine';
 
 type QueryEntityOptions = {
   id?: string;
   spaceId?: string;
+  /**
+   * By default we query the local store for the entity without
+   * querying the remote server. This assumes that the entity
+   * has already been hydrated elsewhere in the app, so there's
+   * no need to do it again.
+   *
+   * There may be cases where the entity hasn't been pre-hydrated,
+   * so we can pass a flag to ensure it's hydrated as part of the
+   * hook instantiation.
+   */
+  shouldHydrate?: boolean;
+  /**
+   * @TODO how do we merge enabled and shouldHydrate?
+   */
   enabled?: boolean;
 };
 
-export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptions) {
+const reactive = createAtom(() => ({
+  values: reactiveValues.get(),
+  relations: reactiveRelations.get(),
+}));
+
+/**
+ * @TODO: We're basically inventing @tanstack/db. Right now it's
+ * not stable (as of July 2025). Once it's stable we should just
+ * migrate to @tanstack/db and use that instead.
+ */
+export function useQueryEntity({ id, spaceId, enabled = true, shouldHydrate = false }: QueryEntityOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
 
-  const { isFetched, data: entity } = useQuery({
+  const { isFetched } = useQuery({
     enabled: Boolean(id) && enabled,
     queryKey: GeoStore.queryKey(id),
     queryFn: async () => {
@@ -46,114 +72,17 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
     },
   });
 
-  useEffect(() => {
-    if (!id || !enabled) {
-      return;
-    }
-
-    // const trackedRelationIds = new Set(entity?.relations.map(r => r.id) ?? []);
-    const trackedRelationToEntities = new Set(entity?.relations.map(r => r.toEntity.id) ?? []);
-
-    const isEntityTracked = (id: string) => {
-      return trackedRelationToEntities.has(id);
-    };
-
-    const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
-      if (event.entities.some(e => e.id === id)) {
-        const entity = store.getEntity(id, { spaceId });
-        cache.setQueryData(GeoStore.queryKey(id), entity);
-      }
-    });
-
-    const onEntityDeletedSub = stream.on(GeoEventStream.ENTITY_DELETED, event => {
-      if (event.entity.id === id) {
-        cache.setQueryData(GeoStore.queryKey(id), null);
-      }
-    });
-
-    const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
-      if (event.relation.fromEntity.id === id) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
-
-    const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
-      if (event.relation.fromEntity.id === id) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
-
-    const onTripleCreatedSub = stream.on(GeoEventStream.VALUES_CREATED, event => {
-      let shouldUpdate = false;
-
-      if (event.value.entity.id === id) {
-        shouldUpdate = true;
+  const entity = useSelector(
+    reactive,
+    () => {
+      if (!id || !enabled) {
+        return null;
       }
 
-      /**
-       * If the changed triple is for one of the relations of the subscribed entities
-       * changed we need to re-pull the entity to get the latest state of its relation.
-       *
-       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
-       * re-pull Byron to get the latest name for Geo, PBC.
-       */
-      const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
-
-      if (maybeRelationToChanged) {
-        shouldUpdate = true;
-      }
-
-      const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
-
-      if (maybeRelationEntityChanged) {
-        shouldUpdate = true;
-      }
-
-      if (shouldUpdate) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
-
-    const onTripleDeletedSub = stream.on(GeoEventStream.VALUES_DELETED, event => {
-      let shouldUpdate = false;
-
-      if (event.value.entity.id === id) {
-        shouldUpdate = true;
-      }
-
-      /**
-       * If the changed triple is for one of the relations of the subscribed entities
-       * changed we need to re-pull the entity to get the latest state of its relation.
-       *
-       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
-       * re-pull Byron to get the latest name for Geo, PBC.
-       */
-      const maybeRelationToChanged = isEntityTracked(event.value.entity.id);
-
-      if (maybeRelationToChanged) {
-        shouldUpdate = true;
-      }
-
-      const maybeRelationEntityChanged = isEntityTracked(event.value.entity.id);
-
-      if (maybeRelationEntityChanged) {
-        shouldUpdate = true;
-      }
-
-      if (shouldUpdate) {
-        cache.setQueryData(GeoStore.queryKey(id), store.getEntity(id, { spaceId }));
-      }
-    });
-
-    return () => {
-      onEntitySyncedSub();
-      onEntityDeletedSub();
-      onRelationCreatedSub();
-      onRelationDeletedSub();
-      onTripleCreatedSub();
-      onTripleDeletedSub();
-    };
-  }, [id, store, stream, spaceId, enabled, cache, entity]);
+      return store.getEntity(id, { spaceId }) ?? null;
+    },
+    equal
+  );
 
   return {
     entity,
@@ -181,8 +110,6 @@ export function useQueryRelation({ id, spaceId, enabled = true }: QueryEntityOpt
        */
       const merged = await E.findOneRelation({ id, spaceId, cache });
 
-      console.log('mergedmerged', merged);
-
       return merged;
     },
   });
@@ -195,10 +122,25 @@ export function useQueryRelation({ id, spaceId, enabled = true }: QueryEntityOpt
 
 type QueryEntitiesOptions = {
   where: WhereCondition;
-  enabled?: boolean;
   first?: number;
   skip?: number;
   placeholderData?: typeof keepPreviousData;
+
+  /**
+   * By default we query the local store for the entity without
+   * querying the remote server. This assumes that the entity
+   * has already been hydrated elsewhere in the app, so there's
+   * no need to do it again.
+   *
+   * There may be cases where the entity hasn't been pre-hydrated,
+   * so we can pass a flag to ensure it's hydrated as part of the
+   * hook instantiation.
+   */
+  shouldHydrate?: boolean;
+  /**
+   * @TODO how do we merge enabled and shouldHydrate?
+   */
+  enabled?: boolean;
 };
 
 export function useQueryEntities({
@@ -210,28 +152,6 @@ export function useQueryEntities({
 }: QueryEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
-
-  /**
-   * What would a reactive approach to queried entities look like?
-   * Currently we listen to the event stream and execute some heuristics
-   * to see if we should update the existing state.
-   *
-   * There's a few approaches we could take
-   * 1. Keep the heuristics, but instead of setting state, just update
-   *    the cache by invalidating it. (how we used to do it)
-   * 2. Keep the heuristics, but instead of settubg state, just set
-   *    the cache state directly. (how we currently do it)
-   * 3. Introduce some other reactive system that automatically updates
-   *    when its dependencies are updated. This would require that its
-   *    dependencies are themselves reactive. The filter could also be
-   *    reactive, so when the filter changes it causes the reactive result
-   *    to also update.
-   *
-   * Benefits of moving to the cache-based system is that we get "view sharing."
-   * Different callers get the same data back as long as the parameters are
-   * the same. Q: But what happens if one of them mutates? We might end up
-   * with multiple cache updates simultaneously.
-   */
 
   /**
    * This query runs behind the scenes to sync any remote entities that match
@@ -249,236 +169,38 @@ export function useQueryEntities({
    * To prevent flicker when adding new items to collections, callers should explicitly
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const {
-    isFetched,
-    isLoading,
-    data: localEntities,
-  } = useQuery({
+  const { isFetched, isLoading } = useQuery({
     enabled,
     placeholderData,
     queryKey: GeoStore.queryKeys(where, first, skip),
     queryFn: async () => {
       const entities = await E.findMany({ store, cache, where, first, skip });
-
-      /**
-       * @TODO
-       * Do we need to actually sync the results since we're returning it?
-       * One benefit of syncing is that all of the entities end up in the
-       * store, so any components subscribed to the store can hook into
-       * the new synced data as needed.
-       */
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities });
       return entities;
     },
   });
 
-  useEffect(() => {
-    if (!enabled) return;
-
-    const localEntitiesList = localEntities ?? [];
-
-    const onEntitySyncedSub = stream.on(GeoEventStream.ENTITIES_SYNCED, event => {
-      let shouldUpdate = false;
-      const syncedEntitiesIds = event.entities.map(e => e.id);
-
-      const latestQueriedEntities = new EntityQuery(store)
-        .where(where)
-        .limit(first)
-        .offset(skip)
-        .sortBy({ field: 'updatedAt', direction: 'desc' })
-        .execute();
-      const latestQueriedEntitiesIds = latestQueriedEntities.map(e => e.id);
-
-      /**
-       * If we end up with a filter that doesn't return any data then none of
-       * the below "validation" checks will ever pass. So we check here if we
-       * end up with an empty query result.
-       */
-      if (syncedEntitiesIds.length === 0 && latestQueriedEntitiesIds.length === 0) {
-        cache.setQueryData(GeoStore.queryKeys(where, first, skip), []);
-        return;
+  const results = useSelector(
+    reactive,
+    () => {
+      if (!enabled) {
+        return [];
       }
 
-      /**
-       * We only want to re-render consumers if the synced entities are relevant
-       * to the query. This can happen in a few ways
-       *
-       * 1. The synced entity is included in the latest query result
-       * 2. The sync entity was included in the _previous_ query result but not
-       *    the new query result. (it was removed from the result list)
-       * 3. The synced entity is one of the relations of an entity in the query
-       *    result
-       */
-      if (syncedEntitiesIds.some(entityId => latestQueriedEntitiesIds.includes(entityId))) {
-        shouldUpdate = true;
-      }
-
-      /**
-       * This means the queried list has changed as a result of the deleted relation.
-       *
-       * This usually won't trigger since the triple/relation handlers likely already
-       * updated local state. This happens because triple/relation events are optimistic
-       * so run before syncing completes.
-       */
-      const previousListHasEntity = localEntitiesList.some(e => syncedEntitiesIds.includes(e.id));
-      const newListDoesNotHaveEntity = !latestQueriedEntities.some(e => syncedEntitiesIds.includes(e.id));
-
-      if (previousListHasEntity && newListDoesNotHaveEntity) {
-        shouldUpdate = true;
-      }
-
-      /**
-       * If any relations of the subscribed entities changes we need to re-pull
-       * the entity to get the latest state of its relations. e.g., if Byron has
-       * Works at -> Geo and we change Geo to Geo, PBC., we need to re-pull Byron
-       * to get the latest name for Geo, PBC.
-       */
-      const maybeRelationChanged = latestQueriedEntities.some(e =>
-        e.relations.some(r => syncedEntitiesIds.includes(r.toEntity.id))
-      );
-
-      if (maybeRelationChanged) {
-        shouldUpdate = true;
-      }
-
-      if (shouldUpdate) {
-        cache.setQueryData(GeoStore.queryKeys(where, first, skip), latestQueriedEntities);
-      }
-    });
-
-    const onRelationCreatedSub = stream.on(GeoEventStream.RELATION_CREATED, event => {
-      const entities = new EntityQuery(store)
-        .where(where)
-        .limit(first)
-        .offset(skip)
-        .sortBy({ field: 'updatedAt', direction: 'desc' })
-        .execute();
-      const ids: string[] = entities.map(e => e.id);
-
-      if (ids.includes(event.relation.fromEntity.id)) {
-        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
-      }
-    });
-
-    const onRelationDeletedSub = stream.on(GeoEventStream.RELATION_DELETED, event => {
-      const entities = new EntityQuery(store)
+      const result = new EntityQuery(store.getEntities())
         .where(where)
         .limit(first)
         .offset(skip)
         .sortBy({ field: 'updatedAt', direction: 'desc' })
         .execute();
 
-      const previousListHasFromEntity = localEntitiesList.some(e => e.id === event.relation.fromEntity.id);
-      const newListDoesNotHaveFromEntity = !entities.some(e => e.id === event.relation.fromEntity.id);
-
-      // This means the queried list has changed as a result of the deleted relation
-      if (previousListHasFromEntity && newListDoesNotHaveFromEntity) {
-        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
-      }
-    });
-
-    const onTripleCreatedSub = stream.on(GeoEventStream.VALUES_CREATED, event => {
-      let shouldUpdate = false;
-
-      const entities = new EntityQuery(store)
-        .where(where)
-        .limit(first)
-        .offset(skip)
-        .sortBy({ field: 'updatedAt', direction: 'desc' })
-        .execute();
-      const ids: string[] = entities.map(e => e.id);
-
-      if (ids.includes(event.value.entity.id)) {
-        shouldUpdate = true;
-      }
-
-      /**
-       * If the changed triple is for one of the relations of the subscribed entities
-       * changed we need to re-pull the entity to get the latest state of its relation.
-       *
-       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
-       * re-pull Byron to get the latest name for Geo, PBC.
-       */
-      const maybeRelationToChanged = entities.some(e => e.relations.some(r => r.toEntity.id === event.value.entity.id));
-
-      if (maybeRelationToChanged) {
-        shouldUpdate = true;
-      }
-
-      const maybeRelationEntityChanged = entities.some(e => e.relations.some(r => r.id === event.value.entity.id));
-
-      if (maybeRelationEntityChanged) {
-        shouldUpdate = true;
-      }
-
-      if (shouldUpdate) {
-        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
-      }
-    });
-
-    const onTripleDeletedSub = stream.on(GeoEventStream.VALUES_DELETED, event => {
-      // @TODO: We don't handle deletes correctly. If you delete something it may
-      // cause the queried entities to change. How do we detect if we should update
-      // the state based on whether the delete results in filter changes? We only
-      // want to reset state if the change is relevant for the query.
-      //
-      // For now we just refetch and rerender every hook if _any_ deletes happen
-      // in the app
-
-      // If a triple is deleted and alters the result of this query then the triple's
-      // entity won't show up in the query results.
-      let shouldUpdate = false;
-      const entities = new EntityQuery(store)
-        .where(where)
-        .limit(first)
-        .offset(skip)
-        .sortBy({ field: 'updatedAt', direction: 'desc' })
-        .execute();
-
-      const previousListHasChangedEntity = localEntitiesList.some(e => e.id === event.value.entity.id);
-      const newListDoesNotHaveChangedEntity = !entities.some(e => e.id === event.value.entity.id);
-
-      // This means the queried list has changed as a result of the deleted relation
-      if (previousListHasChangedEntity && newListDoesNotHaveChangedEntity) {
-        shouldUpdate = true;
-      }
-
-      /**
-       * If the changed triple is for one of the relations of the subscribed entities
-       * changed we need to re-pull the entity to get the latest state of its relation.
-       *
-       * e.g., if Byron has Works at -> Geo and we change Geo to Geo, PBC., we need to
-       * re-pull Byron to get the latest name for Geo, PBC.
-       */
-
-      const maybeRelationChanged = entities.some(e => e.relations.some(r => r.toEntity.id === event.value.entity.id));
-
-      if (maybeRelationChanged) {
-        shouldUpdate = true;
-      }
-
-      const maybeRelationEntityChanged = entities.some(e => e.relations.some(r => r.id === event.value.entity.id));
-
-      if (maybeRelationEntityChanged) {
-        shouldUpdate = true;
-      }
-
-      if (shouldUpdate) {
-        cache.setQueryData(GeoStore.queryKeys(where, first, skip), entities);
-      }
-    });
-
-    return () => {
-      onEntitySyncedSub();
-      onRelationCreatedSub();
-      onRelationDeletedSub();
-      onTripleCreatedSub();
-      onTripleDeletedSub();
-    };
-  }, [where, stream, store, localEntities, enabled, first, skip, cache]);
+      return result;
+    },
+    equal
+  );
 
   return {
-    entities: localEntities ?? [],
+    entities: results,
     isLoading: !isFetched && enabled && isLoading,
   };
 }
@@ -546,4 +268,81 @@ export function useQueryEntityAsync() {
   const { store } = useSyncEngine();
 
   return (id: string) => E.findOne({ store, cache, id });
+}
+
+type UseValuesParams = {
+  selector?: (v: Value) => boolean;
+  includeDeleted?: boolean;
+};
+
+export function useValues(options: UseValuesParams & { mergeWith?: Value[] } = {}) {
+  const { selector, includeDeleted = false } = options;
+
+  const values = useSelector(
+    reactiveValues,
+    state => {
+      return selector
+        ? state.filter(v => selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false))
+        : state;
+    },
+    equal
+  );
+
+  return values;
+}
+
+export function getValues(options: UseValuesParams & { mergeWith?: Value[] } = {}) {
+  const { selector, includeDeleted = false, mergeWith = [] } = options;
+
+  if (mergeWith.length === 0) {
+    return reactiveValues
+      .get()
+      .filter(v => (selector ? selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false) : true));
+  }
+
+  return Values.merge(reactiveValues.get(), mergeWith).filter(v =>
+    selector ? selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false) : true
+  );
+}
+
+type UseRelationsParams = {
+  selector?: (r: Relation) => boolean;
+  includeDeleted?: boolean;
+  mergeWith?: Relation[];
+};
+
+export function useRelations(options: UseRelationsParams = {}) {
+  const { selector, includeDeleted = false, mergeWith = [] } = options;
+
+  const values = useSelector(
+    reactiveRelations,
+    relations => {
+      if (mergeWith.length === 0) {
+        return relations.filter(r =>
+          selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
+        );
+      }
+
+      return mergeRelations(relations, mergeWith).filter(r =>
+        selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
+      );
+    },
+    equal
+  );
+
+  return values;
+}
+
+export function getRelations(options: UseRelationsParams = {}) {
+  const { selector, includeDeleted = false, mergeWith = [] } = options;
+
+  if (mergeWith.length === 0) {
+    return reactiveRelations
+      .get()
+      .filter(r => (selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true));
+  }
+
+  return mergeRelations(reactiveRelations.get(), mergeWith).filter(r =>
+    selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
+  );
 }

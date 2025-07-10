@@ -1,6 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { useRelations } from '~/core/database/relations';
+import { useRelations } from '~/core/sync/use-store';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
 export type RelationWithBlock = Relation & {
@@ -16,7 +16,7 @@ export type RelationWithBlock = Relation & {
 
 export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
   const blocks = useRelations({
-    mergeWith: initialBlockRelations,
+    mergeWith: initialBlockRelations ?? [],
     selector: r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS,
   });
 

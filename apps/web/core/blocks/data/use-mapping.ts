@@ -1,10 +1,8 @@
 import { GraphUri, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
-import { getRelations } from '~/core/database/relations';
-import { getValues } from '~/core/database/v2.values';
 import { EntityId } from '~/core/io/schema';
-import { useQueryEntitiesAsync } from '~/core/sync/use-store';
+import { getRelations, getValues, useQueryEntitiesAsync } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { Cell, Entity, Property, RenderableProperty, Row } from '~/core/v2.types';

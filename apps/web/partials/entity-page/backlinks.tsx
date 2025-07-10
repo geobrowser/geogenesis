@@ -77,8 +77,9 @@ const Backlink = ({ backlink }: BacklinkProps) => {
           </span>
           <ChevronRight />
           <span className="inline-flex items-center gap-1.5">
-            {space.entity.types.map(t => (
-              <Tag key={t.id}>{t.name}</Tag>
+            {space.entity.types.map((t, index) => (
+              // An entity may have the same type multiple times, so we use the index to differentiate them
+              <Tag key={`backlink-${t.id}=${index}`}>{t.name}</Tag>
             ))}
           </span>
         </span>
