@@ -59,27 +59,27 @@ export class GeoStore {
   }
 
   private syncEntities(entities: Entity[]) {
-    for (const entity of entities) {
-      syncedEntities.set(entity.id, entity);
-      reactiveValues.set(prev => {
-        const valueIdsToWrite = new Set(entity.values.map(t => t.id));
+    const newValues = entities.flatMap(e => e.values);
+    const newRelations = entities.flatMap(e => e.relations);
 
-        const unchangedValues = prev.filter(t => {
-          return !valueIdsToWrite.has(t.id);
-        });
+    const valueIdsToWrite = new Set(newValues.map(t => t.id));
+    const relationIdsToWrite = new Set(newRelations.map(t => t.id));
 
-        return [...unchangedValues, ...entity.values];
+    reactiveValues.set(prev => {
+      const unchangedValues = prev.filter(t => {
+        return !valueIdsToWrite.has(t.id);
       });
-      reactiveRelations.set(prev => {
-        const relationIdsToWrite = new Set(entity.relations.map(t => t.id));
 
-        const unchangedRelations = prev.filter(t => {
-          return !relationIdsToWrite.has(t.id);
-        });
+      return [...unchangedValues, ...newValues];
+    });
 
-        return [...unchangedRelations, ...entity.relations];
+    reactiveRelations.set(prev => {
+      const unchangedRelations = prev.filter(t => {
+        return !relationIdsToWrite.has(t.id);
       });
-    }
+
+      return [...unchangedRelations, ...newRelations];
+    });
 
     if (process.env.NODE_ENV === 'development') {
       console.log(`
