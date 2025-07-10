@@ -308,17 +308,24 @@ export function getValues(options: UseValuesParams & { mergeWith?: Value[] } = {
 type UseRelationsParams = {
   selector?: (r: Relation) => boolean;
   includeDeleted?: boolean;
+  mergeWith?: Relation[];
 };
 
 export function useRelations(options: UseRelationsParams = {}) {
-  const { selector, includeDeleted = false } = options;
+  const { selector, includeDeleted = false, mergeWith = [] } = options;
 
   const values = useSelector(
     reactiveRelations,
-    state => {
-      return selector
-        ? state.filter(v => selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false))
-        : state;
+    relations => {
+      if (mergeWith.length === 0) {
+        return relations.filter(r =>
+          selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
+        );
+      }
+
+      return mergeRelations(relations, mergeWith).filter(r =>
+        selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
+      );
     },
     equal
   );
@@ -326,7 +333,7 @@ export function useRelations(options: UseRelationsParams = {}) {
   return values;
 }
 
-export function getRelations(options: UseRelationsParams & { mergeWith?: Relation[] } = {}) {
+export function getRelations(options: UseRelationsParams = {}) {
   const { selector, includeDeleted = false, mergeWith = [] } = options;
 
   if (mergeWith.length === 0) {

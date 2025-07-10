@@ -55,7 +55,7 @@ export class E {
   }): Entity | null {
     const remoteEntity = mergeWith;
 
-    const localEntity = store.getEntity(id, { includeDeleted: true });
+    const localEntity = store.getEntity(id, { includeDeleted: true, spaceId });
 
     if (!localEntity && !remoteEntity) {
       return null;
