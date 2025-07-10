@@ -4,7 +4,7 @@ import { createAtom } from '@xstate/store';
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { readTypes } from '../database/entities';
 import { Entities } from '../utils/entity';
-import { DataType, Entity, ExtraRenderableType, Property, Relation, Value } from '../v2.types';
+import { DataType, Entity, RawRenderableType, Property, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
@@ -259,7 +259,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
      * @TODO
      * Move to higher-order file
      */
-    const mapping: Record<string, ExtraRenderableType> = {
+    const mapping: Record<string, RawRenderableType> = {
       [SystemIds.URL]: 'URL',
       [SystemIds.IMAGE]: 'IMAGE',
     };

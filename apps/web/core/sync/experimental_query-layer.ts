@@ -53,7 +53,14 @@ export type ValueCondition = {
 
 export type RelationCondition = {
   typeOf?: { id?: StringCondition; name?: StringCondition };
+  fromEntity?: { id?: StringCondition; name?: StringCondition };
   toEntity?: { id?: StringCondition; name?: StringCondition };
+  space?: StringCondition;
+};
+
+export type BacklinkCondition = {
+  typeOf?: { id?: StringCondition; name?: StringCondition };
+  fromEntity?: { id?: StringCondition; name?: StringCondition };
   space?: StringCondition;
 };
 
@@ -66,6 +73,7 @@ export type WhereCondition = {
   space?: { id?: StringCondition };
   values?: ValueCondition[];
   relations?: RelationCondition[];
+  backlinks?: BacklinkCondition[];
   OR?: WhereCondition[];
   AND?: WhereCondition[];
   NOT?: WhereCondition;

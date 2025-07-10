@@ -28,6 +28,7 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   CHECKBOX: CheckboxChecked,
   NUMBER: Number,
   POINT: GeoLocation,
+  GEO_LOCATION: GeoLocation,
 };
 
 interface Props {
