@@ -10,7 +10,15 @@ const nextConfig = {
   // reactStrictMode: true,
   experimental: {
     reactCompiler: true,
-    optimizePackageImports: ['effect', 'viem', 'wagmi', '@graphprotocol/grc-20'],
+    optimizePackageImports: [
+      'effect',
+      'viem',
+      'wagmi',
+      '@graphprotocol/grc-20',
+      'mapbox-gl',
+      '@tiptap/core',
+      '@tiptap/react',
+    ],
   },
   devIndicators: {
     appIsrStatus: false,
