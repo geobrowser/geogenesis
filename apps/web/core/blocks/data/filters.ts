@@ -53,9 +53,21 @@ const FilterString = Schema.Struct({
   filter: Schema.optional(
     Schema.Record({
       key: Schema.String,
-      value: Schema.Struct({
-        is: Schema.String,
-      }),
+      value: Schema.Union(
+        // Property filter
+        Schema.Struct({
+          is: Schema.String,
+        }),
+        // Entity filter
+        Schema.Struct({
+          fromEntity: Schema.Struct({
+            is: Schema.String,
+          }),
+          type: Schema.Struct({
+            is: Schema.String,
+          }),
+        })
+      ),
     })
   ),
 });
@@ -130,12 +142,6 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
   });
 }
 
-type FilterObject = {
-  [key: string]: {
-    is: string;
-  };
-};
-
 export async function fromGeoFilterString(filterString: string | null): Promise<Filter[]> {
   if (!filterString) {
     return [];
@@ -151,12 +157,31 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
       return null;
     },
     onRight: value => {
+      let entity = undefined;
+      const filters: Array<{ property: string; is: string }> = [];
+
+      if (value.filter) {
+        Object.entries(value.filter).forEach(([key, filterValue]) => {
+          // Entity filter
+          if (key === '_relation' && 'fromEntity' in filterValue && 'type' in filterValue) {
+            entity = {
+              fromEntity: filterValue.fromEntity.is,
+              typeOf: filterValue.type.is,
+            };
+            // Property filter
+          } else if ('is' in filterValue) {
+            filters.push({
+              property: key,
+              is: filterValue.is,
+            });
+          }
+        });
+      }
+
       return {
         spaces: value.spaceId?.in ?? [],
-        filters: Object.entries((where?.filter ?? {}) as FilterObject).map(([key, value]) => ({
-          property: key,
-          is: value.is,
-        })),
+        filters,
+        entity: entity as { fromEntity: string; typeOf: string } | undefined,
       };
     },
   });
@@ -184,8 +209,9 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
       )
     : [];
 
-  // const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SystemIds.RELATION_FROM_PROPERTY);
-  // const unresolvedEntityFilter = maybeFromFilter ? getResolvedEntity(maybeFromFilter.is) : null;
+  const unresolvedEntityFilter = filtersFromString.entity
+    ? getResolvedEntityFilter(filtersFromString.entity.fromEntity, filtersFromString.entity.typeOf)
+    : null;
 
   const unresolvedAttributeFilters = Promise.all(
     filtersFromString.filters.map(async filter => {
@@ -193,19 +219,19 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
     })
   );
 
-  const [
-    spaceFilters,
-    attributeFilters,
-    // entityFilter
-  ] = await Promise.all([
+  const [spaceFilters, attributeFilters, entityFilter] = await Promise.all([
     unresolvedSpaceFilters,
     unresolvedAttributeFilters,
-    // unresolvedEntityFilter,
+    unresolvedEntityFilter,
   ]);
 
   filters.push(...spaceFilters);
+
   filters.push(...attributeFilters);
-  // if (entityFilter) filters.push(entityFilter);
+
+  if (entityFilter) {
+    filters.push(entityFilter);
+  }
 
   return filters;
 }
@@ -215,25 +241,18 @@ async function getSpaceName(spaceId: string) {
   return space?.entity.name ?? null;
 }
 
-async function getResolvedEntity(entityId: string): Promise<Filter> {
-  const entity = await E.findOne({ store, cache: queryClient, id: entityId });
-
-  if (!entity) {
-    return {
-      columnId: SystemIds.RELATION_FROM_PROPERTY,
-      columnName: 'From',
-      valueType: 'RELATION',
-      value: entityId,
-      valueName: null,
-    };
-  }
+async function getResolvedEntityFilter(entityId: string, typeId: string): Promise<Filter> {
+  const [fromEntity] = await Promise.all([
+    E.findOne({ store, cache: queryClient, id: entityId }),
+    E.findOne({ store, cache: queryClient, id: typeId }),
+  ]);
 
   return {
-    columnId: SystemIds.RELATION_FROM_PROPERTY,
-    columnName: 'From',
+    columnId: typeId,
+    columnName: 'Backlink',
     valueType: 'RELATION',
     value: entityId,
-    valueName: entity.name,
+    valueName: fromEntity?.name ?? null,
   };
 }
 

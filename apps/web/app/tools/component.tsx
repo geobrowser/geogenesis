@@ -302,11 +302,12 @@ const ConvertFilter = () => {
     event.preventDefault();
 
     const newFilterState = await fromGeoFilterString(filterString.trim());
-    const newWhere = filterStateToWhere(newFilterState);
-    const newEntityFilter = convertWhereConditionToEntityFilter(newWhere);
-
     setFilterState(newFilterState);
+
+    const newWhere = filterStateToWhere(newFilterState);
     setWhere(newWhere);
+
+    const newEntityFilter = convertWhereConditionToEntityFilter(newWhere);
     setEntityFilter(newEntityFilter);
   };
 

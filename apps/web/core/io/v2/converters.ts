@@ -11,7 +11,7 @@ import {
   ValueFilter,
 } from '~/core/gql/graphql';
 import {
-  // BooleanCondition,
+  BacklinkCondition,
   NumberCondition,
   RelationCondition,
   StringCondition,
@@ -179,6 +179,39 @@ function convertRelationConditionToRelationFilter(condition: RelationCondition):
 }
 
 /**
+ * Convert backlink conditions to relation filter format
+ */
+function convertBacklinkConditionToRelationFilter(condition: BacklinkCondition): RelationFilter {
+  const filter: RelationFilter = {};
+
+  if (condition.fromEntity?.id) {
+    filter.fromEntityId = convertStringConditionToUuidFilter(condition.fromEntity.id);
+  }
+
+  if (condition.fromEntity?.name) {
+    filter.fromEntity = {
+      name: convertStringConditionToStringFilter(condition.fromEntity.name),
+    } as EntityFilter;
+  }
+
+  if (condition.typeOf?.id) {
+    filter.typeId = convertStringConditionToUuidFilter(condition.typeOf.id);
+  }
+
+  if (condition.typeOf?.name) {
+    filter.type = {
+      name: convertStringConditionToStringFilter(condition.typeOf.name),
+    } as PropertyFilter;
+  }
+
+  if (condition.space) {
+    filter.spaceId = convertStringConditionToUuidFilter(condition.space);
+  }
+
+  return filter;
+}
+
+/**
  * Main function to convert WhereCondition to EntityFilter
  */
 export function convertWhereConditionToEntityFilter(where: WhereCondition): EntityFilter {
@@ -283,6 +316,25 @@ export function convertWhereConditionToEntityFilter(where: WhereCondition): Enti
       relationFilters.forEach(rf => {
         filter.and!.push({
           relations: { some: rf },
+        } as EntityFilter);
+      });
+    }
+  }
+
+  // Handle backlinks
+  if (where.backlinks && where.backlinks.length > 0) {
+    const backlinkFilters = where.backlinks.map(b => convertBacklinkConditionToRelationFilter(b));
+
+    if (backlinkFilters.length === 1) {
+      filter.backlinks = {
+        some: backlinkFilters[0],
+      } as EntityToManyRelationFilter;
+    } else {
+      // Multiple backlink conditions should be ANDed together
+      filter.and = filter.and || [];
+      backlinkFilters.forEach(bf => {
+        filter.and!.push({
+          backlinks: { some: bf },
         } as EntityFilter);
       });
     }
