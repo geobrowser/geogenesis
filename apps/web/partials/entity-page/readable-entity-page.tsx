@@ -2,8 +2,6 @@ import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
-
-import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
