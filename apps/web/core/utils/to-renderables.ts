@@ -1,6 +1,4 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-
-import { GEO_LOCATION } from '../constants';
 import {
   DataType,
   FlattenedRenderType,
@@ -13,6 +11,7 @@ import {
   Value,
   ValueRenderableProperty,
 } from '../v2.types';
+import { GEO_LOCATION } from '../constants';
 
 interface ToRenderablesArgs {
   entityId: string;
@@ -28,10 +27,7 @@ interface ToRenderablesArgs {
  * Flattens the type hierarchy into a single render type.
  * This eliminates the need for nested type checking in components.
  */
-function getFlattenedType(property: {
-  dataType: DataType;
-  renderableType?: RawRenderableType | null;
-}): FlattenedRenderType {
+function getFlattenedType(property: { dataType: DataType; renderableType?: RawRenderableType | null }): FlattenedRenderType {
   if (property.renderableType) {
     switch (property.renderableType) {
       case SystemIds.IMAGE:
@@ -44,7 +40,7 @@ function getFlattenedType(property: {
         return 'RELATION';
     }
   }
-
+  
   // Fall back to dataType for all other cases
   return property.dataType;
 }
@@ -82,7 +78,7 @@ export function toRenderables({
     .filter(renderable => !attributesWithAValue.has(renderable.id) && !placeholders.has(renderable.id))
     .map((s): ValueRenderableProperty | RelationRenderableProperty => {
       const flattenedType = getFlattenedType(s);
-
+      
       // Handle relation types
       if (flattenedType === 'RELATION') {
         return {
@@ -99,7 +95,7 @@ export function toRenderables({
           placeholder: true,
         };
       }
-
+      
       if (flattenedType === 'IMAGE') {
         return {
           type: 'IMAGE',
@@ -115,7 +111,7 @@ export function toRenderables({
           placeholder: true,
         };
       }
-
+      
       // Handle value types (including flattened ones like URL, GEO_LOCATION)
       return {
         type: flattenedType as NativeRenderableProperty['type'],
@@ -151,7 +147,7 @@ export function toRenderables({
     .filter(r => r.renderableType !== SystemIds.DATA_BLOCK && r.renderableType !== SystemIds.TEXT_BLOCK)
     .map((r): RelationRenderableProperty => {
       const flattenedType = getFlattenedRelationType(r.renderableType);
-
+      
       return {
         type: flattenedType,
         relationEntityId: r.entityId,

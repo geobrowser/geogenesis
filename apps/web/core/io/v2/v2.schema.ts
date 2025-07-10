@@ -14,7 +14,9 @@ export const Property = Schema.Struct({
   id: Schema.UUID,
   name: Schema.NullOr(Schema.String),
   dataType: DataType,
-  renderableType: Schema.NullOr(Schema.UUID),
+  renderableType: Schema.NullOr(
+    Schema.UUID,
+  ),
   relationValueTypes: Schema.Array(
     Schema.Struct({
       id: Schema.String,
@@ -72,7 +74,9 @@ export const Relation = Schema.Struct({
   type: Schema.Struct({
     id: Schema.UUID,
     name: Schema.NullOr(Schema.String),
-    renderableType: Schema.NullOr(Schema.UUID),
+    renderableType: Schema.NullOr(
+      Schema.UUID
+    ),
   }),
   entityId: Schema.UUID,
 });
