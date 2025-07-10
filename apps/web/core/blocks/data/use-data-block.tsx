@@ -280,22 +280,41 @@ export function filterStateToWhere(filterState: Filter[]): WhereCondition {
         continue;
       }
 
-      if (!where.relations) {
-        where.relations = [];
-      }
+      if (filter.columnName === 'Backlink') {
+        if (!where.backlinks) {
+          where.backlinks = [];
+        }
 
-      where['relations'].push({
-        typeOf: {
-          id: {
-            equals: filter.columnId,
+        where['backlinks'].push({
+          typeOf: {
+            id: {
+              equals: filter.columnId,
+            },
           },
-        },
-        toEntity: {
-          id: {
-            equals: filter.value,
+          fromEntity: {
+            id: {
+              equals: filter.value,
+            },
           },
-        },
-      });
+        });
+      } else {
+        if (!where.relations) {
+          where.relations = [];
+        }
+
+        where['relations'].push({
+          typeOf: {
+            id: {
+              equals: filter.columnId,
+            },
+          },
+          toEntity: {
+            id: {
+              equals: filter.value,
+            },
+          },
+        });
+      }
     }
   }
 
