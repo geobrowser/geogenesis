@@ -1,7 +1,7 @@
 import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
-import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
@@ -69,8 +69,7 @@ const ReadableNumberField = ({ value, unitId, propertyId }: { value: string; uni
   const { entity } = useQueryEntity({ id: unitId });
   const { entity: propertyEntity } = useQueryEntity({ id: propertyId });
 
-  const FORMAT_PROPERTY_ID = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f'; // should replace with systemIds
-  const format = propertyEntity?.values.find(value => value.property.id === FORMAT_PROPERTY_ID)?.value;
+  const format = propertyEntity?.values.find(value => value.property.id === FORMAT_PROPERTY)?.value;
 
   const currencySign = React.useMemo(
     () => entity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,

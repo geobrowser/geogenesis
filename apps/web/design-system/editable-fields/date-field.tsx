@@ -6,6 +6,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
+import { FORMAT_PROPERTY } from '~/core/constants';
 
 import { useFieldWithValidation } from '~/core/hooks/use-field-with-validation';
 import { useFormWithValidation } from '~/core/hooks/use-form-with-validation';
@@ -650,8 +651,7 @@ export function DateField({ value, isEditing, variant, onBlur, className = '', p
 
   const { entity } = useQueryEntity({ id: propertyId });
 
-  const FORMAT_PROPERTY_ID = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f'; // should replace with systemIds
-  const format = entity?.values.find(value => value.property.id === FORMAT_PROPERTY_ID)?.value;
+  const format = entity?.values.find(value => value.property.id === FORMAT_PROPERTY)?.value;
 
   const [startDate, endDate] = React.useMemo(() => {
     if (isDateInterval && value) {
