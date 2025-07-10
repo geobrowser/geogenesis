@@ -8,14 +8,12 @@ import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useRelations } from '~/core/database/relations';
-import { useValues } from '~/core/database/v2.values';
-import { DB } from '~/core/database/write';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
 import { getSpaces } from '~/core/io/v2/queries';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Publish } from '~/core/utils/publish';
 import { getImagePath } from '~/core/utils/utils';
@@ -295,7 +293,6 @@ const ReviewChanges = () => {
               <div>
                 <SmallButton
                   onClick={() => {
-                    DB.deleteAll(activeSpace);
                     store.clear();
                   }}
                 >

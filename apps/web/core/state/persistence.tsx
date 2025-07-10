@@ -2,10 +2,6 @@
 
 import * as React from 'react';
 
-import { db } from '../database/indexeddb';
-import { localRelationsAtom, localValuesAtom } from '../database/write';
-import { store } from './jotai-store';
-
 export const Persistence = () => {
   React.useEffect(() => {
     // const unsubValues = store.sub(localValuesAtom, async () => {

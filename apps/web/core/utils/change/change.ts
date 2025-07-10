@@ -2,8 +2,6 @@ import { GraphUrl, Id, SystemIds } from '@graphprotocol/grc-20';
 import { Effect, Record } from 'effect';
 import equal from 'fast-deep-equal';
 
-import { getRelations } from '~/core/database/relations';
-import { getValues } from '~/core/database/v2.values';
 import { Proposal } from '~/core/io/dto/proposals';
 import { fetchParentEntityId } from '~/core/io/fetch-parent-entity-id';
 import { getBatchEntities } from '~/core/io/v2/queries';

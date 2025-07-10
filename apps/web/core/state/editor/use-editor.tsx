@@ -8,8 +8,8 @@ import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { getValues } from '~/core/database/v2.values';
 import { storage } from '~/core/sync/use-mutate';
+import { getValues } from '~/core/sync/use-store';
 import { getImageHash, getImagePath, validateEntityId } from '~/core/utils/utils';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 

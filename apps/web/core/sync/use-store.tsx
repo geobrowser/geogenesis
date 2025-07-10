@@ -5,9 +5,10 @@ import { Effect } from 'effect';
 import equal from 'fast-deep-equal';
 
 import { getProperties, getProperty } from '../io/v2/queries';
-import { Property } from '../v2.types';
+import { Values } from '../utils/value';
+import { Property, Relation, Value } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
-import { E } from './orm';
+import { E, mergeRelations } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues } from './store';
 import { GeoEventStream } from './stream';
 import { useSyncEngine } from './use-sync-engine';
@@ -267,4 +268,74 @@ export function useQueryEntityAsync() {
   const { store } = useSyncEngine();
 
   return (id: string) => E.findOne({ store, cache, id });
+}
+
+type UseValuesParams = {
+  selector?: (v: Value) => boolean;
+  includeDeleted?: boolean;
+};
+
+export function useValues(options: UseValuesParams & { mergeWith?: Value[] } = {}) {
+  const { selector, includeDeleted = false } = options;
+
+  const values = useSelector(
+    reactiveValues,
+    state => {
+      return selector
+        ? state.filter(v => selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false))
+        : state;
+    },
+    equal
+  );
+
+  return values;
+}
+
+export function getValues(options: UseValuesParams & { mergeWith?: Value[] } = {}) {
+  const { selector, includeDeleted = false, mergeWith = [] } = options;
+
+  if (mergeWith.length === 0) {
+    return reactiveValues
+      .get()
+      .filter(v => (selector ? selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false) : true));
+  }
+
+  return Values.merge(reactiveValues.get(), mergeWith).filter(v =>
+    selector ? selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false) : true
+  );
+}
+
+type UseRelationsParams = {
+  selector?: (r: Relation) => boolean;
+  includeDeleted?: boolean;
+};
+
+export function useRelations(options: UseRelationsParams = {}) {
+  const { selector, includeDeleted = false } = options;
+
+  const values = useSelector(
+    reactiveRelations,
+    state => {
+      return selector
+        ? state.filter(v => selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false))
+        : state;
+    },
+    equal
+  );
+
+  return values;
+}
+
+export function getRelations(options: UseRelationsParams & { mergeWith?: Relation[] } = {}) {
+  const { selector, includeDeleted = false, mergeWith = [] } = options;
+
+  if (mergeWith.length === 0) {
+    return reactiveRelations
+      .get()
+      .filter(r => (selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true));
+  }
+
+  return mergeRelations(reactiveRelations.get(), mergeWith).filter(r =>
+    selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
+  );
 }
