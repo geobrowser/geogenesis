@@ -1,9 +1,10 @@
 import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
+import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { useQueryEntity, useQueryProperty } from '~/core/sync/use-store';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
 import { RelationRenderableProperty, RenderableProperty, Value, ValueRenderableProperty } from '~/core/v2.types';
 
@@ -11,6 +12,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
@@ -36,6 +38,7 @@ export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId
           SystemIds.NAME_PROPERTY,
           SystemIds.COVER_PROPERTY,
           ContentIds.AVATAR_PROPERTY,
+          RENDERABLE_TYPE_PROPERTY,
         ].includes(attributeId as Id.Id)
       ) {
         count++;
@@ -75,6 +78,11 @@ const ReadableNumberField = ({ value, format, unitId }: { value: string; format?
 };
 
 function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRenderableProperty[] }) {
+  const spaceId = values[0].spaceId;
+  const attributeId = values[0].propertyId;
+  const propertyId = values[0].propertyId;
+  const propertyName = values[0].propertyName;
+
   return (
     <>
       {values.map((t, index) => {
@@ -84,41 +92,50 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
         }
         return (
           <div key={`${entityId}-${t.propertyId}-${index}`} className="break-words">
-            <Text as="p" variant="bodySemibold">
-              {values[0].propertyName || t.propertyId}
-            </Text>
+            <Link href={NavUtils.toEntity(spaceId, attributeId)}>
+              <Text as="p" variant="bodySemibold">
+                {propertyName || propertyId}
+              </Text>
+            </Link>
             <div className="flex flex-wrap gap-2">
               {values.map(renderable => {
                 switch (renderable.type) {
-                  case 'TEXT': {
+                  case 'URL':
+                    return (
+                      <WebUrlField
+                        key={`uri-${renderable.propertyId}-${renderable.value}`}
+                        isEditing={false}
+                        spaceId={renderable.spaceId}
+                        value={renderable.value}
+                      />
+                    );
+                  case 'TEXT':
                     return (
                       <Text key={`string-${renderable.propertyId}-${renderable.value}`} as="p">
                         {renderable.value}
                       </Text>
                     );
+                  case 'GEO_LOCATION': {
+                    // Parse the coordinates using the GeoPoint utility
+                    const coordinates = GeoPoint.parseCoordinates(renderable.value);
+                    return (
+                      <div
+                        key={`string-${renderable.propertyId}-${renderable.value}`}
+                        className="flex w-full flex-col gap-2"
+                      >
+                        <Text as="p">({renderable.value})</Text>
+                        <Map latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
+                      </div>
+                    );
                   }
                   case 'POINT': {
-                    if (renderable.propertyId === SystemIds.GEO_LOCATION_PROPERTY) {
-                      // Parse the coordinates using the GeoPoint utility
-                      const coordinates = GeoPoint.parseCoordinates(renderable.value);
-                      return (
-                        <div
-                          key={`string-${renderable.propertyId}-${renderable.value}`}
-                          className="flex w-full flex-col gap-2"
-                        >
-                          <Text as="p">({renderable.value})</Text>
-                          <Map latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
-                        </div>
-                      );
-                    } else {
-                      return (
-                        <div className="flex w-full flex-col gap-2">
-                          <Text key={`string-${renderable.propertyId}-${renderable.value}`} as="p">
-                            ({renderable.value})
-                          </Text>
-                        </div>
-                      );
-                    }
+                    return (
+                      <div className="flex w-full flex-col gap-2">
+                        <Text key={`string-${renderable.propertyId}-${renderable.value}`} as="p">
+                          ({renderable.value})
+                        </Text>
+                      </div>
+                    );
                   }
                   case 'NUMBER':
                     return (
@@ -145,16 +162,6 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
                       />
                     );
                   }
-                  // case 'URL': {
-                  //   return (
-                  //     <WebUrlField
-                  //       key={`uri-${renderable.propertyId}-${renderable.value}`}
-                  //       isEditing={false}
-                  //       spaceId={spaceId}
-                  //       value={renderable.value}
-                  //     />
-                  //   );
-                  // }
                 }
               })}
             </div>
@@ -176,7 +183,8 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
   if (
     attributeId === SystemIds.COVER_PROPERTY ||
     attributeId === ContentIds.AVATAR_PROPERTY ||
-    (attributeId === SystemIds.TYPES_PROPERTY && !isTypes)
+    (attributeId === SystemIds.TYPES_PROPERTY && !isTypes) ||
+    attributeId === RENDERABLE_TYPE_PROPERTY
   ) {
     return null;
   }

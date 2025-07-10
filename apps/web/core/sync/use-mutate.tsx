@@ -4,7 +4,7 @@ import produce, { Draft } from 'immer';
 import { remove, removeRelation, upsert, upsertRelation } from '../database/write';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
-import { NativeRenderableProperty, Relation, RelationRenderableProperty, Value } from '../v2.types';
+import { DataType, FlattenedRenderType, NativeRenderableProperty, Relation, RelationRenderableProperty, Value } from '../v2.types';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
@@ -236,6 +236,31 @@ export function useMutate() {
   };
 }
 
+/**
+ * Converts a flattened type back to its original dataType.
+ * This is the reverse of the flattening logic in to-renderables.ts
+ */
+function getOriginalDataType(flattenedType: FlattenedRenderType): DataType {
+  switch (flattenedType) {
+    case 'URL':
+    case 'GEO_LOCATION':
+      return 'TEXT';
+    case 'IMAGE':
+      return 'RELATION';
+    case 'RELATION':
+      return 'RELATION';
+    case 'TEXT':
+    case 'NUMBER':
+    case 'CHECKBOX':
+    case 'TIME':
+    case 'POINT':
+      return flattenedType;
+    default:
+      // This should never happen with proper typing, but provide a fallback
+      return 'TEXT';
+  }
+}
+
 function getValueFromRenderable(renderable: NativeRenderableProperty): Value {
   return {
     id: ID.createValueId({
@@ -251,8 +276,8 @@ function getValueFromRenderable(renderable: NativeRenderableProperty): Value {
     property: {
       id: renderable.propertyId,
       name: renderable.propertyName,
-      dataType: renderable.type,
-      renderableType: renderable.type,
+      dataType: getOriginalDataType(renderable.type),
+      renderableType: renderable.renderableType ?? null,
     },
     value: renderable.value,
     options: renderable.options,

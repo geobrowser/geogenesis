@@ -615,7 +615,7 @@ type EntityByAttributeMapMap = Record<string, TripleByAttributeMap>;
 function shouldFilterTriple(value: Value) {
   if (
     value.property.id === SystemIds.TYPES_PROPERTY &&
-    value.property.renderableType === 'URL' &&
+    value.property.renderableType === SystemIds.URL &&
     value.value === GraphUrl.fromEntityId(SystemIds.RELATION_TYPE)
   ) {
     return true;

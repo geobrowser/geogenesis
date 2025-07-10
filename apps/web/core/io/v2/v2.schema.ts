@@ -14,13 +14,15 @@ export const Property = Schema.Struct({
   id: Schema.UUID,
   name: Schema.NullOr(Schema.String),
   dataType: DataType,
+  renderableType: Schema.NullOr(
+    Schema.UUID,
+  ),
   relationValueTypes: Schema.Array(
     Schema.Struct({
       id: Schema.String,
       name: Schema.NullOr(Schema.String),
     })
   ),
-  renderableType: Schema.NullOr(Schema.String),
 });
 
 export type RemoteProperty = Schema.Schema.Type<typeof Property>;
@@ -73,26 +75,7 @@ export const Relation = Schema.Struct({
     id: Schema.UUID,
     name: Schema.NullOr(Schema.String),
     renderableType: Schema.NullOr(
-      Schema.transform(
-        Schema.Union(Schema.Literal(SystemIds.IMAGE), Schema.Literal(SystemIds.URL)),
-        Schema.Union(Schema.Literal('IMAGE'), Schema.Literal('URL')),
-        {
-          strict: true,
-          decode: id => {
-            switch (id) {
-              case SystemIds.IMAGE:
-                return 'IMAGE' as const;
-              case SystemIds.URL:
-                return 'URL' as const;
-              default:
-                throw new Error();
-            }
-          },
-          encode: () => {
-            throw new Error();
-          },
-        }
-      )
+      Schema.UUID
     ),
   }),
   entityId: Schema.UUID,
