@@ -9,13 +9,13 @@ const exporter = ServerEnvironment.telemetryToken
       url: 'https://api.axiom.co/v1/traces', // Axiom API endpoint for trace data
       headers: {
         Authorization: ServerEnvironment.telemetryToken,
-        'X-Axiom-Dataset': 'gaia.web',
+        'X-Axiom-Dataset': 'web',
       },
     })
   : undefined;
 
 // Set up tracing with the OpenTelemetry SDK
 export const Telemetry = NodeSdk.layer(() => ({
-  resource: { serviceName: 'gaia.api' },
+  resource: { serviceName: 'web' },
   spanProcessor: exporter ? new BatchSpanProcessor(exporter) : undefined,
 }));
