@@ -59,6 +59,16 @@ export class GeoStore {
   }
 
   private syncEntities(entities: Entity[]) {
+    /**
+     * We set the synced entities before we update values and relations
+     * so that the synced entities are immediately available as soon as
+     * any downstream reactive consumers update as a result of changes to
+     * reactiveValues or reactiveRelations.
+     */
+    for (const entity of entities) {
+      syncedEntities.set(entity.id, entity);
+    }
+
     const newValues = entities.flatMap(e => e.values);
     const newRelations = entities.flatMap(e => e.relations);
 
