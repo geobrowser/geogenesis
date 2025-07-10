@@ -7,14 +7,12 @@ import { ReactNode, createContext, useContext } from 'react';
 import { queryClient } from '../query-client';
 import { Relation, Value } from '../v2.types';
 import { SyncEngine } from './engine';
-import { EntityQuery } from './experimental_query-layer';
 import { GeoStore, reactiveRelations, reactiveValues } from './store';
 import { GeoEventStream } from './stream';
 
 const SyncEngineContext = createContext<{
   stream: GeoEventStream;
   store: GeoStore;
-  query: EntityQuery;
   hydrate: (entityIds?: string[]) => void;
   values: Atom<Value[]>;
   relations: Atom<Relation[]>;
@@ -30,7 +28,6 @@ export function useSyncEngine() {
 
 export const stream = new GeoEventStream();
 export const store = new GeoStore(stream);
-const query = new EntityQuery(store);
 export const engine = new SyncEngine(stream, queryClient, store);
 
 export function SyncEngineProvider({ children }: { children: ReactNode }) {
@@ -44,7 +41,7 @@ export function SyncEngineProvider({ children }: { children: ReactNode }) {
 
   return (
     <SyncEngineContext.Provider
-      value={{ store, stream, query, hydrate, values: reactiveValues, relations: reactiveRelations }}
+      value={{ store, stream, hydrate, values: reactiveValues, relations: reactiveRelations }}
     >
       {children}
     </SyncEngineContext.Provider>
