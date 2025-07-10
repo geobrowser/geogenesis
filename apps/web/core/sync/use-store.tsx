@@ -47,7 +47,7 @@ export function useQueryEntity({ id, spaceId, enabled = true, shouldHydrate = fa
   const { store, stream } = useSyncEngine();
 
   const { isFetched } = useQuery({
-    enabled: Boolean(id) && (enabled || shouldHydrate),
+    enabled: Boolean(id) && enabled,
     queryKey: GeoStore.queryKey(id),
     queryFn: async () => {
       // If the entity is in the store then it's already been synced and we can
