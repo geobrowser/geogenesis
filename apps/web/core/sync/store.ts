@@ -362,7 +362,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.RELATION_CREATED, newRelation });
+    this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation: newRelation });
   }
 
   /**
