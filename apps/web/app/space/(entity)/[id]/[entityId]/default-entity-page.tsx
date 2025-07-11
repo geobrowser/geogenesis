@@ -65,39 +65,39 @@ export default async function DefaultEntityPage({
         initialBlockRelations={props.blockRelations}
         initialTabs={props.tabs}
       >
-      {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
-      <EntityPageContentContainer>
-        <div className="space-y-2">
-          {showRelations && <EntityPageRelations relations={props.relationEntityRelations} spaceId={props.spaceId} />}
-          {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
-          {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
-        </div>
-        {tabs.length > 1 && (
-          <>
-            <Spacer height={40} />
-            <React.Suspense fallback={null}>
-              <TabGroup tabs={tabs} />
-            </React.Suspense>
-          </>
-        )}
-        {notice}
-        {(showSpacer || !!notice) && <Spacer height={40} />}
+        {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
+        <EntityPageContentContainer>
+          <div className="space-y-2">
+            {showRelations && <EntityPageRelations relations={props.relationEntityRelations} spaceId={props.spaceId} />}
+            {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
+            {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
+          </div>
+          {tabs.length > 1 && (
+            <>
+              <Spacer height={40} />
+              <React.Suspense fallback={null}>
+                <TabGroup tabs={tabs} />
+              </React.Suspense>
+            </>
+          )}
+          {notice}
+          {(showSpacer || !!notice) && <Spacer height={40} />}
 
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-        <ToggleEntityPage {...props} />
-        <AutomaticModeToggle />
-        <Spacer height={40} />
-        {/*
+          <ToggleEntityPage {...props} />
+          <AutomaticModeToggle />
+          <Spacer height={40} />
+          {/*
              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
              boundary. We don't want to show any referenced by loading states but do want to
              stream it in
           */}
-        <ErrorBoundary fallback={<EmptyErrorComponent />}>
-          <React.Suspense fallback={<div />}>
-            <BacklinksServerContainer entityId={params.entityId} />
-          </React.Suspense>
-        </ErrorBoundary>
-      </EntityPageContentContainer>
+          <ErrorBoundary fallback={<EmptyErrorComponent />}>
+            <React.Suspense fallback={<div />}>
+              <BacklinksServerContainer entityId={params.entityId} />
+            </React.Suspense>
+          </ErrorBoundary>
+        </EntityPageContentContainer>
       </EditorProvider>
     </EntityStoreProvider>
   );
@@ -190,7 +190,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     types: entity?.types ?? [],
 
     tabs,
-    tabEntities: [],
+    tabEntities,
 
     // For relation entity pages
     relationEntityRelations,
@@ -235,6 +235,11 @@ const buildTabsForEntityPage = (
   if (DYNAMIC_TABS.length > 0) {
     tabs.push(...DYNAMIC_TABS);
   }
+
+  tabs.push({
+    label: 'Activity',
+    href: `${NavUtils.toEntity(spaceId, entityId)}/activity`,
+  });
 
   return tabs;
 };
