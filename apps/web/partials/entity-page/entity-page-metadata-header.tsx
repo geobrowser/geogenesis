@@ -87,7 +87,7 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
 
   return (
     <div className="flex items-center gap-2 text-text">
-      {hasPropertyType && (
+      {hasPropertyType && editable && (
         <div className="flex items-center gap-2">
           {/* TODO: Provide the selected property type as the value prop */}
           <PropertyRenderableTypeDropdown value={undefined} />
