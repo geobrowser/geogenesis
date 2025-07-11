@@ -21,7 +21,6 @@ const nextConfig = {
     ],
   },
   devIndicators: {
-    appIsrStatus: false,
     buildActivity: false,
   },
   images: {
