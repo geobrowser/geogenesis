@@ -33,12 +33,12 @@ const numberFieldStyles = cva('', {
 export function NumberField({
   onChange,
   value,
+  format,
   unitId,
   placeholder = 'Add value...',
   isEditing = false,
   variant,
   className = '',
-  format,
 }: Props) {
   const [localValue, setLocalValue] = React.useState(value || '');
 

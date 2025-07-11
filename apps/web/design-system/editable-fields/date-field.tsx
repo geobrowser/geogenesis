@@ -1,6 +1,5 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
