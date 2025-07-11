@@ -45,15 +45,19 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
   const propertyDataType = React.useMemo(() => {
     if (!propertyData) return null;
 
+    // If there's a renderableType ID but the entity hasn't loaded yet, return null
+    // to prevent the loading flash
+    if (propertyData.renderableType && !renderableTypeEntity) {
+      return null;
+    }
+
     let renderableType = null;
-    if (propertyData.renderableType) {
-      if (renderableTypeEntity) {
-        // It's a UUID, use the entity data
-        renderableType = {
-          id: renderableTypeEntity.id,
-          name: renderableTypeEntity.name,
-        };
-      }
+    if (propertyData.renderableType && renderableTypeEntity) {
+      // It's a UUID, use the entity data
+      renderableType = {
+        id: renderableTypeEntity.id,
+        name: renderableTypeEntity.name,
+      };
     }
 
     return {
