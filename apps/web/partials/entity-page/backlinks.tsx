@@ -4,6 +4,7 @@ import Image from 'next/image';
 
 import { useState } from 'react';
 
+import { useEntity } from '~/core/database/entities';
 import { useSpace } from '~/core/hooks/use-space';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -54,8 +55,9 @@ type BacklinkProps = {
 
 const Backlink = ({ backlink }: BacklinkProps) => {
   const { space } = useSpace(backlink.spaceIds[0] ?? '');
+  const entity = useEntity({ id: backlink.id, spaceId: backlink.spaceIds[0] ?? '' });
 
-  if (!space) return;
+  if (!space || !entity) return;
 
   return (
     <div>
@@ -77,7 +79,7 @@ const Backlink = ({ backlink }: BacklinkProps) => {
           </span>
           <ChevronRight />
           <span className="inline-flex items-center gap-1.5">
-            {space.entity.types.map((t, index) => (
+            {entity.types.map((t, index) => (
               // An entity may have the same type multiple times, so we use the index to differentiate them
               <Tag key={`backlink-${t.id}=${index}`}>{t.name}</Tag>
             ))}
