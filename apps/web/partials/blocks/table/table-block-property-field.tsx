@@ -168,8 +168,7 @@ export function TableBlockPropertyField(props: {
                       key={renderable.propertyId}
                       isEditing={true}
                       value={renderable.value}
-                      // @TODO(migration): Fix format
-                      // format={renderable.options?.format}
+                      propertyId={renderable.propertyId}
                       onBlur={value => {
                         onChangeEntry(
                           {
@@ -295,7 +294,7 @@ export function TableBlockPropertyField(props: {
                     variant="tableProperty"
                     isEditing={false}
                     value={renderable.value}
-                    // format={renderable.options?.format}
+                    propertyId={renderable.propertyId}
                   />
                 </RenderedProperty>
               );

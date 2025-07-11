@@ -131,7 +131,7 @@ export const EntityTableCell = ({
               isEditing={false}
               key={renderable.value}
               value={renderable.value}
-              // format={renderable.options?.format}
+              propertyId={renderable.propertyId}
             />
           );
         }

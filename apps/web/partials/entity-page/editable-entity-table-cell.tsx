@@ -429,7 +429,7 @@ export function EditableEntityTableCell({
                 key={renderable.propertyId}
                 isEditing={true}
                 value={renderable.value}
-                // format={renderable.options?.format}
+                propertyId={renderable.propertyId}
                 onBlur={value => {
                   onChangeEntry(
                     {

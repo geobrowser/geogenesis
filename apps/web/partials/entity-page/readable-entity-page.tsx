@@ -2,7 +2,7 @@ import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
@@ -66,8 +66,11 @@ export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId
   );
 }
 
-const ReadableNumberField = ({ value, format, unitId }: { value: string; format?: string; unitId?: string }) => {
+const ReadableNumberField = ({ value, unitId, propertyId }: { value: string; unitId?: string; propertyId: string }) => {
   const { entity } = useQueryEntity({ id: unitId });
+  const { entity: propertyEntity } = useQueryEntity({ id: propertyId });
+
+  const format = propertyEntity?.values.find(value => value.property.id === FORMAT_PROPERTY)?.value;
 
   const currencySign = React.useMemo(
     () => entity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
@@ -146,8 +149,7 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
                       <ReadableNumberField
                         key={`number-${renderable.propertyId}-${renderable.value}`}
                         value={renderable.value}
-                        // @TODO(migration): fix formatting
-                        // format={renderable.options?.format}
+                        propertyId={renderable.propertyId}
                         unitId={renderable.options?.unit ?? undefined}
                       />
                     );
@@ -162,8 +164,7 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
                         key={`time-${renderable.propertyId}-${renderable.value}`}
                         isEditing={false}
                         value={renderable.value}
-                        // @TODO(migration) fix formatting
-                        // format={renderable.options?.format}
+                        propertyId={renderable.propertyId}
                       />
                     );
                   }
