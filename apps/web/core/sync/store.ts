@@ -324,22 +324,24 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Delete a value with optimistic updates
    */
   public deleteValue(value: Value): void {
-    value.hasBeenPublished = false;
-    value.isDeleted = true;
-    value.isLocal = true;
-    value.timestamp = new Date().toISOString();
+    const newValue = produce(value, draft => {
+      draft.hasBeenPublished = false;
+      draft.isDeleted = true;
+      draft.isLocal = true;
+      draft.timestamp = new Date().toISOString();
+    });
 
     // Remove from reactive values
     reactiveValues.set(prev => {
       const unchangedValues = prev.filter(t => {
-        return t.id !== value.id;
+        return t.id !== newValue.id;
       });
 
-      return [...unchangedValues, value];
+      return [...unchangedValues, newValue];
     });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: value });
+    this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: newValue });
   }
 
   /**
@@ -369,22 +371,24 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Delete a relation with optimistic updates
    */
   public deleteRelation(relation: Relation): void {
-    relation.hasBeenPublished = false;
-    relation.isDeleted = true;
-    relation.isLocal = true;
-    relation.timestamp = new Date().toISOString();
+    const newRelation = produce(relation, draft => {
+      draft.hasBeenPublished = false;
+      draft.isDeleted = true;
+      draft.isLocal = true;
+      draft.timestamp = new Date().toISOString();
+    });
 
     // Remove from reactive relations
     reactiveRelations.set(prev => {
       const unchangedRelations = prev.filter(t => {
-        return t.id !== relation.id;
+        return t.id !== newRelation.id;
       });
 
-      return [...unchangedRelations, relation];
+      return [...unchangedRelations, newRelation];
     });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation });
+    this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation: newRelation });
   }
 
   /**
