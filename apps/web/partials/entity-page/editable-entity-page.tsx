@@ -292,6 +292,10 @@ export function RelationsGroup({ relations, properties }: RelationsGroupProps) {
   const { id, name, spaceId } = useEntityPageStore();
   const { storage } = useMutate();
 
+  if (relations.length === 0) {
+    return null;
+  }
+
   const typeOfId = relations[0].propertyId;
   const typeOfName = relations[0].propertyName;
   const typeOfRenderableType = relations[0].type;

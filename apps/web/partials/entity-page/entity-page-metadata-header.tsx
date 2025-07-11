@@ -27,7 +27,9 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
 
   const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
   const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
-  const typesRenderables = renderablesGroupedByAttributeId[SystemIds.TYPES_PROPERTY];
+
+  // @TODO noIndexedAccessCheck
+  const typesRenderables = renderablesGroupedByAttributeId[SystemIds.TYPES_PROPERTY] ?? [];
 
   // Fetch property data type to see if this is a property entity
   const { property: propertyData } = useQueryProperty({

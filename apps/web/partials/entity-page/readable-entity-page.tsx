@@ -1,8 +1,8 @@
 import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
-import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 
+import { RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
@@ -78,6 +78,10 @@ const ReadableNumberField = ({ value, format, unitId }: { value: string; format?
 };
 
 function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRenderableProperty[] }) {
+  if (values.length === 0) {
+    return null;
+  }
+
   const spaceId = values[0].spaceId;
   const attributeId = values[0].propertyId;
   const propertyId = values[0].propertyId;
@@ -174,6 +178,10 @@ function ValuesGroup({ entityId, values }: { entityId: string; values: ValueRend
 }
 
 export function RelationsGroup({ relations, isTypes }: { relations: RelationRenderableProperty[]; isTypes?: boolean }) {
+  if (relations.length === 0) {
+    return null;
+  }
+
   const attributeId = relations[0].propertyId;
   const attributeName = relations[0].propertyName;
   const spaceId = relations[0].spaceId;
