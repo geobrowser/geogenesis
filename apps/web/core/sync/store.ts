@@ -1,10 +1,11 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { createAtom } from '@xstate/store';
+import produce from 'immer';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { readTypes } from '../database/entities';
 import { Entities } from '../utils/entity';
-import { DataType, Entity, RawRenderableType, Property, Relation, Value } from '../v2.types';
+import { DataType, Entity, Property, RawRenderableType, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
@@ -300,21 +301,23 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Add or update a value with optimistic updates
    */
   public setValue(value: Value): void {
-    value.hasBeenPublished = false;
-    value.isDeleted = false;
-    value.isLocal = true;
-    value.timestamp = new Date().toISOString();
+    const newValue = produce(value, draft => {
+      draft.hasBeenPublished = false;
+      draft.isDeleted = false;
+      draft.isLocal = true;
+      draft.timestamp = new Date().toISOString();
+    });
 
     reactiveValues.set(prev => {
       const unchangedValues = prev.filter(t => {
-        return t.id !== value.id;
+        return t.id !== newValue.id;
       });
 
-      return [...unchangedValues, value];
+      return [...unchangedValues, newValue];
     });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value: value });
+    this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value: newValue });
   }
 
   /**
@@ -343,21 +346,23 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Add or update a relation with optimistic updates
    */
   public setRelation(relation: Relation): void {
-    relation.hasBeenPublished = false;
-    relation.isDeleted = false;
-    relation.isLocal = true;
-    relation.timestamp = new Date().toISOString();
+    const newRelation = produce(relation, draft => {
+      draft.hasBeenPublished = false;
+      draft.isDeleted = false;
+      draft.isLocal = true;
+      draft.timestamp = new Date().toISOString();
+    });
 
     reactiveRelations.set(prev => {
       const unchangedRelations = prev.filter(t => {
         return t.id !== relation.id;
       });
 
-      return [...unchangedRelations, relation];
+      return [...unchangedRelations, newRelation];
     });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation });
+    this.stream.emit({ type: GeoEventStream.RELATION_CREATED, newRelation });
   }
 
   /**
