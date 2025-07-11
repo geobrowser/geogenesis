@@ -63,11 +63,9 @@ export class GeoNumber {
 
   static format(value?: string | number, formatPattern?: string, currencySymbol: string = '', locale = 'en') {
     try {
-      console.log(`Formatting number: "${value}" with format: "${formatPattern}" and currency symbol: "${currencySymbol}"`);
       const numericValue = typeof value === 'string' ? parseFloat(value) : value;
 
       if (numericValue === undefined || isNaN(numericValue)) {
-        console.error(`Invalid number value: "${value}"`);
         throw new Error('Invalid number');
       }
 
@@ -75,8 +73,6 @@ export class GeoNumber {
       const intlMessageFormat = formatToUse.startsWith('::') ? formatToUse : `::${formatToUse}`;
 
       const message = new IntlMessageFormat(`{value, number, ${intlMessageFormat}}`, locale);
-      console.log(`Using format: "${intlMessageFormat}" for value: "${numericValue}"`);
-      console.log(`${currencySymbol}${message.format({ value: numericValue })}`)
       return `${currencySymbol}${message.format({ value: numericValue })}`;
     } catch (e) {
       console.error(`Unable to format number: "${value}" with format: "${formatPattern}".`);
