@@ -236,10 +236,10 @@ const buildTabsForEntityPage = (
     tabs.push(...DYNAMIC_TABS);
   }
 
-  tabs.push({
-    label: 'Activity',
-    href: `${NavUtils.toEntity(spaceId, entityId)}/activity`,
-  });
+  // tabs.push({
+  //   label: 'Activity',
+  //   href: `${NavUtils.toEntity(spaceId, entityId)}/activity`,
+  // });
 
   return tabs;
 };
