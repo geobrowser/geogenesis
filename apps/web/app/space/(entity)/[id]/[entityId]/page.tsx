@@ -1,6 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { cachedFetchEntityType } from './cached-entity-type';
+import { cachedFetchEntityPage } from './cached-fetch-entity';
 import DefaultEntityPage from './default-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
 
@@ -12,9 +13,9 @@ interface Props {
 export default async function EntityTemplateStrategy(props: Props) {
   const params = await props.params;
   const searchParams = await props.searchParams;
-  const types = await cachedFetchEntityType(params.entityId);
+  const result = await cachedFetchEntityPage(params.entityId, params.id);
 
-  if (types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
+  if (result?.entity?.types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
     return <ProfileEntityServerContainer params={params} />;
   }
 
