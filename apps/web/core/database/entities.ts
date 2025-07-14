@@ -9,16 +9,15 @@ import { E } from '../sync/orm';
 import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
 import { Entities } from '../utils/entity';
-import { EntityWithSchema, Property, Relation, Value } from '../v2.types';
+import { EntityWithSchema, Property, Relation } from '../v2.types';
 
 type UseEntityOptions = {
   spaceId?: string;
   id: string;
-  initialData?: { spaces: string[]; values: Value[]; relations: Relation[] };
 };
 
 export function useEntity(options: UseEntityOptions): EntityWithSchema {
-  const { spaceId, id, initialData } = options;
+  const { spaceId, id } = options;
 
   const { entity } = useQueryEntity({
     id: id,
@@ -27,13 +26,12 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
 
   // If the caller passes in a set of data we use that for merging. If not,
   // we fetch the entity from the server and merge it with the local state.
-  const data = entity ?? initialData;
 
-  const values = data?.values ?? [];
-  const relations = data?.relations ?? [];
+  const values = entity?.values ?? [];
+  const relations = entity?.relations ?? [];
 
   const name = Entities.name(values ?? []);
-  const spaces = data?.spaces ?? [];
+  const spaces = entity?.spaces ?? [];
   const description = Entities.description(values);
   const types = readTypes(relations);
 

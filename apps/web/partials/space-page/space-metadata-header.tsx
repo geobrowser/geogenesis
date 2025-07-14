@@ -36,7 +36,7 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
 
   const editable = useUserIsEditing(spaceId);
 
-  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
+  const { renderablesGroupedByAttributeId } = useRenderables(spaceId);
 
   const typesRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];

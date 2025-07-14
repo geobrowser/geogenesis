@@ -2,11 +2,8 @@
 
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { useEntity } from '~/core/database/entities';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
-
-import { useEntityStoreInstance } from './entity-store-provider';
 
 export function useEntityTypes(entityId: string, spaceId?: string) {
   const types = useRelations({
@@ -48,26 +45,4 @@ export function useDescription(entityId: string, spaceId?: string) {
   });
 
   return maybeDescription[0]?.value ?? null;
-}
-
-export function useEntityPageStore() {
-  const { spaceId, id } = useEntityStoreInstance();
-
-  const { name, spaces, values, relations, schema, types } = useEntity({
-    spaceId: spaceId,
-    id: id,
-  });
-
-  return {
-    values,
-    relations,
-
-    name,
-    spaces,
-    spaceId,
-    id,
-
-    schema,
-    types,
-  };
 }

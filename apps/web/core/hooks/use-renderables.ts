@@ -3,11 +3,12 @@ import { pipe } from 'effect';
 import { atom, useAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 
-import { useEntityPageStore } from '../state/entity-page-store/entity-store';
+import { useEntity } from '../database/entities';
+import { useEntityStoreInstance } from '../state/entity-page-store/entity-store-provider';
 import { useValues } from '../sync/use-store';
 import { toRenderables } from '../utils/to-renderables';
 import { groupBy } from '../utils/utils';
-import { Property, RenderableProperty, Value } from '../v2.types';
+import { Property, RenderableProperty } from '../v2.types';
 import { useUserIsEditing } from './use-user-is-editing';
 
 /**
@@ -21,27 +22,19 @@ import { useUserIsEditing } from './use-user-is-editing';
  *
  * Schemas are derived from the entity's types and are also a form of placeholders.
  */
-export function useRenderables(serverValues: Value[], spaceId: string, isRelationPage?: boolean) {
+export function useRenderables(spaceId: string, isRelationPage?: boolean) {
   const isEditing = useUserIsEditing(spaceId);
-  const { values: localValues, relations, schema, name, id } = useEntityPageStore();
+  const { id } = useEntityStoreInstance();
+  const { relations, schema, name } = useEntity({ id, spaceId });
 
   // Scope the placeholder renderables to the entityId so that we don't have to worry about
   // them being shared across different entities.
   const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
     usePlaceholderRenderables(id);
 
-  const valuesFromSpace = useValues({
-    selector: t => t.spaceId === spaceId,
-    includeDeleted: true,
+  const values = useValues({
+    selector: v => v.spaceId === spaceId && v.entity.id === id,
   });
-
-  // We hydrate the local editable store with the triples from the server. While it's hydrating
-  // we can fallback to the server triples so we render real data and there's no layout shift.
-  //
-  // There may be some deleted triples locally. We check the actions to make sure that there are
-  // actually 0 actions in the case that there are 0 local triples as the local triples here
-  // are only the ones where `isDeleted` is false.
-  const values = localValues.length === 0 && valuesFromSpace.length === 0 ? serverValues : localValues;
 
   // @TODO(migration): Type properties aren't working with new data model
   // const serverUrlValues = serverValues.filter(triple => triple.value.type === 'URL');

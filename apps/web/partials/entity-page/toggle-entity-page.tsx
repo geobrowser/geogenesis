@@ -1,13 +1,11 @@
 'use client';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { Value } from '~/core/v2.types';
 
 import { EditableEntityPage } from './editable-entity-page';
 import { ReadableEntityPage } from './readable-entity-page';
 
 type EntityPageProps = {
-  values: Value[];
   id: string;
   spaceId: string;
 };

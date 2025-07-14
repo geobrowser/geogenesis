@@ -1,6 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { cachedFetchEntityType } from './cached-entity-type';
 import { cachedFetchEntityPage } from './cached-fetch-entity';
 import DefaultEntityPage from './default-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';

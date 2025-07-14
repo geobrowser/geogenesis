@@ -6,7 +6,7 @@ import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity, useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
-import { DataType, RawRenderableType, RenderableProperty, Value } from '~/core/v2.types';
+import { DataType, RawRenderableType, RenderableProperty } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -20,27 +20,26 @@ import { Text } from '~/design-system/text';
 type Renderables = Record<string, RenderableProperty[]>;
 
 interface Props {
-  values: Value[];
   id: string;
   spaceId: string;
 }
 
-export function ReadableEntityPage({ values: serverValues, id: entityId, spaceId }: Props) {
-  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverValues, spaceId);
+const SKIPPED_PROPERTIES: string[] = [
+  SystemIds.TYPES_PROPERTY,
+  SystemIds.NAME_PROPERTY,
+  SystemIds.COVER_PROPERTY,
+  ContentIds.AVATAR_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+];
+
+export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
+  const { renderablesGroupedByAttributeId: renderables } = useRenderables(spaceId);
 
   function countRenderableProperty(renderables: Renderables): number {
     let count = 0;
     Object.values(renderables).forEach(renderable => {
       const attributeId = renderable[0].propertyId;
-      if (
-        ![
-          SystemIds.TYPES_PROPERTY,
-          SystemIds.NAME_PROPERTY,
-          SystemIds.COVER_PROPERTY,
-          ContentIds.AVATAR_PROPERTY,
-          RENDERABLE_TYPE_PROPERTY,
-        ].includes(attributeId as Id.Id)
-      ) {
+      if (!SKIPPED_PROPERTIES.includes(attributeId)) {
         count++;
       }
     });

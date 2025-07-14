@@ -35,7 +35,7 @@ export function ProfilePageComponent(props: Props) {
 
       <Spacer height={40} />
       <motion.div key="entity-page-entity-attributes" layout="position">
-        <ToggleEntityPage id={props.id} spaceId={props.spaceId} values={props.values} />
+        <ToggleEntityPage id={props.id} spaceId={props.spaceId} />
       </motion.div>
       <Spacer height={40} />
       {props.referencedByComponent}

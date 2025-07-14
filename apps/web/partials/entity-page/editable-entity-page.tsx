@@ -36,14 +36,13 @@ import { RenderableTypeDropdown } from './renderable-type-dropdown';
 import { editorHasContentAtom } from '~/atoms';
 
 interface Props {
-  values: Value[];
   id: string;
   spaceId: string;
 }
 
-export function EditableEntityPage({ id, spaceId, values }: Props) {
+export function EditableEntityPage({ id, spaceId }: Props) {
   const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
-    useRenderables(values, spaceId);
+    useRenderables(spaceId);
 
   const { storage } = useMutate();
 
