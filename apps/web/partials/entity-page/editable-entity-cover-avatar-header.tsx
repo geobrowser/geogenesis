@@ -35,8 +35,8 @@ export const EditableCoverAvatarHeader = ({
     const renderableType = firstRenderable.type;
 
     if (
-      (renderableType === 'IMAGE' && firstRenderable.propertyId === SystemIds.COVER_PROPERTY) ||
-      (renderableType === 'IMAGE' && firstRenderable.propertyId === ContentIds.AVATAR_PROPERTY)
+      firstRenderable.propertyId === SystemIds.COVER_PROPERTY ||
+      firstRenderable.propertyId === ContentIds.AVATAR_PROPERTY
     ) {
       return firstRenderable;
     }
