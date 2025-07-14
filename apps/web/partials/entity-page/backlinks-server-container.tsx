@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { Space } from '~/core/io/dto/spaces';
 import { getEntityBacklinks, getSpaces } from '~/core/io/v2/queries';
 
-import { Backlink, Backlinks } from '~/partials/entity-page/backlinks';
+import { Backlinks } from '~/partials/entity-page/backlinks';
 
 type BacklinksServerContainerProps = {
   entityId: string;
@@ -12,7 +12,7 @@ type BacklinksServerContainerProps = {
 export const BacklinksServerContainer = async ({ entityId }: BacklinksServerContainerProps) => {
   const backlinksData = await Effect.runPromise(getEntityBacklinks(entityId));
 
-  if (!Array.isArray(backlinksData) || backlinksData.length === 0) return null;
+  if (backlinksData.length === 0) return null;
 
   const allSpaceIds = Array.from(new Set(backlinksData.flatMap(backlink => backlink.spaceIds)));
 
@@ -41,7 +41,7 @@ export const BacklinksServerContainer = async ({ entityId }: BacklinksServerCont
         primarySpace,
       },
     ];
-  }) as Backlink[];
+  });
 
   return <Backlinks backlinks={backlinks} />;
 };
