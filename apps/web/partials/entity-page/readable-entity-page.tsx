@@ -6,14 +6,7 @@ import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useQueryEntity, useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
-import {
-  DataType,
-  RawRenderableType,
-  RelationRenderableProperty,
-  RenderableProperty,
-  Value,
-  ValueRenderableProperty,
-} from '~/core/v2.types';
+import { DataType, RawRenderableType, RenderableProperty, Value } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -133,12 +126,12 @@ export function RelationsGroup({
   entityId,
   spaceId,
   propertyId,
-  isTypes,
+  isMetadataHeader,
 }: {
   entityId: string;
   propertyId: string;
   spaceId: string;
-  isTypes?: boolean;
+  isMetadataHeader?: boolean;
 }) {
   const { property } = useQueryProperty({ id: propertyId });
 
@@ -164,7 +157,7 @@ export function RelationsGroup({
   if (
     propertyId === SystemIds.COVER_PROPERTY ||
     propertyId === ContentIds.AVATAR_PROPERTY ||
-    (propertyId === SystemIds.TYPES_PROPERTY && !isTypes) ||
+    (propertyId === SystemIds.TYPES_PROPERTY && !isMetadataHeader) ||
     propertyId === RENDERABLE_TYPE_PROPERTY
   ) {
     return null;

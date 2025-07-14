@@ -71,7 +71,12 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
       {editable ? (
         <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
       ) : (
-        <ReadableRelationsGroup entityId={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} isTypes={true} />
+        <ReadableRelationsGroup
+          entityId={id}
+          spaceId={spaceId}
+          propertyId={SystemIds.TYPES_PROPERTY}
+          isMetadataHeader={true}
+        />
       )}
     </div>
   );
