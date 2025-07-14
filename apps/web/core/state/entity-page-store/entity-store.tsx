@@ -51,12 +51,11 @@ export function useDescription(entityId: string, spaceId?: string) {
 }
 
 export function useEntityPageStore() {
-  const { spaceId, id, initialSpaces, initialValues, initialRelations } = useEntityStoreInstance();
+  const { spaceId, id } = useEntityStoreInstance();
 
   const { name, spaces, values, relations, schema, types } = useEntity({
     spaceId: spaceId,
     id: id,
-    initialData: { spaces: initialSpaces, values: initialValues, relations: initialRelations },
   });
 
   return {

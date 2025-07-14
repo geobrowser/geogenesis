@@ -83,7 +83,6 @@ export default async function ProfileLayout(props: Props) {
     <EntityStoreProvider
       id={entityId}
       spaceId={params.id}
-      initialSpaces={profile.spaces}
       initialValues={profile.values}
       initialRelations={profile.relations}
     >
