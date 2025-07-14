@@ -3,6 +3,7 @@ import cx from 'classnames';
 import * as React from 'react';
 
 import { useEntity } from '~/core/database/entities';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 import { getImagePath } from '~/core/utils/utils';
 import { SearchResult, SpaceEntity } from '~/core/v2.types';
 

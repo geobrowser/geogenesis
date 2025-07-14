@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Services } from '~/core/services';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getImagePath } from '~/core/utils/utils';
 import { ImageRelationRenderableProperty, RelationRenderableProperty, RenderableProperty } from '~/core/v2.types';
@@ -26,13 +26,12 @@ export const EditableCoverAvatarHeader = ({
   avatarUrl: string | null;
   coverUrl: string | null;
 }) => {
-  const { spaceId } = useEntityPageStore();
+  const { spaceId } = useEntityStoreInstance();
   const editable = useUserIsEditing(spaceId);
   const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
 
   const coverAvatarRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];
-    const renderableType = firstRenderable.type;
 
     if (
       firstRenderable.propertyId === SystemIds.COVER_PROPERTY ||
@@ -110,8 +109,8 @@ const AvatarCoverInput = ({
   const [hovered, setHovered] = useState(false);
   const [hoveredIcon, setHoveredIcon] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const { spaceId } = useEntityStoreInstance();
 
-  const { spaceId, id, name } = useEntityPageStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { ipfs } = Services.useServices();
 

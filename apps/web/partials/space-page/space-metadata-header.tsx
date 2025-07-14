@@ -4,11 +4,10 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { useProperties } from '~/core/hooks/use-properties';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RelationRenderableProperty } from '~/core/v2.types';
+import { useEntityTypes } from '~/core/state/entity-page-store/entity-store';
+import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 
 import { Create } from '~/design-system/icons/create';
 
@@ -23,7 +22,8 @@ interface SpacePageMetadataHeaderProps {
 export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePageMetadataHeaderProps) {
   const [addTypeState, setAddTypeState] = React.useState(false);
 
-  const { types } = useEntityPageStore();
+  const { id } = useEntityStoreInstance();
+  const types = useEntityTypes(id, spaceId);
 
   const additionalTypeChips = types.map((type, i) => (
     <span
@@ -37,8 +37,6 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
   const editable = useUserIsEditing(spaceId);
 
   const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
-
-  const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
 
   const typesRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
     const firstRenderable = renderables[0];
@@ -57,7 +55,7 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
         {editable ? (
           <div className="box-border h-6">
             {(typesRenderableObj && types.length > 0) || (addTypeState && types.length === 0) ? (
-              <RelationsGroup relations={typesRenderableObj as RelationRenderableProperty[]} properties={properties} />
+              <RelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
             ) : (
               <button
                 onClick={() => setAddTypeState(true)}

@@ -4,10 +4,9 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { useProperties } from '~/core/hooks/use-properties';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity, useQueryProperty } from '~/core/sync/use-store';
 import { RelationRenderableProperty } from '~/core/v2.types';
 
@@ -20,20 +19,13 @@ interface EntityPageMetadataHeaderProps {
   spaceId: string;
 }
 
-export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderProps) {
-  const { id: entityId } = useEntityPageStore();
-
+export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHeaderProps) {
   const editable = useUserIsEditing(spaceId);
-
-  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
-  const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
-
-  // @TODO noIndexedAccessCheck
-  const typesRenderables = renderablesGroupedByAttributeId[SystemIds.TYPES_PROPERTY] ?? [];
+  const name = useName(id, spaceId);
 
   // Fetch property data type to see if this is a property entity
   const { property: propertyData } = useQueryProperty({
-    id: entityId,
+    id,
     spaceId,
     enabled: true,
   });
@@ -63,8 +55,8 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
     }
 
     return {
-      id: propertyData.id || '',
-      dataType: propertyData.dataType || '',
+      id: propertyData.id,
+      dataType: propertyData.dataType,
       renderableType,
     };
   }, [propertyData, renderableTypeEntity]);
@@ -81,9 +73,9 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
         </div>
       )}
       {editable ? (
-        <EditableRelationsGroup relations={typesRenderables as RelationRenderableProperty[]} properties={properties} />
+        <EditableRelationsGroup id={id} name={name} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
       ) : (
-        <ReadableRelationsGroup relations={typesRenderables as RelationRenderableProperty[]} isTypes={true} />
+        <ReadableRelationsGroup entityId={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} isTypes={true} />
       )}
     </div>
   );

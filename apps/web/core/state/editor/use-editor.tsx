@@ -209,9 +209,7 @@ export const useTabId = () => {
 
   if (!validateEntityId(maybeTabId)) return null;
 
-  const tabId: EntityId = EntityId(maybeTabId as string);
-
-  return tabId;
+  return maybeTabId;
 };
 
 export function useEditorStore() {

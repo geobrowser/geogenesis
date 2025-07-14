@@ -11,7 +11,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
 import { fetchCompletedProposals } from '~/core/io/subgraph/fetch-completed-proposals';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -44,7 +44,7 @@ export function EditableSpaceHeading({
   entityId: string;
   addSubspaceComponent?: React.ReactElement<any>;
 }) {
-  const { name } = useEntityPageStore();
+  const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
 
   const path = usePathname();
