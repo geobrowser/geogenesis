@@ -306,6 +306,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       draft.isDeleted = false;
       draft.isLocal = true;
       draft.timestamp = new Date().toISOString();
+      draft.placeholder = false;
     });
 
     reactiveValues.set(prev => {
@@ -329,6 +330,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       draft.isDeleted = true;
       draft.isLocal = true;
       draft.timestamp = new Date().toISOString();
+      draft.placeholder = false;
     });
 
     // Remove from reactive values
@@ -353,6 +355,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       draft.isDeleted = false;
       draft.isLocal = true;
       draft.timestamp = new Date().toISOString();
+      draft.placeholder = false;
     });
 
     reactiveRelations.set(prev => {
@@ -376,6 +379,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       draft.isDeleted = true;
       draft.isLocal = true;
       draft.timestamp = new Date().toISOString();
+      draft.placeholder = false;
     });
 
     // Remove from reactive relations
