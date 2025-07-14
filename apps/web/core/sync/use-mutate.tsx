@@ -1,9 +1,10 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import produce, { Draft } from 'immer';
 
+import { DATA_TYPE_PROPERTY } from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
-import { DataType, FlattenedRenderType, NativeRenderableProperty, Relation, RelationRenderableProperty, Value } from '../v2.types';
+import { DataType, FlattenedRenderType, NativeRenderableProperty, Property, Relation, RelationRenderableProperty, Value } from '../v2.types';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
@@ -17,7 +18,7 @@ type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
  * 1. Values
  * 2. Relations
  * 3. Renderables – A unified representation of a Value OR a Relation
- * 4. @TODO: Properties
+ * 4. Properties – Property entities with dataType
  *
  * The Mutator API abstracts complexity for writing to stores directly
  * by orchestrating writes to the appropriate stores based on the type
@@ -30,6 +31,9 @@ export interface Mutator {
     name: {
       set: (entityId: string, spaceId: string, value: string) => void;
     };
+  };
+  properties: {
+    create: (params: { entityId: string; spaceId: string; name: string; dataType: DataType }) => void;
   };
   values: {
     get: (id: string, entityId: string) => Value | null;
@@ -95,6 +99,78 @@ function createMutator(store: GeoStore): Mutator {
 
           store.setValue(newValue);
         },
+      },
+    },
+    properties: {
+      create: ({ entityId, spaceId, name, dataType }) => {
+        // Set the name value
+        const nameValue: Value = {
+          id: ID.createValueId({
+            entityId,
+            propertyId: SystemIds.NAME_PROPERTY,
+            spaceId,
+          }),
+          entity: {
+            id: entityId,
+            name,
+          },
+          property: {
+            id: SystemIds.NAME_PROPERTY,
+            name: 'Name',
+            dataType: 'TEXT',
+            renderableType: null,
+          },
+          spaceId,
+          value: name,
+        };
+
+        // Set the dataType value
+        const dataTypeValue: Value = {
+          id: ID.createValueId({
+            entityId,
+            propertyId: DATA_TYPE_PROPERTY,
+            spaceId,
+          }),
+          entity: {
+            id: entityId,
+            name,
+          },
+          property: {
+            id: DATA_TYPE_PROPERTY,
+            name: 'Data Type',
+            dataType: 'TEXT',
+            renderableType: null,
+          },
+          spaceId,
+          value: dataType,
+        };
+
+        // Create the Property type relation
+        const propertyTypeRelation: Relation = {
+          id: ID.createEntityId(),
+          entityId: ID.createEntityId(),
+          spaceId,
+          renderableType: 'RELATION',
+          verified: false,
+          position: null,
+          type: {
+            id: SystemIds.TYPES_PROPERTY,
+            name: 'Types',
+          },
+          fromEntity: {
+            id: entityId,
+            name,
+          },
+          toEntity: {
+            id: SystemIds.PROPERTY,
+            name: 'Property',
+            value: SystemIds.PROPERTY,
+          },
+        };
+
+        store.setValue(nameValue);
+        store.setValue(dataTypeValue);
+        store.setRelation(propertyTypeRelation);
       },
     },
     values: {

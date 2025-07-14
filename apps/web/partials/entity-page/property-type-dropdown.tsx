@@ -2,7 +2,7 @@ import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 
 import * as React from 'react';
-import { Dispatch, SetStateAction, useState } from 'react';
+import { useState } from 'react';
 
 import { SwitchableRenderableType } from '~/core/v2.types';
 
@@ -21,7 +21,6 @@ import { ColorName } from '~/design-system/theme/colors';
 interface Props {
   value?: SwitchableRenderableType;
   onChange?: (value: SwitchableRenderableType) => void;
-  dataType?: string;
 }
 
 const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
@@ -48,66 +47,34 @@ const typeOptions: Record<SwitchableRenderableType, string> = {
   GEO_LOCATION: 'Geo Location',
 };
 
-export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Props) => {
-  const [selectedValue, setSelectedValue] = useState<SwitchableRenderableType | undefined>(value);
+export const PropertyTypeDropdown = ({ value, onChange }: Props) => {
   const [open, setOpen] = useState(false);
 
-  // Determine which options are available based on the property's dataType
+  // Show all available property types
   const availableOptions = React.useMemo(() => {
-    if (!dataType) {
-      console.warn('PropertyRenderableTypeDropdown: No dataType provided');
-      return [];
-    }
-
-    // Based on the dataType, determine which renderable types are valid
-    switch (dataType) {
-      case 'TEXT':
-        // TEXT dataType can be rendered as TEXT, URL, or GEO_LOCATION
-        return ['TEXT', 'URL', 'GEO_LOCATION'] as SwitchableRenderableType[];
-      case 'RELATION':
-        // RELATION dataType can be rendered as RELATION or IMAGE
-        return ['RELATION', 'IMAGE'] as SwitchableRenderableType[];
-      case 'NUMBER':
-        return ['NUMBER'] as SwitchableRenderableType[];
-      case 'CHECKBOX':
-        return ['CHECKBOX'] as SwitchableRenderableType[];
-      case 'TIME':
-        return ['TIME'] as SwitchableRenderableType[];
-      case 'POINT':
-        return ['POINT'] as SwitchableRenderableType[];
-      default:
-        console.warn('PropertyRenderableTypeDropdown: Unknown dataType:', dataType);
-        return [];
-    }
-  }, [dataType]);
+    // Return all possible property types
+    return Object.keys(typeOptions) as SwitchableRenderableType[];
+  }, []);
 
   const options = availableOptions.map(key => ({
     value: key,
     label: typeOptions[key],
-    onClick: (
-      setSelectedValue: Dispatch<SetStateAction<SwitchableRenderableType | undefined>>,
-      value: SwitchableRenderableType
-    ) => {
-      setSelectedValue(value);
+    onClick: (value: SwitchableRenderableType) => {
+      onChange?.(value);
     },
     Icon: icons[key],
   }));
 
   let Icon = DashedCircle as React.FunctionComponent<{ color?: ColorName }>;
-  if (selectedValue) {
-    Icon = icons[selectedValue];
+  if (value) {
+    Icon = icons[value];
   }
 
-  let label = 'Set renderable type';
-  if (selectedValue) {
-    label = typeOptions[selectedValue];
+  let label = 'Set property type';
+  if (value) {
+    label = typeOptions[value];
   }
 
-  // If no options are available, don't render the dropdown
-  if (availableOptions.length === 0) {
-    console.warn('No valid renderable types available for this property dataType:', dataType);
-    return null;
-  }
 
   return (
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -134,12 +101,12 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
               <DropdownPrimitive.Item
                 key={`triple-type-dropdown-${index}`}
                 onClick={() => {
-                  option.onClick(setSelectedValue, option.value);
-                  onChange?.(option.value);
+                  console.log('🎯 Dropdown item clicked:', option.value);
+                  option.onClick(option.value);
                 }}
                 className={cx(
                   'flex w-full select-none items-center gap-2 rounded-md bg-white px-3 py-2.5 text-button text-text hover:cursor-pointer hover:bg-divider focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
-                  selectedValue === option.value && '!bg-divider'
+                  value === option.value && '!bg-divider'
                 )}
               >
                 <TypeIcon color="grey-04" />
