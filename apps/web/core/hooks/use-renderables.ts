@@ -4,8 +4,9 @@ import { atom, useAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 
 import { useEntity } from '../database/entities';
+import { useName } from '../state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '../state/entity-page-store/entity-store-provider';
-import { useValues } from '../sync/use-store';
+import { useRelations, useValues } from '../sync/use-store';
 import { toRenderables } from '../utils/to-renderables';
 import { groupBy } from '../utils/utils';
 import { Property, RenderableProperty } from '../v2.types';
@@ -25,7 +26,12 @@ import { useUserIsEditing } from './use-user-is-editing';
 export function useRenderables(spaceId: string, isRelationPage?: boolean) {
   const isEditing = useUserIsEditing(spaceId);
   const { id } = useEntityStoreInstance();
-  const { relations, schema, name } = useEntity({ id, spaceId });
+  const name = useName(id, spaceId);
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === id && r.spaceId === spaceId,
+  });
+
+  const { schema } = useEntity({ id, spaceId });
 
   // Scope the placeholder renderables to the entityId so that we don't have to worry about
   // them being shared across different entities.
