@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
-import { getEntityBacklinks } from '~/core/io/v2/queries';
+import { Space } from '~/core/io/dto/spaces';
+import { getEntityBacklinks, getSpaces } from '~/core/io/v2/queries';
 
 import { Backlink, Backlinks } from '~/partials/entity-page/backlinks';
 
@@ -9,9 +10,38 @@ type BacklinksServerContainerProps = {
 };
 
 export const BacklinksServerContainer = async ({ entityId }: BacklinksServerContainerProps) => {
-  const backlinks = await Effect.runPromise(getEntityBacklinks(entityId));
+  const backlinksData = await Effect.runPromise(getEntityBacklinks(entityId));
 
-  if (backlinks.length === 0) return null;
+  if (!Array.isArray(backlinksData) || backlinksData.length === 0) return null;
 
-  return <Backlinks backlinks={backlinks as Backlink[]} />;
+  const allSpaceIds = Array.from(new Set(backlinksData.flatMap(backlink => backlink.spaceIds)));
+
+  const spacesData: Space[] =
+    allSpaceIds.length > 0 ? await Effect.runPromise(getSpaces({ spaceIds: allSpaceIds })) : [];
+
+  const backlinks = backlinksData.flatMap(backlink => {
+    if (!backlink.name || !backlink.spaceIds || backlink.spaceIds.length === 0) return [];
+
+    const primarySpaceId = backlink.spaceIds[0];
+    const spaceData = spacesData.find(space => space.id === primarySpaceId);
+
+    if (!spaceData) return [];
+
+    const primarySpace = {
+      id: spaceData.id,
+      entity: {
+        name: spaceData.entity.name || '',
+        image: spaceData.entity.image,
+      },
+    };
+
+    return [
+      {
+        ...backlink,
+        primarySpace,
+      },
+    ];
+  }) as Backlink[];
+
+  return <Backlinks backlinks={backlinks} />;
 };

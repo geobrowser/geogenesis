@@ -4,8 +4,6 @@ import Image from 'next/image';
 
 import { useState } from 'react';
 
-import { useEntity } from '~/core/database/entities';
-import { useSpace } from '~/core/hooks/use-space';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -17,7 +15,13 @@ type BacklinksProps = {
   backlinks: Backlink[];
 };
 
-export type Backlink = { id: string; name?: string | null; spaceIds: Array<string> };
+export type Backlink = {
+  id: string;
+  name?: string | null;
+  spaceIds: Array<string>;
+  types: Array<{ id: string; name: string }>;
+  primarySpace: { id: string; entity: { name: string; image?: string } };
+};
 
 export const Backlinks = ({ backlinks }: BacklinksProps) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
@@ -54,32 +58,29 @@ type BacklinkProps = {
 };
 
 const Backlink = ({ backlink }: BacklinkProps) => {
-  const { space } = useSpace(backlink.spaceIds[0] ?? '');
-  const entity = useEntity({ id: backlink.id, spaceId: backlink.spaceIds[0] ?? '' });
-
-  if (!space || !entity) return;
-
   return (
     <div>
       <PrefetchLink
-        href={NavUtils.toEntity(space.id, backlink.id)}
+        href={NavUtils.toEntity(backlink.primarySpace.id, backlink.id)}
         entityId={backlink.id}
-        spaceId={space.id}
+        spaceId={backlink.primarySpace.id}
         className="inline-flex flex-col"
       >
         <span className="text-metadataMedium">{backlink.name}</span>
         <span className="mt-1.5 inline-flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5">
-            {space.entity.image && (
+            {backlink.primarySpace?.entity?.image && (
               <span className="relative h-3 w-3 overflow-hidden rounded-xs">
-                <Image layout="fill" objectFit="cover" src={getImagePath(space.entity.image)} alt="" />
+                <Image layout="fill" objectFit="cover" src={getImagePath(backlink.primarySpace.entity.image)} alt="" />
               </span>
             )}
-            <span className="text-breadcrumb">{space.entity.name}</span>
+            <span className="text-breadcrumb">
+              {backlink.primarySpace?.entity?.name || `Space: ${backlink.primarySpace.id}`}
+            </span>
           </span>
           <ChevronRight />
           <span className="inline-flex items-center gap-1.5">
-            {entity.types.map((t, index) => (
+            {backlink.types.map((t, index) => (
               // An entity may have the same type multiple times, so we use the index to differentiate them
               <Tag key={`backlink-${t.id}=${index}`}>{t.name}</Tag>
             ))}
