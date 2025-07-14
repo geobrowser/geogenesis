@@ -4,11 +4,8 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity, useQueryProperty } from '~/core/sync/use-store';
-import { RelationRenderableProperty } from '~/core/v2.types';
 
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
@@ -21,7 +18,6 @@ interface EntityPageMetadataHeaderProps {
 
 export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHeaderProps) {
   const editable = useUserIsEditing(spaceId);
-  const name = useName(id, spaceId);
 
   // Fetch property data type to see if this is a property entity
   const { property: propertyData } = useQueryProperty({
@@ -73,7 +69,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
         </div>
       )}
       {editable ? (
-        <EditableRelationsGroup id={id} name={name} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
+        <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
       ) : (
         <ReadableRelationsGroup entityId={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} isTypes={true} />
       )}
