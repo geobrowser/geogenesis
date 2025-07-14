@@ -1,7 +1,7 @@
 import type { CodegenConfig } from '@graphql-codegen/cli';
 
 const config: CodegenConfig = {
-  schema: 'https://v2-postgraphile.up.railway.app/graphql',
+  schema: 'https://api-testnet.geobrowser.io/graphql',
   documents: ['./**/*.tsx'],
   generates: {
     './core/gql/': {
