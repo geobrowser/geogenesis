@@ -1,7 +1,7 @@
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
-import { Effect, pipe } from 'effect';
+import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 import { useAtomValue, useSetAtom } from 'jotai';
 import Image from 'next/legacy/image';
@@ -14,12 +14,9 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
-import { sortRenderables } from '~/core/hooks/use-renderables';
 import { getProperties } from '~/core/io/v2/queries';
-import { useQueryEntitiesAsync, useQueryEntityAsync } from '~/core/sync/use-store';
-import { toRenderables } from '~/core/utils/to-renderables';
+import { useQueryEntityAsync } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
-import { RenderableProperty } from '~/core/v2.types';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { Dots } from '~/design-system/dots';
