@@ -44,7 +44,6 @@ export function TableBlockPropertyField(props: {
         <div className="space-y-1">
           <div className="text-metadata text-grey-04">{firstRenderable.propertyName}</div>
           <RelationsGroup
-            isPlaceholderEntry={true}
             entityId={entityId}
             spaceId={spaceId}
             renderables={renderables as RelationRenderableProperty[]}
@@ -378,7 +377,6 @@ type RelationsGroupProps = {
   entityId: string;
   entityName: string | null;
   renderables: RelationRenderableProperty[];
-  isPlaceholderEntry: boolean;
   properties?: Record<string, Property>;
 };
 

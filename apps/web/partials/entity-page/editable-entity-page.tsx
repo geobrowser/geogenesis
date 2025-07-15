@@ -128,36 +128,38 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                 >
                   {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
                   <>
+                    {/* Formatting exists on properties now instead of value */}
                     {/* {property.dataType === 'TIME' && (
-                        <DateFormatDropdown
-                          value={firstRenderable.value}
-                          // @TODO(migration): fix formatting. Now on property
-                          // format={firstRenderable.options?.format}
-                          onSelect={(value?: string, format?: string) => {
-                            storage.renderables.values.update(firstRenderable, draft => {
-                              draft.value = value ?? firstRenderable.value;
-                            });
-                          }}
-                        />
-                      )}
-                      {property.dataType === 'NUMBER' && (
-                        <NumberOptionsDropdown
-                          value={firstRenderable.value}
-                          // @TODO(migration): Fix format. Now defined on Property
-                          // format={firstRenderable.options?.format}
-                          unitId={firstRenderable.options?.unit}
-                          send={({ format, unitId }) => {
-                            storage.renderables.values.update(firstRenderable, draft => {
-                              const newOptions = {
-                                language: draft.options?.language,
-                                unit: unitId,
-                              };
+                      <DateFormatDropdown
+                        value={firstRenderable.value}
+                        // @TODO(migration): fix formatting. Now on property
+                        // format={firstRenderable.options?.format}
+                        onSelect={(value?: string, format?: string) => {
+                          storage.renderables.values.update(firstRenderable, draft => {
+                            draft.value = value ?? firstRenderable.value;
+                          });
+                        }}
+                      />
+                    )} */}
+                    {/* @TODO: Formatting exists on property now instead of value */}
+                    {/* {property.dataType === 'NUMBER' && (
+                      <NumberOptionsDropdown
+                        value={firstRenderable.value}
+                        // @TODO(migration): Fix format. Now defined on Property
+                        // format={firstRenderable.options?.format}
+                        unitId={firstRenderable.options?.unit}
+                        send={({ format, unitId }) => {
+                          storage.renderables.values.update(firstRenderable, draft => {
+                            const newOptions = {
+                              language: draft.options?.language,
+                              unit: unitId,
+                            };
 
-                              draft.options = newOptions;
-                            });
-                          }}
-                        />
-                      )} */}
+                            draft.options = newOptions;
+                          });
+                        }}
+                      />
+                    )} */}
 
                     {/* <RenderableTypeDropdown value={renderableType} options={[]} /> */}
 
