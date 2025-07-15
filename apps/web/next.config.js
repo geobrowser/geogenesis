@@ -9,6 +9,10 @@
 const nextConfig = {
   // reactStrictMode: true,
   experimental: {
+    // Activate new client-side router improvements
+    clientSegmentCache: true,
+    // Enable persistent caching for the turbopack dev server and build.
+    turbopackPersistentCaching: true,
     reactCompiler: true,
     optimizePackageImports: [
       'effect',
@@ -19,9 +23,6 @@ const nextConfig = {
       '@tiptap/core',
       '@tiptap/react',
     ],
-  },
-  devIndicators: {
-    buildActivity: false,
   },
   images: {
     remotePatterns: [
