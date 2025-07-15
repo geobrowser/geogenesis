@@ -1,7 +1,7 @@
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
-import { pipe } from 'effect';
+import { Effect, pipe } from 'effect';
 import { dedupeWith } from 'effect/Array';
 import { useAtomValue, useSetAtom } from 'jotai';
 import Image from 'next/legacy/image';
@@ -15,6 +15,7 @@ import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { sortRenderables } from '~/core/hooks/use-renderables';
+import { getProperties } from '~/core/io/v2/queries';
 import { useQueryEntitiesAsync, useQueryEntityAsync } from '~/core/sync/use-store';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { getImagePath } from '~/core/utils/utils';
@@ -208,8 +209,6 @@ type PropertySelectorProps = {
  * user can select Name, Description or Spouse.
  */
 function PropertySelector({ entityIds, where }: PropertySelectorProps) {
-  const findMany = useQueryEntitiesAsync();
-
   const { toggleProperty: setProperty, mapping } = useView();
 
   const { data: availableProperties, isLoading } = useQuery({
@@ -220,38 +219,17 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
         return [];
       }
 
-      const entities = await findMany({
-        where: {
-          id: {
-            in: entityIds,
-          },
-        },
-      });
-
-      const availableProperties = entities.flatMap(e => {
-        return pipe(
-          toRenderables({
-            entityId: e.id,
-            entityName: e.name,
-            spaceId: e.spaces[0],
-            values: e.values,
-            relations: e.relations,
-          }),
-          sortRenderables,
-          renderables =>
-            renderables
-              .map(t => {
-                return {
-                  id: t.propertyId,
-                  name: t.propertyName,
-                  renderableType: t.type,
-                };
-              })
-              .filter(t => t.name !== null)
-        );
-      });
-
-      return dedupeWith(availableProperties, (a, b) => a.id === b.id);
+      const properties = await Effect.runPromise(getProperties(entityIds));
+      return dedupeWith(
+        properties.map(e => {
+          return {
+            id: e.id,
+            name: e.name,
+            renderableType: e.renderableType ?? e.dataType,
+          };
+        }),
+        (a, b) => a.id === b.id
+      );
     },
   });
 
@@ -267,11 +245,7 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
     return <MenuItem>No available properties</MenuItem>;
   }
 
-  const onSelectProperty = (property: {
-    id: string;
-    name: string | null;
-    renderableType: RenderableProperty['type'];
-  }) => {
+  const onSelectProperty = (property: { id: string; name: string | null; renderableType: string }) => {
     const selector = generateSelector(property, where);
 
     setProperty(

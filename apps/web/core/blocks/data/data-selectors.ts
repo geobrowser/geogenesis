@@ -3,7 +3,7 @@ import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import { Entity, RenderableProperty } from '~/core/v2.types';
+import { Entity } from '~/core/v2.types';
 
 type TripleSegment = {
   type: 'TRIPLE';
@@ -140,17 +140,18 @@ export async function mapSelectorLexiconToSourceEntity(
   return [];
 }
 
+const valueRenderableTypes: string[] = ['TEXT', 'NUMBER', 'TIME', 'CHECKBOX'];
+
 export function generateSelector(
   property: {
     id: string;
-    renderableType: RenderableProperty['type'];
+    renderableType: string;
   },
   where: 'TO' | 'FROM' | 'SOURCE'
 ) {
   let selector: string | null = null;
-  const tripleRenderableTypes: RenderableProperty['type'][] = ['TEXT', 'NUMBER', 'TIME', 'CHECKBOX'];
 
-  if (tripleRenderableTypes.includes(property.renderableType)) {
+  if (valueRenderableTypes.includes(property.renderableType)) {
     if (where === 'SOURCE') {
       selector = `.[${property.id}]`;
     }
@@ -195,7 +196,7 @@ export function getIsSelected(
   property: {
     id: string;
     name: string | null;
-    renderableType: RenderableProperty['type'];
+    renderableType: string;
   }
 ): boolean {
   return selectors.some(s => {
