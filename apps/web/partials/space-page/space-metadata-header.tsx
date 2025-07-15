@@ -4,7 +4,6 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityTypes } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
@@ -36,25 +35,12 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
 
   const editable = useUserIsEditing(spaceId);
 
-  const { renderablesGroupedByAttributeId } = useRenderables(spaceId);
-
-  const typesRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
-    const firstRenderable = renderables[0];
-    const renderableType = firstRenderable.type;
-
-    if (renderableType === 'RELATION' && firstRenderable.propertyId === SystemIds.TYPES_PROPERTY) {
-      return renderables;
-    }
-  });
-
-  const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.propertyId === SystemIds.TYPES_PROPERTY));
-
   return (
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-y-4 text-text">
       <div className="flex items-center gap-1">
         {editable ? (
           <div className="box-border h-6">
-            {(typesRenderableObj && types.length > 0) || (addTypeState && types.length === 0) ? (
+            {types.length > 0 || (addTypeState && types.length === 0) ? (
               <RelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
             ) : (
               <button
