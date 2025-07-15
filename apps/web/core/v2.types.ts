@@ -29,10 +29,6 @@ export type Property = {
  * local state
  */
 type LocalMetadata = {
-  // Used to render local data as a placeholder. This is usually used
-  // to prepopulate data as a result of an entity's schema or when
-  // creating new entity data from a "template"
-  placeholder?: boolean;
   // Used to determine when data was last modified. This can be used
   // for merging heuristics between local and remote data.
   timestamp?: string | null;

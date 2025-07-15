@@ -1,7 +1,9 @@
 'use client';
 
 import { SystemIds } from '@graphprotocol/grc-20';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
+import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
 
@@ -45,4 +47,19 @@ export function useDescription(entityId: string, spaceId?: string) {
   });
 
   return maybeDescription[0]?.value ?? null;
+}
+
+export function useEntitySchema(entityId: string, spaceId?: string) {
+  const types = useEntityTypes(entityId, spaceId);
+
+  const { data: schema } = useQuery({
+    enabled: types.length > 0,
+    queryKey: ['entity-schema-for-merging', entityId, types],
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      return await getSchemaFromTypeIds(types.map(t => t.id));
+    },
+  });
+
+  return schema ?? [];
 }

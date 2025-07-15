@@ -3,14 +3,46 @@ import { pipe } from 'effect';
 import { atom, useAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 
+import * as React from 'react';
+
 import { useEntity } from '../database/entities';
-import { useName } from '../state/entity-page-store/entity-store';
+import { useEntitySchema, useName } from '../state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '../state/entity-page-store/entity-store-provider';
 import { useRelations, useValues } from '../sync/use-store';
 import { toRenderables } from '../utils/to-renderables';
 import { groupBy } from '../utils/utils';
-import { Property, RenderableProperty } from '../v2.types';
+import { DataType, Property, Relation, RenderableProperty, Value } from '../v2.types';
+import { useProperties } from './use-properties';
 import { useUserIsEditing } from './use-user-is-editing';
+
+const SKIPPED_PROPERTIES: string[] = [SystemIds.BLOCKS];
+
+export function useRenderedProperties(entityId: string, spaceId: string) {
+  const values = useValues({
+    selector: v => v.spaceId === spaceId && v.entity.id === entityId,
+  });
+
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
+  });
+
+  const uniqueProperties = new Set(
+    [...values.map(v => v.property.id), ...relations.map(r => r.type.id)].filter(p => !SKIPPED_PROPERTIES.includes(p))
+  );
+
+  return useProperties([...uniqueProperties.values()]) ?? {};
+}
+
+export function usePlaceholderProperties(entityId: string, spaceId: string) {
+  const schema = useEntitySchema(entityId, spaceId);
+  const map: Record<string, Property> = {};
+
+  for (const p of schema) {
+    map[p.id] = p;
+  }
+
+  return map;
+}
 
 /**
  * When rendering the underlying data for Properties we map them to a shared data structure
@@ -27,11 +59,30 @@ export function useRenderables(spaceId: string, isRelationPage?: boolean) {
   const isEditing = useUserIsEditing(spaceId);
   const { id } = useEntityStoreInstance();
   const name = useName(id, spaceId);
-  const relations = useRelations({
-    selector: r => r.fromEntity.id === id && r.spaceId === spaceId,
-  });
 
   const { schema } = useEntity({ id, spaceId });
+
+  // @TODO
+  // Use the schema and placeholders to determine what placeholders we need.
+  // During render we can remove placeholders if we already have data for it.
+  // Rather than doing it in here.
+  //
+  // We can probably have a placeholderValues and placeholderRelations so we
+  // don't need to merge both. These can be stored as state and just read by
+  // each rendered value or relation
+  //
+  // To generate the placeholders we need to be calculate the schema for an
+  // entity. We should just make a useSchema hook that reads useTypes and
+  // then fetches all the properties as needed. We can also put the code
+  // for semantic schema expansion there, too. We already have all the code
+  // we need for normal schema in useEntity.
+  //
+  // @NOTE – how to optimize?
+  // Lastly we can keep track of all the properties we're rendering. To do so
+  // we actually need to track all the values and relations again so we end up
+  // back to non-granular rendering? I guess this should only re-render if there
+  // is actually new data and shouldn't re-render if we have the same properties
+  // as last render.
 
   // Scope the placeholder renderables to the entityId so that we don't have to worry about
   // them being shared across different entities.
@@ -40,6 +91,10 @@ export function useRenderables(spaceId: string, isRelationPage?: boolean) {
 
   const values = useValues({
     selector: v => v.spaceId === spaceId && v.entity.id === id,
+  });
+
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === id && r.spaceId === spaceId,
   });
 
   // @TODO(migration): Type properties aren't working with new data model
@@ -140,7 +195,7 @@ const placeholderRenderablesAtomFamily = atomFamily(
  * solve that afterwards.
  */
 
-function usePlaceholderRenderables(entityId: string) {
+export function usePlaceholderRenderables(entityId: string) {
   const [placeholderRenderables, setPlaceholderRenderables] = useAtom(placeholderRenderablesAtomFamily(entityId));
 
   const onAddPlaceholderRenderable = (renderable: RenderableProperty) => {
@@ -158,6 +213,52 @@ function usePlaceholderRenderables(entityId: string) {
     addPlaceholderRenderable: onAddPlaceholderRenderable,
     removeEmptyPlaceholderRenderable: onRemoveEmptyPlaceholderRenderable,
   };
+}
+
+export function usePlaceholderRenderables_V2(entityId: string) {
+  const [placeholders, setPlaceholders] = React.useState<Record<string, Value | Relation>>({});
+
+  const onAddPlaceholderRenderable = (placeholdersToAdd: { propertyId: string; dataType: DataType }[]) => {
+    const newPlaceholders = placeholders;
+
+    for (const newPlaceholder of placeholdersToAdd) {
+      if (newPlaceholder.dataType === 'RELATION') {
+        // ... Add placeholder relation
+      } else {
+        // ... Add placeholder value
+      }
+    }
+
+    setPlaceholders(newPlaceholders);
+  };
+
+  const getPlaceholder = (propertyId: string, dataType: DataType) => {
+    const placeholder = placeholders[propertyId];
+
+    if (placeholder) {
+      if (dataType === 'RELATION') {
+        return isRelation(placeholder) ? placeholder : null;
+      }
+
+      return isValue(placeholder) ? placeholder : null;
+    }
+
+    return null;
+  };
+
+  return {
+    placeholders,
+    addPlaceholder: onAddPlaceholderRenderable,
+    getPlaceholder,
+  };
+}
+
+function isValue(value: Relation | Value): value is Value {
+  return 'value' in value;
+}
+
+function isRelation(relation: Relation | Value): relation is Relation {
+  return 'fromEntity' in relation;
 }
 
 export function sortRenderables(renderables: RenderableProperty[], isRelationPage?: boolean) {
@@ -213,4 +314,21 @@ export function sortRenderables(renderables: RenderableProperty[], isRelationPag
 
     return (propertyNameA || '').localeCompare(propertyNameB || '');
   });
+}
+
+export function useEditableProperties(entityId: string, spaceId: string) {
+  const renderedProperties = useRenderedProperties(entityId, spaceId);
+  const placeholderProperties = usePlaceholderProperties(entityId, spaceId);
+
+  const properties: Record<string, Property> = {};
+
+  for (const p of [...Object.values(placeholderProperties)]) {
+    properties[p.id] = p;
+  }
+
+  for (const p of [...Object.values(renderedProperties)]) {
+    properties[p.id] = p;
+  }
+
+  return properties;
 }

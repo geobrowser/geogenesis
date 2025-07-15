@@ -1,12 +1,12 @@
-import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
 import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
-import { useRenderables } from '~/core/hooks/use-renderables';
+import { useRenderedProperties } from '~/core/hooks/use-renderables';
 import { useQueryEntity, useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
-import { DataType, RawRenderableType, RenderableProperty } from '~/core/v2.types';
+import { DataType, RawRenderableType } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -16,8 +16,6 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
-
-type Renderables = Record<string, RenderableProperty[]>;
 
 interface Props {
   id: string;
@@ -32,34 +30,33 @@ const SKIPPED_PROPERTIES: string[] = [
   RENDERABLE_TYPE_PROPERTY,
 ];
 
+function countRenderableProperty(renderedProperties: string[]): number {
+  let count = 0;
+  renderedProperties.forEach(propertyId => {
+    if (!SKIPPED_PROPERTIES.includes(propertyId)) {
+      count++;
+    }
+  });
+  return count;
+}
+
 export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
-  const { renderablesGroupedByAttributeId: renderables } = useRenderables(spaceId);
+  const renderedProperties = useRenderedProperties(entityId, spaceId);
 
-  function countRenderableProperty(renderables: Renderables): number {
-    let count = 0;
-    Object.values(renderables).forEach(renderable => {
-      const attributeId = renderable[0].propertyId;
-      if (!SKIPPED_PROPERTIES.includes(attributeId)) {
-        count++;
-      }
-    });
-    return count;
-  }
-
-  if (countRenderableProperty(renderables) <= 0) {
+  if (countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
     return null;
   }
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
-      {Object.entries(renderables).map(([attributeId, renderable]) => {
-        const isRelation = renderable[0].type === 'RELATION' || renderable[0].type === 'IMAGE';
+      {Object.entries(renderedProperties).map(([propertyId, property]) => {
+        const isRelation = property.dataType === 'RELATION';
 
         if (isRelation) {
-          return <RelationsGroup key={attributeId} entityId={entityId} spaceId={spaceId} propertyId={attributeId} />;
+          return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
         }
 
-        return <ValuesGroup key={attributeId} entityId={entityId} propertyId={attributeId} spaceId={spaceId} />;
+        return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
       })}
     </div>
   );
@@ -235,7 +232,7 @@ function RenderedValue({
   }
 
   switch (renderableType) {
-    case 'URL':
+    case SystemIds.URL:
       return <WebUrlField key={`uri-${propertyId}-${value}`} isEditing={false} spaceId={spaceId} value={value} />;
     case 'TEXT':
       return (

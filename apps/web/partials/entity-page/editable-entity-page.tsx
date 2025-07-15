@@ -6,15 +6,14 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useRenderables } from '~/core/hooks/use-renderables';
+import { useEditableProperties, usePlaceholderRenderables } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useCover, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
-import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
-import { NativeRenderableProperty, Relation, RenderableProperty, Value } from '~/core/v2.types';
+import { Property, Relation, Value, ValueOptions } from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -32,7 +31,6 @@ import { Text } from '~/design-system/text';
 
 import { DateFormatDropdown } from './date-format-dropdown';
 import { NumberOptionsDropdown } from './number-options-dropdown';
-import { RenderableTypeDropdown } from './renderable-type-dropdown';
 import { editorHasContentAtom } from '~/atoms';
 
 interface Props {
@@ -41,8 +39,10 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, spaceId }: Props) {
-  const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
-    useRenderables(spaceId);
+  const { addPlaceholderRenderable } = usePlaceholderRenderables(id);
+
+  const renderedProperties = useEditableProperties(id, spaceId);
+  const propertiesEntries = Object.entries(renderedProperties);
 
   const { storage } = useMutate();
 
@@ -50,7 +50,6 @@ export function EditableEntityPage({ id, spaceId }: Props) {
   const coverUrl = useCover(id);
   const types = useEntityTypes(id, spaceId);
   const { blockIds } = useEditorStore();
-  // Use the shared atom directly to get the latest value
   const [editorHasContent] = useAtom(editorHasContentAtom);
 
   // Show the properties panel when:
@@ -65,14 +64,14 @@ export function EditableEntityPage({ id, spaceId }: Props) {
     types.length > 0 ||
     (blockIds && blockIds.length > 0) ||
     editorHasContent ||
-    Object.entries(renderablesGroupedByAttributeId).length > 0;
+    propertiesEntries.length > 0;
 
   return (
     showPropertiesPanel && (
       <>
         <div className="rounded-lg border border-grey-02 shadow-button">
           <div className="flex flex-col gap-6 p-5">
-            {Object.entries(renderablesGroupedByAttributeId).length === 0 && (
+            {propertiesEntries.length === 0 && (
               <div className="flex flex-col items-center justify-center py-4 text-center">
                 <Text as="p" variant="body" color="grey-04">
                   No properties added yet
@@ -82,51 +81,34 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                 </Text>
               </div>
             )}
-            {Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
-              // Triple groups only ever have one renderable
-              const firstRenderable = renderables[0];
-              const renderableType = firstRenderable.type;
-
+            {propertiesEntries.map(([propertyId, property]) => {
               // Hide cover/avatar/types/name property, user can upload cover using upload icon on top placeholder
               // and add types inline using the + button, add name under cover image component
               if (
-                firstRenderable.propertyId === SystemIds.COVER_PROPERTY ||
-                firstRenderable.propertyId === ContentIds.AVATAR_PROPERTY ||
-                firstRenderable.propertyId === SystemIds.TYPES_PROPERTY ||
-                firstRenderable.propertyId === SystemIds.NAME_PROPERTY
+                propertyId === SystemIds.COVER_PROPERTY ||
+                propertyId === ContentIds.AVATAR_PROPERTY ||
+                propertyId === SystemIds.TYPES_PROPERTY ||
+                propertyId === SystemIds.NAME_PROPERTY
               ) {
                 return null;
               }
 
               return (
-                <div key={`${id}-${attributeId}`} className="relative break-words">
-                  <EditableAttribute
-                    renderable={firstRenderable}
-                    onChange={() => {
-                      // If we create a placeholder using the + button the placeholder gets an empty
-                      // attribute id. If we then add an attribute the placeholder won't get removed
-                      // because the placeholder attribute id is different than the new attribute id.
-                      //
-                      // Here we manually remove the placeholder when the attribute is changed. This is
-                      // a bit of different control flow from how we handle other placeholders, but it's
-                      // only necessary on entity pages.
-                      if (firstRenderable.placeholder === true && firstRenderable.propertyId === '') {
-                        removeEmptyPlaceholderRenderable(firstRenderable);
-                      }
-                    }}
-                  />
-                  {renderableType === 'RELATION' || renderableType === 'IMAGE' ? (
-                    <RelationsGroup key={attributeId} propertyId={attributeId} id={id} spaceId={spaceId} />
+                <div key={`${id}-${propertyId}`} className="relative break-words">
+                  <RenderedProperty spaceId={spaceId} property={property} />
+
+                  {property.dataType === 'RELATION' || property.renderableType === 'IMAGE' ? (
+                    <RelationsGroup key={propertyId} propertyId={propertyId} id={id} spaceId={spaceId} />
                   ) : (
-                    <RenderedValue key={attributeId} propertyId={attributeId} entityId={id} spaceId={spaceId} />
+                    <RenderedValue key={propertyId} propertyId={propertyId} entityId={id} spaceId={spaceId} />
                   )}
                   {/* We need to pin to top for Geo Location to prevent covering the display toggle */}
                   <div
-                    className={`absolute right-0 flex items-center gap-1 ${firstRenderable.propertyId === SystemIds.GEO_LOCATION_PROPERTY && renderableType === 'POINT' ? 'top-0' : 'top-6'}`}
+                    className={`absolute right-0 flex items-center gap-1 ${propertyId === SystemIds.GEO_LOCATION_PROPERTY && property.dataType === 'POINT' ? 'top-0' : 'top-6'}`}
                   >
                     {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
                     <>
-                      {renderableType === 'TIME' && (
+                      {/* {property.dataType === 'TIME' && (
                         <DateFormatDropdown
                           value={firstRenderable.value}
                           // @TODO(migration): fix formatting. Now on property
@@ -138,7 +120,7 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                           }}
                         />
                       )}
-                      {renderableType === 'NUMBER' && (
+                      {property.dataType === 'NUMBER' && (
                         <NumberOptionsDropdown
                           value={firstRenderable.value}
                           // @TODO(migration): Fix format. Now defined on Property
@@ -155,22 +137,19 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                             });
                           }}
                         />
-                      )}
-                      {/*
-                        @TODO(migration): Renderable type is no longer selectable. Instead it's
-                        defined on the Property
-                      */}
-                      <RenderableTypeDropdown value={renderableType} options={[]} />
+                      )} */}
+
+                      {/* <RenderableTypeDropdown value={renderableType} options={[]} /> */}
 
                       {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
-                      {renderableType !== 'RELATION' && (
+                      {/* {property.dataType !== 'RELATION' && (
                         <SquareButton
                           icon={<Trash />}
                           onClick={() => {
                             storage.renderables.values.delete(firstRenderable as NativeRenderableProperty);
                           }}
                         />
-                      )}
+                      )} */}
                     </>
                   </div>
                 </div>
@@ -200,71 +179,66 @@ export function EditableEntityPage({ id, spaceId }: Props) {
   );
 }
 
-function EditableAttribute({ renderable, onChange }: { renderable: RenderableProperty; onChange: () => void }) {
-  const { spaceId } = useEntityStoreInstance();
-  const { storage } = useMutate();
+function RenderedProperty({ property, spaceId }: { property: Property; spaceId: string }) {
+  // if (property.placeholder) {
+  //   return (
+  //     <>
+  //       <SelectEntity
+  //         placeholder="Add property..."
+  //         spaceId={spaceId}
+  //         relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+  //         onCreateEntity={result => {
+  //           storage.renderables.values.set({
+  //             propertyId: SystemIds.NAME_PROPERTY,
+  //             entityId: result.id,
+  //             spaceId,
+  //             propertyName: 'Name',
+  //             entityName: result.name,
+  //             type: 'TEXT',
+  //             value: result.name ?? '',
+  //           });
 
-  if (renderable.propertyId === '') {
-    return (
-      <>
-        <SelectEntity
-          placeholder="Add property..."
-          spaceId={spaceId}
-          relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-          onCreateEntity={result => {
-            storage.renderables.values.set({
-              propertyId: SystemIds.NAME_PROPERTY,
-              entityId: result.id,
-              spaceId,
-              propertyName: 'Name',
-              entityName: result.name,
-              type: 'TEXT',
-              value: result.name ?? '',
-            });
-
-            storage.relations.set({
-              id: Id.generate(),
-              entityId: Id.generate(),
-              spaceId,
-              renderableType: 'RELATION',
-              verified: result.verified,
-              toSpaceId: result.space,
-              type: {
-                id: SystemIds.TYPES_PROPERTY,
-                name: 'Types',
-              },
-              fromEntity: {
-                id: result.id,
-                name: result.name,
-              },
-              toEntity: {
-                id: SystemIds.PROPERTY,
-                name: 'Property',
-                value: SystemIds.PROPERTY,
-              },
-            });
-          }}
-          onDone={result => {
-            onChange();
-
-            // @TODO(migration): Change functionality based on property data type
-
-            // .send({
-            //   type: 'UPSERT_PROPERTY',
-            //   payload: { renderable, propertyId: result.id, propertyName: result.name },
-            // });
-          }}
-          withSelectSpace={false}
-          advanced={false}
-        />
-      </>
-    );
-  }
+  //           storage.relations.set({
+  //             id: Id.generate(),
+  //             entityId: Id.generate(),
+  //             spaceId,
+  //             renderableType: 'RELATION',
+  //             verified: result.verified,
+  //             toSpaceId: result.space,
+  //             type: {
+  //               id: SystemIds.TYPES_PROPERTY,
+  //               name: 'Types',
+  //             },
+  //             fromEntity: {
+  //               id: result.id,
+  //               name: result.name,
+  //             },
+  //             toEntity: {
+  //               id: SystemIds.PROPERTY,
+  //               name: 'Property',
+  //               value: SystemIds.PROPERTY,
+  //             },
+  //           });
+  //         }}
+  //         onDone={result => {
+  //           // @TODO(migration): Change functionality based on property data type
+  //           // onChange();
+  //           // .send({
+  //           //   type: 'UPSERT_PROPERTY',
+  //           //   payload: { renderable, propertyId: result.id, propertyName: result.name },
+  //           // });
+  //         }}
+  //         withSelectSpace={false}
+  //         advanced={false}
+  //       />
+  //     </>
+  //   );
+  // }
 
   return (
-    <Link href={NavUtils.toEntity(spaceId, renderable.propertyId)}>
+    <Link href={NavUtils.toEntity(spaceId, property.id)}>
       <Text as="p" variant="bodySemibold">
-        {renderable.propertyName ?? renderable.propertyId}
+        {property.name ?? property.id}
       </Text>
     </Link>
   );
@@ -280,15 +254,15 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   const { storage } = useMutate();
   const name = useName(id, spaceId);
 
+  // @TODO: Should just read from local property store instead of querying since
+  // it should already be queried in useEditableProperties
   const { property } = useQueryProperty({ id: propertyId });
 
   const relations = useRelations({
     selector: r => r.fromEntity.id === id && r.spaceId === spaceId && r.type.id === propertyId,
   });
 
-  if (relations.length === 0) {
-    return null;
-  }
+  const hasPlaceholders = relations.length === 0;
 
   if (!property) {
     return null;
@@ -297,8 +271,6 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   const typeOfId = property.id;
   const typeOfName = property.name;
   const relationValueTypes = property.relationValueTypes;
-  // const hasPlaceholders = relations.some(r => r.placeholder === true);
-  const hasPlaceholders = false;
   const valueType = relationValueTypes?.[0];
 
   return (
@@ -364,102 +336,8 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
           );
         }
 
-        if (property.renderableType === SystemIds.IMAGE) {
+        if (property.renderableType === SystemIds.IMAGE && !hasPlaceholders) {
           return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue)} />;
-        }
-
-        if (r.placeholder === true) {
-          return (
-            <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
-              <SelectEntity
-                key={JSON.stringify(relationValueTypes)}
-                spaceId={spaceId}
-                relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
-                onCreateEntity={result => {
-                  storage.values.set({
-                    id: ID.createValueId({
-                      entityId: result.id,
-                      propertyId: SystemIds.NAME_PROPERTY,
-                      spaceId,
-                    }),
-                    entity: {
-                      id: result.id,
-                      name: result.name,
-                    },
-                    property: {
-                      id: SystemIds.NAME_PROPERTY,
-                      name: 'Name',
-                      dataType: 'TEXT',
-                    },
-                    spaceId,
-                    value: result.name ?? '',
-                  });
-
-                  if (valueType) {
-                    storage.relations.set({
-                      id: Id.generate(),
-                      entityId: Id.generate(),
-                      spaceId,
-                      renderableType: 'RELATION',
-                      verified: result.verified,
-                      toSpaceId: result.space,
-                      type: {
-                        id: SystemIds.TYPES_PROPERTY,
-                        name: 'Types',
-                      },
-                      fromEntity: {
-                        id: result.id,
-                        name: result.name,
-                      },
-                      toEntity: {
-                        id: valueType.id,
-                        name: valueType.name,
-                        value: valueType.id,
-                      },
-                    });
-                  }
-                }}
-                onDone={result => {
-                  const newRelationId = ID.createEntityId();
-                  // @TODO(migration): lightweight relation pointing to entity id
-                  const newEntityId = ID.createEntityId();
-
-                  const newRelation: Relation = {
-                    id: newRelationId,
-                    spaceId: spaceId,
-                    position: Position.generate(),
-                    renderableType: 'RELATION',
-                    verified: false,
-                    entityId: newEntityId,
-                    type: {
-                      id: propertyId,
-                      name: property.name,
-                    },
-                    fromEntity: {
-                      id: id,
-                      name: name,
-                    },
-                    toEntity: {
-                      id: result.id,
-                      name: result.name,
-                      value: result.id,
-                    },
-                  };
-
-                  if (result.space) {
-                    newRelation.toSpaceId = result.space;
-                  }
-
-                  if (result.verified) {
-                    newRelation.verified = true;
-                  }
-
-                  storage.relations.set(newRelation);
-                }}
-                variant="fixed"
-              />
-            </div>
-          );
         }
 
         if (relationId !== SystemIds.TYPES_PROPERTY) {
@@ -574,6 +452,97 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
           />
         </div>
       )}
+
+      {hasPlaceholders && (
+        <div key={`relation-select-entity-${property.id}`} data-testid="select-entity" className="w-full">
+          <SelectEntity
+            spaceId={spaceId}
+            relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
+            onCreateEntity={result => {
+              storage.values.set({
+                id: ID.createValueId({
+                  entityId: result.id,
+                  propertyId: SystemIds.NAME_PROPERTY,
+                  spaceId,
+                }),
+                entity: {
+                  id: result.id,
+                  name: result.name,
+                },
+                property: {
+                  id: SystemIds.NAME_PROPERTY,
+                  name: 'Name',
+                  dataType: 'TEXT',
+                },
+                spaceId,
+                value: result.name ?? '',
+              });
+
+              if (valueType) {
+                storage.relations.set({
+                  id: Id.generate(),
+                  entityId: Id.generate(),
+                  spaceId,
+                  renderableType: 'RELATION',
+                  verified: result.verified,
+                  toSpaceId: result.space,
+                  type: {
+                    id: SystemIds.TYPES_PROPERTY,
+                    name: 'Types',
+                  },
+                  fromEntity: {
+                    id: result.id,
+                    name: result.name,
+                  },
+                  toEntity: {
+                    id: valueType.id,
+                    name: valueType.name,
+                    value: valueType.id,
+                  },
+                });
+              }
+            }}
+            onDone={result => {
+              const newRelationId = ID.createEntityId();
+              // @TODO(migration): lightweight relation pointing to entity id
+              const newEntityId = ID.createEntityId();
+
+              const newRelation: Relation = {
+                id: newRelationId,
+                spaceId: spaceId,
+                position: Position.generate(),
+                renderableType: 'RELATION',
+                verified: false,
+                entityId: newEntityId,
+                type: {
+                  id: propertyId,
+                  name: property.name,
+                },
+                fromEntity: {
+                  id: id,
+                  name: name,
+                },
+                toEntity: {
+                  id: result.id,
+                  name: result.name,
+                  value: result.id,
+                },
+              };
+
+              if (result.space) {
+                newRelation.toSpaceId = result.space;
+              }
+
+              if (result.verified) {
+                newRelation.verified = true;
+              }
+
+              storage.relations.set(newRelation);
+            }}
+            variant="fixed"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -586,14 +555,9 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
     selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
   });
 
-  // Should only be one value for a given (space, entity, property) tuple
-  const rawValue = values[0];
+  const rawValue: Value | undefined = values[0] as Value | undefined;
   const value = rawValue?.value ?? '';
   const options = rawValue?.options;
-
-  if (!rawValue) {
-    return null;
-  }
 
   if (!property) {
     return null;
@@ -602,6 +566,33 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
   if (propertyId === SystemIds.NAME_PROPERTY) {
     return null;
   }
+
+  const onChange = (value: string, options?: ValueOptions) => {
+    if (!rawValue) {
+      storage.values.set({
+        spaceId,
+        entity: {
+          id: entityId,
+          name: null,
+        },
+        property: {
+          id: property.id,
+          name: property.name,
+          dataType: property.dataType,
+          renderableType: property.renderableType,
+        },
+        value: value,
+        options,
+      });
+
+      return;
+    }
+
+    storage.values.update(rawValue, draft => {
+      draft.value = value;
+      draft.options = options;
+    });
+  };
 
   switch (property.dataType) {
     case 'TEXT': {
@@ -612,11 +603,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
           placeholder="Add value..."
           aria-label="text-field"
           value={value}
-          onChange={value => {
-            storage.values.update(rawValue, draft => {
-              draft.value = value;
-            });
-          }}
+          onChange={onChange}
         />
       );
     }
@@ -629,11 +616,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
           // @TODO(migration): Fix formatting. Now on property
           // format={renderable.options?.format}
           unitId={options?.unit}
-          onChange={value => {
-            storage.values.update(rawValue, draft => {
-              draft.value = value;
-            });
-          }}
+          onChange={onChange}
         />
       );
     case 'CHECKBOX': {
@@ -644,9 +627,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
           key={`checkbox-${propertyId}-${value}`}
           checked={checked}
           onChange={() => {
-            storage.values.update(rawValue, draft => {
-              draft.value = !checked ? '1' : '0';
-            });
+            onChange(checked ? '0' : '1');
           }}
         />
       );
@@ -656,11 +637,9 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
         <DateField
           key={propertyId}
           // format={renderable.options?.format}
-          onBlur={({ value, format }) =>
-            storage.values.update(rawValue, draft => {
-              draft.value = value;
-            })
-          }
+          onBlur={({ value, format }) => {
+            onChange(value);
+          }}
           isEditing={true}
           value={value}
           propertyId={propertyId}
@@ -703,11 +682,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
               placeholder="Add value..."
               aria-label="text-field"
               value={value}
-              onChange={value => {
-                storage.values.update(rawValue, draft => {
-                  draft.value = value;
-                });
-              }}
+              onChange={onChange}
             />
           ) : (
             <PageStringField
@@ -716,11 +691,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
               placeholder="Add value..."
               aria-label="text-field"
               value={value}
-              onChange={value => {
-                storage.values.update(rawValue, draft => {
-                  draft.value = value;
-                });
-              }}
+              onChange={onChange}
             />
           )}
         </>
