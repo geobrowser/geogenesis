@@ -324,6 +324,10 @@ export class EntityQuery {
         return this.matchesRelations(entity.relations, condition);
       }
 
+      case 'backlinks': {
+        return this.matchesBacklinks(entity, condition);
+      }
+
       default:
         return false;
     }
@@ -416,6 +420,51 @@ export class EntityQuery {
         }
 
         return true;
+      });
+    });
+  }
+
+  /**
+   * Check if any backlinks match the condition
+   */
+  private matchesBacklinks(entity: Entity, condition: BacklinkCondition | BacklinkCondition[]): boolean {
+    const conditions = Array.isArray(condition) ? condition : [condition];
+
+    return conditions.some(cond => {
+      return this.entities.some(otherEntity => {
+        return otherEntity.relations.some(relation => {
+          // Check if this relation points TO the current entity
+          if (relation.toEntity.id !== entity.id) {
+            return false;
+          }
+
+          // Check typeOf.id
+          if (cond.typeOf?.id && !this.matchesStringCondition(relation.type.id as string, cond.typeOf.id)) {
+            return false;
+          }
+
+          // Check typeOf.name
+          if (cond.typeOf?.name && !this.matchesStringCondition(relation.type.name || '', cond.typeOf.name)) {
+            return false;
+          }
+
+          // Check fromEntity.id
+          if (cond.fromEntity?.id && !this.matchesStringCondition(relation.fromEntity.id, cond.fromEntity.id)) {
+            return false;
+          }
+
+          // Check fromEntity.name
+          if (cond.fromEntity?.name && !this.matchesStringCondition(relation.fromEntity.name || '', cond.fromEntity.name)) {
+            return false;
+          }
+
+          // Check space
+          if (cond.space && !this.matchesStringCondition(relation.spaceId, cond.space)) {
+            return false;
+          }
+
+          return true;
+        });
       });
     });
   }
