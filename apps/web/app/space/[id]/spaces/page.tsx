@@ -29,13 +29,15 @@ export type SpaceData = {
 };
 
 const getAddress = async (id: string) => {
-  const onChainProfile = await fetchOnchainProfileByEntityId(id);
+  return null;
 
-  if (!onChainProfile) return null;
+  // const onChainProfile = await fetchOnchainProfileByEntityId(id);
 
-  const address = onChainProfile.accountId;
+  // if (!onChainProfile) return null;
 
-  return address;
+  // const address = onChainProfile.accountId;
+
+  // return address;
 };
 
 const getSpaces = async (address: string) => {
