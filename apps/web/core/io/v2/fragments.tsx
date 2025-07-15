@@ -344,6 +344,10 @@ export const entityBacklinksQuery = graphql(/* GraphQL */ `
           id
           name
           spaceIds
+          types {
+            id
+            name
+          }
         }
       }
     }

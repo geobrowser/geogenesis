@@ -2,6 +2,7 @@ import type { EntityFilter } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/v2.types';
 
 import { Space } from '../dto/spaces';
+
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
@@ -119,7 +120,11 @@ export function getEntityBacklinks(entityId: string, spaceId?: string, signal?: 
   return graphql({
     query: entityBacklinksQuery,
     decoder: data =>
-      data.entity?.backlinksList ? (data.entity.backlinksList.map(e => e?.fromEntity).filter(e => !!e) ?? []) : [],
+      data.entity?.backlinksList 
+        ? (data.entity.backlinksList
+            .map((e: any) => e?.fromEntity)
+            .filter((e): e is { id: string; name?: string | null; spaceIds: string[]; types: Array<{ id: string; name: string }> } => e !== null) ?? []) 
+        : [],
     variables: { id: entityId, spaceId },
     signal,
   });
