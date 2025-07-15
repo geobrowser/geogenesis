@@ -1,9 +1,4 @@
-import {
-  BaseRelationRenderableProperty,
-  ImageRelationRenderableProperty,
-  NativeRenderableProperty,
-  ValueOptions,
-} from '~/core/v2.types';
+import { DataType, ValueOptions } from '~/core/v2.types';
 
 export type BlockId = string;
 
@@ -56,21 +51,21 @@ export type TripleChange = NativeTripleChange;
 export type RenderableChange = TripleChange | RelationChange;
 
 type BaseRelationChange = {
-  type: BaseRelationRenderableProperty['type'];
+  type: 'RELATION';
   attribute: Attribute;
   before: RelationChangeValue | null;
   after: RelationChangeValue | null;
 };
 
 type ImageRelationChange = {
-  type: ImageRelationRenderableProperty['type'];
+  type: 'IMAGE';
   attribute: Attribute;
   before: RelationChangeValue | null;
   after: RelationChangeValue | null;
 };
 
 type NativeTripleChange = {
-  type: NativeRenderableProperty['type'];
+  type: DataType;
   attribute: Attribute;
   before: TripleChangeValue | null;
   after: TripleChangeValue | null;

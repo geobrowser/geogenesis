@@ -6,7 +6,7 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useEditableProperties, usePlaceholderRenderables } from '~/core/hooks/use-renderables';
+import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useCover, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
@@ -78,8 +78,6 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, spaceId }: Props) {
-  const { addPlaceholderRenderable } = usePlaceholderRenderables(id);
-
   const renderedProperties = useEditableProperties(id, spaceId);
   const propertiesEntries = Object.entries(renderedProperties);
 
@@ -179,21 +177,7 @@ export function EditableEntityPage({ id, spaceId }: Props) {
           })}
         </div>
         <div className="p-4">
-          <SquareButton
-            onClick={() => {
-              addPlaceholderRenderable({
-                type: 'TEXT',
-                entityId: id,
-                entityName: name ?? '',
-                propertyId: '',
-                propertyName: null,
-                value: '',
-                spaceId,
-                placeholder: true,
-              });
-            }}
-            icon={<Create />}
-          />
+          <SquareButton onClick={() => {}} icon={<Create />} />
         </div>
       </div>
     </ShowablePanel>
