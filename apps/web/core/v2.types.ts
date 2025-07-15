@@ -195,13 +195,15 @@ export type SpaceEntity = Entity & {
 
 export type Cell = {
   slotId: string;
-  cellId: string;
+  propertyId: string;
   name: string | null;
-  renderables: RenderableProperty[];
   description?: string | null;
   image?: string | null;
   space?: string;
   verified?: boolean;
+  /**
+   * We can render a different property in the same "slot"
+   */
   renderedPropertyId?: string;
   collectionId?: string;
   relationId?: string;

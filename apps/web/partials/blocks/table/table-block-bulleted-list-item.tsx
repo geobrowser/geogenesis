@@ -37,7 +37,7 @@ export function TableBlockBulletedListItem({
   source,
 }: Props) {
   const nameCell = columns[SystemIds.NAME_PROPERTY];
-  const { cellId, verified } = nameCell;
+  const { propertyId: cellId, verified } = nameCell;
 
   const name = getName(nameCell, currentSpaceId);
 

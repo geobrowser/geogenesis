@@ -45,7 +45,7 @@ export function TableBlockListItem({
   const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_PROPERTY];
   const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_PROPERTY];
 
-  const { cellId, verified } = nameCell;
+  const { propertyId: cellId, verified } = nameCell;
   let { description, image } = nameCell;
 
   const name = getName(nameCell, currentSpaceId);

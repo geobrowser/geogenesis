@@ -69,6 +69,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
 
 export const getName = (nameCell: Cell, currentSpaceId: string) => {
   let name = nameCell?.name;
+
   const maybeNameInSpaceRenderable = nameCell.renderables.find(
     r => r.propertyId === SystemIds.NAME_PROPERTY && r.spaceId === currentSpaceId
   );

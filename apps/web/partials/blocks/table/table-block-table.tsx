@@ -107,13 +107,11 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
-    const maybePropertiesSchema = propertiesSchema?.[cellData.slotId];
+    const property = propertiesSchema?.[cellData.slotId];
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
     const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
     const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space) : space;
-
-    const renderables = cellData.renderables;
 
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
@@ -124,15 +122,17 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;
 
+    if (!property) {
+      return null;
+    }
+
     if (isEditable && source.type !== 'RELATIONS') {
       return (
         <EditableEntityTableCell
           key={entityId}
           entityId={entityId}
           spaceId={spaceId}
-          attributeId={propertyId}
-          renderables={renderables}
-          filterSearchByTypes={maybePropertiesSchema?.relationValueTypes}
+          property={property}
           isPlaceholderRow={Boolean(row.original.placeholder)}
           name={name}
           currentSpaceId={space}
@@ -151,9 +151,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         key={entityId}
         entityId={entityId}
         spaceId={spaceId}
-        columnId={propertyId}
-        // Don't want to render placeholders in edit mode
-        renderables={renderables.filter(r => r.placeholder !== true)}
+        property={property}
         isExpanded={isExpanded}
         name={name}
         href={href}
@@ -286,15 +284,15 @@ export const TableBlockTable = ({
           <tbody>
             {tableRows.map((row, index: number) => {
               const cells = row.getVisibleCells();
-              const entityId = cells?.[0]?.getValue<Cell>()?.cellId;
+              const entityId = cells?.[0]?.getValue<Cell>()?.propertyId;
 
               return (
                 <tr key={entityId ?? index} className="hover:bg-bg">
                   {cells.map(cell => {
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
-                    const firstRenderable = cell.getValue<Cell>()?.renderables[0];
+                    const propertyId = cell.getValue<Cell>().propertyId;
 
-                    const isNameCell = Boolean(firstRenderable?.propertyId === SystemIds.NAME_PROPERTY);
+                    const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
