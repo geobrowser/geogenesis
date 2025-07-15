@@ -39,7 +39,8 @@ export function TableBlockBulletedListItem({
   const nameCell = columns[SystemIds.NAME_PROPERTY];
   const { propertyId: cellId, verified } = nameCell;
 
-  const name = getName(nameCell, currentSpaceId);
+  // const name = getName(nameCell, currentSpaceId);
+  const name = 'Banana'; // @TODO: Fix name
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 

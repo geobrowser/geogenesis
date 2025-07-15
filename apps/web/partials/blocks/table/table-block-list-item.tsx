@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useRelations, useValues } from '~/core/sync/use-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
@@ -42,27 +43,28 @@ export function TableBlockListItem({
   source,
 }: Props) {
   const nameCell = columns[SystemIds.NAME_PROPERTY];
-  const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_PROPERTY];
-  const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
   let { description, image } = nameCell;
 
-  const name = getName(nameCell, currentSpaceId);
+  // const name = getName(nameCell, currentSpaceId);
+  const name = 'Banana'; // @TODO: Fix name
+  const descriptionValues = useValues({
+    selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
+  });
 
-  const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
-    r => r.propertyId === SystemIds.DESCRIPTION_PROPERTY && r.spaceId === currentSpaceId
-  )?.value;
-
-  const maybeDescription =
-    maybeDescriptionInSpace ??
-    maybeDescriptionData?.renderables.find(r => r.propertyId === SystemIds.DESCRIPTION_PROPERTY)?.value;
+  const maybeDescriptionInSpace = descriptionValues.find(r => r.spaceId === currentSpaceId)?.value;
+  const maybeDescription = maybeDescriptionInSpace ?? descriptionValues[0]?.value;
 
   if (maybeDescription) {
     description = maybeDescription;
   }
 
-  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.propertyId === ContentIds.AVATAR_PROPERTY)?.value;
+  const avatarRelations = useRelations({
+    selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
+  });
+
+  const maybeAvatarUrl = avatarRelations[0]?.toEntity.value;
 
   if (maybeAvatarUrl) {
     image = maybeAvatarUrl;
@@ -330,16 +332,19 @@ export function TableBlockListItem({
 
           {!isPlaceholder &&
             otherPropertyData.map(p => {
+              const property = properties?.[p.slotId];
+
+              if (!property) {
+                return null;
+              }
+
               return (
                 <div key={p.slotId}>
                   <TableBlockPropertyField
                     key={p.slotId}
-                    renderables={
-                      nameCell?.space ? p.renderables.filter(r => r.spaceId === nameCell.space) : p.renderables
-                    }
                     spaceId={currentSpaceId}
                     entityId={rowEntityId}
-                    properties={properties}
+                    property={property}
                     onChangeEntry={onChangeEntry}
                     source={source}
                   />
@@ -389,18 +394,19 @@ export function TableBlockListItem({
         {description && <div className="line-clamp-4 text-metadata text-text md:line-clamp-3">{description}</div>}
 
         {otherPropertyData.map(p => {
+          const property = properties?.[p.slotId];
+
+          if (!property) {
+            return null;
+          }
+
           return (
             <div key={`${p.slotId}-${cellId}`}>
               <TableBlockPropertyField
                 key={p.slotId}
-                renderables={
-                  nameCell?.space
-                    ? p.renderables.filter(r => Boolean(r.placeholder) === false && r.spaceId === nameCell.space)
-                    : p.renderables.filter(r => Boolean(r.placeholder) === false)
-                }
                 spaceId={currentSpaceId}
                 entityId={cellId}
-                properties={properties}
+                property={property}
                 onChangeEntry={onChangeEntry}
                 source={source}
               />

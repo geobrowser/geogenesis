@@ -116,7 +116,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
-    const name = getName(nameCell, space);
+    // const name = getName(nameCell, space);
+    const name = 'Banana'; // @TODO: Fix name
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
