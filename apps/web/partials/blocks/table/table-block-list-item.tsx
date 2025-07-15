@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
@@ -13,7 +14,6 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
-import { getName } from '~/partials/blocks/table/utils';
 
 import { TableBlockPropertyField } from './table-block-property-field';
 
@@ -47,8 +47,8 @@ export function TableBlockListItem({
   const { propertyId: cellId, verified } = nameCell;
   let { description, image } = nameCell;
 
-  // const name = getName(nameCell, currentSpaceId);
-  const name = 'Banana'; // @TODO: Fix name
+  const name = useName(rowEntityId);
+
   const descriptionValues = useValues({
     selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
   });

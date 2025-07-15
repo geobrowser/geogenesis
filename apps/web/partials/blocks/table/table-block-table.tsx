@@ -16,6 +16,7 @@ import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
 import { Cell, Property, Row } from '~/core/v2.types';
 
@@ -23,7 +24,6 @@ import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
-import { getName } from '~/partials/blocks/table/utils';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
@@ -116,8 +116,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
-    // const name = getName(nameCell, space);
-    const name = 'Banana'; // @TODO: Fix name
+    // We are in a component internally within react-table. eslint isn't
+    // able to infer that this is a valid React component.
+    // eslint-disable-next-line
+    const name = useName(entityId);
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
