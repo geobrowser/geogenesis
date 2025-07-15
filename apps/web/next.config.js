@@ -10,7 +10,7 @@ const nextConfig = {
   // reactStrictMode: true,
   experimental: {
     // Activate new client-side router improvements
-    clientSegmentCache: true,
+    // clientSegmentCache: true,
     // Enable persistent caching for the turbopack dev server and build.
     turbopackPersistentCaching: true,
     reactCompiler: true,
