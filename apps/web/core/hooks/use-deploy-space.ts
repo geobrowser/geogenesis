@@ -2,8 +2,9 @@
 
 import { useMutation } from '@tanstack/react-query';
 
+import { Environment } from '~/core/environment';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { EntityId } from '~/core/io/schema';
+import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { SpaceGovernanceType } from '../types';
@@ -45,20 +46,14 @@ export function useDeploySpace() {
           return null;
         }
 
-        const { spaceName, type, governanceType } = args;
+        const { spaceName, type, entityId } = args;
 
-        const url = new URL(
-          `/api/space/deploy?spaceName=${spaceName}&type=${type}&initialEditorAddress=${initialEditorAddress}`,
-          window.location.href
-        );
-
-        if (validateEntityId(args.entityId)) {
-          url.searchParams.set('entityId', args.entityId as EntityId);
-        }
+        let spaceAvatarUri: string | null = null;
+        let spaceCoverUri: string | null = null;
 
         if (args.type === 'personal' || args.type === 'company') {
           if (args.spaceImage && args.spaceImage !== '') {
-            url.searchParams.set('spaceAvatarUri', args.spaceImage);
+            spaceAvatarUri = args.spaceImage;
           }
         } else if (
           args.type === 'default' ||
@@ -72,15 +67,39 @@ export function useDeploySpace() {
           args.type === 'interest'
         ) {
           if (args.spaceImage && args.spaceImage !== '') {
-            url.searchParams.set('spaceCoverUri', args.spaceImage);
+            spaceCoverUri = args.spaceImage;
           }
         }
 
-        if (governanceType) {
-          url.searchParams.set('governanceType', governanceType);
+        const ops = await generateOpsForSpaceType({
+          type,
+          spaceName,
+          spaceAvatarUri,
+          spaceCoverUri,
+          initialEditorAddress,
+          entityId,
+        });
+
+        const config = Environment.getConfig();
+        const apiUrl = config.api.replace('/graphql', '/deploy');
+
+        const deployResult = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            initialEditorAddress,
+            spaceName,
+            spaceEntityId: validateEntityId(entityId) ? entityId : undefined,
+            ops,
+          }),
+        });
+
+        if (!deployResult.ok) {
+          throw new Error('Space deployment failed');
         }
 
-        const deployResult = await fetch(url);
         const json: { spaceId: string } = await deployResult.json();
         return json.spaceId;
       } catch (error) {

@@ -36,119 +36,123 @@ export const generateOpsForSpaceType = async ({
   ops.push(...newEntity.ops);
 
   // Add space type-specific ops
-  switch (type) {
-    case 'personal': {
-      const [personOps] = await cloneEntity({
-        oldEntityId: SystemIds.PERSON_TEMPLATE,
-        entityId: newEntityId,
-        entityName: spaceName,
-      });
+  try {
+    switch (type) {
+      case 'personal': {
+        const [personOps] = await cloneEntity({
+          oldEntityId: SystemIds.PERSON_TEMPLATE,
+          entityId: newEntityId,
+          entityName: spaceName,
+        });
 
-      ops.push(...personOps);
+        ops.push(...personOps);
 
-      const { accountId, ops: accountOps } = Account.make(initialEditorAddress);
+        const { accountId, ops: accountOps } = Account.make(initialEditorAddress);
 
-      ops.push(...accountOps);
+        ops.push(...accountOps);
 
-      const { ops: accountRelationOps } = Graph.createRelation({
-        fromEntity: newEntityId,
-        toEntity: accountId,
-        type: SystemIds.ACCOUNTS_PROPERTY,
-      });
+        const { ops: accountRelationOps } = Graph.createRelation({
+          fromEntity: newEntityId,
+          toEntity: accountId,
+          type: SystemIds.ACCOUNTS_PROPERTY,
+        });
 
-      ops.push(...accountRelationOps);
+        ops.push(...accountRelationOps);
 
-      break;
+        break;
+      }
+      case 'company': {
+        const [companyOps] = await cloneEntity({
+          oldEntityId: SystemIds.COMPANY_TEMPLATE,
+          entityId: newEntityId,
+          entityName: spaceName,
+        });
+
+        ops.push(...companyOps);
+        break;
+      }
+      case 'nonprofit': {
+        // @TODO nonprofit template
+
+        break;
+      }
+      case 'academic-field': {
+        const [academicFieldOps] = await cloneEntity({
+          oldEntityId: SystemIds.ACADEMIC_FIELD_TEMPLATE,
+          entityId: newEntityId,
+          entityName: spaceName,
+        });
+
+        ops.push(...academicFieldOps);
+        break;
+      }
+      case 'dao': {
+        const [daoOps] = await cloneEntity({
+          oldEntityId: SystemIds.DAO_TEMPLATE,
+          entityId: newEntityId,
+          entityName: spaceName,
+        });
+
+        ops.push(...daoOps);
+        break;
+      }
+      case 'government-org': {
+        // @TODO government org template
+        const { ops: imageRelationOps } = Graph.createRelation({
+          fromEntity: newEntityId,
+          toEntity: SystemIds.GOVERNMENT_ORG_TYPE,
+          type: SystemIds.TYPES_PROPERTY,
+        });
+
+        ops.push(...imageRelationOps);
+        break;
+      }
+      case 'industry': {
+        const [industryOps] = await cloneEntity({
+          oldEntityId: SystemIds.INDUSTRY_TEMPLATE,
+          entityId: newEntityId,
+          entityName: spaceName,
+        });
+
+        ops.push(...industryOps);
+        break;
+      }
+      case 'interest': {
+        const [interestOps] = await cloneEntity({
+          oldEntityId: SystemIds.INTEREST_TEMPLATE,
+          entityId: newEntityId,
+          entityName: spaceName,
+        });
+
+        ops.push(...interestOps);
+        break;
+      }
+      case 'protocol': {
+        const [protocolOps] = await cloneEntity({
+          oldEntityId: SystemIds.PROTOCOL_TEMPLATE,
+          entityId: newEntityId,
+          entityName: spaceName,
+        });
+
+        ops.push(...protocolOps);
+
+        break;
+      }
+      case 'region': {
+        const [regionOps] = await cloneEntity({
+          oldEntityId: SystemIds.REGION_TEMPLATE,
+          entityId: newEntityId,
+          entityName: spaceName,
+        });
+
+        ops.push(...regionOps);
+        break;
+      }
+      default:
+        break;
     }
-    case 'company': {
-      const [companyOps] = await cloneEntity({
-        oldEntityId: SystemIds.COMPANY_TEMPLATE,
-        entityId: newEntityId,
-        entityName: spaceName,
-      });
-
-      ops.push(...companyOps);
-      break;
-    }
-    case 'nonprofit': {
-      // @TODO nonprofit template
-
-      break;
-    }
-    case 'academic-field': {
-      const [academicFieldOps] = await cloneEntity({
-        oldEntityId: SystemIds.ACADEMIC_FIELD_TEMPLATE,
-        entityId: newEntityId,
-        entityName: spaceName,
-      });
-
-      ops.push(...academicFieldOps);
-      break;
-    }
-    case 'dao': {
-      const [daoOps] = await cloneEntity({
-        oldEntityId: SystemIds.DAO_TEMPLATE,
-        entityId: newEntityId,
-        entityName: spaceName,
-      });
-
-      ops.push(...daoOps);
-      break;
-    }
-    case 'government-org': {
-      // @TODO government org template
-      const { ops: imageRelationOps } = Graph.createRelation({
-        fromEntity: newEntityId,
-        toEntity: SystemIds.GOVERNMENT_ORG_TYPE,
-        type: SystemIds.TYPES_PROPERTY,
-      });
-
-      ops.push(...imageRelationOps);
-      break;
-    }
-    case 'industry': {
-      const [industryOps] = await cloneEntity({
-        oldEntityId: SystemIds.INDUSTRY_TEMPLATE,
-        entityId: newEntityId,
-        entityName: spaceName,
-      });
-
-      ops.push(...industryOps);
-      break;
-    }
-    case 'interest': {
-      const [interestOps] = await cloneEntity({
-        oldEntityId: SystemIds.INTEREST_TEMPLATE,
-        entityId: newEntityId,
-        entityName: spaceName,
-      });
-
-      ops.push(...interestOps);
-      break;
-    }
-    case 'protocol': {
-      const [protocolOps] = await cloneEntity({
-        oldEntityId: SystemIds.PROTOCOL_TEMPLATE,
-        entityId: newEntityId,
-        entityName: spaceName,
-      });
-
-      ops.push(...protocolOps);
-
-      break;
-    }
-    case 'region': {
-      const [regionOps] = await cloneEntity({
-        oldEntityId: SystemIds.REGION_TEMPLATE,
-        entityId: newEntityId,
-        entityName: spaceName,
-      });
-
-      ops.push(...regionOps);
-      break;
-    }
-    default:
-      break;
+  } catch (error) {
+    console.error(error);
   }
 
   if (spaceAvatarUri) {
