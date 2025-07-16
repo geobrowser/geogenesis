@@ -4,6 +4,8 @@ import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useName } from '~/core/state/entity-page-store/entity-store';
+import { useRelations, useValues } from '~/core/sync/use-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
@@ -12,7 +14,6 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
-import { getName } from '~/partials/blocks/table/utils';
 
 import { TableBlockPropertyField } from './table-block-property-field';
 
@@ -42,30 +43,34 @@ export function TableBlockGalleryItem({
   source,
 }: Props) {
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
-  const maybeDescriptionData: Cell | undefined = columns[SystemIds.DESCRIPTION_PROPERTY];
-  const maybeAvatarData: Cell | undefined = columns[ContentIds.AVATAR_PROPERTY];
-  const maybeCoverData: Cell | undefined = columns[SystemIds.COVER_PROPERTY];
 
-  const { cellId, verified } = nameCell;
+  const { propertyId: cellId, verified } = nameCell;
   let { image, description } = nameCell;
 
-  const name = getName(nameCell, currentSpaceId);
+  const name = useName(rowEntityId);
 
-  const maybeDescriptionInSpace = maybeDescriptionData?.renderables.find(
-    r => r.propertyId === SystemIds.DESCRIPTION_PROPERTY && r.spaceId === currentSpaceId
-  )?.value;
+  const descriptionValues = useValues({
+    selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
+  });
 
-  const maybeDescription =
-    maybeDescriptionInSpace ??
-    maybeDescriptionData?.renderables.find(r => r.propertyId === SystemIds.DESCRIPTION_PROPERTY)?.value;
+  const maybeDescriptionInSpace = descriptionValues.find(r => r.spaceId === currentSpaceId)?.value;
+  const maybeDescription = maybeDescriptionInSpace ?? descriptionValues[0]?.value;
 
   if (maybeDescription) {
     description = maybeDescription;
   }
 
-  const maybeAvatarUrl = maybeAvatarData?.renderables.find(r => r.propertyId === ContentIds.AVATAR_PROPERTY)?.value;
+  const avatarRelations = useRelations({
+    selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
+  });
 
-  const maybeCoverUrl = maybeCoverData?.renderables.find(r => r.propertyId === SystemIds.COVER_PROPERTY)?.value;
+  const maybeAvatarUrl = avatarRelations[0]?.toEntity.value;
+
+  const coverRelations = useRelations({
+    selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === rowEntityId,
+  });
+
+  const maybeCoverUrl = coverRelations[0]?.toEntity.value;
 
   if (maybeAvatarUrl) {
     image = maybeAvatarUrl;
@@ -309,16 +314,19 @@ export function TableBlockGalleryItem({
           </div>
           {!isPlaceholder &&
             otherPropertyData.map(p => {
+              const property = properties?.[p.slotId];
+
+              if (!property) {
+                return null;
+              }
+
               return (
                 <div key={p.slotId}>
                   <TableBlockPropertyField
                     key={p.slotId}
-                    renderables={
-                      nameCell?.space ? p.renderables.filter(r => r.spaceId === nameCell.space) : p.renderables
-                    }
                     spaceId={currentSpaceId}
                     entityId={rowEntityId}
-                    properties={properties}
+                    property={property}
                     onChangeEntry={onChangeEntry}
                     source={source}
                   />
@@ -375,14 +383,16 @@ export function TableBlockGalleryItem({
         {otherPropertyData
           .filter(p => p.slotId !== SystemIds.DESCRIPTION_PROPERTY)
           .map(p => {
+            const property = properties?.[p.slotId];
+
+            if (!property) {
+              return null;
+            }
+
             return (
               <TableBlockPropertyField
                 key={p.slotId}
-                renderables={
-                  nameCell?.space
-                    ? p.renderables.filter(r => Boolean(r.placeholder) === false && r.spaceId === nameCell.space)
-                    : p.renderables.filter(r => Boolean(r.placeholder) === false)
-                }
+                property={property}
                 spaceId={currentSpaceId}
                 entityId={cellId}
                 onChangeEntry={onChangeEntry}

@@ -2,6 +2,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
@@ -10,7 +11,6 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
-import { getName } from '~/partials/blocks/table/utils';
 
 type Props = {
   columns: Record<string, Cell>;
@@ -37,9 +37,10 @@ export function TableBlockBulletedListItem({
   source,
 }: Props) {
   const nameCell = columns[SystemIds.NAME_PROPERTY];
-  const { cellId, verified } = nameCell;
+  const { propertyId: cellId, verified } = nameCell;
 
-  const name = getName(nameCell, currentSpaceId);
+  // const name = getName(nameCell, currentSpaceId);
+  const name = useName(rowEntityId);
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 

@@ -60,6 +60,33 @@ export class GeoStore {
   }
 
   private syncEntities(entities: Entity[]) {
+    this.hydrateWith(entities);
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`
+Finished syncing entities to store.
+Entity ids: ${entities.map(e => e.id).join(', ')}`);
+    }
+  }
+
+  static queryKey(id?: string) {
+    return ['store', 'entity', id];
+  }
+
+  static queryKeys(where: WhereCondition, first?: number, skip?: number) {
+    return ['store', 'entities', JSON.stringify(where), first, skip];
+  }
+
+  clear() {
+    const entitiesToSync = this.getEntities();
+
+    this.properties.clear();
+    this.pendingDataTypes.clear();
+
+    this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entitiesToSync.map(e => e.id) });
+  }
+
+  public hydrateWith(entities: Entity[]) {
     /**
      * We set the synced entities before we update values and relations
      * so that the synced entities are immediately available as soon as
@@ -91,33 +118,6 @@ export class GeoStore {
 
       return [...unchangedRelations, ...newRelations];
     });
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`
-Finished syncing entities to store.
-Entity ids: ${entities.map(e => e.id).join(', ')}`);
-    }
-  }
-
-  static queryKey(id?: string) {
-    return ['store', 'entity', id];
-  }
-
-  static queryKeys(where: WhereCondition, first?: number, skip?: number) {
-    return ['store', 'entities', JSON.stringify(where), first, skip];
-  }
-
-  clear() {
-    const entitiesToSync = this.getEntities();
-
-    this.properties.clear();
-    this.pendingDataTypes.clear();
-
-    this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entitiesToSync.map(e => e.id) });
-  }
-
-  public hydrate(entityIds: string[]) {
-    this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entityIds });
   }
 
   /**

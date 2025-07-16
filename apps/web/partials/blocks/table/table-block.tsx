@@ -52,44 +52,23 @@ interface Props {
   spaceId: string;
 }
 
-function makePlaceholderRow(entityId: string, spaceId: string, properties: { id: string; name: string | null }[]) {
+function makePlaceholderRow(entityId: string, properties: { id: string; name: string | null }[]) {
   const columns: Record<string, Cell> = {};
 
   columns[SystemIds.NAME_PROPERTY] = {
     slotId: SystemIds.NAME_PROPERTY,
-    cellId: ID.createEntityId(),
+    propertyId: ID.createEntityId(),
     name: null,
-    renderables: [],
   };
 
   for (const p of properties) {
-    // Why were we skipping the name attribute?
-    // if (p.id === EntityId(SystemIds.NAME_PROPERTY)) {
-    //   continue;
-    // }
-
     const maybeColumn = columns[p.id];
 
-    if (!maybeColumn || maybeColumn?.renderables.length === 0) {
+    if (!maybeColumn) {
       columns[p.id] = {
         slotId: p.id,
-        cellId: ID.createEntityId(),
+        propertyId: ID.createEntityId(),
         name: null,
-        renderables: [
-          // @TODO(migration): Create placeholder renderable
-          // {
-          //   type: p.dataType as NativeRenderableProperty['type'],
-          //   relationId: p.id,
-          //   valueName: p.name,
-          //   fromEntityId: entityId,
-          //   fromEntityName: null,
-          //   propertyId: p.id,
-          //   propertyName: p.name,
-          //   spaceId,
-          //   value: '',
-          //   placeholder: true,
-          // },
-        ],
       };
     }
   }
@@ -138,7 +117,7 @@ function useEntries(
   const placeholderEntityId = pendingEntityId || nextEntityId;
 
   const renderedEntries = shouldShowPlaceholder
-    ? [makePlaceholderRow(placeholderEntityId, spaceId, properties), ...entries]
+    ? [makePlaceholderRow(placeholderEntityId, properties), ...entries]
     : entries;
 
   const onChangeEntry: onChangeEntryFn = (context, event) => {

@@ -6,13 +6,14 @@ import LegacyImage from 'next/legacy/image';
 import { ChangeEvent, useRef } from 'react';
 import { useState } from 'react';
 
-import { useRenderables } from '~/core/hooks/use-renderables';
+import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Services } from '~/core/services';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
+import { useRelations } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
-import { ImageRelationRenderableProperty, RelationRenderableProperty, RenderableProperty } from '~/core/v2.types';
+import { Relation } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -26,24 +27,35 @@ export const EditableCoverAvatarHeader = ({
   avatarUrl: string | null;
   coverUrl: string | null;
 }) => {
-  const { spaceId } = useEntityPageStore();
+  const { spaceId, id } = useEntityStoreInstance();
   const editable = useUserIsEditing(spaceId);
-  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
 
-  const coverAvatarRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
-    const firstRenderable = renderables[0];
-    const renderableType = firstRenderable.type;
-
-    if (
-      (renderableType === 'IMAGE' && firstRenderable.propertyId === SystemIds.COVER_PROPERTY) ||
-      (renderableType === 'IMAGE' && firstRenderable.propertyId === ContentIds.AVATAR_PROPERTY)
-    ) {
-      return firstRenderable;
-    }
+  /**
+   * We render the cover and avatar states depending on the editable state
+   * and the entity's data.
+   *
+   * In edit mode we show the cover and avatar if it's already being rendered
+   * as part of existing data or if it _should_ be rendered because it's in
+   * the schema.
+   *
+   * In browse mode we show the cover and avatar if they exist in the relations
+   * for the entity.
+   */
+  const coverAvatarRenderable = useRelations({
+    selector: r =>
+      (r.type.id === SystemIds.COVER_PROPERTY || r.type.id === ContentIds.AVATAR_PROPERTY) &&
+      r.fromEntity.id === id &&
+      r.spaceId === spaceId,
   });
 
-  const coverRenderable = coverAvatarRenderable.find(r => r?.propertyId === SystemIds.COVER_PROPERTY);
-  const avatarRenderable = coverAvatarRenderable.find(r => r?.propertyId === ContentIds.AVATAR_PROPERTY);
+  const renderedProperties = useEditableProperties(id, spaceId);
+
+  const coverRenderable = editable
+    ? renderedProperties[SystemIds.COVER_PROPERTY]
+    : coverAvatarRenderable.find(r => r.type.id === SystemIds.COVER_PROPERTY);
+  const avatarRenderable = editable
+    ? renderedProperties[ContentIds.AVATAR_PROPERTY]
+    : coverAvatarRenderable.find(r => r.type.id === ContentIds.AVATAR_PROPERTY);
 
   // Only show avatar when there's an actual avatar or user is in edit mode
   const showAvatar = avatarUrl || (editable && avatarRenderable);
@@ -58,16 +70,10 @@ export const EditableCoverAvatarHeader = ({
     >
       {coverRenderable && (
         <div
-          key={`cover-${coverRenderable.propertyId}`}
+          key={`cover-editable-avatar-header-${id}`}
           className="absolute left-1/2 top-0 flex h-full w-full max-w-[1192px] -translate-x-1/2 transform items-center justify-center rounded-lg bg-center bg-no-repeat transition-all duration-200 ease-in-out"
         >
-          <AvatarCoverInput
-            typeOfId={coverRenderable.propertyId}
-            typeOfName={coverRenderable.propertyName ?? ''}
-            inputId="cover-input"
-            firstRenderable={coverRenderable}
-            imgUrl={coverUrl}
-          />
+          <AvatarCoverInput entityId={id} typeOfId={SystemIds.COVER_PROPERTY} inputId="cover-input" imgUrl={coverUrl} />
         </div>
       )}
       {/* Avatar placeholder - only show when there's an avatar or in edit mode with renderable */}
@@ -82,9 +88,8 @@ export const EditableCoverAvatarHeader = ({
           <div className="flex h-20 w-20 items-center justify-center rounded-lg transition-all duration-200 ease-in-out">
             <AvatarCoverInput
               typeOfId={ContentIds.AVATAR_PROPERTY}
-              typeOfName={'Avatar'}
+              entityId={id}
               inputId="avatar-input"
-              firstRenderable={avatarRenderable ?? null}
               imgUrl={avatarUrl}
             />
           </div>
@@ -96,28 +101,32 @@ export const EditableCoverAvatarHeader = ({
 
 const AvatarCoverInput = ({
   typeOfId,
-  typeOfName,
   inputId,
-  firstRenderable,
+  entityId,
   imgUrl,
 }: {
   typeOfId: string;
-  typeOfName: string;
   inputId: string;
-  firstRenderable: RenderableProperty | null;
+  entityId: string;
   imgUrl?: string | null;
 }) => {
   const [hovered, setHovered] = useState(false);
   const [hoveredIcon, setHoveredIcon] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const { spaceId } = useEntityStoreInstance();
 
-  const { spaceId, id, name } = useEntityPageStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { ipfs } = Services.useServices();
 
   const isCover = typeOfId === SystemIds.COVER_PROPERTY;
 
   const editable = useUserIsEditing(spaceId);
+
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.type.id === typeOfId && r.spaceId === spaceId,
+  });
+
+  const firstRenderable = relations[0] as Relation | undefined;
 
   const { storage } = useMutate();
 
@@ -175,7 +184,7 @@ const AvatarCoverInput = ({
         const imageSrc = await ipfs.uploadFile(file);
         // Only delete the old image after the new one is successfully uploaded
         if (imgUrl && firstRenderable) {
-          deleteProperty(firstRenderable as ImageRelationRenderableProperty);
+          deleteRelation(firstRenderable);
         }
         onImageChange(imageSrc);
       } catch (error) {
@@ -187,9 +196,9 @@ const AvatarCoverInput = ({
     }
   };
 
-  const deleteProperty = (renderable: RelationRenderableProperty) => {
+  const deleteRelation = (renderable: Relation) => {
     if (firstRenderable) {
-      storage.renderables.relations.delete(renderable);
+      storage.relations.delete(renderable);
     }
   };
 
@@ -247,7 +256,7 @@ const AvatarCoverInput = ({
                   <SquareButton
                     onMouseEnter={() => setHoveredIcon('Trash')}
                     onMouseLeave={() => setHoveredIcon('')}
-                    onClick={() => deleteProperty(firstRenderable as ImageRelationRenderableProperty)}
+                    onClick={() => (firstRenderable ? deleteRelation(firstRenderable) : undefined)}
                     icon={<Trash />}
                   />
                 </>

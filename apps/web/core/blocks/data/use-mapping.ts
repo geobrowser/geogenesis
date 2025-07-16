@@ -1,13 +1,9 @@
 import { GraphUri, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
-import { EntityId } from '~/core/io/schema';
-import { getRelations, getValues, useQueryEntitiesAsync } from '~/core/sync/use-store';
+import { useQueryEntitiesAsync } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
-import { toRenderables } from '~/core/utils/to-renderables';
-import { Cell, Entity, Property, RenderableProperty, Row } from '~/core/v2.types';
-
-import { makePlaceholderFromValueType } from '~/partials/blocks/table/utils';
+import { Cell, Entity, Row } from '~/core/v2.types';
 
 import { PathSegment } from './data-selectors';
 
@@ -103,48 +99,19 @@ export function useMapping(
   };
 }
 
-export function mappingToRows(
-  entities: Entity[],
-  slotIds: string[],
-  collectionItems: Entity[],
-  spaceId: string,
-  properties?: Record<string, Property>
-): Row[] {
+export function mappingToRows(entities: Entity[], slotIds: string[], collectionItems: Entity[]): Row[] {
   /**
    * Take each row, take each mapping, take each "slot" in the mapping
    * and map them into the Row structure.
    */
-  return entities.map(({ name, values, id, relations, description }) => {
+  return entities.map(({ name, id, relations, description }) => {
     const newSlots = slotIds.reduce(
       (acc, slotId) => {
-        const cellTriples = values.filter(value => value.property.id === slotId);
-        const cellRelations = relations.filter(t => t.type.id === slotId);
-
         const cell: Cell = {
           slotId: slotId,
-          cellId: id,
-          renderables: [],
+          propertyId: id,
           name,
         };
-
-        const maybeProperty = properties?.[slotId];
-
-        const placeholder = makePlaceholderFromValueType({
-          propertyId: slotId,
-          propertyName: maybeProperty?.name ?? null,
-          entityId: id,
-          spaceId,
-          dataType: maybeProperty?.dataType ?? 'TEXT',
-        });
-
-        cell.renderables = toRenderables({
-          entityId: id,
-          entityName: name,
-          spaceId,
-          values: cellTriples,
-          relations: cellRelations,
-          placeholderRenderables: [placeholder],
-        });
 
         const isNameCell = slotId === SystemIds.NAME_PROPERTY;
 
@@ -156,7 +123,7 @@ export function mappingToRows(
           const collectionEntity = collectionItems?.find(entity =>
             entity.values
               .find(triple => triple.property.id === SystemIds.RELATION_TO_PROPERTY)
-              ?.value.startsWith(`graph://${cell.cellId}`)
+              ?.value.startsWith(`graph://${cell.propertyId}`)
           );
 
           // @TODO(migration): Update to new data model
@@ -206,15 +173,8 @@ export function mappingToRows(
   });
 }
 
-export function mappingToCell(
-  entities: Entity[],
-  propertyId: string,
-  lexicon: PathSegment[],
-  spaceId: string,
-  relationId: string
-): Cell {
+export function mappingToCell(entities: Entity[], propertyId: string, lexicon: PathSegment[]): Cell {
   const finalSegment: PathSegment | undefined = lexicon[lexicon.length - 1];
-  const propertyToFilter = finalSegment ? finalSegment.property : propertyId;
 
   const cell: Cell = {
     slotId: propertyId,
@@ -223,82 +183,9 @@ export function mappingToCell(
     //
     // e.g., We might want to render the name of an entity in the Roles slot.
     renderedPropertyId: finalSegment?.property,
-    renderables: [],
-    cellId: entities.find(e => e.id)?.id ?? '',
+    propertyId: entities.find(e => e.id)?.id ?? '',
     name: null,
   };
-
-  const renderables = entities.flatMap((entity): RenderableProperty[] => {
-    const { id, values, relations } = entity;
-    const cellTriples = values.filter(value => value.property.id === propertyToFilter);
-    const cellRelations = relations.filter(t => t.type.id === propertyToFilter);
-    const entityName = Entities.name(cellTriples);
-
-    if (propertyToFilter === SystemIds.RELATION_TO_PROPERTY || propertyToFilter === SystemIds.RELATION_FROM_PROPERTY) {
-      const imageEntityUrlValue = values.find(v => v.property.id === SystemIds.IMAGE_URL_PROPERTY)?.value ?? null;
-
-      return entity.types.some(t => t.id === EntityId(SystemIds.IMAGE_TYPE))
-        ? [
-            {
-              type: 'IMAGE',
-              propertyId: propertyId,
-              propertyName: null,
-              fromEntityId: id,
-              spaceId,
-              value: imageEntityUrlValue ?? '',
-              fromEntityName: entity.name,
-              valueName: entity.name,
-              relationId,
-              // @TODO(migration): not sure what this should be
-              relationEntityId: '',
-            },
-          ]
-        : [
-            {
-              type: 'RELATION',
-              propertyId: propertyId,
-              propertyName: null,
-              fromEntityId: id,
-              spaceId,
-              value: id,
-              fromEntityName: entity.name,
-              valueName: entity.name,
-              relationId,
-              // @TODO(migration): not sure what this should be
-              relationEntityId: '',
-            },
-          ];
-    }
-
-    const mergedValues = getValues({
-      mergeWith: cellTriples,
-      selector: value => {
-        const isRowCell = value.entity.id === id;
-        const isColCell = value.property.id === propertyId;
-
-        // For mapped data we don't care about the correct value type
-        return isRowCell && isColCell;
-      },
-    });
-
-    const mergedRelations = getRelations({
-      mergeWith: cellRelations,
-      selector: relation => {
-        const isRowCell = relation.fromEntity.id === id;
-        const isColCell = relation.type.id === propertyId;
-
-        return isRowCell && isColCell;
-      },
-    });
-
-    return toRenderables({
-      entityId: id,
-      entityName,
-      spaceId,
-      values: mergedValues,
-      relations: mergedRelations,
-    });
-  });
 
   const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
 
@@ -310,7 +197,6 @@ export function mappingToCell(
     cell.description = entities.find(e => e.description)?.description ?? null;
   }
 
-  cell.renderables = renderables;
   cell.name = entities.find(e => e.name)?.name || null;
 
   return cell;

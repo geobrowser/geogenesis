@@ -84,7 +84,7 @@ export default async function SpacePage(props0: Props) {
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
       </React.Suspense>
-      <ToggleEntityPage id={props.id} spaceId={spaceId} values={props.values} />
+      <ToggleEntityPage id={props.id} spaceId={spaceId} />
       <Spacer height={40} />
       {/*
         Some SEO parsers fail to parse meta tags if there's no fallback in a suspense

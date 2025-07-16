@@ -59,7 +59,6 @@ export default async function Layout(props0: LayoutProps) {
     <EntityStoreProvider
       id={props.id}
       spaceId={spaceId}
-      initialSpaces={props.spaces}
       initialValues={props.values}
       initialRelations={props.relations}
     >
@@ -142,7 +141,6 @@ const getSpaceFrontPage = async (spaceId: string) => {
     };
   }
 
-  const spaces = entity?.spaces ?? [];
   const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 
   const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
@@ -175,7 +173,6 @@ const getSpaceFrontPage = async (spaceId: string) => {
     id: entity.id,
     name: entity.name,
     description: Entities.description(entity.values),
-    spaces,
 
     tabEntities,
     tabs,

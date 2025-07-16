@@ -98,7 +98,7 @@ export function useDataBlock() {
                 for (const [propertyId, selector] of Object.entries(mapping)) {
                   const lexicon = parseSelectorIntoLexicon(selector);
                   const entities = await mapSelectorLexiconToSourceEntity(lexicon, relation.id);
-                  cells.push(mappingToCell(entities, propertyId, lexicon, spaceId, relation.id));
+                  cells.push(mappingToCell(entities, propertyId, lexicon));
                 }
 
                 return {
@@ -148,11 +148,11 @@ export function useDataBlock() {
    */
   const rows = (() => {
     if (source.type === 'COLLECTION') {
-      return mappingToRows(collectionItems, shownColumnIds, collectionRelations, spaceId, propertiesSchema);
+      return mappingToRows(collectionItems, shownColumnIds, collectionRelations);
     }
 
     if (source.type === 'GEO' || source.type === 'SPACES') {
-      return mappingToRows(queriedEntities, shownColumnIds, [], spaceId, propertiesSchema);
+      return mappingToRows(queriedEntities, shownColumnIds, []);
     }
 
     if (source.type === 'RELATIONS') {
