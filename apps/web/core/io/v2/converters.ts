@@ -1,5 +1,4 @@
 import {
-  DataTypes,
   EntityFilter,
   EntityToManyRelationFilter,
   EntityToManyValueFilter,
@@ -95,21 +94,8 @@ function convertValueConditionToValueFilter(condition: ValueCondition): ValueFil
     filter.propertyId = convertStringConditionToUuidFilter(condition.propertyId);
   }
 
-  if (condition.propertyName) {
-    filter.property = {
-      name: convertStringConditionToStringFilter(condition.propertyName),
-    } as PropertyFilter;
-  }
-
   if (condition.space) {
     filter.spaceId = convertStringConditionToUuidFilter(condition.space);
-  }
-
-  if (condition.dataType) {
-    filter.property = {
-      ...filter.property,
-      dataType: { is: condition.dataType as DataTypes },
-    } as PropertyFilter;
   }
 
   // Handle value based on type
