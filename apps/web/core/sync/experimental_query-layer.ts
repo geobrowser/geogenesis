@@ -44,10 +44,8 @@ export type NumberCondition = {
 export type BooleanCondition = { equals: boolean };
 
 export type ValueCondition = {
-  propertyName?: StringCondition;
   propertyId?: StringCondition;
   value?: StringCondition | NumberCondition | BooleanCondition;
-  dataType?: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER';
   space?: StringCondition;
 };
 
@@ -341,11 +339,6 @@ export class EntityQuery {
 
     return conditions.some(cond => {
       return values.some(value => {
-        // Check attributeName
-        if (cond.propertyName && !this.matchesStringCondition(value.property.name || '', cond.propertyName)) {
-          return false;
-        }
-
         // Check attributeId
         if (cond.propertyId && !this.matchesStringCondition(value.property.id, cond.propertyId)) {
           return false;
@@ -353,11 +346,6 @@ export class EntityQuery {
 
         // Check space
         if (cond.space && !this.matchesStringCondition(value.spaceId, cond.space)) {
-          return false;
-        }
-
-        // Check valueType
-        if (cond.dataType && value.property.dataType !== cond.dataType) {
           return false;
         }
 
@@ -454,7 +442,10 @@ export class EntityQuery {
           }
 
           // Check fromEntity.name
-          if (cond.fromEntity?.name && !this.matchesStringCondition(relation.fromEntity.name || '', cond.fromEntity.name)) {
+          if (
+            cond.fromEntity?.name &&
+            !this.matchesStringCondition(relation.fromEntity.name || '', cond.fromEntity.name)
+          ) {
             return false;
           }
 
