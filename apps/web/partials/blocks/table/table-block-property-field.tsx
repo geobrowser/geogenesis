@@ -20,7 +20,6 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
-import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn } from './change-entry';
 
@@ -60,85 +59,6 @@ export function TableBlockPropertyField(props: {
   return (
     <div className="flex flex-wrap gap-x-2">
       <RenderedProperty entityId={entityId} property={property} spaceId={spaceId} />
-      {/* {props.renderables
-        .filter(r => !!r.value)
-        .map(renderable => {
-          switch (renderable.type) {
-            case 'TEXT':
-              return (
-                <RenderedProperty key={`string-${property.id}-${value}`} renderable={renderable} className="mt-1">
-                  <Text variant="tableProperty" color="grey-04" as="p">
-                    {value}
-                  </Text>
-                </RenderedProperty>
-              );
-            case 'NUMBER':
-              return (
-                <RenderedProperty
-                  key={`${renderable.entityId}-${property.id}-${value}`}
-                  renderable={renderable}
-                  className="mt-1"
-                >
-                  <NumberField
-                    variant="tableProperty"
-                    value={value}
-                    // format={renderable.options?.format}
-                    unitId={rawValue.options?.unit}
-                    isEditing={false}
-                  />
-                </RenderedProperty>
-              );
-            case 'CHECKBOX': {
-              const checked = getChecked(value);
-              return (
-                <RenderedProperty key={`checkbox-${property.id}-${value}`} renderable={renderable} className="mt-1">
-                  <Checkbox checked={checked} />
-                </RenderedProperty>
-              );
-            }
-            case 'TIME': {
-              return (
-                <RenderedProperty key={`time-${property.id}-${value}`} renderable={renderable} className="mt-1">
-                  <DateField variant="tableProperty" isEditing={false} value={value} propertyId={property.id} />
-                </RenderedProperty>
-              );
-            }
-            // case 'URL': {
-            //   return (
-            //     <Property
-            //       key={`uri-${property.id}-${value}`}
-            //       renderable={renderable}
-            //       className="mt-1"
-            //     >
-            //       <WebUrlField
-            //         variant="tableProperty"
-            //         isEditing={false}
-            //         spaceId={props.spaceId}
-            //         value={value}
-            //       />
-            //     </Property>
-            //   );
-            // }
-            case 'IMAGE':
-              // We don't support rendering images in list or gallery views except the main image
-              return null;
-            case 'RELATION':
-              return (
-                <RenderedProperty key={`uri-${property.id}-${value}`} renderable={renderable} className="mt-2">
-                  <LinkableRelationChip
-                    isEditing={false}
-                    currentSpaceId={spaceId}
-                    entityId={value}
-                    spaceId={renderable.spaceId}
-                    relationId={renderable.relationId}
-                    small
-                  >
-                    {valueName ?? value}
-                  </LinkableRelationChip>
-                </RenderedProperty>
-              );
-          }
-        })} */}
     </div>
   );
 }
@@ -209,7 +129,6 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
     return (
       <div data-testid="select-entity" className="w-full">
         <SelectEntity
-          key={JSON.stringify(filterSearchByTypes)}
           spaceId={spaceId}
           relationValueTypes={filterSearchByTypes}
           onCreateEntity={result => {
