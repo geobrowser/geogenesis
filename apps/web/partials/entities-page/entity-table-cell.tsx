@@ -107,7 +107,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
   });
 
   return relations.map(relation => {
-    if (property.renderableType === SystemIds.IMAGE) {
+    if (property.renderableTypeStrict === 'IMAGE') {
       const value = relation.toEntity.value;
       return <ImageZoom key={value} variant="table-cell" imageSrc={getImagePath(value)} />;
     }
@@ -146,15 +146,16 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
 
   const rawValue = values[0];
   const value = rawValue?.value ?? '';
-  const renderableType = property.renderableType ?? property.dataType;
+  const renderableType = property.renderableTypeStrict ?? property.dataType;
 
-  if (renderableType === SystemIds.URL) {
+  if (renderableType === 'URL') {
     return <WebUrlField variant="tableCell" isEditing={false} key={value} spaceId={spaceId} value={value} />;
   }
 
   if (renderableType === 'TIME') {
     return <DateField variant="tableCell" isEditing={false} key={value} value={value} propertyId={property.id} />;
   }
+
   if (renderableType === 'CHECKBOX') {
     return <input type="checkbox" disabled key={`checkbox-${property.id}-${value}`} checked={value === '1'} />;
   }

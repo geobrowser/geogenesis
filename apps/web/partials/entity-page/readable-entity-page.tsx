@@ -6,7 +6,7 @@ import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
 import { useQueryEntity, useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
-import { DataType, RawRenderableType } from '~/core/v2.types';
+import { DataType, RenderableType } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -108,7 +108,7 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
                 propertyId={propertyId}
                 entityId={entityId}
                 spaceId={t.spaceId}
-                renderableType={property.renderableType ?? 'TEXT'}
+                renderableType={property.renderableTypeStrict ?? 'TEXT'}
               />
             </div>
           </div>
@@ -178,7 +178,7 @@ export function RelationsGroup({
             const relationEntityId = r.entityId;
             const relationId = r.id;
 
-            if (property.renderableType === SystemIds.IMAGE) {
+            if (property.renderableTypeStrict === 'IMAGE') {
               const imagePath = getImagePath(linkedEntityId ?? '');
               return <ImageZoom key={`image-${relationId}-${linkedEntityId}`} imageSrc={imagePath} />;
             }
@@ -213,7 +213,7 @@ function RenderedValue({
   entityId: string;
   propertyId: string;
   spaceId: string;
-  renderableType: DataType | RawRenderableType;
+  renderableType: DataType | RenderableType;
 }) {
   // Seems like we really want useRenderables to query entity data + property data
   // more granularly?
@@ -232,7 +232,7 @@ function RenderedValue({
   }
 
   switch (renderableType) {
-    case SystemIds.URL:
+    case 'URL':
       return <WebUrlField key={`uri-${propertyId}-${value}`} isEditing={false} spaceId={spaceId} value={value} />;
     case 'TEXT':
       return (

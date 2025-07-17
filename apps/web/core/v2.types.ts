@@ -1,9 +1,5 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-
-import { GEO_LOCATION } from './constants';
-
 export type DataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
-export type RenderableType = typeof SystemIds.IMAGE | typeof SystemIds.URL | typeof GEO_LOCATION; // GEO_LOCATION needs to be migrated to SDK
+export type RenderableType = 'IMAGE' | 'URL' | 'GEO_LOCATION'; // GEO_LOCATION needs to be migrated to SDK
 export type RawRenderableType = string; // UUIDs of renderable types
 
 export type Property = {
@@ -12,7 +8,14 @@ export type Property = {
   dataType: DataType;
   isDataTypeEditable?: boolean;
   relationValueTypes?: { id: string; name: string | null }[];
+  /**
+   * We might render _any_ arbitrary renderable type in the UI or we might
+   * render a _specific_ renderable type. We want to make sure the strict
+   * representation is type safe so that we don't miss any renderable types
+   * that we should be supporting.
+   */
   renderableType?: RawRenderableType | null; // Raw UUID from API, gets converted in to-renderables.ts
+  renderableTypeStrict?: RenderableType | null; // Renderable type used in the frontend, converted from raw UUID
 };
 
 // @TODO: Relation renderable types + values
