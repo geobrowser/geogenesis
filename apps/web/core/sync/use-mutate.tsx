@@ -47,29 +47,6 @@ export interface Mutator {
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
   };
-  /**
-   * When mutating renderables in the app, you should go through the
-   * renderables namespace. This makes it simpler to continue using
-   * the renderable data without having to map to values or relations
-   * in the caller's code.
-   *
-   * Instead, just pass the renderable you want to create, update, or
-   * delete. This namespace automatically converts to either a Value or
-   * Relation depending on whether you used renderables.values or
-   * renderables.relations.
-   */
-  renderables: {
-    values: {
-      set: (renderable: NativeRenderableProperty) => void;
-      update: (renderable: NativeRenderableProperty, draft: Recipe<Value>) => void;
-      delete: (renderable: NativeRenderableProperty) => void;
-    };
-    relations: {
-      set: (renderable: RelationRenderableProperty) => void;
-      update: (renderable: RelationRenderableProperty, draft: Recipe<Relation>) => void;
-      delete: (renderable: RelationRenderableProperty) => void;
-    };
-  };
 }
 
 function createMutator(store: GeoStore): Mutator {
@@ -146,31 +123,31 @@ function createMutator(store: GeoStore): Mutator {
         };
 
         // Create the Property type relation
-        const propertyTypeRelation: Relation = {
-          id: ID.createEntityId(),
-          entityId: ID.createEntityId(),
-          spaceId,
-          renderableType: 'RELATION',
-          verified: false,
-          position: null,
-          type: {
-            id: SystemIds.TYPES_PROPERTY,
-            name: 'Types',
-          },
-          fromEntity: {
-            id: entityId,
-            name,
-          },
-          toEntity: {
-            id: SystemIds.PROPERTY,
-            name: 'Property',
-            value: SystemIds.PROPERTY,
-          },
-        };
+        // const propertyTypeRelation: Relation = {
+        //   id: ID.createEntityId(),
+        //   entityId: ID.createEntityId(),
+        //   spaceId,
+        //   renderableType: 'RELATION',
+        //   verified: false,
+        //   position: null,
+        //   type: {
+        //     id: SystemIds.TYPES_PROPERTY,
+        //     name: 'Types',
+        //   },
+        //   fromEntity: {
+        //     id: entityId,
+        //     name,
+        //   },
+        //   toEntity: {
+        //     id: SystemIds.PROPERTY,
+        //     name: 'Property',
+        //     value: SystemIds.PROPERTY,
+        //   },
+        // };
 
         store.setValue(nameValue);
         store.setValue(dataTypeValue);
-        store.setRelation(propertyTypeRelation);
+        // store.setRelation(propertyTypeRelation);
       },
     },
     values: {
@@ -210,38 +187,6 @@ function createMutator(store: GeoStore): Mutator {
         store.deleteRelation(newRelation);
       },
     },
-    renderables: {
-      values: {
-        set: renderable => {
-          const valueFromRenderable = getValueFromRenderable(renderable);
-          store.setValue(valueFromRenderable);
-        },
-        update: (renderable, draft) => {
-          const valueFromRenderable = getValueFromRenderable(renderable);
-          const newRenderable = produce(valueFromRenderable, draft);
-          store.setValue(newRenderable);
-        },
-        delete: renderable => {
-          const valueFromRenderable = getValueFromRenderable(renderable);
-          store.deleteValue(valueFromRenderable);
-        },
-      },
-      relations: {
-        set: renderable => {
-          const relation = getRelationFromRenderable(renderable);
-          store.setRelation(relation);
-        },
-        update: (renderable, draft) => {
-          const relation = getRelationFromRenderable(renderable);
-          const newRenderable = produce(relation, draft);
-          store.setRelation(newRenderable);
-        },
-        delete: renderable => {
-          const relation = getRelationFromRenderable(renderable);
-          store.deleteRelation(relation);
-        },
-      },
-    },
   };
 }
 
@@ -252,77 +197,5 @@ export function useMutate() {
 
   return {
     storage: createMutator(store),
-  };
-}
-
-/**
- * Converts a flattened type back to its original dataType.
- * This is the reverse of the flattening logic in to-renderables.ts
- */
-function getOriginalDataType(flattenedType: FlattenedRenderType): DataType {
-  switch (flattenedType) {
-    case 'URL':
-    case 'GEO_LOCATION':
-      return 'TEXT';
-    case 'IMAGE':
-      return 'RELATION';
-    case 'RELATION':
-      return 'RELATION';
-    case 'TEXT':
-    case 'NUMBER':
-    case 'CHECKBOX':
-    case 'TIME':
-    case 'POINT':
-      return flattenedType;
-    default:
-      // This should never happen with proper typing, but provide a fallback
-      return 'TEXT';
-  }
-}
-
-function getValueFromRenderable(renderable: NativeRenderableProperty): Value {
-  return {
-    id: ID.createValueId({
-      entityId: renderable.entityId,
-      propertyId: renderable.propertyId,
-      spaceId: renderable.spaceId,
-    }),
-    spaceId: renderable.spaceId,
-    entity: {
-      id: renderable.entityId,
-      name: renderable.entityName,
-    },
-    property: {
-      id: renderable.propertyId,
-      name: renderable.propertyName,
-      dataType: getOriginalDataType(renderable.type),
-      renderableType: renderable.renderableType ?? null,
-    },
-    value: renderable.value,
-    options: renderable.options,
-  };
-}
-
-function getRelationFromRenderable(renderable: RelationRenderableProperty): Relation {
-  return {
-    id: renderable.relationId,
-    entityId: renderable.relationEntityId,
-    position: renderable.position,
-    verified: renderable.verified,
-    renderableType: renderable.type,
-    spaceId: renderable.spaceId,
-    fromEntity: {
-      id: renderable.fromEntityId,
-      name: renderable.fromEntityName,
-    },
-    type: {
-      id: renderable.propertyId,
-      name: renderable.propertyName,
-    },
-    toEntity: {
-      id: renderable.value, // is this right?
-      name: renderable.valueName,
-      value: renderable.value,
-    },
   };
 }

@@ -60,6 +60,33 @@ export class GeoStore {
   }
 
   private syncEntities(entities: Entity[]) {
+    this.hydrateWith(entities);
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`
+Finished syncing entities to store.
+Entity ids: ${entities.map(e => e.id).join(', ')}`);
+    }
+  }
+
+  static queryKey(id?: string) {
+    return ['store', 'entity', id];
+  }
+
+  static queryKeys(where: WhereCondition, first?: number, skip?: number) {
+    return ['store', 'entities', JSON.stringify(where), first, skip];
+  }
+
+  clear() {
+    const entitiesToSync = this.getEntities();
+
+    this.properties.clear();
+    this.pendingDataTypes.clear();
+
+    this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entitiesToSync.map(e => e.id) });
+  }
+
+  public hydrateWith(entities: Entity[]) {
     /**
      * We set the synced entities before we update values and relations
      * so that the synced entities are immediately available as soon as
@@ -91,33 +118,6 @@ export class GeoStore {
 
       return [...unchangedRelations, ...newRelations];
     });
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`
-Finished syncing entities to store.
-Entity ids: ${entities.map(e => e.id).join(', ')}`);
-    }
-  }
-
-  static queryKey(id?: string) {
-    return ['store', 'entity', id];
-  }
-
-  static queryKeys(where: WhereCondition, first?: number, skip?: number) {
-    return ['store', 'entities', JSON.stringify(where), first, skip];
-  }
-
-  clear() {
-    const entitiesToSync = this.getEntities();
-
-    this.properties.clear();
-    this.pendingDataTypes.clear();
-
-    this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entitiesToSync.map(e => e.id) });
-  }
-
-  public hydrate(entityIds: string[]) {
-    this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entityIds });
   }
 
   /**
@@ -324,22 +324,24 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Delete a value with optimistic updates
    */
   public deleteValue(value: Value): void {
-    value.hasBeenPublished = false;
-    value.isDeleted = true;
-    value.isLocal = true;
-    value.timestamp = new Date().toISOString();
+    const newValue = produce(value, draft => {
+      draft.hasBeenPublished = false;
+      draft.isDeleted = true;
+      draft.isLocal = true;
+      draft.timestamp = new Date().toISOString();
+    });
 
     // Remove from reactive values
     reactiveValues.set(prev => {
       const unchangedValues = prev.filter(t => {
-        return t.id !== value.id;
+        return t.id !== newValue.id;
       });
 
-      return [...unchangedValues, value];
+      return [...unchangedValues, newValue];
     });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: value });
+    this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: newValue });
   }
 
   /**
@@ -362,29 +364,31 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.RELATION_CREATED, newRelation });
+    this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation: newRelation });
   }
 
   /**
    * Delete a relation with optimistic updates
    */
   public deleteRelation(relation: Relation): void {
-    relation.hasBeenPublished = false;
-    relation.isDeleted = true;
-    relation.isLocal = true;
-    relation.timestamp = new Date().toISOString();
+    const newRelation = produce(relation, draft => {
+      draft.hasBeenPublished = false;
+      draft.isDeleted = true;
+      draft.isLocal = true;
+      draft.timestamp = new Date().toISOString();
+    });
 
     // Remove from reactive relations
     reactiveRelations.set(prev => {
       const unchangedRelations = prev.filter(t => {
-        return t.id !== relation.id;
+        return t.id !== newRelation.id;
       });
 
-      return [...unchangedRelations, relation];
+      return [...unchangedRelations, newRelation];
     });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation });
+    this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation: newRelation });
   }
 
   /**

@@ -54,7 +54,6 @@ export default async function DefaultEntityPage({
     <EntityStoreProvider
       id={props.id}
       spaceId={props.spaceId}
-      initialSpaces={props.spaces}
       initialValues={props.values}
       initialRelations={props.relations}
     >
@@ -183,14 +182,13 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     name: entity?.name ?? null,
     description: Entities.description(entity?.values ?? []),
     spaceId,
-    spaces,
     serverAvatarUrl,
     serverCoverUrl,
     relations: entity?.relations ?? [],
     types: entity?.types ?? [],
 
     tabs,
-    tabEntities: [],
+    tabEntities,
 
     // For relation entity pages
     relationEntityRelations,
@@ -235,6 +233,11 @@ const buildTabsForEntityPage = (
   if (DYNAMIC_TABS.length > 0) {
     tabs.push(...DYNAMIC_TABS);
   }
+
+  // tabs.push({
+  //   label: 'Activity',
+  //   href: `${NavUtils.toEntity(spaceId, entityId)}/activity`,
+  // });
 
   return tabs;
 };

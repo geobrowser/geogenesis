@@ -3,8 +3,9 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
+import { useRelations, useValues } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
-import { RenderableProperty } from '~/core/v2.types';
+import { Property } from '~/core/v2.types';
 
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
@@ -20,8 +21,7 @@ import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata'
 type Props = {
   entityId: string;
   spaceId: string;
-  columnId: string;
-  renderables: RenderableProperty[];
+  property: Property;
   isExpanded: boolean;
   name: string | null;
   href: string;
@@ -36,8 +36,7 @@ type Props = {
 export const EntityTableCell = ({
   entityId,
   spaceId,
-  columnId,
-  renderables,
+  property,
   isExpanded,
   name,
   href,
@@ -48,7 +47,8 @@ export const EntityTableCell = ({
   onLinkEntry,
   source,
 }: Props) => {
-  const isNameCell = columnId === SystemIds.NAME_PROPERTY;
+  const isNameCell = property.id === SystemIds.NAME_PROPERTY;
+  const isRelation = property.dataType === 'RELATION';
 
   if (isNameCell) {
     return (
@@ -86,81 +86,91 @@ export const EntityTableCell = ({
 
   return (
     <div className="flex flex-wrap gap-2">
-      {renderables.map(renderable => {
-        if (renderable.type === 'IMAGE') {
-          const value = renderable.value;
-          return <ImageZoom key={value} variant="table-cell" imageSrc={getImagePath(value)} />;
-        }
-
-        if (renderable.type === 'RELATION') {
-          const value = renderable.value;
-          const name = renderable.valueName;
-          const relationId = renderable.relationId;
-          const relationValue = renderable.value;
-
-          return (
-            <LinkableRelationChip
-              key={value}
-              isEditing={false}
-              currentSpaceId={spaceId}
-              entityId={relationValue}
-              spaceId={renderable.spaceId}
-              relationId={relationId}
-            >
-              {name ?? value}
-            </LinkableRelationChip>
-          );
-        }
-
-        // if (renderable.type === 'URL') {
-        //   return (
-        //     <WebUrlField
-        //       variant="tableCell"
-        //       isEditing={false}
-        //       key={renderable.value}
-        //       spaceId={spaceId}
-        //       value={renderable.value}
-        //     />
-        //   );
-        // }
-
-        if (renderable.type === 'TIME') {
-          return (
-            <DateField
-              variant="tableCell"
-              isEditing={false}
-              key={renderable.value}
-              value={renderable.value}
-              propertyId={renderable.propertyId}
-            />
-          );
-        }
-        if (renderable.type === 'CHECKBOX') {
-          return (
-            <input
-              type="checkbox"
-              disabled
-              key={`checkbox-${renderable.propertyId}-${renderable.value}`}
-              checked={renderable.value === '1'}
-            />
-          );
-        }
-
-        if (renderable.type === 'NUMBER') {
-          return (
-            <NumberField
-              variant="tableCell"
-              isEditing={false}
-              key={renderable.value}
-              value={renderable.value}
-              // format={renderable.options?.format}
-              unitId={renderable.options?.unit}
-            />
-          );
-        }
-
-        return <CellContent key={renderable.value} isExpanded={isExpanded} value={renderable.value} />;
-      })}
+      {isRelation ? (
+        <RelationGroup entityId={entityId} property={property} spaceId={spaceId} />
+      ) : (
+        <ValueGroup entityId={entityId} property={property} spaceId={spaceId} isExpanded={isExpanded} />
+      )}
     </div>
   );
 };
+
+type RelationGroupProps = {
+  entityId: string;
+  property: Property;
+  spaceId: string;
+};
+
+function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.type.id === property.id,
+  });
+
+  return relations.map(relation => {
+    if (property.renderableType === SystemIds.IMAGE) {
+      const value = relation.toEntity.value;
+      return <ImageZoom key={value} variant="table-cell" imageSrc={getImagePath(value)} />;
+    }
+
+    const value = relation.toEntity.value;
+    const name = relation.toEntity.name;
+    const relationId = relation.id;
+    const relationValue = relation.toEntity.id;
+
+    return (
+      <LinkableRelationChip
+        key={relation.toEntity.value}
+        isEditing={false}
+        currentSpaceId={spaceId}
+        entityId={relationValue}
+        spaceId={relation.spaceId}
+        relationId={relationId}
+      >
+        {name ?? value}
+      </LinkableRelationChip>
+    );
+  });
+}
+
+type ValueGroupProps = {
+  entityId: string;
+  property: Property;
+  spaceId: string;
+  isExpanded?: boolean;
+};
+
+function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps) {
+  const values = useValues({
+    selector: v => v.entity.id === entityId && v.property.id === property.id,
+  });
+
+  const rawValue = values[0];
+  const value = rawValue?.value ?? '';
+  const renderableType = property.renderableType ?? property.dataType;
+
+  if (renderableType === SystemIds.URL) {
+    return <WebUrlField variant="tableCell" isEditing={false} key={value} spaceId={spaceId} value={value} />;
+  }
+
+  if (renderableType === 'TIME') {
+    return <DateField variant="tableCell" isEditing={false} key={value} value={value} propertyId={property.id} />;
+  }
+  if (renderableType === 'CHECKBOX') {
+    return <input type="checkbox" disabled key={`checkbox-${property.id}-${value}`} checked={value === '1'} />;
+  }
+
+  if (renderableType === 'NUMBER') {
+    return (
+      <NumberField
+        variant="tableCell"
+        isEditing={false}
+        key={value}
+        value={value}
+        // format={renderable.options?.format}
+        unitId={rawValue.options?.unit}
+      />
+    );
+  }
+
+  return <CellContent key={value} isExpanded={isExpanded} value={value} />;
+}

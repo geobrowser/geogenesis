@@ -16,6 +16,7 @@ import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
 import { Cell, Property, Row } from '~/core/v2.types';
 
@@ -23,7 +24,6 @@ import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
-import { getName } from '~/partials/blocks/table/utils';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
@@ -107,22 +107,27 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
-    const maybePropertiesSchema = propertiesSchema?.[cellData.slotId];
+    const property = propertiesSchema?.[cellData.slotId];
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
     const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
     const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space) : space;
 
-    const renderables = cellData.renderables;
-
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
-    const name = getName(nameCell, space);
+    // We are in a component internally within react-table. eslint isn't
+    // able to infer that this is a valid React component.
+    // eslint-disable-next-line
+    const name = useName(entityId);
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;
+
+    if (!property) {
+      return null;
+    }
 
     if (isEditable && source.type !== 'RELATIONS') {
       return (
@@ -130,9 +135,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           key={entityId}
           entityId={entityId}
           spaceId={spaceId}
-          attributeId={propertyId}
-          renderables={renderables}
-          filterSearchByTypes={maybePropertiesSchema?.relationValueTypes}
+          property={property}
           isPlaceholderRow={Boolean(row.original.placeholder)}
           name={name}
           currentSpaceId={space}
@@ -151,9 +154,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         key={entityId}
         entityId={entityId}
         spaceId={spaceId}
-        columnId={propertyId}
-        // Don't want to render placeholders in edit mode
-        renderables={renderables.filter(r => r.placeholder !== true)}
+        property={property}
         isExpanded={isExpanded}
         name={name}
         href={href}
@@ -286,15 +287,15 @@ export const TableBlockTable = ({
           <tbody>
             {tableRows.map((row, index: number) => {
               const cells = row.getVisibleCells();
-              const entityId = cells?.[0]?.getValue<Cell>()?.cellId;
+              const entityId = cells?.[0]?.getValue<Cell>()?.propertyId;
 
               return (
                 <tr key={entityId ?? index} className="hover:bg-bg">
                   {cells.map(cell => {
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
-                    const firstRenderable = cell.getValue<Cell>()?.renderables[0];
+                    const propertyId = cell.getValue<Cell>().propertyId;
 
-                    const isNameCell = Boolean(firstRenderable?.propertyId === SystemIds.NAME_PROPERTY);
+                    const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];

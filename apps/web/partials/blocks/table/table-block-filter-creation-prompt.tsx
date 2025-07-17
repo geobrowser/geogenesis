@@ -12,7 +12,8 @@ import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Space } from '~/core/io/dto/spaces';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useName } from '~/core/state/entity-page-store/entity-store';
+import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -237,7 +238,9 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
 }
 
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const { id: fromId, name: fromName } = useEntityPageStore();
+  const { id: fromId, spaceId } = useEntityStoreInstance();
+  const fromName = useName(fromId, spaceId);
+
   const { source } = useSource();
   const { filterState } = useFilters();
   const [state, dispatch] = React.useReducer(reducer, getInitialState(source));

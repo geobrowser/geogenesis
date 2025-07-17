@@ -5,7 +5,7 @@ import { Atom } from '@xstate/store';
 import { ReactNode, createContext, useContext } from 'react';
 
 import { queryClient } from '../query-client';
-import { Relation, Value } from '../v2.types';
+import { Entity, Relation, Value } from '../v2.types';
 import { SyncEngine } from './engine';
 import { GeoStore, reactiveRelations, reactiveValues } from './store';
 import { GeoEventStream } from './stream';
@@ -14,6 +14,7 @@ const SyncEngineContext = createContext<{
   stream: GeoEventStream;
   store: GeoStore;
   hydrate: (entityIds?: string[]) => void;
+  hydrateWith: (entities: Entity[]) => void;
   values: Atom<Value[]>;
   relations: Atom<Relation[]>;
 } | null>(null);
@@ -41,7 +42,14 @@ export function SyncEngineProvider({ children }: { children: ReactNode }) {
 
   return (
     <SyncEngineContext.Provider
-      value={{ store, stream, hydrate, values: reactiveValues, relations: reactiveRelations }}
+      value={{
+        store,
+        stream,
+        hydrate,
+        hydrateWith: store.hydrateWith,
+        values: reactiveValues,
+        relations: reactiveRelations,
+      }}
     >
       {children}
     </SyncEngineContext.Provider>

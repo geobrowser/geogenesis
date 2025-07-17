@@ -1,28 +1,65 @@
 'use client';
 
-import { useEntity } from '~/core/database/entities';
+import { SystemIds } from '@graphprotocol/grc-20';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
-import { useEntityStoreInstance } from './entity-store-provider';
+import { getSchemaFromTypeIds } from '~/core/database/entities';
+import { useRelations, useValues } from '~/core/sync/use-store';
+import { Entities } from '~/core/utils/entity';
 
-export function useEntityPageStore() {
-  const { spaceId, id, initialSpaces, initialValues, initialRelations } = useEntityStoreInstance();
-
-  const { name, spaces, values, relations, schema, types } = useEntity({
-    spaceId: spaceId,
-    id: id,
-    initialData: { spaces: initialSpaces, values: initialValues, relations: initialRelations },
+export function useEntityTypes(entityId: string, spaceId?: string) {
+  const types = useRelations({
+    selector: r =>
+      r.type.id === SystemIds.TYPES_PROPERTY &&
+      r.fromEntity.id === entityId &&
+      (spaceId ? r.spaceId === spaceId : true),
   });
 
-  return {
-    values,
-    relations,
+  return types.map(t => ({
+    id: t.toEntity.id,
+    name: t.toEntity.name,
+  }));
+}
 
-    name,
-    spaces,
-    spaceId,
-    id,
+export function useCover(entityId: string) {
+  const maybeCover = useRelations({
+    selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === entityId,
+  });
 
-    schema,
-    types,
-  };
+  return Entities.cover(maybeCover);
+}
+
+export function useName(entityId: string, spaceId?: string) {
+  const maybeName = useValues({
+    selector: r =>
+      r.property.id === SystemIds.NAME_PROPERTY && r.entity.id === entityId && (spaceId ? r.spaceId === spaceId : true),
+  });
+
+  return maybeName[0]?.value ?? null;
+}
+
+export function useDescription(entityId: string, spaceId?: string) {
+  const maybeDescription = useValues({
+    selector: r =>
+      r.property.id === SystemIds.DESCRIPTION_PROPERTY &&
+      r.entity.id === entityId &&
+      (spaceId ? r.spaceId === spaceId : true),
+  });
+
+  return maybeDescription[0]?.value ?? null;
+}
+
+export function useEntitySchema(entityId: string, spaceId?: string) {
+  const types = useEntityTypes(entityId, spaceId);
+
+  const { data: schema } = useQuery({
+    enabled: types.length > 0,
+    queryKey: ['entity-schema-for-merging', entityId, types],
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      return await getSchemaFromTypeIds(types.map(t => t.id));
+    },
+  });
+
+  return schema ?? [];
 }

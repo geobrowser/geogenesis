@@ -12,13 +12,12 @@ import * as React from 'react';
 import { useCallback, useState } from 'react';
 
 import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE, ROOT_SPACE } from '~/core/constants';
-import { useEntity } from '~/core/database/entities';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { EntityId } from '~/core/io/schema';
 import { useTabId } from '~/core/state/editor/use-editor';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { getTabSlug } from '~/core/utils/utils';
 
@@ -309,8 +308,8 @@ const JoinSpaces = () => {
 const useTabSlug = () => {
   const spaceId = useSpaceId();
   const tabId = useTabId();
-  const tabEntity = useEntity({ id: EntityId(tabId ?? ''), spaceId });
-  const tabSlug = getTabSlug(tabEntity?.name ?? '');
+  const name = useName(tabId ?? '', spaceId);
+  const tabSlug = getTabSlug(name ?? '');
 
   return tabSlug || null;
 };

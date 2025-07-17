@@ -5,14 +5,11 @@ import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
 import * as React from 'react';
 
 import { RENDERABLE_TYPE_PROPERTY, DATA_TYPE_PROPERTY, GEO_LOCATION } from '~/core/constants';
-import { useProperties } from '~/core/hooks/use-properties';
-import { useRenderables } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useQueryEntity, useQueryProperty } from '~/core/sync/use-store';
-import { RelationRenderableProperty, SwitchableRenderableType } from '~/core/v2.types';
+import { useQueryEntity, useQueryProperty, useRelations } from '~/core/sync/use-store';
+import { SwitchableRenderableType } from '~/core/v2.types';
 
 import { Divider } from '~/design-system/divider';
 
@@ -20,38 +17,28 @@ import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
 import { PropertyTypeDropdown } from './property-type-dropdown';
 import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
+import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
   spaceId: string;
 }
 
-export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderProps) {
-  const { id: entityId, relations, name } = useEntityPageStore();
+export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHeaderProps) {
+  const { id: entityId } = useEntityStoreInstance();
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
+  })
+  const name = useName(entityId);
+  
   const { storage } = useMutate();
 
   const editable = useUserIsEditing(spaceId);
 
-  const { renderablesGroupedByAttributeId } = useRenderables([], spaceId);
-  const properties = useProperties(Object.keys(renderablesGroupedByAttributeId));
-
-  // @TODO noIndexedAccessCheck
-  const typesRenderables = renderablesGroupedByAttributeId[SystemIds.TYPES_PROPERTY] ?? [];
-
-  const typesRenderable = Object.values(renderablesGroupedByAttributeId).map(renderables => {
-    const firstRenderable = renderables[0];
-    const renderableType = firstRenderable.type;
-
-    if (renderableType === 'RELATION' && firstRenderable.propertyId === SystemIds.TYPES_PROPERTY) {
-      return renderables;
-    }
-  });
-
-  const typesRenderableObj = typesRenderable.find(r => r?.find(re => re.propertyId === SystemIds.TYPES_PROPERTY));
-
   // Fetch property data type to see if this is a property entity
   const { property: propertyData } = useQueryProperty({
-    id: entityId,
+    id,
     spaceId,
     enabled: true,
   });
@@ -69,11 +56,8 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
     enabled: !!(propertyData?.renderableType || renderableTypeRelation?.toEntity.id),
   });
 
-  const hasPropertyType = typesRenderableObj?.some(type => type.value === SystemIds.PROPERTY);
-  
-  // Check if entity has a dataType value (indicating it's a property)
-  const dataTypeValue = renderablesGroupedByAttributeId[DATA_TYPE_PROPERTY]?.[0];
-  const isPropertyEntity = hasPropertyType || !!dataTypeValue;
+  const dataTypeValue = propertyData?.dataType
+  const isPropertyEntity = !!propertyData
 
   const propertyDataType = React.useMemo(() => {
     // If we have propertyData from the backend, use it
@@ -95,25 +79,8 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
       };
     }
     
-    // Otherwise, if we have a dataType value, use that
-    if (dataTypeValue && dataTypeValue.type === 'TEXT') {
-      let renderableType = null;
-      if (renderableTypeRelation && renderableTypeEntity) {
-        renderableType = {
-          id: renderableTypeEntity.id,
-          name: renderableTypeEntity.name,
-        };
-      }
-      
-      return {
-        id: entityId,
-        dataType: dataTypeValue.value || 'TEXT',
-        renderableType,
-      };
-    }
-    
     return null;
-  }, [propertyData, renderableTypeEntity, dataTypeValue, entityId, renderableTypeRelation]);
+  }, [propertyData, renderableTypeEntity, entityId, renderableTypeRelation]);
 
   // Determine the current renderable type based on property data
   const currentRenderableType = React.useMemo(() => {
@@ -404,7 +371,7 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
     // 2. No property data exists from backend
     // 3. No dataType value exists (meaning we haven't created it yet)
     // 4. No existing Property type relation exists
-    if (hasPropertyType && !propertyData && !dataTypeValue && !existingPropertyTypeRelation && entityId && spaceId) {
+    if (existingPropertyTypeRelation && !propertyData && !dataTypeValue && entityId && spaceId) {
       console.log('🎯 Property type detected but no property data exists, creating property with default dataType');
       
       // Create the property with a default dataType of TEXT
@@ -415,11 +382,11 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
         dataType: 'TEXT',
       });
     }
-  }, [hasPropertyType, propertyData, dataTypeValue, entityId, spaceId, storage, name, relations]);
+  }, [propertyData, dataTypeValue, entityId, spaceId, storage, name, relations]);
 
   // Debug logging
   React.useEffect(() => {
-    if (hasPropertyType) {
+    if (propertyData) {
       console.log('Entity has property type', {
         entityId,
         propertyData,
@@ -427,7 +394,7 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
         currentRenderableType,
       });
     }
-  }, [hasPropertyType, entityId, propertyData, propertyDataType, currentRenderableType]);
+  }, [entityId, propertyData, propertyDataType, currentRenderableType]);
 
   return (
     <div className="flex items-center gap-2 text-text">
@@ -450,9 +417,14 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
         </div>
       )}
       {editable ? (
-        <EditableRelationsGroup relations={typesRenderables as RelationRenderableProperty[]} properties={properties} />
+        <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
       ) : (
-        <ReadableRelationsGroup relations={typesRenderables as RelationRenderableProperty[]} isTypes={true} />
+        <ReadableRelationsGroup
+          entityId={id}
+          spaceId={spaceId}
+          propertyId={SystemIds.TYPES_PROPERTY}
+          isMetadataHeader={true}
+        />
       )}
     </div>
   );

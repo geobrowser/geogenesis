@@ -44,10 +44,8 @@ export type NumberCondition = {
 export type BooleanCondition = { equals: boolean };
 
 export type ValueCondition = {
-  propertyName?: StringCondition;
   propertyId?: StringCondition;
   value?: StringCondition | NumberCondition | BooleanCondition;
-  dataType?: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER';
   space?: StringCondition;
 };
 
@@ -324,6 +322,10 @@ export class EntityQuery {
         return this.matchesRelations(entity.relations, condition);
       }
 
+      case 'backlinks': {
+        return this.matchesBacklinks(entity, condition);
+      }
+
       default:
         return false;
     }
@@ -337,11 +339,6 @@ export class EntityQuery {
 
     return conditions.some(cond => {
       return values.some(value => {
-        // Check attributeName
-        if (cond.propertyName && !this.matchesStringCondition(value.property.name || '', cond.propertyName)) {
-          return false;
-        }
-
         // Check attributeId
         if (cond.propertyId && !this.matchesStringCondition(value.property.id, cond.propertyId)) {
           return false;
@@ -349,11 +346,6 @@ export class EntityQuery {
 
         // Check space
         if (cond.space && !this.matchesStringCondition(value.spaceId, cond.space)) {
-          return false;
-        }
-
-        // Check valueType
-        if (cond.dataType && value.property.dataType !== cond.dataType) {
           return false;
         }
 
@@ -416,6 +408,54 @@ export class EntityQuery {
         }
 
         return true;
+      });
+    });
+  }
+
+  /**
+   * Check if any backlinks match the condition
+   */
+  private matchesBacklinks(entity: Entity, condition: BacklinkCondition | BacklinkCondition[]): boolean {
+    const conditions = Array.isArray(condition) ? condition : [condition];
+
+    return conditions.some(cond => {
+      return this.entities.some(otherEntity => {
+        return otherEntity.relations.some(relation => {
+          // Check if this relation points TO the current entity
+          if (relation.toEntity.id !== entity.id) {
+            return false;
+          }
+
+          // Check typeOf.id
+          if (cond.typeOf?.id && !this.matchesStringCondition(relation.type.id as string, cond.typeOf.id)) {
+            return false;
+          }
+
+          // Check typeOf.name
+          if (cond.typeOf?.name && !this.matchesStringCondition(relation.type.name || '', cond.typeOf.name)) {
+            return false;
+          }
+
+          // Check fromEntity.id
+          if (cond.fromEntity?.id && !this.matchesStringCondition(relation.fromEntity.id, cond.fromEntity.id)) {
+            return false;
+          }
+
+          // Check fromEntity.name
+          if (
+            cond.fromEntity?.name &&
+            !this.matchesStringCondition(relation.fromEntity.name || '', cond.fromEntity.name)
+          ) {
+            return false;
+          }
+
+          // Check space
+          if (cond.space && !this.matchesStringCondition(relation.spaceId, cond.space)) {
+            return false;
+          }
+
+          return true;
+        });
       });
     });
   }

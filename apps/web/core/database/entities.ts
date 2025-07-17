@@ -2,23 +2,24 @@
 
 import { SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
+import { getProperties } from '../io/v2/queries';
 import { queryClient } from '../query-client';
 import { E } from '../sync/orm';
 import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
 import { Entities } from '../utils/entity';
-import { EntityWithSchema, Property, Relation, Value } from '../v2.types';
+import { EntityWithSchema, Property, Relation } from '../v2.types';
 
 type UseEntityOptions = {
   spaceId?: string;
   id: string;
-  initialData?: { spaces: string[]; values: Value[]; relations: Relation[] };
 };
 
 export function useEntity(options: UseEntityOptions): EntityWithSchema {
-  const { spaceId, id, initialData } = options;
+  const { spaceId, id } = options;
 
   const { entity } = useQueryEntity({
     id: id,
@@ -27,13 +28,12 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema {
 
   // If the caller passes in a set of data we use that for merging. If not,
   // we fetch the entity from the server and merge it with the local state.
-  const data = entity ?? initialData;
 
-  const values = data?.values ?? [];
-  const relations = data?.relations ?? [];
+  const values = entity?.values ?? [];
+  const relations = entity?.relations ?? [];
 
   const name = Entities.name(values ?? []);
-  const spaces = data?.spaces ?? [];
+  const spaces = entity?.spaces ?? [];
   const description = Entities.description(values);
   const types = readTypes(relations);
 
@@ -96,7 +96,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
   const dedupedTypeIds = [...new Set(typesIds)];
 
   // @TODO(migration): Should generate schema by syncing types
-  const schemaEntities = await E.findMany({
+  const typeEntities = await E.findMany({
     store: geoStore,
     cache: queryClient,
     where: {
@@ -108,72 +108,18 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
     skip: 0,
   });
 
-  // @TODO(migration): Fetch types directly
-  const schemaWithoutValueType = schemaEntities.flatMap((e): Property[] => {
-    const attributeRelations = e.relations.filter(t => t.type.id === SystemIds.PROPERTIES);
+  const propertyIds = typeEntities
+    .flatMap(entity => {
+      return entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES);
+    })
+    .map(r => r.toEntity.id);
 
-    if (attributeRelations.length === 0) {
-      return [];
-    }
-
-    return attributeRelations.map(a => ({
-      id: a.toEntity.id,
-      name: a.toEntity.name,
-
-      // We add the correct value type below.
-      dataType: 'TEXT', // @TODO(migration): Use types query
-    }));
-  });
-
-  const attributes = await E.findMany({
-    store: geoStore,
-    cache: queryClient,
-    where: {
-      id: {
-        in: schemaWithoutValueType.map(a => a.id),
-      },
-    },
-    first: 100,
-    skip: 0,
-  });
-
-  // const valueTypes = attributes.map(a => {
-  //   const valueTypeId = a.relations.find(r => r.type.id === EntityId(SystemIds.VALUE_TYPE_PROPERTY))?.toEntity.id;
-  //   return {
-  //     attributeId: a.id,
-  //     valueTypeId,
-  //   };
-  // });
-
-  const relationValueTypes = attributes.map(a => {
-    const relationValueType = a.relations.find(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)?.toEntity;
-
-    const relationValueTypes = a.relations
-      .filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
-      .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
-
-    return {
-      attributeId: a.id,
-      relationValueTypeId: relationValueType?.id,
-      relationValueTypeName: relationValueType?.name,
-      relationValueTypes,
-    };
-  });
-
-  const schema = schemaWithoutValueType.map((s): Property => {
-    const relationValueType = relationValueTypes.find(t => t.attributeId === s.id) ?? null;
-
-    return {
-      ...s,
-      dataType: 'TEXT', // @TODO(migration): use Types
-      relationValueTypes: relationValueType?.relationValueTypes,
-    };
-  });
+  const properties = await Effect.runPromise(getProperties(propertyIds));
 
   // If the schema exists already in the list then we should dedupe it.
   // Some types might share some elements in their schemas, e.g., Person
   // and Pet both have Avatar as part of their schema.
-  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...schema], (a, b) => a.id === b.id);
+  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...properties], (a, b) => a.id === b.id);
 }
 
 /**
