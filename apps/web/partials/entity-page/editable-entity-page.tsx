@@ -1,6 +1,7 @@
 'use client';
 
 import { ContentIds, Id, Position, SystemIds } from '@graphprotocol/grc-20';
+import { RENDERABLE_TYPE_PROPERTY, DATA_TYPE_PROPERTY, GEO_LOCATION } from '~/core/constants';
 // import { Image } from '@graphprotocol/grc-20';
 import { useAtom } from 'jotai';
 
@@ -21,6 +22,7 @@ import {
   Relation,
   RelationRenderableProperty,
   RenderableProperty,
+  SwitchableRenderableType,
   Value,
   ValueRenderableProperty,
 } from '~/core/v2.types';
@@ -225,6 +227,56 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
           spaceId={spaceId}
           relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
           onCreateEntity={result => {
+            // Get the selected property type from the result
+            const selectedPropertyType = result.selectedPropertyType || 'TEXT';
+            
+            // Map the selected property type to its base dataType and renderableType
+            let baseDataType: SwitchableRenderableType;
+            let renderableTypeId: string | null = null;
+
+            switch (selectedPropertyType) {
+              case 'TEXT':
+                baseDataType = 'TEXT';
+                renderableTypeId = null;
+                break;
+              case 'URL':
+                baseDataType = 'TEXT';
+                renderableTypeId = SystemIds.URL;
+                break;
+              case 'GEO_LOCATION':
+                baseDataType = 'TEXT';
+                renderableTypeId = GEO_LOCATION;
+                break;
+              case 'RELATION':
+                baseDataType = 'RELATION';
+                renderableTypeId = null;
+                break;
+              case 'IMAGE':
+                baseDataType = 'RELATION';
+                renderableTypeId = SystemIds.IMAGE;
+                break;
+              case 'NUMBER':
+                baseDataType = 'NUMBER';
+                renderableTypeId = null;
+                break;
+              case 'CHECKBOX':
+                baseDataType = 'CHECKBOX';
+                renderableTypeId = null;
+                break;
+              case 'TIME':
+                baseDataType = 'TIME';
+                renderableTypeId = null;
+                break;
+              case 'POINT':
+                baseDataType = 'POINT';
+                renderableTypeId = null;
+                break;
+              default:
+                baseDataType = 'TEXT';
+                renderableTypeId = null;
+            }
+
+            // Create the name value
             storage.renderables.values.set({
               propertyId: SystemIds.NAME_PROPERTY,
               entityId: result.id,
@@ -235,6 +287,27 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
               value: result.name ?? '',
             });
 
+            // Create the dataType value
+            storage.values.set({
+              // id: ID.createValueId({
+              //   entityId: result.id,
+              //   propertyId: DATA_TYPE_PROPERTY,
+              //   spaceId,
+              // }),
+              entity: {
+                id: result.id,
+                name: result.name || '',
+              },
+              // property: {
+              //   id: DATA_TYPE_PROPERTY,
+              //   name: 'Data Type',
+              //   dataType: 'TEXT',
+              // },
+              spaceId,
+              value: baseDataType,
+            });
+
+            // Create the Property type relation
             storage.relations.set({
               id: Id.generate(),
               entityId: Id.generate(),
@@ -256,6 +329,31 @@ function EditableAttribute({ renderable, onChange }: { renderable: RenderablePro
                 value: SystemIds.PROPERTY,
               },
             });
+
+            // If there's a renderableType, create the relation
+            if (renderableTypeId) {
+              storage.relations.set({
+                id: Id.generate(),
+                entityId: Id.generate(),
+                spaceId,
+                renderableType: 'RELATION',
+                verified: false,
+                position: Position.generate(),
+                type: {
+                  id: RENDERABLE_TYPE_PROPERTY,
+                  name: 'Renderable Type',
+                },
+                fromEntity: {
+                  id: result.id,
+                  name: result.name,
+                },
+                toEntity: {
+                  id: renderableTypeId,
+                  name: selectedPropertyType,
+                  value: renderableTypeId,
+                },
+              });
+            }
           }}
           onDone={result => {
             onChange();

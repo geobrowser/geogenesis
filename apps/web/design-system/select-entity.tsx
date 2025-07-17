@@ -1,4 +1,4 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds, Id, Position } from '@graphprotocol/grc-20';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -19,7 +19,8 @@ import { Space } from '~/core/io/dto/spaces';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getImagePath } from '~/core/utils/utils';
-import { Property, SearchResult } from '~/core/v2.types';
+import { Property, SearchResult, SwitchableRenderableType, Relation } from '~/core/v2.types';
+import { RENDERABLE_TYPE_PROPERTY, GEO_LOCATION } from '~/core/constants';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { ResultsList } from '~/design-system/autocomplete/results-list';
@@ -43,6 +44,7 @@ import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
+import { PropertyTypeDropdown } from '~/partials/entity-page/property-type-dropdown';
 
 type SelectEntityProps = {
   onDone?: (
@@ -55,7 +57,7 @@ type SelectEntityProps = {
     // Not the best way to do this but the simplest for now to avoid breaking changes.
     fromCreateFn?: boolean
   ) => void;
-  onCreateEntity?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
+  onCreateEntity?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean; selectedPropertyType?: SwitchableRenderableType }) => void;
   spaceId: string;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
@@ -102,6 +104,7 @@ export const SelectEntity = ({
 
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
+  const [selectedPropertyType, setSelectedPropertyType] = useState<SwitchableRenderableType>('TEXT');
 
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 
@@ -132,6 +135,9 @@ export const SelectEntity = ({
 
   const [, setToast] = useToast();
 
+  // Check if we're creating a property entity
+  const isCreatingProperty = relationValueTypes?.some(type => type.id === SystemIds.PROPERTY);
+
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
 
@@ -142,7 +148,7 @@ export const SelectEntity = ({
     // e.g., you're in a collection and create a new entity, we want to add the current
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
-      onCreateEntity({ id: newEntityId, name: query });
+      onCreateEntity({ id: newEntityId, name: query, selectedPropertyType: isCreatingProperty ? selectedPropertyType : undefined });
     } else {
       // Create new entity with name and types using internal id
       storage.entities.name.set(newEntityId, spaceId, query);
@@ -574,10 +580,18 @@ export const SelectEntity = ({
                 )}
                 {!result && (
                   <div className="flex w-full items-center justify-between border-t border-grey-02 px-4 py-2">
-                    <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
-                      <Toggle checked={isShowingIds} />
-                      <div className="text-[0.875rem] text-grey-04">IDs</div>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
+                        <Toggle checked={isShowingIds} />
+                        <div className="text-[0.875rem] text-grey-04">IDs</div>
+                      </button>
+                      {isCreatingProperty && (
+                        <PropertyTypeDropdown 
+                          value={selectedPropertyType} 
+                          onChange={setSelectedPropertyType}
+                        />
+                      )}
+                    </div>
                     <button onClick={onCreateNewEntity} className="text-resultLink text-ctaHover">
                       Create new
                     </button>
