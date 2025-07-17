@@ -225,7 +225,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   if (isEmpty) {
     return (
       <div className="flex flex-wrap items-center gap-1 pr-10">
-        {property.renderableType === SystemIds.IMAGE ? (
+        {property.renderableTypeStrict === 'IMAGE' ? (
           <div key="relation-upload-image">
             <PageImageField
               onImageChange={imageSrc => {
@@ -377,7 +377,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         const relationName = r.toEntity.name;
         const relationValue = r.toEntity.id;
 
-        if (property.renderableType === SystemIds.IMAGE) {
+        if (property.renderableTypeStrict === 'IMAGE') {
           return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue)} />;
         }
 
