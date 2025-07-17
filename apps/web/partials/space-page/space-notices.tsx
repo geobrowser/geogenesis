@@ -34,17 +34,20 @@ import { dismissedNoticesAtom } from '~/atoms';
 import { teamNoticeDismissedAtom } from '~/atoms';
 import type { RepeatingNotice } from '~/atoms';
 
+const AUTHORS_PROPERTY = '91a9e2f6-e51a-48f7-9976-61de8561b690';
+
 type SpaceNoticesProps = {
   spaceType: SpacePageType;
   spaceId: string;
   entityId: string;
 };
 
-export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
+export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps) => {
   const { isEditor } = useAccessControl(spaceId);
   const isEditing = useUserIsEditing(spaceId);
   const { nextEntityId, onClick } = useCreateEntityWithFilters(spaceId);
   const tabSlug = useTabSlug();
+  const authorName = useName(entityId, spaceId);
 
   if (spaceType === 'person') {
     if (isEditor) {
@@ -74,10 +77,17 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
                         valueName: 'Post',
                         valueType: 'RELATION',
                       },
+                      {
+                        columnId: AUTHORS_PROPERTY,
+                        columnName: 'Authors',
+                        value: entityId,
+                        valueName: authorName,
+                        valueType: 'RELATION',
+                      },
                     ],
                   })
                 }
-                href={NavUtils.toEntity(spaceId, nextEntityId)}
+                href={NavUtils.toEntity(spaceId, nextEntityId, true)}
               >
                 Create post
               </SimpleButton>
