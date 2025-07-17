@@ -1,6 +1,5 @@
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
-import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -10,6 +9,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
@@ -358,6 +358,8 @@ export function TableBlockListItem({
 
   return (
     <Link
+      entityId={rowEntityId}
+      spaceId={currentSpaceId}
       href={href}
       className="group flex w-full max-w-full grow items-start justify-start gap-6 rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider"
     >
@@ -371,7 +373,12 @@ export function TableBlockListItem({
       </div>
       <div className="w-full">
         {source.type !== 'COLLECTION' ? (
-          <Link href={href} className="text-smallTitle font-medium text-text">
+          <Link
+            entityId={rowEntityId}
+            spaceId={currentSpaceId}
+            href={href}
+            className="text-smallTitle font-medium text-text"
+          >
             {name || rowEntityId}
           </Link>
         ) : (
@@ -386,7 +393,12 @@ export function TableBlockListItem({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <Link href={href} className="text-smallTitle font-medium text-text">
+            <Link
+              entityId={rowEntityId}
+              spaceId={currentSpaceId}
+              href={href}
+              className="text-smallTitle font-medium text-text"
+            >
               {name || rowEntityId}
             </Link>
           </CollectionMetadata>
