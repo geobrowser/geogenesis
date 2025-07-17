@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { Id, SystemIds } from '@graphprotocol/grc-20';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import dayjs from 'dayjs';
@@ -11,13 +11,14 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 
-import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE, ROOT_SPACE } from '~/core/constants';
+import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useTabId } from '~/core/state/editor/use-editor';
 import { useName } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { getTabSlug } from '~/core/utils/utils';
 
@@ -235,14 +236,39 @@ type FindProjectsProps = {
 
 const FindProjects = ({ spaceId }: FindProjectsProps) => {
   const router = useRouter();
+  const { storage } = useMutate();
 
   return (
     <div className="pr-[3.25rem]">
       <SelectEntity
         placeholder=""
-        onDone={result => {
-          const destination = NavUtils.toEntity(ROOT_SPACE, result.id);
+        onDone={(result, fromCreateFn) => {
+          const destinationSpace = fromCreateFn ? spaceId : result.primarySpace || spaceId;
+          const destination = NavUtils.toEntity(destinationSpace, result.id);
           router.push(destination);
+        }}
+        onCreateEntity={result => {
+          storage.entities.name.set(result.id, spaceId, result.name || '');
+
+          storage.relations.set({
+            id: Id.generate(),
+            entityId: Id.generate(),
+            spaceId,
+            renderableType: 'RELATION',
+            fromEntity: {
+              id: result.id,
+              name: result.name,
+            },
+            toEntity: {
+              id: SystemIds.PROJECT_TYPE,
+              name: 'Project',
+              value: SystemIds.PROJECT_TYPE,
+            },
+            type: {
+              id: SystemIds.TYPES_PROPERTY,
+              name: 'Types',
+            },
+          });
         }}
         spaceId={spaceId}
         relationValueTypes={projectValueTypes}

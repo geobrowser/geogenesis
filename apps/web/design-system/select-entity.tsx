@@ -46,7 +46,7 @@ import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
   onDone?: (
-    result: { id: string; name: string | null; space?: EntityId; verified?: boolean },
+    result: { id: string; name: string | null; space?: EntityId; primarySpace?: EntityId; verified?: boolean },
     // This is used to determine if the onDone is called from within the create function
     // internal to SelectEntity. Some consumers in the codebase want to either listen to
     // the onDone OR onCreateEntity callback but not both. This lets them bail out of
@@ -167,6 +167,7 @@ export const SelectEntity = ({
       onDone?.({
         id: result.id,
         name: result.name,
+        primarySpace: result.spaces?.[0]?.spaceId ? EntityId(result.spaces[0].spaceId) : undefined,
       });
       onQueryChange('');
     }
@@ -408,6 +409,7 @@ export const SelectEntity = ({
                                     onDone?.({
                                       id: result.id,
                                       name: result.name,
+                                      primarySpace: result.spaces?.[0]?.spaceId ? EntityId(result.spaces[0].spaceId) : undefined,
                                     });
                                     onQueryChange('');
                                     setSelectedIndex(0);
