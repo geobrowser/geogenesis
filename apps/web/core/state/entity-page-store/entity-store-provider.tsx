@@ -2,39 +2,28 @@
 
 import * as React from 'react';
 
-import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import { useHydrateEntity } from '~/core/sync/use-store';
 import { OmitStrict } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
-import { Entity, Relation, Value } from '~/core/v2.types';
 
-const EntityStoreContext = React.createContext<
-  OmitStrict<Props, 'children' | 'initialRelations' | 'initialValues'> | undefined
->(undefined);
+const EntityStoreContext = React.createContext<OmitStrict<Props, 'children'> | undefined>(undefined);
 
 interface Props {
   id: string;
   spaceId: string;
   children: React.ReactNode;
-  initialValues: Value[];
-  initialRelations: Relation[];
 }
 
-export function EntityStoreProvider({ id, spaceId, children, initialValues, initialRelations }: Props) {
-  const { hydrateWith } = useSyncEngine();
-
-  React.useEffect(() => {
-    const newEntity: Entity = {
-      id,
-      name: null,
-      description: null,
-      types: [],
-      spaces: Entities.spaces(initialValues, initialRelations),
-      values: initialValues,
-      relations: initialRelations,
-    };
-
-    hydrateWith([newEntity]);
-  }, [id, initialRelations, initialValues, hydrateWith]);
+export function EntityStoreProvider({ id, spaceId, children }: Props) {
+  /**
+   * We hydrate the entity in the provider to ensure that all downstream
+   * consumers of entity data are guaranteed to be able to query for the
+   * entity. We trigger it here instead of in another component to ensure
+   * the hydration is triggered as early/high as possible in the component
+   * tree.
+   */
+  useHydrateEntity({
+    id,
+  });
 
   const store = React.useMemo(() => {
     return {

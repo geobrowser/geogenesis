@@ -51,17 +51,11 @@ export default async function Layout(props0: LayoutProps) {
   const spaceId = params.id;
 
   const props = await getSpaceFrontPage(spaceId);
-  const coverUrl = Entities.cover(props.relations);
 
   const tabs = buildTabsForSpacePage(props.tabEntities, props.space?.entity?.types ?? [], params);
 
   return (
-    <EntityStoreProvider
-      id={props.id}
-      spaceId={spaceId}
-      initialValues={props.values}
-      initialRelations={props.relations}
-    >
+    <EntityStoreProvider id={props.id} spaceId={spaceId}>
       <EditorProvider
         id={props.id}
         spaceId={spaceId}
@@ -69,7 +63,7 @@ export default async function Layout(props0: LayoutProps) {
         initialBlocks={props.blocks}
         initialTabs={props.tabs}
       >
-        <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
+        <EntityPageCover avatarUrl={null} coverUrl={props.coverUrl} />
         <EntityPageContentContainer>
           <div className="space-y-2">
             <EditableSpaceHeading
@@ -128,16 +122,13 @@ const getSpaceFrontPage = async (spaceId: string) => {
   if (!entity) {
     return {
       id: Id.generate(),
-      name: null,
-      description: null,
       spaces: [spaceId],
-      values: [],
-      relations: [],
       tabEntities: [],
       tabs: {},
       blockRelations: [],
       blocks: [],
       space: null,
+      coverUrl: null,
     };
   }
 
@@ -168,19 +159,13 @@ const getSpaceFrontPage = async (spaceId: string) => {
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
-    values: entity.values,
-    relations: entity.relations,
     id: entity.id,
-    name: entity.name,
-    description: Entities.description(entity.values),
-
     tabEntities,
     tabs,
-
     blockRelations: entity.relations,
     blocks,
-
     space,
+    coverUrl: Entities.cover(entity.relations) ?? null,
   };
 };
 
