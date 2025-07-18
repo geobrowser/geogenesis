@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 import equal from 'fast-deep-equal';
 
 import { getProperties, getProperty } from '../io/v2/queries';
+import { OmitStrict } from '../types';
 import { Values } from '../utils/value';
 import { Property, Relation, Value } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
@@ -39,11 +40,17 @@ const reactive = createAtom(() => ({
 }));
 
 /**
- * @TODO: We're basically inventing @tanstack/db. Right now it's
- * not stable (as of July 2025). Once it's stable we should just
- * migrate to @tanstack/db and use that instead.
+ * Triggers sync for a specific entity. This is useful when we want to
+ * hydrate the sync store ahead of time from within React.
+ *
+ * If you want to hydrate the sync store outside of react, use the store's
+ * "hydrate" method instead.
+ *
+ * ```ts
+ * store.hydrate({ id, spaceId });
+ * ```
  */
-export function useQueryEntity({ id, spaceId, enabled = true, shouldHydrate = false }: QueryEntityOptions) {
+export function useHydrateEntity({ id, enabled = true }: OmitStrict<QueryEntityOptions, 'shouldHydrate' | 'spaceId'>) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
 
@@ -71,6 +78,18 @@ export function useQueryEntity({ id, spaceId, enabled = true, shouldHydrate = fa
       return null;
     },
   });
+
+  return { isFetched };
+}
+
+/**
+ * @TODO: We're basically inventing @tanstack/db. Right now it's
+ * not stable (as of July 2025). Once it's stable we should just
+ * migrate to @tanstack/db and use that instead.
+ */
+export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptions) {
+  const { store } = useSyncEngine();
+  const { isFetched } = useHydrateEntity({ id, enabled });
 
   const entity = useSelector(
     reactive,

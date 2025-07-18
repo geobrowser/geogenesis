@@ -51,12 +51,7 @@ export default async function DefaultEntityPage({
   const showRelations = props.isRelationEntity;
 
   return (
-    <EntityStoreProvider
-      id={props.id}
-      spaceId={props.spaceId}
-      initialValues={props.values}
-      initialRelations={props.relations}
-    >
+    <EntityStoreProvider id={props.id} spaceId={props.spaceId}>
       <EditorProvider
         id={props.id}
         spaceId={props.spaceId}
@@ -177,15 +172,10 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
-    values: entity?.values ?? [],
     id: entityId,
-    name: entity?.name ?? null,
-    description: Entities.description(entity?.values ?? []),
     spaceId,
     serverAvatarUrl,
     serverCoverUrl,
-    relations: entity?.relations ?? [],
-    types: entity?.types ?? [],
 
     tabs,
     tabEntities,

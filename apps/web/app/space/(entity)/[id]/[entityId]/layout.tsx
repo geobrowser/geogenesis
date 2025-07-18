@@ -80,12 +80,7 @@ export default async function ProfileLayout(props: Props) {
   const profile = await getProfilePage(entityId);
 
   return (
-    <EntityStoreProvider
-      id={entityId}
-      spaceId={params.id}
-      initialValues={profile.values}
-      initialRelations={profile.relations}
-    >
+    <EntityStoreProvider id={entityId} spaceId={params.id}>
       <EditorProvider
         id={profile.id}
         spaceId={params.id}
@@ -124,28 +119,25 @@ export default async function ProfileLayout(props: Props) {
   );
 }
 
-async function getProfilePage(entityId: string): Promise<
-  Entity & {
-    avatarUrl: string | null;
-    coverUrl: string | null;
-    blocks: Entity[];
-    blockRelations: Relation[];
-  }
-> {
+async function getProfilePage(entityId: string): Promise<{
+  id: string;
+  spaces: string[];
+  types: string[];
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  blocks: Entity[];
+  blockRelations: Relation[];
+}> {
   const person = await cachedFetchEntity(entityId);
 
   // @TODO: Real error handling
   if (!person) {
     return {
       id: entityId,
-      name: null,
       spaces: [],
       avatarUrl: null,
       coverUrl: null,
-      values: [],
       types: [],
-      description: null,
-      relations: [],
       blocks: [],
       blockRelations: [],
     };
@@ -157,6 +149,7 @@ async function getProfilePage(entityId: string): Promise<
 
   return {
     ...person,
+    types: person.types.map(t => t.id),
     avatarUrl: Entities.avatar(person.relations),
     coverUrl: Entities.cover(person.relations),
     blockRelations: blockRelations,
