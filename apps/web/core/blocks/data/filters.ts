@@ -95,7 +95,8 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
     case 'SPACES':
       filter = {
         // where: {
-        //   spaces: filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value),
+        spaceId: { in: filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value) },
+        // filter: { spaceId: { is: source.value[0] } },
         //   AND: filters
         //     .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
         //     .map(f => {

@@ -60,7 +60,9 @@ type GetSourceArgs = {
  * a fallback source with a type of Spaces containing the current space id.
  */
 export function getSource({ blockId, dataEntityRelations, currentSpaceId, filterState }: GetSourceArgs): Source {
-  const sourceType = dataEntityRelations.find(r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE)?.toEntity.id;
+  const sourceType = dataEntityRelations.find(
+    r => r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE && !r.isDeleted
+  )?.toEntity.id;
 
   const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_PROPERTY);
 

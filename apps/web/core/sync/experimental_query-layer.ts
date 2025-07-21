@@ -284,16 +284,16 @@ export class EntityQuery {
 
       case 'spaces':
         // Temporarily disabled until we have property space ids
-        return true;
-      // if (condition === undefined) {
-      //   return true;
-      // }
+        //return true;
+        if (condition === undefined) {
+          return true;
+        }
 
-      // if (Array.isArray(condition)) {
-      //   const clause = condition as StringCondition[];
-      //   return clause.some(space => space.equals && entity.spaces.includes(space.equals));
-      // }
-      // return false;
+        if (Array.isArray(condition)) {
+          const clause = condition as StringCondition[];
+          return clause.some(space => space.equals && entity.spaces.includes(space.equals));
+        }
+        return false;
 
       case 'types':
         if (condition === undefined) {
