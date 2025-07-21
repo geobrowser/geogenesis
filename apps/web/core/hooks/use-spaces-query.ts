@@ -7,28 +7,107 @@ import { useState } from 'react';
 
 import { Environment } from '~/core/environment';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
-import { SubstreamSpace } from '~/core/io/schema';
-import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 
-import { Space } from '../io/dto/spaces';
-import { SpaceEntity } from '../v2.types';
+import { SpaceDto } from '../io/dto/spaces';
+import { RemoteSpace } from '../io/v2/v2.schema';
 
 type NetworkResult = {
-  spaces: {
-    nodes: Array<Pick<SubstreamSpace, 'spacesMetadatum' | 'id'>>;
-  };
+  spaces: Array<RemoteSpace>;
 };
 
+const mainSpacesIds = JSON.stringify([
+  'b2565802-3118-47be-91f2-e59170735bac',
+  'b42fa1af-1d67-4058-a6f1-4be5d7360caf',
+  'dabe3133-4334-47a0-85c5-f965a3a94d4c',
+]);
+
+// @TODO: Support filtering by page name
 const spacesQuery = (name: string) => `
   {
     spaces(
-      filter: { spacesMetadatum: { version: { name: { includesInsensitive: "${name}" } } } }
-      first: 10
+      filter : 
+        {id: 
+          {in: ${mainSpacesIds}}
+        }
     ) {
-      nodes {
+      id
+      type
+      daoAddress
+      spaceAddress
+      mainVotingAddress
+      membershipAddress
+      personalAddress
+
+      membersList {
+        address
+      }
+
+      editorsList {
+        address
+      }
+
+      page  {
         id
-        ${spaceMetadataFragment}
+        name
+        description
+        spaceIds
+
+        types {
+          id
+          name
+        }
+
+        valuesList {
+          spaceId
+          property {
+            id
+            name
+            dataType
+            renderableType
+            relationValueTypes {
+              id
+              name
+            }
+          }
+          value
+          language
+          unit
+        }
+
+        relationsList {
+          id
+          spaceId
+          position
+          verified
+          entityId
+
+          fromEntity {
+            id
+            name
+          }
+
+          toEntity {
+            id
+            name
+            types {
+              id
+              name
+            }
+            valuesList {
+              propertyId
+              value
+            }
+          }
+
+          toSpaceId
+
+          type {
+            id
+            name
+            renderableType
+          }
+        }
       }
     }
   }
@@ -42,7 +121,7 @@ export function useSpacesQuery() {
     queryKey: ['spaces-by-name', debouncedQuery],
     queryFn: async ({ signal }) => {
       const queryEffect = graphql<NetworkResult>({
-        query: spacesQuery(query),
+        query: spacesQuery(debouncedQuery),
         endpoint: Environment.getConfig().api,
         signal,
       });
@@ -50,6 +129,7 @@ export function useSpacesQuery() {
       const resultOrError = await Effect.runPromise(Effect.either(queryEffect));
 
       if (Either.isLeft(resultOrError)) {
+        console.log(resultOrError);
         const error = resultOrError.left;
 
         switch (error._tag) {
@@ -68,23 +148,23 @@ export function useSpacesQuery() {
             );
 
             return {
-              spaces: {
-                nodes: [],
-              },
+              spaces: [],
             };
 
           default:
             console.error(`${error._tag}: Unable to fetch spaces in spaces-by-name`);
 
             return {
-              spaces: {
-                nodes: [],
-              },
+              spaces: [],
             };
         }
       }
 
-      return resultOrError.right;
+      return {
+        spaces: resultOrError.right.spaces
+          .map(rSpace => SpaceDto(rSpace))
+          .filter(item => item.entity.name?.toLowerCase().includes(debouncedQuery.toLowerCase())),
+      };
     },
   });
 
@@ -99,7 +179,6 @@ export function useSpacesQuery() {
   return {
     query,
     setQuery,
-    // @TODO(migration): Query for spaces by name
-    spaces: [] as SpaceEntity[],
+    spaces: data.spaces,
   };
 }

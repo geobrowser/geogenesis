@@ -138,11 +138,11 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
               <div className="flex items-center gap-2">
                 <div className="flex-shrink-0">
                   <img
-                    src={getImagePath(space.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
+                    src={getImagePath(space.entity.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
                     className="h-[12px] w-[12px] rounded-sm"
                   />
                 </div>
-                <div className="flex-grow truncate text-button text-text">{space.name}</div>
+                <div className="flex-grow truncate text-button text-text">{space.entity.name}</div>
                 {active && (
                   <div className="relative text-grey-04">
                     <Check />
