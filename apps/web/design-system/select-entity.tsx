@@ -16,7 +16,6 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
-import { EntityId, SpaceId } from '~/core/io/schema';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getImagePath } from '~/core/utils/utils';
 import { Property, SearchResult } from '~/core/v2.types';
@@ -46,7 +45,7 @@ import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
   onDone?: (
-    result: { id: string; name: string | null; space?: EntityId; primarySpace?: EntityId; verified?: boolean },
+    result: { id: string; name: string | null; space?: string; primarySpace?: string; verified?: boolean },
     // This is used to determine if the onDone is called from within the create function
     // internal to SelectEntity. Some consumers in the codebase want to either listen to
     // the onDone OR onCreateEntity callback but not both. This lets them bail out of
@@ -55,7 +54,7 @@ type SelectEntityProps = {
     // Not the best way to do this but the simplest for now to avoid breaking changes.
     fromCreateFn?: boolean
   ) => void;
-  onCreateEntity?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
+  onCreateEntity?: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
   spaceId: string;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
@@ -167,7 +166,7 @@ export const SelectEntity = ({
       onDone?.({
         id: result.id,
         name: result.name,
-        primarySpace: result.spaces?.[0]?.spaceId ? EntityId(result.spaces[0].spaceId) : undefined,
+        primarySpace: result.spaces?.[0]?.spaceId ? result.spaces[0].spaceId : undefined,
       });
       onQueryChange('');
     }
@@ -359,7 +358,7 @@ export const SelectEntity = ({
                                     <SpaceFilterInput
                                       onSelect={result => {
                                         setSpaceFilter({
-                                          spaceId: SpaceId(result.id),
+                                          spaceId: result.id,
                                           spaceName: result.name,
                                         });
                                         setIsAddingFilter(false);
@@ -370,7 +369,7 @@ export const SelectEntity = ({
                                     <TypeFilterInput
                                       onSelect={result => {
                                         setTypeFilter({
-                                          typeId: EntityId(result.id),
+                                          typeId: result.id,
                                           typeName: result.name,
                                         });
                                         setIsAddingFilter(false);
@@ -409,7 +408,7 @@ export const SelectEntity = ({
                                     onDone?.({
                                       id: result.id,
                                       name: result.name,
-                                      primarySpace: result.spaces?.[0]?.spaceId ? EntityId(result.spaces[0].spaceId) : undefined,
+                                      primarySpace: result.spaces?.[0]?.spaceId ? result.spaces[0].spaceId : undefined,
                                     });
                                     onQueryChange('');
                                     setSelectedIndex(0);
@@ -551,7 +550,7 @@ export const SelectEntity = ({
                             onDone?.({
                               id: result.id,
                               name: result.name,
-                              space: EntityId(space.spaceId),
+                              space: space.spaceId,
                             });
                             onQueryChange('');
                             setSelectedIndex(0);
