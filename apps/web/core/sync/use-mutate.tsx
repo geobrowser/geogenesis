@@ -115,39 +115,15 @@ function createMutator(store: GeoStore): Mutator {
           property: {
             id: DATA_TYPE_PROPERTY,
             name: 'Data Type',
-            dataType: 'TEXT',
+            dataType: dataType,
             renderableType: null,
           },
           spaceId,
           value: dataType,
         };
 
-        // Create the Property type relation
-        // const propertyTypeRelation: Relation = {
-        //   id: ID.createEntityId(),
-        //   entityId: ID.createEntityId(),
-        //   spaceId,
-        //   renderableType: 'RELATION',
-        //   verified: false,
-        //   position: null,
-        //   type: {
-        //     id: SystemIds.TYPES_PROPERTY,
-        //     name: 'Types',
-        //   },
-        //   fromEntity: {
-        //     id: entityId,
-        //     name,
-        //   },
-        //   toEntity: {
-        //     id: SystemIds.PROPERTY,
-        //     name: 'Property',
-        //     value: SystemIds.PROPERTY,
-        //   },
-        // };
-
         store.setValue(nameValue);
         store.setValue(dataTypeValue);
-        // store.setRelation(propertyTypeRelation);
       },
     },
     values: {

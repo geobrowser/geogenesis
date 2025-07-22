@@ -256,21 +256,12 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     const renderableType = entity?.relations.find(t => t.type.id === RENDERABLE_TYPE_PROPERTY);
 
-    /**
-     * @TODO
-     * Move to higher-order file
-     */
-    const mapping: Record<string, RawRenderableType> = {
-      [SystemIds.URL]: 'URL',
-      [SystemIds.IMAGE]: 'IMAGE',
-    };
-
     return {
       id,
       name: entity?.name ?? null,
       dataType: dataType,
       relationValueTypes,
-      renderableType: renderableType ? mapping[renderableType.toEntity.id] : dataType,
+      renderableType: renderableType ? renderableType.toEntity.id : null,
 
       /**
        * A data type is still editable as long as there's no

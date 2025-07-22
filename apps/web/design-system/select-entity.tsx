@@ -1,4 +1,4 @@
-import { SystemIds, Id, Position } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -19,8 +19,7 @@ import { Space } from '~/core/io/dto/spaces';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getImagePath } from '~/core/utils/utils';
-import { Property, SearchResult, SwitchableRenderableType, Relation } from '~/core/v2.types';
-import { RENDERABLE_TYPE_PROPERTY, GEO_LOCATION } from '~/core/constants';
+import { Property, SearchResult, SwitchableRenderableType } from '~/core/v2.types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { ResultsList } from '~/design-system/autocomplete/results-list';

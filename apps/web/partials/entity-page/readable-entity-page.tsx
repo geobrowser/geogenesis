@@ -135,6 +135,11 @@ export function RelationsGroup({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === propertyId,
   });
 
+  // Get all values for image URL lookup
+  const allValues = useValues({
+    selector: v => v.spaceId === spaceId,
+  });
+
   if (relations.length === 0) {
     return null;
   }
@@ -179,8 +184,14 @@ export function RelationsGroup({
             const relationId = r.id;
 
             if (property.renderableType === SystemIds.IMAGE) {
-              const imagePath = getImagePath(linkedEntityId ?? '');
-              return <ImageZoom key={`image-${relationId}-${linkedEntityId}`} imageSrc={imagePath} />;
+              // linkedEntityId is the image entity ID, we need to get the actual image URL
+              const imageEntityValues = allValues.filter(v => v.entity.id === linkedEntityId);
+              const imageUrlValue = imageEntityValues.find(v => 
+                typeof v.value === 'string' && v.value.startsWith('ipfs://')
+              );
+              const actualImageSrc = imageUrlValue?.value;
+              
+              return <ImageZoom key={`image-${relationId}-${linkedEntityId}`} imageSrc={getImagePath(actualImageSrc || '')} />;
             }
 
             return (

@@ -193,15 +193,13 @@ export function BlockImageField({ imageSrc, onImageChange, onImageRemove, varian
 
 interface ImageFieldProps {
   imageSrc?: string;
-  onImageChange: (imageSrc: string) => void;
+  onFileChange: (file: File) => void;
   onImageRemove?: () => void;
   variant?: ImageVariant;
   horizontal?: boolean;
 }
 
-export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
-  const { ipfs } = Services.useServices();
-
+export function PageImageField({ imageSrc, onFileChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputClick = () => {
     // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
@@ -211,10 +209,9 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
   };
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
+    if (e.target.files && onFileChange) {
       const file = e.target.files[0];
-      const imageSrc = await ipfs.uploadFile(file);
-      onImageChange(imageSrc);
+      onFileChange(file);
     }
   };
 
