@@ -1,5 +1,8 @@
-import { BASE58_ALLOWED_CHARS } from '@geogenesis/sdk';
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { Base58 } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
+import { parseISO } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
+import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
@@ -21,10 +24,10 @@ export const NavUtils = {
   toRoot: () => '/root',
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
-  toSpace: (spaceId: string) => (spaceId === SYSTEM_IDS.ROOT_SPACE_ID ? `/root` : `/space/${spaceId}`),
+  toSpace: (spaceId: string) => (spaceId === SystemIds.ROOT_SPACE_ID ? `/root` : `/space/${spaceId}`),
   toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
-  toEntity: (spaceId: string, newEntityId: string) => {
-    return `/space/${spaceId}/${newEntityId}`;
+  toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
+    return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
   },
   toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
@@ -62,7 +65,69 @@ export function formatShortAddress(address: string): string {
   return address.slice(0, 8) + '...' + address.slice(-6);
 }
 
+export class GeoNumber {
+  static defaultFormat = 'precision-unlimited';
+
+  static format(value?: string | number, formatPattern?: string, currencySymbol: string = '', locale = 'en') {
+    try {
+      const numericValue = typeof value === 'string' ? parseFloat(value) : value;
+
+      if (numericValue === undefined || isNaN(numericValue)) {
+        throw new Error('Invalid number');
+      }
+
+      const formatToUse = formatPattern || GeoNumber.defaultFormat;
+      const intlMessageFormat = formatToUse.startsWith('::') ? formatToUse : `::${formatToUse}`;
+
+      const message = new IntlMessageFormat(`{value, number, ${intlMessageFormat}}`, locale);
+      return `${currencySymbol}${message.format({ value: numericValue })}`;
+    } catch (e) {
+      console.error(`Unable to format number: "${value}" with format: "${formatPattern}".`);
+      return value;
+    }
+  }
+}
+
+export class GeoPoint {
+  /**
+   * Parses coordinates from a string format like "lat, lon" into separate latitude and longitude values
+   * @param value - String containing latitude and longitude separated by a comma
+   * @returns An object with parsed latitude and longitude values, or null if parsing fails
+   */
+  static parseCoordinates(value?: string): { latitude: number; longitude: number } | null {
+    if (!value) return null;
+
+    try {
+      const coordParts = value.split(',').map(part => part.trim());
+      if (coordParts.length !== 2) return null;
+
+      const latitude = parseFloat(coordParts[0]);
+      const longitude = parseFloat(coordParts[1]);
+
+      if (isNaN(latitude) || isNaN(longitude)) return null;
+
+      return { latitude, longitude };
+    } catch (e) {
+      console.error(`Unable to parse coordinates: "${value}"`);
+      return null;
+    }
+  }
+
+  /**
+   * Formats coordinates as a string
+   * @param latitude - Latitude value
+   * @param longitude - Longitude value
+   * @returns Formatted coordinate string
+   */
+  static formatCoordinates(latitude: number, longitude: number): string {
+    return `${latitude}, ${longitude}`;
+  }
+}
+
 export class GeoDate {
+  static defaultFormat = 'MMM d, yyyy - h:mmaaa';
+  static intervalDelimiter = '/';
+
   /**
    * We return blocktime from the subgraph for createdAt and updatedAt fields.
    * JavaScript date expects milliseconds, so we need to convert from seconds.
@@ -163,6 +228,65 @@ export class GeoDate {
   static isMonth30Days(month: number): boolean {
     return [4, 6, 9, 11].includes(month);
   }
+
+  private static validateFormat = (format?: string) => {
+    if (!format || typeof format !== 'string') {
+      return this.defaultFormat;
+    }
+
+    try {
+      const testDate = new Date();
+      formatInTimeZone(testDate, 'UTC', format);
+      return format;
+    } catch (e) {
+      console.warn(`Invalid date format: "${format}". Using default format instead.`);
+      return this.defaultFormat;
+    }
+  };
+
+  static toggleDateInterval = (dateIsoString?: string): string => {
+    if (!dateIsoString) {
+      return '';
+    }
+
+    if (this.isDateInterval(dateIsoString)) {
+      const [startDateString] = dateIsoString.split(this.intervalDelimiter).map(d => d.trim());
+      return startDateString;
+    }
+    return `${dateIsoString}${this.intervalDelimiter}${dateIsoString}`;
+  };
+
+  static isDateInterval = (dateString?: string): boolean => {
+    if (!dateString) {
+      return false;
+    }
+
+    return dateString.includes(this.intervalDelimiter);
+  };
+
+  static format = (dateIsoString: string, displayFormat?: string) => {
+    try {
+      const validatedFormat = this.validateFormat(displayFormat);
+
+      if (this.isDateInterval(dateIsoString)) {
+        const [startDateString, endDateString] = dateIsoString.split(this.intervalDelimiter).map(d => d.trim());
+
+        const startDate = parseISO(startDateString);
+        const endDate = parseISO(endDateString);
+
+        const formattedStartDate = formatInTimeZone(startDate, 'UTC', validatedFormat);
+        const formattedEndDate = formatInTimeZone(endDate, 'UTC', validatedFormat);
+
+        return `${formattedStartDate} — ${formattedEndDate}`;
+      }
+
+      const date = parseISO(dateIsoString);
+      return formatInTimeZone(date, 'UTC', validatedFormat);
+    } catch (e) {
+      console.error(`Unable to format date: "${dateIsoString}" with format: "${displayFormat}".`, e);
+      return dateIsoString;
+    }
+  };
 }
 
 // We rewrite the URL to use the geobrowser preview API in vercel.json.
@@ -352,7 +476,7 @@ export const validateEntityId = (maybeEntityId: EntityId | string | null | undef
   if (!VALID_ENTITY_ID_LENGTHS.includes(maybeEntityId.length)) return false;
 
   for (const char of maybeEntityId) {
-    const index = BASE58_ALLOWED_CHARS.indexOf(char);
+    const index = Base58.BASE58_ALLOWED_CHARS.indexOf(char);
     if (index === -1) {
       return false;
     }
@@ -362,3 +486,58 @@ export const validateEntityId = (maybeEntityId: EntityId | string | null | undef
 };
 
 const VALID_ENTITY_ID_LENGTHS = [21, 22];
+
+export const getTabSlug = (label: string) => {
+  return label
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .toLowerCase();
+};
+
+//For pagination rendering
+export enum PagesPaginationPlaceholder {
+  skip = '...',
+}
+
+const MAX_VISIBLE_PAGES = 7;
+
+export const getPaginationPages = (totalPages: number, activePage: number) => {
+  if (totalPages <= MAX_VISIBLE_PAGES) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const pages = [];
+
+  // Always show first and second pages
+  pages.push(1, 2);
+
+  if (activePage <= 7) {
+    // Current page is within first 7 pages: show 1 2 3 4 5 6 7 ... last
+    for (let i = 3; i <= 7; i++) {
+      pages.push(i);
+    }
+    pages.push(PagesPaginationPlaceholder.skip);
+  } else if (activePage >= totalPages - 1) {
+    // Current page is last or second-to-last: show 1 2 ... (last-5) through (last-1) last
+    pages.push(PagesPaginationPlaceholder.skip);
+    // Show at least 6 pages at the end (including the last page)
+    const startPage = Math.max(totalPages - 5, 3); // Ensure we don't overlap with pages 1 and 2
+    for (let i = startPage; i < totalPages; i++) {
+      pages.push(i);
+    }
+  } else {
+    // Current page is in the middle: show 1 2 ... (current-3) (current-2) (current-1) current ... last
+    pages.push(PagesPaginationPlaceholder.skip);
+    
+    // Show 3 pages before current and current page itself
+    for (let i = activePage - 3; i <= activePage; i++) {
+      pages.push(i);
+    }
+    
+    pages.push(PagesPaginationPlaceholder.skip);
+  }
+
+  // Always show last page
+  pages.push(totalPages);
+  return pages;
+};

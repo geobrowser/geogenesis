@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { Relation } from '../database/Relation';
 import { Triple } from '../database/Triple';
@@ -17,7 +17,7 @@ export function createType(
     space: spaceId,
     entityId,
     entityName,
-    attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+    attributeId: SystemIds.NAME_ATTRIBUTE,
     attributeName: 'Name',
     value: { type: 'TEXT', value: entityName },
   });
@@ -27,7 +27,7 @@ export function createType(
     relation: Relation.make({
       space: spaceId,
       typeOf: {
-        id: SYSTEM_IDS.TYPES_ATTRIBUTE,
+        id: SystemIds.TYPES_ATTRIBUTE,
         name: 'Types',
       },
       fromEntity: {
@@ -35,10 +35,10 @@ export function createType(
         name: entityName,
       },
       toEntity: {
-        id: SYSTEM_IDS.SCHEMA_TYPE,
+        id: SystemIds.SCHEMA_TYPE,
         name: 'Type',
         renderableType: 'RELATION',
-        value: SYSTEM_IDS.SCHEMA_TYPE,
+        value: SystemIds.SCHEMA_TYPE,
       },
     }),
     spaceId,

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -20,7 +20,7 @@ function getFetchTabEntityIdQuery(spaceId: string, pageTypeEntityId: string) {
             relationsByFromVersionId: {
               some: {
                 typeOf: {
-                  id: { equalTo: "${SYSTEM_IDS.PAGE_TYPE_ATTRIBUTE}" }
+                  id: { equalTo: "${SystemIds.PAGE_TYPE_ATTRIBUTE}" }
                 }
                 toEntity: {
                   id: { equalTo: "${pageTypeEntityId}" }

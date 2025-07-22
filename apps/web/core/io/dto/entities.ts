@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { RelationDtoHistorical, RelationDtoLive } from '~/core/io/dto/relations';
 import { TripleDto } from '~/core/io/dto/triples';
@@ -28,7 +28,7 @@ export function EntityDtoLive(substreamEntity: SubstreamEntityLive): Entity {
   const relationsOut = networkRelations.map(RelationDtoLive);
 
   const entityTypes = relationsOut
-    .filter(relation => relation.typeOf.id === SYSTEM_IDS.TYPES_ATTRIBUTE)
+    .filter(relation => relation.typeOf.id === EntityId(SystemIds.TYPES_ATTRIBUTE))
     .map(relation => {
       return {
         id: relation.toEntity.id,
@@ -58,7 +58,7 @@ export function EntityDtoHistorical(substreamEntity: SubstreamEntityHistorical) 
   const relationsOut = networkRelations.map(RelationDtoHistorical);
 
   const entityTypes = relationsOut
-    .filter(relation => relation.typeOf.id === SYSTEM_IDS.TYPES_ATTRIBUTE)
+    .filter(relation => relation.typeOf.id === EntityId(SystemIds.TYPES_ATTRIBUTE))
     .map(relation => {
       return {
         id: relation.toEntity.id,

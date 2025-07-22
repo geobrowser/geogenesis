@@ -25,16 +25,11 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
       Effect.forEach(
         versions,
         v =>
-          Effect.retry(
-            Effect.promise(async () => {
-              const latestVersion = await CurrentVersions.selectOne({ entity_id: v.entity_id.toString() });
-              if (!latestVersion) return null;
-              return [v.entity_id.toString(), latestVersion.version_id.toString()] as const;
-            }),
-            {
-              times: 5,
-            }
-          ),
+          Effect.promise(async () => {
+            const latestVersion = await CurrentVersions.selectOne({ entity_id: v.entity_id.toString() });
+            if (!latestVersion) return null;
+            return [v.entity_id.toString(), latestVersion.version_id.toString()] as const;
+          }),
         {
           concurrency: 50,
         }
@@ -79,6 +74,11 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
                 value: {
                   type: t.value_type,
                   value: t.text_value as string,
+                  options: {
+                    format: t.format_option ?? undefined,
+                    unit: t.unit_option ?? undefined,
+                    language: t.language_option ?? undefined,
+                  },
                 },
               },
             };

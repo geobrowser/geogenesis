@@ -1,18 +1,19 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { useLogout } from '@privy-io/react-auth';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
-import { useParams } from 'next/navigation';
+import { useSetAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useGeoAccount } from '~/core/hooks/use-geo-account';
+import { Cookie } from '~/core/cookie';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
-import { usePathSegments } from '~/core/hooks/use-path-segments';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
@@ -20,32 +21,68 @@ import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
+import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Home } from '~/design-system/icons/home';
 import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '../onboarding/dialog';
+
+function useUser() {
+  const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
+  const address = smartAccount?.account.address;
+  const { profile, isLoading: isLoadingProfile } = useGeoProfile(address);
+
+  return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile };
+}
+
+function useResetOnboarding() {
+  const setName = useSetAtom(nameAtom);
+  const setEntityId = useSetAtom(entityIdAtom);
+  const setAvatar = useSetAtom(avatarAtom);
+  const setSpaceId = useSetAtom(spaceIdAtom);
+  const setStep = useSetAtom(stepAtom);
+
+  const resetOnboarding = () => {
+    setName('');
+    setEntityId('');
+    setAvatar('');
+    setSpaceId('');
+    setStep('start');
+  };
+
+  return resetOnboarding;
+}
+
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
 
-  const smartAccount = useSmartAccount();
-  const address = smartAccount?.account.address;
-  const { isLoading, account } = useGeoAccount(address);
+  const { isLoading: isUserLoading, profile, address } = useUser();
 
   const { shouldShowElement } = useOnboardGuard();
+  const resetOnboarding = useResetOnboarding();
 
-  if (!address) {
-    return <GeoConnectButton />;
-  }
+  const { logout } = useLogout({
+    onSuccess: async () => {
+      console.log('disconnecting');
+      await Cookie.onConnectionChange({ type: 'disconnect' });
+      resetOnboarding();
+    },
+  });
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <div className="flex items-center gap-4">
         <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
         <Skeleton className="h-7 w-7" radius="rounded-full" />
       </div>
     );
+  }
+
+  if (!address) {
+    return <GeoConnectButton />;
   }
 
   return (
@@ -55,23 +92,23 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={account?.profile?.avatarUrl} size={28} />
+            <Avatar value={address} avatarUrl={profile?.avatarUrl} size={28} />
           </div>
         }
         open={open}
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {account?.profile.profileLink && (
+        {profile?.profileLink && (
           <>
             <AvatarMenuItem>
               <div className="flex items-center gap-2">
                 <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                  <Avatar value={address} avatarUrl={account.profile?.avatarUrl} size={16} />
+                  <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
                 </div>
                 <Link
                   prefetch={false}
-                  href={NavUtils.toSpace(account.profile.profileLink.split('/')[2])}
+                  href={NavUtils.toSpace(profile?.profileLink.split('/')[2])}
                   className="text-button"
                 >
                   Personal space
@@ -89,7 +126,13 @@ export function NavbarActions() {
           </AvatarMenuItem>
         )}
         <AvatarMenuItem>
-          <GeoConnectButton />
+          <button
+            onClick={logout}
+            className="m-0 flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-0"
+          >
+            <p className="text-button">Sign out</p>
+            <DisconnectWallet />
+          </button>
         </AvatarMenuItem>
       </Menu>
     </div>
@@ -141,18 +184,6 @@ const variants = {
 };
 
 const MotionPopoverContent = motion(Popover.Content);
-
-const useSpaceId = () => {
-  const params = useParams();
-  const segment = usePathSegments();
-
-  if (segment[0] === 'root') {
-    return SYSTEM_IDS.ROOT_SPACE_ID;
-  }
-
-  const spaceId = params?.['id'] as string | undefined;
-  return spaceId;
-};
 
 function ModeToggle() {
   const controls = useAnimation();
@@ -281,7 +312,7 @@ function AnimatedTogglePill({ controls }: { controls: AnimationControls }) {
       animate={controls}
       variants={variants}
       transition={{
-        duration: 0.15,
+        duration: 0.5,
         type: 'spring',
         bounce: 0,
       }}

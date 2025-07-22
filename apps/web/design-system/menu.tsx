@@ -21,7 +21,7 @@ interface Props {
   modal?: boolean;
 }
 
-const contentStyles = cva('z-10 w-[360px] overflow-hidden rounded-lg border border-grey-02 shadow-lg', {
+const contentStyles = cva('z-20 w-[360px] overflow-hidden rounded-lg border border-grey-02 shadow-lg', {
   variants: {
     align: {
       start: 'origin-top-left',
@@ -76,7 +76,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
             active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
           )}
         />
-        <div className="relative z-10">{children}</div>
+        <div className="relative z-10 flex items-center gap-2">{children}</div>
       </Link>
     );
   }
@@ -92,7 +92,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
           active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
         )}
       />
-      <div className="relative z-10 w-full">{children}</div>
+      <div className="relative z-10 flex w-full items-center gap-2">{children}</div>
     </button>
   );
 }

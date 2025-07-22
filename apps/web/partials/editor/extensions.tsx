@@ -2,7 +2,7 @@ import Bold from '@tiptap/extension-bold';
 import BulletList from '@tiptap/extension-bullet-list';
 import Document from '@tiptap/extension-document';
 import Gapcursor from '@tiptap/extension-gapcursor';
-import HardBreak from '@tiptap/extension-hard-break';
+import History from '@tiptap/extension-history';
 import Image from '@tiptap/extension-image';
 import Italic from '@tiptap/extension-italic';
 import Link from '@tiptap/extension-link';
@@ -11,9 +11,9 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Text from '@tiptap/extension-text';
 
 import { ConfiguredCommandExtension } from './command-extension';
+import { DataNode } from './data-node';
 import { HeadingNode } from './heading-node';
 import { ParagraphNode } from './paragraph-node';
-import { TableNode } from './table-node';
 import { TrailingNode } from './trailing-node';
 
 export const tiptapExtensions = [
@@ -44,32 +44,32 @@ export const tiptapExtensions = [
   ParagraphNode,
   HeadingNode,
   ConfiguredCommandExtension,
-  HardBreak.extend({
-    addKeyboardShortcuts() {
-      // Make hard breaks behave like normal paragraphs
-      const handleEnter = () =>
-        this.editor.commands.first(({ commands }) => [
-          () => commands.newlineInCode(),
-          () => commands.createParagraphNear(),
-          () => commands.liftEmptyBlock(),
-          () => commands.splitBlock(),
-        ]);
+  // HardBreak.extend({
+  //   addKeyboardShortcuts() {
+  //     // Make hard breaks behave like normal paragraphs
+  //     const handleEnter = () =>
+  //       this.editor.commands.first(({ commands }) => [
+  //         () => commands.newlineInCode(),
+  //         () => commands.createParagraphNear(),
+  //         () => commands.liftEmptyBlock(),
+  //         () => commands.splitBlock(),
+  //       ]);
 
-      return {
-        // This was intercepting the 'Enter' behavior in `command-list.tsx`
-        // Disabling doesn't seem to make a difference so maybe it was unnecessary?
-        // Enter: handleEnter,
+  //     return {
+  //       // This was intercepting the 'Enter' behavior in `command-list.tsx`
+  //       // Disabling doesn't seem to make a difference so maybe it was unnecessary?
+  //       // Enter: handleEnter,
 
-        'Mod-Enter': handleEnter,
-        'Shift-Enter': handleEnter,
-      };
-    },
-  }),
+  //       'Mod-Enter': handleEnter,
+  //       'Shift-Enter': handleEnter,
+  //     };
+  //   },
+  // }),
   Gapcursor,
   TrailingNode,
   BulletList,
   ListItem,
-  TableNode,
+  DataNode,
   Image,
   Placeholder.configure({
     placeholder: ({ node }) => {
@@ -77,4 +77,5 @@ export const tiptapExtensions = [
       return isHeading ? 'Heading...' : '/ to select content block or write some content...';
     },
   }),
+  History,
 ];

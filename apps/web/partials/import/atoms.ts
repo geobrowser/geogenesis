@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { atom } from 'jotai';
 
 import { Triple } from '~/core/types';
@@ -27,7 +27,7 @@ export const entityCountAtom = atom(get => {
 export const entityCountByTypeAtom = atom(get => {
   const actions = get(triplesAtom);
 
-  const typeActions = actions.filter(action => action.attributeId === SYSTEM_IDS.TYPES_ATTRIBUTE);
+  const typeActions = actions.filter(action => action.attributeId === SystemIds.TYPES_ATTRIBUTE);
 
   const entitySetByType: Record<string, Set<string>> = {};
 

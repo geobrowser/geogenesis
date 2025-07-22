@@ -59,6 +59,12 @@ const baseTypography = {
       lineHeight: '1.3125rem',
       fontWeight: WEIGHTS.regular,
     },
+    tableProperty: {
+      color: colors.light.text,
+      fontSize: '1rem',
+      lineHeight: '1rem',
+      fontWeight: WEIGHTS.regular,
+    },
     textLink: {
       color: colors.light.text,
       fontSize: '1.1875rem',
@@ -172,6 +178,7 @@ export const textStyles: Record<TypographyName, string> = {
   smallTitle: 'text-smallTitle',
   body: 'text-body',
   tableCell: 'text-tableCell',
+  tableProperty: 'text-tableProperty',
   textLink: 'text-textLink',
   quote: 'text-quote',
   listItem: 'text-listItem',

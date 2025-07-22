@@ -1,109 +1,285 @@
 export function htmlToMarkdown(html: string): string {
-  let md = html;
-
-  // Convert headings
-  md = md.replace(/<h1>(.*?)<\/h1>/gi, '# $1\n');
-  md = md.replace(/<h2>(.*?)<\/h2>/gi, '## $1\n');
-  md = md.replace(/<h3>(.*?)<\/h3>/gi, '### $1\n');
-  md = md.replace(/<h4>(.*?)<\/h4>/gi, '#### $1\n');
-  md = md.replace(/<h5>(.*?)<\/h5>/gi, '##### $1\n');
-  md = md.replace(/<h6>(.*?)<\/h6>/gi, '###### $1\n');
-
-  // Convert paragraphs
-  md = md.replace(/<p>(.*?)<\/p>/gi, '$1\n\n');
-
-  // Convert bold
-  md = md.replace(/<strong>(.*?)<\/strong>/gi, '**$1**');
-
-  // Convert italic
-  md = md.replace(/<em>(.*?)<\/em>/gi, '*$1*');
-
-  // Convert links
-  md = md.replace(/<a href="(.*?)">(.*?)<\/a>/gi, '[$2]($1)');
-
-  // Convert unordered lists
-  md = md.replace(/<ul>(.*?)<\/ul>/gis, match => {
-    return match.replace(/<li>(.*?)<\/li>/gi, '- $1\n');
-  });
-
-  // Convert ordered lists
-  md = md.replace(/<ol>(.*?)<\/ol>/gis, match => {
-    let counter = 1;
-    return match.replace(/<li>(.*?)<\/li>/gi, () => `${counter++}. $1\n`);
-  });
-
-  // Convert blockquotes
-  // We don't support blockquotes atm
-  // md = md.replace(/<blockquote>(.*?)<\/blockquote>/gi, '> $1\n');
-
-  // Convert code blocks
-  // We don't support code blocks atm
-  // md = md.replace(/<pre><code>(.*?)<\/code><\/pre>/gi, '```\n$1\n```\n');
-
-  // Convert inline code
-  // We don't support inline code atm
-  // md = md.replace(/<code>(.*?)<\/code>/gi, '`$1`');
-
-  // Remove remaining tags
-  md = md.replace(/<[^>]*>/g, '');
-
-  // Decode HTML entities
-  md = md.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-
-  return md.trim();
+  // Create a temporary DOM element to parse HTML properly
+  if (typeof window === 'undefined') {
+    // Simple fallback for SSR
+    return html.replace(/<[^>]*>/g, '').trim();
+  }
+  
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  
+  function processNode(node: Node, indent: string = ''): string {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || '';
+    }
+    
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return '';
+    }
+    
+    const element = node as Element;
+    const tagName = element.tagName.toLowerCase();
+    let result = '';
+    
+    switch (tagName) {
+      case 'h1':
+        result = `# ${getTextContent(element)}\n`;
+        break;
+      case 'h2':
+        result = `## ${getTextContent(element)}\n`;
+        break;
+      case 'h3':
+        result = `### ${getTextContent(element)}\n`;
+        break;
+      case 'h4':
+        result = `#### ${getTextContent(element)}\n`;
+        break;
+      case 'h5':
+        result = `##### ${getTextContent(element)}\n`;
+        break;
+      case 'h6':
+        result = `###### ${getTextContent(element)}\n`;
+        break;
+      case 'p':
+        result = `${processChildren(element, indent)}\n\n`;
+        break;
+      case 'strong':
+      case 'b':
+        result = `**${processChildren(element, indent)}**`;
+        break;
+      case 'em':
+      case 'i':
+        result = `*${processChildren(element, indent)}*`;
+        break;
+      case 'a': {
+        const href = element.getAttribute('href') || '';
+        const text = processChildren(element, indent);
+        result = `[${text}](${href})`;
+        break;
+      }
+      case 'ol':
+      case 'ul':
+        result = processListItems(element, indent);
+        break;
+      case 'li':
+        // This shouldn't be called directly, handled by ul/ol
+        result = processChildren(element, indent);
+        break;
+      case 'br':
+        result = '\n';
+        break;
+      default:
+        // For any other tags, just process children
+        result = processChildren(element, indent);
+    }
+    
+    return result;
+  }
+  
+  function processChildren(element: Element, indent: string = ''): string {
+    const results: string[] = [];
+    
+    for (let i = 0; i < element.childNodes.length; i++) {
+      const child = element.childNodes[i];
+      const processed = processNode(child, indent);
+      if (processed) {
+        results.push(processed);
+      }
+    }
+    
+    return results.join('');
+  }
+  
+  function processListItems(listElement: Element, indent: string = ''): string {
+    const items: string[] = [];
+    
+    for (let i = 0; i < listElement.children.length; i++) {
+      const child = listElement.children[i];
+      if (child.tagName.toLowerCase() === 'li') {
+        let itemContent = '';
+        
+        // Process each child of the li
+        for (let j = 0; j < child.childNodes.length; j++) {
+          const liChild = child.childNodes[j];
+          
+          if (liChild.nodeType === Node.ELEMENT_NODE) {
+            const childElement = liChild as Element;
+            const childTag = childElement.tagName.toLowerCase();
+            
+            if (childTag === 'ul') {
+              // Handle nested list
+              const nestedList = processNode(liChild, indent + '  ');
+              if (itemContent.trim()) {
+                // If there's content before the nested list, add it as a bullet point
+                const bullet = `${indent}- `;
+                items.push(`${bullet}${itemContent.trim()}`);
+              }
+              items.push(nestedList);
+              itemContent = ''; // Reset for any content after the nested list
+            } else {
+              // Regular content
+              itemContent += processNode(liChild, indent);
+            }
+          } else {
+            // Text node
+            itemContent += processNode(liChild, indent);
+          }
+        }
+        
+        // Add any remaining content as a list item
+        if (itemContent.trim()) {
+          const bullet = `${indent}- `;
+          items.push(`${bullet}${itemContent.trim()}`);
+        }
+      }
+    }
+    
+    return items.join('\n');
+  }
+  
+  function getTextContent(element: Element): string {
+    // Get text content while preserving inline formatting
+    return processChildren(element, '');
+  }
+  
+  // Process all children of the temp div
+  const results: string[] = [];
+  for (let i = 0; i < temp.childNodes.length; i++) {
+    const processed = processNode(temp.childNodes[i]);
+    if (processed) {
+      results.push(processed);
+    }
+  }
+  
+  return results.join('').trim();
 }
 
 export function markdownToHtml(markdown: string): string {
-  let html = markdown;
-
-  // Convert headings
-  html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-  html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-  html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-  html = html.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
-  html = html.replace(/^##### (.*$)/gim, '<h5>$1</h5>');
-  html = html.replace(/^###### (.*$)/gim, '<h6>$1</h6>');
-
-  // Convert list items
-  html = html.replace(/^- (.*$)/gim, '<li>$1</li>');
-
-  // Convert paragraphs
-  html = html.replace(/^\s*(\n)?(.+)/gim, function (m) {
-    // eslint-disable-next-line no-useless-escape
-    return /\<(\/)?(h\d|ul|ol|li|blockquote|pre|img)/.test(m) ? m : '<p>' + m + '</p>';
-  });
-
-  // Convert bold
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-  // Convert italic
-  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-  // Convert links
-  html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
-
-  // Convert unordered lists
-  html = html.replace(/^\s*(-|\*)\s(.*)$/gim, '<ul>\n<li>$2</li>\n</ul>');
-  html = html.replace(/<\/ul>\s*<ul>/g, '');
-
-  // Convert ordered lists
-  html = html.replace(/^\s*(\d+\.)\s(.*)$/gim, '<ol>\n<li>$2</li>\n</ol>');
-  html = html.replace(/<\/ol>\s*<ol>/g, '');
-
-  // Convert blockquotes
-  // eslint-disable-next-line no-useless-escape
-  html = html.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
-
-  // Convert code blocks
-  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-
-  // Convert inline code
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Convert line breaks
-  html = html.replace(/\n/g, '<br>');
-
-  return html.trim();
+  const lines = markdown.split('\n');
+  const output: string[] = [];
+  const listStack: Array<{ type: 'ul'; depth: number }> = [];
+  let inCodeBlock = false;
+  let codeBlockContent: string[] = [];
+  let i = 0;
+  
+  function processInlineFormatting(text: string): string {
+    // Process inline formatting in the correct order
+    // Links first (to avoid interfering with other formatting)
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    
+    // Bold (must come before italic to handle ***text*** correctly)
+    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    
+    // Italic
+    text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    
+    // Inline code
+    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    
+    return text;
+  }
+  
+  function closeListsToDepth(targetDepth: number) {
+    while (listStack.length > 0 && listStack[listStack.length - 1].depth > targetDepth) {
+      const list = listStack.pop()!;
+      output.push(`${'  '.repeat(list.depth)}</${list.type}>`);
+    }
+  }
+  
+  while (i < lines.length) {
+    const line = lines[i];
+    
+    // Handle code blocks
+    if (line.startsWith('```')) {
+      if (inCodeBlock) {
+        output.push(`<pre><code>${codeBlockContent.join('\n')}</code></pre>`);
+        codeBlockContent = [];
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+      }
+      i++;
+      continue;
+    }
+    
+    if (inCodeBlock) {
+      codeBlockContent.push(line);
+      i++;
+      continue;
+    }
+    
+    // Check for list items
+    const bulletMatch = line.match(/^(\s*)- (.*)$/);
+    
+    if (bulletMatch) {
+      const indent = bulletMatch[1].length;
+      const content = processInlineFormatting(bulletMatch[2]);
+      const depth = Math.floor(indent / 2); // 2 spaces per indent level
+      
+      // Close any lists that are deeper than current level
+      closeListsToDepth(depth);
+      
+      // Open new list if needed
+      if (listStack.length === 0 || listStack[listStack.length - 1].depth < depth) {
+        output.push(`${'  '.repeat(depth)}<ul>`);
+        listStack.push({ type: 'ul', depth });
+      }
+      
+      // Add list item
+      output.push(`${'  '.repeat(depth + 1)}<li>${content}</li>`);
+      i++;
+      continue;
+    }
+    
+    // If we're here, it's not a list item, so close all lists
+    closeListsToDepth(-1);
+    
+    // Skip empty lines
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+    
+    // Handle headings
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const content = processInlineFormatting(headingMatch[2]);
+      output.push(`<h${level}>${content}</h${level}>`);
+      i++;
+      continue;
+    }
+    
+    // Handle blockquotes
+    if (line.startsWith('> ')) {
+      const content = processInlineFormatting(line.substring(2));
+      output.push(`<blockquote>${content}</blockquote>`);
+      i++;
+      continue;
+    }
+    
+    // Handle horizontal rules
+    if (line.match(/^(-{3,}|_{3,}|\*{3,})$/)) {
+      output.push('<hr>');
+      i++;
+      continue;
+    }
+    
+    // Everything else is a paragraph
+    const content = processInlineFormatting(line);
+    output.push(`<p>${content}</p>`);
+    i++;
+  }
+  
+  // Close any remaining open lists
+  closeListsToDepth(-1);
+  
+  // Close any unclosed code block
+  if (inCodeBlock && codeBlockContent.length > 0) {
+    output.push(`<pre><code>${codeBlockContent.join('\n')}</code></pre>`);
+  }
+  
+  return output.join('\n').trim();
 }
 
 export function htmlToPlainText(html: string) {

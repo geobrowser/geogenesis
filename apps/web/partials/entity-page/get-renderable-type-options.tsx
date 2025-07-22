@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -7,26 +7,29 @@ import { RenderableProperty, SwitchableRenderableType, ValueTypeId } from '~/cor
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { Date } from '~/design-system/icons/date';
+import { GeoLocation } from '~/design-system/icons/geo-location';
 import { Image } from '~/design-system/icons/image';
 import { Number } from '~/design-system/icons/number';
-import { RelationSmall } from '~/design-system/icons/relation-small';
+import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
 
 export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
   switch (valueType) {
-    case SYSTEM_IDS.TEXT:
+    case SystemIds.TEXT:
       return 'TEXT';
-    case SYSTEM_IDS.CHECKBOX:
+    case SystemIds.CHECKBOX:
       return 'CHECKBOX';
-    case SYSTEM_IDS.TIME:
+    case SystemIds.TIME:
       return 'TIME';
-    case SYSTEM_IDS.URL:
+    case SystemIds.URL:
       return 'URL';
-    case SYSTEM_IDS.RELATION:
+    case SystemIds.RELATION:
       return 'RELATION';
-    case SYSTEM_IDS.IMAGE:
+    case SystemIds.IMAGE:
       return 'IMAGE';
+    case SystemIds.POINT:
+      return 'POINT';
     default:
       return 'TEXT';
   }
@@ -198,7 +201,7 @@ export const getRenderableTypeSelectorOptions = (
       label: (
         <div className="flex items-center gap-2">
           <IconWrapper>
-            <RelationSmall />
+            <Relation />
           </IconWrapper>
           <p>Relation</p>
         </div>
@@ -214,6 +217,28 @@ export const getRenderableTypeSelectorOptions = (
           value: '',
           relationId: '',
           valueName: null,
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        }),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <IconWrapper>
+            <GeoLocation />
+          </IconWrapper>
+          <p>Point</p>
+        </div>
+      ),
+      value: 'POINT' as const,
+      onClick: () =>
+        onSelect({
+          type: 'POINT',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
           spaceId: renderable.spaceId,
           placeholder: true,
         }),

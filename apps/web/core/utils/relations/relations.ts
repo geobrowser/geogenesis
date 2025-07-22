@@ -1,4 +1,4 @@
-import { GraphUrl, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, Relation, SystemIds } from '@graphprotocol/grc-20';
 
 import { EntityId } from '~/core/io/schema';
 import { Triple } from '~/core/types';
@@ -25,18 +25,18 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
   return [
     {
       space: spaceId,
-      attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+      attributeId: SystemIds.TYPES_ATTRIBUTE,
       attributeName: 'Types',
       entityId: entityId,
       entityName: null,
       value: {
         type: 'URL',
-        value: GraphUrl.fromEntityId(SYSTEM_IDS.RELATION_TYPE),
+        value: GraphUrl.fromEntityId(SystemIds.RELATION_TYPE),
       },
     },
     {
       space: spaceId,
-      attributeId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+      attributeId: SystemIds.RELATION_FROM_ATTRIBUTE,
       attributeName: 'From Entity',
       entityId: entityId,
       entityName: null,
@@ -47,7 +47,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
     },
     {
       space: spaceId,
-      attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+      attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
       attributeName: 'To Entity',
       entityId: entityId,
       entityName: null,
@@ -58,7 +58,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
     },
     {
       space: spaceId,
-      attributeId: SYSTEM_IDS.RELATION_INDEX,
+      attributeId: SystemIds.RELATION_INDEX,
       attributeName: 'Index',
       entityId: entityId,
       entityName: null,
@@ -69,7 +69,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
     },
     {
       space: spaceId,
-      attributeId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+      attributeId: SystemIds.RELATION_TYPE_ATTRIBUTE,
       attributeName: 'Relation type',
       entityId: entityId,
       entityName: null,

@@ -1,23 +1,31 @@
 import { Schema } from '@effect/schema';
 import { Effect, Either } from 'effect';
-import { v4 } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { queryClient } from '~/core/query-client';
+import { SpaceId } from '~/core/types';
 
 import { Entity, EntityDtoLive } from '../dto/entities';
 import { SubstreamEntityLive } from '../schema';
 import { getEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
-export async function fetchEntitiesBatchCached(entityIds: string[], filterString?: string) {
+type FetchEntitiesBatchCachedOptions = {
+  spaceId?: SpaceId;
+  entityIds: string[];
+  filterString?: string;
+};
+
+export async function fetchEntitiesBatchCached(options: FetchEntitiesBatchCachedOptions) {
+  const { spaceId, entityIds, filterString } = options;
+
   return queryClient.fetchQuery({
-    queryKey: ['entities-batch', entityIds, filterString],
-    queryFn: () => fetchEntitiesBatch(entityIds, filterString),
+    queryKey: ['entities-batch', spaceId, entityIds, filterString],
+    queryFn: () => fetchEntitiesBatch(options),
   });
 }
 
-const query = (entityIds: string[], filterString?: string) => {
+const query = (entityIds: string[], filterString?: string, spaceId?: string) => {
   const filter = filterString
     ? `currentVersion: {
         version: {
@@ -34,7 +42,7 @@ const query = (entityIds: string[], filterString?: string) => {
         id
         currentVersion {
           version {
-            ${getEntityFragment()}
+            ${getEntityFragment(spaceId ? { spaceId } : {})}
           }
         }
       }
@@ -46,21 +54,24 @@ interface NetworkResult {
   entities: { nodes: SubstreamEntityLive[] };
 }
 
-export async function fetchEntitiesBatch(
-  entityIds: string[],
-  filterString?: string,
-  signal?: AbortController['signal']
-): Promise<Entity[]> {
-  const queryId = v4();
+type FetchEntitiesBatchOptions = {
+  spaceId?: SpaceId;
+  entityIds: string[];
+  filterString?: string;
+  signal?: AbortController['signal'];
+};
+
+export async function fetchEntitiesBatch(options: FetchEntitiesBatchOptions): Promise<Entity[]> {
+  const { spaceId, entityIds, filterString, signal } = options;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
-    query: query(entityIds, filterString),
+    query: query(entityIds, filterString, spaceId),
     signal,
   });
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* () {
+    const resultOrError = yield* Effect.either(graphqlFetchEffect);
 
     if (Either.isLeft(resultOrError)) {
       const error = resultOrError.left;
@@ -73,7 +84,7 @@ export async function fetchEntitiesBatch(
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchEntitiesBatch. queryId: ${queryId}
+            `Encountered runtime graphql error in fetchEntitiesBatch.
             queryString: ${query(entityIds)}
             `,
             error.message
@@ -82,7 +93,7 @@ export async function fetchEntitiesBatch(
           return [];
 
         default:
-          console.error(`${error._tag}: Unable to fetch entities, queryId: ${queryId}`);
+          console.error(`${error._tag}: Unable to fetch entities batch. ${String(error)}`);
           return [];
       }
     }
@@ -98,7 +109,6 @@ export async function fetchEntitiesBatch(
 
       return Either.match(decodedSpace, {
         onLeft: () => {
-          // console.error(`Unable to decode collection item entity ${e.id} with error ${error}`);
           return null;
         },
         onRight: substreamEntity => {

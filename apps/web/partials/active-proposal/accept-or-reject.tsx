@@ -49,8 +49,7 @@ export function AcceptOrReject({
   const isPendingApproval = hasApproved && voteStatus === 'pending';
   const isPendingRejection = hasRejected && voteStatus === 'pending';
 
-  const smartAccount = useSmartAccount();
-
+  const { smartAccount } = useSmartAccount();
   const onApprove = () => {
     setHasApproved(true);
     vote('ACCEPT');

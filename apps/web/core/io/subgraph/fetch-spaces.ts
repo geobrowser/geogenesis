@@ -22,7 +22,7 @@ const getFetchSpacesQuery = (spaceIds?: string[]) => {
   }
 
   return `query {
-    spaces {
+    spaces(filter: { spacePluginAddress: { isNull: false } }) {
       nodes {
         ${spaceFragment}
       }
@@ -98,7 +98,7 @@ export async function fetchSpaces(args?: FetchSpacesArgs): Promise<Space[]> {
 
       return Either.match(decodedSpace, {
         onLeft: error => {
-          console.error(`Unable to decode space: ${String(error)}`);
+          console.error(`Unable to decode space. spaceId: ${space.id} ${String(error)}`);
           return null;
         },
         onRight: space => {

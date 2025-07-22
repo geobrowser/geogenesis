@@ -1,10 +1,10 @@
-import { ID } from '@geogenesis/sdk';
+import { Id } from '@graphprotocol/grc-20';
 
 import { EntityId } from '../io/schema';
 import { Triple } from '../types';
 
 export function createEntityId() {
-  return EntityId(ID.make());
+  return EntityId(Id.generate());
 }
 
 /**

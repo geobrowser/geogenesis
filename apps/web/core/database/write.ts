@@ -1,14 +1,16 @@
 'use client';
 
-import { INITIAL_RELATION_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
 import { atom } from 'jotai';
 
 import { EntityId } from '../io/schema';
+import { queryClient } from '../query-client';
 import { store } from '../state/jotai-store';
+import { E } from '../sync/orm';
+import { store as geoStore } from '../sync/use-sync-engine';
 import { OmitStrict } from '../types';
 import { Relations } from '../utils/relations';
 import { Triple } from './Triple';
-import { mergeEntityAsync } from './entities';
 import { db } from './indexeddb';
 import { RemoveOp, StoreRelation, StoredRelation, StoredTriple, UpsertOp } from './types';
 
@@ -18,6 +20,11 @@ const opsWithPersistence = () => {
   baseAtom.onMount = setValue => {
     (async () => {
       const stored = await db.triples.toArray();
+
+      for (const triple of stored) {
+        if (triple.isDeleted) geoStore.deleteTriple(triple);
+        else geoStore.setTriple(triple);
+      }
 
       setValue(stored);
     })();
@@ -32,6 +39,11 @@ const relationsWithPersistence = () => {
   baseAtom.onMount = setValue => {
     (async () => {
       const stored = await db.relations.toArray();
+
+      for (const relation of stored) {
+        if (relation.isDeleted) geoStore.deleteRelation(relation);
+        else geoStore.setRelation(relation);
+      }
 
       setValue(stored);
     })();
@@ -51,8 +63,8 @@ type UpsertRelationArgs = {
 
 type DeleteRelationArgs = {
   type: 'DELETE_RELATION';
-  relationId: EntityId;
-  fromEntityId: EntityId;
+
+  relation: StoreRelation;
   spaceId: string;
 };
 
@@ -79,6 +91,15 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
 
     const relationId = EntityId(triples[0].entityId);
 
+    geoStore.setRelation({
+      ...args.relation,
+      id: relationId,
+    });
+
+    for (const triple of triples) {
+      geoStore.setTriple(triple);
+    }
+
     const unchangedRelations = store.get(localRelationsAtom).filter(r => {
       return r.id !== relationId;
     });
@@ -95,14 +116,21 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
     return;
   }
 
-  const nonDeletedRelations = store.get(localRelationsAtom).filter(r => r.id !== args.relationId);
+  const relationId = args.relation.id;
+
+  geoStore.deleteRelation({
+    ...args.relation,
+    id: EntityId(relationId as string), // we require a relation id to delete
+  });
+
+  const nonDeletedRelations = store.get(localRelationsAtom).filter(r => r.id !== relationId);
 
   store.set(localRelationsAtom, [
     ...nonDeletedRelations,
     // We can set a dummy relation here since we only care about the deleted state
     {
       space: args.spaceId,
-      id: args.relationId,
+      id: EntityId(relationId as string),
       index: INITIAL_RELATION_INDEX_VALUE,
       isDeleted: true,
       typeOf: {
@@ -110,11 +138,11 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
         name: null,
       },
       fromEntity: {
-        id: EntityId(args.fromEntityId),
+        id: EntityId(args.relation.fromEntity.id),
         name: null,
       },
       toEntity: {
-        id: EntityId(args.relationId),
+        id: EntityId(args.relation.id as string),
         name: null,
         renderableType: 'RELATION',
         value: '',
@@ -124,31 +152,44 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
   // @TODO: Delete all triples for this relationship
   // This is async but we aren't awaiting it so we'll see what happens I guess. Might want to
   // use effect or something to monitor this and de-color it.
-  deleteRelation(args.relationId, args.spaceId);
+  deleteRelation(args.relation.id as string, args.spaceId);
 };
 
 async function deleteRelation(relationId: string, spaceId: string) {
   // @TODO we might need to delete any relations on a relation, too.
-  const { triples } = await mergeEntityAsync(EntityId(relationId));
-  removeMany(triples, spaceId);
+  const entity = await E.findOne({ store: geoStore, cache: queryClient, id: relationId });
+
+  if (entity) {
+    removeMany(entity.triples, spaceId);
+
+    // for (const relation of entity.relationsOut) {
+    //   removeRelation({
+    //     relation,
+    //     spaceId,
+    //   });
+    // }
+  }
 }
 
 export async function removeEntity(entityId: string, spaceId: string) {
-  const { triples, relationsOut, id } = await mergeEntityAsync(EntityId(entityId));
-  removeMany(triples, spaceId);
+  const entity = await E.findOne({ store: geoStore, cache: queryClient, id: entityId });
 
-  for (const relation of relationsOut) {
-    removeRelation({
-      relationId: relation.id,
-      fromEntityId: id,
-      spaceId,
-    });
+  if (entity) {
+    removeMany(entity.triples, spaceId);
+
+    for (const relation of entity.relationsOut) {
+      removeRelation({
+        relation,
+        spaceId,
+      });
+    }
   }
 }
 
 export const upsert = (op: UpsertOp, spaceId: string) => {
   const triple = Triple.make({ ...op, space: spaceId }, { hasBeenPublished: false, isDeleted: false });
   writeMany([triple]);
+  geoStore.setTriple(triple);
 };
 
 export const upsertMany = (ops: UpsertOp[], spaceId: string) => {
@@ -156,23 +197,28 @@ export const upsertMany = (ops: UpsertOp[], spaceId: string) => {
     return Triple.make({ ...op, space: spaceId }, { hasBeenPublished: false, isDeleted: false });
   });
   writeMany(triples);
+
+  for (const triple of triples) {
+    geoStore.setTriple(triple);
+  }
 };
 
 export const remove = (op: RemoveOp, spaceId: string) => {
   // We don't delete from our local store, but instead just set a tombstone
   // on the row. This is so we can still publish the changes as an op
-  writeMany([
-    Triple.make(
-      {
-        ...op,
-        attributeName: op.attributeName ?? null,
-        entityName: null,
-        space: spaceId,
-        value: op.value ?? { type: 'TEXT', value: '' },
-      },
-      { hasBeenPublished: false, isDeleted: true }
-    ),
-  ]);
+  const triple = Triple.make(
+    {
+      ...op,
+      attributeName: op.attributeName ?? null,
+      entityName: null,
+      space: spaceId,
+      value: op.value ?? { type: 'TEXT', value: '' },
+    },
+    { hasBeenPublished: false, isDeleted: true }
+  );
+
+  writeMany([triple]);
+  geoStore.deleteTriple(triple);
 };
 
 export const removeMany = (ops: RemoveOp[], spaceId: string) => {
@@ -192,6 +238,10 @@ export const removeMany = (ops: RemoveOp[], spaceId: string) => {
   // We don't delete from our local store, but instead just set a tombstone
   // on the row. This is so we can still publish the changes as an op
   writeMany(triples);
+
+  for (const triple of triples) {
+    geoStore.deleteTriple(triple);
+  }
 };
 
 export const restoreRelations = (relations: StoredRelation[]) => {

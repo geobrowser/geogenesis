@@ -1,24 +1,23 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
-import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
-import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
-import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
+import { getTabSlug } from '~/core/utils/utils';
 
+import { Create } from '~/design-system/icons/create';
 import { MenuItem } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 import { TabGroup } from '~/design-system/tab-group';
 
-import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { AddSubspaceDialog } from '~/partials/space-page/add-subspace-dialog';
@@ -26,6 +25,7 @@ import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
+import { cachedFetchEntitiesBatch } from '../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from './cached-fetch-space';
 
 type LayoutProps = {
@@ -52,15 +52,11 @@ export default async function Layout(props0: LayoutProps) {
 
   const spaceId = params.id;
 
-  const [props, subspaces, inflightSubspaces] = await Promise.all([
-    getData(spaceId),
-    fetchSubspacesBySpaceId(spaceId),
-    fetchInFlightSubspaceProposalsForSpaceId(spaceId),
-  ]);
+  const props = await getData(spaceId);
   const coverUrl = Entities.cover(props.relationsOut);
 
   const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
-  const tabs = await buildTabsForSpacePage(props.tabEntities, props.space.spaceConfig?.types ?? [], params);
+  const tabs = buildTabsForSpacePage(props.tabEntities, props.space.spaceConfig?.types ?? [], params);
 
   return (
     <EntityStoreProvider
@@ -79,27 +75,36 @@ export default async function Layout(props0: LayoutProps) {
       >
         <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
         <EntityPageContentContainer>
-          <EditableHeading spaceId={props.spaceId} entityId={props.id} />
-          <SpacePageMetadataHeader
-            typeNames={typeNames}
-            spaceId={props.spaceId}
-            entityId={props.id}
-            addSubspaceComponent={
-              <AddSubspaceDialog
-                spaceId={spaceId}
-                trigger={<MenuItem>Add subspace</MenuItem>}
-                subspaces={subspaces}
-                inflightSubspaces={inflightSubspaces}
-                spaceType={props.space.type}
-              />
-            }
-            membersComponent={
-              <React.Suspense fallback={<MembersSkeleton />}>
-                <SpaceEditors spaceId={spaceId} />
-                <SpaceMembers spaceId={spaceId} />
-              </React.Suspense>
-            }
-          />
+          <div className="space-y-2">
+            <EditableSpaceHeading
+              spaceId={props.spaceId}
+              entityId={props.id}
+              addSubspaceComponent={
+                <AddSubspaceDialog
+                  spaceId={spaceId}
+                  trigger={
+                    <MenuItem>
+                      <Create />
+                      <p>Add subspace</p>
+                    </MenuItem>
+                  }
+                  spaceType={props.space.type}
+                />
+              }
+            />
+            <SpacePageMetadataHeader
+              typeNames={typeNames}
+              spaceId={props.spaceId}
+              entityId={props.id}
+              membersComponent={
+                <React.Suspense fallback={<MembersSkeleton />}>
+                  <SpaceEditors spaceId={spaceId} />
+                  <SpaceMembers spaceId={spaceId} />
+                </React.Suspense>
+              }
+            />
+          </div>
+
           <Spacer height={40} />
           <React.Suspense fallback={null}>
             <TabGroup tabs={tabs} />
@@ -133,18 +138,18 @@ const getData = async (spaceId: string) => {
 
   const spaces = entity?.spaces ?? [];
   const tabIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.TABS_ATTRIBUTE))
+    .filter(r => r.typeOf.id === EntityId(SystemIds.TABS_ATTRIBUTE))
     ?.map(r => r.toEntity.id);
 
-  const tabEntities = tabIds ? await fetchEntitiesBatch(tabIds) : [];
+  const tabEntities = tabIds ? await fetchEntitiesBatch({ spaceId, entityIds: tabIds }) : [];
 
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
       const blockIds = entity?.relationsOut
-        .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+        .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
         ?.map(r => r.toEntity.id);
 
-      const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+      const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
       return blocks;
     })
   );
@@ -159,10 +164,10 @@ const getData = async (spaceId: string) => {
   });
 
   const blockIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
     ?.map(r => r.toEntity.id);
 
-  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
     triples: entity.triples,
@@ -214,14 +219,14 @@ function buildTabsForSpacePage(
   // Order of how we add the tabs matters. We want to
   // show "content-based" tabs first, then "space-based" tabs.
 
-  if (typeIds.includes(SYSTEM_IDS.SPACE_TYPE)) {
+  if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     tabs.push(...ALL_SPACES_TABS);
 
     if (DYNAMIC_TABS.length > 0) {
       tabs.push(...DYNAMIC_TABS);
     }
 
-    if (!typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
+    if (!typeIds.includes(SystemIds.PERSON_TYPE)) {
       tabs.push(...SOME_SPACES_TABS);
     }
   }
@@ -258,13 +263,6 @@ const getDynamicTabs = (spaceId: string, tabEntities: EntityType[]) => {
   });
 
   return tabs;
-};
-
-const getTabSlug = (label: string) => {
-  return label
-    .replace(/[^a-zA-Z0-9\s]/g, '')
-    .replace(/\s+/g, '-')
-    .toLowerCase();
 };
 
 const dynamicTabSequence = [

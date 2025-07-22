@@ -1,4 +1,4 @@
-import { Account, CONTENT_IDS, Image, Op, Relation, SYSTEM_IDS } from '@geogenesis/sdk';
+import { Account, ContentIds, Image, Op, Relation, SystemIds } from '@graphprotocol/grc-20';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
@@ -31,7 +31,7 @@ export const generateOpsForSpaceType = async ({
   ops.push(
     Ops.create({
       entity: newEntityId,
-      attribute: SYSTEM_IDS.NAME_ATTRIBUTE,
+      attribute: SystemIds.NAME_ATTRIBUTE,
       value: {
         type: 'TEXT',
         value: spaceName,
@@ -43,8 +43,8 @@ export const generateOpsForSpaceType = async ({
   ops.push(
     Relation.make({
       fromId: newEntityId,
-      toId: SYSTEM_IDS.SPACE_TYPE,
-      relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+      toId: SystemIds.SPACE_TYPE,
+      relationTypeId: SystemIds.TYPES_ATTRIBUTE,
     })
   );
 
@@ -52,7 +52,7 @@ export const generateOpsForSpaceType = async ({
   switch (type) {
     case 'personal': {
       const [personOps] = await cloneEntity({
-        oldEntityId: SYSTEM_IDS.PERSON_TEMPLATE,
+        oldEntityId: SystemIds.PERSON_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
       });
@@ -66,7 +66,7 @@ export const generateOpsForSpaceType = async ({
       ops.push(
         Relation.make({
           fromId: newEntityId,
-          relationTypeId: SYSTEM_IDS.ACCOUNTS_ATTRIBUTE,
+          relationTypeId: SystemIds.ACCOUNTS_ATTRIBUTE,
           toId: accountId,
         })
       );
@@ -75,7 +75,7 @@ export const generateOpsForSpaceType = async ({
     }
     case 'company': {
       const [companyOps] = await cloneEntity({
-        oldEntityId: SYSTEM_IDS.COMPANY_TEMPLATE,
+        oldEntityId: SystemIds.COMPANY_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
       });
@@ -90,7 +90,7 @@ export const generateOpsForSpaceType = async ({
     }
     case 'academic-field': {
       const [academicFieldOps] = await cloneEntity({
-        oldEntityId: SYSTEM_IDS.ACADEMIC_FIELD_TEMPLATE,
+        oldEntityId: SystemIds.ACADEMIC_FIELD_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
       });
@@ -100,7 +100,7 @@ export const generateOpsForSpaceType = async ({
     }
     case 'dao': {
       const [daoOps] = await cloneEntity({
-        oldEntityId: SYSTEM_IDS.DAO_TEMPLATE,
+        oldEntityId: SystemIds.DAO_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
       });
@@ -114,14 +114,14 @@ export const generateOpsForSpaceType = async ({
       ops.push(
         Relation.make({
           fromId: newEntityId,
-          toId: SYSTEM_IDS.GOVERNMENT_ORG_TYPE,
-          relationTypeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+          toId: SystemIds.GOVERNMENT_ORG_TYPE,
+          relationTypeId: SystemIds.TYPES_ATTRIBUTE,
         })
       );
       break;
     case 'industry': {
       const [industryOps] = await cloneEntity({
-        oldEntityId: SYSTEM_IDS.INDUSTRY_TEMPLATE,
+        oldEntityId: SystemIds.INDUSTRY_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
       });
@@ -131,7 +131,7 @@ export const generateOpsForSpaceType = async ({
     }
     case 'interest': {
       const [interestOps] = await cloneEntity({
-        oldEntityId: SYSTEM_IDS.INTEREST_TEMPLATE,
+        oldEntityId: SystemIds.INTEREST_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
       });
@@ -141,7 +141,7 @@ export const generateOpsForSpaceType = async ({
     }
     case 'protocol': {
       const [protocolOps] = await cloneEntity({
-        oldEntityId: SYSTEM_IDS.PROTOCOL_TEMPLATE,
+        oldEntityId: SystemIds.PROTOCOL_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
       });
@@ -152,7 +152,7 @@ export const generateOpsForSpaceType = async ({
     }
     case 'region': {
       const [regionOps] = await cloneEntity({
-        oldEntityId: SYSTEM_IDS.REGION_TEMPLATE,
+        oldEntityId: SystemIds.REGION_TEMPLATE,
         entityId: newEntityId,
         entityName: spaceName,
       });
@@ -165,7 +165,7 @@ export const generateOpsForSpaceType = async ({
   }
 
   if (spaceAvatarUri) {
-    const { imageId, ops: imageOps } = Image.make(spaceAvatarUri);
+    const { id: imageId, ops: imageOps } = Image.make({ cid: spaceAvatarUri });
 
     // Creates the image entity
     ops.push(...imageOps);
@@ -175,13 +175,13 @@ export const generateOpsForSpaceType = async ({
       Relation.make({
         fromId: newEntityId,
         toId: imageId, // Set the avatar relation to point to the entity id of the new entity
-        relationTypeId: CONTENT_IDS.AVATAR_ATTRIBUTE,
+        relationTypeId: ContentIds.AVATAR_ATTRIBUTE,
       })
     );
   }
 
   if (spaceCoverUri) {
-    const { imageId, ops: imageOps } = Image.make(spaceCoverUri);
+    const { id: imageId, ops: imageOps } = Image.make({ cid: spaceCoverUri });
 
     // Creates the image entity
     ops.push(...imageOps);
@@ -191,7 +191,7 @@ export const generateOpsForSpaceType = async ({
       Relation.make({
         fromId: newEntityId,
         toId: imageId, // Set the avatar relation to point to the entity id of the new entity
-        relationTypeId: SYSTEM_IDS.COVER_ATTRIBUTE,
+        relationTypeId: SystemIds.COVER_ATTRIBUTE,
       })
     );
   }

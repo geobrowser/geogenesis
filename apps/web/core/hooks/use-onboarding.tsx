@@ -13,7 +13,7 @@ import { useSmartAccount } from './use-smart-account';
 const isOnboardingVisibleAtom = atom(false);
 
 export function useOnboarding() {
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const params = useSearchParams();
   const onboardFlag = params?.get(Environment.variables.onboardFlag);

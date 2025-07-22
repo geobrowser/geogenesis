@@ -1,6 +1,6 @@
 'use client';
 
-import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { MainVotingAbi } from '@graphprotocol/grc-20/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { encodeFunctionData, getAddress } from 'viem';
@@ -14,7 +14,7 @@ import { useStatusBar } from '~/core/state/status-bar-store';
 export function useRequestToBeMember(votingPluginAddress: string | null) {
   const { dispatch } = useStatusBar();
 
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const tx = useSmartAccountTransaction({
     address: votingPluginAddress,
   });

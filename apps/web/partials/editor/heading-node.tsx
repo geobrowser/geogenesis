@@ -44,7 +44,7 @@ function HeadingNodeComponent({ node }: NodeViewRendererProps) {
 
   return (
     <NodeViewWrapper>
-      <NodeViewContent as={tag} contentEditable={isEditable ? 'true' : 'false'} />
+      <NodeViewContent as={tag} contentEditable={isEditable ? 'true' : 'false'} suppressContentEditableWarning />
     </NodeViewWrapper>
   );
 }

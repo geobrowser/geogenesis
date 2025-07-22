@@ -1,8 +1,7 @@
 import { Schema } from '@effect/schema';
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
@@ -25,7 +24,7 @@ function getFetchEntitiesQuery(
             some: { type: { entityId: { in: ["${typeIds.join('","')}"] } } }
           }`
       : // Filter out block entities by default
-        `versionTypes: { every: { type: { entityId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.DATA_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}"] } } } }`;
+        `versionTypes: { every: { type: { entityId: { notIn: ["${SystemIds.TEXT_BLOCK}", "${SystemIds.DATA_BLOCK}", "${SystemIds.IMAGE_BLOCK}"] } } } }`;
 
   const constructedWhere =
     entityOfWhere !== ''
@@ -75,7 +74,6 @@ interface NetworkResult {
 }
 
 export async function fetchEntities(options: FetchEntitiesOptions): Promise<Entity[]> {
-  const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
   const fieldFilters = Object.fromEntries(options.filter.map(clause => [clause.field, clause.value])) as Record<
@@ -120,7 +118,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchEntities. queryId: ${queryId} ryString: ${getFetchEntitiesQuery(
+            `Encountered runtime graphql error in fetchEntities. queryString: ${getFetchEntitiesQuery(
               options.query,
               entityOfWhere,
               options.typeIds,
@@ -128,7 +126,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
               options.skip
             )}
           `,
-            error.message
+            String(error.message)
           );
 
           return {
@@ -137,7 +135,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch entities, queryId: ${queryId}query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
+            `${error._tag}: Unable to fetch entities, query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}. ${String(error.message)}`
           );
           return {
             entities: { nodes: [] },

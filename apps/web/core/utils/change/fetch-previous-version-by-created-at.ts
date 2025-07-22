@@ -16,7 +16,7 @@ interface FetchVersionsArgs {
 
 const query = (createdAt: number, entityId: string, spaceId: string) => {
   return `query {
-    versions(filter: {
+    versions(orderBy: CREATED_AT_DESC, first: 1, filter: {
         entityId: { equalTo: "${entityId}"}
         createdAt: {lessThan: ${createdAt}}
         edit: { spaceId: { equalTo: "${spaceId}" } proposals: { some: { status: { equalTo: ACCEPTED } } } }
@@ -93,12 +93,13 @@ export async function fetchPreviousVersionByCreatedAt(args: FetchVersionsArgs) {
   }
 
   const latestVersion = networkVersions[0];
+
   const decoded = Schema.decodeEither(SubstreamVersionHistorical)(latestVersion);
 
   return Either.match(decoded, {
     onLeft: error => {
       console.error(
-        `Could not decode version with id ${latestVersion.id} and entityId ${latestVersion.entityId} less than ${
+        `FetchPreviousVersionByCreatedAt: Could not decode version with id ${latestVersion.id} and entityId ${latestVersion.entityId} less than ${
           args.createdAt
         }. ${String(error)}`
       );

@@ -3,7 +3,9 @@ import { atomWithStorage } from 'jotai/utils';
 
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
-export const editingColumnsAtom = atom<boolean>(false);
+export const editingPropertiesAtom = atom<boolean>(false);
+
+export const editorHasContentAtom = atom<boolean>(false);
 
 export const dismissedNoticesAtom = atomWithStorage<Array<string>>('dismissedNotices', []);
 

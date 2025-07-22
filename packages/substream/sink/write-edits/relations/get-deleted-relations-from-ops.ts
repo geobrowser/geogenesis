@@ -1,4 +1,4 @@
-import { type DeleteRelationOp } from '@geogenesis/sdk';
+import { type DeleteRelationOp } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
 
 import { Relations } from '~/sink/db/relations';

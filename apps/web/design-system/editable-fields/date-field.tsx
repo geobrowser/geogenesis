@@ -1,6 +1,7 @@
 'use client';
 
 import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
@@ -14,11 +15,33 @@ import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 
 interface DateFieldProps {
-  onBlur?: (date: string) => void;
-  variant?: 'body' | 'tableCell';
+  onBlur?: ({ value, format }: { value: string; format?: string }) => void;
+  variant?: 'body' | 'tableCell' | 'tableProperty';
   value: string;
+  format?: string;
   isEditing?: boolean;
+  className?: string;
 }
+
+interface DateInputProps {
+  variant?: 'body' | 'tableCell' | 'tableProperty';
+  initialDate: string;
+  onDateChange: (date: string) => void;
+  label?: string;
+}
+
+const dateTextStyles = cva('', {
+  variants: {
+    variant: {
+      body: 'text-body text-text',
+      tableCell: 'text-tableCell text-text',
+      tableProperty: '!text-tableProperty !text-grey-04',
+    },
+  },
+  defaultVariants: {
+    variant: 'body',
+  },
+});
 
 const dateFieldStyles = cva(
   'w-full bg-transparent text-center tabular-nums transition-colors duration-75 ease-in-out placeholder:text-grey-02 focus:outline-none',
@@ -27,6 +50,7 @@ const dateFieldStyles = cva(
       variant: {
         body: 'text-body',
         tableCell: 'text-tableCell',
+        tableProperty: '!text-tableProperty !text-grey-04',
       },
       error: {
         true: 'text-red-01',
@@ -39,27 +63,12 @@ const dateFieldStyles = cva(
   }
 );
 
-const labelStyles = cva('text-footnote transition-colors duration-75 ease-in-out', {
-  variants: {
-    active: {
-      true: 'text-text',
-      false: 'text-grey-02',
-    },
-    error: {
-      true: 'text-red-01',
-    },
-  },
-  defaultVariants: {
-    active: false,
-    error: false,
-  },
-});
-
 const timeStyles = cva('m-0 w-[21px] bg-transparent p-0 tabular-nums placeholder:text-grey-02 focus:outline-none', {
   variants: {
     variant: {
       body: 'text-body',
       tableCell: 'text-tableCell',
+      tableProperty: '!text-tableProperty !text-grey-04',
     },
     error: {
       true: 'text-red-01',
@@ -71,7 +80,7 @@ const timeStyles = cva('m-0 w-[21px] bg-transparent p-0 tabular-nums placeholder
   },
 });
 
-export function DateField(props: DateFieldProps) {
+function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
   const {
     day: initialDay,
     month: initialMonth,
@@ -79,7 +88,7 @@ export function DateField(props: DateFieldProps) {
     hour: initialHour,
     minute: initialMinute,
     meridiem: initialMeridiem,
-  } = GeoDate.fromISOStringUTC(props.value);
+  } = GeoDate.fromISOStringUTC(initialDate);
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
   const formattedInitialMonth = initialMonth === '' ? initialMonth : initialMonth.padStart(2, '0');
@@ -204,7 +213,7 @@ export function DateField(props: DateFieldProps) {
 
   const onToggleMeridiem = () => {
     const newMeridiem = meridiem === 'am' ? 'pm' : 'am';
-    onBlur(newMeridiem);
+    updateDate(newMeridiem);
     setMeridiem(newMeridiem);
   };
 
@@ -215,6 +224,18 @@ export function DateField(props: DateFieldProps) {
     if (!regex.test(value)) return;
     if (value.length > 2) return;
     setDay(value);
+
+    // Reset touched state when editing
+    setDayTouched(false);
+
+    // Auto-focus to hour field when 2 digits are entered for day
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (hourInputRef.current) {
+          hourInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const onMonthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -224,6 +245,18 @@ export function DateField(props: DateFieldProps) {
     if (!regex.test(value)) return;
     if (value.length > 2) return;
     setMonth(value);
+
+    // Reset touched state when editing
+    setMonthTouched(false);
+
+    // Auto-focus to day field when 2 digits are entered for month
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (dayInputRef.current) {
+          dayInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const onYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -233,6 +266,18 @@ export function DateField(props: DateFieldProps) {
     if (!regex.test(value)) return;
     if (value.length > 4) return;
     setYear(value);
+
+    // Reset touched state when editing
+    setYearTouched(false);
+
+    // Auto-focus to month field when 4 digits are entered for year
+    if (value.length === 4) {
+      queueMicrotask(() => {
+        if (monthInputRef.current) {
+          monthInputRef.current.focus();
+        }
+      });
+    }
   };
 
   const onMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -241,8 +286,19 @@ export function DateField(props: DateFieldProps) {
 
     if (!regex.test(value)) return;
     if (value.length > 2) return;
-
     setMinute(value);
+
+    // Reset touched state when editing
+    setMinuteTouched(false);
+
+    // Auto-focus to meridiem button when 2 digits are entered for minute
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (meridiemButtonRef.current) {
+          meridiemButtonRef.current.focus();
+        }
+      });
+    }
   };
 
   const onHourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,11 +307,22 @@ export function DateField(props: DateFieldProps) {
 
     if (!regex.test(value)) return;
     if (value.length > 2) return;
-
     setHour(value);
+
+    // Reset touched state when editing
+    setHourTouched(false);
+
+    // Auto-focus to minute field when 2 digits are entered for hour
+    if (value.length === 2) {
+      queueMicrotask(() => {
+        if (minuteInputRef.current) {
+          minuteInputRef.current.focus();
+        }
+      });
+    }
   };
 
-  const onBlur = (meridiem: 'am' | 'pm') => {
+  const updateDate = (meridiem: 'am' | 'pm') => {
     let newMinute = minute.value;
     let newHour = hour.value;
     let newDay = day.value;
@@ -308,152 +375,185 @@ export function DateField(props: DateFieldProps) {
         hour: meridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
       });
 
-      // Only create the triple if the form is valid
-      props.onBlur?.(isoString);
+      onDateChange(isoString);
     }
   };
 
-  const isValidHour = hour.value === '' || (!hour.isValidating && hour.isValid);
-  const isValidMinute = minute.value === '' || (!minute.isValidating && minute.isValid);
-  const isValidDay = day.value === '' || (!day.isValidating && day.isValid);
-  const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
-  const isValidYear = year.value === '' || (!year.isValidating && year.isValid);
+  const VALID_YEAR_LENGTH = 4;
+  const VALID_MONTH_LENGTH = 2;
+  const VALID_DAY_LENGTH = 2;
+  const VALID_HOUR_LENGTH = 2;
+  const VALID_MINUTE_LENGTH = 2;
+
+  // Modify isValid checks to only validate if the field has been touched (blurred) or has a complete value
+  const [yearTouched, setYearTouched] = React.useState(false);
+  const [monthTouched, setMonthTouched] = React.useState(false);
+  const [dayTouched, setDayTouched] = React.useState(false);
+  const [hourTouched, setHourTouched] = React.useState(false);
+  const [minuteTouched, setMinuteTouched] = React.useState(false);
+
+  const isValidYear =
+    year.value === '' ||
+    (!year.isValidating && year.isValid) ||
+    (!yearTouched && year.value.length < VALID_YEAR_LENGTH);
+
+  const isValidMonth =
+    month.value === '' ||
+    (!month.isValidating && month.isValid) ||
+    (!monthTouched && month.value.length < VALID_MONTH_LENGTH) ||
+    !dateFormState.isValid;
+
+  const isValidDay =
+    day.value === '' || (!day.isValidating && day.isValid) || (!dayTouched && day.value.length < VALID_DAY_LENGTH);
+
+  const isValidHour =
+    hour.value === '' ||
+    (!hour.isValidating && hour.isValid) ||
+    (!hourTouched && hour.value.length < VALID_HOUR_LENGTH);
+
+  const isValidMinute =
+    minute.value === '' ||
+    (!minute.isValidating && minute.isValid) ||
+    (!minuteTouched && minute.value.length < VALID_MINUTE_LENGTH);
+
+  // Create refs for all input fields
+  const yearInputRef = React.useRef<HTMLInputElement>(null);
+  const monthInputRef = React.useRef<HTMLInputElement>(null);
+  const dayInputRef = React.useRef<HTMLInputElement>(null);
+  const hourInputRef = React.useRef<HTMLInputElement>(null);
+  const minuteInputRef = React.useRef<HTMLInputElement>(null);
+  const meridiemButtonRef = React.useRef<HTMLButtonElement>(null);
+
+  // Add hook to select all text when input receives focus
+  React.useEffect(() => {
+    const selectAllOnFocus = (event: FocusEvent) => {
+      const input = event.target as HTMLInputElement;
+      if (input.type === 'text' || input.type === '') {
+        queueMicrotask(() => {
+          input.select();
+        });
+      }
+    };
+
+    const yearInput = yearInputRef.current;
+    const monthInput = monthInputRef.current;
+    const dayInput = dayInputRef.current;
+    const hourInput = hourInputRef.current;
+    const minuteInput = minuteInputRef.current;
+
+    if (yearInput) yearInput.addEventListener('focus', selectAllOnFocus);
+    if (monthInput) monthInput.addEventListener('focus', selectAllOnFocus);
+    if (dayInput) dayInput.addEventListener('focus', selectAllOnFocus);
+    if (hourInput) hourInput.addEventListener('focus', selectAllOnFocus);
+    if (minuteInput) minuteInput.addEventListener('focus', selectAllOnFocus);
+
+    return () => {
+      if (yearInput) yearInput.removeEventListener('focus', selectAllOnFocus);
+      if (monthInput) monthInput.removeEventListener('focus', selectAllOnFocus);
+      if (dayInput) dayInput.removeEventListener('focus', selectAllOnFocus);
+      if (hourInput) hourInput.removeEventListener('focus', selectAllOnFocus);
+      if (minuteInput) minuteInput.removeEventListener('focus', selectAllOnFocus);
+    };
+  }, []);
 
   return (
-    <div>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex w-[164px] gap-3">
-          <div className="flex w-full flex-[2] flex-col">
-            {props.isEditing ? (
-              <input
-                data-testid="date-field-month"
-                value={month.value}
-                onChange={onMonthChange}
-                onBlur={() => onBlur(meridiem)}
-                placeholder="MM"
-                className={dateFieldStyles({
-                  variant: props.variant,
-                  error: !isValidMonth || !dateFormState.isValid,
-                })}
-              />
-            ) : (
-              <p
-                className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !dateFormState.isValid })}
-              >
-                {month.value}
-              </p>
-            )}
-            <span
-              className={labelStyles({ active: month.value !== '', error: !isValidMonth || !dateFormState.isValid })}
-            >
-              Month
-            </span>
+    <div className="flex flex-col">
+      {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex w-[136px] items-center gap-1">
+          <div className="flex flex-[6] flex-col">
+            <input
+              ref={yearInputRef}
+              value={year.value}
+              onChange={onYearChange}
+              onBlur={() => {
+                setYearTouched(true);
+                updateDate(meridiem);
+              }}
+              placeholder="YYYY"
+              className={`${dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
+            />
           </div>
 
-          <span className="w-full flex-[1] pt-[3px] text-grey-02">/</span>
+          <span className="size flex flex-[1] justify-center text-lg text-grey-02">/</span>
 
-          <div className="flex flex-[2] flex-col items-center">
-            {props.isEditing ? (
-              <input
-                data-testid="date-field-day"
-                value={day.value}
-                onChange={onDayChange}
-                onBlur={() => onBlur(meridiem)}
-                placeholder="DD"
-                className={dateFieldStyles({
-                  variant: props.variant,
-                  error: !isValidDay || !dateFormState.isValid,
-                })}
-              />
-            ) : (
-              <p
-                className={dateFieldStyles({
-                  variant: props.variant,
-                  error: !isValidDay || !dateFormState.isValid,
-                })}
-              >
-                {day.value}
-              </p>
-            )}
-            <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !dateFormState.isValid })}>
-              Day
-            </span>
+          <div className="flex flex-[4] flex-col">
+            <input
+              ref={monthInputRef}
+              value={month.value}
+              onChange={onMonthChange}
+              onBlur={() => {
+                setMonthTouched(true);
+                updateDate(meridiem);
+              }}
+              placeholder="MM"
+              className={dateFieldStyles({
+                variant,
+                error: !isValidMonth || !dateFormState.isValid,
+              })}
+            />
           </div>
 
-          <span className="flex-[1] pt-[3px] text-grey-02">/</span>
+          <span className="size flex flex-[1] justify-center text-lg text-grey-02">/</span>
 
-          <div className="flex w-full flex-[4] flex-col items-center">
-            {props.isEditing ? (
-              <input
-                data-testid="date-field-year"
-                value={year.value}
-                onChange={onYearChange}
-                onBlur={() => onBlur(meridiem)}
-                placeholder="YYYY"
-                className={dateFieldStyles({ variant: props.variant, error: !isValidYear || !dateFormState.isValid })}
-              />
-            ) : (
-              <p className={dateFieldStyles({ variant: props.variant, error: !isValidYear || !dateFormState.isValid })}>
-                {year.value}
-              </p>
-            )}
-            <span className={labelStyles({ active: year.value !== '', error: !isValidYear || !dateFormState.isValid })}>
-              Year
-            </span>
+          <div className="flex flex-[4] flex-col">
+            <input
+              ref={dayInputRef}
+              value={day.value}
+              onChange={onDayChange}
+              onBlur={() => {
+                setDayTouched(true);
+                updateDate(meridiem);
+              }}
+              placeholder="DD"
+              className={dateFieldStyles({
+                variant,
+                error: !isValidDay || !dateFormState.isValid,
+              })}
+            />
           </div>
         </div>
-        <div className="flex items-center">
-          <Minus color="grey-03" />
-          <Spacer width={18} />
+        <div className="flex grow items-center">
+          <Minus color="grey-02" className="size-4" />
+          <Spacer width={14} />
           <div className="flex items-center gap-1">
-            {props.isEditing ? (
-              <>
-                <input
-                  data-testid="date-field-hour"
-                  value={hour.value}
-                  onChange={onHourChange}
-                  onBlur={() => onBlur(meridiem)}
-                  placeholder="00"
-                  className={timeStyles({ variant: props.variant, error: !isValidHour || !timeFormState.isValid })}
-                />
+            <input
+              ref={hourInputRef}
+              value={hour.value}
+              onChange={onHourChange}
+              onBlur={() => {
+                setHourTouched(true);
+                updateDate(meridiem);
+              }}
+              placeholder="00"
+              className={timeStyles({ variant, error: !isValidHour || !timeFormState.isValid })}
+            />
 
-                <span>:</span>
-                <input
-                  data-testid="date-field-minute"
-                  value={minute.value}
-                  onChange={onMinuteChange}
-                  onBlur={() => onBlur(meridiem)}
-                  placeholder="00"
-                  className={timeStyles({ variant: props.variant, error: !isValidMinute || !timeFormState.isValid })}
-                />
-              </>
-            ) : (
-              <>
-                <p className={timeStyles({ variant: props.variant })}>{hour.value}</p>
-                <span>:</span>
-                <p className={timeStyles({ variant: props.variant })}>{minute.value}</p>
-              </>
-            )}
+            <span>:</span>
+            <input
+              ref={minuteInputRef}
+              value={minute.value}
+              onChange={onMinuteChange}
+              onBlur={() => {
+                setMinuteTouched(true);
+                updateDate(meridiem);
+              }}
+              placeholder="00"
+              className={timeStyles({ variant, error: !isValidMinute || !timeFormState.isValid })}
+            />
           </div>
 
-          {props.isEditing ? (
-            <>
-              <Spacer width={12} />
-              <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
-                <SmallButton
-                  onClick={() => (props.isEditing ? onToggleMeridiem() : undefined)}
-                  variant="secondary"
-                  className="whitespace-nowrap uppercase"
-                >
-                  {meridiem}
-                </SmallButton>
-              </motion.div>
-            </>
-          ) : (
-            <p className={`${timeStyles({ variant: props.variant })} w-[28px] whitespace-nowrap uppercase`}>
+          <Spacer width={12} />
+          <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
+            <SmallButton
+              ref={meridiemButtonRef}
+              onClick={() => onToggleMeridiem()}
+              variant="secondary"
+              className="whitespace-nowrap uppercase"
+            >
               {meridiem}
-            </p>
-          )}
+            </SmallButton>
+          </motion.div>
         </div>
       </div>
 
@@ -538,6 +638,107 @@ export function DateField(props: DateFieldProps) {
           )}
         </div>
       </AnimatePresence>
+    </div>
+  );
+}
+
+export function DateField({ value, format, isEditing, variant, onBlur, className = '' }: DateFieldProps) {
+  const isDateInterval = React.useMemo(() => GeoDate.isDateInterval(value), [value]);
+  const [intervalError, setIntervalError] = React.useState<string | null>(null);
+
+  const [startDate, endDate] = React.useMemo(() => {
+    if (isDateInterval && value) {
+      const dateStrings = value.split(GeoDate.intervalDelimiter).map(d => d.trim());
+      return [dateStrings[0], dateStrings[1] || dateStrings[0]];
+    }
+    return [value, value];
+  }, [value, isDateInterval]);
+
+  const formattedDate = value ? GeoDate.format(value, format) : null;
+
+  const validateDateInterval = React.useCallback((start: string, end: string): boolean => {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    if (startDate > endDate) {
+      setIntervalError('End date cannot be before start date');
+      return false;
+    }
+
+    setIntervalError(null);
+    return true;
+  }, []);
+
+  const handleStartDateChange = (newStartDate: string) => {
+    if (!onBlur) return;
+
+    if (isDateInterval) {
+      const isValid = validateDateInterval(newStartDate, endDate);
+
+      if (isValid) {
+        onBlur({
+          value: `${newStartDate}${GeoDate.intervalDelimiter}${endDate}`,
+          format: format,
+        });
+      }
+    } else {
+      onBlur({
+        value: newStartDate,
+        format: format,
+      });
+    }
+  };
+
+  const handleEndDateChange = (newEndDate: string) => {
+    if (!onBlur || !isDateInterval) return;
+
+    const isValid = validateDateInterval(startDate, newEndDate);
+
+    if (isValid) {
+      onBlur({
+        value: `${startDate}${GeoDate.intervalDelimiter}${newEndDate}`,
+        format: format,
+      });
+    }
+  };
+
+  if (!isEditing)
+    return (
+      <p className={dateTextStyles({ variant, className })} data-testid="date-field-value">
+        {formattedDate}
+      </p>
+    );
+
+  return (
+    <div className={cx('flex flex-col gap-1', className)}>
+      <div className="flex flex-row items-start gap-4">
+        <DateInput variant={variant} initialDate={startDate} onDateChange={handleStartDateChange} />
+
+        {isDateInterval && (
+          <>
+            <span>—</span>
+            <DateInput variant={variant} initialDate={endDate} onDateChange={handleEndDateChange} />
+          </>
+        )}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <div className="overflow-hidden">
+          {intervalError && (
+            <motion.p
+              className="text-smallButton text-red-01"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15, bounce: 0.2 }}
+            >
+              {intervalError}
+            </motion.p>
+          )}
+        </div>
+      </AnimatePresence>
+
+      {formattedDate && <span className="text-sm text-grey-04">Browse format · {formattedDate}</span>}
     </div>
   );
 }

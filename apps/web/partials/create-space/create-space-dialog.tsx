@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as Dialog from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -45,7 +45,7 @@ const stepAtom = atom<Step>('select-type');
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
 export function CreateSpaceDialog() {
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const [open, onOpenChange] = useState(false);
   const { deploy } = useDeploySpace();
@@ -383,17 +383,17 @@ type StepEnterProfileProps = {
 };
 
 const allowedTypesBySpaceType: Record<SpaceType, string[]> = {
-  default: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE],
-  company: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.COMPANY_TYPE],
-  nonprofit: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.NONPROFIT_TYPE],
-  personal: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.PERSON_TYPE],
-  'academic-field': [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.ACADEMIC_FIELD_TYPE],
-  region: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.REGION_TYPE],
-  industry: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.INDUSTRY_TYPE],
-  protocol: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.PROTOCOL_TYPE],
-  dao: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.DAO_TYPE],
-  'government-org': [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.GOVERNMENT_ORG_TYPE],
-  interest: [SYSTEM_IDS.SPACE_TYPE, SYSTEM_IDS.PROJECT_TYPE, SYSTEM_IDS.INTEREST_TYPE],
+  default: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE],
+  company: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.COMPANY_TYPE],
+  nonprofit: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.NONPROFIT_TYPE],
+  personal: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE],
+  'academic-field': [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.ACADEMIC_FIELD_TYPE],
+  region: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.REGION_TYPE],
+  industry: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.INDUSTRY_TYPE],
+  protocol: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PROTOCOL_TYPE],
+  dao: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.DAO_TYPE],
+  'government-org': [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.GOVERNMENT_ORG_TYPE],
+  interest: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.INTEREST_TYPE],
 };
 
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {

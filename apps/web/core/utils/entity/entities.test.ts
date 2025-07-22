@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { describe, expect, it } from 'vitest';
 
 import { Triple } from '~/core/types';
@@ -9,58 +9,11 @@ const triplesWithSystemDescriptionAttribute: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
-    attributeId: SYSTEM_IDS.DESCRIPTION_ATTRIBUTE,
+    attributeId: SystemIds.DESCRIPTION_ATTRIBUTE,
     attributeName: 'Description',
     value: {
       type: 'TEXT',
       value: 'banana',
-    },
-    space: 'spaceId',
-    entityName: 'banana',
-  },
-];
-
-const triplesWithSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
-  {
-    id: '',
-    entityId: 'entityId',
-    attributeId: SYSTEM_IDS.DESCRIPTION_ATTRIBUTE,
-    attributeName: 'Description',
-    value: {
-      value: 'valueId',
-      type: 'ENTITY',
-      name: 'banana',
-    },
-    space: 'spaceId',
-    entityName: 'banana',
-  },
-];
-
-const triplesWithNonSystemDescriptionAttribute: Triple[] = [
-  {
-    id: '',
-    entityId: 'entityId',
-    attributeId: 'attributeId',
-    attributeName: 'Description',
-    value: {
-      type: 'TEXT',
-      value: 'banana',
-    },
-    space: 'spaceId',
-    entityName: 'banana',
-  },
-];
-
-const triplesWithNonSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
-  {
-    id: '',
-    entityId: 'entityId',
-    attributeId: 'attributeId',
-    attributeName: 'Description',
-    value: {
-      value: 'valueId',
-      type: 'ENTITY',
-      name: 'banana',
     },
     space: 'spaceId',
     entityName: 'banana',
@@ -69,7 +22,7 @@ const triplesWithNonSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
 
 /**
  * We assume that the Description triple's attribute for an Entity will match the expected
- * system Description attribute ID at SYSTEM_IDS.DESCRIPTION_ATTRIBUTE. However, anybody can
+ * system Description attribute ID at SystemIds.DESCRIPTION_ATTRIBUTE. However, anybody can
  * set up a triple that references _any_ attribute whose name is "Description."
  *
  * We currently handle this in the UI by checking the system ID for Description as well
@@ -81,18 +34,6 @@ const triplesWithNonSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
 describe('Entity description helpers', () => {
   it('Entity.description should parse description from triples where description attribute is the the expected system Description', () => {
     expect(description(triplesWithSystemDescriptionAttribute)).toBe('banana');
-  });
-
-  it('Entity.description should return null where description is the expected system Description and value is a reference to another Entity', () => {
-    expect(description(triplesWithSystemDescriptionAttributeAndValueIsEntity)).toBe(null);
-  });
-
-  it('Entity.description should parse description from triples where description is not the expected system Description', () => {
-    expect(description(triplesWithNonSystemDescriptionAttribute)).toBe('banana');
-  });
-
-  it('Entity.description should return null where description is not the expected system Description and value is a reference to another Entity', () => {
-    expect(description(triplesWithNonSystemDescriptionAttributeAndValueIsEntity)).toBe(null);
   });
 
   it('Entity.descriptionTriple should return the Description triple', () => {
@@ -108,38 +49,7 @@ const triplesWithSystemNameAttribute: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
-    attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
-    attributeName: 'Name',
-    entityName: 'banana',
-    space: 'spaceId',
-    value: {
-      type: 'TEXT',
-      value: 'banana',
-    },
-  },
-];
-
-const triplesWithSystemNameAttributeAndNameIsEntity: Triple[] = [
-  {
-    id: '',
-    entityId: 'entityId',
-    attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
-    attributeName: 'Name',
-    entityName: 'banana',
-    space: 'spaceId',
-    value: {
-      value: 'valueId',
-      type: 'ENTITY',
-      name: 'banana',
-    },
-  },
-];
-
-const triplesWithNonSystemNameAttribute: Triple[] = [
-  {
-    id: '',
-    entityId: 'entityId',
-    attributeId: 'not-name',
+    attributeId: SystemIds.NAME_ATTRIBUTE,
     attributeName: 'Name',
     entityName: 'banana',
     space: 'spaceId',
@@ -153,14 +63,6 @@ const triplesWithNonSystemNameAttribute: Triple[] = [
 describe('Entity name helpers', () => {
   it('Entity.name should parse name from triples where name attribute is the the expected system Name', () => {
     expect(name(triplesWithSystemNameAttribute)).toBe('banana');
-  });
-
-  it('Entity.name should parse name from triples where name is the expected system Name and value is a reference to another Entity', () => {
-    expect(name(triplesWithSystemNameAttributeAndNameIsEntity)).toBe(null);
-  });
-
-  it('Entity.name should return null where name is not the expected system Name', () => {
-    expect(name(triplesWithNonSystemNameAttribute)).toBe(null);
   });
 
   it('Entity.nameTriple should return the Name triple', () => {

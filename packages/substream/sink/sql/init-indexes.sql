@@ -64,3 +64,9 @@ CREATE INDEX relations_from_entity_id
 
 CREATE INDEX relations_from_version_id
     on relations (from_version_id);
+
+CREATE INDEX search_vector_idx ON public.entities USING GIN (search_vector);
+
+CREATE INDEX name_trgm_idx ON public.entities USING GIN(name gin_trgm_ops);
+
+

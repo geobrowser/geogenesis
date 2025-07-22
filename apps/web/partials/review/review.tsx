@@ -15,6 +15,7 @@ import { usePublish } from '~/core/hooks/use-publish';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Triples } from '~/core/utils/triples';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -24,6 +25,7 @@ import { Blank } from '~/design-system/icons/blank';
 import { Close } from '~/design-system/icons/close';
 import { Dash } from '~/design-system/icons/dash';
 import { Tick } from '~/design-system/icons/tick';
+import { Pending } from '~/design-system/pending';
 import { SlideUp } from '~/design-system/slide-up';
 
 import { ChangedEntity } from '../diff/changed-entity';
@@ -47,6 +49,7 @@ type Proposal = {
 
 const ReviewChanges = () => {
   const { state } = useStatusBar();
+  const { store } = useSyncEngine();
   const [activeSpace, setActiveSpace] = useState<string>('');
   const { setIsReviewOpen } = useDiff();
 
@@ -163,6 +166,7 @@ const ReviewChanges = () => {
     proposalName?.length > 0 &&
     Triples.prepareTriplesForPublishing(triplesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
 
+  const [isPublishing, setIsPublishing] = useState(false);
   const { makeProposal } = usePublish();
   const [changes, isLoading] = useLocalChanges(activeSpace);
 
@@ -194,6 +198,7 @@ const ReviewChanges = () => {
 
   const handlePublish = useCallback(async () => {
     if (!activeSpace) return;
+    setIsPublishing(true);
 
     const clearProposalName = () => {
       setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
@@ -210,6 +215,8 @@ const ReviewChanges = () => {
         clearProposalName();
       },
     });
+
+    setIsPublishing(false);
   }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace, relationsFromSpace]);
 
   if (isLoading || !changes || isSpacesLoading) {
@@ -223,7 +230,7 @@ const ReviewChanges = () => {
 
   return (
     <>
-      <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
+      <div className="flex w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
           <SquareButton onClick={() => setIsReviewOpen(false)} icon={<Close />} />
           {dedupedSpacesWithActions.length > 0 && (
@@ -263,15 +270,15 @@ const ReviewChanges = () => {
           )}
         </div>
         <div>
-          <Button onClick={handlePublish} disabled={!isReadyToPublish}>
-            Publish
+          <Button onClick={handlePublish} disabled={!isReadyToPublish || isPublishing}>
+            <Pending isPending={isPublishing}>Publish</Pending>
           </Button>
         </div>
       </div>
-      <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[16px] bg-bg shadow-big">
+      <div className="h-full overflow-y-auto overflow-x-clip overscroll-contain bg-white">
         <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
           <div className="relative flex flex-col gap-16">
-            <div className="absolute right-0 top-0 flex items-center gap-8">
+            <div className="absolute right-0 top-0 z-10 flex items-center gap-8">
               <div className="inline-flex items-center gap-2">
                 <span>
                   <span className="font-medium">
@@ -288,13 +295,14 @@ const ReviewChanges = () => {
                 <SmallButton
                   onClick={() => {
                     DB.deleteAll(activeSpace);
+                    store.clear();
                   }}
                 >
                   Delete all
                 </SmallButton>
               </div>
             </div>
-            <div className="flex flex-col">
+            <div className="relative flex flex-col ">
               <div className="text-body">Proposal name</div>
               <input
                 type="text"
@@ -306,10 +314,11 @@ const ReviewChanges = () => {
                   })
                 }
                 placeholder="Name your proposal..."
-                className="bg-transparent text-3xl font-semibold text-text placeholder:text-grey-02 focus:outline-none"
+                className="bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
               />
+              <div className="absolute -bottom-10 -left-32 -right-32 h-px bg-divider" />
             </div>
-            <div className="flex flex-col gap-16 divide-y divide-grey-02">
+            <div className="relative flex flex-col gap-16 divide-y divide-divider pt-16">
               {changes.map(change => (
                 <ChangedEntity
                   key={change.id}

@@ -1,4 +1,4 @@
-import { GraphUrl, SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
@@ -55,7 +55,7 @@ export function EntityTextAutocomplete({
     upsert(
       {
         entityId: newEntityId,
-        attributeId: SYSTEM_IDS.NAME_ATTRIBUTE,
+        attributeId: SystemIds.NAME_ATTRIBUTE,
         entityName: query,
         attributeName: 'Name',
         value: {
@@ -71,7 +71,7 @@ export function EntityTextAutocomplete({
         upsert(
           {
             entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+            attributeId: SystemIds.TYPES_ATTRIBUTE,
             entityName: query,
             attributeName: 'Types',
             value: {
@@ -91,7 +91,7 @@ export function EntityTextAutocomplete({
     //       {
     //         type: 'SET_TRIPLE',
     //         entityId: newEntityId,
-    //         attributeId: SYSTEM_IDS.TYPES_ATTRIBUTE,
+    //         attributeId: SystemIds.TYPES_ATTRIBUTE,
     //         entityName: query,
     //         attributeName: 'Types',
     //         value: {
@@ -118,7 +118,7 @@ export function EntityTextAutocomplete({
         onChange={e => onQueryChange(e.target.value)}
         placeholder={placeholder}
         className={cx(
-          'relative z-10 m-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none',
+          'relative z-10 m-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-03 focus:outline-none',
           className
         )}
       />

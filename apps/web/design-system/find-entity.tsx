@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as Popover from '@radix-ui/react-popover';
 import pluralize from 'pluralize';
 
@@ -125,7 +125,7 @@ export const FindEntity = ({
                                     <button
                                       onClick={event => {
                                         event.stopPropagation();
-                                        window.open(NavUtils.toEntity(SYSTEM_IDS.ROOT_SPACE_ID, result.id));
+                                        window.open(NavUtils.toEntity(SystemIds.ROOT_SPACE_ID, result.id));
                                       }}
                                       className="relative text-text hover:text-ctaPrimary"
                                     >

@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as Tabs from '@radix-ui/react-tabs';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
@@ -252,7 +252,7 @@ const CloneEntity = () => {
 
   const handleCloneEntity = async () => {
     const [newOps] = await cloneEntity({
-      oldEntityId: SYSTEM_IDS.COMPANY_TEMPLATE,
+      oldEntityId: SystemIds.COMPANY_TEMPLATE,
       entityName: spaceName,
     });
     setOps(newOps);

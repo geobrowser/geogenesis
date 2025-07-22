@@ -1,12 +1,13 @@
-import { getChecksumAddress } from '@geogenesis/sdk';
+import { getChecksumAddress } from '@graphprotocol/grc-20';
 import { Effect, Either } from 'effect';
 
+import { postProcessProposalOps } from '../post-process-edit-proposals';
 import type { ChainEditProposal } from '../schema/proposal';
 import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder } from '~/sink/proto';
-import type { Op, SetTripleOp, SinkEditProposal } from '~/sink/types';
+import type { IntermediateSinkEditProposal } from '~/sink/types';
 
 /**
  * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
@@ -18,9 +19,9 @@ import type { Op, SetTripleOp, SinkEditProposal } from '~/sink/types';
  *
  * Later on we map this to the database schema and write the proposal to the database.
  */
-export function getProposalFromIpfs(
+function getProposalFromIpfs(
   proposal: ChainEditProposal
-): Effect.Effect<SinkEditProposal | null, SpaceWithPluginAddressNotFoundError> {
+): Effect.Effect<IntermediateSinkEditProposal | null, SpaceWithPluginAddressNotFoundError> {
   return Effect.gen(function* (_) {
     yield* _(Effect.logDebug('[FETCH PROPOSAL] Fetching proposal from IPFS'));
 
@@ -118,45 +119,14 @@ export function getProposalFromIpfs(
           return null;
         }
 
-        const mappedProposal: SinkEditProposal = {
+        const mappedProposal: IntermediateSinkEditProposal = {
           ...proposal,
           type: 'ADD_EDIT',
           name: parsedContent.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          ops: parsedContent.ops.map((op): Op => {
-            switch (op.type) {
-              case 'SET_TRIPLE':
-                return {
-                  type: 'SET_TRIPLE',
-                  space: maybeSpace.id,
-                  triple: op.triple,
-                } as SetTripleOp;
-              case 'DELETE_TRIPLE':
-                return {
-                  type: 'DELETE_TRIPLE',
-                  space: maybeSpace.id,
-                  triple: {
-                    attribute: op.triple.attribute,
-                    entity: op.triple.entity,
-                    value: {},
-                  },
-                };
-              case 'CREATE_RELATION':
-                return {
-                  type: 'CREATE_RELATION',
-                  space: maybeSpace.id,
-                  relation: op.relation,
-                };
-              case 'DELETE_RELATION':
-                return {
-                  type: 'DELETE_RELATION',
-                  space: maybeSpace.id,
-                  relation: op.relation,
-                };
-            }
-          }),
+          ops: parsedContent.ops,
           creator: getChecksumAddress(proposal.creator),
           daoAddress: getChecksumAddress(proposal.daoAddress),
           space: maybeSpace.id,
@@ -169,5 +139,18 @@ export function getProposalFromIpfs(
         yield* _(Effect.logError(`[FETCH PROPOSAL] Unsupported content type ${validIpfsMetadata.type}`));
         return null;
     }
+  });
+}
+
+export function getProposalsFromIpfs(proposals: ChainEditProposal[]) {
+  return Effect.gen(function* (_) {
+    const ipfsProposals = yield* _(
+      Effect.forEach(proposals, proposal => getProposalFromIpfs(proposal), {
+        concurrency: 20,
+      })
+    );
+
+    const sinkProposals = ipfsProposals.filter(maybeProposal => maybeProposal !== null);
+    return yield* _(Effect.forEach(sinkProposals, p => postProcessProposalOps(p, p.space)));
   });
 }

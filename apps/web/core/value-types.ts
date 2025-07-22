@@ -1,33 +1,34 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { ValueType as TripleValueType, ValueTypeId } from './types';
 
-export const valueTypeIds: Record<TripleValueType, ValueTypeId> = {
-  TEXT: SYSTEM_IDS.TEXT,
-  TIME: SYSTEM_IDS.TIME,
-  URL: SYSTEM_IDS.URL,
-  CHECKBOX: SYSTEM_IDS.CHECKBOX,
-  NUMBER: SYSTEM_IDS.NUMBER,
+export const VALUE_TYPE_IDS: Record<TripleValueType, ValueTypeId> = {
+  TEXT: SystemIds.TEXT,
+  TIME: SystemIds.TIME,
+  URL: SystemIds.URL,
+  CHECKBOX: SystemIds.CHECKBOX,
+  NUMBER: SystemIds.NUMBER,
+  POINT: SystemIds.POINT,
 };
 
 export type FilterableValueType = TripleValueType | 'RELATION' | 'IMAGE';
 
-export const valueTypes: Record<ValueTypeId, FilterableValueType> = {
-  [SYSTEM_IDS.CHECKBOX]: 'CHECKBOX',
-  [SYSTEM_IDS.TIME]: 'TIME',
-  [SYSTEM_IDS.IMAGE]: 'IMAGE',
-  [SYSTEM_IDS.NUMBER]: 'NUMBER',
-  [SYSTEM_IDS.RELATION]: 'RELATION',
-  [SYSTEM_IDS.TEXT]: 'TEXT',
-  [SYSTEM_IDS.URL]: 'URL',
+export const VALUE_TYPES: Record<ValueTypeId, FilterableValueType> = {
+  [SystemIds.CHECKBOX]: 'CHECKBOX',
+  [SystemIds.TIME]: 'TIME',
+  [SystemIds.IMAGE]: 'IMAGE',
+  [SystemIds.NUMBER]: 'NUMBER',
+  [SystemIds.RELATION]: 'RELATION',
+  [SystemIds.TEXT]: 'TEXT',
+  [SystemIds.URL]: 'URL',
 };
 
-export const valueTypeNames: Record<ValueTypeId, string> = {
-  [SYSTEM_IDS.CHECKBOX]: 'Checkbox',
-  [SYSTEM_IDS.TIME]: 'Date',
-  [SYSTEM_IDS.IMAGE]: 'Image',
-  [SYSTEM_IDS.NUMBER]: 'Number',
-  [SYSTEM_IDS.RELATION]: 'Relation',
-  [SYSTEM_IDS.TEXT]: 'Text',
-  [SYSTEM_IDS.URL]: 'Web URL',
+export const VALUE_TYPE_NAMES: Record<ValueTypeId, string> = {
+  [SystemIds.CHECKBOX]: 'Checkbox',
+  [SystemIds.TIME]: 'Date',
+  [SystemIds.IMAGE]: 'Image',
+  [SystemIds.NUMBER]: 'Number',
+  [SystemIds.RELATION]: 'Relation',
+  [SystemIds.TEXT]: 'Text',
+  [SystemIds.URL]: 'Web URL',
 };

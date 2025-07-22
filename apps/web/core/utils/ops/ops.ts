@@ -1,4 +1,4 @@
-import { Op, Value } from '@geogenesis/sdk';
+import { Op, Value } from '@graphprotocol/grc-20';
 
 interface CreateArgs {
   entity: string;

@@ -1,21 +1,16 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds, TripleValueOptions } from '@graphprotocol/grc-20';
 
 import { EntityId } from './io/schema';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type ValueType =
-  | 'TEXT'
-  | 'URL'
-  | 'TIME'
-  | 'NUMBER'
-  // | GEO_LOCATION
-  | 'CHECKBOX';
+export type ValueType = 'TEXT' | 'URL' | 'TIME' | 'NUMBER' | 'CHECKBOX' | 'POINT';
 
 export type Value = {
-  type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER';
+  type: 'TEXT' | 'URL' | 'TIME' | 'CHECKBOX' | 'NUMBER' | 'POINT';
   value: string;
+  options?: TripleValueOptions;
 };
 
 export type SetTripleAppOp = {
@@ -60,7 +55,7 @@ export type Triple = {
   isDeleted?: boolean;
 };
 
-export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT';
+export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT';
 
 // Renderable fields are a special data model to represent us rendering both
 // triples and relations in the same way. This is used across tables and entity
@@ -77,6 +72,7 @@ export type NativeRenderableProperty = {
   spaceId: string;
   value: string;
   placeholder?: boolean;
+  options?: TripleValueOptions;
 };
 
 type RelationPropertyProperties = {
@@ -99,18 +95,23 @@ export type ImageRelationRenderableProperty = {
   type: 'IMAGE';
 } & RelationPropertyProperties;
 
+export type PointRelationRenderableProperty = {
+  type: 'POINT';
+} & NativeRenderableProperty;
+
 export type RelationRenderableProperty = BaseRelationRenderableProperty | ImageRelationRenderableProperty;
 
 export type TripleRenderableProperty = NativeRenderableProperty;
 export type RenderableProperty =
   | TripleRenderableProperty
   | BaseRelationRenderableProperty
-  | ImageRelationRenderableProperty;
+  | ImageRelationRenderableProperty
+  | PointRelationRenderableProperty;
 
 // The types of renderables don't map 1:1 to the triple value types. We might
 // also render relations with a specific type, e.g., an Image entity or a
 // Person entity, etc.
-export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URL' | 'TIME' | 'IMAGE' | 'CHECKBOX' | 'NUMBER';
+export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URL' | 'TIME' | 'IMAGE' | 'CHECKBOX' | 'NUMBER' | 'POINT';
 
 export type ReviewState =
   | 'idle'
@@ -139,13 +140,14 @@ export type FilterClause = {
 export type FilterState = FilterClause[];
 
 export type ValueTypeId =
-  | typeof SYSTEM_IDS.TEXT
-  | typeof SYSTEM_IDS.RELATION
-  | typeof SYSTEM_IDS.TIME
-  | typeof SYSTEM_IDS.URL
-  | typeof SYSTEM_IDS.CHECKBOX
-  | typeof SYSTEM_IDS.NUMBER
-  | typeof SYSTEM_IDS.IMAGE;
+  | typeof SystemIds.TEXT
+  | typeof SystemIds.RELATION
+  | typeof SystemIds.TIME
+  | typeof SystemIds.URL
+  | typeof SystemIds.CHECKBOX
+  | typeof SystemIds.NUMBER
+  | typeof SystemIds.IMAGE
+  | typeof SystemIds.POINT;
 
 export type GeoType = {
   entityId: string;
@@ -162,10 +164,12 @@ export interface PropertySchema {
   relationValueTypeId?: EntityId;
   relationValueTypeName?: string | null;
   homeSpace?: string;
+  relationValueTypes?: RelationValueType[];
 }
 
 export type Relation = {
   hasBeenPublished?: boolean;
+  isDeleted?: boolean;
   space: string;
   id: EntityId;
   index: string;
@@ -195,19 +199,25 @@ export type Relation = {
 };
 
 export type Cell = {
+  slotId: string;
+  cellId: string;
   name: string | null;
-  columnId: string;
-  entityId: string;
-  triples: Triple[];
-  relations: Relation[];
+  renderables: RenderableProperty[];
   description?: string | null;
   image?: string | null;
   space?: string;
   verified?: boolean;
+  renderedPropertyId?: string;
+  collectionId?: string;
+  relationId?: string;
 };
 
 export type Row = {
   entityId: string;
+  // There's a UX where users can press a + button to create a new row. This
+  // new row doesn't have any data and isn't associated with an entity until
+  // the association is made by adding real data or selecting an existing entity.
+  placeholder?: boolean;
   // attributeId -> Cell
   columns: Record<string, Cell>;
 };
@@ -226,7 +236,7 @@ export type AppEnv = 'development' | 'testnet' | 'production';
 export type RelationValueType = {
   typeId: string;
   typeName: string | null;
-  spaceIdOfAttribute: string;
+  spaceIdOfAttribute?: string;
 };
 
 export type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;

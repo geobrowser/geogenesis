@@ -1,31 +1,11 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 
-import { PropertySchema, RenderableProperty, ValueTypeId } from '~/core/types';
-
-export function columnName(columnId: string, columns: PropertySchema[]): string {
-  const column = columns.find(c => c.id === columnId);
-
-  if (!column) {
-    return '';
-  }
-
-  return column.name ?? '';
-}
-
-export function columnValueType(columnId: string, columns: PropertySchema[]): ValueTypeId {
-  const column = columns.find(c => c.id === columnId);
-
-  if (!column) {
-    return SYSTEM_IDS.TEXT;
-  }
-
-  return column.valueType ?? SYSTEM_IDS.TEXT;
-}
+import { Cell, RenderableProperty, ValueTypeId } from '~/core/types';
 
 interface MakePlaceholderFromValueTypeArgs {
   valueType: ValueTypeId;
   attributeId: string;
-  attributeName: string;
+  attributeName: string | null;
   spaceId: string;
   entityId: string;
 }
@@ -34,7 +14,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
   const { attributeId, attributeName, entityId, valueType, spaceId } = args;
 
   switch (valueType) {
-    case SYSTEM_IDS.RELATION:
+    case SystemIds.RELATION:
       return {
         type: 'RELATION',
         attributeId,
@@ -47,7 +27,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         relationId: '',
         placeholder: true,
       };
-    case SYSTEM_IDS.TIME:
+    case SystemIds.TIME:
       return {
         type: 'TIME',
         attributeId,
@@ -58,7 +38,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         value: '',
         placeholder: true,
       };
-    case SYSTEM_IDS.URL:
+    case SystemIds.URL:
       return {
         type: 'URL',
         attributeId,
@@ -70,7 +50,7 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
         placeholder: true,
       };
 
-    case SYSTEM_IDS.TEXT:
+    case SystemIds.TEXT:
     default:
       return {
         type: 'TEXT',
@@ -84,3 +64,32 @@ export function makePlaceholderFromValueType(args: MakePlaceholderFromValueTypeA
       };
   }
 }
+
+export const getName = (nameCell: Cell, currentSpaceId: string) => {
+  let name = nameCell?.name;
+  const maybeNameInSpaceRenderable = nameCell.renderables.find(
+    r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.spaceId === currentSpaceId
+  );
+
+  let maybeNameInSpace = maybeNameInSpaceRenderable?.value;
+
+  if (maybeNameInSpaceRenderable?.type === 'RELATION') {
+    maybeNameInSpace = maybeNameInSpaceRenderable?.valueName ?? maybeNameInSpace;
+  }
+
+  const maybeNameRenderable = nameCell?.renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE);
+
+  let maybeOtherName = maybeNameRenderable?.value;
+
+  if (maybeNameRenderable?.type === 'RELATION') {
+    maybeOtherName = maybeNameRenderable?.valueName ?? maybeNameInSpace;
+  }
+
+  const maybeName = maybeNameInSpace ?? maybeOtherName;
+
+  if (maybeName) {
+    name = maybeName ?? null;
+  }
+
+  return name;
+};

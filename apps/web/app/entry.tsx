@@ -11,7 +11,6 @@ import { Persistence } from '~/core/state/persistence';
 
 import { ClientOnly } from '~/design-system/client-only';
 
-import { Compare } from '~/partials/history/compare';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { OnboardingDialog } from '~/partials/onboarding/dialog';
@@ -53,11 +52,10 @@ export function App({ children }: { children: React.ReactNode }) {
         <Toast />
         <FlowBar />
         <Review />
-        <Compare />
         {/* @TODO remove */}
         <Persistence />
       </ClientOnly>
-      <Analytics />
+      {process.env.NODE_ENV === 'production' && <Analytics />}
     </>
   );
 }

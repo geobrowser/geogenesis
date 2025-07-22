@@ -1,12 +1,10 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-
-import * as React from 'react';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { useRelations } from '~/core/database/relations';
 import { EntityId, TypeId } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
 
-export type RelationWithBlock = {
+export type RelationWithBlock = Relation & {
   relationId: EntityId;
   typeOfId: TypeId;
   index: string;
@@ -18,7 +16,7 @@ export type RelationWithBlock = {
 };
 
 /**
- * Blocks are defined via relations with relation type of {@link SYSTEM_IDS.BLOCKS}.
+ * Blocks are defined via relations with relation type of {@link SystemIds.BLOCKS}.
  * These relations point to entities which are renderable by the content editor. The
  * currently renderable block types are:
  * 1) Text
@@ -27,22 +25,17 @@ export type RelationWithBlock = {
  *
  */
 export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
-  const blocks = useRelations(
-    React.useMemo(() => {
-      return {
-        mergeWith: initialBlockRelations,
-        selector: r => r.fromEntity.id === fromEntityId && r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS),
-      };
-    }, [initialBlockRelations, fromEntityId])
-  );
+  const blocks = useRelations({
+    mergeWith: initialBlockRelations,
+    selector: r => r.fromEntity.id === fromEntityId && r.typeOf.id === EntityId(SystemIds.BLOCKS),
+  });
 
-  return React.useMemo(() => {
-    return blocks.map(relationToRelationWithBlock).sort(sortByIndex);
-  }, [blocks]);
+  return blocks.map(relationToRelationWithBlock).sort(sortByIndex);
 }
 
 function relationToRelationWithBlock(r: Relation): RelationWithBlock {
   return {
+    ...r,
     typeOfId: TypeId(r.typeOf.id),
     index: r.index,
     block: {

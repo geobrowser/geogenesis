@@ -9,6 +9,8 @@ export const TYPES_ATTRIBUTE = 'Jfmby78N4BCseZinBmdVov';
 export const TABS_ATTRIBUTE = 'AasCPmGHxVcsswE9PzmNT4';
 export const BLOCKS = 'QYbjCM6NT9xmh2hFGsqpQX';
 
+export const IS_TYPE_PROPERTY_ATTRIBUTE = 'T2TRBTBe5NS8vR94PLhzce';
+
 /** Value types */
 export const VALUE_TYPE_ATTRIBUTE = 'WQfdWjboZWFuTseDhG5Cw1';
 export const CHECKBOX = 'G9NpD4c7GB7nH5YU9Tesgf';
@@ -43,6 +45,8 @@ export const DATA_SOURCE_ATTRIBUTE = 'J8nmVHZDeCLNhPxX7qyEZG';
 export const ALL_OF_GEO_DATA_SOURCE = 'XqDkiYjqEufsbjqegxkqZU';
 export const COLLECTION_DATA_SOURCE = '3J6223VX6MkwTftWdzDfo4';
 export const QUERY_DATA_SOURCE = '8HkP7HCufp2HcCFajuJFcq';
+
+export const SELECTOR_ATTRIBUTE = '7zvaXnZVY9z5oCoYqciroz';
 
 /**
  * Defines the filters applied to a data block. It applies whether
@@ -138,7 +142,7 @@ export const VERIFIED_SOURCE_ATTRIBUTE = '5jodArZNFzucsYzQaDVFBL';
 export const SOURCE_SPACE_ATTRIBUTE = 'GzkEQP3yedWjXE8QPFKEwV';
 
 /** Core types */
-export const ACADEMIC_FIELD_TYPE = 'ExCjm3rzYVfpMRwDchdrEe';
+export const ACADEMIC_FIELD_TYPE = 'ExCjm3rzYVfpMRwDchdrE';
 export const COMPANY_TYPE = 'UhpHYoFEzAov9WwqtDwQk4';
 export const DAO_TYPE = 'Hh8hc47TMBvRsD4oqUNxP9';
 export const GOVERNMENT_ORG_TYPE = 'MokrHqV4jZhBfPN3mLPjM8';

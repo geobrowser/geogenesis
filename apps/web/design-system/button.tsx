@@ -25,15 +25,14 @@ type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
 
 const buttonClassNames = (className = '') =>
   cva(
-    `relative inline-flex items-center justify-center rounded-sm border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none ${className}`,
-
+    `relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none ${className}`,
     {
       variants: {
         variant: {
           primary:
             'border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover',
           secondary:
-            'border-grey-02 bg-white !text-grey-04 shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text',
+            'border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text',
           tertiary: 'border-white bg-text text-white shadow-none',
           ghost:
             'border-transparent bg-white !text-grey-04 shadow-none hover:border-text hover:bg-bg hover:!text-text hover:shadow-button focus:border-text focus:shadow-inner-text',
@@ -47,7 +46,7 @@ const buttonClassNames = (className = '') =>
         },
         small: {
           false: 'gap-2 px-3 py-2 text-[1.0625rem] text-button leading-[1.125rem]',
-          true: 'gap-1.5 px-1.5 py-1 text-smallButton leading-none',
+          true: 'h-6 gap-1.5 px-1.5 !text-metadata leading-none text-text',
         },
         disabled: {
           true: 'cursor-pointer',
@@ -83,6 +82,7 @@ export const Button = forwardRef(function Button(
 type SquareButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   icon?: React.ReactNode;
   isActive?: boolean;
+  label?: string;
 };
 
 const squareButtonClassNames = cva(
@@ -125,7 +125,7 @@ type IconButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   icon: React.ReactNode;
 };
 
-const iconButtonClassNames = cva('cursor-pointer border-none bg-white', {
+const iconButtonClassNames = cva('cursor-pointer border-none bg-white text-grey-04', {
   variants: {
     disabled: {
       true: 'cursor-pointer',
@@ -154,4 +154,28 @@ export const SmallButton = forwardRef(function SmallButton(
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   return <Button ref={ref} variant={variant} small={true} {...rest} />;
+});
+
+const defaultClassNameAddTypeButton =
+  'box-content flex h-6 items-center gap-[6px] rounded border border-dashed border-grey-02 px-[7px] text-[1rem] font-normal text-grey-04';
+
+export const AddTypeButton = forwardRef(function AddTypeButton(
+  {
+    icon,
+    isActive = false,
+    className = defaultClassNameAddTypeButton,
+    style = {},
+    disabled = false,
+    children,
+    label,
+    ...rest
+  }: SquareButtonProps,
+  ref: React.ForwardedRef<HTMLButtonElement>
+) {
+  return (
+    <button ref={ref} className={className} style={{ fontFeatureSettings: '"tnum" 1', ...style }} {...rest}>
+      {icon}
+      {label}
+    </button>
+  );
 });

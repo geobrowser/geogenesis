@@ -10,13 +10,14 @@ import { graphql } from '~/core/io/subgraph/graphql';
 
 interface FetchVersionsArgs {
   editId: string;
+  spaceId: string;
 }
 
-const query = (editId: string) => {
+const query = (editId: string, spaceId: string) => {
   return `query {
     versions(filter: { editId: {equalTo: ${JSON.stringify(editId)}}} first: 50) {
       nodes {
-        ${getEntityFragment({ useHistorical: true })}
+        ${getEntityFragment({ spaceId, useHistorical: true })}
         edit {
           id
           name
@@ -43,7 +44,7 @@ export async function fetchVersionsByEditId(args: FetchVersionsArgs) {
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: query(args.editId),
+    query: query(args.editId, args.spaceId),
   });
 
   const withFallbacks = Effect.gen(function* () {
@@ -60,7 +61,7 @@ export async function fetchVersionsByEditId(args: FetchVersionsArgs) {
                 args.editId
               }
 
-                queryString: ${query(args.editId)}
+                queryString: ${query(args.editId, args.spaceId)}
                 `,
               error.message
             );
@@ -87,7 +88,9 @@ export async function fetchVersionsByEditId(args: FetchVersionsArgs) {
 
       return Either.match(decoded, {
         onLeft: error => {
-          console.error(`Could not decode version with id ${v.id} and entityId ${v.entityId}. ${String(error)}`);
+          console.error(
+            `FetchVersionsByEditId: Could not decode version with id ${v.id} and entityId ${v.entityId}. ${String(error)}`
+          );
           return null;
         },
         onRight: result => {

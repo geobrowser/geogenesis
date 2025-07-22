@@ -11,6 +11,10 @@ const nextConfig = {
   experimental: {
     reactCompiler: true,
   },
+  devIndicators: {
+    appIsrStatus: false,
+    buildActivity: false,
+  },
   images: {
     remotePatterns: [
       {
@@ -26,6 +30,7 @@ const nextConfig = {
         destination: '/root',
         permanent: false,
       },
+
       {
         // governing public knowledge
         source: '/space/0x2B5357e08aE291848Ff467eB1a8239d2e392bef5/c714d348-c4a5-44be-bd3c-fe56f241b0eb',
@@ -58,6 +63,32 @@ const nextConfig = {
         source: '/join',
         destination: 'https://www.geobrowser.io/',
         permanent: false,
+      },
+    ];
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/',
+        destination: 'https://geo.framer.website/',
+      },
+      {
+        source: '/ending-homelessness',
+        destination: 'https://geo.framer.website/ending-homelessness',
+      },
+      {
+        source: '/blog',
+        destination: 'https://geo-blog.vercel.app',
+      },
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: 'testnet.geobrowser.io',
+          },
+        ],
+        destination: 'https://geogenesis-git-feat-testnet-geo-browser.vercel.app/:path*',
       },
     ];
   },

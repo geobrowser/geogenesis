@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import { redirect } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -150,11 +150,11 @@ const getData = async (spaceId: string) => {
 export type SpacePageType = 'person' | 'company' | 'nonprofit';
 
 const getSpaceType = (types: { id: string; name: string | null }[]): SpacePageType | null => {
-  if (types.some(type => type.id === SYSTEM_IDS.PERSON_TYPE)) {
+  if (types.some(type => type.id === SystemIds.PERSON_TYPE)) {
     return 'person';
-  } else if (types.some(type => type.id === SYSTEM_IDS.COMPANY_TYPE)) {
+  } else if (types.some(type => type.id === SystemIds.COMPANY_TYPE)) {
     return 'company';
-  } else if (types.some(type => type.id === SYSTEM_IDS.NONPROFIT_TYPE)) {
+  } else if (types.some(type => type.id === SystemIds.NONPROFIT_TYPE)) {
     return 'nonprofit';
   } else {
     return null;

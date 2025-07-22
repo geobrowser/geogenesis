@@ -46,8 +46,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
 
   const [proposalName, setProposalName] = useState('');
   const isReadyToPublish = proposalName.length > 3;
-  const smartAccount = useSmartAccount();
-
+  const { smartAccount } = useSmartAccount();
   const { makeBulkProposal } = useBulkPublish();
 
   const handlePublish = async () => {

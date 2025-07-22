@@ -1,11 +1,10 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { GraphUri, GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
 import { Metadata } from 'next';
 
 import { Entity } from '~/core/io/dto/entities';
-import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId, TypeId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -22,13 +21,40 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 
 import { cachedFetchEntityType } from './cached-entity-type';
-import { cachedFetchEntity } from './cached-fetch-entity';
+import { cachedFetchEntitiesBatch, cachedFetchEntity } from './cached-fetch-entity';
 
 const TABS = ['Overview', 'Activity'] as const;
 
 interface Props {
   params: Promise<{ id: string; entityId: string }>;
   children: React.ReactNode;
+}
+
+async function getTitleForRelation(entity: Entity | null): Promise<string | null> {
+  const maybeRelation = entity?.triples.find(t => t.attributeId === SystemIds.TYPES_ATTRIBUTE);
+  const maybeType = maybeRelation?.value.value;
+
+  if (
+    maybeRelation?.value.type === 'URL' &&
+    maybeType &&
+    SystemIds.RELATION_TYPE === GraphUrl.toEntityId(maybeType as GraphUri)
+  ) {
+    const maybeFrom = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE);
+    const maybeTo = entity?.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE);
+
+    if (maybeFrom?.value.type === 'URL' && maybeTo?.value.type === 'URL') {
+      const [maybeFromEntity, maybeToEntity] = await Promise.all([
+        cachedFetchEntity(GraphUrl.toEntityId(maybeFrom.value.value as GraphUri)),
+        cachedFetchEntity(GraphUrl.toEntityId(maybeTo.value.value as GraphUri)),
+      ]);
+
+      if (maybeFromEntity && maybeToEntity) {
+        return `${maybeFromEntity.name ?? maybeFromEntity.id} → ${maybeToEntity.name ?? maybeToEntity.id}`;
+      }
+    }
+  }
+
+  return null;
 }
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
@@ -38,12 +64,13 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
   const entity = await cachedFetchEntity(entityId);
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
+  const title = (await getTitleForRelation(entity)) ?? entityName ?? 'New entity';
 
   return {
-    title: entityName ?? 'New entity',
+    title,
     description,
     openGraph: {
-      title: entityName ?? 'New entity',
+      title,
       description: description ?? undefined,
       url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
       images: openGraphImageUrl
@@ -71,15 +98,13 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 export default async function ProfileLayout(props: Props) {
   const params = await props.params;
 
-  const {
-    children
-  } = props;
+  const { children } = props;
 
   const entityId = params.entityId;
 
   const types = await cachedFetchEntityType(entityId);
 
-  if (!types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
+  if (!types.includes(TypeId(SystemIds.PERSON_TYPE))) {
     return <>{children}</>;
   }
 
@@ -101,8 +126,10 @@ export default async function ProfileLayout(props: Props) {
       >
         <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
         <EntityPageContentContainer>
-          <EditableHeading spaceId={params.id} entityId={entityId} />
-          <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
+          <div className="space-y-2">
+            <EditableHeading spaceId={params.id} entityId={entityId} />
+            <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
+          </div>
 
           <Spacer height={40} />
           <React.Suspense fallback={null}>
@@ -157,18 +184,14 @@ async function getProfilePage(entityId: string): Promise<
     };
   }
 
-  const blockIds = person?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
-    ?.map(r => r.toEntity.id);
-
-  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
+  const blockRelations = person?.relationsOut.filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS));
+  const blockIds = blockRelations?.map(r => r.toEntity.id);
+  const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
     ...person,
     avatarUrl: Entities.avatar(person.relationsOut),
     coverUrl: Entities.cover(person.relationsOut),
-
-    relationsOut: [],
     blockRelations: person.relationsOut,
     blocks,
   };

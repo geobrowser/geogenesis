@@ -16,7 +16,7 @@ export const getStreamConfiguration: GetStreamConfigurationFn = (options, blockN
   console.info(`Configured to start stream from cache using block ${blockNumberFromCache}.`);
 
   return {
-    startBlockNumber: blockNumberFromCache,
+    startBlockNumber: blockNumberFromCache ?? 881,
 
     // We should always use cursor unless we specify a block number or have used the cache.
     shouldUseCursor: true,

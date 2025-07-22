@@ -1,11 +1,11 @@
 import { useState } from 'react';
 
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { SpaceId } from '~/core/io/schema';
-import { useTableBlock } from '~/core/state/table-block-store';
 import { getImagePath } from '~/core/utils/utils';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
@@ -28,7 +28,8 @@ export const DataBlockSourceMenu = ({
 }: DataBlockSourceMenuProps) => {
   const [view, setView] = useState<View>('initial');
   const { spaces } = useSpaces();
-  const { source, setSource, blockEntity } = useTableBlock();
+  const { entityId } = useDataBlock();
+  const { setSource, source } = useSource();
 
   return (
     <>
@@ -42,7 +43,7 @@ export const DataBlockSourceMenu = ({
           </div>
           <MenuItem active={source.type === 'COLLECTION'}>
             <button
-              onClick={() => setSource({ type: 'COLLECTION', value: blockEntity.id })}
+              onClick={() => setSource({ type: 'COLLECTION', value: entityId })}
               className="flex w-full items-center justify-between gap-2"
             >
               <span className="text-button text-text">{collectionName || 'New collection'}</span>
@@ -78,12 +79,6 @@ export const DataBlockSourceMenu = ({
               <ChevronRight />
             </button>
           </MenuItem>
-          <MenuItem active={source.type === 'ENTITY'}>
-            <button onClick={() => setView('entity')} className="flex w-full items-center justify-between gap-2">
-              <span className="text-button text-text">Single entity</span>
-              {source.type === 'ENTITY' && <Check />}
-            </button>
-          </MenuItem>
           <MenuItem active={source.type === 'GEO'}>
             <button
               onClick={() => {
@@ -104,73 +99,7 @@ export const DataBlockSourceMenu = ({
           </MenuItem>
         </>
       )}
-      {view === 'entity' && <EntityMenu onBack={() => setView('initial')} />}
       {view === 'spaces' && <SpacesMenu onBack={() => setView('initial')} />}
-    </>
-  );
-};
-
-type EntityMenuProps = {
-  onBack: () => void;
-};
-
-const EntityMenu = ({ onBack }: EntityMenuProps) => {
-  const { query, onQueryChange, results } = useSearch();
-  const { setSource, source } = useTableBlock();
-
-  const handleToggleEntity = (entityId: string, entityName: string | null) => {
-    setSource({
-      type: 'ENTITY',
-      value: entityId,
-      name: entityName,
-    });
-  };
-
-  return (
-    <>
-      <div className="border-b border-grey-02">
-        <button onClick={onBack} className="flex w-full items-center gap-1 p-2">
-          <ArrowLeft color="grey-04" />
-          <span className="text-smallButton text-grey-04">Back</span>
-        </button>
-      </div>
-      <div className="p-1">
-        <Input
-          withSearchIcon
-          placeholder="Search..."
-          value={query}
-          onChange={event => onQueryChange(event.target.value)}
-        />
-      </div>
-      <div className="max-h-[273px] w-full overflow-y-auto">
-        {results.map(entity => {
-          const active = source.type === 'ENTITY' && source.value === entity.id;
-
-          return (
-            <MenuItem
-              key={entity.id}
-              onClick={() => handleToggleEntity(entity.id, entity.name)}
-              active={active}
-              className="group"
-            >
-              <div className="flex items-center gap-2">
-                <div className="flex-shrink-0">
-                  <img src={PLACEHOLDER_SPACE_IMAGE} className="h-[12px] w-[12px] rounded-sm" />
-                </div>
-                <div className="flex-grow truncate text-button text-text">{entity.name}</div>
-                {active && (
-                  <div className="relative text-grey-04">
-                    <Check />
-                    <div className="absolute inset-0 flex items-center justify-center bg-grey-01 opacity-0 group-hover:opacity-100">
-                      <Close />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </MenuItem>
-          );
-        })}
-      </div>
     </>
   );
 };
@@ -181,7 +110,7 @@ type SpacesMenuProps = {
 
 const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
   const { query, setQuery, spaces: queriedSpaces } = useSpacesQuery();
-  const { setSource, source } = useTableBlock();
+  const { setSource, source } = useSource();
 
   const handleToggleSpace = (spaceId: string) => {
     setSource({

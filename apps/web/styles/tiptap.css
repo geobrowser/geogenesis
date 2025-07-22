@@ -27,6 +27,16 @@
   @apply underline transition-colors duration-100 hover:text-grey-04;
 }
 
+/* Inadvertently makes editable titles grey when not focused */
+/* .ProseMirror-hideselection .data-node input {
+  color: #b6b6b6 !important;
+} */
+
+.ProseMirror-hideselection .data-node textarea::placeholder,
+.ProseMirror-hideselection .data-node .table-block-editable-title textarea::placeholder {
+  color: #b6b6b6 !important;
+}
+
 .ProseMirror .tiptap-menu-trigger {
   position: absolute;
   padding-right: 24px;

@@ -1,4 +1,4 @@
-import { CONTENT_IDS, SYSTEM_IDS } from '@geogenesis/sdk';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 
 import { EntityId } from '~/core/io/schema';
 import { Triple as ITriple, Relation, RenderableProperty } from '~/core/types';
@@ -8,7 +8,7 @@ import { Triple as ITriple, Relation, RenderableProperty } from '~/core/types';
  * description of the entity.
  *
  * We assume that the Description triple's attribute for an Entity will match the expected
- * system Description attribute ID at SYSTEM_IDS.DESCRIPTION_ATTRIBUTE. However, anybody can
+ * system Description attribute ID at SystemIds.DESCRIPTION_ATTRIBUTE. However, anybody can
  * set up a triple that references _any_ attribute whose name is "Description."
  *
  * We currently handle this in the UI by checking the system ID for Description as well
@@ -23,7 +23,7 @@ export function description(triples: ITriple[]): string | null {
 }
 
 export function descriptionTriple(triples: ITriple[]): ITriple | undefined {
-  return triples.find(triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION_ATTRIBUTE);
+  return triples.find(triple => triple.attributeId === SystemIds.DESCRIPTION_ATTRIBUTE);
 }
 
 /**
@@ -36,22 +36,22 @@ export function name(triples: ITriple[]): string | null {
 }
 
 export function nameFromRenderable(renderables: RenderableProperty[]): string | null {
-  const value = renderables.find(r => r.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE && r.type === 'TEXT')?.value as
+  const value = renderables.find(r => r.attributeId === SystemIds.NAME_ATTRIBUTE && r.type === 'TEXT')?.value as
     | string
     | undefined;
   return value ?? null;
 }
 
 export function nameTriple(triples: ITriple[]): ITriple | undefined {
-  return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
+  return triples.find(triple => triple.attributeId === SystemIds.NAME_ATTRIBUTE);
 }
 
 export function nameTriples(triples: ITriple[]): ITriple[] {
-  return triples.filter(triple => triple.attributeId === SYSTEM_IDS.NAME_ATTRIBUTE);
+  return triples.filter(triple => triple.attributeId === SystemIds.NAME_ATTRIBUTE);
 }
 
 export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
-  return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE_ATTRIBUTE);
+  return triples.find(triple => triple.attributeId === SystemIds.VALUE_TYPE_ATTRIBUTE);
 }
 
 /**
@@ -59,7 +59,7 @@ export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
  */
 export function avatar(relations?: Relation[]): string | null {
   if (!relations) return null;
-  return relations.find(r => r.typeOf.id === EntityId(CONTENT_IDS.AVATAR_ATTRIBUTE))?.toEntity.value ?? null;
+  return relations.find(r => r.typeOf.id === EntityId(ContentIds.AVATAR_ATTRIBUTE))?.toEntity.value ?? null;
 }
 
 /**
@@ -67,5 +67,19 @@ export function avatar(relations?: Relation[]): string | null {
  */
 export function cover(relations?: Relation[]): string | null {
   if (!relations) return null;
-  return relations.find(r => r.typeOf.id === EntityId(SYSTEM_IDS.COVER_ATTRIBUTE))?.toEntity.value ?? null;
+  return relations.find(r => r.typeOf.id === EntityId(SystemIds.COVER_ATTRIBUTE))?.toEntity.value ?? null;
+}
+
+export function spaces(triples?: ITriple[], relations?: Relation[]): string[] {
+  const spaces: string[] = [];
+
+  for (const triple of triples ?? []) {
+    spaces.push(triple.space);
+  }
+
+  for (const relation of relations ?? []) {
+    spaces.push(relation.space);
+  }
+
+  return [...new Set(spaces)];
 }

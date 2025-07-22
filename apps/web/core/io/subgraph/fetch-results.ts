@@ -1,5 +1,5 @@
 import { Schema } from '@effect/schema';
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -11,19 +11,28 @@ import { SubstreamSearchResult } from '../schema';
 import { resultEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
-function getFetchResultsQuery(query: string | undefined, typeIds?: string[], first = 100, skip = 0) {
+function getFetchResultsQuery(query: string | undefined, typeIds?: string[], spaceId?: string, first = 100, skip = 0) {
   const typeIdsString =
     typeIds && typeIds.length > 0
       ? `versionTypes: {
             some: { type: { entityId: { in: ["${typeIds.join('","')}"] } } }
           }`
       : // Filter out block entities by default
-        `versionTypes: { every: { type: { entityId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.DATA_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.PAGE_TYPE}"] } } } }`;
+        `versionTypes: { every: { type: { entityId: { notIn: ["${SystemIds.TEXT_BLOCK}", "${SystemIds.DATA_BLOCK}", "${SystemIds.IMAGE_BLOCK}", "${SystemIds.PAGE_TYPE}"] } } } }`;
 
-  const constructedWhere = `{name: {startsWithInsensitive: ${JSON.stringify(query)}} ${typeIdsString} }`;
+  const spaceIdString = spaceId
+    ? `versionSpaces: {
+        some: { spaceId: { equalTo: "${spaceId}" } }
+      }`
+    : ``;
 
-  return `query {
-    entities(filter: {
+  const constructedWhere = `{
+  name: {
+    isNull: false
+  } ${typeIdsString} ${spaceIdString} }`;
+
+  const fetchResultsQuery = `query {
+    searchEntitiesFuzzy(searchTerm: ${JSON.stringify(query?.split(' ').join('&'))}, filter: {
         currentVersion: {
           version: ${constructedWhere}
         }
@@ -40,18 +49,21 @@ function getFetchResultsQuery(query: string | undefined, typeIds?: string[], fir
       }
     }
   }`;
+
+  return fetchResultsQuery;
 }
 
 export interface FetchResultsOptions {
   query?: string;
   typeIds?: string[];
+  spaceId?: string;
   first?: number;
   skip?: number;
   signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
-  entities: { nodes: SubstreamSearchResult[] };
+  searchEntitiesFuzzy: { nodes: SubstreamSearchResult[] };
 }
 
 export async function fetchResults(options: FetchResultsOptions): Promise<SearchResult[]> {
@@ -60,7 +72,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchResultsQuery(options.query ?? '', options.typeIds, options.first, options.skip),
+    query: getFetchResultsQuery(options.query ?? '', options.typeIds, options.spaceId, options.first, options.skip),
     signal: options?.signal,
   });
 
@@ -81,6 +93,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
             `Encountered runtime graphql error in fetchResults. queryId: ${queryId} ryString: ${getFetchResultsQuery(
               options.query,
               options.typeIds,
+              options.spaceId,
               options.first,
               options.skip
             )}
@@ -89,7 +102,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
           );
 
           return {
-            entities: { nodes: [] },
+            searchEntitiesFuzzy: { nodes: [] },
           };
 
         default:
@@ -97,7 +110,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
             `${error._tag}: Unable to fetch results, queryId: ${queryId}query: ${options.query} skip: ${options.skip} first: ${options.first}`
           );
           return {
-            entities: { nodes: [] },
+            searchEntitiesFuzzy: { nodes: [] },
           };
       }
     }
@@ -105,9 +118,9 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
     return resultOrError.right;
   });
 
-  const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const { searchEntitiesFuzzy } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  return entities.nodes
+  return searchEntitiesFuzzy.nodes
     .map(result => {
       const decodedResult = Schema.decodeEither(SubstreamSearchResult)(result);
 

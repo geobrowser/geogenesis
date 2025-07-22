@@ -1,16 +1,18 @@
 import * as React from 'react';
 
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useTableBlock } from '~/core/state/table-block-store';
 import { getImagePath } from '~/core/utils/utils';
 
 export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const { spaces } = useSpaces();
   const userCanEdit = useUserIsEditing(spaceId);
 
-  const { name, setName, source } = useTableBlock();
+  const { name, setName, isLoading } = useDataBlock();
+  const { source } = useSource();
 
   const hasOverflow = source.type === 'SPACES' ? source.value.length > 3 : false;
   const renderedSpaces = source.type === 'SPACES' ? (hasOverflow ? source.value.slice(0, 2) : source.value) : [];
@@ -19,13 +21,15 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
 
   // Auto focus newly created data blocks
   React.useEffect(() => {
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 200);
-  }, []);
+    if (!isLoading && !name) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 200);
+    }
+  }, [name, isLoading]);
 
   return (
-    <div className="flex flex-grow items-center gap-2">
+    <div className="table-block-editable-title flex flex-grow items-center gap-2">
       {source.type === 'GEO' && (
         <img
           src={getImagePath(PLACEHOLDER_SPACE_IMAGE)}
@@ -82,14 +86,15 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
       <div className="relative z-0 w-full text-button text-text">
         {userCanEdit ? (
           <input
+            type="text"
             ref={inputRef}
             onBlur={e => setName(e.currentTarget.value)}
             defaultValue={name ?? undefined}
             placeholder="Enter a name for this table..."
-            className="w-full shrink-0 grow appearance-none text-smallTitle text-text outline-none placeholder:text-grey-03"
+            className="w-full shrink-0 grow appearance-none text-mediumTitle text-text outline-none placeholder:text-grey-03"
           />
         ) : (
-          <h4 className="text-smallTitle">{name}</h4>
+          <h4 className="text-mediumTitle">{name}</h4>
         )}
       </div>
     </div>

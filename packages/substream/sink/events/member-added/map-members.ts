@@ -1,10 +1,14 @@
-import { getChecksumAddress } from '@geogenesis/sdk';
+import { getChecksumAddress } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
 import type { MemberAdded } from './parser';
 import { Spaces } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';
+
+class CouldNotMapMembersError extends Error {
+  _tag: 'CouldNotMapMembersError' = 'CouldNotMapMembersError';
+}
 
 export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
@@ -18,11 +22,11 @@ export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
           [
             Effect.tryPromise({
               try: () => Spaces.findForVotingPlugin(member.mainVotingPluginAddress),
-              catch: () => new Error(),
+              catch: e => new CouldNotMapMembersError(String(e)),
             }),
             Effect.tryPromise({
               try: () => Spaces.findForPersonalPlugin(member.mainVotingPluginAddress),
-              catch: () => new Error(),
+              catch: e => new CouldNotMapMembersError(String(e)),
             }),
           ],
           { concurrency: 2 }

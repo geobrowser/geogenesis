@@ -1,12 +1,12 @@
 import type { IMessageTypeRegistry } from '@bufbuild/protobuf';
 import { createGrpcTransport } from '@connectrpc/connect-node';
-import { ID, NETWORK_IDS } from '@geogenesis/sdk';
+import { Id, NetworkIds, getChecksumAddress } from '@graphprotocol/grc-20';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import type { BlockScopedData } from '@substreams/core/proto';
 import { readPackageFromFile } from '@substreams/manifest';
 import { Data, Duration, Effect, Either, Logger, Secret, Stream } from 'effect';
 
-import { MANIFEST } from './constants/constants';
+import { MANIFEST, US_LAW_SPACE } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
 import { Spaces } from './db';
 import { Environment } from './environment';
@@ -146,7 +146,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       // error handling, CLI flags, cache state, etc. We default to cursor
       // if it exists or start from the passed in block if not.
       startCursor: shouldUseCursor ? startCursor : undefined,
-      startBlockNum: shouldUseCursor ? undefined : startBlockNumber,
+      // If start cursor should be used but it's undefined then fall back to the block number
+      startBlockNum: shouldUseCursor ? (startCursor === undefined ? startBlockNumber : undefined) : startBlockNumber,
       // The stream will retry recoverable errors for 10 minutes
       // internally. This has no effect on unrecoverable errors.
       maxRetrySeconds: 600, // 10 minutes.
@@ -155,9 +156,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
     const sink = createSink({
       handleBlockScopedData: message => {
         return Effect.gen(function* (_) {
+          const start = Date.now();
           const blockNumber = Number(message.clock?.number.toString());
 
-          const requestId = ID.make();
+          const requestId = Id.generate();
           const telemetry = yield* _(Telemetry);
           const logLevel = yield* _(getConfiguredLogLevel);
 
@@ -168,19 +170,12 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             handleMessage(message, registry).pipe(
               withRequestId(requestId),
               Logger.withMinimumLogLevel(logLevel),
-              Effect.provide(LoggerLive)
+              Effect.provide(LoggerLive),
+              // Limit the maximum time a block takes to index to 5 minutes
+              Effect.timeout(Duration.minutes(5))
             ),
             Effect.either
           );
-
-          if (Either.isLeft(result)) {
-            const error = result.left;
-            telemetry.captureMessage(error.message);
-            yield* _(Effect.logError(error.message));
-            return;
-          }
-
-          const hasValidEvent = result.right;
 
           yield* _(
             Effect.tryPromise({
@@ -188,6 +183,21 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               catch: () => new CouldNotWriteCursorError(),
             })
           );
+
+          if (Either.isLeft(result)) {
+            const error = result.left;
+
+            if (error._tag === 'TimeoutException') {
+              yield* _(Effect.logError('[BLOCK] Timed out after 5 minutes'));
+              return;
+            }
+
+            telemetry.captureMessage(error.message);
+            yield* _(Effect.logError(error.message));
+            return;
+          }
+
+          const hasValidEvent = result.right;
 
           if (hasValidEvent) {
             yield* _(
@@ -198,6 +208,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               )
             );
           }
+
+          const end = Date.now();
+          console.log(`[BLOCK] Ended ${blockNumber} in ${end - start}ms`);
         }).pipe(Effect.provideService(Telemetry, TelemetryLive));
       },
 
@@ -313,7 +326,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
           handleNewGeoBlock({
             ...block,
             hash: message.clock?.id ?? '',
-            network: NETWORK_IDS.GEO,
+            network: NetworkIds.GEO,
           })
         )
       );
@@ -322,6 +335,10 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
     let createdSpaceIds: string[] | null = null;
 
     if (spacePluginCreatedResponse.success) {
+      const spaceData = spacePluginCreatedResponse.data.spacesCreated.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+
       /**
        * A space's id is derived from the contract address of the DAO and the network the DAO is deployed to.
        * Users can import or fork a space from any network and import the contents of the original space into
@@ -349,14 +366,15 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
        * of this logic for checking proposals happens in the same place.
        */
       if (editsPublishedResponse.success) {
-        const spacesWithInitialProposal = getSpacesWithInitialProposalsProcessed(
-          spacePluginCreatedResponse.data.spacesCreated,
-          editsPublishedResponse.data.editsPublished
+        const editData = editsPublishedResponse.data.editsPublished.filter(
+          f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
         );
+
+        const spacesWithInitialProposal = getSpacesWithInitialProposalsProcessed(spaceData, editData);
 
         const spacePluginAddressesWithInitialProposal = new Set(spacesWithInitialProposal.map(s => s.spaceAddress));
 
-        const initialProposalsForSpaces = editsPublishedResponse.data.editsPublished.filter(p =>
+        const initialProposalsForSpaces = editData.filter(p =>
           spacePluginAddressesWithInitialProposal.has(p.pluginAddress)
         );
 
@@ -367,7 +385,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
           return acc;
         }, new Map<string, string | null>());
 
-        const spacesCreated = spacePluginCreatedResponse.data.spacesCreated.map(s => {
+        const spacesCreated = spaceData.map(s => {
           return {
             id: initialSpaceIdsByPluginAddress.get(s.spaceAddress) ?? null,
             daoAddress: s.daoAddress,
@@ -377,12 +395,16 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
 
         createdSpaceIds = yield* _(handleSpacesCreated(spacesCreated, block));
       } else {
-        createdSpaceIds = yield* _(handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, block));
+        createdSpaceIds = yield* _(handleSpacesCreated(spaceData, block));
       }
     }
 
     if (personalPluginsCreated.success) {
-      yield* _(handlePersonalSpacesCreated(personalPluginsCreated.data.personalPluginsCreated, block));
+      const data = personalPluginsCreated.data.personalPluginsCreated.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+
+      yield* _(handlePersonalSpacesCreated(data, block));
 
       // We want to map the initial editors across spaces fairly similarly. Unfortunately
       // the contracts are distinct enough where they don't match 1:1 with how they
@@ -395,7 +417,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       //
       // Order matters here so we need to make sure we cwrite the plugin before we write
       // the editors.
-      const initialEditors: InitialEditorsAdded[] = personalPluginsCreated.data.personalPluginsCreated.map(p => {
+      const initialEditors: InitialEditorsAdded[] = data.map(p => {
         return {
           pluginAddress: p.personalAdminAddress,
           addresses: [p.initialEditor],
@@ -415,65 +437,112 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
      * emit the initial editors as part of the space creation event.
      */
     if (initialEditorsAddedResponse.success) {
-      yield* _(handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, block));
+      const data = initialEditorsAddedResponse.data.initialEditorsAdded.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+
+      yield* _(handleInitialGovernanceSpaceEditorsAdded(data, block));
     }
 
     if (membersAdded.success) {
-      yield* _(Effect.fork(handleMemberAdded(membersAdded.data.membersAdded, block)));
+      const data = membersAdded.data.membersAdded.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+
+      yield* _(handleMemberAdded(data, block));
     }
 
     if (membersRemoved.success) {
-      yield* _(Effect.fork(handleMemberRemoved(membersRemoved.data.membersRemoved)));
+      const data = membersRemoved.data.membersRemoved.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleMemberRemoved(data));
     }
 
     if (editorsAdded.success) {
-      yield* _(Effect.fork(handleEditorsAdded(editorsAdded.data.editorsAdded, block)));
+      const data = editorsAdded.data.editorsAdded.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleEditorsAdded(data, block));
     }
 
     if (editorsRemoved.success) {
-      yield* _(Effect.fork(handleEditorRemoved(editorsRemoved.data.editorsRemoved)));
+      const data = editorsRemoved.data.editorsRemoved.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleEditorRemoved(data));
     }
 
     if (subspacesAdded.success) {
-      yield* _(Effect.fork(handleSubspacesAdded(subspacesAdded.data.subspacesAdded, block)));
+      const data = subspacesAdded.data.subspacesAdded.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleSubspacesAdded(data, block));
     }
 
     if (subspacesRemoved.success) {
-      yield* _(Effect.fork(handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved)));
+      const data = subspacesRemoved.data.subspacesRemoved.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleSubspacesRemoved(data));
     }
 
-    // AddSubspaceProposal
-    // RemoveSubspaceProposal
     if (addMembersProposed.success) {
-      yield* _(handleMembershipProposalsCreated(addMembersProposed.data.proposedAddedMembers, block));
+      const data = addMembersProposed.data.proposedAddedMembers.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleMembershipProposalsCreated(data, block));
     }
 
     if (removeMembersProposed.success) {
-      yield* _(handleMembershipProposalsCreated(removeMembersProposed.data.proposedRemovedMembers, block));
+      const data = removeMembersProposed.data.proposedRemovedMembers.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleMembershipProposalsCreated(data, block));
     }
 
     if (addEditorsProposed.success) {
-      yield* _(handleEditorshipProposalsCreated(addEditorsProposed.data.proposedAddedEditors, block));
+      const data = addEditorsProposed.data.proposedAddedEditors.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleEditorshipProposalsCreated(data, block));
     }
 
     if (removeEditorsProposed.success) {
-      yield* _(handleEditorshipProposalsCreated(removeEditorsProposed.data.proposedRemovedEditors, block));
+      const data = removeEditorsProposed.data.proposedRemovedEditors.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleEditorshipProposalsCreated(data, block));
     }
 
     if (addSubspacesProposed.success) {
-      yield* _(handleSubspaceProposalsCreated(addSubspacesProposed.data.proposedAddedSubspaces, block));
+      const data = addSubspacesProposed.data.proposedAddedSubspaces.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleSubspaceProposalsCreated(data, block));
     }
 
     if (removeSubspacesProposed.success) {
-      yield* _(handleSubspaceProposalsCreated(removeSubspacesProposed.data.proposedRemovedSubspaces, block));
+      const data = removeSubspacesProposed.data.proposedRemovedSubspaces.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+      yield* _(handleSubspaceProposalsCreated(data, block));
     }
 
     if (editsProposed.success) {
-      yield* _(handleEditProposalCreated(editsProposed.data.edits, block));
+      const data = editsProposed.data.edits.filter(
+        f => getChecksumAddress(f.daoAddress) !== getChecksumAddress(US_LAW_SPACE.daoAddress)
+      );
+
+      yield* _(handleEditProposalCreated(data, block));
     }
 
     if (votesCast.success) {
-      yield* _(handleVotesCast(votesCast.data.votesCast, block));
+      const data = votesCast.data.votesCast.filter(
+        f => getChecksumAddress(f.pluginAddress) !== getChecksumAddress(US_LAW_SPACE.mainVotingPluginAddress)
+      );
+
+      yield* _(handleVotesCast(data, block));
     }
 
     /**
@@ -485,6 +554,10 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
      * proposals, proposed versions, ops, etc. before we actually set the proposal as "ACCEPTED"
      */
     if (editsPublishedResponse.success) {
+      const data = editsPublishedResponse.data.editsPublished.filter(
+        f => f.pluginAddress !== US_LAW_SPACE.mainVotingPluginAddress
+      );
+
       /**
        * Since there are potentially two handlers that we need to run, we abstract out the common
        * data fetching needed for both here, and pass the result to the two handlers. This breaks
@@ -494,7 +567,7 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
        * `getEditsProposalFromProposalIpfsUri` might be an Edit or it might be an Import which
        * contains many edits
        */
-      const proposals = yield* _(getEditsProposalsFromIpfsUri(editsPublishedResponse.data.editsPublished, block));
+      const proposals = yield* _(getEditsProposalsFromIpfsUri(data, block));
 
       // We need to know if we're reading from a personal space or public space for each proposal.
       //
@@ -568,12 +641,16 @@ function handleMessage(message: BlockScopedData, registry: IMessageTypeRegistry)
       }
 
       if (proposals.length > 0) {
-        yield* _(handleEditsPublished(proposals, createdSpaceIds ?? [], block));
+        yield* _(handleEditsPublished(proposals, block));
       }
     }
 
     if (executedProposals.success) {
-      yield* _(handleProposalsExecuted(executedProposals.data.executedProposals));
+      const data = executedProposals.data.executedProposals.filter(
+        f => f.pluginAddress !== US_LAW_SPACE.mainVotingPluginAddress
+      );
+
+      yield* _(handleProposalsExecuted(data, block));
     }
 
     return hasValidEvent;

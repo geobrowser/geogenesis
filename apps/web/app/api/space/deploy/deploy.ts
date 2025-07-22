@@ -9,9 +9,9 @@ import {
 import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
-import { VotingMode, getChecksumAddress } from '@geogenesis/sdk';
-import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
-import { EditProposal } from '@geogenesis/sdk/proto';
+import { VotingMode, getChecksumAddress } from '@graphprotocol/grc-20';
+import { MAINNET } from '@graphprotocol/grc-20/contracts';
+import { EditProposal } from '@graphprotocol/grc-20/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { ethers, providers } from 'ethers';
 import { v4 as uuid } from 'uuid';
@@ -40,8 +40,8 @@ const deployParams = {
   network: SupportedNetworks.LOCAL, // I don't think this matters but is required by Aragon SDK
   signer: signer,
   web3Providers: new providers.JsonRpcProvider(Environment.variables.rpcEndpoint),
-  DAOFactory: DAO_FACTORY_ADDRESS,
-  ENSRegistry: ENS_REGISTRY_ADDRESS,
+  DAOFactory: MAINNET.DAO_FACTORY_ADDRESS,
+  ENSRegistry: MAINNET.ENS_REGISTRY_ADDRESS,
 };
 
 class DeployDaoError extends Error {
@@ -86,7 +86,7 @@ export function deploySpace(args: DeployArgs) {
       catch: e => new GenerateOpsError(`Failed to generate ops: ${String(e)}`),
     });
 
-    const initialContent = EditProposal.make({
+    const initialContent = EditProposal.encode({
       name: args.spaceName,
       author: initialEditorAddress,
       ops,
@@ -138,37 +138,27 @@ export function deploySpace(args: DeployArgs) {
     const deployStartTime = Date.now();
     yield* Effect.logInfo('Creating DAO');
 
-    const dao = yield* Effect.retry(
-      Effect.tryPromise({
-        try: async () => {
-          const steps = await createDao(createParams, deployParams);
-          let dao = '';
-          let pluginAddresses = [];
+    const dao = yield* Effect.tryPromise({
+      try: async () => {
+        const steps = await createDao(createParams, deployParams);
+        let dao = '';
+        let pluginAddresses = [];
 
-          for await (const step of steps) {
-            switch (step.key) {
-              case DaoCreationSteps.CREATING:
-                break;
-              case DaoCreationSteps.DONE: {
-                dao = step.address;
-                pluginAddresses = step.pluginAddresses ?? [];
-              }
+        for await (const step of steps) {
+          switch (step.key) {
+            case DaoCreationSteps.CREATING:
+              break;
+            case DaoCreationSteps.DONE: {
+              dao = step.address;
+              pluginAddresses = step.pluginAddresses ?? [];
             }
           }
+        }
 
-          return { dao, pluginAddresses };
-        },
-        catch: e => new DeployDaoError(`Failed creating DAO: ${e}`),
-      }),
-      {
-        schedule: Schedule.exponential(Duration.millis(100)).pipe(
-          Schedule.jittered,
-          Schedule.compose(Schedule.elapsed),
-          Schedule.tapInput(() => Effect.succeed(Telemetry.metric(Metrics.deploymentRetry))),
-          Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.minutes(1)))
-        ),
-      }
-    );
+        return { dao, pluginAddresses };
+      },
+      catch: e => new DeployDaoError(`Failed creating DAO: ${e}`),
+    });
 
     const deployEndTime = Date.now() - deployStartTime;
     Telemetry.metric(Metrics.timing('deploy_dao_duration', deployEndTime));
@@ -335,7 +325,7 @@ async function* createDao(params: CreateGeoDaoParams, context: ContextParams) {
   // This check isn't 100% correct all the time
   // simulate the DAO creation to get an address
   // const pluginSetupProcessorAddr = await daoFactoryInstance.pluginSetupProcessor();
-  const pluginSetupProcessor = PluginSetupProcessor__factory.connect(PLUGIN_SETUP_PROCESSOR_ADDRESS, signer);
+  const pluginSetupProcessor = PluginSetupProcessor__factory.connect(MAINNET.PLUGIN_SETUP_PROCESSOR_ADDRESS, signer);
   let execPermissionFound = false;
 
   // using the DAO base because it reflects a newly created DAO the best
@@ -364,7 +354,7 @@ async function* createDao(params: CreateGeoDaoParams, context: ContextParams) {
   // write the tx using the geo signer.
   // @TODO can this just be a smart account client?
   const hash = await walletClient.sendTransaction({
-    to: DAO_FACTORY_ADDRESS,
+    to: MAINNET.DAO_FACTORY_ADDRESS as `0x${string}`,
     data: encodeFunctionData({
       abi: DaoFactoryAbi,
       functionName: 'createDao',

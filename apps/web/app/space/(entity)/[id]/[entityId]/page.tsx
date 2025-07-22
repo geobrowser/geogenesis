@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SystemIds } from '@graphprotocol/grc-20';
 
 import { TypeId } from '~/core/io/schema';
 
@@ -8,15 +8,17 @@ import { ProfileEntityServerContainer } from './profile-entity-server-container'
 
 interface Props {
   params: Promise<{ id: string; entityId: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export default async function EntityTemplateStrategy(props: Props) {
   const params = await props.params;
+  const searchParams = await props.searchParams;
   const types = await cachedFetchEntityType(params.entityId);
 
-  if (types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
+  if (types.includes(TypeId(SystemIds.PERSON_TYPE))) {
     return <ProfileEntityServerContainer params={params} />;
   }
 
-  return <DefaultEntityPage params={params} />;
+  return <DefaultEntityPage params={params} searchParams={searchParams} />;
 }

@@ -18,6 +18,7 @@ module.exports = {
       'grey-02': '#DBDBDB',
       'grey-03': '#B6B6B6',
       'grey-04': '#606060',
+      link: '#8B8B8B',
       divider: '#F0F0F0',
       orange: '#FFA134',
       green: '#2ACE9D',
@@ -83,6 +84,12 @@ module.exports = {
         'slide-down': 'slideDown 300ms ease-in-out',
         'slide-up': 'slideUp 300ms ease-in-out',
       },
+      backgroundImage: {
+        'cover-default': "url('/images/placeholders/Cover_Default.svg')",
+        'cover-hover': "url('/images/placeholders/Cover_Hover.svg')",
+        'avatar-default': "url('/images/placeholders/Avatar_Default.svg')",
+        'avatar-hover': "url('/images/placeholders/Avatar_Hover.svg')",
+      },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0' },
@@ -115,10 +122,10 @@ module.exports = {
       },
       fontSize: {
         mainPage: [
-          '2.75rem',
+          '3.25rem',
           {
-            lineHeight: '2.875rem',
-            letterSpacing: '0.37px',
+            lineHeight: '3.5rem',
+            letterSpacing: '-0.5px',
             fontWeight: '600',
           },
         ],
@@ -126,15 +133,16 @@ module.exports = {
           '2rem',
           {
             lineHeight: '2.5rem',
-            letterSpacing: '0.25px',
+            letterSpacing: '-.5px',
             fontWeight: '600',
           },
         ],
         mediumTitle: [
-          '1.5rem',
+          '1.4rem',
           {
-            lineHeight: '1.8125rem',
-            fontWeight: '600',
+            lineHeight: '1.6rem',
+            fontWeight: '500',
+            letterSpacing: '-.25px',
           },
         ],
         cardEntityTitle: [
@@ -149,12 +157,14 @@ module.exports = {
           {
             lineHeight: '1.3125rem',
             fontWeight: '600',
+            letterSpacing: '-0.25px',
           },
         ],
         body: [
-          '1.1875rem',
+          '1.25rem',
           {
             lineHeight: '1.8125rem',
+            letterSpacing: '-0.08px',
             fontWeight: '400',
           },
         ],
@@ -170,6 +180,14 @@ module.exports = {
           {
             lineHeight: '1.3125rem',
             fontWeight: '400',
+          },
+        ],
+        tableProperty: [
+          '1rem',
+          {
+            lineHeight: '1rem',
+            fontWeight: '400',
+            letterSpacing: '-0.25px',
           },
         ],
         textLink: [
@@ -301,6 +319,22 @@ module.exports = {
           {
             lineHeight: '1rem',
             fontWeight: '500',
+          },
+        ],
+        resultTitle: [
+          '1rem',
+          {
+            lineHeight: '1rem',
+            fontWeight: '500',
+            letterSpacing: '-0.25px',
+          },
+        ],
+        resultLink: [
+          '1rem',
+          {
+            lineHeight: '1rem',
+            fontWeight: '400',
+            letterSpacing: '-0.25px',
           },
         ],
       },

@@ -1,6 +1,6 @@
-import { Op } from '@geogenesis/sdk';
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
-import { EditProposal } from '@geogenesis/sdk/proto';
+import { Op } from '@graphprotocol/grc-20';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@graphprotocol/grc-20/abis';
+import { EditProposal } from '@graphprotocol/grc-20/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 
@@ -32,7 +32,7 @@ interface MakeProposalOptions {
 
 export function usePublish() {
   const { restore, restoreRelations } = useWriteOps();
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const { dispatch } = useStatusBar();
 
   /**
@@ -159,7 +159,7 @@ export function usePublish() {
 }
 
 export function useBulkPublish() {
-  const smartAccount = useSmartAccount();
+  const { smartAccount } = useSmartAccount();
   const { dispatch } = useStatusBar();
 
   /**
@@ -234,7 +234,7 @@ export function useBulkPublish() {
 interface MakeProposalArgs {
   name: string;
   ops: Op[];
-  smartAccount: NonNullable<ReturnType<typeof useSmartAccount>>;
+  smartAccount: NonNullable<ReturnType<typeof useSmartAccount>['smartAccount']>;
   space: {
     id: string;
     spacePluginAddress: string;
@@ -248,7 +248,7 @@ interface MakeProposalArgs {
 function makeProposal(args: MakeProposalArgs) {
   const { name, ops, smartAccount, space, onChangePublishState } = args;
 
-  const proposal = EditProposal.make({ name, ops, author: smartAccount.account.address });
+  const proposal = EditProposal.encode({ name, ops, author: smartAccount.account.address });
 
   const writeTxEffect = Effect.gen(function* () {
     if (ops.length === 0) {
