@@ -69,11 +69,13 @@ export function TableBlockEditableFilters() {
     value,
     valueType,
     valueName,
+    columnName,
   }: {
     columnId: string;
     value: string;
     valueType: FilterableValueType;
     valueName: string | null;
+    columnName: string;
   }) => {
     setFilterState(
       [
@@ -81,7 +83,7 @@ export function TableBlockEditableFilters() {
         {
           valueType,
           columnId,
-          columnName: null,
+          columnName,
           value,
           valueName,
         },

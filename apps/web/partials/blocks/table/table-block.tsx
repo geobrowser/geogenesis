@@ -421,10 +421,8 @@ export const TableBlock = ({ spaceId }: Props) => {
             icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
             color="grey-04"
           />
-
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
-
           {renderPlusButtonAsInline && (
             <button onClick={onAddPlaceholder}>
               <Create />

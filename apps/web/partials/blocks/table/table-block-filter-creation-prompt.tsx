@@ -38,6 +38,7 @@ interface TableBlockFilterPromptProps {
     value: string;
     valueType: FilterableValueType;
     valueName: string | null;
+    columnName: string;
   }) => void;
 }
 
@@ -274,6 +275,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
       value: getFilterValue(state.value),
       valueType: options.find(o => o.columnId === state.selectedColumn)?.valueType ?? 'TEXT',
       valueName: getFilterValueName(state.value),
+      columnName: state.value.type,
     });
     dispatch({ type: 'done' });
   };

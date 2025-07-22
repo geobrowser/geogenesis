@@ -74,6 +74,35 @@ const FilterString = Schema.Struct({
 
 export type FilterString = Schema.Schema.Type<typeof FilterString>;
 
+function buildFilterFromEntities(entities: OmitStrict<Filter, 'valueName'>[]) {
+  return {
+    filter: Object.fromEntries(
+      entities
+        .filter(entity => entity.columnId && entity.value && entity.columnId !== SystemIds.SPACE_FILTER)
+        .map(entity => {
+          const { columnId, value, valueType } = entity;
+
+          let filterValue;
+
+          if (valueType === 'TEXT') {
+          }
+
+          filterValue = {
+            is: value,
+            type: {
+              is: valueType,
+            },
+            fromEntity: {
+              is: columnId,
+            },
+          };
+
+          return [columnId, filterValue];
+        })
+    ),
+  };
+}
+
 export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], source: Source): string {
   let filter: FilterString | null = null;
 
@@ -94,9 +123,9 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
       break;
     case 'SPACES':
       filter = {
-        // where: {
         spaceId: { in: filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value) },
-        // filter: { spaceId: { is: source.value[0] } },
+        filter: buildFilterFromEntities(filters).filter,
+        // where: {
         //   AND: filters
         //     .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
         //     .map(f => {
@@ -111,6 +140,7 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
     case 'COLLECTION':
     case 'GEO':
       filter = {
+        filter: buildFilterFromEntities(filters).filter,
         // where: {
         //   AND: filters
         //     .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
@@ -260,7 +290,9 @@ async function getResolvedEntityFilter(entityId: string, typeId: string): Promis
 async function getResolvedFilter(filter: PropertyFilter): Promise<Filter> {
   const [maybePropertyEntity, maybeValueEntity] = await Promise.all([
     E.findOne({ store, cache: queryClient, id: filter.property }),
-    E.findOne({ store, cache: queryClient, id: filter.is }),
+    filter.property === SystemIds.NAME_PROPERTY || filter.property === SystemIds.DESCRIPTION_PROPERTY
+      ? undefined
+      : E.findOne({ store, cache: queryClient, id: filter.is }),
   ]);
 
   // if (valueType === EntityId(SystemIds.RELATION)) {
@@ -280,6 +312,9 @@ async function getResolvedFilter(filter: PropertyFilter): Promise<Filter> {
     columnName: maybePropertyEntity?.name ?? null,
     value: filter.is,
     valueName: maybeValueEntity?.name ?? null,
-    valueType: 'RELATION',
+    valueType:
+      filter.property === SystemIds.NAME_PROPERTY || filter.property === SystemIds.DESCRIPTION_PROPERTY
+        ? 'TEXT'
+        : 'RELATION',
   };
 }
