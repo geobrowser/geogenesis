@@ -1,5 +1,4 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
 import { useName } from '~/core/state/entity-page-store/entity-store';
@@ -7,6 +6,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
@@ -178,7 +178,7 @@ export function TableBlockBulletedListItem({
     <div className="group relative flex w-full gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
       <div className="mt-1 flex-shrink-0 text-xl leading-none text-text">•</div>
       {source.type !== 'COLLECTION' ? (
-        <Link href={href} className="text-body">
+        <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
           {name}
         </Link>
       ) : (
@@ -193,7 +193,7 @@ export function TableBlockBulletedListItem({
           verified={verified}
           onLinkEntry={onLinkEntry}
         >
-          <Link href={href} className="text-body">
+          <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
             {name}
           </Link>
         </CollectionMetadata>

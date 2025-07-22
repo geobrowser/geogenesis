@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { Id, SystemIds } from '@graphprotocol/grc-20';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import dayjs from 'dayjs';
@@ -11,13 +11,14 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 
-import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE, ROOT_SPACE } from '~/core/constants';
+import { IPFS_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
-import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useTabId } from '~/core/state/editor/use-editor';
 import { useName } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { getTabSlug } from '~/core/utils/utils';
 
@@ -29,10 +30,11 @@ import { ResizableContainer } from '~/design-system/resizable-container';
 import { SelectEntity } from '~/design-system/select-entity';
 
 import { SpacePageType } from '~/app/space/[id]/page';
-import type { SpaceData } from '~/app/space/[id]/spaces/page';
 import { dismissedNoticesAtom } from '~/atoms';
 import { teamNoticeDismissedAtom } from '~/atoms';
 import type { RepeatingNotice } from '~/atoms';
+
+const AUTHORS_PROPERTY = '91a9e2f6-e51a-48f7-9976-61de8561b690';
 
 type SpaceNoticesProps = {
   spaceType: SpacePageType;
@@ -40,11 +42,13 @@ type SpaceNoticesProps = {
   entityId: string;
 };
 
-export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
+export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps) => {
   const { isEditor } = useAccessControl(spaceId);
   const isEditing = useUserIsEditing(spaceId);
   const { nextEntityId, onClick } = useCreateEntityWithFilters(spaceId);
-  const tabSlug = useTabSlug();
+  const authorName = useName(entityId, spaceId);
+  const teamTabId = useTeamTabId();
+  const currentTabId = useTabId();
 
   if (spaceType === 'person') {
     if (isEditor) {
@@ -74,10 +78,17 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
                         valueName: 'Post',
                         valueType: 'RELATION',
                       },
+                      {
+                        columnId: AUTHORS_PROPERTY,
+                        columnName: 'Authors',
+                        value: entityId,
+                        valueName: authorName,
+                        valueType: 'RELATION',
+                      },
                     ],
                   })
                 }
-                href={NavUtils.toEntity(spaceId, nextEntityId)}
+                href={NavUtils.toEntity(spaceId, nextEntityId, true)}
               >
                 Create post
               </SimpleButton>
@@ -98,7 +109,7 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
 
   switch (spaceType) {
     case 'company': {
-      if (tabSlug === 'team') {
+      if (currentTabId && teamTabId && currentTabId === teamTabId) {
         return (
           <NoticesContainer>
             <TeamNotice />
@@ -125,7 +136,9 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
             title={`Add team members to your company`}
             action={
               <div className="flex h-[38px] items-end">
-                <SimpleButton href={`/space/${spaceId}/team`}>Add team</SimpleButton>
+                <SimpleButton href={teamTabId ? `/space/${spaceId}?tabId=${teamTabId}` : `/space/${spaceId}/team`}>
+                  Add team
+                </SimpleButton>
               </div>
             }
           />
@@ -136,7 +149,31 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
             title={`Write and publish your first post`}
             action={
               <div className="flex h-[38px] items-end">
-                <SimpleButton href={NavUtils.toEntity(spaceId, nextEntityId)}>Create post</SimpleButton>
+                <SimpleButton
+                  onClick={() =>
+                    onClick({
+                      filters: [
+                        {
+                          columnId: SystemIds.TYPES_PROPERTY,
+                          columnName: 'Types',
+                          value: SystemIds.POST_TYPE,
+                          valueName: 'Post',
+                          valueType: 'RELATION',
+                        },
+                        {
+                          columnId: AUTHORS_PROPERTY,
+                          columnName: 'Authors',
+                          value: entityId,
+                          valueName: authorName,
+                          valueType: 'RELATION',
+                        },
+                      ],
+                    })
+                  }
+                  href={NavUtils.toEntity(spaceId, nextEntityId, true)}
+                >
+                  Create post
+                </SimpleButton>
               </div>
             }
           />
@@ -225,14 +262,39 @@ type FindProjectsProps = {
 
 const FindProjects = ({ spaceId }: FindProjectsProps) => {
   const router = useRouter();
+  const { storage } = useMutate();
 
   return (
     <div className="pr-[3.25rem]">
       <SelectEntity
         placeholder=""
-        onDone={result => {
-          const destination = NavUtils.toEntity(ROOT_SPACE, result.id);
+        onDone={(result, fromCreateFn) => {
+          const destinationSpace = fromCreateFn ? spaceId : result.primarySpace || spaceId;
+          const destination = NavUtils.toEntity(destinationSpace, result.id);
           router.push(destination);
+        }}
+        onCreateEntity={result => {
+          storage.entities.name.set(result.id, spaceId, result.name || '');
+
+          storage.relations.set({
+            id: Id.generate(),
+            entityId: Id.generate(),
+            spaceId,
+            renderableType: 'RELATION',
+            fromEntity: {
+              id: result.id,
+              name: result.name,
+            },
+            toEntity: {
+              id: SystemIds.PROJECT_TYPE,
+              name: 'Project',
+              value: SystemIds.PROJECT_TYPE,
+            },
+            type: {
+              id: SystemIds.TYPES_PROPERTY,
+              name: 'Types',
+            },
+          });
         }}
         spaceId={spaceId}
         relationValueTypes={projectValueTypes}
@@ -257,7 +319,7 @@ const projectValueTypes = [
 ];
 
 // @TODO(migration): Correct space ids
-const spaces: SpaceData[] = [
+const spaces = [
   {
     id: 'BDuZwkjCg3nPWMDshoYtpS',
     name: 'Crypto news',
@@ -305,13 +367,19 @@ const JoinSpaces = () => {
   );
 };
 
-const useTabSlug = () => {
-  const spaceId = useSpaceId();
-  const tabId = useTabId();
-  const name = useName(tabId ?? '', spaceId);
-  const tabSlug = getTabSlug(name ?? '');
+const useTeamTabId = () => {
+  const { initialTabs } = useEditorInstance();
 
-  return tabSlug || null;
+  if (!initialTabs) return null;
+
+  const teamTab = Object.entries(initialTabs).find(([, tab]) => {
+    const tabSlug = getTabSlug(tab.entity.name ?? '');
+    return tabSlug === 'team';
+  });
+
+  const teamTabId = teamTab?.[0];
+
+  return teamTabId ?? null;
 };
 
 const TeamNotice = () => {

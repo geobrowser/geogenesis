@@ -192,7 +192,7 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
         const relationName = r.toEntity.name;
         const relationValue = r.toEntity.value;
 
-        if (property.renderableType === SystemIds.IMAGE) {
+        if (property.renderableTypeStrict === 'IMAGE') {
           return (
             <ImageZoom
               variant="table-cell"
