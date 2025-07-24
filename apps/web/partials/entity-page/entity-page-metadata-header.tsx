@@ -9,7 +9,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useQueryProperty, useRelations } from '~/core/sync/use-store';
-import { SwitchableRenderableType } from '~/core/v2.types';
+import { DataType, SwitchableRenderableType } from '~/core/v2.types';
 
 import { Divider } from '~/design-system/divider';
 
@@ -93,10 +93,9 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
       propertyData,
       renderableTypeEntity,
       renderableTypeRelation,
-      entityId,
-      hasLocalPropertyType
+      entityId
     );
-  }, [propertyData, renderableTypeEntity, entityId, renderableTypeRelation, hasLocalPropertyType]);
+  }, [propertyData, renderableTypeEntity, entityId, renderableTypeRelation]);
 
   // Determine the current renderable type based on property data
   const currentRenderableType = React.useMemo(() => {

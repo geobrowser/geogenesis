@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
-import { Property } from '~/core/v2.types';
+import { Property, SwitchableRenderableType } from '~/core/v2.types';
 
 import { SelectEntity } from './select-entity';
 
@@ -12,7 +12,7 @@ type SelectEntityAsPopoverProps = {
   trigger: React.ReactNode;
   spaceId: string;
   onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
-  onCreateEntity?: (result: { id: string; name: string | null; space?: string }) => void;
+  onCreateEntity?: (result: { id: string; name: string | null; space?: string; verified?: boolean; selectedPropertyType?: SwitchableRenderableType }) => void;
   relationValueTypes?: Property['relationValueTypes'];
 };
 

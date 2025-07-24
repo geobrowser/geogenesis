@@ -16,7 +16,7 @@ export function PropertyDto(queryResult: RemoteProperty): Property {
   };
 }
 
-function getStrictRenderableType(renderableType: RemoteProperty['renderableType']) {
+export function getStrictRenderableType(renderableType: RemoteProperty['renderableType']) {
   switch (renderableType) {
     case SystemIds.IMAGE:
       return 'IMAGE';

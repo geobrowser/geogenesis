@@ -1,5 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, GEO_LOCATION } from '~/core/constants';
+import { DATA_TYPE_PROPERTY, GEO_LOCATION, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { DataType, Property, Relation, Value, SwitchableRenderableType, Entity } from '~/core/v2.types';
 
 /**
@@ -140,12 +141,15 @@ export function reconstructFromStore(
     ? (dataTypeString as DataType) 
     : 'TEXT';
 
+  const renderableTypeId = renderableTypeRelation?.toEntity.id || null;
+  
   // Construct a Property object
   const property: Property = {
     id,
     name: nameValue?.value || '',
     dataType,
-    renderableType: renderableTypeRelation?.toEntity.id || null,
+    renderableType: renderableTypeId,
+    renderableTypeStrict: getStrictRenderableType(renderableTypeId),
   };
 
   return property;
@@ -198,19 +202,20 @@ export function mapRenderableTypeToSwitchable(
   return fallbackDataType as SwitchableRenderableType;
 }
 
+
 /**
  * Determines if a property is unpublished based on its relations
  */
 export function isUnpublished(
   propertyData: Property | null,
-  propertyTypeRelation: Relation | null
+  propertyTypeRelation: Relation | null | undefined
 ): boolean {
   if (!propertyData) {
     return false;
   }
   
   // If the relation exists and is local/unpublished, then the property is unpublished
-  return propertyTypeRelation !== null && 
+  return propertyTypeRelation != null && 
          (propertyTypeRelation.isLocal === true || propertyTypeRelation.hasBeenPublished === false);
 }
 
@@ -220,10 +225,9 @@ export function isUnpublished(
 export function constructDataType(
   propertyData: Property | null,
   renderableTypeEntity: Pick<Entity, 'id' | 'name'> | null,
-  renderableTypeRelation: Relation | null,
-  entityId: string,
-  hasLocalPropertyType: boolean
-): { id: string; dataType: string; renderableType: { id: string; name: string } | null } | null {
+  renderableTypeRelation: Relation | null | undefined,
+  entityId: string
+): { id: string; dataType: DataType; renderableType: { id: string; name: string } | null } | null {
   // If we have propertyData from the backend, use it
   if (propertyData) {
     let renderableType = null;
@@ -245,20 +249,8 @@ export function constructDataType(
 
     return {
       id: propertyData.id || '',
-      dataType: propertyData.dataType || '',
+      dataType: propertyData.dataType,
       renderableType,
-    };
-  }
-  
-  // For local properties without remote data
-  if (hasLocalPropertyType) {
-    return {
-      id: entityId,
-      dataType: propertyData?.dataType || 'TEXT',
-      renderableType: renderableTypeRelation ? {
-        id: renderableTypeRelation.toEntity.id,
-        name: renderableTypeRelation.toEntity.name || '',
-      } : null,
     };
   }
   

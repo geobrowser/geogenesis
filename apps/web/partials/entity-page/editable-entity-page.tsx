@@ -208,7 +208,7 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                 addPropertyToEntity({
                   entityId: id,
                   propertyId: result.id,
-                  propertyName: result.name,
+                  propertyName: result.name || '', // Default to empty string if name is null
                   entityName: name || undefined,
                 });
               }

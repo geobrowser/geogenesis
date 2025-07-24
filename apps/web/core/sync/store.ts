@@ -3,6 +3,7 @@ import { createAtom } from '@xstate/store';
 import produce from 'immer';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
+import { getStrictRenderableType } from '../io/dto/properties';
 import { readTypes } from '../database/entities';
 import { Entities } from '../utils/entity';
 import { DataType, Entity, Property, RawRenderableType, Relation, Value } from '../v2.types';
@@ -256,12 +257,15 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     const renderableType = entity?.relations.find(t => t.type.id === RENDERABLE_TYPE_PROPERTY);
 
+    const renderableTypeId = renderableType ? renderableType.toEntity.id : null;
+
     return {
       id,
       name: entity?.name ?? null,
       dataType: dataType,
       relationValueTypes,
-      renderableType: renderableType ? renderableType.toEntity.id : null,
+      renderableType: renderableTypeId,
+      renderableTypeStrict: getStrictRenderableType(renderableTypeId),
 
       /**
        * A data type is still editable as long as there's no
@@ -274,6 +278,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   getStableDataType(id: string): DataType | null {
     return this.dataTypes.get(id) ?? null;
   }
+
 
   /**
    * Get all relations for an entity including optimistic updates

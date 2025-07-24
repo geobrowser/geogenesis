@@ -4,7 +4,7 @@ import produce, { Draft } from 'immer';
 import { DATA_TYPE_PROPERTY } from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
-import { DataType, FlattenedRenderType, NativeRenderableProperty, Property, Relation, RelationRenderableProperty, Value } from '../v2.types';
+import { DataType, Relation, Value } from '../v2.types';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
