@@ -5,7 +5,6 @@ import {
   mapPropertyType,
   reconstructFromStore,
   mapRenderableTypeToSwitchable,
-  isUnpublished,
   constructDataType,
   getCurrentRenderableType
 } from './properties';
@@ -150,7 +149,10 @@ describe('Properties', () => {
         id: propertyId,
         name: 'Test Property',
         dataType: 'TEXT',
+        relationValueTypes: [],
         renderableType: null,
+        renderableTypeStrict: undefined,
+        isDataTypeEditable: true,
       });
     });
 
@@ -203,7 +205,10 @@ describe('Properties', () => {
         id: propertyId,
         name: 'Test Property',
         dataType: 'TEXT',
+        relationValueTypes: [],
         renderableType: SystemIds.URL,
+        renderableTypeStrict: 'URL',
+        isDataTypeEditable: true,
       });
     });
   });
@@ -235,91 +240,6 @@ describe('Properties', () => {
     });
   });
 
-  describe('isUnpublished', () => {
-    it('should return false for property with no propertyData', () => {
-      const mockTypeRelation: Relation = {
-        id: 'rel-1',
-        entityId: 'entity-1',
-        fromEntity: { id: 'prop-1', name: 'Test Property' },
-        type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
-        toEntity: { id: SystemIds.PROPERTY, name: 'Property' },
-        spaceId: 'space-1',
-        position: { x: 0, y: 0 },
-        verified: false,
-        renderableType: 'RELATION',
-      };
-
-      const result = isUnpublished(null, mockTypeRelation);
-      expect(result).toBe(false);
-    });
-
-    it('should return false for property with propertyData and no type relation', () => {
-      const mockPropertyData: Property = {
-        id: 'prop-1',
-        name: 'Test Property',
-        dataType: 'TEXT',
-        renderableType: 'TEXT',
-      };
-
-      const result = isUnpublished(mockPropertyData, null);
-      expect(result).toBe(false);
-    });
-
-    it('should return false for property with both propertyData and type relation', () => {
-      const mockPropertyData: Property = {
-        id: 'prop-1',
-        name: 'Test Property',
-        dataType: 'TEXT',
-        renderableType: 'TEXT',
-      };
-
-      const mockTypeRelation: Relation = {
-        id: 'rel-1',
-        entityId: 'entity-1',
-        fromEntity: { id: 'prop-1', name: 'Test Property' },
-        type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
-        toEntity: { id: SystemIds.PROPERTY, name: 'Property' },
-        spaceId: 'space-1',
-        position: { x: 0, y: 0 },
-        verified: false,
-        renderableType: 'RELATION',
-      };
-
-      const result = isUnpublished(mockPropertyData, mockTypeRelation);
-      expect(result).toBe(false);
-    });
-
-    it('should return false when neither propertyData nor type relation exists', () => {
-      const result = isUnpublished(null, null);
-      expect(result).toBe(false);
-    });
-
-    it('should return true for property with local type relation', () => {
-      const mockPropertyData: Property = {
-        id: 'prop-1',
-        name: 'Test Property',
-        dataType: 'TEXT',
-        renderableType: null,
-      };
-
-      const mockTypeRelation: Relation = {
-        id: 'rel-1',
-        entityId: 'entity-1',
-        fromEntity: { id: 'prop-1', name: 'Test Property' },
-        type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
-        toEntity: { id: SystemIds.PROPERTY, name: 'Property' },
-        spaceId: 'space-1',
-        position: { x: 0, y: 0 },
-        verified: false,
-        renderableType: 'RELATION',
-        isLocal: true,
-        hasBeenPublished: false,
-      };
-
-      const result = isUnpublished(mockPropertyData, mockTypeRelation);
-      expect(result).toBe(true);
-    });
-  });
 
   describe('constructDataType', () => {
     it('should return property data when available', () => {
@@ -345,7 +265,7 @@ describe('Properties', () => {
       });
     });
 
-    it('should construct from renderableTypeEntity when no property data', () => {
+    it('should return null when no property data is available', () => {
       const mockRenderableTypeEntity = {
         id: SystemIds.URL,
         name: 'Url',
@@ -355,18 +275,13 @@ describe('Properties', () => {
         null,
         mockRenderableTypeEntity,
         null,
-        'prop-1',
-        true
+        'prop-1'
       );
 
-      expect(result).toEqual({
-        id: 'prop-1',
-        dataType: 'TEXT',
-        renderableType: null,
-      });
+      expect(result).toBeNull();
     });
 
-    it('should construct from renderableTypeRelation when no entity', () => {
+    it('should return null when only renderableTypeRelation is available', () => {
       const mockRenderableTypeRelation: Relation = {
         id: 'rel-1',
         entityId: 'entity-1',
@@ -383,22 +298,14 @@ describe('Properties', () => {
         null,
         null,
         mockRenderableTypeRelation,
-        'prop-1',
-        true
+        'prop-1'
       );
 
-      expect(result).toEqual({
-        id: 'prop-1',
-        dataType: 'TEXT',
-        renderableType: {
-          id: SystemIds.IMAGE,
-          name: 'Image',
-        },
-      });
+      expect(result).toBeNull();
     });
 
     it('should return null when no data sources available', () => {
-      const result = constructDataType(null, null, null, 'prop-1', false);
+      const result = constructDataType(null, null, null, 'prop-1');
       expect(result).toBeNull();
     });
   });

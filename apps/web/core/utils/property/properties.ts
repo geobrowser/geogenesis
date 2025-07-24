@@ -141,15 +141,26 @@ export function reconstructFromStore(
     ? (dataTypeString as DataType) 
     : 'TEXT';
 
+  // Get relation value types
+  const relationValueTypes = getRelations({
+    selector: r => r.fromEntity.id === id && 
+                   r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE
+  }).map(r => ({
+    id: r.toEntity.id,
+    name: r.toEntity.name || null,
+  }));
+
   const renderableTypeId = renderableTypeRelation?.toEntity.id || null;
   
   // Construct a Property object
   const property: Property = {
     id,
-    name: nameValue?.value || '',
+    name: nameValue?.value || null, // Fixed: use null instead of empty string
     dataType,
+    relationValueTypes, // Added: missing field
     renderableType: renderableTypeId,
     renderableTypeStrict: getStrictRenderableType(renderableTypeId),
+    isDataTypeEditable: true, // Added: local properties are editable by default
   };
 
   return property;
@@ -203,21 +214,6 @@ export function mapRenderableTypeToSwitchable(
 }
 
 
-/**
- * Determines if a property is unpublished based on its relations
- */
-export function isUnpublished(
-  propertyData: Property | null,
-  propertyTypeRelation: Relation | null | undefined
-): boolean {
-  if (!propertyData) {
-    return false;
-  }
-  
-  // If the relation exists and is local/unpublished, then the property is unpublished
-  return propertyTypeRelation != null && 
-         (propertyTypeRelation.isLocal === true || propertyTypeRelation.hasBeenPublished === false);
-}
 
 /**
  * Constructs property data type information from various sources

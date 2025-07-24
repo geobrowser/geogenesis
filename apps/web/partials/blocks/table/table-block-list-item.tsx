@@ -95,7 +95,10 @@ export function TableBlockListItem({
             <BlockImageField
               variant="avatar"
               imageSrc={image ?? undefined}
-              onImageChange={imageSrc => {
+              onFileChange={async (file) => {
+                // TODO: Update this implementation for new store/model/SDK architecture
+                // The onChangeEntry event system needs to be updated to work with the new data model
+                console.log('Image upload not yet implemented for list items', file);
                 // const { id: imageId, ops } = Image.make({ cid: imageSrc });
                 // const [createRelationOp, setTripleOp] = ops;
                 // if (createRelationOp.type === 'CREATE_RELATION') {

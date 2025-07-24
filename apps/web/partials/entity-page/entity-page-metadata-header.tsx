@@ -63,16 +63,8 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
          r.toEntity.id === SystemIds.PROPERTY
   );
 
-  // Determine if property is unpublished by checking if the property data is local only
-  const isUnpublishedProperty = React.useMemo(() => {
-    const propertyTypeRelation = relations.find(
-      r => r.fromEntity.id === entityId && 
-           r.type.id === SystemIds.TYPES_PROPERTY && 
-           r.toEntity.id === SystemIds.PROPERTY
-    );
-    
-    return Properties.isUnpublished(propertyData, propertyTypeRelation);
-  }, [propertyData, relations, entityId]);
+  // Check if property data type is editable (simpler than checking publish status)
+  const isDataTypeEditable = propertyData?.isDataTypeEditable ?? false;
 
   // Find renderableType relation
   const renderableTypeRelation = relations.find(
@@ -114,10 +106,10 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
       const renderableTypeId = mapping.renderableTypeId;
 
 
-      // Published properties can't change their base dataType
-      if (!isUnpublishedProperty && propertyData && propertyData.dataType !== baseDataType) {
+      // Non-editable properties can't change their base dataType
+      if (!isDataTypeEditable && propertyData && propertyData.dataType !== baseDataType) {
         console.warn('Cannot change property dataType from', propertyData.dataType, 'to', baseDataType);
-        console.warn('Published properties cannot change their base dataType');
+        console.warn('Non-editable properties cannot change their base dataType');
         return;
       }
 
@@ -210,7 +202,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
         }
       }
     },
-    [entityId, spaceId, storage, propertyData, relations, isUnpublishedProperty, name]
+    [entityId, spaceId, storage, propertyData, relations, isDataTypeEditable, name]
   );
 
   // Create property data when Property type is added
@@ -244,7 +236,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
           <PropertyTypeDropdown 
             value={currentRenderableType} 
             onChange={handlePropertyTypeChange}
-            baseDataType={isUnpublishedProperty ? undefined : propertyDataType?.dataType}
+            baseDataType={isDataTypeEditable ? undefined : propertyDataType?.dataType}
           />
           <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
         </div>
