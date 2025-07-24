@@ -4,7 +4,7 @@ import cx from 'classnames';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { SwitchableRenderableType } from '~/core/v2.types';
+import { SwitchableRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '~/core/v2.types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -37,17 +37,6 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   GEO_LOCATION: GeoLocation,
 };
 
-const typeOptions: Record<SwitchableRenderableType, string> = {
-  TIME: 'Time',
-  TEXT: 'Text',
-  URL: 'Url',
-  RELATION: 'Relation',
-  IMAGE: 'Image',
-  CHECKBOX: 'Checkbox',
-  NUMBER: 'Number',
-  POINT: 'Point',
-  GEO_LOCATION: 'Geo Location',
-};
 
 
 export const PropertyTypeDropdown = ({ value, onChange, baseDataType }: Props) => {
@@ -57,18 +46,18 @@ export const PropertyTypeDropdown = ({ value, onChange, baseDataType }: Props) =
   const availableOptions = React.useMemo(() => {
     // If no baseDataType is provided, return all options (unpublished property)
     if (!baseDataType) {
-      return Object.keys(typeOptions) as SwitchableRenderableType[];
+      return Object.keys(SWITCHABLE_RENDERABLE_TYPE_LABELS) as SwitchableRenderableType[];
     }
     
     // Filter options to only those with matching base dataType (published property)
-    return (Object.keys(typeOptions) as SwitchableRenderableType[]).filter(
+    return (Object.keys(SWITCHABLE_RENDERABLE_TYPE_LABELS) as SwitchableRenderableType[]).filter(
       type => Properties.typeToBaseDataType[type] === baseDataType
     );
   }, [baseDataType]);
 
   const options = availableOptions.map(key => ({
     value: key,
-    label: typeOptions[key],
+    label: SWITCHABLE_RENDERABLE_TYPE_LABELS[key],
     onClick: (value: SwitchableRenderableType) => {
       onChange?.(value);
     },
@@ -82,7 +71,7 @@ export const PropertyTypeDropdown = ({ value, onChange, baseDataType }: Props) =
 
   let label = 'Set property type';
   if (value) {
-    label = typeOptions[value];
+    label = SWITCHABLE_RENDERABLE_TYPE_LABELS[value];
   }
 
 

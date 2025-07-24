@@ -9,7 +9,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useQueryProperty, useRelations } from '~/core/sync/use-store';
-import { DataType, SwitchableRenderableType } from '~/core/v2.types';
+import { DataType, SwitchableRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '~/core/v2.types';
 
 import { Divider } from '~/design-system/divider';
 
@@ -21,17 +21,6 @@ import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-st
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { Properties } from '~/core/utils/property';
 
-const typeOptions: Record<SwitchableRenderableType, string> = {
-  TIME: 'Time',
-  TEXT: 'Text',
-  URL: 'Url',
-  RELATION: 'Relation',
-  IMAGE: 'Image',
-  CHECKBOX: 'Checkbox',
-  NUMBER: 'Number',
-  POINT: 'Point',
-  GEO_LOCATION: 'Geo Location',
-};
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -168,7 +157,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
           // Update existing relation
           storage.relations.update(existingRelation, draft => {
             draft.toEntity.id = renderableTypeId;
-            draft.toEntity.name = typeOptions[newType] || newType;
+            draft.toEntity.name = SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType;
             draft.toEntity.value = renderableTypeId;
           });
         } else {
@@ -186,7 +175,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
             },
             toEntity: {
               id: renderableTypeId,
-              name: typeOptions[newType] || newType,
+              name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
               value: renderableTypeId,
             },
             spaceId,

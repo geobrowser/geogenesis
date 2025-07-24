@@ -335,6 +335,26 @@ export const getImageHash = (value: string) => {
   }
 };
 
+/**
+ * Extracts the IPFS image URL from an entity's values
+ * @param imageEntityId The ID of the image entity
+ * @param allValues Array of all values to search through
+ * @returns The IPFS URL string or undefined if not found
+ */
+export function getImageUrlFromEntity(imageEntityId: string, allValues: Array<{ entity: { id: string }; value: string }>): string | undefined {
+  if (!imageEntityId) return undefined;
+  
+  // Filter values for the specific image entity
+  const imageEntityValues = allValues.filter(v => v.entity.id === imageEntityId);
+  
+  // Find the first value that is a string starting with 'ipfs://'
+  const imageUrlValue = imageEntityValues.find(v => 
+    typeof v.value === 'string' && v.value.startsWith('ipfs://')
+  );
+  
+  return imageUrlValue?.value;
+}
+
 // Get the image URL from an image triple value
 // this allows us to render images on the front-end based on a raw triple value
 // e.g., ipfs://HASH -> https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH

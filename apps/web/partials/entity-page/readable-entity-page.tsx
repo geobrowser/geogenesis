@@ -5,7 +5,7 @@ import * as React from 'react';
 import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
 import { useQueryEntity, useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
-import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
+import { GeoNumber, GeoPoint, NavUtils, getImagePath, getImageUrlFromEntity } from '~/core/utils/utils';
 import { DataType, RenderableType } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -185,11 +185,7 @@ export function RelationsGroup({
 
             if (property.renderableTypeStrict === 'IMAGE') {
               // linkedEntityId is the image entity ID, we need to get the actual image URL
-              const imageEntityValues = allValues.filter(v => v.entity.id === linkedEntityId);
-              const imageUrlValue = imageEntityValues.find(v => 
-                typeof v.value === 'string' && v.value.startsWith('ipfs://')
-              );
-              const actualImageSrc = imageUrlValue?.value;
+              const actualImageSrc = getImageUrlFromEntity(linkedEntityId, allValues);
               
               return <ImageZoom key={`image-${relationId}-${linkedEntityId}`} imageSrc={getImagePath(actualImageSrc || '')} />;
             }

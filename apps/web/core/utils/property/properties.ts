@@ -166,52 +166,6 @@ export function reconstructFromStore(
   return property;
 }
 
-/**
- * Maps renderable type entity names/IDs to SwitchableRenderableType values
- * Handles various naming conventions and IDs
- */
-export function mapRenderableTypeToSwitchable(
-  renderableTypeName: string,
-  renderableTypeId: string,
-  fallbackDataType: string
-): SwitchableRenderableType {
-  // Handle null/undefined renderableTypeName
-  if (!renderableTypeName) {
-    return fallbackDataType as SwitchableRenderableType;
-  }
-  
-  // Normalize the name for comparison
-  const normalizedName = renderableTypeName.toLowerCase().replace(/[\s-_]/g, '');
-  
-  // Check by normalized name first
-  if (normalizedName === 'url') {
-    return 'URL';
-  }
-  
-  if (normalizedName === 'geolocation') {
-    return 'GEO_LOCATION';
-  }
-  
-  if (normalizedName === 'image') {
-    return 'IMAGE';
-  }
-  
-  // Check by ID as fallback
-  if (renderableTypeId === SystemIds.URL) {
-    return 'URL';
-  }
-  
-  if (renderableTypeId === GEO_LOCATION) {
-    return 'GEO_LOCATION';
-  }
-  
-  if (renderableTypeId === SystemIds.IMAGE) {
-    return 'IMAGE';
-  }
-  
-  // Default to the base dataType
-  return fallbackDataType as SwitchableRenderableType;
-}
 
 
 
@@ -263,13 +217,12 @@ export function getCurrentRenderableType(
   
   // If there's a renderableType, map it to the appropriate type
   if (propertyDataType.renderableType) {
-    return mapRenderableTypeToSwitchable(
-      propertyDataType.renderableType.name,
-      propertyDataType.renderableType.id,
-      propertyDataType.dataType
-    );
+    return getStrictRenderableType(
+      propertyDataType.renderableType.id
+    ) || 'TEXT'; // Default to TEXT if mapping fails
   }
   
   // Otherwise, default to the base dataType
   return propertyDataType.dataType as SwitchableRenderableType;
 }
+

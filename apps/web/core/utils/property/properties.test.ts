@@ -4,10 +4,10 @@ import { RENDERABLE_TYPE_PROPERTY, DATA_TYPE_PROPERTY } from '~/core/constants';
 import { 
   mapPropertyType,
   reconstructFromStore,
-  mapRenderableTypeToSwitchable,
   constructDataType,
   getCurrentRenderableType
 } from './properties';
+import { getImageUrlFromEntity } from '../utils';
 import { SwitchableRenderableType, Property, Relation } from '~/core/v2.types';
 
 // Mock the constants to ensure they're available in tests
@@ -213,34 +213,6 @@ describe('Properties', () => {
     });
   });
 
-  describe('mapRenderableTypeToSwitchable', () => {
-    it('should map SystemIds.IMAGE to IMAGE', () => {
-      const result = mapRenderableTypeToSwitchable('Image', SystemIds.IMAGE, 'TEXT');
-      expect(result).toBe('IMAGE');
-    });
-
-    it('should map SystemIds.URL to URL', () => {
-      const result = mapRenderableTypeToSwitchable('Url', SystemIds.URL, 'TEXT');
-      expect(result).toBe('URL');
-    });
-
-    it('should map SystemIds.GEO_LOCATION to GEO_LOCATION', () => {
-      const result = mapRenderableTypeToSwitchable('Geo Location', 'GEO_LOCATION_ID', 'TEXT');
-      expect(result).toBe('GEO_LOCATION');
-    });
-
-    it('should return TEXT for unknown renderableType', () => {
-      const result = mapRenderableTypeToSwitchable('Unknown', 'UNKNOWN_ID', 'TEXT');
-      expect(result).toBe('TEXT');
-    });
-
-    it('should handle null/undefined renderableType', () => {
-      expect(mapRenderableTypeToSwitchable(null as any, 'id', 'TEXT')).toBe('TEXT');
-      expect(mapRenderableTypeToSwitchable(undefined as any, 'id', 'TEXT')).toBe('TEXT');
-    });
-  });
-
-
   describe('constructDataType', () => {
     it('should return property data when available', () => {
       const mockPropertyData: Property = {
@@ -350,6 +322,85 @@ describe('Properties', () => {
 
       const result = getCurrentRenderableType(mockPropertyDataType);
       expect(result).toBe('TEXT');
+    });
+  });
+
+  describe('getImageUrlFromEntity', () => {
+    it('should return undefined for empty imageEntityId', () => {
+      const result = getImageUrlFromEntity('', []);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when no values found for entity', () => {
+      const mockValues = [
+        {
+          entity: { id: 'other-entity', name: 'Other' },
+          property: { id: 'prop-1', name: 'Property', dataType: 'TEXT' },
+          value: 'ipfs://test-hash',
+        },
+      ];
+
+      const result = getImageUrlFromEntity('image-entity', mockValues as any);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when no IPFS values found', () => {
+      const mockValues = [
+        {
+          entity: { id: 'image-entity', name: 'Image' },
+          property: { id: 'prop-1', name: 'Property', dataType: 'TEXT' },
+          value: 'https://example.com/image.jpg',
+        },
+        {
+          entity: { id: 'image-entity', name: 'Image' },
+          property: { id: 'prop-2', name: 'Property', dataType: 'TEXT' },
+          value: 'not-an-ipfs-url',
+        },
+      ];
+
+      const result = getImageUrlFromEntity('image-entity', mockValues as any);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return the first IPFS URL found for the entity', () => {
+      const mockValues = [
+        {
+          entity: { id: 'image-entity', name: 'Image' },
+          property: { id: 'prop-1', name: 'Property', dataType: 'TEXT' },
+          value: 'https://example.com/image.jpg',
+        },
+        {
+          entity: { id: 'image-entity', name: 'Image' },
+          property: { id: 'prop-2', name: 'Property', dataType: 'TEXT' },
+          value: 'ipfs://first-hash',
+        },
+        {
+          entity: { id: 'image-entity', name: 'Image' },
+          property: { id: 'prop-3', name: 'Property', dataType: 'TEXT' },
+          value: 'ipfs://second-hash',
+        },
+      ];
+
+      const result = getImageUrlFromEntity('image-entity', mockValues as any);
+      expect(result).toBe('ipfs://first-hash');
+    });
+
+    it('should handle non-string values gracefully', () => {
+      const mockValues = [
+        {
+          entity: { id: 'image-entity', name: 'Image' },
+          property: { id: 'prop-1', name: 'Property', dataType: 'NUMBER' },
+          value: 42,
+        },
+        {
+          entity: { id: 'image-entity', name: 'Image' },
+          property: { id: 'prop-2', name: 'Property', dataType: 'TEXT' },
+          value: 'ipfs://test-hash',
+        },
+      ];
+
+      const result = getImageUrlFromEntity('image-entity', mockValues as any);
+      expect(result).toBe('ipfs://test-hash');
     });
   });
 });

@@ -12,7 +12,8 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useCover, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath, getImageUrlFromEntity } from '~/core/utils/utils';
+import { Properties } from '~/core/utils/property';
 import {
   Property,
   Relation,
@@ -263,14 +264,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   const imageSrc = React.useMemo(() => {
     if (!property || property.renderableType !== SystemIds.IMAGE || !imageEntityId) return undefined;
     
-    // Filter values for the specific image entity
-    const imageEntityValues = allValues.filter(v => v.entity.id === imageEntityId);
-    
-    const imageUrlValue = imageEntityValues.find(v => 
-      typeof v.value === 'string' && v.value.startsWith('ipfs://')
-    );
-    
-    return imageUrlValue?.value;
+    return getImageUrlFromEntity(imageEntityId, allValues);
   }, [property, imageEntityId, allValues]);
 
   if (!property) {
@@ -472,11 +466,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
         if (property.renderableTypeStrict === 'IMAGE') {
           // relationValue is the image entity ID, we need to get the actual image URL
-          const imageEntityValues = allValues.filter(v => v.entity.id === relationValue);
-          const imageUrlValue = imageEntityValues.find(v => 
-            typeof v.value === 'string' && v.value.startsWith('ipfs://')
-          );
-          const actualImageSrc = imageUrlValue?.value;
+          const actualImageSrc = getImageUrlFromEntity(relationValue, allValues);
           
           return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(actualImageSrc || '')} />;
         }

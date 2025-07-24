@@ -4,7 +4,7 @@ import cx from 'classnames';
 import * as React from 'react';
 import { Dispatch, SetStateAction, useState } from 'react';
 
-import { SwitchableRenderableType } from '~/core/v2.types';
+import { SwitchableRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '~/core/v2.types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -36,17 +36,6 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   GEO_LOCATION: GeoLocation,
 };
 
-const typeOptions: Record<SwitchableRenderableType, string> = {
-  TIME: 'Time',
-  TEXT: 'Text',
-  URL: 'Url',
-  RELATION: 'Relation',
-  IMAGE: 'Image',
-  CHECKBOX: 'Checkbox',
-  NUMBER: 'Number',
-  POINT: 'Point',
-  GEO_LOCATION: 'Geo Location',
-};
 
 export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Props) => {
   const [selectedValue, setSelectedValue] = useState<SwitchableRenderableType | undefined>(value);
@@ -83,7 +72,7 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
 
   const options = availableOptions.map(key => ({
     value: key,
-    label: typeOptions[key],
+    label: SWITCHABLE_RENDERABLE_TYPE_LABELS[key],
     onClick: (
       setSelectedValue: Dispatch<SetStateAction<SwitchableRenderableType | undefined>>,
       value: SwitchableRenderableType
@@ -100,7 +89,7 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
 
   let label = 'Set renderable type';
   if (selectedValue) {
-    label = typeOptions[selectedValue];
+    label = SWITCHABLE_RENDERABLE_TYPE_LABELS[selectedValue];
   }
 
   // If no options are available, don't render the dropdown
