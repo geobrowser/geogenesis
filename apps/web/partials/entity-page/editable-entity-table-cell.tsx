@@ -292,6 +292,7 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsG
                 currentSpaceId={spaceId}
                 entityId={r.toEntity.id}
                 relationId={r.id}
+                relationEntityId={r.entityId}
                 spaceId={r.toSpaceId}
                 verified={r.verified}
               >

@@ -219,6 +219,7 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
                 currentSpaceId={spaceId}
                 entityId={relationValue}
                 relationId={relationId}
+                relationEntityId={r.entityId}
                 spaceId={r.toSpaceId}
                 verified={r.verified}
                 small

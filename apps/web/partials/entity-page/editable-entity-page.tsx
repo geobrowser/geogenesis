@@ -395,6 +395,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               currentSpaceId={spaceId}
               entityId={relationValue}
               relationId={relationId}
+              relationEntityId={r.entityId}
               spaceId={r.toSpaceId}
               verified={r.verified}
             >
