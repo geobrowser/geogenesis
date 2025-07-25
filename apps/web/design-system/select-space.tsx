@@ -104,11 +104,13 @@ export const SelectSpace = ({
                           onDone({
                             id: result.id,
                             name: result.name,
+                            space: undefined,
+                            verified: false,
                           });
                         }}
                         className={cx(
-                          'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150  focus:outline-none',
-                          spaceId ? 'hover:bg-grey-01' : 'bg-divider'
+                          'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 focus:outline-none',
+                          !spaceId ? 'bg-divider' : 'hover:bg-grey-01 focus:bg-grey-01'
                         )}
                       >
                         <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>

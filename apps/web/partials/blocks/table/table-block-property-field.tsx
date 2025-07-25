@@ -210,9 +210,17 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
                 onDelete={() => {
                   storage.relations.delete(r);
                 }}
+                onDone={result => {
+                  storage.relations.update(r, draft => {
+                    draft.toSpaceId = result.space;
+                    draft.verified = result.verified;
+                  });
+                }}
                 currentSpaceId={spaceId}
                 entityId={relationValue}
                 relationId={relationId}
+                spaceId={r.toSpaceId}
+                verified={r.verified}
                 small
               >
                 {relationName ?? relationValue}
