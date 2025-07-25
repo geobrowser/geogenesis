@@ -9,8 +9,6 @@ import { store } from '~/core/sync/use-sync-engine';
 import { OmitStrict } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
 
-import { Source } from './source';
-
 export type Filter = {
   columnId: string;
   columnName: string | null;
@@ -74,60 +72,51 @@ const FilterString = Schema.Struct({
 
 export type FilterString = Schema.Schema.Type<typeof FilterString>;
 
-export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], source: Source): string {
-  let filter: FilterString | null = null;
+const FilterMap = Schema.mutable(
+  Schema.Record({
+    key: Schema.String,
+    value: Schema.Union(
+      Schema.Struct({
+        is: Schema.String,
+      }),
+      Schema.Struct({
+        fromEntity: Schema.Struct({
+          is: Schema.String,
+        }),
+        type: Schema.Struct({
+          is: Schema.String,
+        }),
+      })
+    ),
+  })
+);
 
-  switch (source.type) {
-    case 'RELATIONS':
-      filter = {
-        // where: {
-        //   AND: filters
-        //     .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
-        //     .map(f => {
-        //       return {
-        //         attribute: f.columnId,
-        //         is: f.value,
-        //       };
-        //     }),
-        // },
-      };
-      break;
-    case 'SPACES':
-      filter = {
-        // where: {
-        //   spaces: filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value),
-        //   AND: filters
-        //     .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
-        //     .map(f => {
-        //       return {
-        //         attribute: f.columnId,
-        //         is: f.value,
-        //       };
-        //     }),
-        // },
-      };
-      break;
-    case 'COLLECTION':
-    case 'GEO':
-      filter = {
-        // where: {
-        //   AND: filters
-        //     .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
-        //     .map(f => {
-        //       return {
-        //         attribute: f.columnId,
-        //         is: f.value,
-        //       };
-        //     }),
-        // },
-      };
-      break;
-  }
+type FilterMap = Schema.Schema.Type<typeof FilterMap>;
 
-  if (filter === null) {
-    console.error('[toGeoFilterState] Invalid source type', source.type);
-    throw new Error(`[toGeoFilterState] Invalid source type ${source.type}`);
-  }
+export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[]): string {
+  const spaces = filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value);
+
+  const filterMap: FilterMap = {};
+
+  filters
+    .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
+    .forEach(f => {
+      // Entity filter
+      if (f.columnName === 'Backlink') {
+        filterMap['_relation'] = {
+          fromEntity: { is: f.value },
+          type: { is: f.columnId },
+        };
+        // Property filter
+      } else {
+        filterMap[f.columnId] = { is: f.value };
+      }
+    });
+
+  const filter: FilterString = {
+    ...(spaces.length > 0 && { spaceId: { in: spaces } }),
+    ...(Object.keys(filterMap).length > 0 && { filter: filterMap }),
+  };
 
   const maybeEncoded = Schema.encodeUnknownEither(FilterString)(filter);
 

@@ -432,7 +432,7 @@ export const TableBlock = ({ spaceId }: Props) => {
                         draft.splice(index, 1);
                       });
 
-                      setFilterState(newFilterState, source);
+                      setFilterState(newFilterState);
                     }}
                   />
                 );

@@ -75,19 +75,16 @@ export function TableBlockEditableFilters() {
     valueType: FilterableValueType;
     valueName: string | null;
   }) => {
-    setFilterState(
-      [
-        ...filterState,
-        {
-          valueType,
-          columnId,
-          columnName: null,
-          value,
-          valueName,
-        },
-      ],
-      source
-    );
+    setFilterState([
+      ...filterState,
+      {
+        valueType,
+        columnId,
+        columnName: null,
+        value,
+        valueName,
+      },
+    ]);
   };
 
   return (
