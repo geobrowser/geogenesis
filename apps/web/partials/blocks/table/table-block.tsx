@@ -212,10 +212,9 @@ function useEntries(
       verified?: boolean;
     }
   ) => {
-    const relations = getRelations({
-      selector: r => r.spaceId === spaceId,
-    });
-    const relation = relations.find(r => r.id === id);
+    const relation = getRelations({
+      selector: r => r.spaceId === spaceId && r.id === id,
+    })?.[0];
 
     if (relation) {
       storage.relations.update(relation, draft => {
