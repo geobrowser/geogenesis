@@ -19,7 +19,7 @@ import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editi
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations } from '~/core/sync/use-store';
+import { getRelations } from '~/core/sync/use-store';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
@@ -202,9 +202,6 @@ function useEntries(
   };
 
   const { storage } = useMutate();
-  const relations = useRelations({
-    selector: r => r.spaceId === spaceId,
-  });
 
   const onLinkEntry = (
     id: string,
@@ -215,6 +212,9 @@ function useEntries(
       verified?: boolean;
     }
   ) => {
+    const relations = getRelations({
+      selector: r => r.spaceId === spaceId,
+    });
     const relation = relations.find(r => r.id === id);
 
     if (relation) {
