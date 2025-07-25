@@ -29,6 +29,7 @@ type Props = {
   currentSpaceId: string;
   collectionId?: string;
   relationId?: string;
+  toSpaceId?: string;
   verified?: boolean;
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
@@ -44,6 +45,7 @@ export function EditableEntityTableCell({
   currentSpaceId,
   collectionId,
   relationId,
+  toSpaceId,
   verified,
   onChangeEntry,
   onLinkEntry,
@@ -142,7 +144,7 @@ export function EditableEntityTableCell({
             name={name}
             currentSpaceId={currentSpaceId}
             entityId={entityId}
-            spaceId={spaceId}
+            spaceId={toSpaceId}
             collectionId={collectionId}
             relationId={relationId}
             verified={verified}
@@ -189,7 +191,7 @@ export function EditableEntityTableCell({
   const isRelation = property.dataType === 'RELATION';
 
   if (isRelation) {
-    return <RelationsGroup entityId={entityId} property={property} spaceId={spaceId} />;
+    return <RelationsGroup entityId={entityId} property={property} spaceId={spaceId} onLinkEntry={onLinkEntry} />;
   }
 
   return (
@@ -203,9 +205,10 @@ interface RelationsGroupProps {
   entityId: string;
   spaceId: string;
   property: Property;
+  onLinkEntry: onLinkEntryFn;
 }
 
-function RelationsGroup({ entityId, property, spaceId }: RelationsGroupProps) {
+function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsGroupProps) {
   const relations = useRelations({
     // We don't filter by space id as we want to render data from all spaces.
     selector: r => r.fromEntity.id === entityId && r.type.id === property.id,
@@ -278,9 +281,20 @@ function RelationsGroup({ entityId, property, spaceId }: RelationsGroupProps) {
                   //   }
                   // );
                 }}
+                onDone={result => {
+                  onLinkEntry(r.id, {
+                    id: r.toEntity.id,
+                    name: r.toEntity.name,
+                    space: result.space,
+                    verified: result.verified,
+                  }, r.verified);
+                }}
                 currentSpaceId={spaceId}
                 entityId={r.toEntity.id}
                 relationId={r.id}
+                relationEntityId={r.entityId}
+                spaceId={r.toSpaceId}
+                verified={r.verified}
               >
                 {r.toEntity.name ?? r.toEntity.id}
               </LinkableRelationChip>
