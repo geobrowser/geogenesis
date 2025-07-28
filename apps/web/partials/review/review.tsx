@@ -163,7 +163,7 @@ const ReviewChanges = () => {
 
   const isReadyToPublish =
     proposalName?.length > 0 &&
-    Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
+    Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace).length > 0;
 
   const [isPublishing, setIsPublishing] = useState(false);
   const { makeProposal } = usePublish();

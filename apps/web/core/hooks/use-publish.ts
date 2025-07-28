@@ -52,7 +52,7 @@ export function usePublish() {
           return;
         }
 
-        const { opsToPublish: ops } = Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
+        const ops = Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
 
         if (ops.length === 0) {
           console.error('resulting ops are empty, cancelling publish');
@@ -182,7 +182,7 @@ export function useBulkPublish() {
               type: 'SET_REVIEW_STATE',
               payload: newState,
             }),
-          ops: Publish.prepareLocalDataForPublishing(triples, relations, spaceId).opsToPublish,
+          ops: Publish.prepareLocalDataForPublishing(triples, relations, spaceId),
           smartAccount,
           space: {
             id: space.id,
