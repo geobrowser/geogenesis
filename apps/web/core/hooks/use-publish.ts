@@ -14,6 +14,7 @@ import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
 import { getSpace } from '../io/v2/queries';
 import { useStatusBar } from '../state/status-bar-store';
+import { useMutate } from '../sync/use-mutate';
 import { ReviewState, SpaceGovernanceType } from '../types';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
@@ -31,6 +32,7 @@ interface MakeProposalOptions {
 export function usePublish() {
   const { smartAccount } = useSmartAccount();
   const { dispatch } = useStatusBar();
+  const { storage } = useMutate();
 
   /**
    * Take the actions for a specific space the user wants to write to Geo and publish them
@@ -77,46 +79,10 @@ export function usePublish() {
           },
         });
 
-        // const dataBeingPublished = new Set([
-        //   ...valuesToPublish.map(a => {
-        //     return a.id;
-        //   }),
-        //   ...relations.map(a => {
-        //     return a.id;
-        //   }),
-        // ]);
-
-        // We filter out the actions that are being published from the actionsBySpace. We do this
-        // since we need to update the entire state of the space with the published actions and the
-        // unpublished actions being merged together.
-        // If the actionsBySpace[spaceId] is empty, then we return an empty array
-        // const nonPublishedTriples = getValues({
-        //   selector: t => t.spaceId === spaceId && !dataBeingPublished.has(t.id),
-        // });
-
-        // const nonPublishedRelations = getRelations({
-        //   selector: r => r.spaceId === spaceId && !dataBeingPublished.has(r.id),
-        // });
-
-        // const publishedTriples: StoredTriple[] = [...valuesToPublish, ...relationTriples].map(triple =>
-        //   // We keep published relations' ops in memory so we can continue to render any relations
-        //   // as entity pages. These don't actually get published since we publish relations as
-        //   // a CREATE_RELATION and DELETE_RELATION op.
-        //   Triple.make(triple, { hasBeenPublished: true, isDeleted: triple.isDeleted })
-        // );
-
-        // const publishedRelations = relations.map(relation => ({
-        //   ...relation,
-        //   // We keep published actions in memory to keep the UI optimistic. This is mostly done
-        //   // because there is a period between publishing actions and the subgraph finishing indexing
-        //   // where the UI would be in a state where the published actions are not showing up in the UI.
-        //   // Instead we keep the actions in memory so the UI is up-to-date while the subgraph indexes.
-        //   hasBeenPublished: true,
-        // }));
-
-        // @TODO(migration): Correctly update published and non-published data.
-        // restoreRelations([...publishedRelations, ...nonPublishedRelations]);
-        // restore([...publishedTriples, ...nonPublishedTriples]);
+        storage.setAsPublished(
+          valuesToPublish.map(v => v.id),
+          relations.map(r => r.id)
+        );
       });
 
       const result = await Effect.runPromise(Effect.either(publish));
@@ -262,9 +228,6 @@ function makeProposal(args: MakeProposalArgs) {
     onChangePublishState('publishing-ipfs');
     const cid = yield* IpfsEffectClient.upload(proposal);
     onChangePublishState('publishing-contract');
-
-    // yield* check(() => cid.startsWith('ipfs://'), 'CID does not start with ipfs://');
-    // yield* check(() => cidContains !== undefined && cidContains !== '', 'CID is not valid');
 
     const callData = getCalldataForSpaceGovernanceType({
       type: space.type,

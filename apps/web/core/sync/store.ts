@@ -1,5 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { createAtom } from '@xstate/store';
+import { Array as A } from 'effect';
 import produce from 'immer';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
@@ -198,9 +199,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Get multiple entities by ID with full resolution
    */
   public getEntities(options: ReadOptions = {}): Entity[] {
-    return Array.from(syncedEntities.keys())
-      .map(id => this.getEntity(id, options))
-      .filter(entity => entity !== undefined);
+    return [...syncedEntities.keys()].map(id => this.getEntity(id, options)).filter(entity => entity !== undefined);
   }
 
   /**
@@ -407,5 +406,36 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     });
 
     return referencingEntities;
+  }
+
+  public setAsPublished(valueIds: string[], relationIds: string[]) {
+    const valueIdsSet = new Set(valueIds);
+    const relationIdsSet = new Set(relationIds);
+
+    reactiveValues.set(prev => {
+      const [published, unpublished] = A.partition(prev, v => valueIdsSet.has(v.id));
+
+      return [
+        ...unpublished,
+        ...published.map(p => {
+          return produce(p, draft => {
+            draft.hasBeenPublished = true;
+          });
+        }),
+      ];
+    });
+
+    reactiveRelations.set(prev => {
+      const [published, unpublished] = A.partition(prev, r => relationIdsSet.has(r.id));
+
+      return [
+        ...unpublished,
+        ...published.map(p => {
+          return produce(p, draft => {
+            draft.hasBeenPublished = true;
+          });
+        }),
+      ];
+    });
   }
 }
