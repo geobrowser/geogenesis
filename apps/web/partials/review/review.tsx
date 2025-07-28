@@ -143,10 +143,10 @@ const ReviewChanges = () => {
   // Entity Id -> Attribute Id -> boolean
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
 
-  const triplesFromSpace = useValues(
+  const valuesFromSpace = useValues(
     React.useMemo(() => {
       return {
-        selector: t => t.spaceId === activeSpace,
+        selector: t => t.spaceId === activeSpace && t.isLocal === true,
         includeDeleted: true,
       };
     }, [activeSpace])
@@ -155,7 +155,7 @@ const ReviewChanges = () => {
   const relationsFromSpace = useRelations(
     React.useMemo(() => {
       return {
-        selector: r => r.spaceId === activeSpace,
+        selector: r => r.spaceId === activeSpace && r.isLocal === true,
         includeDeleted: true,
       };
     }, [activeSpace])
@@ -163,7 +163,7 @@ const ReviewChanges = () => {
 
   const isReadyToPublish =
     proposalName?.length > 0 &&
-    Publish.prepareLocalDataForPublishing(triplesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
+    Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
 
   const [isPublishing, setIsPublishing] = useState(false);
   const { makeProposal } = usePublish();
@@ -206,7 +206,7 @@ const ReviewChanges = () => {
     // @TODO: Selectable publishing
 
     await makeProposal({
-      values: triplesFromSpace,
+      values: valuesFromSpace,
       relations: relationsFromSpace,
       spaceId: activeSpace,
       name: proposalName,
@@ -216,7 +216,7 @@ const ReviewChanges = () => {
     });
 
     setIsPublishing(false);
-  }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace, relationsFromSpace]);
+  }, [activeSpace, proposalName, proposals, makeProposal, valuesFromSpace, relationsFromSpace]);
 
   if (isLoading || !changes || isSpacesLoading) {
     return <div>Loading...</div>;
@@ -317,7 +317,8 @@ const ReviewChanges = () => {
               <div className="absolute -bottom-10 -left-32 -right-32 h-px bg-divider" />
             </div>
             <div className="relative flex flex-col gap-16 divide-y divide-divider pt-16">
-              {changes.map(change => (
+              {JSON.stringify([...valuesFromSpace, ...relationsFromSpace], null, 2)}
+              {/* {changes.map(change => (
                 <ChangedEntity
                   key={change.id}
                   change={change}
@@ -340,7 +341,7 @@ const ReviewChanges = () => {
                   //   </div>
                   // )}
                 />
-              ))}
+              ))} */}
             </div>
           </div>
         </div>
