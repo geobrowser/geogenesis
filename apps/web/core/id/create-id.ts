@@ -1,15 +1,9 @@
 import { Id } from '@graphprotocol/grc-20';
 
-import { EntityId } from '../io/schema';
-
-export function createEntityId() {
-  return EntityId(Id.generate());
+export function createEntityId(): string {
+  return Id.generate();
 }
 
-/**
- * Triple id encoding should match between client and network.
- * As a future improvement, we could try to run the same code between assemblyscript/typescript.
- */
 export function createValueId({
   entityId,
   propertyId,
@@ -21,5 +15,3 @@ export function createValueId({
 }): string {
   return `${spaceId}:${entityId}:${propertyId}`;
 }
-
-export const BUILTIN_ENTITY_IDS = ['name', 'type', 'attribute', 'space'];

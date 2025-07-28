@@ -52,6 +52,7 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
 
       return acc;
     },
+    // entity id -> changed values
     {} as Record<string, { deleted: Value[]; set: Value[] }>
   );
 
@@ -66,7 +67,6 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
    * same time.
    */
   for (const [entityId, { deleted, set }] of Object.entries(valuesByEntity)) {
-    // Create UpdateEntityOp for non-deleted values
     if (set.length > 0) {
       const values = set.map(value => ({
         property: Id.Id(value.property.id),
