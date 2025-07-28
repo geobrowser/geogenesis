@@ -127,9 +127,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   public getEntity(id: string, options: ReadOptions = {}): Entity | undefined {
     const { includeDeleted = false } = options;
 
-    // Check if the entity is deleted
-    // if (this.isEntityDeleted(id) && !options.includeDeleted) return undefined;
-
     // Get the base entity
     const entity = syncedEntities.get(id);
 
@@ -413,7 +410,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const relationIdsSet = new Set(relationIds);
 
     reactiveValues.set(prev => {
-      const [published, unpublished] = A.partition(prev, v => valueIdsSet.has(v.id));
+      const [unpublished, published] = A.partition(prev, v => valueIdsSet.has(v.id));
 
       return [
         ...unpublished,
@@ -426,7 +423,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     });
 
     reactiveRelations.set(prev => {
-      const [published, unpublished] = A.partition(prev, r => relationIdsSet.has(r.id));
+      const [unpublished, published] = A.partition(prev, r => relationIdsSet.has(r.id));
 
       return [
         ...unpublished,
