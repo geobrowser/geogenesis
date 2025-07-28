@@ -22,6 +22,7 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
@@ -97,6 +98,7 @@ function useEntries(
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
 
+  const { storage } = useMutate();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
 
   // Clear pending ID once it appears in entries
@@ -207,16 +209,18 @@ function useEntries(
        * the entity already exists.
        */
       if (event.type !== 'Find') {
-        const maybeName = event.type === 'Create' ? event.data.name : undefined;
+        // const maybeName = event.type === 'Create' ? event.data.name : undefined;
 
         // Mark this ID as pending before creating
         setPendingEntityId(context.entityId);
 
         createEntityWithTypes({
-          name: maybeName,
+          name: event.data.name,
           filters: filterState,
         });
       }
+    } else {
+      storage.entities.name.set(context.entityId, spaceId, event.data.name ?? '');
     }
   };
 

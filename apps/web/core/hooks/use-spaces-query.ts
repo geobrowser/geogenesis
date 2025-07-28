@@ -11,7 +11,7 @@ import { Subgraph } from '~/core/io';
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 
-const filterByTypes = ['362c1dbd-dc64-44bb-a3c4-652f38a642d7']; //Filter only space type entities
+const filterByTypes = ['362c1dbd-dc64-44bb-a3c4-652f38a642d7']; // Filter only space type entities
 
 export function useSpacesQuery() {
   const [query, setQuery] = useState('');
@@ -74,6 +74,23 @@ export function useSpacesQuery() {
     return { id: space.spaces[0].spaceId, name: space.name, image: space.spaces[0].image };
   });
 
+  type SpaceItem = {
+    id: string;
+    name: string | null;
+    image: string;
+  };
+
+  const uniqueSpacesById = (arr: SpaceItem[]): SpaceItem[] => {
+    const seen = new Map<string, boolean>();
+    return arr.reduce<SpaceItem[]>((acc, item) => {
+      if (!seen.has(item.id)) {
+        seen.set(item.id, true);
+        acc.push(item);
+      }
+      return acc;
+    }, []);
+  };
+
   if (!fuzzyMatchedSpaces) {
     return {
       query,
@@ -85,6 +102,6 @@ export function useSpacesQuery() {
   return {
     query,
     setQuery,
-    spaces,
+    spaces: uniqueSpacesById(spaces),
   };
 }

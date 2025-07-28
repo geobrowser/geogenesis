@@ -240,6 +240,7 @@ export function TableBlockListItem({
                               },
                               value: { type: 'TEXT', value },
                             },
+                            name,
                           },
                         }
                       );
