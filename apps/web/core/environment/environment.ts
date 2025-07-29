@@ -53,7 +53,7 @@ export const getConfig = (): AppConfig => {
     chainId: variables.chainId,
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
-    api: variables.rpcEndpoint,
+    api: variables.apiEndpoint,
     bundler: `${variables.bundlerRpcEndpoint}?apikey=${variables.accountAbstractionApiKey}`,
   };
 };

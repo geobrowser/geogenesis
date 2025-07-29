@@ -1,5 +1,4 @@
 import { Op } from '@graphprotocol/grc-20';
-import { CreateRelationOp, DeleteRelationOp, Id } from '@graphprotocol/grc-20';
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@graphprotocol/grc-20/abis';
 import { EditProposal } from '@graphprotocol/grc-20/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
@@ -9,7 +8,6 @@ import * as React from 'react';
 
 import { Relation, Value } from '~/core/v2.types';
 
-// import { check } from '../check';
 import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
 import { getSpace } from '../io/v2/queries';
@@ -110,7 +108,7 @@ export function usePublish() {
         onSuccess?.();
       }, 3000);
     },
-    [smartAccount, dispatch]
+    [smartAccount, dispatch, storage]
   );
 
   return {
@@ -237,13 +235,17 @@ function makeProposal(args: MakeProposalArgs) {
 
     const execute = Effect.tryPromise({
       try: async () => {
-        return await smartAccount.sendTransaction({
-          to:
-            space.type === 'PUBLIC'
-              ? (space.mainVotingPluginAddress as `0x${string}`)
-              : (space.personalSpaceAdminPluginAddress as `0x${string}`),
-          value: 0n,
-          data: callData,
+        return await smartAccount.sendUserOperation({
+          calls: [
+            {
+              to:
+                space.type === 'PUBLIC'
+                  ? (space.mainVotingPluginAddress as `0x${string}`)
+                  : (space.personalSpaceAdminPluginAddress as `0x${string}`),
+              value: 0n,
+              data: callData,
+            },
+          ],
         });
       },
       catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
@@ -255,7 +257,7 @@ function makeProposal(args: MakeProposalArgs) {
         Schedule.jittered,
         Schedule.compose(Schedule.elapsed),
         Schedule.tapInput(() => Effect.succeed(console.log('[PUBLISH][makeProposal] Retrying'))),
-        Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(30)))
+        Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(10)))
       )
     );
   });
@@ -290,66 +292,4 @@ function getCalldataForSpaceGovernanceType(args: GovernanceTypeCalldataArgs) {
         args: [args.cid, args.spacePluginAddress as `0x${string}`],
       });
   }
-}
-
-export function prepareLocalDataForPublishing(values: Value[], relations: Relation[], spaceId: string) {
-  const validValues = values.filter(
-    // Deleted ops have a value of ''. Make sure we don't filter those out
-    v => v.spaceId === spaceId && !v.hasBeenPublished && v.property.id !== '' && v.entity.id !== ''
-  );
-
-  const relationOps = relations.map((r): CreateRelationOp | DeleteRelationOp => {
-    if (r.isDeleted) {
-      return {
-        type: 'DELETE_RELATION',
-        id: Id.Id(r.id),
-      };
-    }
-
-    return {
-      type: 'CREATE_RELATION',
-      relation: {
-        id: Id.Id(r.id),
-        type: Id.Id(r.type.id),
-        entity: Id.Id(r.entityId),
-        fromEntity: Id.Id(r.fromEntity.id),
-        toEntity: Id.Id(r.toEntity.id),
-        position: r.position ?? undefined,
-        verified: r.verified ?? undefined,
-        toSpace: r.toSpaceId ? Id.Id(r.toSpaceId) : undefined,
-      },
-    };
-  });
-
-  // @TODO(migration): Need to group values and squash into Entity ops
-  // const tripleOps = validValues.map((t): SetTripleOp | DeleteTripleOp => {
-  //   if (t.isDeleted) {
-  //     return {
-  //       type: 'DELETE_TRIPLE',
-  //       triple: {
-  //         entity: t.entityId,
-  //         attribute: t.attributeId,
-  //       },
-  //     };
-  //   }
-
-  //   return {
-  //     type: 'SET_TRIPLE',
-  //     triple: {
-  //       entity: t.entityId,
-  //       attribute: t.attributeId,
-  //       value: {
-  //         type: t.value.type,
-  //         value: t.value.value,
-  //         ...(t.value.options !== undefined && {
-  //           options: Object.fromEntries(Object.entries(t.value.options).filter(([, v]) => v !== undefined)),
-  //         }),
-  //       },
-  //     },
-  //   };
-  // });
-
-  return {
-    opsToPublish: [...relationOps],
-  };
 }

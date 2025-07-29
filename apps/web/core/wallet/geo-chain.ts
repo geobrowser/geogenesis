@@ -8,8 +8,8 @@ export const GEOGENESIS: Chain = {
   id: Number(chainId),
   name: 'Geo Genesis',
   nativeCurrency: {
-    name: chainId === '80451' ? 'Ethereum' : 'The Graph',
-    symbol: chainId === '80451' ? 'ETH' : 'GRT',
+    name: chainId === '80451' ? 'The Graph' : 'Ethereum',
+    symbol: chainId === '80451' ? 'GRT' : 'ETH',
     decimals: 18,
   },
   rpcUrls: {
