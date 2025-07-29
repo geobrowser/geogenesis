@@ -1,9 +1,3 @@
-const APP_ENV = process.env.NEXT_PUBLIC_APP_ENV;
-
-if (!APP_ENV) {
-  throw new Error('NEXT_PUBLIC_APP_ENV is not set');
-}
-
 // Not required, only set in test environments
 const TEST_ENV = process.env.NEXT_PUBLIC_IS_TEST_ENV;
 
@@ -13,7 +7,7 @@ if (!PRIVY_APP_ID) {
   throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is not set');
 }
 
-let RPC_ENDPOINT = process.env.NEXT_PUBLIC_GEOGENESIS_RPC;
+const RPC_ENDPOINT = process.env.NEXT_PUBLIC_GEOGENESIS_RPC;
 
 if (!RPC_ENDPOINT) {
   throw new Error('NEXT_PUBLIC_GEOGENESIS_RPC is not set');
@@ -25,7 +19,7 @@ if (!RPC_ENDPOINT_TESTNET) {
   throw new Error('NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET is not set');
 }
 
-let API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT;
+const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT;
 
 if (!API_ENDPOINT) {
   throw new Error('NEXT_PUBLIC_API_ENDPOINT is not set');
@@ -37,7 +31,7 @@ if (!API_ENDPOINT_TESTNET) {
   throw new Error('NEXT_PUBLIC_API_ENDPOINT_TESTNET is not set');
 }
 
-let BUNDLER_RPC_ENDPOINT = process.env.NEXT_PUBLIC_BUNDLER_RPC;
+const BUNDLER_RPC_ENDPOINT = process.env.NEXT_PUBLIC_BUNDLER_RPC;
 
 if (!BUNDLER_RPC_ENDPOINT) {
   throw new Error('NEXT_PUBLIC_BUNDLER_RPC is not set');
@@ -74,7 +68,6 @@ if (!ONBOARD_CODE) {
 }
 
 export {
-  APP_ENV,
   TEST_ENV,
   PRIVY_APP_ID,
   RPC_ENDPOINT,
