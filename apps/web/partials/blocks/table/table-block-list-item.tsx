@@ -53,6 +53,12 @@ export function TableBlockListItem({
     selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
   });
 
+  const nameValues = useValues({
+    selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.NAME_PROPERTY,
+  });
+  const nameValueId = nameValues[0]?.id;
+  const descriptionValueId = descriptionValues[0]?.id;
+
   const maybeDescriptionInSpace = descriptionValues.find(r => r.spaceId === currentSpaceId)?.value;
   const maybeDescription = maybeDescriptionInSpace ?? descriptionValues[0]?.value;
 
@@ -221,7 +227,7 @@ export function TableBlockListItem({
                       onChangeEntry(
                         {
                           entityId: rowEntityId,
-                          entityName: value,
+                          entityName: name,
                           spaceId: currentSpaceId,
                         },
                         {
@@ -231,7 +237,7 @@ export function TableBlockListItem({
                             payload: {
                               renderable: {
                                 attributeId: SystemIds.NAME_PROPERTY,
-                                entityId: rowEntityId,
+                                entityId: nameValueId,
                                 spaceId: currentSpaceId,
                                 attributeName: 'Name',
                                 entityName: name,
@@ -264,7 +270,7 @@ export function TableBlockListItem({
                         onChangeEntry(
                           {
                             entityId: rowEntityId,
-                            entityName: value,
+                            entityName: name,
                             spaceId: currentSpaceId,
                           },
                           {
@@ -311,7 +317,7 @@ export function TableBlockListItem({
                       payload: {
                         renderable: {
                           attributeId: SystemIds.DESCRIPTION_PROPERTY,
-                          entityId: rowEntityId,
+                          entityId: descriptionValueId,
                           spaceId: currentSpaceId,
                           attributeName: 'Description',
                           entityName: name,

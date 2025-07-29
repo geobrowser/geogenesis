@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { Id, SystemIds } from '@graphprotocol/grc-20';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
@@ -26,6 +26,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
+import { Value } from '~/core/v2.types';
 import { Cell, Row, SearchResult } from '~/core/v2.types';
 
 import { IconButton } from '~/design-system/button';
@@ -129,8 +130,26 @@ function useEntries(
       //   context,
       // });
       // send(event.data);
+
       if ((event.data.type = 'UPSERT_RENDERABLE_TRIPLE_VALUE')) {
-        storage.entities.name.set(context.entityId, spaceId, event.data.payload.value.value ?? '');
+        const value: Value = {
+          id: event.data.payload.renderable.entityId ?? Id.generate(),
+          entity: {
+            id: context.entityId,
+            name: event.data.payload.renderable.entityName,
+          },
+          property: {
+            id: event.data.payload.renderable.attributeId,
+            name: event.data.payload.renderable.attributeName,
+            dataType: event.data.payload.renderable.type,
+          },
+          spaceId,
+          value: event.data.payload.value.value ?? '',
+        };
+
+        storage.values.update(value, draft => {
+          draft.value = event.data.payload.value.value;
+        });
       }
     }
 

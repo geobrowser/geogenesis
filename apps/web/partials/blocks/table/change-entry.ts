@@ -1,5 +1,6 @@
 import { SearchResult } from '~/core/v2.types';
 import { RenderableEntityType } from '~/core/v2.types';
+import { DataType } from '~/core/v2.types';
 
 type EventPayload = {
   type: string;
@@ -10,7 +11,7 @@ type EventPayload = {
       spaceId: string;
       attributeName: string;
       entityName: string | null;
-      type: string;
+      type: DataType;
       value: string;
     };
     value: { type: RenderableEntityType; value: string };
