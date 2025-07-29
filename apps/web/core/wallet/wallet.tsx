@@ -13,6 +13,7 @@ import { Button } from '~/design-system/button';
 
 import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
+import { Environment } from '../environment';
 import { GEOGENESIS } from './geo-chain';
 
 const realWalletConfig = createConfig({
@@ -21,7 +22,7 @@ const realWalletConfig = createConfig({
   // extensions within the browser.
   multiInjectedProviderDiscovery: true,
   transports: {
-    [GEOGENESIS.id]: http(process.env.NEXT_PUBLIC_GEOGENESIS_RPC!),
+    [GEOGENESIS.id]: http(Environment.getConfig().rpc),
   },
   ssr: true,
   connectors: [
@@ -33,7 +34,7 @@ const realWalletConfig = createConfig({
     }),
     walletConnect({
       showQrModal: true,
-      projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+      projectId: Environment.variables.walletConnectProjectId,
       metadata: {
         name: 'Geo Genesis',
         description: "Browse and organize the world's public knowledge and information in a decentralized way.",
@@ -117,10 +118,5 @@ export function GeoConnectButton() {
     login();
   };
 
-  return (
-    <Button onClick={onLogin}>
-      {/* <Wallet color="white" /> */}
-      Sign in
-    </Button>
-  );
+  return <Button onClick={onLogin}>Sign in</Button>;
 }
