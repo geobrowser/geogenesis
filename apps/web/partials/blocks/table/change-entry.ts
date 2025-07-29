@@ -1,9 +1,26 @@
 import { SearchResult } from '~/core/v2.types';
+import { RenderableEntityType } from '~/core/v2.types';
+
+type EventPayload = {
+  type: string;
+  payload: {
+    renderable: {
+      attributeId: string;
+      entityId: string;
+      spaceId: string;
+      attributeName: string;
+      entityName: string | null;
+      type: string;
+      value: string;
+    };
+    value: { type: RenderableEntityType; value: string };
+  };
+};
 
 type ChangeEntryParams =
   | {
       type: 'EVENT';
-      data: any; // @TODO(migration): Correct type
+      data: EventPayload; // @TODO(migration): Correct type
     }
   | {
       type: 'Create';

@@ -114,7 +114,7 @@ export function TableBlockBulletedListItem({
                               type: 'TEXT',
                               value: name ?? '',
                             },
-                            value: { type: 'TEXT', value: value },
+                            value: { type: 'TEXT', value },
                           },
                         },
                       }
@@ -157,7 +157,7 @@ export function TableBlockBulletedListItem({
                                 type: 'TEXT',
                                 value: name ?? '',
                               },
-                              value: { type: 'TEXT', value: value },
+                              value: { type: 'TEXT', value },
                             },
                           },
                         }

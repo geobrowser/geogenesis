@@ -130,7 +130,6 @@ export function EditableEntityTableCell({
                       },
                       value: { type: 'TEXT', value },
                     },
-                    name: value,
                   },
                 }
               );

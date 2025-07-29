@@ -129,6 +129,9 @@ function useEntries(
       //   context,
       // });
       // send(event.data);
+      if ((event.data.type = 'UPSERT_RENDERABLE_TRIPLE_VALUE')) {
+        storage.entities.name.set(context.entityId, spaceId, event.data.payload.value.value ?? '');
+      }
     }
 
     // Adding a collection item shouldn't _only_ be for FOC. Should be for adding any data
@@ -197,7 +200,7 @@ function useEntries(
       }
     }
 
-    if (context.entityId === nextEntityId || context.entityId === pendingEntityId) {
+    if (context.entityId === nextEntityId) {
       setHasPlaceholderRow(false);
 
       /**
@@ -209,18 +212,16 @@ function useEntries(
        * the entity already exists.
        */
       if (event.type !== 'Find') {
-        // const maybeName = event.type === 'Create' ? event.data.name : undefined;
+        const maybeName = event.type === 'Create' ? event.data.name : undefined;
 
         // Mark this ID as pending before creating
         setPendingEntityId(context.entityId);
 
         createEntityWithTypes({
-          name: event.data.name,
+          name: maybeName,
           filters: filterState,
         });
       }
-    } else {
-      storage.entities.name.set(context.entityId, spaceId, event.data.name ?? '');
     }
   };
 
