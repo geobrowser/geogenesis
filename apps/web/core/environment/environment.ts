@@ -57,13 +57,12 @@ export const variables: IVars = {
 };
 
 export const getConfig = (): AppConfig => {
-  const chainId = '19411';
-  const rpc = chainId === '19411' ? variables.rpcEndpointTestnet : variables.rpcEndpoint;
-  const api = chainId === '19411' ? variables.apiEndpointTestnet : variables.apiEndpoint;
-  const bundler = chainId === '19411' ? variables.bundlerRpcEndpointTestnet : variables.bundlerRpcEndpoint;
+  const rpc = variables.chainId === '19411' ? variables.rpcEndpointTestnet : variables.rpcEndpoint;
+  const api = variables.chainId === '19411' ? variables.apiEndpointTestnet : variables.apiEndpoint;
+  const bundler = variables.chainId === '19411' ? variables.bundlerRpcEndpointTestnet : variables.bundlerRpcEndpoint;
 
   return {
-    chainId,
+    chainId: variables.chainId,
     rpc,
     ipfs: IPFS_GATEWAY_PATH,
     api,
