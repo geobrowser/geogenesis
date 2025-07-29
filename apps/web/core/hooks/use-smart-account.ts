@@ -80,16 +80,6 @@ export function useSmartAccount() {
         },
       });
 
-      console.log('smart account', {
-        walletClient,
-        publicClient,
-        chain: GEOGENESIS,
-        rpc: config.rpc,
-        bundler: config.bundler,
-        paymasterClient,
-        smartAccount,
-      });
-
       if (!cookies.walletAddress || cookies.walletAddress !== smartAccount.account.address) {
         // We set a cookie with the connected user's address so we can fetch data while on the
         // server associated with the user. Since no data in Geo Genesis is private and all
