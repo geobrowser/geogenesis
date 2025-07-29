@@ -44,15 +44,13 @@ export const EntityPageRelations = ({ spaceId, entityId, relations: serverRelati
     selector: r => r.entityId === entityId,
   });
 
-  const relations = isHydrated ? clientRelations : serverRelations;
+  const relations = isHydrated && clientRelations.length > 0 ? clientRelations : serverRelations;
 
   useEffect(() => {
     if (serverRelations && serverRelations.length > 0) {
       const entityIds = serverRelations.map(r => r.fromEntity.id);
       hydrate(entityIds);
-      setTimeout(() => {
-        setIsHydrated(true);
-      }, 1_000);
+      setIsHydrated(true);
     }
   }, [serverRelations, hydrate]);
 
