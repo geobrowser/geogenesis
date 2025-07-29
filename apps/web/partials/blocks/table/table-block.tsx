@@ -1,6 +1,6 @@
 'use client';
 
-import { Id, SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds } from '@graphprotocol/grc-20';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
@@ -23,11 +23,11 @@ import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editi
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
+import { OmitStrict } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { Value } from '~/core/v2.types';
-import { Cell, Row, SearchResult } from '~/core/v2.types';
+import { Cell, Row, SearchResult, Value } from '~/core/v2.types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -132,8 +132,8 @@ function useEntries(
       // send(event.data);
 
       if ((event.data.type = 'UPSERT_RENDERABLE_TRIPLE_VALUE')) {
-        const value: Value = {
-          id: event.data.payload.renderable.entityId ?? Id.generate(),
+        const value: Value | OmitStrict<Value, 'id'> = {
+          id: event.data.payload.renderable.entityId ?? undefined,
           entity: {
             id: context.entityId,
             name: event.data.payload.renderable.entityName,
@@ -147,9 +147,13 @@ function useEntries(
           value: event.data.payload.value.value ?? '',
         };
 
-        storage.values.update(value, draft => {
-          draft.value = event.data.payload.value.value;
-        });
+        if (!event.data.payload.renderable.entityId) {
+          storage.values.set(value);
+        } else {
+          storage.values.update(value, draft => {
+            draft.value = event.data.payload.value.value;
+          });
+        }
       }
     }
 
