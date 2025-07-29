@@ -62,7 +62,13 @@ export default async function DefaultEntityPage({
         {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
         <EntityPageContentContainer>
           <div className="space-y-2">
-            {showRelations && <EntityPageRelations relations={props.relationEntityRelations} spaceId={props.spaceId} />}
+            {showRelations && (
+              <EntityPageRelations
+                spaceId={props.spaceId}
+                entityId={props.id}
+                relations={props.relationEntityRelations}
+              />
+            )}
             {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
             {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
           </div>
