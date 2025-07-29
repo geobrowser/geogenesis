@@ -1,8 +1,9 @@
 import { IPFS_GATEWAY_PATH } from '../constants';
-import { AppEnv } from '../types';
 import {
   ACCOUNT_ABSTRACTION_API_KEY,
-  APP_ENV,
+  API_ENDPOINT,
+  BUNDLER_RPC_ENDPOINT,
+  CHAIN_ID,
   ONBOARD_CODE,
   ONBOARD_FLAG,
   PRIVY_APP_ID,
@@ -11,7 +12,7 @@ import {
   WALLETCONNECT_PROJECT_ID,
 } from './config';
 
-type SupportedChainId = '31337' | '80451';
+type SupportedChainId = '31337' | '80451' | '19411';
 
 export type AppConfig = {
   chainId: SupportedChainId;
@@ -22,10 +23,12 @@ export type AppConfig = {
 };
 
 type IVars = Readonly<{
-  appEnv: string;
+  chainId: '19411' | '80451';
   walletConnectProjectId: string;
   privyAppId: string;
   rpcEndpoint: string;
+  apiEndpoint: string;
+  bundlerRpcEndpoint: string;
   accountAbstractionApiKey: string;
   isTestEnv: boolean;
   onboardFlag: string;
@@ -33,49 +36,24 @@ type IVars = Readonly<{
 }>;
 
 export const variables: IVars = {
-  appEnv: APP_ENV!,
+  chainId: CHAIN_ID! as '19411' | '80451',
   isTestEnv: TEST_ENV === 'true',
   privyAppId: PRIVY_APP_ID!,
   rpcEndpoint: RPC_ENDPOINT!,
+  apiEndpoint: API_ENDPOINT!,
+  bundlerRpcEndpoint: BUNDLER_RPC_ENDPOINT!,
   walletConnectProjectId: WALLETCONNECT_PROJECT_ID!,
   accountAbstractionApiKey: ACCOUNT_ABSTRACTION_API_KEY!,
   onboardFlag: ONBOARD_FLAG!,
   onboardCode: ONBOARD_CODE!,
 };
 
-// @TODO: This eventually completely comes from our environment instead of hardcoded here.
-// We can ensure our env matches the right schema in `make` above.
-export const options: Record<AppEnv, AppConfig> = {
-  development: {
-    chainId: '31337',
-    rpc: 'http://localhost:8545',
-    ipfs: IPFS_GATEWAY_PATH,
-    api: 'http://localhost:5001/graphql',
-    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
-  },
-  production: {
-    chainId: '80451',
-    rpc: variables.rpcEndpoint,
-    ipfs: IPFS_GATEWAY_PATH,
-    api: 'https://api-testnet.geobrowser.io/graphql',
-    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
-  },
-  testnet: {
-    chainId: '80451',
-    rpc: variables.rpcEndpoint,
-    ipfs: IPFS_GATEWAY_PATH,
-    api: 'https://geo-conduit.up.railway.app/graphql',
-    bundler: `https://api.pimlico.io/v2/80451/rpc?apikey=${variables.accountAbstractionApiKey}`,
-  },
-};
-
 export const getConfig = (): AppConfig => {
-  const env = variables.appEnv;
-
-  if (!(env in options)) {
-    console.error(`No config for env ${env}`);
-    return options['production'];
-  }
-
-  return options[env as AppEnv];
+  return {
+    chainId: variables.chainId,
+    rpc: variables.rpcEndpoint,
+    ipfs: IPFS_GATEWAY_PATH,
+    api: variables.rpcEndpoint,
+    bundler: `${variables.bundlerRpcEndpoint}?apikey=${variables.accountAbstractionApiKey}`,
+  };
 };

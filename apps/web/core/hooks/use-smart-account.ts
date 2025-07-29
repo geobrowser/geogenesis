@@ -1,5 +1,6 @@
 'use client';
 
+import { getSmartAccountWalletClient } from '@graphprotocol/grc-20';
 import { useQuery } from '@tanstack/react-query';
 import { createSmartAccountClient } from 'permissionless';
 import { toSafeSmartAccount } from 'permissionless/accounts';
@@ -37,8 +38,9 @@ export function useSmartAccount() {
         client: publicClient,
         owners: [walletClient],
         entryPoint: {
-          version: '0.7',
+          // optional, defaults to 0.7
           address: entryPoint07Address,
+          version: '0.7',
         },
         version: '1.4.1',
       });
