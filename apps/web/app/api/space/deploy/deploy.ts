@@ -44,6 +44,7 @@ export function deploySpace(args: DeployArgs) {
           ops,
           network: Environment.getConfig().chainId === '19411' ? 'TESTNET' : 'MAINNET',
           editorAddress: initialEditorAddress,
+          governanceType: governanceType,
         }),
       catch: e => new GenerateOpsError(`Failed to generate ops: ${String(e)}`),
     });
