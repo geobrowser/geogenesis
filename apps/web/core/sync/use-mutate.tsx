@@ -1,7 +1,7 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds, Graph, Position } from '@graphprotocol/grc-20';
 import produce, { Draft } from 'immer';
 
-import { DATA_TYPE_PROPERTY } from '../constants';
+import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
 import { DataType, Relation, Value } from '../v2.types';
@@ -33,7 +33,16 @@ export interface Mutator {
     };
   };
   properties: {
-    create: (params: { entityId: string; spaceId: string; name: string; dataType: DataType }) => void;
+    create: (params: { 
+      entityId: string; 
+      spaceId: string; 
+      name: string; 
+      dataType: DataType;
+      renderableTypeId: string | null;
+      verified?: boolean;
+      toSpaceId?: string;
+      skipTypeRelation?: boolean;
+    }) => void;
   };
   values: {
     get: (id: string, entityId: string) => Value | null;
@@ -46,6 +55,16 @@ export interface Mutator {
     set: (relation: Relation) => void;
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
+  };
+  images: {
+    createAndLink: (params: {
+      file: File;
+      fromEntityId: string;
+      fromEntityName?: string | null;
+      relationPropertyId: string;
+      relationPropertyName: string | null;
+      spaceId: string;
+    }) => Promise<{ imageId: string; relationId: string }>;
   };
 }
 
@@ -79,7 +98,7 @@ function createMutator(store: GeoStore): Mutator {
       },
     },
     properties: {
-      create: ({ entityId, spaceId, name, dataType }) => {
+      create: ({ entityId, spaceId, name, dataType, renderableTypeId, verified = false, toSpaceId, skipTypeRelation = false }) => {
         // Set the name value
         const nameValue: Value = {
           id: ID.createValueId({
@@ -124,6 +143,60 @@ function createMutator(store: GeoStore): Mutator {
 
         store.setValue(nameValue);
         store.setValue(dataTypeValue);
+
+        // When creating property by adding a property type relation,
+        // we don't need to create the property type relation again
+        if (!skipTypeRelation) {
+          const propertyTypeRelation: Relation = {
+            id: ID.createEntityId(),
+            entityId: ID.createEntityId(),
+            spaceId,
+            renderableType: 'RELATION',
+            verified,
+            toSpaceId,
+            position: Position.generate(),
+            type: {
+              id: SystemIds.TYPES_PROPERTY,
+              name: 'Types',
+            },
+            fromEntity: {
+              id: entityId,
+              name: name,
+            },
+            toEntity: {
+              id: SystemIds.PROPERTY,
+              name: 'Property',
+              value: SystemIds.PROPERTY,
+            },
+          };
+          store.setRelation(propertyTypeRelation);
+        }
+
+        // If there's a renderableType, create the relation
+        if (renderableTypeId) {
+          const renderableTypeRelation: Relation = {
+            id: ID.createEntityId(),
+            entityId: ID.createEntityId(),
+            spaceId,
+            renderableType: 'RELATION',
+            verified: false,
+            position: Position.generate(),
+            type: {
+              id: RENDERABLE_TYPE_PROPERTY,
+              name: 'Renderable Type',
+            },
+            fromEntity: {
+              id: entityId,
+              name: name,
+            },
+            toEntity: {
+              id: renderableTypeId,
+              name: renderableTypeId, // This should ideally be the actual name
+              value: renderableTypeId,
+            },
+          };
+          store.setRelation(renderableTypeRelation);
+        }
       },
     },
     values: {
@@ -161,6 +234,90 @@ function createMutator(store: GeoStore): Mutator {
       },
       delete: newRelation => {
         store.deleteRelation(newRelation);
+      },
+    },
+    images: {
+      createAndLink: async ({ file, fromEntityId, fromEntityName, relationPropertyId, relationPropertyName, spaceId }) => {
+        // Create the image entity using the Graph API
+        const { id: imageId, ops: createImageOps } = await Graph.createImage({
+          blob: file,
+        });
+
+        // Process the operations returned by Graph.createImage
+        for (const op of createImageOps) {
+          if (op.type === 'CREATE_RELATION') {
+            store.setRelation({
+              id: op.relation.id,
+              entityId: op.relation.entity,
+              fromEntity: {
+                id: op.relation.fromEntity,
+                name: null,
+              },
+              type: {
+                id: op.relation.type,
+                name: 'Image',
+              },
+              toEntity: {
+                id: op.relation.toEntity,
+                name: 'Image',
+                value: op.relation.toEntity,
+              },
+              spaceId,
+              position: Position.generate(),
+              verified: false,
+              renderableType: 'RELATION',
+            });
+          } else if (op.type === 'UPDATE_ENTITY') {
+            // Create values for each property in the entity update
+            for (const value of op.entity.values) {
+              store.setValue({
+                id: ID.createValueId({
+                  entityId: op.entity.id,
+                  propertyId: value.property,
+                  spaceId,
+                }),
+                entity: {
+                  id: op.entity.id,
+                  name: null,
+                },
+                property: {
+                  id: value.property,
+                  name: 'Image Property',
+                  dataType: 'TEXT',
+                  renderableType: 'URL',
+                },
+                spaceId,
+                value: value.value,
+              });
+            }
+          }
+        }
+        
+        // Create relation from parent entity to image entity
+        const relationId = ID.createEntityId();
+        store.setRelation({
+          id: relationId,
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: fromEntityId,
+            name: fromEntityName || '',
+          },
+          type: {
+            id: relationPropertyId,
+            name: relationPropertyName || '',
+          },
+          toEntity: {
+            id: imageId,
+            name: null,
+            value: imageId,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'IMAGE',
+        });
+
+        return { imageId, relationId };
       },
     },
   };

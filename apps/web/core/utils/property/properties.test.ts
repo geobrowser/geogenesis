@@ -7,7 +7,6 @@ import {
   constructDataType,
   getCurrentRenderableType
 } from './properties';
-import { getImageUrlFromEntity } from '../utils';
 import { SwitchableRenderableType, Property, Relation } from '~/core/v2.types';
 
 // Mock the constants to ensure they're available in tests
@@ -322,85 +321,6 @@ describe('Properties', () => {
 
       const result = getCurrentRenderableType(mockPropertyDataType);
       expect(result).toBe('TEXT');
-    });
-  });
-
-  describe('getImageUrlFromEntity', () => {
-    it('should return undefined for empty imageEntityId', () => {
-      const result = getImageUrlFromEntity('', []);
-      expect(result).toBeUndefined();
-    });
-
-    it('should return undefined when no values found for entity', () => {
-      const mockValues = [
-        {
-          entity: { id: 'other-entity', name: 'Other' },
-          property: { id: 'prop-1', name: 'Property', dataType: 'TEXT' },
-          value: 'ipfs://test-hash',
-        },
-      ];
-
-      const result = getImageUrlFromEntity('image-entity', mockValues as any);
-      expect(result).toBeUndefined();
-    });
-
-    it('should return undefined when no IPFS values found', () => {
-      const mockValues = [
-        {
-          entity: { id: 'image-entity', name: 'Image' },
-          property: { id: 'prop-1', name: 'Property', dataType: 'TEXT' },
-          value: 'https://example.com/image.jpg',
-        },
-        {
-          entity: { id: 'image-entity', name: 'Image' },
-          property: { id: 'prop-2', name: 'Property', dataType: 'TEXT' },
-          value: 'not-an-ipfs-url',
-        },
-      ];
-
-      const result = getImageUrlFromEntity('image-entity', mockValues as any);
-      expect(result).toBeUndefined();
-    });
-
-    it('should return the first IPFS URL found for the entity', () => {
-      const mockValues = [
-        {
-          entity: { id: 'image-entity', name: 'Image' },
-          property: { id: 'prop-1', name: 'Property', dataType: 'TEXT' },
-          value: 'https://example.com/image.jpg',
-        },
-        {
-          entity: { id: 'image-entity', name: 'Image' },
-          property: { id: 'prop-2', name: 'Property', dataType: 'TEXT' },
-          value: 'ipfs://first-hash',
-        },
-        {
-          entity: { id: 'image-entity', name: 'Image' },
-          property: { id: 'prop-3', name: 'Property', dataType: 'TEXT' },
-          value: 'ipfs://second-hash',
-        },
-      ];
-
-      const result = getImageUrlFromEntity('image-entity', mockValues as any);
-      expect(result).toBe('ipfs://first-hash');
-    });
-
-    it('should handle non-string values gracefully', () => {
-      const mockValues = [
-        {
-          entity: { id: 'image-entity', name: 'Image' },
-          property: { id: 'prop-1', name: 'Property', dataType: 'NUMBER' },
-          value: 42,
-        },
-        {
-          entity: { id: 'image-entity', name: 'Image' },
-          property: { id: 'prop-2', name: 'Property', dataType: 'TEXT' },
-          value: 'ipfs://test-hash',
-        },
-      ];
-
-      const result = getImageUrlFromEntity('image-entity', mockValues as any);
-      expect(result).toBe('ipfs://test-hash');
     });
   });
 });

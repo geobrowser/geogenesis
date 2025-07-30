@@ -9,7 +9,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useQueryProperty, useRelations } from '~/core/sync/use-store';
-import { DataType, SwitchableRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '~/core/v2.types';
+import { SwitchableRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '~/core/v2.types';
 
 import { Divider } from '~/design-system/divider';
 
@@ -61,13 +61,18 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
   );
   
   const { entity: renderableTypeEntity } = useQueryEntity({
-    id: propertyData?.renderableType || renderableTypeRelation?.toEntity.id || undefined,
+    // id: propertyData?.renderableType || renderableTypeRelation?.toEntity.id || undefined,
+    id: propertyData?.renderableType || undefined,
     spaceId,
     enabled: !!(propertyData?.renderableType || renderableTypeRelation?.toEntity.id),
   });
 
   const isPropertyEntity = !!propertyData || !!hasLocalPropertyType
 
+  // Check for local dataType value to avoid creating duplicate properties
+  // const localDataTypeValue = useValues({
+  //   selector: v => v.entity.id === entityId && v.property.id === DATA_TYPE_PROPERTY && v.spaceId === spaceId
+  // })[0];
 
   const propertyDataType = React.useMemo(() => {
     return Properties.constructDataType(
@@ -202,18 +207,19 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
     );
     
     // Only create property if:
-    // 1. Entity has Property type
+    // 1. Entity has Property type relation
     // 2. No property data exists from backend
-    // 3. No dataType value exists (meaning we haven't created it yet)
-    // 4. No existing Property type relation exists
     if (existingPropertyTypeRelation && !propertyData && entityId && spaceId) {
       
       // Create the property with a default dataType of TEXT
+      // Skip creating the Property type relation since it already exists
       storage.properties.create({
         entityId,
         spaceId,
         name: name || 'New Property',
         dataType: 'TEXT',
+        renderableTypeId: null,
+        skipTypeRelation: true,
       });
     }
   }, [propertyData, entityId, spaceId, storage, name, relations]);

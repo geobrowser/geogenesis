@@ -1,9 +1,10 @@
-import { ContentIds, SystemIds, Graph } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
@@ -42,6 +43,7 @@ export function TableBlockGalleryItem({
   relationId,
   source,
 }: Props) {
+  const { storage } = useMutate();
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
@@ -114,9 +116,40 @@ export function TableBlockGalleryItem({
               variant="gallery"
               imageSrc={image ?? undefined}
               onFileChange={async (file) => {
-                // TODO: Update this implementation for new store/model/SDK architecture
-                // The onChangeEntry event system needs to be updated to work with the new data model
-                console.log('Image upload not yet implemented for gallery items', file);
+                // Use the consolidated helper to create and link the image
+                const { imageId } = await storage.images.createAndLink({
+                  file,
+                  fromEntityId: rowEntityId,
+                  fromEntityName: name,
+                  relationPropertyId: SystemIds.COVER_PROPERTY,
+                  relationPropertyName: 'Cover',
+                  spaceId: currentSpaceId,
+                });
+
+                // Notify the parent component about the change
+                onChangeEntry(
+                  {
+                    entityId: rowEntityId,
+                    entityName: name,
+                    spaceId: currentSpaceId,
+                  },
+                  {
+                    type: 'EVENT',
+                    data: {
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: rowEntityId,
+                        fromEntityName: name,
+                        toEntityId: imageId,
+                        toEntityName: null,
+                        typeOfId: SystemIds.COVER_PROPERTY,
+                        typeOfName: 'Cover',
+                        renderableType: 'IMAGE',
+                        value: imageId,
+                      },
+                    },
+                  }
+                );
               }}
             />
           )}

@@ -6,7 +6,7 @@ import { RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { readTypes } from '../database/entities';
 import { Entities } from '../utils/entity';
-import { DataType, Entity, Property, RawRenderableType, Relation, Value } from '../v2.types';
+import { DataType, Entity, Property, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 

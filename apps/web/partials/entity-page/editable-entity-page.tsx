@@ -12,8 +12,7 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useCover, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
-import { NavUtils, getImagePath, getImageUrlFromEntity } from '~/core/utils/utils';
-import { Properties } from '~/core/utils/property';
+import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
 import {
   Property,
   Relation,
@@ -26,7 +25,6 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { Graph } from '@graphprotocol/grc-20';
 import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
@@ -51,7 +49,8 @@ function ShowablePanel({
   hasEntries: boolean;
   children: React.ReactNode;
 }) {
-  const coverUrl = useCover(id);
+  const coverUrl = useCover(id, spaceId);
+  console.log('coverUrl', coverUrl);
   const types = useEntityTypes(id, spaceId);
   const { blockIds } = useEditorStore();
   const [editorHasContent] = useAtom(editorHasContentAtom);
@@ -209,7 +208,7 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                 addPropertyToEntity({
                   entityId: id,
                   propertyId: result.id,
-                  propertyName: result.name || '', // Default to empty string if name is null
+                  propertyName: result.name || '',
                   entityName: name || undefined,
                 });
               }
@@ -251,21 +250,14 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   });
 
 
-  // Always call useValues hook to maintain hook order consistency (must be before early returns)
-  const allValues = useValues({
-    selector: v => v.spaceId === spaceId,
-  });
-
   // For IMAGE properties, get the image URL from related image entities
   const imageRelation = relations.find(r => r.renderableType === 'IMAGE');
   const imageEntityId = imageRelation?.toEntity.id;
   
-  // Find the image URL value (typically the first value with an ipfs:// URL)
-  const imageSrc = React.useMemo(() => {
-    if (!property || property.renderableType !== SystemIds.IMAGE || !imageEntityId) return undefined;
-    
-    return getImageUrlFromEntity(imageEntityId, allValues);
-  }, [property, imageEntityId, allValues]);
+  // Use the efficient hook to get only the image URL for this specific entity
+  const imageSrc = useImageUrlFromEntity(imageEntityId, spaceId);
+
+  console.log('imageSrc', imageSrc);
 
   if (!property) {
     return null;
@@ -285,79 +277,14 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
             <PageImageField
               imageSrc={imageSrc}
               onFileChange={async file => {
-                // Create the image entity using the new Graph API with blob
-                const { id: imageId, ops: createImageOps } = await Graph.createImage({
-                  blob: file,
-                });
-
-                
-                // Process the operations returned by Graph.createImage
-                for (const op of createImageOps) {
-                  if (op.type === 'CREATE_RELATION') {
-                    storage.relations.set({
-                      id: op.relation.id,
-                      entityId: op.relation.entity,
-                      fromEntity: {
-                        id: op.relation.fromEntity,
-                        name: null,
-                      },
-                      type: {
-                        id: op.relation.type,
-                        name: 'Types',
-                      },
-                      toEntity: {
-                        id: op.relation.toEntity,
-                        name: 'Image',
-                        value: op.relation.toEntity,
-                      },
-                      spaceId,
-                      position: Position.generate(),
-                      verified: false,
-                      renderableType: 'RELATION',
-                    });
-                  } else if (op.type === 'UPDATE_ENTITY') {
-                    // Create values for each property in the entity update
-                    for (const value of op.entity.values) {
-                      storage.values.set({
-                        entity: {
-                          id: op.entity.id,
-                          name: null,
-                        },
-                        property: {
-                          id: value.property,
-                          name: 'Image Property',
-                          dataType: 'TEXT',
-                          renderableType: 'URL',
-                        },
-                        spaceId,
-                        value: value.value,
-                      });
-                    }
-                  }
-                }
-                
-                // Create relation from parent entity to image entity
-                const newRelationId = ID.createEntityId();
-                storage.relations.set({
-                  id: newRelationId,
-                  entityId: ID.createEntityId(),
-                  fromEntity: {
-                    id: id,
-                    name: name || '',
-                  },
-                  type: {
-                    id: propertyId,
-                    name: typeOfName,
-                  },
-                  toEntity: {
-                    id: imageId,
-                    name: null,
-                    value: imageId,
-                  },
+                // Use the consolidated helper to create and link the image
+                await storage.images.createAndLink({
+                  file,
+                  fromEntityId: id,
+                  fromEntityName: name,
+                  relationPropertyId: propertyId,
+                  relationPropertyName: typeOfName,
                   spaceId,
-                  position: Position.generate(),
-                  verified: false,
-                  renderableType: 'IMAGE',
                 });
               }}
               onImageRemove={() => console.log(`remove`)}
@@ -465,10 +392,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         const relationValue = r.toEntity.id;
 
         if (property.renderableTypeStrict === 'IMAGE') {
-          // relationValue is the image entity ID, we need to get the actual image URL
-          const actualImageSrc = getImageUrlFromEntity(relationValue, allValues);
-          
-          return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(actualImageSrc || '')} />;
+          return <ImageRelation key={`image-${relationId}-${relationValue}`} relationValue={relationValue} spaceId={spaceId} />;
         }
 
         return (
@@ -583,6 +507,13 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
       )}
     </div>
   );
+}
+
+function ImageRelation({ relationValue, spaceId }: { relationValue: string; spaceId: string }) {
+  // Use the efficient hook to get only the image URL for this specific entity
+  const actualImageSrc = useImageUrlFromEntity(relationValue, spaceId);
+  
+  return <ImageZoom imageSrc={getImagePath(actualImageSrc || '')} />;
 }
 
 function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; propertyId: string; spaceId: string }) {
