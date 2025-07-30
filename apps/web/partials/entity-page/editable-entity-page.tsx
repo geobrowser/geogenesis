@@ -186,11 +186,11 @@ export function EditableEntityPage({ id, spaceId }: Props) {
             spaceId={spaceId}
             relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
             onCreateEntity={result => {
-              const selectedPropertyType = result.selectedPropertyType || 'TEXT';
+              const renderableType = result.renderableType || 'TEXT';
               
               const createdPropertyId = createProperty({
                 name: result.name || '',
-                propertyType: selectedPropertyType,
+                propertyType: renderableType,
                 verified: result.verified,
                 space: result.space,
               });

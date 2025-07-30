@@ -42,7 +42,7 @@ import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
-import { PropertyTypeDropdown } from '~/partials/entity-page/property-type-dropdown';
+import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 
 type SelectEntityProps = {
   onDone?: (
@@ -55,7 +55,7 @@ type SelectEntityProps = {
     // Not the best way to do this but the simplest for now to avoid breaking changes.
     fromCreateFn?: boolean
   ) => void;
-  onCreateEntity?: (result: { id: string; name: string | null; space?: string; verified?: boolean; selectedPropertyType?: SwitchableRenderableType }) => void;
+  onCreateEntity?: (result: { id: string; name: string | null; space?: string; verified?: boolean; renderableType?: SwitchableRenderableType }) => void;
   spaceId: string;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
@@ -102,7 +102,7 @@ export const SelectEntity = ({
 
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
-  const [selectedPropertyType, setSelectedPropertyType] = useState<SwitchableRenderableType>('TEXT');
+  const [renderableType, setRenderableType] = useState<SwitchableRenderableType>('TEXT');
 
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 
@@ -146,7 +146,7 @@ export const SelectEntity = ({
     // e.g., you're in a collection and create a new entity, we want to add the current
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
-      onCreateEntity({ id: newEntityId, name: query, selectedPropertyType: isCreatingProperty ? selectedPropertyType : undefined });
+      onCreateEntity({ id: newEntityId, name: query, renderableType: isCreatingProperty ? renderableType : undefined });
     } else {
       // Create new entity with name and types using internal id
       storage.entities.name.set(newEntityId, spaceId, query);
@@ -586,9 +586,9 @@ export const SelectEntity = ({
                         <div className="text-[0.875rem] text-grey-04">IDs</div>
                       </button>
                       {isCreatingProperty && (
-                        <PropertyTypeDropdown 
-                          value={selectedPropertyType} 
-                          onChange={setSelectedPropertyType}
+                        <RenderableTypeDropdown 
+                          value={renderableType} 
+                          onChange={setRenderableType}
                         />
                       )}
                     </div>

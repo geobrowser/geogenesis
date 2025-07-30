@@ -15,7 +15,7 @@ import { Divider } from '~/design-system/divider';
 
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
-import { PropertyTypeDropdown } from './property-type-dropdown';
+import { RenderableTypeDropdown } from './renderable-type-dropdown';
 import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useName } from '~/core/state/entity-page-store/entity-store';
@@ -228,7 +228,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
     <div className="flex items-center gap-2 text-text">
       {isPropertyEntity && editable && (
         <div className="flex items-center gap-2">
-          <PropertyTypeDropdown 
+          <RenderableTypeDropdown 
             value={currentRenderableType} 
             onChange={handlePropertyTypeChange}
             baseDataType={isDataTypeEditable ? undefined : propertyDataType?.dataType}
