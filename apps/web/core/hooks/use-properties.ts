@@ -17,7 +17,7 @@ export function useProperties(propertyIds: string[]): Record<string, Property> {
   return map;
 }
 
-function sortProperties(renderables: Property[]) {
+export function sortProperties(renderables: Property[]) {
   /* Visible triples includes both real triples and placeholder triples */
   return renderables.sort((renderableA, renderableB) => {
     // Always put an empty, placeholder triple with no attribute id at the bottom
