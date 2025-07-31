@@ -224,6 +224,7 @@ export function TableBlockListItem({
                     currentSpaceId={currentSpaceId}
                     entityId={rowEntityId}
                     spaceId={nameCell?.space}
+                    collectionId={nameCell?.collectionId}
                     relationId={relationId}
                     verified={verified}
                     onLinkEntry={onLinkEntry}
@@ -360,6 +361,7 @@ export function TableBlockListItem({
             currentSpaceId={currentSpaceId}
             entityId={rowEntityId}
             spaceId={nameCell?.space}
+            collectionId={nameCell?.collectionId}
             relationId={relationId}
             verified={verified}
             onLinkEntry={onLinkEntry}

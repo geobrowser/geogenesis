@@ -10,8 +10,6 @@ export type Profile = {
   address: `0x${string}`;
 };
 
-export type AppEnv = 'development' | 'testnet' | 'production';
-
 export type SpaceType =
   | 'default'
   | 'company'

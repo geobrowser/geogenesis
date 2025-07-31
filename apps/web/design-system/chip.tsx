@@ -3,21 +3,21 @@
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 
-// import Image from 'next/image';
+import Image from 'next/image';
 import * as React from 'react';
 import { useState } from 'react';
 
-// import { useSpace } from '~/core/hooks/use-space';
-// import { EntityId } from '~/core/io/schema';
-// import { getImagePath } from '~/core/utils/utils';
+import { useSpace } from '~/core/hooks/use-space';
+import { EntityId } from '~/core/io/schema';
+import { getImagePath } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { RelationSmall } from '~/design-system/icons/relation-small';
-// import { TopRanked } from '~/design-system/icons/top-ranked';
+import { TopRanked } from '~/design-system/icons/top-ranked';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-// import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
+import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 import { ColorName, colors } from '~/design-system/theme/colors';
 
 type LinkableChipProps = {
@@ -62,6 +62,7 @@ type LinkableRelationChipProps = {
   verified?: boolean;
 
   onDelete?: () => void;
+  onDone?: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
   small?: boolean;
   className?: string;
   children: React.ReactNode;
@@ -161,9 +162,10 @@ export function LinkableRelationChip({
   entityId,
   spaceId,
   relationEntityId,
-  // relationId,
+  relationId,
   verified,
   onDelete,
+  onDone,
   small = false,
   className = '',
   children,
@@ -177,7 +179,7 @@ export function LinkableRelationChip({
 
   const shouldClamp = typeof children === 'string' && children.length >= 42;
 
-  // const { space } = useSpace(spaceId);
+  const { space } = useSpace(spaceId);
 
   return (
     <div
@@ -229,8 +231,7 @@ export function LinkableRelationChip({
             sideOffset={-4}
             className="z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
           >
-            {/* @TODO restore with GRC-20 */}
-            {/* {isEditing && (
+            {isEditing && (
               <div
                 className="-mt-1 inline-block"
                 onMouseEnter={() => setIsSpaceHovered(true)}
@@ -241,8 +242,8 @@ export function LinkableRelationChip({
                   spaceId={spaceId}
                   verified={verified}
                   onDone={result => {
-                    if (!relationId) return;
-                    console.info('result', result);
+                    if (!relationId || !onDone) return;
+                    onDone(result);
                   }}
                   trigger={
                     <button className="inline-flex items-center p-1">
@@ -259,7 +260,7 @@ export function LinkableRelationChip({
                   }
                 />
               </div>
-            )} */}
+            )}
             {relationEntityId && (
               <Link
                 entityId={relationEntityId}

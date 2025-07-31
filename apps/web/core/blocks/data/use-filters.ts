@@ -9,7 +9,6 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Filter, fromGeoFilterString, toGeoFilterState } from './filters';
-import { Source } from './source';
 import { useDataBlockInstance } from './use-data-block';
 
 export function useFilters() {
@@ -63,11 +62,11 @@ export function useFilters() {
   });
 
   const setFilterState = React.useCallback(
-    (filters: Filter[], source: Source) => {
+    (filters: Filter[]) => {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString = newState.length === 0 ? '' : toGeoFilterState(newState, source);
+      const newFiltersString = newState.length === 0 ? '' : toGeoFilterState(newState);
 
       const entityName = blockEntity?.name ?? '';
 

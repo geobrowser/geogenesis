@@ -46,8 +46,7 @@ export function useSource() {
             value: newSource.value,
             valueName: newSource.name,
           });
-        }),
-        newSource
+        })
       );
 
       // @NOTE disabled since overwrites user set titles if changing source before onBlur writes ops
@@ -109,23 +108,20 @@ export function useSource() {
       // adding the new one.
       const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SystemIds.SPACE_FILTER) ?? [];
 
-      setFilterState(
-        [
-          ...filtersWithoutSpaces,
-          {
-            columnId: SystemIds.SPACE_FILTER,
-            columnName: 'Space',
-            valueType: 'RELATION',
-            value: newSource.value[0],
-            valueName: null,
-          },
-        ],
-        newSource
-      );
+      setFilterState([
+        ...filtersWithoutSpaces,
+        {
+          columnId: SystemIds.SPACE_FILTER,
+          columnName: 'Space',
+          valueType: 'RELATION',
+          value: newSource.value[0],
+          valueName: null,
+        },
+      ]);
     }
 
     if (newSource.type === 'GEO') {
-      setFilterState([], newSource);
+      setFilterState([]);
     }
   };
 

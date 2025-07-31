@@ -11,6 +11,8 @@ type CreateCollectionItemRelationArgs = {
     id: string;
     name: string | null;
   };
+  toSpaceId?: string;
+  verified?: boolean;
 };
 
 /**
@@ -26,6 +28,8 @@ export function upsertCollectionItemRelation({
   collectionId,
   spaceId,
   toEntity,
+  toSpaceId,
+  verified,
 }: CreateCollectionItemRelationArgs) {
   // Create a relation for the Collection Item pointing from the collection to the new entity
   storage.relations.set({
@@ -36,51 +40,11 @@ export function upsertCollectionItemRelation({
       toEntityName: toEntity.name,
       spaceId,
     }),
+    ...(toSpaceId !== undefined ? { toSpaceId } : {}),
+    ...(verified !== undefined ? { verified } : {}),
   });
 }
 
-type UpsertSourceSpaceCollectionItemArgs = {
-  collectionItemId: string;
-  spaceId: string;
-  sourceSpaceId?: string;
-  toId: string;
-};
-
-export function upsertSourceSpaceOnCollectionItem({
-  collectionItemId,
-  spaceId,
-  toId,
-  sourceSpaceId,
-}: UpsertSourceSpaceCollectionItemArgs) {
-  // @TODO(migration): Update source space
-  const relation = storage.relations.get('the-relation-id', 'the-entity-id');
-
-  if (relation) {
-    storage.relations.update(relation, draft => {
-      draft.toSpaceId = sourceSpaceId;
-    });
-  }
-}
-
-type UpsertVerifiedSourceCollectionItemArgs = {
-  collectionItemId: string;
-  spaceId: string;
-  verified?: boolean;
-};
-
-export function upsertVerifiedSourceOnCollectionItem({
-  collectionItemId,
-  spaceId,
-  verified = true,
-}: UpsertVerifiedSourceCollectionItemArgs) {
-  const relation = storage.relations.get('the-relation-id', 'the-entity-id');
-
-  if (relation) {
-    storage.relations.update(relation, draft => {
-      draft.verified = verified;
-    });
-  }
-}
 
 type MakeRelationForCollectionItemArgs = {
   collectionId: string;

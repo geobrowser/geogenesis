@@ -1,6 +1,7 @@
 import { Graph, getChecksumAddress } from '@graphprotocol/grc-20';
 import { Effect } from 'effect';
 
+import { Environment } from '~/core/environment';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 
@@ -41,7 +42,7 @@ export function deploySpace(args: DeployArgs) {
           name: args.spaceName,
           spaceEntityId: args.entityId,
           ops,
-          network: 'TESTNET',
+          network: Environment.getConfig().chainId === '19411' ? 'TESTNET' : 'MAINNET',
           editorAddress: initialEditorAddress,
         }),
       catch: e => new GenerateOpsError(`Failed to generate ops: ${String(e)}`),

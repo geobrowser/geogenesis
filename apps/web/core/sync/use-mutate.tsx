@@ -66,6 +66,7 @@ export interface Mutator {
       spaceId: string;
     }) => Promise<{ imageId: string; relationId: string }>;
   };
+  setAsPublished: (valueIds: string[], relationIds: string[]) => void;
 }
 
 function createMutator(store: GeoStore): Mutator {
@@ -319,6 +320,9 @@ function createMutator(store: GeoStore): Mutator {
 
         return { imageId, relationId };
       },
+    },
+    setAsPublished: (valueIds, relationIds) => {
+      store.setAsPublished(valueIds, relationIds);
     },
   };
 }

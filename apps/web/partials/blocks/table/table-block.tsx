@@ -7,11 +7,7 @@ import produce from 'immer';
 
 import * as React from 'react';
 
-import {
-  upsertCollectionItemRelation,
-  upsertSourceSpaceOnCollectionItem,
-  upsertVerifiedSourceOnCollectionItem,
-} from '~/core/blocks/data/collection';
+import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -22,6 +18,8 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
+import { useMutate } from '~/core/sync/use-mutate';
+import { getRelations } from '~/core/sync/use-store';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
@@ -168,26 +166,9 @@ function useEntries(
               id: to.id,
               name: to.name,
             },
+            toSpaceId: to.space,
+            verified: to.verified,
           });
-
-          // Callers can optionally pass a selected entity in the case of Find or Create
-          // to set the collection. We allow setting any data or using FOC.
-          if (to.space) {
-            upsertSourceSpaceOnCollectionItem({
-              collectionItemId: id,
-              toId: to.id,
-              spaceId: spaceId,
-              sourceSpaceId: to.space,
-            });
-          }
-
-          if (to.space && to.verified) {
-            upsertVerifiedSourceOnCollectionItem({
-              collectionItemId: id,
-              spaceId: spaceId,
-              verified: true,
-            });
-          }
 
           // Mark this ID as pending to keep the placeholder visible
           setPendingEntityId(to.id);
@@ -220,6 +201,8 @@ function useEntries(
     }
   };
 
+  const { storage } = useMutate();
+
   const onLinkEntry = (
     id: string,
     to: {
@@ -227,27 +210,16 @@ function useEntries(
       name: string | null;
       space?: string;
       verified?: boolean;
-    },
-    currentlyVerified?: boolean
+    }
   ) => {
-    upsertSourceSpaceOnCollectionItem({
-      collectionItemId: id,
-      toId: to.id,
-      spaceId: spaceId,
-      sourceSpaceId: to.space,
-    });
+    const relation = getRelations({
+      selector: r => r.spaceId === spaceId && r.id === id,
+    })?.[0];
 
-    if (to.space && to.verified) {
-      upsertVerifiedSourceOnCollectionItem({
-        collectionItemId: id,
-        spaceId: spaceId,
-        verified: true,
-      });
-    } else if (to.space && !to.verified && currentlyVerified) {
-      upsertVerifiedSourceOnCollectionItem({
-        collectionItemId: id,
-        spaceId: spaceId,
-        verified: false,
+    if (relation) {
+      storage.relations.update(relation, draft => {
+        draft.toSpaceId = to.space;
+        draft.verified = to.verified;
       });
     }
   };
@@ -460,7 +432,7 @@ export const TableBlock = ({ spaceId }: Props) => {
                         draft.splice(index, 1);
                       });
 
-                      setFilterState(newFilterState, source);
+                      setFilterState(newFilterState);
                     }}
                   />
                 );
