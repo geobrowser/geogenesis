@@ -1,6 +1,7 @@
-import { CreateRelationOp, DeleteRelationOp, Id, UnsetEntityValuesOp, UpdateEntityOp } from '@graphprotocol/grc-20';
+import { CreatePropertyOp, CreateRelationOp, DeleteRelationOp, Id, UnsetEntityValuesOp, UpdateEntityOp, SystemIds } from '@graphprotocol/grc-20';
 
-import { Relation, Value } from '~/core/v2.types';
+import { DataType, Relation, Value } from '~/core/v2.types';
+import { DATA_TYPE_PROPERTY } from '~/core/constants';
 
 /**
  * Maps the local Geo Genesis data model for data to the GRC-20 compliant
@@ -12,6 +13,14 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
     v =>
       v.spaceId === spaceId && !v.hasBeenPublished && v.property.id !== '' && v.entity.id !== '' && v.isLocal === true
   );
+
+  // Identify property entities by looking for entities that have a TYPES_PROPERTY relation to PROPERTY
+  const propertyEntityIds = new Set<string>();
+  relations.forEach(r => {
+    if (r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY && !r.isDeleted) {
+      propertyEntityIds.add(r.fromEntity.id);
+    }
+  });
 
   const relationOps = relations.map((r): CreateRelationOp | DeleteRelationOp => {
     if (r.isDeleted) {
@@ -97,5 +106,25 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
     }
   }
 
-  return [...relationOps, ...entityOps];
+  // Create property operations for identified property entities
+  const propertyOps: CreatePropertyOp[] = [];
+  
+  propertyEntityIds.forEach(propertyId => {
+    // Find the dataType value for this property entity
+    const dataTypeValue = validValues.find(
+      v => v.entity.id === propertyId && v.property.id === DATA_TYPE_PROPERTY
+    );
+    
+    if (dataTypeValue && dataTypeValue.value) {
+      propertyOps.push({
+        type: 'CREATE_PROPERTY',
+        property: {
+          id: Id.Id(propertyId),
+          dataType: dataTypeValue.value as DataType,
+        },
+      });
+    }
+  });
+
+  return [...relationOps, ...entityOps, ...propertyOps];
 }
