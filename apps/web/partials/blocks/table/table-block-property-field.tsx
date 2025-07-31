@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations, useValues } from '~/core/sync/use-store';
+import { useRelations, useValue } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 import { Property } from '~/core/v2.types';
 
@@ -298,12 +298,11 @@ type EditableValueGroupProps = {
 };
 
 function EditableValueGroup({ entityId, property, isEditing }: EditableValueGroupProps) {
-  const values = useValues({
+  const rawValue = useValue({
     selector: v => v.entity.id === entityId && v.property.id === property.id,
   });
 
   const renderableType = property.renderableType ?? property.dataType;
-  const rawValue = values[0];
   const value = rawValue?.value ?? '';
 
   switch (renderableType) {
@@ -312,7 +311,7 @@ function EditableValueGroup({ entityId, property, isEditing }: EditableValueGrou
         <NumberField
           variant="tableCell"
           value={value}
-          unitId={rawValue.options?.unit}
+          unitId={rawValue?.options?.unit}
           // @TODO(migration): Fix format
           // format={renderable.options?.format}
           isEditing={isEditing}

@@ -1,7 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { Source } from '~/core/blocks/data/source';
-import { useRelations, useValues } from '~/core/sync/use-store';
+import { useRelations, useValue } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 import { Property, Value } from '~/core/v2.types';
 
@@ -343,12 +343,10 @@ interface ValueGroupProps {
 }
 
 function ValueGroup({ entityId, property }: ValueGroupProps) {
-  const values = useValues({
+  const rawValue = useValue({
     // We don't filter by space id as we want to render data from all spaces.
     selector: v => v.entity.id === entityId && v.property.id === property.id,
   });
-
-  const rawValue = values[0] as Value | undefined;
   const value = rawValue?.value ?? '';
 
   const renderableType = property.renderableType ?? property.dataType;
