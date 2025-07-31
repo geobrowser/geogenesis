@@ -19,7 +19,7 @@ import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editi
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { getRelations } from '~/core/sync/use-store';
+import { getRelation } from '~/core/sync/use-store';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
@@ -212,9 +212,9 @@ function useEntries(
       verified?: boolean;
     }
   ) => {
-    const relation = getRelations({
+    const relation = getRelation({
       selector: r => r.spaceId === spaceId && r.id === id,
-    })?.[0];
+    });
 
     if (relation) {
       storage.relations.update(relation, draft => {

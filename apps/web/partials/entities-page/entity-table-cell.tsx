@@ -3,7 +3,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { useRelations, useValues } from '~/core/sync/use-store';
+import { useRelations, useValue } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 import { Property } from '~/core/v2.types';
 
@@ -140,11 +140,9 @@ type ValueGroupProps = {
 };
 
 function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps) {
-  const values = useValues({
+  const rawValue = useValue({
     selector: v => v.entity.id === entityId && v.property.id === property.id,
   });
-
-  const rawValue = values[0];
   const value = rawValue?.value ?? '';
   const renderableType = property.renderableTypeStrict ?? property.dataType;
 
@@ -168,7 +166,7 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
         key={value}
         value={value}
         // format={renderable.options?.format}
-        unitId={rawValue.options?.unit}
+        unitId={rawValue?.options?.unit}
       />
     );
   }
