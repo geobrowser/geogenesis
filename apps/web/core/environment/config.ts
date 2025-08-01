@@ -1,9 +1,3 @@
-const APP_ENV = process.env.NEXT_PUBLIC_APP_ENV;
-
-if (!APP_ENV) {
-  throw new Error('NEXT_PUBLIC_APP_ENV is not set');
-}
-
 // Not required, only set in test environments
 const TEST_ENV = process.env.NEXT_PUBLIC_IS_TEST_ENV;
 
@@ -17,6 +11,36 @@ const RPC_ENDPOINT = process.env.NEXT_PUBLIC_GEOGENESIS_RPC;
 
 if (!RPC_ENDPOINT) {
   throw new Error('NEXT_PUBLIC_GEOGENESIS_RPC is not set');
+}
+
+const RPC_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET;
+
+if (!RPC_ENDPOINT_TESTNET) {
+  throw new Error('NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET is not set');
+}
+
+const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT;
+
+if (!API_ENDPOINT) {
+  throw new Error('NEXT_PUBLIC_API_ENDPOINT is not set');
+}
+
+const API_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_API_ENDPOINT_TESTNET;
+
+if (!API_ENDPOINT_TESTNET) {
+  throw new Error('NEXT_PUBLIC_API_ENDPOINT_TESTNET is not set');
+}
+
+const BUNDLER_RPC_ENDPOINT = process.env.NEXT_PUBLIC_BUNDLER_RPC;
+
+if (!BUNDLER_RPC_ENDPOINT) {
+  throw new Error('NEXT_PUBLIC_BUNDLER_RPC is not set');
+}
+
+const BUNDLER_RPC_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_BUNDLER_RPC_TESTNET;
+
+if (!BUNDLER_RPC_ENDPOINT_TESTNET) {
+  throw new Error('NEXT_PUBLIC_BUNDLER_RPC_TESTNET is not set');
 }
 
 const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
@@ -44,10 +68,14 @@ if (!ONBOARD_CODE) {
 }
 
 export {
-  APP_ENV,
   TEST_ENV,
   PRIVY_APP_ID,
   RPC_ENDPOINT,
+  API_ENDPOINT,
+  BUNDLER_RPC_ENDPOINT,
+  RPC_ENDPOINT_TESTNET,
+  API_ENDPOINT_TESTNET,
+  BUNDLER_RPC_ENDPOINT_TESTNET,
   WALLETCONNECT_PROJECT_ID,
   ACCOUNT_ABSTRACTION_API_KEY,
   ONBOARD_FLAG,

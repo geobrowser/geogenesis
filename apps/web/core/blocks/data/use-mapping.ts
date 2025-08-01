@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { useQueryEntitiesAsync } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
-import { Cell, Entity, Row } from '~/core/v2.types';
+import { Cell, Entity, Relation, Row } from '~/core/v2.types';
 
 import { PathSegment } from './data-selectors';
 
@@ -99,7 +99,7 @@ export function useMapping(
   };
 }
 
-export function mappingToRows(entities: Entity[], slotIds: string[], collectionItems: Entity[]): Row[] {
+export function mappingToRows(entities: Entity[], slotIds: string[], collectionRelations: Relation[]): Row[] {
   /**
    * Take each row, take each mapping, take each "slot" in the mapping
    * and map them into the Row structure.
@@ -119,42 +119,13 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionI
           cell.description = description;
           cell.image = Entities.cover(relations) ?? Entities.avatar(relations) ?? null;
 
-          // @TODO(migration): Migrate to new relations model
-          const collectionEntity = collectionItems?.find(entity =>
-            entity.values
-              .find(triple => triple.property.id === SystemIds.RELATION_TO_PROPERTY)
-              ?.value.startsWith(`graph://${cell.propertyId}`)
-          );
+          const collectionRelation = collectionRelations?.find(relation => relation.toEntity.id === id);
 
-          // @TODO(migration): Update to new data model
-          if (collectionEntity) {
-            cell.collectionId = collectionEntity.id;
-
-            const url = collectionEntity.values.find(
-              value => value.property.id === SystemIds.RELATION_TO_PROPERTY
-            )?.value;
-
-            const relationId = collectionEntity.values.find(
-              value => value.property.id === SystemIds.RELATION_TO_PROPERTY
-            )?.entity.id;
-
-            cell.relationId = relationId;
-
-            if (url?.startsWith('graph://')) {
-              const spaceId = GraphUrl.toSpaceId(url as GraphUri);
-
-              if (spaceId) {
-                cell.space = spaceId;
-
-                const verifiedSourceTriple = collectionEntity.values.find(
-                  value => value.property.id === SystemIds.VERIFIED_SOURCE_PROPERTY
-                );
-
-                if (verifiedSourceTriple) {
-                  cell.verified = verifiedSourceTriple.value === '1';
-                }
-              }
-            }
+          if (collectionRelation) {
+            cell.relationId = collectionRelation.id;
+            cell.collectionId = collectionRelation.fromEntity.id;
+            cell.space = collectionRelation.toSpaceId;
+            cell.verified = collectionRelation.verified;
           }
         }
 

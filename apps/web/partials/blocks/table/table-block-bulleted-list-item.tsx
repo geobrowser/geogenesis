@@ -130,6 +130,7 @@ export function TableBlockBulletedListItem({
                   currentSpaceId={currentSpaceId}
                   entityId={rowEntityId}
                   spaceId={nameCell?.space}
+                  collectionId={nameCell?.collectionId}
                   relationId={relationId}
                   verified={verified}
                   onLinkEntry={onLinkEntry}
@@ -189,6 +190,7 @@ export function TableBlockBulletedListItem({
           currentSpaceId={currentSpaceId}
           entityId={rowEntityId}
           spaceId={nameCell?.space}
+          collectionId={nameCell?.collectionId}
           relationId={relationId}
           verified={verified}
           onLinkEntry={onLinkEntry}

@@ -21,37 +21,24 @@ export function useCollection({ first, skip }: CollectionProps) {
     enabled: source.type === 'COLLECTION',
   });
 
-  const collectionItemsRelations =
+  const collectionRelations =
     source.type === 'COLLECTION'
       ? (blockEntity?.relations.filter(
           r => r.fromEntity.id === source.value && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE
         ) ?? [])
       : [];
 
-  const orderedCollectionItemRelations = collectionItemsRelations.sort((a, z) => {
+  const orderedCollectionRelations = collectionRelations.sort((a, z) => {
     return Position.compare(a.position ?? null, z.position ?? null);
   });
 
-  const collectionItemIds = orderedCollectionItemRelations?.map(c => c.toEntity.id) ?? [];
-  const collectionRelationIds = orderedCollectionItemRelations?.map(c => c.id) ?? [];
+  const collectionItemIds = orderedCollectionRelations?.map(c => c.toEntity.id) ?? [];
 
   const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
     enabled: collectionItemIds !== null,
     where: {
       id: {
         in: collectionItemIds,
-      },
-    },
-    first,
-    skip,
-    placeholderData: keepPreviousData,
-  });
-
-  const { entities: collectionRelations, isLoading: isCollectionRelationsLoading } = useQueryEntities({
-    enabled: collectionRelationIds !== null,
-    where: {
-      id: {
-        in: collectionRelationIds,
       },
     },
     first,
@@ -66,7 +53,7 @@ export function useCollection({ first, skip }: CollectionProps) {
    */
   const collectionItemsMap = new Map(collectionItems.map(item => [item.id, item]));
 
-  const orderedCollectionItems = orderedCollectionItemRelations
+  const orderedCollectionItems = orderedCollectionRelations
     .map(relation => {
       const entity = collectionItemsMap.get(relation.toEntity.id);
 
@@ -76,9 +63,9 @@ export function useCollection({ first, skip }: CollectionProps) {
 
   return {
     collectionItems: orderedCollectionItems,
-    collectionRelations,
-    isLoading: isCollectionItemsLoading || isCollectionRelationsLoading,
-    isFetched: !isCollectionItemsLoading && !isCollectionRelationsLoading,
-    collectionLength: collectionItemsRelations.length,
+    collectionRelations: orderedCollectionRelations,
+    isLoading: isCollectionItemsLoading,
+    isFetched: !isCollectionItemsLoading,
+    collectionLength: collectionRelations.length,
   };
 }

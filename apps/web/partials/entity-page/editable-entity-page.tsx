@@ -11,7 +11,7 @@ import { ID } from '~/core/id';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useCover, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
+import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Property, Relation, Value, ValueOptions } from '~/core/v2.types';
 
@@ -386,9 +386,18 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
             <LinkableRelationChip
               isEditing
               onDelete={() => storage.relations.delete(r)}
+              onDone={result => {
+                storage.relations.update(r, draft => {
+                  draft.toSpaceId = result.space;
+                  draft.verified = result.verified;
+                });
+              }}
               currentSpaceId={spaceId}
               entityId={relationValue}
               relationId={relationId}
+              relationEntityId={r.entityId}
+              spaceId={r.toSpaceId}
+              verified={r.verified}
             >
               {relationName ?? relationValue}
             </LinkableRelationChip>
@@ -497,11 +506,9 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
   const { storage } = useMutate();
   const { property } = useQueryProperty({ id: propertyId });
 
-  const values = useValues({
+  const rawValue = useValue({
     selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
   });
-
-  const rawValue: Value | undefined = values[0] as Value | undefined;
   const value = rawValue?.value ?? '';
   const options = rawValue?.options;
 

@@ -43,6 +43,7 @@ export interface Mutator {
     update: GeoProduceFn<Relation>;
     delete: (relation: Relation) => void;
   };
+  setAsPublished: (valueIds: string[], relationIds: string[]) => void;
 }
 
 function createMutator(store: GeoStore): Mutator {
@@ -110,6 +111,9 @@ function createMutator(store: GeoStore): Mutator {
       delete: newRelation => {
         store.deleteRelation(newRelation);
       },
+    },
+    setAsPublished: (valueIds, relationIds) => {
+      store.setAsPublished(valueIds, relationIds);
     },
   };
 }

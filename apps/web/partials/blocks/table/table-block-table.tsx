@@ -141,6 +141,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           currentSpaceId={space}
           collectionId={collectionId}
           relationId={relationId}
+          toSpaceId={nameCell?.space}
           verified={verified}
           onChangeEntry={onChangeEntry}
           onLinkEntry={onLinkEntry}

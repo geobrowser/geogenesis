@@ -72,7 +72,6 @@ function makeNewBlockRelation({
   // Check both the existing blocks and any that are created as part of this update
   // tick. This is necessary as right now we don't update the Geo state until the
   // user blurs the editor. See the comment earlier in this function.
-
   const beforeCollectionItemIndex = allRelations.find(c => c.toEntity.id === beforeBlockIndex)?.position;
 
   // When the afterCollectionItemIndex is undefined, we need to use the next block of beforeBlockIndex

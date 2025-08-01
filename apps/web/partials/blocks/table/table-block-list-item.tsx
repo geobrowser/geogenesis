@@ -4,7 +4,7 @@ import NextImage from 'next/image';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
-import { useRelations, useValues } from '~/core/sync/use-store';
+import { useRelation, useValues } from '~/core/sync/use-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
@@ -66,11 +66,11 @@ export function TableBlockListItem({
     description = maybeDescription;
   }
 
-  const avatarRelations = useRelations({
+  const avatarRelation = useRelation({
     selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
   });
 
-  const maybeAvatarUrl = avatarRelations[0]?.toEntity.value;
+  const maybeAvatarUrl = avatarRelation?.toEntity.value;
 
   if (maybeAvatarUrl) {
     image = maybeAvatarUrl;
@@ -259,6 +259,7 @@ export function TableBlockListItem({
                     currentSpaceId={currentSpaceId}
                     entityId={rowEntityId}
                     spaceId={nameCell?.space}
+                    collectionId={nameCell?.collectionId}
                     relationId={relationId}
                     verified={verified}
                     onLinkEntry={onLinkEntry}
@@ -395,6 +396,7 @@ export function TableBlockListItem({
             currentSpaceId={currentSpaceId}
             entityId={rowEntityId}
             spaceId={nameCell?.space}
+            collectionId={nameCell?.collectionId}
             relationId={relationId}
             verified={verified}
             onLinkEntry={onLinkEntry}
