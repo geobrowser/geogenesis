@@ -49,7 +49,8 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
   const hasLocalPropertyType = relations.find(
     r => r.fromEntity.id === entityId && 
          r.type.id === SystemIds.TYPES_PROPERTY && 
-         r.toEntity.id === SystemIds.PROPERTY
+         r.toEntity.id === SystemIds.PROPERTY &&
+         r.isLocal === true
   );
 
   // Check if property data type is editable (simpler than checking publish status)
@@ -67,12 +68,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
     enabled: !!(propertyData?.renderableType || renderableTypeRelation?.toEntity.id),
   });
 
-  const isPropertyEntity = !!propertyData || !!hasLocalPropertyType
-
-  // Check for local dataType value to avoid creating duplicate properties
-  // const localDataTypeValue = useValues({
-  //   selector: v => v.entity.id === entityId && v.property.id === DATA_TYPE_PROPERTY && v.spaceId === spaceId
-  // })[0];
+  const isPropertyEntity = !!propertyData || !!hasLocalPropertyType;
 
   const propertyDataType = React.useMemo(() => {
     return Properties.constructDataType(
@@ -203,7 +199,9 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
   React.useEffect(() => {
     // Check if there's already a Property type relation to avoid duplicates
     const existingPropertyTypeRelation = relations.find(
-      r => r.fromEntity.id === entityId && r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY
+      r => r.fromEntity.id === entityId && 
+          r.type.id === SystemIds.TYPES_PROPERTY && 
+          r.toEntity.id === SystemIds.PROPERTY
     );
     
     // Only create property if:

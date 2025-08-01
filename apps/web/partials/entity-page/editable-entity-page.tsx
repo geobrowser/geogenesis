@@ -50,7 +50,6 @@ function ShowablePanel({
   children: React.ReactNode;
 }) {
   const coverUrl = useCover(id, spaceId);
-  console.log('coverUrl', coverUrl);
   const types = useEntityTypes(id, spaceId);
   const { blockIds } = useEditorStore();
   const [editorHasContent] = useAtom(editorHasContentAtom);
@@ -256,8 +255,6 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   
   // Use the efficient hook to get only the image URL for this specific entity
   const imageSrc = useImageUrlFromEntity(imageEntityId, spaceId);
-
-  console.log('imageSrc', imageSrc);
 
   if (!property) {
     return null;
