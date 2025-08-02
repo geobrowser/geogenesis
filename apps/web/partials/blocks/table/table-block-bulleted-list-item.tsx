@@ -121,6 +121,7 @@ export function TableBlockBulletedListItem({
                     );
                   }}
                   value={name ?? ''}
+                  shouldDebounce={true}
                 />
               ) : (
                 <CollectionMetadata
