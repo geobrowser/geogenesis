@@ -31,7 +31,7 @@ export function deploySpace(args: DeployArgs) {
     const governanceType = getGovernanceTypeForSpaceType(args.type, args.governanceType);
 
     yield* Effect.logInfo('Generating ops for space').pipe(Effect.annotateLogs({ type: args.type }));
-    const ops = yield* Effect.tryPromise({
+    const { spaceEntityId, ops } = yield* Effect.tryPromise({
       try: () => generateOpsForSpaceType(args),
       catch: e => new GenerateOpsError(`Failed to generate ops: ${String(e)}`),
     });
@@ -40,10 +40,11 @@ export function deploySpace(args: DeployArgs) {
       try: () =>
         Graph.createSpace({
           name: args.spaceName,
-          spaceEntityId: args.entityId,
+          spaceEntityId,
           ops,
           network: Environment.getConfig().chainId === '19411' ? 'TESTNET' : 'MAINNET',
           editorAddress: initialEditorAddress,
+          governanceType: governanceType,
         }),
       catch: e => new GenerateOpsError(`Failed to generate ops: ${String(e)}`),
     });

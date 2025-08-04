@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
-import { useQueryEntity, useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
+import { useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
 import { DataType, RenderableType } from '~/core/v2.types';
 
@@ -226,13 +226,13 @@ function RenderedValue({
   // more granularly?
   //
   // Why is this super slow
-  const values = useValues({
+  const valueData = useValue({
     selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
   });
 
   // Should only be one value for a given (space, entity, property) tuple
-  const value = values[0]?.value ?? '';
-  const options = values[0]?.options;
+  const value = valueData?.value ?? '';
+  const options = valueData?.options;
 
   if (propertyId === SystemIds.NAME_PROPERTY) {
     return null;

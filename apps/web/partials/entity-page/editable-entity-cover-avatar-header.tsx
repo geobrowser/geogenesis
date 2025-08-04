@@ -10,7 +10,7 @@ import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations } from '~/core/sync/use-store';
+import { useRelation } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 import { Relation } from '~/core/v2.types';
 
@@ -40,21 +40,18 @@ export const EditableCoverAvatarHeader = ({
    * In browse mode we show the cover and avatar if they exist in the relations
    * for the entity.
    */
-  const coverAvatarRenderable = useRelations({
-    selector: r =>
-      (r.type.id === SystemIds.COVER_PROPERTY || r.type.id === ContentIds.AVATAR_PROPERTY) &&
-      r.fromEntity.id === id &&
-      r.spaceId === spaceId,
+  const coverRelation = useRelation({
+    selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === id && r.spaceId === spaceId,
+  });
+
+  const avatarRelation = useRelation({
+    selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === id && r.spaceId === spaceId,
   });
 
   const renderedProperties = useEditableProperties(id, spaceId);
 
-  const coverRenderable = editable
-    ? renderedProperties[SystemIds.COVER_PROPERTY]
-    : coverAvatarRenderable.find(r => r.type.id === SystemIds.COVER_PROPERTY);
-  const avatarRenderable = editable
-    ? renderedProperties[ContentIds.AVATAR_PROPERTY]
-    : coverAvatarRenderable.find(r => r.type.id === ContentIds.AVATAR_PROPERTY);
+  const coverRenderable = editable ? renderedProperties[SystemIds.COVER_PROPERTY] : coverRelation;
+  const avatarRenderable = editable ? renderedProperties[ContentIds.AVATAR_PROPERTY] : avatarRelation;
 
   // Only show avatar when there's an actual avatar or user is in edit mode
   const showAvatar = avatarUrl || (editable && avatarRenderable);
@@ -120,11 +117,9 @@ const AvatarCoverInput = ({
 
   const editable = useUserIsEditing(spaceId);
 
-  const relations = useRelations({
+  const firstRenderable = useRelation({
     selector: r => r.fromEntity.id === entityId && r.type.id === typeOfId && r.spaceId === spaceId,
   });
-
-  const firstRenderable = relations[0] as Relation | undefined;
 
   const { storage } = useMutate();
 

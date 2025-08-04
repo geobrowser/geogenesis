@@ -182,5 +182,5 @@ export const generateOpsForSpaceType = async ({
     ops.push(...imageRelationOps);
   }
 
-  return ops;
+  return { ops, spaceEntityId: newEntityId };
 };

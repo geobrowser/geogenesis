@@ -4,7 +4,7 @@ import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
-import { useRelations, useValues } from '~/core/sync/use-store';
+import { useRelations, useValue } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
 import { useImageUrlFromEntity } from '~/core/utils/utils';
 
@@ -51,23 +51,23 @@ export function useAvatar(entityId: string, spaceId?: string) {
 }
 
 export function useName(entityId: string, spaceId?: string) {
-  const maybeName = useValues({
+  const maybeName = useValue({
     selector: r =>
       r.property.id === SystemIds.NAME_PROPERTY && r.entity.id === entityId && (spaceId ? r.spaceId === spaceId : true),
   });
 
-  return maybeName[0]?.value ?? null;
+  return maybeName?.value ?? null;
 }
 
 export function useDescription(entityId: string, spaceId?: string) {
-  const maybeDescription = useValues({
+  const maybeDescription = useValue({
     selector: r =>
       r.property.id === SystemIds.DESCRIPTION_PROPERTY &&
       r.entity.id === entityId &&
       (spaceId ? r.spaceId === spaceId : true),
   });
 
-  return maybeDescription[0]?.value ?? null;
+  return maybeDescription?.value ?? null;
 }
 
 export function useEntitySchema(entityId: string, spaceId?: string) {
