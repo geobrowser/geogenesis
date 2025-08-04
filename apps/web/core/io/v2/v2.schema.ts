@@ -1,13 +1,15 @@
 import { Brand, Schema } from 'effect';
 
 export const DataType = Schema.Union(
-  Schema.Literal('TEXT'),
+  Schema.Literal('STRING'),
   Schema.Literal('NUMBER'),
-  Schema.Literal('CHECKBOX'),
+  Schema.Literal('BOOLEAN'),
   Schema.Literal('TIME'),
   Schema.Literal('POINT'),
   Schema.Literal('RELATION')
 );
+
+export type DataType = Schema.Schema.Type<typeof DataType>;
 
 export const Property = Schema.Struct({
   id: Schema.UUID,

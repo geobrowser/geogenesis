@@ -75,11 +75,11 @@ export type BooleanFilter = {
 };
 
 export enum DataTypes {
-  Checkbox = 'CHECKBOX',
+  Boolean = 'BOOLEAN',
   Number = 'NUMBER',
   Point = 'POINT',
   Relation = 'RELATION',
-  Text = 'TEXT',
+  String = 'STRING',
   Time = 'TIME'
 }
 

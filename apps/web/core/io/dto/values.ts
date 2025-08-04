@@ -1,10 +1,12 @@
 import { ID } from '~/core/id';
-import { Value } from '~/core/v2.types';
+import { DataType, Value } from '~/core/v2.types';
 
 import { RemoteValue } from '../v2/v2.schema';
+import { getAppDataTypeFromRemoteDataType } from './properties';
 
 export function ValueDto(entity: { id: string; name: string | null }, remoteValue: RemoteValue): Value {
-  const value = getValueFromDataType(remoteValue);
+  const mappedDataType = getAppDataTypeFromRemoteDataType(remoteValue.property.dataType);
+  const value = getValueFromDataType(mappedDataType, remoteValue);
 
   if (!value) {
     console.error('Could not parse valid value for remote value. Defaulting to empty string.', remoteValue);
@@ -24,7 +26,7 @@ export function ValueDto(entity: { id: string; name: string | null }, remoteValu
     property: {
       id: remoteValue.property.id,
       name: remoteValue.property.name ?? null,
-      dataType: remoteValue.property.dataType,
+      dataType: mappedDataType,
       renderableType: remoteValue.property.renderableType,
       relationValueTypes: [...remoteValue.property.relationValueTypes],
     },
@@ -36,8 +38,8 @@ export function ValueDto(entity: { id: string; name: string | null }, remoteValu
   };
 }
 
-function getValueFromDataType(remoteValue: RemoteValue): string | null {
-  switch (remoteValue.property.dataType) {
+function getValueFromDataType(dataType: DataType, remoteValue: RemoteValue): string | null {
+  switch (dataType) {
     case 'TEXT':
       return remoteValue.string;
     case 'NUMBER':
