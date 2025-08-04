@@ -13,6 +13,8 @@ import { store as geoStore } from '../sync/use-sync-engine';
 import { Entities } from '../utils/entity';
 import { EntityWithSchema, Property, Relation } from '../v2.types';
 
+const IS_TYPE_PROPERTY_ID = 'd2c1a101-14e3-464a-8272-f4e75b0f1407';
+
 type UseEntityOptions = {
   spaceId?: string;
   id: string;
@@ -109,17 +111,50 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
   });
 
   const propertyIds = typeEntities
-    .flatMap(entity => {
-      return entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES);
-    })
+    .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
     .map(r => r.toEntity.id);
 
   const properties = await Effect.runPromise(getProperties(propertyIds));
 
+  const propertyEntities = await E.findMany({
+    store: geoStore,
+    cache: queryClient,
+    where: {
+      id: {
+        in: propertyIds,
+      },
+    },
+    first: 100,
+    skip: 0,
+  });
+
+  const typePropertyIds = propertyEntities
+    .filter(entity => {
+      const isTypePropertyValue = entity.values.find(v => v.property.id === IS_TYPE_PROPERTY_ID);
+      return isTypePropertyValue?.value === '1';
+    })
+    .map(e => e.id);
+
+  let additionalPropertyIds: string[] = [];
+
+  if (typePropertyIds.length > 0) {
+    const typePropertyEntities = propertyEntities.filter(e => typePropertyIds.includes(e.id));
+
+    additionalPropertyIds = typePropertyEntities
+      .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
+      .map(r => r.toEntity.id);
+  }
+
+  let additionalProperties: Property[] = [];
+
+  if (additionalPropertyIds.length > 0) {
+    additionalProperties = await Effect.runPromise(getProperties(additionalPropertyIds));
+  }
+
   // If the schema exists already in the list then we should dedupe it.
   // Some types might share some elements in their schemas, e.g., Person
   // and Pet both have Avatar as part of their schema.
-  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...properties], (a, b) => a.id === b.id);
+  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...properties, ...additionalProperties], (a, b) => a.id === b.id);
 }
 
 /**
