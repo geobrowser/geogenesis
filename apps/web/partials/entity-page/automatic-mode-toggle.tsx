@@ -20,6 +20,7 @@ export const AutomaticModeToggle = () => {
   useEffect(() => {
     const shouldStartInEditMode = searchParams?.get('edit') === 'true';
     const newEntityName = searchParams?.get('entityName');
+    const entityType = searchParams?.get('type');
 
     if (editable || !shouldStartInEditMode) return;
 
@@ -30,6 +31,7 @@ export const AutomaticModeToggle = () => {
       const newSearchParams = new URLSearchParams(searchParams?.toString());
       newSearchParams.delete('edit');
       newSearchParams.delete('entityName');
+      newSearchParams.delete('type');
       const newSearchString = newSearchParams.toString();
       const queryString = newSearchString ? `?${newSearchString}` : '';
       window.history.replaceState(null, '', `${pathname}${queryString}`);
@@ -53,6 +55,17 @@ export const AutomaticModeToggle = () => {
             dataType: 'TEXT',
           },
           value: newEntityName,
+        });
+      }
+
+      // Create property if type parameter is provided
+      if (spaceId && entityId && entityType === 'property') {
+        storage.properties.create({
+          entityId,
+          spaceId,
+          name: newEntityName || 'New Property',
+          dataType: 'TEXT',
+          renderableTypeId: null,
         });
       }
     }, 500);

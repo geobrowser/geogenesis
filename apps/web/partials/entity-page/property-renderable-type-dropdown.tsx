@@ -2,7 +2,7 @@ import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 
 import * as React from 'react';
-import { useState } from 'react';
+import { Dispatch, SetStateAction, useState } from 'react';
 
 import { SwitchableRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '~/core/v2.types';
 
@@ -17,12 +17,11 @@ import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
 import { ColorName } from '~/design-system/theme/colors';
-import { Properties } from '~/core/utils/property';
 
 interface Props {
   value?: SwitchableRenderableType;
   onChange?: (value: SwitchableRenderableType) => void;
-  baseDataType?: string;
+  dataType?: string;
 }
 
 const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
@@ -38,42 +37,66 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
 };
 
 
-
-export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props) => {
+export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Props) => {
+  const [selectedValue, setSelectedValue] = useState<SwitchableRenderableType | undefined>(value);
   const [open, setOpen] = useState(false);
 
-  // Show all available renderable types
+  // Determine which options are available based on the property's dataType
   const availableOptions = React.useMemo(() => {
-    // If no baseDataType is provided, return all options (unpublished property)
-    if (!baseDataType) {
-      return Object.keys(SWITCHABLE_RENDERABLE_TYPE_LABELS) as SwitchableRenderableType[];
+    if (!dataType) {
+      console.warn('PropertyRenderableTypeDropdown: No dataType provided');
+      return [];
     }
-    
-    // Filter options to only those with matching base dataType (published property)
-    return (Object.keys(SWITCHABLE_RENDERABLE_TYPE_LABELS) as SwitchableRenderableType[]).filter(
-      type => Properties.typeToBaseDataType[type] === baseDataType
-    );
-  }, [baseDataType]);
+
+    // Based on the dataType, determine which renderable types are valid
+    switch (dataType) {
+      case 'TEXT':
+        // TEXT dataType can be rendered as TEXT, URL, or GEO_LOCATION
+        return ['TEXT', 'URL', 'GEO_LOCATION'] as SwitchableRenderableType[];
+      case 'RELATION':
+        // RELATION dataType can be rendered as RELATION or IMAGE
+        return ['RELATION', 'IMAGE'] as SwitchableRenderableType[];
+      case 'NUMBER':
+        return ['NUMBER'] as SwitchableRenderableType[];
+      case 'CHECKBOX':
+        return ['CHECKBOX'] as SwitchableRenderableType[];
+      case 'TIME':
+        return ['TIME'] as SwitchableRenderableType[];
+      case 'POINT':
+        return ['POINT'] as SwitchableRenderableType[];
+      default:
+        console.warn('PropertyRenderableTypeDropdown: Unknown dataType:', dataType);
+        return [];
+    }
+  }, [dataType]);
 
   const options = availableOptions.map(key => ({
     value: key,
     label: SWITCHABLE_RENDERABLE_TYPE_LABELS[key],
-    onClick: (value: SwitchableRenderableType) => {
-      onChange?.(value);
+    onClick: (
+      setSelectedValue: Dispatch<SetStateAction<SwitchableRenderableType | undefined>>,
+      value: SwitchableRenderableType
+    ) => {
+      setSelectedValue(value);
     },
     Icon: icons[key],
   }));
 
   let Icon = DashedCircle as React.FunctionComponent<{ color?: ColorName }>;
-  if (value) {
-    Icon = icons[value];
+  if (selectedValue) {
+    Icon = icons[selectedValue];
   }
 
   let label = 'Set renderable type';
-  if (value) {
-    label = SWITCHABLE_RENDERABLE_TYPE_LABELS[value];
+  if (selectedValue) {
+    label = SWITCHABLE_RENDERABLE_TYPE_LABELS[selectedValue];
   }
 
+  // If no options are available, don't render the dropdown
+  if (availableOptions.length === 0) {
+    console.warn('No valid renderable types available for this property dataType:', dataType);
+    return null;
+  }
 
   return (
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -100,11 +123,12 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
               <DropdownPrimitive.Item
                 key={`triple-type-dropdown-${index}`}
                 onClick={() => {
-                  option.onClick(option.value);
+                  option.onClick(setSelectedValue, option.value);
+                  onChange?.(option.value);
                 }}
                 className={cx(
                   'flex w-full select-none items-center gap-2 rounded-md bg-white px-3 py-2.5 text-button text-text hover:cursor-pointer hover:bg-divider focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
-                  value === option.value && '!bg-divider'
+                  selectedValue === option.value && '!bg-divider'
                 )}
               >
                 <TypeIcon color="grey-04" />

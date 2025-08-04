@@ -4,6 +4,7 @@ import NextImage from 'next/image';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation, useValues } from '~/core/sync/use-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
@@ -42,6 +43,7 @@ export function TableBlockGalleryItem({
   relationId,
   source,
 }: Props) {
+  const { storage } = useMutate();
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
@@ -113,72 +115,41 @@ export function TableBlockGalleryItem({
             <BlockImageField
               variant="gallery"
               imageSrc={image ?? undefined}
-              onImageChange={imageSrc => {
-                // const { id: imageId, ops } = Image.make({ cid: imageSrc });
-                // const [createRelationOp, setTripleOp] = ops;
-                // if (createRelationOp.type === 'CREATE_RELATION') {
-                //   const imageEntityDispatch = editEvent({
-                //     context: {
-                //       entityId: createRelationOp.relation.fromEntity,
-                //       entityName: null,
-                //       spaceId: currentSpaceId,
-                //     },
-                //   });
-                //   imageEntityDispatch({
-                //     type: 'UPSERT_RELATION',
-                //     payload: {
-                //       fromEntityId: createRelationOp.relation.fromEntity,
-                //       fromEntityName: name,
-                //       toEntityId: createRelationOp.relation.toEntity,
-                //       toEntityName: null,
-                //       typeOfId: createRelationOp.relation.type,
-                //       typeOfName: 'Types',
-                //     },
-                //   });
-                //   if (setTripleOp.type === 'SET_TRIPLE') {
-                //     imageEntityDispatch({
-                //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                //       payload: {
-                //         renderable: {
-                //           attributeId: setTripleOp.triple.attribute,
-                //           entityId: imageId,
-                //           spaceId: currentSpaceId,
-                //           attributeName: 'Image URL',
-                //           entityName: null,
-                //           type: 'URL',
-                //           value: setTripleOp.triple.value.value,
-                //         },
-                //         value: {
-                //           type: 'URL',
-                //           value: setTripleOp.triple.value.value,
-                //         },
-                //       },
-                //     });
-                //     onChangeEntry(
-                //       {
-                //         entityId: rowEntityId,
-                //         entityName: name,
-                //         spaceId: currentSpaceId,
-                //       },
-                //       {
-                //         type: 'EVENT',
-                //         data: {
-                //           type: 'UPSERT_RELATION',
-                //           payload: {
-                //             fromEntityId: rowEntityId,
-                //             fromEntityName: name,
-                //             toEntityId: imageId,
-                //             toEntityName: null,
-                //             typeOfId: ContentIds.AVATAR_PROPERTY,
-                //             typeOfName: 'Avatar',
-                //             renderableType: 'IMAGE',
-                //             value: setTripleOp.triple.value.value,
-                //           },
-                //         },
-                //       }
-                //     );
-                // }
-                // }
+              onFileChange={async (file) => {
+                // Use the consolidated helper to create and link the image
+                const { imageId } = await storage.images.createAndLink({
+                  file,
+                  fromEntityId: rowEntityId,
+                  fromEntityName: name,
+                  relationPropertyId: SystemIds.COVER_PROPERTY,
+                  relationPropertyName: 'Cover',
+                  spaceId: currentSpaceId,
+                });
+
+                // Notify the parent component about the change
+                onChangeEntry(
+                  {
+                    entityId: rowEntityId,
+                    entityName: name,
+                    spaceId: currentSpaceId,
+                  },
+                  {
+                    type: 'EVENT',
+                    data: {
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: rowEntityId,
+                        fromEntityName: name,
+                        toEntityId: imageId,
+                        toEntityName: null,
+                        typeOfId: SystemIds.COVER_PROPERTY,
+                        typeOfName: 'Cover',
+                        renderableType: 'IMAGE',
+                        value: imageId,
+                      },
+                    },
+                  }
+                );
               }}
             />
           )}

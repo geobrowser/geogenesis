@@ -12,8 +12,13 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useCover, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
-import { Property, Relation, Value, ValueOptions } from '~/core/v2.types';
+import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
+import {
+  Property,
+  Relation,
+  Value,
+  ValueOptions,
+} from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -23,15 +28,13 @@ import { ImageZoom, PageImageField, PageStringField } from '~/design-system/edit
 import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
-import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
-import { DateFormatDropdown } from './date-format-dropdown';
-import { NumberOptionsDropdown } from './number-options-dropdown';
 import { editorHasContentAtom } from '~/atoms';
+import { useCreateProperty } from '~/core/hooks/use-create-property';
 
 function ShowablePanel({
   name,
@@ -46,7 +49,7 @@ function ShowablePanel({
   hasEntries: boolean;
   children: React.ReactNode;
 }) {
-  const coverUrl = useCover(id);
+  const coverUrl = useCover(id, spaceId);
   const types = useEntityTypes(id, spaceId);
   const { blockIds } = useEditorStore();
   const [editorHasContent] = useAtom(editorHasContentAtom);
@@ -81,7 +84,7 @@ export function EditableEntityPage({ id, spaceId }: Props) {
   const renderedProperties = useEditableProperties(id, spaceId);
   const propertiesEntries = Object.entries(renderedProperties);
 
-  const { storage } = useMutate();
+  const { createProperty, addPropertyToEntity } = useCreateProperty(spaceId);
 
   const name = useName(id, spaceId);
 
@@ -177,12 +180,45 @@ export function EditableEntityPage({ id, spaceId }: Props) {
           })}
         </div>
         <div className="p-4">
-          <SquareButton onClick={() => {}} icon={<Create />} />
+          <SelectEntityAsPopover
+            trigger={<SquareButton icon={<Create />} />}
+            spaceId={spaceId}
+            relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+            onCreateEntity={result => {
+              const renderableType = result.renderableType || 'TEXT';
+              
+              const createdPropertyId = createProperty({
+                name: result.name || '',
+                propertyType: renderableType,
+                verified: result.verified,
+                space: result.space,
+              });
+
+              // Immediately add the property to the entity
+              addPropertyToEntity({
+                entityId: id,
+                propertyId: createdPropertyId,
+                propertyName: result.name || '',
+                entityName: name || undefined,
+              });
+            }}
+            onDone={result => {
+              if (result) {
+                addPropertyToEntity({
+                  entityId: id,
+                  propertyId: result.id,
+                  propertyName: result.name || '',
+                  entityName: name || undefined,
+                });
+              }
+            }}
+          />
         </div>
       </div>
     </ShowablePanel>
   );
 }
+
 
 function RenderedProperty({ property, spaceId }: { property: Property; spaceId: string }) {
   return (
@@ -212,6 +248,14 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
     selector: r => r.fromEntity.id === id && r.spaceId === spaceId && r.type.id === propertyId,
   });
 
+
+  // For IMAGE properties, get the image URL from related image entities
+  const imageRelation = relations.find(r => r.renderableType === 'IMAGE');
+  const imageEntityId = imageRelation?.toEntity.id;
+  
+  // Use the efficient hook to get only the image URL for this specific entity
+  const imageSrc = useImageUrlFromEntity(imageEntityId, spaceId);
+
   if (!property) {
     return null;
   }
@@ -228,50 +272,17 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         {property.renderableTypeStrict === 'IMAGE' ? (
           <div key="relation-upload-image">
             <PageImageField
-              onImageChange={imageSrc => {
-                // const { id: imageId, ops } = Image.make({ cid: imageSrc });
-                // const [createRelationOp, setTripleOp] = ops;
-                // if (createRelationOp.type === 'CREATE_RELATION') {
-                //   send({
-                //     type: 'UPSERT_RELATION',
-                //     payload: {
-                //       fromEntityId: createRelationOp.relation.fromEntity,
-                //       fromEntityName: name,
-                //       toEntityId: createRelationOp.relation.toEntity,
-                //       toEntityName: null,
-                //       typeOfId: createRelationOp.relation.type,
-                //       typeOfName: 'Types',
-                //     },
-                //   });
-                // }
-                // if (setTripleOp.type === 'SET_TRIPLE') {
-                //   DB.upsert(
-                //     {
-                //       value: {
-                //         type: 'URL',
-                //         value: setTripleOp.triple.value.value,
-                //       },
-                //       entityId: imageId,
-                //       attributeId: setTripleOp.triple.attribute,
-                //       entityName: null,
-                //       attributeName: 'Image URL',
-                //     },
-                //     spaceId
-                //   );
-                //   send({
-                //     type: 'UPSERT_RELATION',
-                //     payload: {
-                //       fromEntityId: id,
-                //       fromEntityName: name,
-                //       toEntityId: imageId,
-                //       toEntityName: null,
-                //       typeOfId: r.attributeId,
-                //       typeOfName: r.attributeName,
-                //       renderableType: 'IMAGE',
-                //       value: setTripleOp.triple.value.value,
-                //     },
-                //   });
-                // }
+              imageSrc={imageSrc}
+              onFileChange={async file => {
+                // Use the consolidated helper to create and link the image
+                await storage.images.createAndLink({
+                  file,
+                  fromEntityId: id,
+                  fromEntityName: name,
+                  relationPropertyId: propertyId,
+                  relationPropertyName: typeOfName,
+                  spaceId,
+                });
               }}
               onImageRemove={() => console.log(`remove`)}
             />
@@ -378,7 +389,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         const relationValue = r.toEntity.id;
 
         if (property.renderableTypeStrict === 'IMAGE') {
-          return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue)} />;
+          return <ImageRelation key={`image-${relationId}-${relationValue}`} relationValue={relationValue} spaceId={spaceId} />;
         }
 
         return (
@@ -405,15 +416,16 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         );
       })}
 
-      <div>
-        <SelectEntityAsPopover
-          trigger={
-            propertyId === SystemIds.TYPES_PROPERTY ? (
-              <AddTypeButton icon={<Create className="h-3 w-3" color="grey-04" />} label="type" />
-            ) : (
-              <SquareButton icon={<Create />} />
-            )
-          }
+      {property.renderableType !== SystemIds.IMAGE && (
+        <div>
+          <SelectEntityAsPopover
+            trigger={
+              propertyId === SystemIds.TYPES_PROPERTY ? (
+                <AddTypeButton icon={<Create className="h-3 w-3" color="grey-04" />} label="type" />
+              ) : (
+                <SquareButton icon={<Create />} />
+              )
+            }
           relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
           onCreateEntity={result => {
             storage.values.set({
@@ -498,8 +510,16 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
           spaceId={spaceId}
         />
       </div>
+      )}
     </div>
   );
+}
+
+function ImageRelation({ relationValue, spaceId }: { relationValue: string; spaceId: string }) {
+  // Use the efficient hook to get only the image URL for this specific entity
+  const actualImageSrc = useImageUrlFromEntity(relationValue, spaceId);
+  
+  return <ImageZoom imageSrc={getImagePath(actualImageSrc || '')} />;
 }
 
 function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; propertyId: string; spaceId: string }) {
@@ -590,7 +610,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
         <DateField
           key={propertyId}
           // format={renderable.options?.format}
-          onBlur={({ value, format }) => {
+          onBlur={({ value }) => {
             onChange(value);
           }}
           isEditing={true}

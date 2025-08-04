@@ -7,6 +7,7 @@ import { getAddress } from 'viem';
 
 import { IPFS_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
 import { EntityId } from '~/core/io/schema';
+import { useValues } from '~/core/sync/use-store';
 
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/schema';
@@ -334,6 +335,27 @@ export const getImageHash = (value: string) => {
     return value;
   }
 };
+
+/**
+ * Hook to efficiently get image URL for a specific entity
+ * @param imageEntityId The ID of the image entity
+ * @param spaceId The space ID to query within
+ * @returns The IPFS URL string or undefined if not found
+ */
+export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId: string): string | undefined {
+  const imageValues = useValues({
+    selector: v => v.entity.id === imageEntityId && v.spaceId === spaceId,
+  });
+
+  if (!imageEntityId || imageValues.length === 0) return undefined;
+
+  // Find the first value that is a string starting with 'ipfs://'
+  const imageUrlValue = imageValues.find(v => 
+    typeof v.value === 'string' && v.value.startsWith('ipfs://')
+  );
+  
+  return imageUrlValue?.value;
+}
 
 // Get the image URL from an image triple value
 // this allows us to render images on the front-end based on a raw triple value
