@@ -13,10 +13,11 @@ export function PropertyDto(queryResult: RemoteProperty): Property {
     relationValueTypes: [...queryResult.relationValueTypes],
     renderableType: queryResult.renderableType,
     renderableTypeStrict: getStrictRenderableType(queryResult.renderableType),
+    isDataTypeEditable: false, // Remote properties are not editable
   };
 }
 
-function getStrictRenderableType(renderableType: RemoteProperty['renderableType']) {
+export function getStrictRenderableType(renderableType: RemoteProperty['renderableType']) {
   switch (renderableType) {
     case SystemIds.IMAGE:
       return 'IMAGE';

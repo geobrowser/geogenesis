@@ -50,7 +50,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
       />
 
       {/* @TODO: Data type should now come from Property */}
-      {isUnpublished && <RenderableTypeDropdown value={value} options={[]} />}
+      {isUnpublished && <RenderableTypeDropdown value={value} />}
     </div>
   );
 });
