@@ -6,7 +6,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation, useValues } from '~/core/sync/use-store';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -82,6 +82,11 @@ export function TableBlockGalleryItem({
     image = maybeCoverUrl;
   }
 
+  const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
+  if (image && imageUrl) {
+    image = imageUrl;
+  }
+
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
   const otherPropertyData = Object.values(columns).filter(
@@ -125,31 +130,6 @@ export function TableBlockGalleryItem({
                   relationPropertyName: 'Cover',
                   spaceId: currentSpaceId,
                 });
-
-                // Notify the parent component about the change
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'EVENT',
-                    data: {
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: rowEntityId,
-                        fromEntityName: name,
-                        toEntityId: imageId,
-                        toEntityName: null,
-                        typeOfId: SystemIds.COVER_PROPERTY,
-                        typeOfName: 'Cover',
-                        renderableType: 'IMAGE',
-                        value: imageId,
-                      },
-                    },
-                  }
-                );
               }}
             />
           )}
@@ -329,7 +309,6 @@ export function TableBlockGalleryItem({
         <div className="flex flex-col gap-2">
           {source.type !== 'COLLECTION' ? (
             <Link href={href} className="text-smallTitle font-medium text-text">
-              entityId={rowEntityId} spaceId={currentSpaceId}
               {name || rowEntityId}
             </Link>
           ) : (

@@ -128,7 +128,7 @@ function useEntries(
       // });
       // send(event.data);
 
-      if ((event.data.type = 'UPSERT_RENDERABLE_TRIPLE_VALUE')) {
+      if ((event.data.type === 'UPSERT_RENDERABLE_TRIPLE_VALUE')) {
         const value: Value | OmitStrict<Value, 'id'> = {
           id: event.data.payload.renderable.entityId ?? undefined,
           entity: {

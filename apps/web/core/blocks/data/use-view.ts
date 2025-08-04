@@ -28,7 +28,7 @@ export function useView() {
   });
 
   const { blockRelations } = useEditorStore();
-  let newRelationId = blockRelations.find(relation => relation.toEntity.id === entityId)?.entityId ?? '';
+  const newRelationId = blockRelations.find(relation => relation.toEntity.id === entityId)?.entityId ?? '';
 
   const { entity: blockRelation } = useQueryEntity({
     spaceId: spaceId,

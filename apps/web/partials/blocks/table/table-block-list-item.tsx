@@ -6,7 +6,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation, useValues } from '~/core/sync/use-store';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -88,6 +88,13 @@ export function TableBlockListItem({
       c.slotId !== SystemIds.DESCRIPTION_PROPERTY
   );
 
+  const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
+  if (image && imageUrl) {
+    image = imageUrl;
+  }
+
+  console.log('Rendering TableBlockListItem for entity:', rowEntityId, { name, description, image });
+
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
@@ -113,31 +120,6 @@ export function TableBlockListItem({
                   relationPropertyName: 'Avatar',
                   spaceId: currentSpaceId,
                 });
-
-                // Notify the parent component about the change
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'EVENT',
-                    data: {
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: rowEntityId,
-                        fromEntityName: name,
-                        toEntityId: imageId,
-                        toEntityName: null,
-                        typeOfId: ContentIds.AVATAR_PROPERTY,
-                        typeOfName: 'Avatar',
-                        renderableType: 'IMAGE',
-                        value: imageId,
-                      },
-                    },
-                  }
-                );
               }}
             />
           )}
