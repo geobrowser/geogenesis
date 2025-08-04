@@ -7,7 +7,7 @@ import { EntityId, SubstreamRelationHistorical, SubstreamType } from '../schema'
 
 export function RelationDtoLive(relation: RemoteRelation): Relation {
   const imageEntityUrlValue =
-    relation.toEntity.valuesList.find(relation => relation.propertyId === SystemIds.IMAGE_URL_PROPERTY)?.value ?? null;
+    relation.toEntity.valuesList.find(relation => relation.propertyId === SystemIds.IMAGE_URL_PROPERTY)?.string ?? null;
   const renderableType = v2_getRenderableEntityType(relation.toEntity.types);
 
   return {

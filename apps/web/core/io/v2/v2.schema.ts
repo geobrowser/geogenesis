@@ -33,7 +33,11 @@ export const Type = Schema.Struct({
 export const Value = Schema.Struct({
   spaceId: Schema.UUID,
   property: Property,
-  value: Schema.String,
+  string: Schema.NullOr(Schema.String),
+  number: Schema.NullOr(Schema.String),
+  boolean: Schema.NullOr(Schema.Boolean),
+  point: Schema.NullOr(Schema.String),
+  time: Schema.NullOr(Schema.String),
   language: Schema.NullOr(Schema.String),
   unit: Schema.NullOr(Schema.String),
 });
@@ -63,7 +67,7 @@ export const Relation = Schema.Struct({
     valuesList: Schema.Array(
       Schema.Struct({
         propertyId: Schema.UUID,
-        value: Schema.String,
+        string: Schema.String,
       })
     ),
   }),
