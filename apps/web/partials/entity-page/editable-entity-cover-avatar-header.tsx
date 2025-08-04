@@ -8,10 +8,9 @@ import { useState } from 'react';
 
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { Services } from '~/core/services';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations } from '~/core/sync/use-store';
+import { useRelation } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 import { Relation } from '~/core/v2.types';
 
@@ -41,21 +40,18 @@ export const EditableCoverAvatarHeader = ({
    * In browse mode we show the cover and avatar if they exist in the relations
    * for the entity.
    */
-  const coverAvatarRenderable = useRelations({
-    selector: r =>
-      (r.type.id === SystemIds.COVER_PROPERTY || r.type.id === ContentIds.AVATAR_PROPERTY) &&
-      r.fromEntity.id === id &&
-      r.spaceId === spaceId,
+  const coverRelation = useRelation({
+    selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === id && r.spaceId === spaceId,
+  });
+
+  const avatarRelation = useRelation({
+    selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === id && r.spaceId === spaceId,
   });
 
   const renderedProperties = useEditableProperties(id, spaceId);
 
-  const coverRenderable = editable
-    ? renderedProperties[SystemIds.COVER_PROPERTY]
-    : coverAvatarRenderable.find(r => r.type.id === SystemIds.COVER_PROPERTY);
-  const avatarRenderable = editable
-    ? renderedProperties[ContentIds.AVATAR_PROPERTY]
-    : coverAvatarRenderable.find(r => r.type.id === ContentIds.AVATAR_PROPERTY);
+  const coverRenderable = editable ? renderedProperties[SystemIds.COVER_PROPERTY] : coverRelation;
+  const avatarRenderable = editable ? renderedProperties[ContentIds.AVATAR_PROPERTY] : avatarRelation;
 
   // Only show avatar when there's an actual avatar or user is in edit mode
   const showAvatar = avatarUrl || (editable && avatarRenderable);
@@ -116,81 +112,52 @@ const AvatarCoverInput = ({
   const { spaceId } = useEntityStoreInstance();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { ipfs } = Services.useServices();
 
   const isCover = typeOfId === SystemIds.COVER_PROPERTY;
 
   const editable = useUserIsEditing(spaceId);
 
-  const relations = useRelations({
+  const firstRenderable = useRelation({
     selector: r => r.fromEntity.id === entityId && r.type.id === typeOfId && r.spaceId === spaceId,
   });
 
-  const firstRenderable = relations[0] as Relation | undefined;
-
   const { storage } = useMutate();
 
-  const onImageChange = (imageSrc: string) => {
-    // const { id: imageId, ops } = Image.make({ cid: imageSrc });
-    // const [createRelationOp, setTripleOp] = ops;
-    // if (createRelationOp.type === 'CREATE_RELATION') {
-    //   send({
-    //     type: 'UPSERT_RELATION',
-    //     payload: {
-    //       fromEntityId: createRelationOp.relation.fromEntity,
-    //       fromEntityName: name,
-    //       toEntityId: createRelationOp.relation.toEntity,
-    //       toEntityName: null,
-    //       typeOfId: createRelationOp.relation.type,
-    //       typeOfName: 'Types',
-    //     },
-    //   });
-    // }
-    // if (setTripleOp.type === 'SET_TRIPLE') {
-    //   DB.upsert(
-    //     {
-    //       value: {
-    //         type: 'URL',
-    //         value: setTripleOp.triple.value.value,
-    //       },
-    //       entityId: imageId,
-    //       attributeId: setTripleOp.triple.attribute,
-    //       entityName: null,
-    //       attributeName: 'Image URL',
-    //     },
-    //     spaceId
-    //   );
-    //   send({
-    //     type: 'UPSERT_RELATION',
-    //     payload: {
-    //       fromEntityId: id,
-    //       fromEntityName: name,
-    //       toEntityId: imageId,
-    //       toEntityName: null,
-    //       typeOfId,
-    //       typeOfName,
-    //       renderableType: 'IMAGE',
-    //       value: setTripleOp.triple.value.value,
-    //     },
-    //   });
-    // }
+  const onImageChange = async (file: File) => {
+    const propertyName = isCover ? 'Cover' : 'Avatar';
+    
+    try {
+      setIsUploading(true);
+      
+      // Use the consolidated helper to create and link the image
+      await storage.images.createAndLink({
+        file,
+        fromEntityId: entityId,
+        fromEntityName: null,
+        relationPropertyId: typeOfId,
+        relationPropertyName: propertyName,
+        spaceId,
+      });
+    } catch (error) {
+      console.error('Failed to upload image:', error);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      setIsUploading(true);
+      
       try {
-        const imageSrc = await ipfs.uploadFile(file);
         // Only delete the old image after the new one is successfully uploaded
         if (imgUrl && firstRenderable) {
           deleteRelation(firstRenderable);
         }
-        onImageChange(imageSrc);
+        await onImageChange(file);
       } catch (error) {
         console.error('Failed to upload image:', error);
       } finally {
-        setIsUploading(false);
         e.target.value = '';
       }
     }

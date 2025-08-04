@@ -3,10 +3,12 @@ import { createAtom } from '@xstate/store';
 import { useSelector } from '@xstate/store/react';
 import { Effect } from 'effect';
 import equal from 'fast-deep-equal';
+import * as React from 'react';
 
 import { getProperties, getProperty } from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Values } from '../utils/value';
+import { Properties } from '../utils/property';
 import { Property, Relation, Value } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E, mergeRelations } from './orm';
@@ -111,7 +113,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
 
 export function useQueryRelation({ id, spaceId, enabled = true }: QueryEntityOptions) {
   const cache = useQueryClient();
-  const { store, stream } = useSyncEngine();
+  // const { store, stream } = useSyncEngine();
 
   const { isFetched, data: entity } = useQuery({
     enabled: Boolean(id) && enabled,
@@ -225,10 +227,10 @@ export function useQueryEntities({
 }
 
 export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOptions) {
-  // const cache = useQueryClient();
-  // const { store, stream } = useSyncEngine();
+  const cache = useQueryClient();
+  const { store } = useSyncEngine();
 
-  const { data: property, isFetched } = useQuery({
+  const { data: remoteProperty, isFetched } = useQuery({
     enabled: enabled && Boolean(id),
     queryKey: ['store', 'property', JSON.stringify({ id, spaceId, enabled })],
     queryFn: async (): Promise<Property | null> => {
@@ -240,8 +242,32 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
     },
   });
 
+  // Try store.getProperty first (for local properties with dataType registered)
+  // Fall back to manual reconstruction (for existing properties added to entities)
+  const property = useSelector(
+    reactive,
+    () => {
+      if (!id || !enabled) {
+        return null;
+      }
+
+      // First try the store's getProperty method (works for registered local properties)
+      const storeProperty = store.getProperty(id);
+      if (storeProperty) {
+        return storeProperty;
+      }
+
+      // Fall back to manual reconstruction for existing properties
+      return Properties.reconstructFromStore(id, getValues, getRelations);
+    },
+    equal
+  );
+
+  // Prefer remote property data, then local store, then reconstructed
+  const finalProperty = remoteProperty || property;
+
   return {
-    property,
+    property: finalProperty,
     isLoading: !isFetched && Boolean(id) && enabled,
   };
 }
@@ -252,10 +278,10 @@ type QueryPropertiesOptions = {
 };
 
 export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptions) {
-  // const cache = useQueryClient();
-  // const { store, stream } = useSyncEngine();
+  const cache = useQueryClient();
+  const { store } = useSyncEngine();
 
-  const { data: properties, isFetched } = useQuery({
+  const { data: remoteProperties, isFetched } = useQuery({
     enabled: enabled,
     queryKey: ['store', 'properties', JSON.stringify({ ids, enabled })],
     queryFn: async (): Promise<Property[]> => {
@@ -263,8 +289,60 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
     },
   });
 
+  // Try store.getProperty first, fall back to manual reconstruction
+  const localProperties = useSelector(
+    reactive,
+    () => {
+      if (!enabled || !ids.length) {
+        return [];
+      }
+
+      const props: Property[] = [];
+
+      for (const id of ids) {
+        // First try the store's getProperty method
+        const storeProperty = store.getProperty(id);
+        if (storeProperty) {
+          props.push(storeProperty);
+          continue;
+        }
+
+        // Fall back to manual reconstruction for existing properties
+        const reconstructedProperty = Properties.reconstructFromStore(id, getValues, getRelations);
+        if (reconstructedProperty) {
+          props.push(reconstructedProperty);
+        }
+      }
+
+      return props;
+    },
+    equal
+  );
+
+  // Merge remote and local properties, preferring remote when both exist
+  const allProperties = React.useMemo(() => {
+    const remotePropsMap = new Map((remoteProperties || []).map(p => [p.id, p]));
+    const localPropsMap = new Map(localProperties.map(p => [p.id, p]));
+    
+    const merged: Property[] = [];
+    
+    for (const id of ids) {
+      const remoteProp = remotePropsMap.get(id);
+      const localProp = localPropsMap.get(id);
+      
+      // Prefer remote property, but fall back to local
+      if (remoteProp) {
+        merged.push(remoteProp);
+      } else if (localProp) {
+        merged.push(localProp);
+      }
+    }
+    
+    return merged;
+  }, [remoteProperties, localProperties, ids]);
+
   return {
-    properties: properties,
+    properties: allProperties,
     isLoading: !isFetched && enabled,
   };
 }
@@ -324,6 +402,50 @@ export function getValues(options: UseValuesParams & { mergeWith?: Value[] } = {
   );
 }
 
+type UseValueParams = {
+  id?: string;
+  selector?: (v: Value) => boolean;
+  includeDeleted?: boolean;
+};
+
+export function useValue(options: UseValueParams) {
+  const { id, selector, includeDeleted = false } = options;
+
+  const value = useSelector(
+    reactiveValues,
+    state => {
+      if (id) {
+        return state.find(v => v.id === id && (includeDeleted ? true : Boolean(v.isDeleted) === false)) ?? null;
+      }
+
+      if (selector) {
+        return state.find(v => selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false)) ?? null;
+      }
+
+      return null;
+    },
+    equal
+  );
+
+  return value;
+}
+
+export function getValue(options: UseValueParams & { mergeWith?: Value[] }) {
+  const { id, selector, includeDeleted = false, mergeWith = [] } = options;
+
+  const values = mergeWith.length === 0 ? reactiveValues.get() : Values.merge(reactiveValues.get(), mergeWith);
+
+  if (id) {
+    return values.find(v => v.id === id && (includeDeleted ? true : Boolean(v.isDeleted) === false)) ?? null;
+  }
+
+  if (selector) {
+    return values.find(v => selector(v) && (includeDeleted ? true : Boolean(v.isDeleted) === false)) ?? null;
+  }
+
+  return null;
+}
+
 type UseRelationsParams = {
   selector?: (r: Relation) => boolean;
   includeDeleted?: boolean;
@@ -364,4 +486,56 @@ export function getRelations(options: UseRelationsParams = {}) {
   return mergeRelations(reactiveRelations.get(), mergeWith).filter(r =>
     selector ? selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false) : true
   );
+}
+
+type UseRelationParams = {
+  id?: string;
+  selector?: (r: Relation) => boolean;
+  includeDeleted?: boolean;
+  mergeWith?: Relation[];
+};
+
+export function useRelation(options: UseRelationParams) {
+  const { id, selector, includeDeleted = false, mergeWith = [] } = options;
+
+  const relation = useSelector(
+    reactiveRelations,
+    relations => {
+      const searchableRelations = mergeWith.length === 0 ? relations : mergeRelations(relations, mergeWith);
+
+      if (id) {
+        return (
+          searchableRelations.find(r => r.id === id && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ?? null
+        );
+      }
+
+      if (selector) {
+        return (
+          searchableRelations.find(r => selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ?? null
+        );
+      }
+
+      return null;
+    },
+    equal
+  );
+
+  return relation;
+}
+
+export function getRelation(options: UseRelationParams) {
+  const { id, selector, includeDeleted = false, mergeWith = [] } = options;
+
+  const relations =
+    mergeWith.length === 0 ? reactiveRelations.get() : mergeRelations(reactiveRelations.get(), mergeWith);
+
+  if (id) {
+    return relations.find(r => r.id === id && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ?? null;
+  }
+
+  if (selector) {
+    return relations.find(r => selector(r) && (includeDeleted ? true : Boolean(r.isDeleted) === false)) ?? null;
+  }
+
+  return null;
 }

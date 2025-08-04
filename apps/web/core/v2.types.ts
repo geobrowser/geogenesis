@@ -132,6 +132,21 @@ export type SwitchableRenderableType =
   | 'POINT'
   | 'GEO_LOCATION';
 
+/**
+ * Human-readable labels for switchable renderable types
+ */
+export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType, string> = {
+  TIME: 'Time',
+  TEXT: 'Text',
+  URL: 'Url',
+  RELATION: 'Relation',
+  IMAGE: 'Image',
+  CHECKBOX: 'Checkbox',
+  NUMBER: 'Number',
+  POINT: 'Point',
+  GEO_LOCATION: 'Geo Location',
+};
+
 export type SearchResult = {
   id: string;
   name: string | null;

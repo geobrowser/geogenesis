@@ -4,8 +4,8 @@ import * as React from 'react';
 
 import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
-import { useQueryEntity, useQueryProperty, useRelations, useValues } from '~/core/sync/use-store';
-import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
+import { useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
+import { GeoNumber, GeoPoint, NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
 import { DataType, RenderableType } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -135,6 +135,7 @@ export function RelationsGroup({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === propertyId,
   });
 
+
   if (relations.length === 0) {
     return null;
   }
@@ -179,8 +180,7 @@ export function RelationsGroup({
             const relationId = r.id;
 
             if (property.renderableTypeStrict === 'IMAGE') {
-              const imagePath = getImagePath(linkedEntityId ?? '');
-              return <ImageZoom key={`image-${relationId}-${linkedEntityId}`} imageSrc={imagePath} />;
+              return <ImageRelation key={`image-${relationId}-${linkedEntityId}`} linkedEntityId={linkedEntityId} relationId={relationId} spaceId={spaceId} />;
             }
 
             return (
@@ -204,6 +204,13 @@ export function RelationsGroup({
   );
 }
 
+function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
+  // Use the efficient hook to get only the image URL for this specific entity
+  const actualImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+  
+  return <ImageZoom imageSrc={getImagePath(actualImageSrc || '')} />;
+}
+
 function RenderedValue({
   entityId,
   propertyId,
@@ -219,13 +226,13 @@ function RenderedValue({
   // more granularly?
   //
   // Why is this super slow
-  const values = useValues({
+  const valueData = useValue({
     selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
   });
 
   // Should only be one value for a given (space, entity, property) tuple
-  const value = values[0]?.value ?? '';
-  const options = values[0]?.options;
+  const value = valueData?.value ?? '';
+  const options = valueData?.options;
 
   if (propertyId === SystemIds.NAME_PROPERTY) {
     return null;

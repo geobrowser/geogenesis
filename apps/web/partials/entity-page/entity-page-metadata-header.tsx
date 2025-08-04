@@ -1,15 +1,26 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
+import { RENDERABLE_TYPE_PROPERTY, DATA_TYPE_PROPERTY } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useQueryEntity, useQueryProperty } from '~/core/sync/use-store';
+import { ID } from '~/core/id';
+import { useMutate } from '~/core/sync/use-mutate';
+import { useQueryEntity, useQueryProperty, useRelations } from '~/core/sync/use-store';
+import { SwitchableRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '~/core/v2.types';
+
+import { Divider } from '~/design-system/divider';
 
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
+import { RenderableTypeDropdown } from './renderable-type-dropdown';
 import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
+import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
+import { useName } from '~/core/state/entity-page-store/entity-store';
+import { Properties } from '~/core/utils/property';
+
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -17,49 +28,213 @@ interface EntityPageMetadataHeaderProps {
 }
 
 export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHeaderProps) {
+  const { id: entityId } = useEntityStoreInstance();
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
+  })
+  const name = useName(entityId);
+  
+  const { storage } = useMutate();
+
   const editable = useUserIsEditing(spaceId);
 
   // Fetch property data type to see if this is a property entity
   const { property: propertyData } = useQueryProperty({
-    id,
+    id: entityId, // Use entityId consistently
     spaceId,
     enabled: true,
   });
 
+  // Check if this entity has a Property type relation (local property check)
+  const hasLocalPropertyType = relations.find(
+    r => r.fromEntity.id === entityId && 
+         r.type.id === SystemIds.TYPES_PROPERTY && 
+         r.toEntity.id === SystemIds.PROPERTY &&
+         r.isLocal === true
+  );
+
+  // Check if property data type is editable (simpler than checking publish status)
+  const isDataTypeEditable = propertyData?.isDataTypeEditable ?? false;
+
+  // Find renderableType relation
+  const renderableTypeRelation = relations.find(
+    r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY
+  );
+  
   const { entity: renderableTypeEntity } = useQueryEntity({
+    // id: propertyData?.renderableType || renderableTypeRelation?.toEntity.id || undefined,
     id: propertyData?.renderableType || undefined,
     spaceId,
-    enabled: !!propertyData?.renderableType,
+    enabled: !!(propertyData?.renderableType || renderableTypeRelation?.toEntity.id),
   });
 
+  const isPropertyEntity = !!propertyData || !!hasLocalPropertyType;
+
   const propertyDataType = React.useMemo(() => {
-    if (!propertyData) return null;
+    return Properties.constructDataType(
+      propertyData,
+      renderableTypeEntity,
+      renderableTypeRelation,
+      entityId
+    );
+  }, [propertyData, renderableTypeEntity, entityId, renderableTypeRelation]);
 
-    // If there's a renderableType ID but the entity hasn't loaded yet, return null
-    // to prevent the loading flash
-    if (propertyData.renderableType && !renderableTypeEntity) {
-      return null;
+  // Determine the current renderable type based on property data
+  const currentRenderableType = React.useMemo(() => {
+    return Properties.getCurrentRenderableType(propertyDataType);
+  }, [propertyDataType]);
+
+  const handlePropertyTypeChange = React.useCallback(
+    (newType: SwitchableRenderableType) => {
+
+      if (!entityId || !spaceId) return;
+
+      // Determine the base dataType and renderableType based on the selected type
+      // Map property types to their base dataType and renderableType
+      const mapping = Properties.mapPropertyType(newType);
+      const baseDataType = mapping.baseDataType;
+      const renderableTypeId = mapping.renderableTypeId;
+
+
+      // Non-editable properties can't change their base dataType
+      if (!isDataTypeEditable && propertyData && propertyData.dataType !== baseDataType) {
+        console.warn('Cannot change property dataType from', propertyData.dataType, 'to', baseDataType);
+        console.warn('Non-editable properties cannot change their base dataType');
+        return;
+      }
+
+      // Update the dataType value if it's different from the current one
+      if (propertyData?.dataType !== baseDataType) {
+        storage.values.set({
+          id: ID.createValueId({
+            entityId,
+            propertyId: DATA_TYPE_PROPERTY,
+            spaceId,
+          }),
+          entity: {
+            id: entityId,
+            name: name || '',
+          },
+          property: {
+            id: DATA_TYPE_PROPERTY,
+            name: 'Data Type',
+            dataType: 'TEXT',
+          },
+          spaceId,
+          value: baseDataType,
+        });
+      } else if (!propertyData) {
+        // If no dataType value exists and no propertyData, create the dataType value
+        storage.values.set({
+          id: ID.createValueId({
+            entityId,
+            propertyId: DATA_TYPE_PROPERTY,
+            spaceId,
+          }),
+          entity: {
+            id: entityId,
+            name: name || '',
+          },
+          property: {
+            id: DATA_TYPE_PROPERTY,
+            name: 'Data Type',
+            dataType: 'TEXT',
+          },
+          spaceId,
+          value: baseDataType,
+        });
+      }
+
+      // Handle the renderableType relation
+
+      const existingRelation = relations.find(
+        r => r.fromEntity.id === entityId && r.type.id === RENDERABLE_TYPE_PROPERTY
+      );
+
+
+      if (renderableTypeId) {
+        // Need to set or update the renderableType relation
+        if (existingRelation) {
+          // Update existing relation
+          storage.relations.update(existingRelation, draft => {
+            draft.toEntity.id = renderableTypeId;
+            draft.toEntity.name = SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType;
+            draft.toEntity.value = renderableTypeId;
+          });
+        } else {
+          // Create new relation
+          storage.relations.set({
+            id: Id.generate(),
+            entityId: ID.createEntityId(),
+            fromEntity: {
+              id: entityId,
+              name: propertyData?.name || '',
+            },
+            type: {
+              id: RENDERABLE_TYPE_PROPERTY,
+              name: 'Renderable Type',
+            },
+            toEntity: {
+              id: renderableTypeId,
+              name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
+              value: renderableTypeId,
+            },
+            spaceId,
+            position: Position.generate(),
+            verified: false,
+            renderableType: 'RELATION',
+          });
+        }
+      } else {
+        // Remove renderableType relation if it exists
+        if (existingRelation) {
+          storage.relations.delete(existingRelation);
+        }
+      }
+    },
+    [entityId, spaceId, storage, propertyData, relations, isDataTypeEditable, name]
+  );
+
+  // Create property data when Property type is added
+  React.useEffect(() => {
+    // Check if there's already a Property type relation to avoid duplicates
+    const existingPropertyTypeRelation = relations.find(
+      r => r.fromEntity.id === entityId && 
+          r.type.id === SystemIds.TYPES_PROPERTY && 
+          r.toEntity.id === SystemIds.PROPERTY
+    );
+    
+    // Only create property if:
+    // 1. Entity has Property type relation
+    // 2. No property data exists from backend
+    if (existingPropertyTypeRelation && !propertyData && entityId && spaceId) {
+      
+      // Create the property with a default dataType of TEXT
+      // Skip creating the Property type relation since it already exists
+      storage.properties.create({
+        entityId,
+        spaceId,
+        name: name || 'New Property',
+        dataType: 'TEXT',
+        renderableTypeId: null,
+        skipTypeRelation: true,
+      });
     }
-
-    let renderableType = null;
-    if (propertyData.renderableType && renderableTypeEntity) {
-      // It's a UUID, use the entity data
-      renderableType = {
-        id: renderableTypeEntity.id,
-        name: renderableTypeEntity.name,
-      };
-    }
-
-    return {
-      id: propertyData.id,
-      dataType: propertyData.dataType,
-      renderableType,
-    };
-  }, [propertyData, renderableTypeEntity]);
+  }, [propertyData, entityId, spaceId, storage, name, relations]);
 
   return (
     <div className="flex items-center gap-2 text-text">
-      {propertyDataType && (
+      {isPropertyEntity && editable && (
+        <div className="flex items-center gap-2">
+          <RenderableTypeDropdown 
+            value={currentRenderableType} 
+            onChange={handlePropertyTypeChange}
+            baseDataType={isDataTypeEditable ? undefined : propertyDataType?.dataType}
+          />
+          <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
+        </div>
+      )}
+      {(propertyDataType && !editable) && (
         <div className="h-100 mt-1 flex items-end">
           <DataTypePill
             dataType={propertyDataType.dataType}
