@@ -93,8 +93,6 @@ export function TableBlockListItem({
     image = imageUrl;
   }
 
-  console.log('Rendering TableBlockListItem for entity:', rowEntityId, { name, description, image });
-
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
