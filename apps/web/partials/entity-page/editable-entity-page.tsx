@@ -1,11 +1,12 @@
 'use client';
 
-import { ContentIds, Id, Position, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 // import { Image } from '@graphprotocol/grc-20';
 import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
+import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { useEditorStore } from '~/core/state/editor/use-editor';
@@ -13,12 +14,7 @@ import { useCover, useEntityTypes, useName } from '~/core/state/entity-page-stor
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
 import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
-import {
-  Property,
-  Relation,
-  Value,
-  ValueOptions,
-} from '~/core/v2.types';
+import { Property, Relation, ValueOptions } from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -34,7 +30,6 @@ import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
 import { editorHasContentAtom } from '~/atoms';
-import { useCreateProperty } from '~/core/hooks/use-create-property';
 
 function ShowablePanel({
   name,
@@ -186,7 +181,7 @@ export function EditableEntityPage({ id, spaceId }: Props) {
             relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
             onCreateEntity={result => {
               const renderableType = result.renderableType || 'TEXT';
-              
+
               const createdPropertyId = createProperty({
                 name: result.name || '',
                 propertyType: renderableType,
@@ -219,7 +214,6 @@ export function EditableEntityPage({ id, spaceId }: Props) {
   );
 }
 
-
 function RenderedProperty({ property, spaceId }: { property: Property; spaceId: string }) {
   return (
     <Link href={NavUtils.toEntity(spaceId, property.id)}>
@@ -248,11 +242,10 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
     selector: r => r.fromEntity.id === id && r.spaceId === spaceId && r.type.id === propertyId,
   });
 
-
   // For IMAGE properties, get the image URL from related image entities
   const imageRelation = relations.find(r => r.renderableType === 'IMAGE');
   const imageEntityId = imageRelation?.toEntity.id;
-  
+
   // Use the efficient hook to get only the image URL for this specific entity
   const imageSrc = useImageUrlFromEntity(imageEntityId, spaceId);
 
@@ -314,8 +307,8 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
                 if (valueType) {
                   storage.relations.set({
-                    id: Id.generate(),
-                    entityId: Id.generate(),
+                    id: IdUtils.generate(),
+                    entityId: IdUtils.generate(),
                     spaceId,
                     renderableType: 'RELATION',
                     verified: result.verified,
@@ -389,7 +382,13 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         const relationValue = r.toEntity.id;
 
         if (property.renderableTypeStrict === 'IMAGE') {
-          return <ImageRelation key={`image-${relationId}-${relationValue}`} relationValue={relationValue} spaceId={spaceId} />;
+          return (
+            <ImageRelation
+              key={`image-${relationId}-${relationValue}`}
+              relationValue={relationValue}
+              spaceId={spaceId}
+            />
+          );
         }
 
         return (
@@ -426,90 +425,90 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 <SquareButton icon={<Create />} />
               )
             }
-          relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
-          onCreateEntity={result => {
-            storage.values.set({
-              id: ID.createValueId({
-                entityId: result.id,
-                propertyId: SystemIds.NAME_PROPERTY,
-                spaceId,
-              }),
-              entity: {
-                id: result.id,
-                name: result.name,
-              },
-              property: {
-                id: SystemIds.NAME_PROPERTY,
-                name: 'Name',
-                dataType: 'TEXT',
-              },
-              spaceId,
-              value: result.name ?? '',
-            });
-
-            if (valueType) {
-              storage.relations.set({
-                id: Id.generate(),
-                entityId: Id.generate(),
-                spaceId,
-                renderableType: 'RELATION',
-                toSpaceId: result.space,
-                type: {
-                  id: SystemIds.TYPES_PROPERTY,
-                  name: 'Types',
-                },
-                fromEntity: {
+            relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
+            onCreateEntity={result => {
+              storage.values.set({
+                id: ID.createValueId({
+                  entityId: result.id,
+                  propertyId: SystemIds.NAME_PROPERTY,
+                  spaceId,
+                }),
+                entity: {
                   id: result.id,
                   name: result.name,
                 },
-                toEntity: {
-                  id: valueType.id,
-                  name: valueType.name,
-                  value: valueType.id,
+                property: {
+                  id: SystemIds.NAME_PROPERTY,
+                  name: 'Name',
+                  dataType: 'TEXT',
                 },
+                spaceId,
+                value: result.name ?? '',
               });
-            }
-          }}
-          onDone={result => {
-            const newRelationId = ID.createEntityId();
-            // @TODO(migration): lightweight relation pointing to entity id
-            const newEntityId = ID.createEntityId();
 
-            const newRelation: Relation = {
-              id: newRelationId,
-              spaceId: spaceId,
-              position: Position.generate(),
-              renderableType: 'RELATION',
-              verified: false,
-              entityId: newEntityId,
-              type: {
-                id: typeOfId,
-                name: typeOfName,
-              },
-              fromEntity: {
-                id: id,
-                name: name,
-              },
-              toEntity: {
-                id: result.id,
-                name: result.name,
-                value: result.id,
-              },
-            };
+              if (valueType) {
+                storage.relations.set({
+                  id: IdUtils.generate(),
+                  entityId: IdUtils.generate(),
+                  spaceId,
+                  renderableType: 'RELATION',
+                  toSpaceId: result.space,
+                  type: {
+                    id: SystemIds.TYPES_PROPERTY,
+                    name: 'Types',
+                  },
+                  fromEntity: {
+                    id: result.id,
+                    name: result.name,
+                  },
+                  toEntity: {
+                    id: valueType.id,
+                    name: valueType.name,
+                    value: valueType.id,
+                  },
+                });
+              }
+            }}
+            onDone={result => {
+              const newRelationId = ID.createEntityId();
+              // @TODO(migration): lightweight relation pointing to entity id
+              const newEntityId = ID.createEntityId();
 
-            if (result.space) {
-              newRelation.toSpaceId = result.space;
-            }
+              const newRelation: Relation = {
+                id: newRelationId,
+                spaceId: spaceId,
+                position: Position.generate(),
+                renderableType: 'RELATION',
+                verified: false,
+                entityId: newEntityId,
+                type: {
+                  id: typeOfId,
+                  name: typeOfName,
+                },
+                fromEntity: {
+                  id: id,
+                  name: name,
+                },
+                toEntity: {
+                  id: result.id,
+                  name: result.name,
+                  value: result.id,
+                },
+              };
 
-            if (result.verified) {
-              newRelation.verified = true;
-            }
+              if (result.space) {
+                newRelation.toSpaceId = result.space;
+              }
 
-            storage.relations.set(newRelation);
-          }}
-          spaceId={spaceId}
-        />
-      </div>
+              if (result.verified) {
+                newRelation.verified = true;
+              }
+
+              storage.relations.set(newRelation);
+            }}
+            spaceId={spaceId}
+          />
+        </div>
       )}
     </div>
   );
@@ -518,7 +517,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 function ImageRelation({ relationValue, spaceId }: { relationValue: string; spaceId: string }) {
   // Use the efficient hook to get only the image URL for this specific entity
   const actualImageSrc = useImageUrlFromEntity(relationValue, spaceId);
-  
+
   return <ImageZoom imageSrc={getImagePath(actualImageSrc || '')} />;
 }
 

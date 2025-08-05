@@ -1,4 +1,4 @@
-import { Id, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, SystemIds } from '@graphprotocol/grc-20';
 import cx from 'classnames';
 
 import { useState } from 'react';
@@ -134,8 +134,8 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
           onCreateEntity={result => {
             if (firstRelationValueType) {
               storage.relations.set({
-                id: Id.generate(),
-                entityId: Id.generate(),
+                id: IdUtils.generate(),
+                entityId: IdUtils.generate(),
                 spaceId,
                 renderableType: 'RELATION',
                 verified: result.verified,
@@ -158,9 +158,9 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
           }}
           onDone={result => {
             storage.relations.set({
-              id: Id.generate(),
+              id: IdUtils.generate(),
               // @TODO(migration): Reuse entity?
-              entityId: Id.generate(),
+              entityId: IdUtils.generate(),
               spaceId,
               renderableType: 'RELATION',
               toSpaceId: result.space,
@@ -238,9 +238,9 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
             onCreateEntity={result => {
               if (firstRelationValueType) {
                 storage.relations.set({
-                  id: Id.generate(),
+                  id: IdUtils.generate(),
                   // @TODO(migration): Reuse entity?
-                  entityId: Id.generate(),
+                  entityId: IdUtils.generate(),
                   spaceId,
                   renderableType: 'RELATION',
                   toSpaceId: result.space,
@@ -262,9 +262,9 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
             }}
             onDone={result => {
               storage.relations.set({
-                id: Id.generate(),
+                id: IdUtils.generate(),
                 // @TODO(migration): Reuse entity?
-                entityId: Id.generate(),
+                entityId: IdUtils.generate(),
                 spaceId,
                 renderableType: 'RELATION',
                 toSpaceId: result.space,

@@ -1,7 +1,7 @@
-import { Id } from '@graphprotocol/grc-20';
+import { IdUtils } from '@graphprotocol/grc-20';
 
 export function createEntityId(): string {
-  return Id.generate();
+  return IdUtils.generate();
 }
 
 export function createValueId({

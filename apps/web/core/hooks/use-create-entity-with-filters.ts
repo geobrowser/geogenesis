@@ -1,4 +1,4 @@
-import { Id, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -6,7 +6,7 @@ import { Filter } from '../blocks/data/filters';
 import { useMutate } from '../sync/use-mutate';
 
 export function useCreateEntityWithFilters(spaceId: string) {
-  const [nextEntityId, setNextEntityId] = React.useState(Id.generate());
+  const [nextEntityId, setNextEntityId] = React.useState(IdUtils.generate());
   const { storage } = useMutate();
 
   const onClick = React.useCallback(
@@ -25,8 +25,8 @@ export function useCreateEntityWithFilters(spaceId: string) {
 
       for (const filter of validFilters) {
         storage.relations.set({
-          id: Id.generate(),
-          entityId: Id.generate(),
+          id: IdUtils.generate(),
+          entityId: IdUtils.generate(),
           spaceId,
           renderableType: 'RELATION',
           fromEntity: {
@@ -45,7 +45,7 @@ export function useCreateEntityWithFilters(spaceId: string) {
         });
       }
 
-      setNextEntityId(Id.generate());
+      setNextEntityId(IdUtils.generate());
     },
     [nextEntityId, spaceId, storage]
   );

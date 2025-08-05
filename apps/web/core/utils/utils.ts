@@ -1,4 +1,4 @@
-import { Id } from '@graphprotocol/grc-20';
+import { IdUtils } from '@graphprotocol/grc-20';
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
@@ -350,10 +350,8 @@ export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId
   if (!imageEntityId || imageValues.length === 0) return undefined;
 
   // Find the first value that is a string starting with 'ipfs://'
-  const imageUrlValue = imageValues.find(v => 
-    typeof v.value === 'string' && v.value.startsWith('ipfs://')
-  );
-  
+  const imageUrlValue = imageValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+
   return imageUrlValue?.value;
 }
 
@@ -488,7 +486,7 @@ export const uuidValidateV4 = (uuid: string) => {
 export const validateEntityId = (maybeEntityId: EntityId | string | null | undefined) => {
   if (typeof maybeEntityId !== 'string') return false;
 
-  return Id.isValid(maybeEntityId);
+  return IdUtils.isValid(maybeEntityId);
 };
 
 export const getTabSlug = (label: string) => {
