@@ -69,7 +69,7 @@ export const Relation = Schema.Struct({
     valuesList: Schema.Array(
       Schema.Struct({
         propertyId: Schema.UUID,
-        string: Schema.String,
+        string: Schema.NullOr(Schema.String),
       })
     ),
   }),
