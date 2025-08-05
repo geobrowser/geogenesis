@@ -1,4 +1,4 @@
-import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 
 import { EntityId } from '~/core/io/schema';
 import { Relation } from '~/core/v2.types';
@@ -11,8 +11,8 @@ export function getRelationForBlockType(
   spaceId: string
 ): Relation {
   return {
-    id: Id.generate(),
-    entityId: Id.generate(),
+    id: IdUtils.generate(),
+    entityId: IdUtils.generate(),
     spaceId: spaceId,
     position: Position.generate(),
     renderableType: 'RELATION',

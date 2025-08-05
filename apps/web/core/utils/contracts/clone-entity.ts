@@ -39,8 +39,8 @@ export const cloneEntity = async (
   const newEntityName = entityName;
   const newOps: Array<Op> = [];
 
-  const triplesToClone = oldEntity.values.filter(triple => !SKIPPED_PROPERTYS.includes(Id.Id(triple.property.id)));
-  const relationsToClone = oldEntity.relations.filter(relation => !SKIPPED_PROPERTYS.includes(Id.Id(relation.type.id)));
+  const triplesToClone = oldEntity.values.filter(triple => !SKIPPED_PROPERTYS.includes(Id(triple.property.id)));
+  const relationsToClone = oldEntity.relations.filter(relation => !SKIPPED_PROPERTYS.includes(Id(relation.type.id)));
   const tabsToClone = oldEntity.relations.filter(relation => relation.type.id === SystemIds.TABS_PROPERTY);
   const blocksToClone = oldEntity.relations.filter(relation => relation.type.id === SystemIds.BLOCKS);
 
@@ -67,7 +67,7 @@ export const cloneEntity = async (
         Ops.create({
           entity: newEntityId,
           value: {
-            property: Id.Id(triple.property.id),
+            property: Id(triple.property.id),
             value: replacedValue,
           },
         })
@@ -77,7 +77,7 @@ export const cloneEntity = async (
         Ops.create({
           entity: newEntityId,
           value: {
-            property: Id.Id(triple.property.id),
+            property: Id(triple.property.id),
             value: triple.value,
           },
         })
@@ -87,7 +87,7 @@ export const cloneEntity = async (
 
   relationsToClone.forEach(relation => {
     const { ops } = Graph.createRelation({
-      type: Id.Id(relation.type.id),
+      type: Id(relation.type.id),
       fromEntity: newEntityId,
       toEntity: relation.toEntity.id,
       position: relation.position,
@@ -141,7 +141,7 @@ const cloneRelatedEntities = async (
       const newRelatedEntityId = ID.createEntityId();
 
       const { ops: relationshipOps } = Graph.createRelation({
-        type: Id.Id(relation.type.id),
+        type: Id(relation.type.id),
         fromEntity: newEntityId,
         toEntity: newRelatedEntityId,
         position: relation.position,

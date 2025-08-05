@@ -17,7 +17,11 @@ export const entityFragment = graphql(/* GraphQL */ `
       property {
         ...PropertyFragment
       }
-      value
+      string
+      number
+      point
+      boolean
+      time
       language
       unit
     }
@@ -41,7 +45,7 @@ export const entityFragment = graphql(/* GraphQL */ `
         }
         valuesList {
           propertyId
-          value
+          string
         }
       }
       toSpaceId
@@ -72,7 +76,11 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         property {
           ...PropertyFragment
         }
-        value
+        string
+        number
+        point
+        boolean
+        time
         language
         unit
       }
@@ -96,7 +104,11 @@ export const entitiesQuery = graphql(/* GraphQL */ `
           }
           valuesList {
             propertyId
-            value
+            string
+            number
+            point
+            boolean
+            time
           }
         }
         toSpaceId
@@ -128,7 +140,11 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
         property {
           ...PropertyFragment
         }
-        value
+        string
+        number
+        point
+        boolean
+        time
         language
         unit
       }
@@ -152,7 +168,11 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
           }
           valuesList {
             propertyId
-            value
+            string
+            number
+            point
+            boolean
+            time
           }
         }
         toSpaceId
@@ -184,7 +204,11 @@ export const entityQuery = graphql(/* GraphQL */ `
         property {
           ...PropertyFragment
         }
-        value
+        string
+        number
+        point
+        boolean
+        time
         language
         unit
       }
@@ -208,7 +232,11 @@ export const entityQuery = graphql(/* GraphQL */ `
           }
           valuesList {
             propertyId
-            value
+            string
+            number
+            point
+            boolean
+            time
           }
         }
         toSpaceId
@@ -246,7 +274,11 @@ export const relationFragment = graphql(/* GraphQL */ `
       }
       valuesList {
         propertyId
-        value
+        string
+        number
+        point
+        boolean
+        time
       }
     }
     toSpaceId
@@ -284,7 +316,11 @@ export const entityPageQuery = graphql(/* GraphQL */ `
         property {
           ...PropertyFragment
         }
-        value
+        string
+        number
+        point
+        boolean
+        time
         language
         unit
       }
@@ -308,7 +344,11 @@ export const entityPageQuery = graphql(/* GraphQL */ `
           }
           valuesList {
             propertyId
-            value
+            string
+            number
+            point
+            boolean
+            time
           }
         }
         toSpaceId
@@ -480,7 +520,11 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
               name
             }
           }
-          value
+          string
+          number
+          point
+          boolean
+          time
           language
           unit
         }
@@ -504,7 +548,11 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
             }
             valuesList {
               propertyId
-              value
+              string
+              number
+              point
+              boolean
+              time
             }
           }
           type {
