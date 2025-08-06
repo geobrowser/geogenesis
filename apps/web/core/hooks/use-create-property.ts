@@ -1,11 +1,12 @@
-import { Id } from '@graphprotocol/grc-20';
+import { IdUtils } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { SwitchableRenderableType, DataType } from '~/core/v2.types';
 import { mapPropertyType, reconstructFromStore } from '~/core/utils/property/properties';
+import { DataType, SwitchableRenderableType } from '~/core/v2.types';
+
 import { useMutate } from '../sync/use-mutate';
-import { getValues, getRelations } from '../sync/use-store';
+import { getRelations, getValues } from '../sync/use-store';
 import { useSyncEngine } from '../sync/use-sync-engine';
 
 export interface CreatePropertyParams {
@@ -23,7 +24,7 @@ export interface AddPropertyToEntityParams {
 }
 
 export function useCreateProperty(spaceId: string) {
-  const [nextPropertyId, setNextPropertyId] = React.useState(Id.generate());
+  const [nextPropertyId, setNextPropertyId] = React.useState(IdUtils.generate());
   const { storage } = useMutate();
   const { store } = useSyncEngine();
 
@@ -43,7 +44,7 @@ export function useCreateProperty(spaceId: string) {
         toSpaceId: space,
       });
 
-      setNextPropertyId(Id.generate());
+      setNextPropertyId(IdUtils.generate());
       return propertyId;
     },
     [nextPropertyId, spaceId, storage]
@@ -53,7 +54,7 @@ export function useCreateProperty(spaceId: string) {
     ({ entityId, propertyId, propertyName, entityName }: AddPropertyToEntityParams) => {
       // Try to resolve the property's dataType from the store
       let dataType: DataType = 'TEXT'; // Default fallback
-      
+
       // First try to get the property from the store
       const storeProperty = store.getProperty(propertyId);
       if (storeProperty?.dataType) {

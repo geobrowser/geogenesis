@@ -663,7 +663,7 @@ function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
 }
 
 const getIsRenderedAsEntity = (entity: Entity) => {
-  if (entity.types.some(type => blockTypes.includes(Id.Id(type.id)))) {
+  if (entity.types.some(type => blockTypes.includes(Id(type.id)))) {
     return false;
   } else {
     return true;

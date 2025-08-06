@@ -1,6 +1,6 @@
 'use client';
 
-import { Id, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, SystemIds } from '@graphprotocol/grc-20';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import dayjs from 'dayjs';
@@ -277,8 +277,8 @@ const FindProjects = ({ spaceId }: FindProjectsProps) => {
           storage.entities.name.set(result.id, spaceId, result.name || '');
 
           storage.relations.set({
-            id: Id.generate(),
-            entityId: Id.generate(),
+            id: IdUtils.generate(),
+            entityId: IdUtils.generate(),
             spaceId,
             renderableType: 'RELATION',
             fromEntity: {

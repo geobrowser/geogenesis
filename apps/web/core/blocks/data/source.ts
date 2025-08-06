@@ -1,4 +1,4 @@
-import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 import { Match } from 'effect';
 
 import { Filter } from '~/core/blocks/data/filters';
@@ -163,9 +163,9 @@ export function makeRelationForSourceType(sourceType: Source['type'], blockId: s
   );
 
   return {
-    id: Id.generate(),
+    id: IdUtils.generate(),
     // @TODO(migration): May want to reuse existing relation entity
-    entityId: Id.generate(),
+    entityId: IdUtils.generate(),
     spaceId: spaceId,
     position: Position.generate(),
     renderableType: 'RELATION',

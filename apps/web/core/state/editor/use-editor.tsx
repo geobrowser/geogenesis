@@ -1,6 +1,6 @@
 'use client';
 
-import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';
 import { useAtom } from 'jotai';
@@ -105,7 +105,7 @@ function makeNewBlockRelation({
     id: newRelationId,
     position: newBlockOrdering,
     verified: false,
-    entityId: Id.generate(),
+    entityId: IdUtils.generate(),
     renderableType,
     type: {
       id: SystemIds.BLOCKS,

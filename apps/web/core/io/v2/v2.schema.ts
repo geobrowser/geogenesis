@@ -1,13 +1,15 @@
 import { Brand, Schema } from 'effect';
 
 export const DataType = Schema.Union(
-  Schema.Literal('TEXT'),
+  Schema.Literal('STRING'),
   Schema.Literal('NUMBER'),
-  Schema.Literal('CHECKBOX'),
+  Schema.Literal('BOOLEAN'),
   Schema.Literal('TIME'),
   Schema.Literal('POINT'),
   Schema.Literal('RELATION')
 );
+
+export type DataType = Schema.Schema.Type<typeof DataType>;
 
 export const Property = Schema.Struct({
   id: Schema.UUID,
@@ -33,7 +35,11 @@ export const Type = Schema.Struct({
 export const Value = Schema.Struct({
   spaceId: Schema.UUID,
   property: Property,
-  value: Schema.String,
+  string: Schema.NullOr(Schema.String),
+  number: Schema.NullOr(Schema.String),
+  boolean: Schema.NullOr(Schema.Boolean),
+  point: Schema.NullOr(Schema.String),
+  time: Schema.NullOr(Schema.String),
   language: Schema.NullOr(Schema.String),
   unit: Schema.NullOr(Schema.String),
 });
@@ -63,7 +69,7 @@ export const Relation = Schema.Struct({
     valuesList: Schema.Array(
       Schema.Struct({
         propertyId: Schema.UUID,
-        value: Schema.String,
+        string: Schema.NullOr(Schema.String),
       })
     ),
   }),
