@@ -5,11 +5,8 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { getProperties } from '../io/v2/queries';
-import { queryClient } from '../query-client';
-import { E } from '../sync/orm';
+import { getBatchEntities, getProperties } from '../io/v2/queries';
 import { useQueryEntity } from '../sync/use-store';
-import { store as geoStore } from '../sync/use-sync-engine';
 import { Entities } from '../utils/entity';
 import { EntityWithSchema, Property, Relation } from '../v2.types';
 
@@ -97,18 +94,7 @@ export const DEFAULT_ENTITY_SCHEMA: Property[] = [
 export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property[]> {
   const dedupedTypeIds = [...new Set(typesIds)];
 
-  // @TODO(migration): Should generate schema by syncing types
-  const typeEntities = await E.findMany({
-    store: geoStore,
-    cache: queryClient,
-    where: {
-      id: {
-        in: dedupedTypeIds,
-      },
-    },
-    first: 100,
-    skip: 0,
-  });
+  const typeEntities = await Effect.runPromise(getBatchEntities(dedupedTypeIds));
 
   const propertyIds = typeEntities
     .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
@@ -116,17 +102,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property
 
   const properties = await Effect.runPromise(getProperties(propertyIds));
 
-  const propertyEntities = await E.findMany({
-    store: geoStore,
-    cache: queryClient,
-    where: {
-      id: {
-        in: propertyIds,
-      },
-    },
-    first: 100,
-    skip: 0,
-  });
+  const propertyEntities = await Effect.runPromise(getBatchEntities(propertyIds));
 
   const typePropertyIds = propertyEntities
     .filter(entity => {
