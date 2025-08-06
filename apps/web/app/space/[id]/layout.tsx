@@ -1,4 +1,4 @@
-import { Id, SystemIds } from '@graphprotocol/grc-20';
+import {  IdUtils, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -121,7 +121,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
 
   if (!entity) {
     return {
-      id: Id.generate(),
+      id: IdUtils.generate(),
       spaces: [spaceId],
       tabEntities: [],
       tabs: {},

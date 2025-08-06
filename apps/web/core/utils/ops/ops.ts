@@ -9,10 +9,10 @@ export function create({ entity, value }: CreateArgs): Op {
   return {
     type: 'UPDATE_ENTITY',
     entity: {
-      id: Id.Id(entity),
+      id: Id(entity),
       values: [
         {
-          property: Id.Id(value.property),
+          property: Id(value.property),
           value: value.value,
           options: value.options,
         },

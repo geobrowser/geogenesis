@@ -44,7 +44,11 @@ export function nameValue(values: Value[]): Value | undefined {
  */
 export function avatar(relations?: Relation[]): string | null {
   if (!relations) return null;
-  return relations.find(r => r.type.id === EntityId(ContentIds.AVATAR_PROPERTY))?.toEntity.value ?? null;
+  const avatarRelation = relations.find(r => r.type.id === EntityId(ContentIds.AVATAR_PROPERTY));
+  if (!avatarRelation) return null;
+  // For now, return the relation value directly since we can't use hooks in utility functions
+  // The calling components should handle fetching the actual image URL
+  return avatarRelation.toEntity.value ?? null;
 }
 
 /**
@@ -52,7 +56,11 @@ export function avatar(relations?: Relation[]): string | null {
  */
 export function cover(relations?: Relation[]): string | null {
   if (!relations) return null;
-  return relations.find(r => r.type.id === EntityId(SystemIds.COVER_PROPERTY))?.toEntity.value ?? null;
+  const coverRelation = relations.find(r => r.type.id === EntityId(SystemIds.COVER_PROPERTY));
+  if (!coverRelation) return null;
+  // For now, return the relation value directly since we can't use hooks in utility functions
+  // The calling components should handle fetching the actual image URL
+  return coverRelation.toEntity.value ?? null;
 }
 
 export function spaces(values?: Value[], relations?: Relation[]): string[] {

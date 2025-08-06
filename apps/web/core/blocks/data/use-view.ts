@@ -1,4 +1,4 @@
-import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
@@ -57,9 +57,9 @@ export function useView() {
     if (!isCurrentView) {
       if (!viewRelation) {
         const newRelation: Relation = {
-          id: Id.generate(),
+          id: IdUtils.generate(),
           // @TODO(migration): Reuse existing entity?
-          entityId: Id.generate(),
+          entityId: IdUtils.generate(),
           spaceId: spaceId,
           position: Position.generate(),
           renderableType: 'RELATION',
@@ -97,7 +97,7 @@ export function useView() {
     const shownColumnRelation = shownColumnRelations.find(relation => relation.toEntity.id === newColumn.id);
 
     const newId = selector ? ID.createEntityId() : undefined;
-    const newRelationEntityId = Id.generate();
+    const newRelationEntityId = IdUtils.generate();
 
     const existingMapping = mapping[newColumn.id];
 
@@ -179,7 +179,7 @@ export function useView() {
 
     if (!isShown) {
       storage.relations.set({
-        id: Id.generate(),
+        id: IdUtils.generate(),
         entityId: newRelationEntityId,
         spaceId: spaceId,
         position: Position.generate(),

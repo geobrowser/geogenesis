@@ -1,4 +1,4 @@
-import { Id, Position, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 
 import { storage } from '~/core/sync/use-mutate';
 import { Relation } from '~/core/v2.types';
@@ -45,7 +45,6 @@ export function upsertCollectionItemRelation({
   });
 }
 
-
 type MakeRelationForCollectionItemArgs = {
   collectionId: string;
   toEntityId: string;
@@ -69,9 +68,9 @@ function makeRelationForCollectionItem({
   // Create a relation that points from the collection to the entity with Relation Type -> CollectionItem
   // 1. Relation type -> CollectionItem
   return {
-    id: Id.generate(),
+    id: IdUtils.generate(),
     // @TODO(migration): Potentially reuse relation entity
-    entityId: Id.generate(),
+    entityId: IdUtils.generate(),
     spaceId: spaceId,
     position: Position.generate(),
     renderableType: 'RELATION',

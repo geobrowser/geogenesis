@@ -4,9 +4,10 @@ import { Array as A } from 'effect';
 import produce from 'immer';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
+import { getStrictRenderableType } from '../io/dto/properties';
 import { readTypes } from '../database/entities';
 import { Entities } from '../utils/entity';
-import { DataType, Entity, Property, RawRenderableType, Relation, Value } from '../v2.types';
+import { DataType, Entity, Property, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
@@ -252,21 +253,15 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     const renderableType = entity?.relations.find(t => t.type.id === RENDERABLE_TYPE_PROPERTY);
 
-    /**
-     * @TODO
-     * Move to higher-order file
-     */
-    const mapping: Record<string, RawRenderableType> = {
-      [SystemIds.URL]: 'URL',
-      [SystemIds.IMAGE]: 'IMAGE',
-    };
+    const renderableTypeId = renderableType ? renderableType.toEntity.id : null;
 
     return {
       id,
       name: entity?.name ?? null,
       dataType: dataType,
       relationValueTypes,
-      renderableType: renderableType ? mapping[renderableType.toEntity.id] : dataType,
+      renderableType: renderableTypeId,
+      renderableTypeStrict: getStrictRenderableType(renderableTypeId),
 
       /**
        * A data type is still editable as long as there's no
@@ -279,6 +274,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   getStableDataType(id: string): DataType | null {
     return this.dataTypes.get(id) ?? null;
   }
+
 
   /**
    * Get all relations for an entity including optimistic updates

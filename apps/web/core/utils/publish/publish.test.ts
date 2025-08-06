@@ -8,13 +8,13 @@ import { prepareLocalDataForPublishing } from './publish';
 // Helper function to create a mock Value
 function createMockValue(overrides: Partial<Value> = {}): Value {
   return {
-    id: Id.generate(),
+    id: IdUtils.generate(),
     entity: {
-      id: Id.generate(),
+      id: IdUtils.generate(),
       name: 'Test Entity',
     },
     property: {
-      id: Id.generate(),
+      id: IdUtils.generate(),
       name: 'Test Property',
       dataType: 'TEXT',
     },
@@ -32,18 +32,18 @@ function createMockValue(overrides: Partial<Value> = {}): Value {
 // Helper function to create a mock Relation
 function createMockRelation(overrides: Partial<Relation> = {}): Relation {
   return {
-    id: Id.generate(),
-    entityId: Id.generate(),
+    id: IdUtils.generate(),
+    entityId: IdUtils.generate(),
     type: {
-      id: Id.generate(),
+      id: IdUtils.generate(),
       name: 'Test Relation Type',
     },
     fromEntity: {
-      id: Id.generate(),
+      id: IdUtils.generate(),
       name: 'From Entity',
     },
     toEntity: {
-      id: Id.generate(),
+      id: IdUtils.generate(),
       name: 'To Entity',
       value: 'to-entity-value',
     },
@@ -144,7 +144,7 @@ describe('prepareLocalDataForPublishing', () => {
 
     it('should filter out values with empty property IDs', () => {
       const values = [
-        createMockValue({ property: { id: Id.generate(), name: 'Valid', dataType: 'TEXT' } }),
+        createMockValue({ property: { id: IdUtils.generate(), name: 'Valid', dataType: 'TEXT' } }),
         createMockValue({ property: { id: '', name: 'Invalid', dataType: 'TEXT' } }),
       ];
       const relations: Relation[] = [];
@@ -157,7 +157,7 @@ describe('prepareLocalDataForPublishing', () => {
 
     it('should filter out values with empty entity IDs', () => {
       const values = [
-        createMockValue({ entity: { id: Id.generate(), name: 'Valid' } }),
+        createMockValue({ entity: { id: IdUtils.generate(), name: 'Valid' } }),
         createMockValue({ entity: { id: '', name: 'Invalid' } }),
       ];
       const relations: Relation[] = [];
@@ -191,25 +191,25 @@ describe('prepareLocalDataForPublishing', () => {
 
   describe('value grouping and operations', () => {
     it('should group values by entity ID', () => {
-      const entity1Id = Id.generate();
-      const entity2Id = Id.generate();
+      const entity1Id = IdUtils.generate();
+      const entity2Id = IdUtils.generate();
       const values = [
         createMockValue({
-          id: Id.generate(),
+          id: IdUtils.generate(),
           entity: { id: entity1Id, name: 'Entity 1' },
-          property: { id: Id.generate(), name: 'Property 1', dataType: 'TEXT' },
+          property: { id: IdUtils.generate(), name: 'Property 1', dataType: 'TEXT' },
           value: 'value 1',
         }),
         createMockValue({
-          id: Id.generate(),
+          id: IdUtils.generate(),
           entity: { id: entity1Id, name: 'Entity 1' },
-          property: { id: Id.generate(), name: 'Property 2', dataType: 'TEXT' },
+          property: { id: IdUtils.generate(), name: 'Property 2', dataType: 'TEXT' },
           value: 'value 2',
         }),
         createMockValue({
-          id: Id.generate(),
+          id: IdUtils.generate(),
           entity: { id: entity2Id, name: 'Entity 2' },
-          property: { id: Id.generate(), name: 'Property 3', dataType: 'TEXT' },
+          property: { id: IdUtils.generate(), name: 'Property 3', dataType: 'TEXT' },
           value: 'value 3',
         }),
       ];
@@ -232,19 +232,19 @@ describe('prepareLocalDataForPublishing', () => {
     });
 
     it('should create both UPDATE_ENTITY and UNSET_ENTITY_VALUES for same entity', () => {
-      const entityId = Id.generate();
-      const property1Id = Id.generate();
-      const property2Id = Id.generate();
+      const entityId = IdUtils.generate();
+      const property1Id = IdUtils.generate();
+      const property2Id = IdUtils.generate();
       const values = [
         createMockValue({
-          id: Id.generate(),
+          id: IdUtils.generate(),
           entity: { id: entityId, name: 'Entity 1' },
           property: { id: property1Id, name: 'Property 1', dataType: 'TEXT' },
           value: 'value 1',
           isDeleted: false,
         }),
         createMockValue({
-          id: Id.generate(),
+          id: IdUtils.generate(),
           entity: { id: entityId, name: 'Entity 1' },
           property: { id: property2Id, name: 'Property 2', dataType: 'TEXT' },
           value: 'value 2',
@@ -317,7 +317,7 @@ describe('prepareLocalDataForPublishing', () => {
   describe('relation handling', () => {
     it('should handle relation with toSpaceId', () => {
       const values: Value[] = [];
-      const toSpaceId = Id.generate();
+      const toSpaceId = IdUtils.generate();
       const relations = [
         createMockRelation({
           toSpaceId: toSpaceId,

@@ -1,5 +1,15 @@
-import { CreateRelationOp, DeleteRelationOp, Id, UnsetEntityValuesOp, UpdateEntityOp } from '@graphprotocol/grc-20';
+import {
+  CreatePropertyOp,
+  CreateRelationOp,
+  DataType,
+  DeleteRelationOp,
+  Id,
+  SystemIds,
+  UnsetEntityValuesOp,
+  UpdateEntityOp,
+} from '@graphprotocol/grc-20';
 
+import { DATA_TYPE_PROPERTY } from '~/core/constants';
 import { Relation, Value } from '~/core/v2.types';
 
 /**
@@ -13,25 +23,33 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
       v.spaceId === spaceId && !v.hasBeenPublished && v.property.id !== '' && v.entity.id !== '' && v.isLocal === true
   );
 
+  // Identify property entities by looking for entities that have a TYPES_PROPERTY relation to PROPERTY
+  const propertyEntityIds = new Set<string>();
+  relations.forEach(r => {
+    if (r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY && !r.isDeleted) {
+      propertyEntityIds.add(r.fromEntity.id);
+    }
+  });
+
   const relationOps = relations.map((r): CreateRelationOp | DeleteRelationOp => {
     if (r.isDeleted) {
       return {
         type: 'DELETE_RELATION',
-        id: Id.Id(r.id),
+        id: Id(r.id),
       };
     }
 
     return {
       type: 'CREATE_RELATION',
       relation: {
-        id: Id.Id(r.id),
-        type: Id.Id(r.type.id),
-        entity: Id.Id(r.entityId),
-        fromEntity: Id.Id(r.fromEntity.id),
-        toEntity: Id.Id(r.toEntity.id),
+        id: Id(r.id),
+        type: Id(r.type.id),
+        entity: Id(r.entityId),
+        fromEntity: Id(r.fromEntity.id),
+        toEntity: Id(r.toEntity.id),
         position: r.position ?? undefined,
         verified: r.verified ?? undefined,
-        toSpace: r.toSpaceId ? Id.Id(r.toSpaceId) : undefined,
+        toSpace: r.toSpaceId ? Id(r.toSpaceId) : undefined,
       },
     };
   });
@@ -69,7 +87,7 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
   for (const [entityId, { deleted, set }] of Object.entries(valuesByEntity)) {
     if (set.length > 0) {
       const values = set.map(value => ({
-        property: Id.Id(value.property.id),
+        property: Id(value.property.id),
         value: value.value,
         ...(value.options && {
           options: Object.fromEntries(Object.entries(value.options).filter(([, v]) => v !== undefined)),
@@ -79,7 +97,7 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
       entityOps.push({
         type: 'UPDATE_ENTITY',
         entity: {
-          id: Id.Id(entityId),
+          id: Id(entityId),
           values,
         },
       });
@@ -90,12 +108,52 @@ export function prepareLocalDataForPublishing(values: Value[], relations: Relati
       entityOps.push({
         type: 'UNSET_ENTITY_VALUES',
         unsetEntityValues: {
-          id: Id.Id(entityId),
-          properties: deleted.map(value => Id.Id(value.property.id)),
+          id: Id(entityId),
+          properties: deleted.map(value => Id(value.property.id)),
         },
       });
     }
   }
 
-  return [...relationOps, ...entityOps];
+  // Create property operations for identified property entities
+  const propertyOps: CreatePropertyOp[] = [];
+
+  propertyEntityIds.forEach(propertyId => {
+    // Find the dataType value for this property entity
+    const dataTypeValue = validValues.find(v => v.entity.id === propertyId && v.property.id === DATA_TYPE_PROPERTY);
+
+    if (dataTypeValue && dataTypeValue.value) {
+      const remoteDataType = getRemoteDataTypeFromAppDataType(dataTypeValue.value);
+
+      if (remoteDataType) {
+        propertyOps.push({
+          type: 'CREATE_PROPERTY',
+          property: {
+            id: Id(propertyId),
+            dataType: remoteDataType,
+          },
+        });
+      }
+    }
+  });
+
+  return [...relationOps, ...entityOps, ...propertyOps];
+}
+
+function getRemoteDataTypeFromAppDataType(dataType: string): DataType | null {
+  switch (dataType) {
+    case 'TEXT':
+      return 'STRING';
+    case 'CHECKBOX':
+      return 'BOOLEAN';
+    case 'POINT':
+      return 'POINT';
+    case 'NUMBER':
+      return 'NUMBER';
+    case 'TIME':
+      return 'TIME';
+
+    default:
+      return null;
+  }
 }
