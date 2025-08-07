@@ -16,6 +16,8 @@ export type Property = {
    */
   renderableType?: RawRenderableType | null; // Raw UUID from API, gets converted in to-renderables.ts
   renderableTypeStrict?: RenderableType | null; // Renderable type used in the frontend, converted from raw UUID
+  format?: string | null; // Format string for the property
+  unit?: string | null; // Unit ID for the property
 };
 
 // @TODO: Relation renderable types + values
