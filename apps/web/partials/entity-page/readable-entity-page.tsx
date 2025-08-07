@@ -67,15 +67,15 @@ const ReadableNumberField = ({ value, unitId, propertyId }: { value: string; uni
   const { property } = useQueryProperty({ id: propertyId });
 
   // Use format and unit from the property directly
-  const format = property?.format;
-  const propertyUnitId = property?.unit;
+  const format = property?.format || undefined;
+  const propertyUnitId = property?.unit || undefined;
 
   // Use unitId from value options if available, otherwise fall back to property unit
-  const actualUnitId = unitId || propertyUnitId;
+  const actualUnitId = unitId || propertyUnitId || undefined;
   const { entity: unitEntity } = useQueryEntity({ id: actualUnitId });
 
   const currencySign = React.useMemo(
-    () => unitEntity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
+    () => unitEntity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value || '',
     [unitEntity]
   );
 
