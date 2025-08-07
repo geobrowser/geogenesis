@@ -283,8 +283,6 @@ export class EntityQuery {
         return this.matchesStringCondition(entity.description || '', condition);
 
       case 'spaces':
-        // Temporarily disabled until we have property space ids
-        //return true;
         if (condition === undefined) {
           return true;
         }

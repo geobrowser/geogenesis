@@ -21,7 +21,7 @@ type EventPayload = {
 type ChangeEntryParams =
   | {
       type: 'EVENT';
-      data: EventPayload; // @TODO(migration): Correct type
+      data: EventPayload;
     }
   | {
       type: 'Create';

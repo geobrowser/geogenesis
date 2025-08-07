@@ -2,12 +2,13 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 
-import { getSpace } from '~/core/io/v2/queries';
+import { getSpace, getProperty } from '~/core/io/v2/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
 import { OmitStrict } from '~/core/types';
 import { FilterableValueType } from '~/core/value-types';
+import { Property } from '~/core/v2.types';
 
 export type Filter = {
   columnId: string;
@@ -246,33 +247,43 @@ async function getResolvedEntityFilter(entityId: string, typeId: string): Promis
 }
 
 async function getResolvedFilter(filter: PropertyFilter): Promise<Filter> {
+  let property: Property | null = null;
+
+  try {
+    const remoteProperty = await Effect.runPromise(getProperty(filter.property));
+    property = remoteProperty;
+  } catch (error) {
+    console.warn('Failed to fetch remote property', filter.property, error);
+  }
+
+  // Use the property's actual data type, or try to infer it if property not found
+  let valueType: FilterableValueType;
+  if (property?.dataType) {
+    valueType = property.dataType;
+  } else {
+    valueType = 'RELATION';
+  }
+
+  
   const [maybePropertyEntity, maybeValueEntity] = await Promise.all([
     E.findOne({ store, cache: queryClient, id: filter.property }),
-    filter.property === SystemIds.NAME_PROPERTY || filter.property === SystemIds.DESCRIPTION_PROPERTY
-      ? undefined
-      : E.findOne({ store, cache: queryClient, id: filter.is }),
+    // Only fetch value entity for RELATION types
+    valueType === 'RELATION'
+      ? E.findOne({ store, cache: queryClient, id: filter.is })
+      : undefined,
   ]);
-
-  // if (valueType === EntityId(SystemIds.RELATION)) {
-  //   const valueEntity = await E.findOne({ store, cache: queryClient, id: filter.is });
-
-  //   return {
-  //     columnId: filter.attribute,
-  //     columnName: maybeAttributeEntity?.name ?? null,
-  //     value: filter.is,
-  //     valueName: valueEntity?.name ?? null,
-  //     valueType: 'RELATION',
-  //   };
-  // }
-
+  
+  console.log('Resolved filter debug', { 
+    valueName: maybeValueEntity?.name ?? null,
+    property: property,
+    is: filter.is,
+  });
+  
   return {
     columnId: filter.property,
     columnName: maybePropertyEntity?.name ?? null,
     value: filter.is,
     valueName: maybeValueEntity?.name ?? null,
-    valueType:
-      filter.property === SystemIds.NAME_PROPERTY || filter.property === SystemIds.DESCRIPTION_PROPERTY
-        ? 'TEXT'
-        : 'RELATION',
+    valueType,
   };
 }
