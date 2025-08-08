@@ -29,6 +29,8 @@ import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
+import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
+
 import { editorHasContentAtom } from '~/atoms';
 
 function ShowablePanel({
@@ -329,7 +331,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                   });
                 }
               }}
-              onDone={result => {
+              onDone={async result => {
                 const newRelationId = ID.createEntityId();
                 // @TODO(migration): lightweight relation pointing to entity id
                 const newEntityId = ID.createEntityId();
@@ -365,6 +367,20 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 }
 
                 storage.relations.set(newRelation);
+
+                if (propertyId === SystemIds.TYPES_PROPERTY) {
+                  const template = await getEntityTemplate(result.id, id, name, spaceId);
+
+                  if (template) {
+                    for (const value of template.values) {
+                      storage.values.set(value);
+                    }
+
+                    for (const relation of template.relations) {
+                      storage.relations.set(relation);
+                    }
+                  }
+                }
               }}
               variant="fixed"
             />
@@ -469,7 +485,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 });
               }
             }}
-            onDone={result => {
+            onDone={async result => {
               const newRelationId = ID.createEntityId();
               // @TODO(migration): lightweight relation pointing to entity id
               const newEntityId = ID.createEntityId();
@@ -505,6 +521,20 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               }
 
               storage.relations.set(newRelation);
+
+              if (typeOfId === SystemIds.TYPES_PROPERTY) {
+                const template = await getEntityTemplate(result.id, id, name, spaceId);
+
+                if (template) {
+                  for (const value of template.values) {
+                    storage.values.set(value);
+                  }
+
+                  for (const relation of template.relations) {
+                    storage.relations.set(relation);
+                  }
+                }
+              }
             }}
             spaceId={spaceId}
           />
