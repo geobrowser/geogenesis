@@ -41,11 +41,11 @@ export const EditableCoverAvatarHeader = ({
    * for the entity.
    */
   const coverRelation = useRelation({
-    selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === id && r.spaceId === spaceId,
+    selector: r => r.fromEntity.id === id && r.type.id === SystemIds.COVER_PROPERTY && r.spaceId === spaceId,
   });
 
   const avatarRelation = useRelation({
-    selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === id && r.spaceId === spaceId,
+    selector: r => r.fromEntity.id === id && r.type.id === ContentIds.AVATAR_PROPERTY && r.spaceId === spaceId,
   });
 
   const renderedProperties = useEditableProperties(id, spaceId);
