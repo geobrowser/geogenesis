@@ -60,8 +60,6 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
     enabled: true,
   });
 
-  console.log('entity', entity);
-
   const formatValue = entity?.values.find(value => value.property.id === FORMAT_PROPERTY);
 
   // Check if this entity has a Property type relation (local property check)
