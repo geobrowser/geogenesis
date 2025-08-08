@@ -6,6 +6,7 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
+import { FORMAT_PROPERTY } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -27,6 +28,7 @@ import { Create } from '~/design-system/icons/create';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
+import SuggestedFormats from '~/design-system/suggested-formats-window';
 import { Text } from '~/design-system/text';
 
 import { editorHasContentAtom } from '~/atoms';
@@ -528,6 +530,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
   const rawValue = useValue({
     selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
   });
+
   const value = rawValue?.value ?? '';
   const options = rawValue?.options;
 
@@ -569,14 +572,25 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
   switch (property.dataType) {
     case 'TEXT': {
       return (
-        <PageStringField
-          key={propertyId}
-          variant="body"
-          placeholder="Add value..."
-          aria-label="text-field"
-          value={value}
-          onChange={onChange}
-        />
+        <>
+          <PageStringField
+            key={propertyId}
+            variant="body"
+            placeholder="Add value..."
+            aria-label="text-field"
+            value={value}
+            onChange={onChange}
+          />
+          {property.id === FORMAT_PROPERTY && (
+            <SuggestedFormats
+              propertyId={propertyId}
+              entityId={entityId}
+              spaceId={spaceId}
+              value={value}
+              onChange={onChange}
+            />
+          )}
+        </>
       );
     }
     case 'NUMBER':
