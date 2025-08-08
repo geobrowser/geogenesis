@@ -582,13 +582,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
             onChange={onChange}
           />
           {property.id === FORMAT_PROPERTY && (
-            <SuggestedFormats
-              propertyId={propertyId}
-              entityId={entityId}
-              spaceId={spaceId}
-              value={value}
-              onChange={onChange}
-            />
+            <SuggestedFormats entityId={entityId} spaceId={spaceId} value={value} onChange={onChange} />
           )}
         </>
       );

@@ -16,6 +16,10 @@ export const FORMAT_PROPERTY = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f';
 export const DEFAULT_TIME_FORMAT = 'MMMM d, yyy';
 export const DEFAULT_NUMBER_FORMAT = ',?';
 
+export const UNICODE_LINK = 'https://unicode-org.github.io/icu/userguide/format_parse/numbers/skeletons.html';
+export const GRC_20_SPECIFICATION_LINK =
+  'https://github.com/graphprotocol/graph-improvement-proposals/blob/main/grcs/0020-knowledge-graph.md#52-number';
+
 export const SUGGESTED_NUMBER_FORMATS = [
   {
     format: '%',
@@ -32,5 +36,24 @@ export const SUGGESTED_NUMBER_FORMATS = [
   {
     format: DEFAULT_NUMBER_FORMAT,
     label: '25,000',
+  },
+];
+
+export const SUGGESTED_TIME_FORMATS = [
+  {
+    format: 'h:mmaaa, MMMM d, yyyy',
+    label: '4:45pm, July 4,2024',
+  },
+  {
+    format: 'MM/dd/yy',
+    label: '07/04/24',
+  },
+  {
+    format: 'h:mmaa',
+    label: '4:45pm',
+  },
+  {
+    format: DEFAULT_TIME_FORMAT,
+    label: 'July 4, 2024',
   },
 ];
