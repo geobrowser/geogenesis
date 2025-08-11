@@ -80,9 +80,11 @@ export default async function ProfileLayout(props: Props) {
 
   const profile = await getProfilePage(entityId);
 
-  const isGeoUser =
-    result?.entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) &&
-    result?.entity?.types.some(type => type.id === EntityId(SystemIds.PERSON_TYPE));
+  // Check if entity has an accounts relation (indicating a real Geo user)
+  const hasAccountsRelation = result?.entity?.relations.some(
+    relation => relation.type.id === SystemIds.ACCOUNTS_PROPERTY
+  );
+  const isGeoUser = hasAccountsRelation;
 
   return (
     <EntityStoreProvider id={entityId} spaceId={params.id}>
