@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
+import { EntityId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
@@ -79,6 +80,10 @@ export default async function ProfileLayout(props: Props) {
 
   const profile = await getProfilePage(entityId);
 
+  const isGeoUser =
+    result?.entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) &&
+    result?.entity?.types.some(type => type.id === EntityId(SystemIds.PERSON_TYPE));
+
   return (
     <EntityStoreProvider id={entityId} spaceId={params.id}>
       <EditorProvider
@@ -107,6 +112,7 @@ export default async function ProfileLayout(props: Props) {
                   label,
                 };
               })}
+              isGeoUser={isGeoUser ?? false}
             />
           </React.Suspense>
 
