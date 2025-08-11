@@ -64,13 +64,19 @@ export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
 
 const ReadableNumberField = ({ value, unitId, propertyId }: { value: string; unitId?: string; propertyId: string }) => {
   const { entity } = useQueryEntity({ id: unitId });
-  const { entity: propertyEntity } = useQueryEntity({ id: propertyId });
+  const { property } = useQueryProperty({ id: propertyId });
 
-  const format = propertyEntity?.values.find(value => value.property.id === FORMAT_PROPERTY)?.value;
+  // Use format and unit from the property directly
+  const format = property?.format || undefined;
+  const propertyUnitId = property?.unit || undefined;
+
+  // Use unitId from value options if available, otherwise fall back to property unit
+  const actualUnitId = unitId || propertyUnitId || undefined;
+  const { entity: unitEntity } = useQueryEntity({ id: actualUnitId });
 
   const currencySign = React.useMemo(
-    () => entity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
-    [entity]
+    () => unitEntity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value || '',
+    [unitEntity]
   );
 
   return <Text as="p">{GeoNumber.format(value, format, currencySign)}</Text>;
@@ -108,7 +114,7 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
                 propertyId={propertyId}
                 entityId={entityId}
                 spaceId={t.spaceId}
-                renderableType={property.renderableTypeStrict ?? 'TEXT'}
+                renderableType={property.renderableTypeStrict ?? property.dataType}
               />
             </div>
           </div>
