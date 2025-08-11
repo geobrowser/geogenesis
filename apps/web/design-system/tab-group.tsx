@@ -8,6 +8,8 @@ import { usePathname } from 'next/navigation';
 import React from 'react';
 
 import { useHydrated } from '~/core/hooks/use-hydrated';
+import { useSpaceId } from '~/core/hooks/use-space-id';
+import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
 import { useTabId } from '~/core/state/editor/use-editor';
 
@@ -19,6 +21,10 @@ interface TabGroupProps {
 }
 
 export function TabGroup({ tabs, className = '' }: TabGroupProps) {
+  const spaceId = useSpaceId();
+  const canUserEdit = useCanUserEdit(spaceId ?? '');
+
+  tabs = canUserEdit ? tabs : tabs.filter(tab => tab.label !== 'Activity');
   return (
     <div
       className={cx('relative z-0 flex max-w-full items-center gap-6 overflow-x-auto overflow-y-clip pb-2', className)}
