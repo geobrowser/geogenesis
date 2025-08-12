@@ -21,7 +21,8 @@ import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-met
 
 import { cachedFetchEntitiesBatch, cachedFetchEntity, cachedFetchEntityPage } from './cached-fetch-entity';
 
-const TABS = ['Overview', 'Activity'] as const;
+// @TODO: Add back "Activity" tab when activity feed and/or user profile querying is ready
+const TABS = ['Overview'] as const;
 
 interface Props {
   params: Promise<{ id: string; entityId: string }>;
@@ -80,12 +81,6 @@ export default async function ProfileLayout(props: Props) {
 
   const profile = await getProfilePage(entityId);
 
-  // Check if entity has an accounts relation (indicating a real Geo user)
-  const hasAccountsRelation = result?.entity?.relations.some(
-    relation => relation.type.id === SystemIds.ACCOUNTS_PROPERTY
-  );
-  const isGeoUser = hasAccountsRelation;
-
   return (
     <EntityStoreProvider id={entityId} spaceId={params.id}>
       <EditorProvider
@@ -105,16 +100,17 @@ export default async function ProfileLayout(props: Props) {
           <React.Suspense fallback={null}>
             <TabGroup
               tabs={TABS.map(label => {
-                const href =
-                  label === 'Overview'
-                    ? `${NavUtils.toEntity(params.id, entityId)}`
-                    : `${NavUtils.toEntity(params.id, entityId)}/${label.toLowerCase()}`;
+                // @TODO: Replace this when we have activity back
+                // const href =
+                //   label === 'Overview'
+                //     ? `${NavUtils.toEntity(params.id, entityId)}`
+                //     : `${NavUtils.toEntity(params.id, entityId)}/${label.toLowerCase()}`;
+                const href = `${NavUtils.toEntity(params.id, entityId)}`;
                 return {
                   href,
                   label,
                 };
               })}
-              isGeoUser={isGeoUser ?? false}
             />
           </React.Suspense>
 

@@ -16,11 +16,9 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 interface TabGroupProps {
   tabs: Array<{ href: string; label: string; badge?: string; disabled?: boolean; hidden?: boolean }>;
   className?: string;
-  isGeoUser: boolean;
 }
 
-export function TabGroup({ tabs, className = '', isGeoUser }: TabGroupProps) {
-  tabs = isGeoUser ? tabs : tabs.filter(tab => tab.label !== 'Activity');
+export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   return (
     <div
       className={cx('relative z-0 flex max-w-full items-center gap-6 overflow-x-auto overflow-y-clip pb-2', className)}
