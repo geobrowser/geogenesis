@@ -440,6 +440,8 @@ export const propertyFragment = graphql(/* GraphQL */ `
     name
     dataType
     renderableType
+    format
+    unit
     relationValueTypes {
       id
       name

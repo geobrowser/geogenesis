@@ -16,6 +16,8 @@ export const Property = Schema.Struct({
   name: Schema.NullOr(Schema.String),
   dataType: DataType,
   renderableType: Schema.NullOr(Schema.UUID),
+  format: Schema.NullOr(Schema.String),
+  unit: Schema.NullOr(Schema.UUID),
   relationValueTypes: Schema.Array(
     Schema.Struct({
       id: Schema.String,

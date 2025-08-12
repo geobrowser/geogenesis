@@ -26,7 +26,7 @@ type Documents = {
     "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    membersList {\n      address\n    }\n\n    editorsList {\n      address\n    }\n\n    page {\n      ...FullEntity\n    }\n  }\n": typeof types.FullSpaceFragmentDoc,
     "\n  query Space($id: UUID!) {\n    space(id: $id) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpaceDocument,
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, first: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpacesDocument,
-    "\n  fragment PropertyFragment on Property {\n    id\n    name\n    dataType\n    renderableType\n    relationValueTypes {\n      id\n      name\n    }\n  }\n": typeof types.PropertyFragmentFragmentDoc,
+    "\n  fragment PropertyFragment on Property {\n    id\n    name\n    dataType\n    renderableType\n    format\n    unit\n    relationValueTypes {\n      id\n      name\n    }\n  }\n": typeof types.PropertyFragmentFragmentDoc,
     "\n  query Property($id: UUID!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n": typeof types.PropertyDocument,
     "\n  query PropertiesBatch($ids: [UUID!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n": typeof types.PropertiesBatchDocument,
     "\n  query Result($id: UUID!) {\n    entity(id: $id) {\n      id\n      name\n      description\n      spaceIds\n      types {\n        id\n        name\n      }\n    }\n  }\n": typeof types.ResultDocument,
@@ -46,7 +46,7 @@ const documents: Documents = {
     "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    membersList {\n      address\n    }\n\n    editorsList {\n      address\n    }\n\n    page {\n      ...FullEntity\n    }\n  }\n": types.FullSpaceFragmentDoc,
     "\n  query Space($id: UUID!) {\n    space(id: $id) {\n      ...FullSpace\n    }\n  }\n": types.SpaceDocument,
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, first: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": types.SpacesDocument,
-    "\n  fragment PropertyFragment on Property {\n    id\n    name\n    dataType\n    renderableType\n    relationValueTypes {\n      id\n      name\n    }\n  }\n": types.PropertyFragmentFragmentDoc,
+    "\n  fragment PropertyFragment on Property {\n    id\n    name\n    dataType\n    renderableType\n    format\n    unit\n    relationValueTypes {\n      id\n      name\n    }\n  }\n": types.PropertyFragmentFragmentDoc,
     "\n  query Property($id: UUID!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n": types.PropertyDocument,
     "\n  query PropertiesBatch($ids: [UUID!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n": types.PropertiesBatchDocument,
     "\n  query Result($id: UUID!) {\n    entity(id: $id) {\n      id\n      name\n      description\n      spaceIds\n      types {\n        id\n        name\n      }\n    }\n  }\n": types.ResultDocument,
@@ -119,7 +119,7 @@ export function graphql(source: "\n  query Spaces($filter: SpaceFilter, $limit: 
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  fragment PropertyFragment on Property {\n    id\n    name\n    dataType\n    renderableType\n    relationValueTypes {\n      id\n      name\n    }\n  }\n"): (typeof documents)["\n  fragment PropertyFragment on Property {\n    id\n    name\n    dataType\n    renderableType\n    relationValueTypes {\n      id\n      name\n    }\n  }\n"];
+export function graphql(source: "\n  fragment PropertyFragment on Property {\n    id\n    name\n    dataType\n    renderableType\n    format\n    unit\n    relationValueTypes {\n      id\n      name\n    }\n  }\n"): (typeof documents)["\n  fragment PropertyFragment on Property {\n    id\n    name\n    dataType\n    renderableType\n    format\n    unit\n    relationValueTypes {\n      id\n      name\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
