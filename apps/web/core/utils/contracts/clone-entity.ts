@@ -13,6 +13,7 @@ type Options = {
   entityName?: string | null;
   parentEntityId?: string | null;
   parentEntityName?: string | null;
+  spaceId?: string;
 };
 
 export const cloneEntity = async (
@@ -23,9 +24,16 @@ export const cloneEntity = async (
     throw new Error(`Must specify entity to clone.`);
   }
 
-  const { oldEntityId, entityId = null, entityName, parentEntityId = null, parentEntityName = null } = options;
+  const {
+    oldEntityId,
+    entityId = null,
+    entityName,
+    parentEntityId = null,
+    parentEntityName = null,
+    spaceId = ROOT_SPACE,
+  } = options;
 
-  const oldEntity = await Effect.runPromise(getEntity(oldEntityId, ROOT_SPACE));
+  const oldEntity = await Effect.runPromise(getEntity(oldEntityId, spaceId));
 
   if (!oldEntity) return [[], previouslySeenEntityIds ?? new Set()];
 
@@ -101,7 +109,8 @@ export const cloneEntity = async (
     newEntityId,
     allSeenEntityIds,
     parentEntityId ?? newEntityId,
-    parentEntityName ?? newEntityName
+    parentEntityName ?? newEntityName,
+    spaceId
   );
   newOps.push(...tabOps);
   newlySeenTabEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
@@ -111,7 +120,8 @@ export const cloneEntity = async (
     newEntityId,
     allSeenEntityIds,
     parentEntityId ?? newEntityId,
-    parentEntityName ?? newEntityName
+    parentEntityName ?? newEntityName,
+    spaceId
   );
   newOps.push(...blockOps);
   newlySeenBlockEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
@@ -124,7 +134,8 @@ const cloneRelatedEntities = async (
   newEntityId: string,
   previouslySeenEntityIds: Set<string>,
   parentEntityId: string | null,
-  parentEntityName: string | null | undefined
+  parentEntityName: string | null | undefined,
+  spaceId: string
 ) => {
   const allSeenEntityIds: Set<string> = new Set();
 
@@ -154,6 +165,7 @@ const cloneRelatedEntities = async (
           entityName: relation.toEntity.name ?? '',
           parentEntityId,
           parentEntityName,
+          spaceId,
         },
         allSeenEntityIds
       );

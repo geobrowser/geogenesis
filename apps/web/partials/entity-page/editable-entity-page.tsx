@@ -11,7 +11,7 @@ import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useCover, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
-import { useMutate } from '~/core/sync/use-mutate';
+import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
 import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Property, Relation, ValueOptions } from '~/core/v2.types';
@@ -28,6 +28,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
+
+import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
 import { editorHasContentAtom } from '~/atoms';
 
@@ -254,6 +256,15 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   }
 
   const typeOfId = property.id;
+  const isType = propertyId === SystemIds.TYPES_PROPERTY;
+  
+  const templateOptions = {
+    entityId: id,
+    entityName: name,
+    propertyId,
+    spaceId,
+    storage,
+  };
   const typeOfName = property.name;
   const relationValueTypes = property.relationValueTypes;
   const valueType = relationValueTypes?.[0];
@@ -284,6 +295,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
           <div key={`relation-select-entity-${property.id}`} data-testid="select-entity" className="w-full">
             <SelectEntity
               spaceId={spaceId}
+              placeholder={isType ? "Find or create type..." : undefined}
               relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
               onCreateEntity={result => {
                 storage.values.set({
@@ -329,7 +341,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                   });
                 }
               }}
-              onDone={result => {
+              onDone={async result => {
                 const newRelationId = ID.createEntityId();
                 // @TODO(migration): lightweight relation pointing to entity id
                 const newEntityId = ID.createEntityId();
@@ -365,6 +377,8 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 }
 
                 storage.relations.set(newRelation);
+
+                await applyTemplate({ ...templateOptions, typeId: result.id });
               }}
               variant="fixed"
             />
@@ -419,12 +433,13 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         <div>
           <SelectEntityAsPopover
             trigger={
-              propertyId === SystemIds.TYPES_PROPERTY ? (
+              isType ? (
                 <AddTypeButton icon={<Create className="h-3 w-3" color="grey-04" />} label="type" />
               ) : (
                 <SquareButton icon={<Create />} />
               )
             }
+            placeholder={isType ? "Find or create type..." : undefined}
             relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
               storage.values.set({
@@ -469,7 +484,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 });
               }
             }}
-            onDone={result => {
+            onDone={async result => {
               const newRelationId = ID.createEntityId();
               // @TODO(migration): lightweight relation pointing to entity id
               const newEntityId = ID.createEntityId();
@@ -505,6 +520,8 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               }
 
               storage.relations.set(newRelation);
+
+              await applyTemplate({ ...templateOptions, propertyId: typeOfId, typeId: result.id });
             }}
             spaceId={spaceId}
           />
@@ -669,5 +686,34 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
         </>
       );
     }
+  }
+}
+
+async function applyTemplate(templateOptions: {
+  entityId: string;
+  entityName: string | null;
+  propertyId: string;
+  typeId: string;
+  spaceId: string;
+  storage: Mutator;
+}) {
+  const { entityId, entityName, propertyId, typeId, spaceId, storage } = templateOptions;
+  
+  if (propertyId !== SystemIds.TYPES_PROPERTY) {
+    return;
+  }
+
+  const template = await getEntityTemplate(typeId, entityId, entityName, spaceId);
+  
+  if (!template) {
+    return;
+  }
+
+  for (const value of template.values) {
+    storage.values.set(value);
+  }
+
+  for (const relation of template.relations) {
+    storage.relations.set(relation);
   }
 }

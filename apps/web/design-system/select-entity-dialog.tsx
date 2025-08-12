@@ -14,6 +14,7 @@ type SelectEntityAsPopoverProps = {
   onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
   onCreateEntity?: (result: { id: string; name: string | null; space?: string; verified?: boolean; renderableType?: SwitchableRenderableType }) => void;
   relationValueTypes?: Property['relationValueTypes'];
+  placeholder?: string;
 };
 
 export function SelectEntityAsPopover({
@@ -22,6 +23,7 @@ export function SelectEntityAsPopover({
   onCreateEntity,
   spaceId,
   relationValueTypes,
+  placeholder,
 }: SelectEntityAsPopoverProps) {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -42,6 +44,7 @@ export function SelectEntityAsPopover({
             withSearchIcon={true}
             spaceId={spaceId}
             relationValueTypes={relationValueTypes}
+            placeholder={placeholder}
             onDone={onDone}
             onCreateEntity={onCreateEntity}
             variant="floating"
