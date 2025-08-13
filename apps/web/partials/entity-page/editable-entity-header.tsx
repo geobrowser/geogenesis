@@ -27,8 +27,12 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
   const { values } = useSyncEngine();
 
   const name = useSelector(values, v => {
-    return v.find(v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === SystemIds.NAME_PROPERTY)
-      ?.value;
+    return v.find(v =>
+      v.entity.id === entityId &&
+      v.spaceId === spaceId &&
+      v.property.id === SystemIds.NAME_PROPERTY &&
+      !v.isDeleted
+    )?.value;
   });
 
 

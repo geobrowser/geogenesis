@@ -18,23 +18,31 @@ type EntityPageCoverProps = {
 
 function useAvatarUrl(entityId: string, spaceId: string, serverAvatarUrl: string | null) {
   const avatarRelations = useRelations({
-    selector: r => r.fromEntity.id === entityId && r.type.id === ContentIds.AVATAR_PROPERTY,
+    selector: r => r.fromEntity.id === entityId && r.type.id === ContentIds.AVATAR_PROPERTY && r.spaceId === spaceId,
   });
-  
+
   const avatarEntityId = Entities.avatar(avatarRelations);
   const imageUrl = useImageUrlFromEntity(avatarEntityId || undefined, spaceId);
-  
+
+  if (!avatarEntityId) {
+    return null;
+  }
+
   return imageUrl || avatarEntityId || serverAvatarUrl;
 }
 
 function useCoverUrl(entityId: string, spaceId: string, serverCoverUrl: string | null) {
   const coverRelations = useRelations({
-    selector: r => r.fromEntity.id === entityId && r.type.id === SystemIds.COVER_PROPERTY,
+    selector: r => r.fromEntity.id === entityId && r.type.id === SystemIds.COVER_PROPERTY && r.spaceId === spaceId,
   });
-  
+
   const coverEntityId = Entities.cover(coverRelations);
   const imageUrl = useImageUrlFromEntity(coverEntityId || undefined, spaceId);
-  
+
+  if (!coverEntityId) {
+    return null;
+  }
+
   return imageUrl || coverEntityId || serverCoverUrl;
 }
 
