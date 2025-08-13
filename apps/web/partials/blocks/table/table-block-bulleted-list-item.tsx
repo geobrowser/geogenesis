@@ -114,13 +114,14 @@ export function TableBlockBulletedListItem({
                               type: 'TEXT',
                               value: name ?? '',
                             },
-                            value: { type: 'TEXT', value: value },
+                            value: { type: 'TEXT', value },
                           },
                         },
                       }
                     );
                   }}
                   value={name ?? ''}
+                  shouldDebounce={true}
                 />
               ) : (
                 <CollectionMetadata
@@ -158,7 +159,7 @@ export function TableBlockBulletedListItem({
                                 type: 'TEXT',
                                 value: name ?? '',
                               },
-                              value: { type: 'TEXT', value: value },
+                              value: { type: 'TEXT', value },
                             },
                           },
                         }

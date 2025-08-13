@@ -5,7 +5,7 @@ import Textarea from 'react-textarea-autosize';
 import * as React from 'react';
 import { ChangeEvent, useRef } from 'react';
 
-import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
+import { useDebouncedValue, useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { Services } from '~/core/services';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -63,14 +63,30 @@ type PageStringFieldProps = {
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
   value?: string;
+  shouldDebounce?: boolean;
 };
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
+  const [localValue, setLocalValue] = React.useState(props.value ?? '');
+  const debouncedValue = useDebouncedValue(localValue, 1500);
+
+  React.useEffect(() => {
+    if (props.shouldDebounce && localValue.length > 0) {
+      props.onChange(localValue);
+    }
+  }, [debouncedValue]);
+
   return (
     <Textarea
       {...props}
-      value={props.value}
-      onChange={e => props.onChange(e.currentTarget.value)}
+      value={props.value && props.value?.length > 0 ? props.value : localValue}
+      onChange={e => {
+        if (props.shouldDebounce) {
+          setLocalValue(e.currentTarget.value);
+        } else {
+          props.onChange(e.currentTarget.value);
+        }
+      }}
       className={textareaStyles({ variant: props.variant })}
     />
   );
@@ -173,9 +189,9 @@ export function BlockImageField({ imageSrc, onFileChange, onImageRemove, variant
         {isUploading ? (
           <Dots />
         ) : (
-          <label htmlFor="avatar-file" className="cursor-pointer">
+          <div className="cursor-pointer">
             <Upload color={hovered ? 'grey-04' : 'grey-03'} />
-          </label>
+          </div>
         )}
         {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash color={hovered ? 'grey-04' : 'grey-03'} />} />}
       </div>
@@ -231,11 +247,9 @@ export function PageImageField({ imageSrc, onFileChange, onImageRemove, variant 
       )}
 
       <div className="flex justify-center gap-2 pt-2">
-        <label htmlFor="avatar-file">
-          <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
-            {isUploading ? 'Uploading...' : 'Upload'}
-          </SmallButton>
-        </label>
+        <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
+          {isUploading ? 'Uploading...' : 'Upload'}
+        </SmallButton>
         {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash />} />}
       </div>
 
@@ -280,18 +294,14 @@ export function TableImageField({ imageSrc, onFileChange, onImageRemove, variant
           <ImageZoom variant={variant} imageSrc={imageSrc} />
         </div>
       ) : (
-        <label htmlFor="avatar-file">
-          <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
-            {isUploading ? 'Uploading...' : 'Upload'}
-          </SmallButton>
-        </label>
+        <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
+          {isUploading ? 'Uploading...' : 'Upload'}
+        </SmallButton>
       )}
 
       {imageSrc && (
         <div className="flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
-          <label htmlFor="avatar-file">
-            <SquareButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />} />
-          </label>
+          <SquareButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />} />
           <SquareButton onClick={onImageRemove} icon={<Trash />} />
         </div>
       )}

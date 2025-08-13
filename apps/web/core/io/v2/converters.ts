@@ -246,17 +246,17 @@ export function convertWhereConditionToEntityFilter(where: WhereCondition): Enti
 
   // @TODO restore once space ids are updated in filters
   // Handle spaces - convert to spaceIds
-  // if (where.spaces && where.spaces.length > 0) {
-  //   const spaceIds: string[] = [];
-  //   where.spaces.forEach(spaceCondition => {
-  //     if (spaceCondition.equals) {
-  //       spaceIds.push(spaceCondition.equals);
-  //     }
-  //   });
-  //   if (spaceIds.length > 0) {
-  //     filter.spaceIds = { in: spaceIds } as UuidListFilter;
-  //   }
-  // }
+  if (where.spaces && where.spaces.length > 0) {
+    const spaceIds: string[] = [];
+    where.spaces.forEach(spaceCondition => {
+      if (spaceCondition.equals) {
+        spaceIds.push(spaceCondition.equals);
+      }
+    });
+    if (spaceIds.length > 0) {
+      filter.spaceIds = { in: spaceIds } as UuidListFilter;
+    }
+  }
 
   // @TODO restore once space ids are updated in filters
   // Handle space (single)

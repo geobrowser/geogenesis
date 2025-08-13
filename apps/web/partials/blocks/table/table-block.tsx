@@ -20,10 +20,11 @@ import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelation } from '~/core/sync/use-store';
+import { OmitStrict } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { Cell, Row, SearchResult } from '~/core/v2.types';
+import { Cell, Row, SearchResult, Value } from '~/core/v2.types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -95,6 +96,7 @@ function useEntries(
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
 
+  const { storage } = useMutate();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
 
   // Clear pending ID once it appears in entries
@@ -125,6 +127,31 @@ function useEntries(
       //   context,
       // });
       // send(event.data);
+
+      if ((event.data.type === 'UPSERT_RENDERABLE_TRIPLE_VALUE')) {
+        const value: Value | OmitStrict<Value, 'id'> = {
+          id: event.data.payload.renderable.entityId ?? undefined,
+          entity: {
+            id: context.entityId,
+            name: event.data.payload.renderable.entityName,
+          },
+          property: {
+            id: event.data.payload.renderable.attributeId,
+            name: event.data.payload.renderable.attributeName,
+            dataType: event.data.payload.renderable.type,
+          },
+          spaceId,
+          value: event.data.payload.value.value ?? '',
+        };
+
+        if (!event.data.payload.renderable.entityId) {
+          storage.values.set(value);
+        } else {
+          storage.values.update(value, draft => {
+            draft.value = event.data.payload.value.value;
+          });
+        }
+      }
     }
 
     // Adding a collection item shouldn't _only_ be for FOC. Should be for adding any data
@@ -176,7 +203,7 @@ function useEntries(
       }
     }
 
-    if (context.entityId === nextEntityId || context.entityId === pendingEntityId) {
+    if (context.entityId === nextEntityId) {
       setHasPlaceholderRow(false);
 
       /**
@@ -200,8 +227,6 @@ function useEntries(
       }
     }
   };
-
-  const { storage } = useMutate();
 
   const onLinkEntry = (
     id: string,
@@ -393,10 +418,8 @@ export const TableBlock = ({ spaceId }: Props) => {
             icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
             color="grey-04"
           />
-
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
-
           {renderPlusButtonAsInline && (
             <button onClick={onAddPlaceholder}>
               <Create />

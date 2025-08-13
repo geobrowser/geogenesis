@@ -6,7 +6,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation, useValues } from '~/core/sync/use-store';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -55,6 +55,12 @@ export function TableBlockListItem({
     selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
   });
 
+  const nameValues = useValues({
+    selector: v => v.entity.id === rowEntityId && v.property.id === SystemIds.NAME_PROPERTY,
+  });
+  const nameValueId = nameValues[0]?.id;
+  const descriptionValueId = descriptionValues[0]?.id;
+
   const maybeDescriptionInSpace = descriptionValues.find(r => r.spaceId === currentSpaceId)?.value;
   const maybeDescription = maybeDescriptionInSpace ?? descriptionValues[0]?.value;
 
@@ -82,6 +88,11 @@ export function TableBlockListItem({
       c.slotId !== SystemIds.DESCRIPTION_PROPERTY
   );
 
+  const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
+  if (image && imageUrl) {
+    image = imageUrl;
+  }
+
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
@@ -107,31 +118,6 @@ export function TableBlockListItem({
                   relationPropertyName: 'Avatar',
                   spaceId: currentSpaceId,
                 });
-
-                // Notify the parent component about the change
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'EVENT',
-                    data: {
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: rowEntityId,
-                        fromEntityName: name,
-                        toEntityId: imageId,
-                        toEntityName: null,
-                        typeOfId: ContentIds.AVATAR_PROPERTY,
-                        typeOfName: 'Avatar',
-                        renderableType: 'IMAGE',
-                        value: imageId,
-                      },
-                    },
-                  }
-                );
               }}
             />
           )}
@@ -188,11 +174,12 @@ export function TableBlockListItem({
                   <PageStringField
                     placeholder="Entity name..."
                     value={name ?? ''}
+                    shouldDebounce={true}
                     onChange={value => {
                       onChangeEntry(
                         {
                           entityId: rowEntityId,
-                          entityName: value,
+                          entityName: name,
                           spaceId: currentSpaceId,
                         },
                         {
@@ -202,7 +189,7 @@ export function TableBlockListItem({
                             payload: {
                               renderable: {
                                 attributeId: SystemIds.NAME_PROPERTY,
-                                entityId: rowEntityId,
+                                entityId: nameValueId,
                                 spaceId: currentSpaceId,
                                 attributeName: 'Name',
                                 entityName: name,
@@ -236,7 +223,7 @@ export function TableBlockListItem({
                         onChangeEntry(
                           {
                             entityId: rowEntityId,
-                            entityName: value,
+                            entityName: name,
                             spaceId: currentSpaceId,
                           },
                           {
@@ -283,7 +270,7 @@ export function TableBlockListItem({
                       payload: {
                         renderable: {
                           attributeId: SystemIds.DESCRIPTION_PROPERTY,
-                          entityId: rowEntityId,
+                          entityId: descriptionValueId,
                           spaceId: currentSpaceId,
                           attributeName: 'Description',
                           entityName: name,
