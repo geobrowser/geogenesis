@@ -36,7 +36,7 @@ const SuggestedFormats = ({
     setVisible(true);
   }, [dataType]);
 
-  let renderableFormats = dataType === 'TIME' ? SUGGESTED_TIME_FORMATS : SUGGESTED_NUMBER_FORMATS;
+  const renderableFormats = dataType === 'TIME' ? SUGGESTED_TIME_FORMATS : SUGGESTED_NUMBER_FORMATS;
 
   return (
     visible && (
@@ -55,6 +55,7 @@ const SuggestedFormats = ({
               <a
                 className="mr-4 flex items-center gap-[6px] text-ctaHover"
                 target="_blank"
+                rel="noreferrer"
                 href={dataType === 'TIME' ? GRC_20_SPECIFICATION_LINK : UNICODE_LINK}
               >
                 View all
@@ -69,7 +70,7 @@ const SuggestedFormats = ({
             {renderableFormats
               .filter(format => format.format !== value)
               .map(option => (
-                <FormatOption format={option.format} label={option.label} onChange={onChange} />
+                <FormatOption key={option.format} format={option.format} label={option.label} onChange={onChange} />
               ))}
           </div>
         </div>

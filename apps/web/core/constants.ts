@@ -13,6 +13,7 @@ export const ROOT_SPACE = '2df11968-9d1c-489f-91b7-bdc88b472161';
 
 export const GEO_LOCATION = '9cf5c1b0-15dc-451c-bfd2-97db64806aff';
 export const FORMAT_PROPERTY = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f';
+export const UNIT_PROPERTY = '11b06581-20d3-41ea-b570-2ef4ee0a4ffd';
 export const DEFAULT_TIME_FORMAT = 'MMMM d, yyy';
 export const DEFAULT_NUMBER_FORMAT = ',?';
 

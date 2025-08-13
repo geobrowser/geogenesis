@@ -311,9 +311,8 @@ function EditableValueGroup({ entityId, property, isEditing }: EditableValueGrou
         <NumberField
           variant="tableCell"
           value={value}
-          unitId={rawValue?.options?.unit}
-          // @TODO(migration): Fix format
-          // format={renderable.options?.format}
+          format={property.format || undefined}
+          unitId={rawValue?.options?.unit || property.unit || undefined}
           isEditing={isEditing}
           onChange={value => {
             // onChangeEntry(

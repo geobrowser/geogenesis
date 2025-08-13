@@ -358,9 +358,8 @@ function ValueGroup({ entityId, property }: ValueGroupProps) {
           variant="tableCell"
           isEditing={true}
           value={value}
-          // @TODO(migration): Fix formatting
-          // format={renderable.options?.format}
-          unitId={rawValue?.options?.unit}
+          format={property.format || undefined}
+          unitId={rawValue?.options?.unit || property.unit || undefined}
           onChange={value =>
             // onChangeEntry(
             //   {

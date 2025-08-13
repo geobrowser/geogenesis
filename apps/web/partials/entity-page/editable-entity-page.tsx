@@ -610,9 +610,8 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
           key={propertyId}
           isEditing={true}
           value={value}
-          // @TODO(migration): Fix formatting. Now on property
-          // format={renderable.options?.format}
-          unitId={options?.unit}
+          format={property.format || undefined}
+          unitId={options?.unit || property.unit || undefined}
           onChange={onChange}
         />
       );
