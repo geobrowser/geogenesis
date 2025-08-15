@@ -1,4 +1,4 @@
-import {  IdUtils, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -206,7 +206,6 @@ function buildTabsForSpacePage(
   // Order of how we add the tabs matters. We want to
   // show "content-based" tabs first, then "space-based" tabs.
 
-  // Always show Overview tab for all spaces
   tabs.push(...ALL_SPACES_TABS);
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
@@ -219,7 +218,6 @@ function buildTabsForSpacePage(
     }
   }
 
-  // Always add Activity tab last
   tabs.push(ACTIVITY_TAB);
 
   const seen = new Map<string, TabProps>();
