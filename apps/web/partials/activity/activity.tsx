@@ -35,7 +35,7 @@ const EntityRow = ({ spaceId, entity }: EntityRowProps) => {
     avatarUrl && (avatarUrl.startsWith('ipfs://') || avatarUrl.startsWith('http')) ? getImagePath(avatarUrl) : null;
 
   const timestamp = entity.updatedAt ? parseInt(entity.updatedAt, 10) : null;
-  const date = timestamp ? new Date(timestamp * 60) : null;
+  const date = timestamp ? new Date(timestamp * 1000) : null;
 
   const formattedDate = date
     ? date.toLocaleDateString('en-US', {
@@ -59,7 +59,7 @@ const EntityRow = ({ spaceId, entity }: EntityRowProps) => {
         {validAvatarUrl ? (
           <Image src={validAvatarUrl} className="object-cover" alt="" fill priority />
         ) : (
-          <div className="flex h-full w-full" />
+          <div className="bg-gradient-geo flex h-full w-full" />
         )}
       </div>
       <div>

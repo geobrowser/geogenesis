@@ -9,11 +9,13 @@ type ActivityServerContainerProps = {
   spaceId: string;
 };
 
+const limit = process.env.NODE_ENV === 'development' ? 10 : 100;
+
 export const ActivityServerContainer = async ({ spaceId }: ActivityServerContainerProps) => {
   const entities = await Effect.runPromise(
     getAllEntities({
       filter: { spaceIds: { in: [spaceId] } },
-      limit: 100,
+      limit,
       orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     })
   );
@@ -28,8 +30,12 @@ export const ActivityServerContainer = async ({ spaceId }: ActivityServerContain
     });
 
   if (namedEntities.length === 0) {
-    return null;
+    return <NoActivity />;
   }
 
   return <Activity entities={namedEntities} spaceId={spaceId} />;
+};
+
+const NoActivity = () => {
+  return <p className="text-body text-grey-04">There are no recently updated entities.</p>;
 };
