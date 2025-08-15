@@ -1,21 +1,19 @@
-import { ActivityPage } from '~/partials/activity/activity-page';
+import { Suspense } from 'react';
 
-import { cachedFetchSpace } from '../cached-fetch-space';
+import { ActivityServerContainer } from '~/partials/activity/activity-server-container';
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{
-    spaceId?: string;
-  }>;
 }
 
-// The ActivityPage component is used both on the [entityId]/activity route
-// and the space/[id]/activity route. We can share the components for this
-// layout by using the same component for both routes.
 export default async function Activity(props: Props) {
-  const searchParams = await props.searchParams;
   const params = await props.params;
-  const space = await cachedFetchSpace(params.id);
 
-  return <ActivityPage entityId={space?.entity?.id ?? null} searchParams={searchParams} />;
+  // @TODO add loading skeleton or spinner
+
+  return (
+    <Suspense fallback={null}>
+      <ActivityServerContainer spaceId={params.id} />
+    </Suspense>
+  );
 }

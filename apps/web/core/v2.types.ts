@@ -96,6 +96,7 @@ export type Entity = {
   types: { id: string; name: string | null }[];
   relations: Relation[];
   values: Value[];
+  updatedAt?: string;
 };
 
 export type EntityWithSchema = Entity & { schema: Property[] };
