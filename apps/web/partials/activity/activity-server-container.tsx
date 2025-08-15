@@ -13,7 +13,7 @@ export const ActivityServerContainer = async ({ spaceId }: ActivityServerContain
   const entities = await Effect.runPromise(
     getAllEntities({
       filter: { spaceIds: { in: [spaceId] } },
-      limit: 100,
+      limit: 20,
       orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     })
   );
