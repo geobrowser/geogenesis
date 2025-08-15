@@ -1,11 +1,12 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
 
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Entity } from '~/core/v2.types';
+
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 type ActivityProps = {
   spaceId: string;
@@ -34,7 +35,7 @@ const EntityRow = ({ spaceId, entity }: EntityRowProps) => {
   const validAvatarUrl =
     avatarUrl && (avatarUrl.startsWith('ipfs://') || avatarUrl.startsWith('http')) ? getImagePath(avatarUrl) : null;
 
-  const timestamp = entity.updatedAt ? parseInt(entity.updatedAt, 10) : null;
+  const timestamp = entity.updatedAt ? Number(entity.updatedAt) : null;
   const date = timestamp ? new Date(timestamp * 1000) : null;
 
   const formattedDate = date
@@ -54,7 +55,12 @@ const EntityRow = ({ spaceId, entity }: EntityRowProps) => {
     : '';
 
   return (
-    <Link href={NavUtils.toEntity(spaceId, entity.id)} className="flex items-center gap-5 py-4 hover:bg-bg">
+    <Link
+      href={NavUtils.toEntity(spaceId, entity.id)}
+      spaceId={spaceId}
+      entityId={entity.id}
+      className="flex items-center gap-5 py-4 hover:bg-bg"
+    >
       <div className="relative size-10 flex-shrink-0 overflow-hidden rounded-md bg-grey-01">
         {validAvatarUrl ? (
           <Image src={validAvatarUrl} className="object-cover" alt="" fill priority />
