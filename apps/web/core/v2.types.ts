@@ -96,6 +96,10 @@ export type Entity = {
   types: { id: string; name: string | null }[];
   relations: Relation[];
   values: Value[];
+  /**
+   * UNIX timestamp in seconds
+   */
+  updatedAt?: string;
 };
 
 export type EntityWithSchema = Entity & { schema: Property[] };

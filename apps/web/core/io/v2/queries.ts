@@ -1,4 +1,4 @@
-import type { EntityFilter } from '~/core/gql/graphql';
+import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/v2.types';
 
 import { Space } from '../dto/spaces';
@@ -46,16 +46,17 @@ type GetAllEntitiesOptions = {
   offset?: number;
   spaceId?: string;
   filter?: EntityFilter;
+  orderBy?: EntitiesOrderBy[];
 };
 
 export function getAllEntities(
-  { limit, offset, spaceId, filter }: GetAllEntitiesOptions,
+  { limit, offset, spaceId, filter, orderBy }: GetAllEntitiesOptions,
   signal?: AbortController['signal']
 ) {
   return graphql({
     query: entitiesQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
-    variables: { limit, offset, spaceId, filter },
+    variables: { limit, offset, spaceId, filter, orderBy },
     signal,
   });
 }
@@ -194,6 +195,7 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
     signal,
   });
 }
+
 
 export function getProperty(id: string, signal?: AbortController['signal']) {
   return graphql({

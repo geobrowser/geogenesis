@@ -35,7 +35,9 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
   signal?: AbortController['signal'];
 }) {
   return Effect.gen(function* () {
-    const client = new GraphQLClient(getConfig().api, {
+    const apiUrl = getConfig().api;
+    
+    const client = new GraphQLClient(apiUrl, {
       signal,
     });
 
