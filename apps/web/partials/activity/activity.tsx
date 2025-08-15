@@ -34,8 +34,8 @@ const EntityRow = ({ spaceId, entity }: EntityRowProps) => {
   const validAvatarUrl =
     avatarUrl && (avatarUrl.startsWith('ipfs://') || avatarUrl.startsWith('http')) ? getImagePath(avatarUrl) : null;
 
-  const timestamp = entity.updatedAt ? parseInt(entity.updatedAt, 10) : null;
-  const date = timestamp ? new Date(timestamp * 60) : null;
+  const timestamp = entity.updatedAt ? Number(entity.updatedAt) : null;
+  const date = timestamp ? new Date(timestamp * 1000) : null;
 
   const formattedDate = date
     ? date.toLocaleDateString('en-US', {
