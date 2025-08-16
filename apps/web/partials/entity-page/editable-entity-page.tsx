@@ -257,7 +257,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   const typeOfId = property.id;
   const isType = propertyId === SystemIds.TYPES_PROPERTY;
-  
+
   const templateOptions = {
     entityId: id,
     entityName: name,
@@ -272,7 +272,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   if (isEmpty) {
     return (
-      <div className="flex flex-wrap items-center gap-1 pr-10">
+      <div className="flex flex-wrap items-center gap-1 pr-1">
         {property.renderableTypeStrict === 'IMAGE' ? (
           <div key="relation-upload-image">
             <PageImageField
@@ -295,7 +295,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
           <div key={`relation-select-entity-${property.id}`} data-testid="select-entity" className="w-full">
             <SelectEntity
               spaceId={spaceId}
-              placeholder={isType ? "Find or create type..." : undefined}
+              placeholder={isType ? 'Find or create type...' : undefined}
               relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
               onCreateEntity={result => {
                 storage.values.set({
@@ -389,7 +389,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1 pr-10">
+    <div className="flex flex-wrap items-center gap-1 pr-1">
       {relations.map(r => {
         const relationId = r.id;
         const relationName = r.toEntity.name;
@@ -439,7 +439,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 <SquareButton icon={<Create />} />
               )
             }
-            placeholder={isType ? "Find or create type..." : undefined}
+            placeholder={isType ? 'Find or create type...' : undefined}
             relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
               storage.values.set({
@@ -698,13 +698,13 @@ async function applyTemplate(templateOptions: {
   storage: Mutator;
 }) {
   const { entityId, entityName, propertyId, typeId, spaceId, storage } = templateOptions;
-  
+
   if (propertyId !== SystemIds.TYPES_PROPERTY) {
     return;
   }
 
   const template = await getEntityTemplate(typeId, entityId, entityName, spaceId);
-  
+
   if (!template) {
     return;
   }
