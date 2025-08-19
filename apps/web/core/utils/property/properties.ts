@@ -1,5 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { DATA_TYPE_PROPERTY, GEO_LOCATION, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+import { DATA_TYPE_PROPERTY, GEO_LOCATION, PLACE, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { DataType, Property, Relation, Value, SwitchableRenderableType, Entity } from '~/core/v2.types';
 
@@ -65,6 +65,11 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
         baseDataType: 'POINT',
         renderableTypeId: null,
       };
+    case 'PLACE':
+      return {
+        baseDataType: 'RELATION',
+        renderableTypeId: PLACE,
+      };
     default: {
       // This ensures exhaustive type checking
       const _exhaustiveCheck: never = type;
@@ -90,6 +95,7 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   TIME: 'TIME',
   POINT: 'POINT',
   GEO_LOCATION: 'POINT',
+  PLACE: 'RELATION',
 } as const;
 
 /**

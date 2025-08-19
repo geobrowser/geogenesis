@@ -147,6 +147,7 @@ export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType,
   NUMBER: 'Number',
   POINT: 'Point',
   GEO_LOCATION: 'Geo Location',
+  PLACE: 'Place',
 };
 
 export type SearchResult = {
