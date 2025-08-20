@@ -18,13 +18,13 @@ import { Property, Relation, ValueOptions } from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
-import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import ReorderableRelationChipsDnd from '~/design-system/reorderable-relation-chips-dnd';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
@@ -390,12 +390,11 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   return (
     <div className="flex flex-wrap items-center gap-1 pr-1">
-      {relations.map(r => {
-        const relationId = r.id;
-        const relationName = r.toEntity.name;
-        const relationValue = r.toEntity.id;
+      {property.renderableTypeStrict === 'IMAGE' ? (
+        relations.map(r => {
+          const relationId = r.id;
+          const relationValue = r.toEntity.id;
 
-        if (property.renderableTypeStrict === 'IMAGE') {
           return (
             <ImageRelation
               key={`image-${relationId}-${relationValue}`}
@@ -403,31 +402,18 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               spaceId={spaceId}
             />
           );
-        }
-
-        return (
-          <div key={`relation-${relationId}-${relationValue}`}>
-            <LinkableRelationChip
-              isEditing
-              onDelete={() => storage.relations.delete(r)}
-              onDone={result => {
-                storage.relations.update(r, draft => {
-                  draft.toSpaceId = result.space;
-                  draft.verified = result.verified;
-                });
-              }}
-              currentSpaceId={spaceId}
-              entityId={relationValue}
-              relationId={relationId}
-              relationEntityId={r.entityId}
-              spaceId={r.toSpaceId}
-              verified={r.verified}
-            >
-              {relationName ?? relationValue}
-            </LinkableRelationChip>
-          </div>
-        );
-      })}
+        })
+      ) : (
+        <ReorderableRelationChipsDnd
+          relations={relations}
+          spaceId={spaceId}
+          onUpdateRelation={(relation: Relation, newPosition: string) => {
+            storage.relations.update(relation, draft => {
+              draft.position = newPosition;
+            });
+          }}
+        />
+      )}
 
       {property.renderableType !== SystemIds.IMAGE && (
         <div>
