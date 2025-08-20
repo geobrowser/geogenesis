@@ -33,7 +33,7 @@ export default function ReorderableRelationChipsDnd({
   spaceId,
 }: {
   relations: Relation[];
-  onUpdateRelation: (relation: Relation, newPosition: string) => void;
+  onUpdateRelation: (relation: Relation, newPosition: string | null) => void;
   spaceId: string;
 }) {
   const { storage } = useMutate();
@@ -68,17 +68,11 @@ export default function ReorderableRelationChipsDnd({
     const oldIndex = sortedRelations.findIndex(r => r?.id === active?.id);
     const newIndex = sortedRelations.findIndex(r => r?.id === over?.id);
 
-    const moved = sortedRelations[oldIndex];
-
     const newList = arrayMove(sortedRelations, oldIndex, newIndex);
 
-    const idx = newList.findIndex(r => r?.id === moved?.id);
-    const before = newList[idx - 1]?.position ?? null;
-    const after = newList[idx + 1]?.position ?? null;
-
-    const newPos = Position.generateBetween(before, after);
-
-    onUpdateRelation(moved, newPos);
+    newList.forEach((relation, index) => {
+      onUpdateRelation(relation, sortedRelations[index].position ?? null);
+    });
 
     setIsDragging(false);
     setActiveId(null);
@@ -168,13 +162,7 @@ function SortableRelationChip({ relation, spaceId }: SortableRelationChipProps) 
   const { storage } = useMutate();
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className="relative flex items-center text-green"
-    >
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="relative flex items-center ">
       <LinkableRelationChip
         isEditing
         onDelete={() => storage.relations.delete(relation)}

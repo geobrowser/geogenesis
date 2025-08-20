@@ -407,9 +407,9 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         <ReorderableRelationChipsDnd
           relations={relations}
           spaceId={spaceId}
-          onUpdateRelation={(relation: Relation, newPosition: string) => {
+          onUpdateRelation={(relation: Relation, newPosition: string | null) => {
             storage.relations.update(relation, draft => {
-              draft.position = newPosition;
+              if (newPosition) draft.position = newPosition;
             });
           }}
         />
