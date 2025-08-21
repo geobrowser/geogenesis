@@ -23,7 +23,6 @@ import {
   PROPERTIES_SOURCED,
   RELATIONS_SOURCED,
 } from '~/core/system-ids';
-import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 import { GeoPoint } from '~/core/utils/utils';
 import { Relation } from '~/core/v2.types';
@@ -42,7 +41,7 @@ import { showingIdsAtom } from '~/atoms';
 
 type SearchPlaceEntityProps = {
   spaceId: string;
-  relationValueTypes?: RelationValueType[];
+  relationValueTypes?: { id: string; name: string | null }[];
   placeholder?: string;
   containerClassName?: string;
   inputClassName?: string;
@@ -327,7 +326,7 @@ export const InputPlace = ({
     );
 
     // Create relation between place entity and current working entity
-    onDone?.({ id: placeEntityId, name: result.place_name }, true);
+    onDone?.({ id: placeEntityId as EntityId, name: result.place_name }, true);
   };
 
   return (
@@ -392,7 +391,7 @@ export const InputPlace = ({
                                 <div className="p-1">
                                   <button
                                     onClick={() => {
-                                      onDone?.({ id: resultEn.id, name: resultEn.name }, true);
+                                      onDone?.({ id: resultEn.id as EntityId, name: resultEn.name }, true);
                                     }}
                                     className="relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"
                                   >

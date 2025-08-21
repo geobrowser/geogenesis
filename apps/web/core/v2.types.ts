@@ -132,7 +132,8 @@ export type SwitchableRenderableType =
   | 'CHECKBOX'
   | 'NUMBER'
   | 'POINT'
-  | 'GEO_LOCATION';
+  | 'GEO_LOCATION'
+  | 'PLACE';
 
 /**
  * Human-readable labels for switchable renderable types

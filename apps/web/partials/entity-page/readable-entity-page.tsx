@@ -2,7 +2,7 @@ import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY, ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
+import { RENDERABLE_TYPE_PROPERTY, ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
 import { useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
@@ -64,7 +64,6 @@ export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
 }
 
 const ReadableNumberField = ({ value, unitId, propertyId }: { value: string; unitId?: string; propertyId: string }) => {
-  const { entity } = useQueryEntity({ id: unitId });
   const { property } = useQueryProperty({ id: propertyId });
 
   // Use format and unit from the property directly

@@ -293,7 +293,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               onImageRemove={() => console.log(`remove`)}
             />
           </div>
-        ) : property.renderableTypeStrict === 'PLACE' || propertyId === VENUE_PROPERTY ? (
+        ) : propertyId === VENUE_PROPERTY ? (
           <div key="relation-place-input">
             <InputPlace 
               spaceId={spaceId}

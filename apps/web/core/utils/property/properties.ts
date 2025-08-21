@@ -181,8 +181,7 @@ export function reconstructFromStore(
 export function constructDataType(
   propertyData: Property | null,
   renderableTypeEntity: Pick<Entity, 'id' | 'name'> | null,
-  renderableTypeRelation: Relation | null | undefined,
-  entityId: string
+  renderableTypeRelation: Relation | null | undefined
 ): { id: string; dataType: DataType; renderableType: { id: string; name: string } | null } | null {
   // If we have propertyData from the backend, use it
   if (propertyData) {

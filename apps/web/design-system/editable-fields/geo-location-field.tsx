@@ -115,7 +115,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
   );
 }
 
-export function GeoLocationWrapper({ relationId, id, spaceId, propertyType }: { relationId: string; id: string; spaceId: string; propertyType?: string }) {
+export function GeoLocationWrapper({ id, spaceId, propertyType }: { relationId?: string; id: string; spaceId: string; propertyType?: string }) {
   const geoData = useGeoCoordinates(id, spaceId, propertyType);
 
   // Only render if there's geo location data
