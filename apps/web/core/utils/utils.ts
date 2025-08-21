@@ -546,25 +546,5 @@ export const getPaginationPages = (totalPages: number, activePage: number) => {
 };
 
 export function sortRelations(relations: Relation[]) {
-  const sortedPositions = Position.sort(relations.map(r => r.position ?? null));
-
-  const used = new Set<string>();
-
-  return sortedPositions.map(pos => {
-    // 1. Try to find a relation with this exact position
-    const exact = relations.find(r => r.position === pos && !used.has(r.id));
-    if (exact) {
-      used.add(exact.id);
-      return exact;
-    }
-
-    // 2. Otherwise, take the next unused relation with null position
-    const nullRelation = relations.find(r => (r.position === null || r.position === undefined) && !used.has(r.id));
-    if (nullRelation) {
-      used.add(nullRelation.id);
-      return nullRelation;
-    }
-
-    throw new Error(`Could not map position "${pos}" to a relation`);
-  });
+  return [...relations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
 }
