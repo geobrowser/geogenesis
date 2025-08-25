@@ -115,7 +115,7 @@ export default function ReorderableRelationChipsDnd({
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={sortedRelations.map(r => r.id)} strategy={horizontalListSortingStrategy}>
-        <div className={`flex gap-2 overflow-x-auto`}>
+        <div className={`flex flex-wrap gap-2`}>
           {sortedRelations.map(relation => (
             <SortableRelationChip key={relation?.id} relation={relation} spaceId={spaceId} />
           ))}
@@ -124,7 +124,7 @@ export default function ReorderableRelationChipsDnd({
 
       <DragOverlay>
         {activeId && activeRelation ? (
-          <div style={{ cursor: 'grabbing' }}>
+          <div className="inline-block" style={{ cursor: 'grabbing' }}>
             <LinkableRelationChip
               isEditing
               onDelete={() => {}}
@@ -133,6 +133,7 @@ export default function ReorderableRelationChipsDnd({
               relationId={activeRelation?.id}
               relationEntityId={activeRelation.entityId}
               spaceId={activeRelation.toSpaceId}
+              verified={activeRelation.verified}
             >
               {activeRelation.toEntity.name}
             </LinkableRelationChip>
@@ -154,27 +155,56 @@ function SortableRelationChip({ relation, spaceId }: SortableRelationChipProps) 
   });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0 : 1,
+    zIndex: isDragging ? 1000 : 'auto',
   };
 
   const { storage } = useMutate();
+  const [justDragged, setJustDragged] = React.useState(false);
+
+  // Track when dragging ends to prevent click events
+  React.useEffect(() => {
+    if (isDragging) {
+      setJustDragged(true);
+    } else if (justDragged) {
+      // Keep justDragged true for a short time after drag ends
+      const timeout = setTimeout(() => setJustDragged(false), 200);
+      return () => clearTimeout(timeout);
+    }
+  }, [isDragging, justDragged]);
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Prevent navigation if we just finished dragging
+    if (justDragged) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="relative flex items-center ">
-      <LinkableRelationChip
-        isEditing
-        onDelete={() => storage.relations.delete(relation)}
-        currentSpaceId={spaceId}
-        entityId={relation.toEntity.id}
-        relationId={relation.id}
-        relationEntityId={relation.entityId}
-        spaceId={relation.toSpaceId}
-        verified={relation.verified}
-      >
-        {relation.toEntity.name}
-      </LinkableRelationChip>
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className="relative inline-block"
+      onClick={handleClick}
+      onClickCapture={handleClick}
+    >
+      <div {...attributes} {...listeners} className="inline-flex items-center">
+        <LinkableRelationChip
+          isEditing
+          onDelete={() => storage.relations.delete(relation)}
+          currentSpaceId={spaceId}
+          entityId={relation.toEntity.id}
+          relationId={relation.id}
+          relationEntityId={relation.entityId}
+          spaceId={relation.toSpaceId}
+          verified={relation.verified}
+        >
+          {relation.toEntity.name}
+        </LinkableRelationChip>
+      </div>
     </div>
   );
 }
