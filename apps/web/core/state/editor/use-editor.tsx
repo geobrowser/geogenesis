@@ -92,6 +92,7 @@ function makeNewBlockRelation({
       case 'listItem':
       case 'bulletList':
       case 'orderedList':
+      case 'codeBlock':
         return 'TEXT';
       case 'tableNode':
         return 'DATA';
@@ -246,12 +247,20 @@ export function useEditorStore() {
         // @TODO(migration): We should be using the sync store to read all data for
         // the app. We need to be able to pre-hydrate the store with values based
         // on the data from the server or else the store won't have any data.
+        // Try to get values from local storage first, then fallback to initial values
         const markdownValuesForBlockId = getValues({
-          mergeWith: initialBlockValues,
           selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,
         });
 
-        const markdownValueForBlockId = markdownValuesForBlockId?.[0];
+        // If no values found in local storage, try with initial values as fallback
+        const finalMarkdownValues = markdownValuesForBlockId.length > 0 
+          ? markdownValuesForBlockId 
+          : getValues({
+              mergeWith: initialBlockValues,
+              selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,
+            });
+
+        const markdownValueForBlockId = finalMarkdownValues?.[0];
         const relationForBlockId = blockRelations.find(r => r.block.id === block.block.id);
 
         const toEntity = relationForBlockId?.block;
@@ -374,6 +383,8 @@ export function useEditorStore() {
               return SystemIds.DATA_BLOCK;
             case 'bulletList':
             case 'paragraph':
+            case 'heading':
+            case 'codeBlock':
               return SystemIds.TEXT_BLOCK;
             case 'image':
               return SystemIds.IMAGE_TYPE;
@@ -464,7 +475,8 @@ export function useEditorStore() {
             break;
           case 'bulletList':
           case 'heading':
-          case 'paragraph': {
+          case 'paragraph':
+          case 'codeBlock': {
             const markdownValue = TextEntity.getTextEntityMarkdownValue(node);
             storage.values.set(markdownValue);
 

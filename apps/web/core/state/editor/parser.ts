@@ -65,6 +65,29 @@ export function htmlToMarkdown(html: string): string {
         // This shouldn't be called directly, handled by ul/ol
         result = processChildren(element, indent);
         break;
+      case 'pre': {
+        // Handle code blocks - look for nested code element
+        const codeElement = element.querySelector('code');
+        if (codeElement) {
+          const codeContent = codeElement.textContent || '';
+          result = `\`\`\`\n${codeContent}\n\`\`\`\n`;
+        } else {
+          result = `\`\`\`\n${processChildren(element, indent)}\n\`\`\`\n`;
+        }
+        break;
+      }
+      case 'code': {
+        // Handle inline code or code blocks
+        const parentTag = element.parentElement?.tagName.toLowerCase();
+        if (parentTag === 'pre') {
+          // This is part of a code block, handled by the pre case
+          result = element.textContent || '';
+        } else {
+          // This is inline code
+          result = `\`${element.textContent || ''}\``;
+        }
+        break;
+      }
       case 'br':
         result = '\n';
         break;

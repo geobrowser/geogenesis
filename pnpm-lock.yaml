@@ -101,6 +101,12 @@ importers:
       '@tiptap/extension-bullet-list':
         specifier: ^2.10.4
         version: 2.11.3(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))
+      '@tiptap/extension-code':
+        specifier: ^2.10.4
+        version: 2.26.1(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))
+      '@tiptap/extension-code-block':
+        specifier: ^2.10.4
+        version: 2.26.1(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))(@tiptap/pm@2.10.4)
       '@tiptap/extension-document':
         specifier: ^2.10.4
         version: 2.11.3(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))
@@ -541,10 +547,10 @@ importers:
         version: 1.21.4(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.24.1)
       vite:
         specifier: ^5.2.11
-        version: 5.4.14(@types/node@24.2.0)
+        version: 5.4.14(@types/node@24.3.0)
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@24.2.0)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+        version: 1.6.0(@types/node@24.3.0)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
     devDependencies:
       '@bufbuild/buf':
         specifier: ^1.31.0
@@ -657,7 +663,7 @@ importers:
         version: 4.3.0(prettier@3.4.2)
       '@types/node':
         specifier: latest
-        version: 24.2.0
+        version: 24.3.0
       '@types/pg':
         specifier: ^8.10.9
         version: 8.11.11
@@ -699,10 +705,10 @@ importers:
         version: 5.7.3
       vite:
         specifier: ^5.2.10
-        version: 5.4.14(@types/node@24.2.0)
+        version: 5.4.14(@types/node@24.3.0)
       vitest:
         specifier: ^1.5.2
-        version: 1.6.0(@types/node@24.2.0)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+        version: 1.6.0(@types/node@24.3.0)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
 
 packages:
 
@@ -1000,8 +1006,8 @@ packages:
   '@bufbuild/protobuf@1.10.1':
     resolution: {integrity: sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ==}
 
-  '@bufbuild/protobuf@2.6.3':
-    resolution: {integrity: sha512-w/gJKME9mYN7ZoUAmSMAWXk4hkVpxRKvEJCb3dV5g9wwWdxTJJ0ayOJAVcNxtdqaxDyFuC0uz4RSGVacJ030PQ==}
+  '@bufbuild/protobuf@2.7.0':
+    resolution: {integrity: sha512-qn6tAIZEw5i/wiESBF4nQxZkl86aY4KoO0IkUa2Lh+rya64oTOdJQFlZuMwI1Qz9VBJQrQC4QlSA2DNek5gCOA==}
 
   '@bufbuild/protoc-gen-es@1.10.0':
     resolution: {integrity: sha512-zBYBsVT/ul4uZb6F+kD7/k4sWNHVVbEPfJwKi0FDr+9VJo8MKIofI6pkr5ksBLr4fi/74r+e/75Xi/0clL5dXg==}
@@ -1114,26 +1120,26 @@ packages:
       '@bufbuild/protobuf': ^1.10.0
       '@connectrpc/connect': 1.6.1
 
-  '@connectrpc/connect-node@2.0.3':
-    resolution: {integrity: sha512-GZ8WXBCeoZY31wzmnrrV4IA0nvYzEwqt9yHg304b7y/ovKh0IEbBuSWbee/hJu2Tt7PD0C8D4WUwheECCeLpQA==}
+  '@connectrpc/connect-node@2.0.4':
+    resolution: {integrity: sha512-+2rmWcCqYxh7TKv6zyJqGloUP5dZSkjrZ3AA1CljGBqiwH6pOjLoNX1ofKh9PBRkJnvfxvL3pBEEWaD1hJso4Q==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       '@bufbuild/protobuf': ^2.2.0
-      '@connectrpc/connect': 2.0.3
+      '@connectrpc/connect': 2.0.4
 
-  '@connectrpc/connect-web@2.0.3':
-    resolution: {integrity: sha512-w4LZ2Ci+NW/kcMoHnoczJgyGTmxuv/MQ+tTm2UNL40HimXKWYCAna/fV0AbHRnTiteiwEBpeSCaxF34MetzhAw==}
+  '@connectrpc/connect-web@2.0.4':
+    resolution: {integrity: sha512-wMiStHClk7YopPIrmFvgviPjHeFpiNGykPxuVIi6leGTpg/GKx317tsN5GySX46iV7RrnESOvAyuisQtJXO99w==}
     peerDependencies:
       '@bufbuild/protobuf': ^2.2.0
-      '@connectrpc/connect': 2.0.3
+      '@connectrpc/connect': 2.0.4
 
   '@connectrpc/connect@1.6.1':
     resolution: {integrity: sha512-KchMDNtU4CDTdkyf0qG7ugJ6qHTOR/aI7XebYn3OTCNagaDYWiZUVKgRgwH79yeMkpNgvEUaXSK7wKjaBK9b/Q==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.10.0
 
-  '@connectrpc/connect@2.0.3':
-    resolution: {integrity: sha512-jAbVMHVtDCydGt2P20VpmLjbLtERqSV0RMSyQF3k2zhK8pzQ2QaCAcyVhufClqrOAFZUKL5BqVYtttaxvhmRgg==}
+  '@connectrpc/connect@2.0.4':
+    resolution: {integrity: sha512-E3EDUMHDdLKVYRxaGbb/MWImZUiGiPQgoehigCvy0NtMTiAn9AQIz/an1689b7mFbkMIXztPHwSNsvtqRPHhqQ==}
     peerDependencies:
       '@bufbuild/protobuf': ^2.2.0
 
@@ -4053,6 +4059,17 @@ packages:
     peerDependencies:
       '@tiptap/core': ^2.7.0
 
+  '@tiptap/extension-code-block@2.26.1':
+    resolution: {integrity: sha512-/TDDOwONl0qEUc4+B6V9NnWtSjz95eg7/8uCb8Y8iRbGvI9vT4/znRKofFxstvKmW4URu/H74/g0ywV57h0B+A==}
+    peerDependencies:
+      '@tiptap/core': ^2.7.0
+      '@tiptap/pm': ^2.7.0
+
+  '@tiptap/extension-code@2.26.1':
+    resolution: {integrity: sha512-GU9deB1A/Tr4FMPu71CvlcjGKwRhGYz60wQ8m4aM+ELZcVIcZRa1ebR8bExRIEWnvRztQuyRiCQzw2N0xQJ1QQ==}
+    peerDependencies:
+      '@tiptap/core': ^2.7.0
+
   '@tiptap/extension-document@2.11.3':
     resolution: {integrity: sha512-utY1JZgxRLt0/oFPPUH8OT8Ltu3nmdycM2EwkM85vil83MnM5kuEYHF1l1q2xhnJ52wdU3afx+e7dFgvMDuunA==}
     peerDependencies:
@@ -4267,8 +4284,8 @@ packages:
   '@types/node@20.17.16':
     resolution: {integrity: sha512-vOTpLduLkZXePLxHiHsBLp98mHGnl8RptV4YAO3HfKO5UHjDvySGbxKtpYfy8Sx5+WKcgc45qNreJJRVM3L6mw==}
 
-  '@types/node@24.2.0':
-    resolution: {integrity: sha512-3xyG3pMCq3oYCNg7/ZP+E1ooTaGB4cG8JWRsqqOYQdbWNY4zbaV0Ennrd7stjiJEFZCaybcIgpTjJWHRfBSIDw==}
+  '@types/node@24.3.0':
+    resolution: {integrity: sha512-aPTXCrfwnDLj4VvXrm+UUCQjNEvJgNA8s5F1cvwQU+3KNltTOkBm1j30uNLyqqPNe7gE3KFzImYoZEfLhp4Yow==}
 
   '@types/pbf@3.0.5':
     resolution: {integrity: sha512-j3pOPiEcWZ34R6a6mN07mUkM4o4Lwf6hPNt8eilOeZhTFbxFXmKhvXl9Y28jotFPaI1bpPDJsbCprUoNke6OrA==}
@@ -10259,7 +10276,7 @@ snapshots:
 
   '@bufbuild/protobuf@1.10.1': {}
 
-  '@bufbuild/protobuf@2.6.3': {}
+  '@bufbuild/protobuf@2.7.0': {}
 
   '@bufbuild/protoc-gen-es@1.10.0(@bufbuild/protobuf@1.10.0)':
     dependencies:
@@ -10518,23 +10535,23 @@ snapshots:
       '@connectrpc/connect': 1.6.1(@bufbuild/protobuf@1.10.0)
       undici: 5.28.5
 
-  '@connectrpc/connect-node@2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))':
+  '@connectrpc/connect-node@2.0.4(@bufbuild/protobuf@2.7.0)(@connectrpc/connect@2.0.4(@bufbuild/protobuf@2.7.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.6.3
-      '@connectrpc/connect': 2.0.3(@bufbuild/protobuf@2.6.3)
+      '@bufbuild/protobuf': 2.7.0
+      '@connectrpc/connect': 2.0.4(@bufbuild/protobuf@2.7.0)
 
-  '@connectrpc/connect-web@2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))':
+  '@connectrpc/connect-web@2.0.4(@bufbuild/protobuf@2.7.0)(@connectrpc/connect@2.0.4(@bufbuild/protobuf@2.7.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.6.3
-      '@connectrpc/connect': 2.0.3(@bufbuild/protobuf@2.6.3)
+      '@bufbuild/protobuf': 2.7.0
+      '@connectrpc/connect': 2.0.4(@bufbuild/protobuf@2.7.0)
 
   '@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0)':
     dependencies:
       '@bufbuild/protobuf': 1.10.0
 
-  '@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3)':
+  '@connectrpc/connect@2.0.4(@bufbuild/protobuf@2.7.0)':
     dependencies:
-      '@bufbuild/protobuf': 2.6.3
+      '@bufbuild/protobuf': 2.7.0
 
   '@discoveryjs/json-ext@0.5.7': {}
 
@@ -12114,7 +12131,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 17.0.45
+      '@types/node': 20.17.16
       '@types/yargs': 17.0.33
       chalk: 4.1.2
 
@@ -13752,10 +13769,10 @@ snapshots:
       '@bufbuild/protobuf': 1.10.0
       '@connectrpc/connect': 1.6.1(@bufbuild/protobuf@1.10.0)
 
-  '@substreams/core@0.17.0(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))':
+  '@substreams/core@0.17.0(@bufbuild/protobuf@2.7.0)(@connectrpc/connect@2.0.4(@bufbuild/protobuf@2.7.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.6.3
-      '@connectrpc/connect': 2.0.3(@bufbuild/protobuf@2.6.3)
+      '@bufbuild/protobuf': 2.7.0
+      '@connectrpc/connect': 2.0.4(@bufbuild/protobuf@2.7.0)
 
   '@substreams/manifest@0.15.0(@bufbuild/buf@1.50.0)(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0))(@effect/schema@0.63.4(effect@2.4.19)(fast-check@3.13.2))(effect@2.4.19)(yaml@2.7.0)':
     dependencies:
@@ -13770,11 +13787,11 @@ snapshots:
 
   '@substreams/node@0.6.2':
     dependencies:
-      '@bufbuild/protobuf': 2.6.3
-      '@connectrpc/connect': 2.0.3(@bufbuild/protobuf@2.6.3)
-      '@connectrpc/connect-node': 2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))
-      '@connectrpc/connect-web': 2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))
-      '@substreams/core': 0.17.0(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))
+      '@bufbuild/protobuf': 2.7.0
+      '@connectrpc/connect': 2.0.4(@bufbuild/protobuf@2.7.0)
+      '@connectrpc/connect-node': 2.0.4(@bufbuild/protobuf@2.7.0)(@connectrpc/connect@2.0.4(@bufbuild/protobuf@2.7.0))
+      '@connectrpc/connect-web': 2.0.4(@bufbuild/protobuf@2.7.0)(@connectrpc/connect@2.0.4(@bufbuild/protobuf@2.7.0))
+      '@substreams/core': 0.17.0(@bufbuild/protobuf@2.7.0)(@connectrpc/connect@2.0.4(@bufbuild/protobuf@2.7.0))
       eventemitter3: 5.0.1
 
   '@substreams/sink@0.14.1(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.0))(effect@2.4.19)':
@@ -13884,6 +13901,15 @@ snapshots:
       tippy.js: 6.3.7
 
   '@tiptap/extension-bullet-list@2.11.3(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))':
+    dependencies:
+      '@tiptap/core': 2.10.4(@tiptap/pm@2.10.4)
+
+  '@tiptap/extension-code-block@2.26.1(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))(@tiptap/pm@2.10.4)':
+    dependencies:
+      '@tiptap/core': 2.10.4(@tiptap/pm@2.10.4)
+      '@tiptap/pm': 2.10.4
+
+  '@tiptap/extension-code@2.26.1(@tiptap/core@2.10.4(@tiptap/pm@2.10.4))':
     dependencies:
       '@tiptap/core': 2.10.4(@tiptap/pm@2.10.4)
 
@@ -14013,7 +14039,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 20.17.16
+      '@types/node': 17.0.45
 
   '@types/cookie@0.6.0': {}
 
@@ -14119,7 +14145,7 @@ snapshots:
     dependencies:
       undici-types: 6.19.8
 
-  '@types/node@24.2.0':
+  '@types/node@24.3.0':
     dependencies:
       undici-types: 7.10.0
 
@@ -14197,11 +14223,11 @@ snapshots:
 
   '@types/ws@7.4.7':
     dependencies:
-      '@types/node': 20.17.16
+      '@types/node': 17.0.45
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 17.0.45
+      '@types/node': 20.17.16
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -17734,7 +17760,7 @@ snapshots:
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 17.0.45
+      '@types/node': 20.17.16
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -19041,7 +19067,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 17.0.45
+      '@types/node': 20.17.16
       long: 5.3.2
 
   protocol-buffers-schema@3.6.0: {}
@@ -20401,13 +20427,13 @@ snapshots:
       - utf-8-validate
       - zod
 
-  vite-node@1.6.0(@types/node@24.2.0):
+  vite-node@1.6.0(@types/node@24.3.0):
     dependencies:
       cac: 6.7.14
       debug: 4.4.0
       pathe: 1.1.2
       picocolors: 1.1.1
-      vite: 5.4.14(@types/node@24.2.0)
+      vite: 5.4.14(@types/node@24.3.0)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -20450,13 +20476,13 @@ snapshots:
       '@types/node': 17.0.45
       fsevents: 2.3.3
 
-  vite@5.4.14(@types/node@24.2.0):
+  vite@5.4.14(@types/node@24.3.0):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.5.1
       rollup: 4.32.1
     optionalDependencies:
-      '@types/node': 24.2.0
+      '@types/node': 24.3.0
       fsevents: 2.3.3
 
   vite@6.2.5(@types/node@17.0.45)(jiti@2.4.2)(tsx@4.19.2)(yaml@2.7.0):
@@ -20471,7 +20497,7 @@ snapshots:
       tsx: 4.19.2
       yaml: 2.7.0
 
-  vitest@1.6.0(@types/node@24.2.0)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
+  vitest@1.6.0(@types/node@24.3.0)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
     dependencies:
       '@vitest/expect': 1.6.0
       '@vitest/runner': 1.6.0
@@ -20490,11 +20516,11 @@ snapshots:
       strip-literal: 2.1.1
       tinybench: 2.9.0
       tinypool: 0.8.4
-      vite: 5.4.14(@types/node@24.2.0)
-      vite-node: 1.6.0(@types/node@24.2.0)
+      vite: 5.4.14(@types/node@24.3.0)
+      vite-node: 1.6.0(@types/node@24.3.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 24.2.0
+      '@types/node': 24.3.0
       jsdom: 20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - less

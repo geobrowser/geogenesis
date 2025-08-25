@@ -78,15 +78,61 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
             if (clipboardData) {
               const textData = clipboardData.getData('text/plain');
               
-              
               // Always prevent default and handle manually to avoid emoji conversion
               event.preventDefault();
               
               // Use plain text to preserve emoji as Unicode
               if (textData) {
                 const lines = textData.split('\n');
-                let tr = view.state.tr;
                 
+                // Check if this looks like code that should be in a code block
+                const shouldBeCodeBlock = (text: string): boolean => {
+                  const codeIndicators = [
+                    // Common code patterns
+                    /^[\s]*(?:function|const|let|var|class|interface|type|import|export)\s+/m,
+                    /^[\s]*(?:def|class|import|from|if __name__|#!\/)/m, // Python
+                    /^[\s]*(?:public|private|protected|static|void|int|String|boolean)\s+/m, // Java/C#
+                    /^[\s]*(?:fn|struct|impl|use|mod|let mut)\s+/m, // Rust
+                    /^[\s]*(?:<\?php|<?=|$[a-zA-Z_])/m, // PHP
+                    // JSON/Config patterns
+                    /^\s*[{[][\s\S]*[}\]]\s*$/m,
+                    /^\s*"[^"]*":\s*["{[]]/m,
+                    // HTML/XML patterns
+                    /^\s*<[a-zA-Z][^>]*>/m,
+                    // CSS patterns
+                    /^\s*[.#]?[a-zA-Z-]+\s*{\s*$/m,
+                    // Shell/Command patterns
+                    /^\s*[$#]\s+/m,
+                    // Has multiple lines with consistent indentation
+                    lines.length > 2 && /^\s{2,}/.test(text),
+                    // Contains typical code symbols
+                    /[{}();[\]]/g.test(text) && lines.length > 1,
+                    // Contains common operators on multiple lines
+                    /[=+\-*/%<>!&|]{1,2}/.test(text) && lines.length > 1
+                  ];
+                  
+                  return codeIndicators.some(pattern => {
+                    if (typeof pattern === 'boolean') return pattern;
+                    return pattern.test(text);
+                  });
+                };
+                
+                // If it looks like code and has multiple lines, create a code block
+                if (lines.length > 1 && shouldBeCodeBlock(textData)) {
+                  const { state } = view;
+                  
+                  // Create code block node with the pasted content
+                  const codeBlockNode = state.schema.nodes.codeBlock.create({}, 
+                    state.schema.text(textData)
+                  );
+                  
+                  const tr = state.tr.replaceSelectionWith(codeBlockNode);
+                  view.dispatch(tr);
+                  return true;
+                }
+                
+                // Otherwise, handle normally line by line
+                let tr = view.state.tr;
                 lines.forEach((line, index) => {
                   if (index > 0) {
                     tr = tr.split(tr.selection.head);
