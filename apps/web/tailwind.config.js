@@ -78,6 +78,9 @@ module.exports = {
       // => @media (max-width: 639px) { ... }
     },
     extend: {
+      fontFamily: {
+        mono: ['var(--font-inconsolata)', 'Inconsolata', 'monospace'],
+      },
       animation: {
         'fade-in': 'fadeIn 0.15s ease-in-out',
         'pulse-strong': 'pulseStrong 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',

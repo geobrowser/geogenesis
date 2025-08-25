@@ -1,4 +1,5 @@
 import localFont from 'next/font/local';
+import { Inconsolata } from 'next/font/google';
 import 'react-medium-image-zoom/dist/styles.css';
 
 import * as React from 'react';
@@ -37,6 +38,11 @@ const calibre = localFont({
     },
   ],
   variable: '--font-calibre',
+});
+
+const inconsolata = Inconsolata({
+  subsets: ['latin'],
+  variable: '--font-inconsolata',
 });
 
 export const metadata: Metadata = {
@@ -111,7 +117,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${calibre.variable}`}>
+    <html lang="en" className={`${calibre.variable} ${inconsolata.variable}`}>
       <head>
         <link rel="preload" as="image" href={DEFAULT_OPENGRAPH_IMAGE} />
       </head>
