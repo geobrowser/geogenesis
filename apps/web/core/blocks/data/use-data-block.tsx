@@ -211,6 +211,8 @@ export function useDataBlock() {
     name: entity?.name ?? null,
     setName,
     totalPages,
+
+    relations: entity?.relations,
   };
 }
 
