@@ -14,6 +14,11 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
 
+import { NoContent } from '../space-tabs/no-content';
+import { tiptapExtensions } from './extensions';
+import { createIdExtension } from './id-extension';
+import { ServerContent } from './server-content';
+
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
   // Twitter emoji
@@ -25,11 +30,6 @@ const EMOJI_CONVERSION_PATTERNS = [
   // Any image with emoji in alt text
   /<img[^>]*alt="([^"]*[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}][^"]*)"[^>]*\/?>/gu,
 ] as const;
-
-import { NoContent } from '../space-tabs/no-content';
-import { tiptapExtensions } from './extensions';
-import { createIdExtension } from './id-extension';
-import { ServerContent } from './server-content';
 
 interface Props {
   spaceId: string;
@@ -47,6 +47,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   useInterceptEditorLinks(spaceId);
 
   const onBlur = (params: { editor: TiptapEditor }) => {
+    console.log('ini jalan juga');
     if (editable) {
       // Responsible for converting all editor blocks to Geo knowledge graph state
       upsertEditorState(params.editor.getJSON());
@@ -56,18 +57,18 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const editor = useEditor(
     {
       extensions,
-      editable: editable,
+      editable: false,
       content: editorJson,
       editorProps: {
         transformPastedHTML: html => {
           // Remove id attributes and prevent emoji conversion to images
           let cleanHtml = removeIdAttributes(html);
-          
+
           // Apply all patterns to convert emoji images back to Unicode
           EMOJI_CONVERSION_PATTERNS.forEach(pattern => {
             cleanHtml = cleanHtml.replace(pattern, '$1');
           });
-          
+
           return cleanHtml;
         },
         // Handle emoji conversion on paste
@@ -77,14 +78,14 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
             const clipboardData = event.clipboardData;
             if (clipboardData) {
               const textData = clipboardData.getData('text/plain');
-              
+
               // Always prevent default and handle manually to avoid emoji conversion
               event.preventDefault();
-              
+
               // Use plain text to preserve emoji as Unicode
               if (textData) {
                 const lines = textData.split('\n');
-                
+
                 // Check if this looks like code that should be in a code block
                 const shouldBeCodeBlock = (text: string): boolean => {
                   const codeIndicators = [
@@ -108,29 +109,27 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
                     // Contains typical code symbols
                     /[{}();[\]]/g.test(text) && lines.length > 1,
                     // Contains common operators on multiple lines
-                    /[=+\-*/%<>!&|]{1,2}/.test(text) && lines.length > 1
+                    /[=+\-*/%<>!&|]{1,2}/.test(text) && lines.length > 1,
                   ];
-                  
+
                   return codeIndicators.some(pattern => {
                     if (typeof pattern === 'boolean') return pattern;
                     return pattern.test(text);
                   });
                 };
-                
+
                 // If it looks like code and has multiple lines, create a code block
                 if (lines.length > 1 && shouldBeCodeBlock(textData)) {
                   const { state } = view;
-                  
+
                   // Create code block node with the pasted content
-                  const codeBlockNode = state.schema.nodes.codeBlock.create({}, 
-                    state.schema.text(textData)
-                  );
-                  
+                  const codeBlockNode = state.schema.nodes.codeBlock.create({}, state.schema.text(textData));
+
                   const tr = state.tr.replaceSelectionWith(codeBlockNode);
                   view.dispatch(tr);
                   return true;
                 }
-                
+
                 // Otherwise, handle normally line by line
                 let tr = view.state.tr;
                 lines.forEach((line, index) => {
@@ -141,7 +140,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
                     tr = tr.insertText(line);
                   }
                 });
-                
+
                 view.dispatch(tr);
                 return true;
               }
@@ -154,10 +153,10 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       onBlur: onBlur,
       onUpdate: ({ editor }) => {
         if (editable) {
-          const hasContent = editor.getText().trim().length > 0 || 
-                          editor.getJSON().content?.some(node => 
-                            node.type === 'image' || node.type === 'tableNode');
-          
+          const hasContent =
+            editor.getText().trim().length > 0 ||
+            editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode');
+
           // Check if we have actual content and update the state immediately
           // This will cause the properties panel to show before blur events
           if (hasContent) {
@@ -166,8 +165,16 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
         }
       },
     },
-    [editorJson, editable]
+    [editorJson]
   );
+
+  // update editable options of editor when editable changes
+  // if editable put in useEditor dependency list, the editor will recreate every editable changes
+  React.useEffect(() => {
+    if (editor) {
+      editor.setEditable(editable);
+    }
+  }, [editor, editable]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
@@ -219,15 +226,16 @@ function useInterceptEditorLinks(spaceId: string) {
     }
 
     // Mutation observer to catch and prevent emoji conversion
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
           if (node.nodeType === Node.ELEMENT_NODE) {
             const element = node as Element;
             // Check if added node is an emoji image
-            if (element.tagName === 'IMG' && 
-                (element.getAttribute('src')?.includes('emoji') || 
-                 element.getAttribute('src')?.includes('twimg.com'))) {
+            if (
+              element.tagName === 'IMG' &&
+              (element.getAttribute('src')?.includes('emoji') || element.getAttribute('src')?.includes('twimg.com'))
+            ) {
               const alt = element.getAttribute('alt');
               if (alt) {
                 const textNode = document.createTextNode(alt);
@@ -236,7 +244,7 @@ function useInterceptEditorLinks(spaceId: string) {
             }
             // Also check child nodes
             const emojiImages = element.querySelectorAll('img[src*="emoji"], img[src*="twimg.com"]');
-            emojiImages.forEach((img) => {
+            emojiImages.forEach(img => {
               const alt = img.getAttribute('alt');
               if (alt) {
                 const textNode = document.createTextNode(alt);
@@ -253,7 +261,7 @@ function useInterceptEditorLinks(spaceId: string) {
     if (editorElement) {
       observer.observe(editorElement, {
         childList: true,
-        subtree: true
+        subtree: true,
       });
     }
 
