@@ -63,8 +63,13 @@ export const InlineCode = Code.extend({
 
   addKeyboardShortcuts() {
     return {
-      'Mod-e': () => this.editor.commands.toggleMark('inlineCode'),
-      'Mod-`': () => this.editor.commands.toggleMark('inlineCode'),
+      'Mod-k': () => this.editor.commands.toggleMark('inlineCode'),
     };
+  },
+
+  addInputRules() {
+    // Override to disable automatic backtick conversion
+    // This prevents the default ` text ` -> inline code conversion
+    return [];
   },
 });
