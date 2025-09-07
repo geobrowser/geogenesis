@@ -270,7 +270,7 @@ function useEntries(
   };
 
   return {
-    entries: sortRows(renderedEntries),
+    entries: renderedEntries,
     onAddPlaceholder,
     onChangeEntry,
     onLinkEntry,
@@ -294,6 +294,8 @@ export const TableBlock = ({ spaceId }: Props) => {
     propertiesSchema,
     totalPages,
     relations,
+    collectionLength,
+    pageSize,
   } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
@@ -356,6 +358,9 @@ export const TableBlock = ({ spaceId }: Props) => {
         entries={entries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
       />
     );
   }
@@ -396,6 +401,9 @@ export const TableBlock = ({ spaceId }: Props) => {
         entries={entries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
       />
     );
   }

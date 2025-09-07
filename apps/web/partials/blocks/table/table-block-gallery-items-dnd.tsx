@@ -18,6 +18,8 @@ import React from 'react';
 import { Source } from '~/core/blocks/data/source';
 import { Property, Relation, Row } from '~/core/v2.types';
 
+import { PositionBox } from '~/design-system/position-box';
+
 import { onChangeEntryFn, onLinkEntryFn } from './change-entry';
 import { TableBlockGalleryItem } from './table-block-gallery-item';
 
@@ -31,6 +33,9 @@ type TableBlockTablePropsDnd = {
   isEditing: boolean;
   onUpdateRelation: (relation: Relation, newPosition: string | null) => void;
   relations: Relation[];
+  collectionLength: number;
+  pageNumber: number;
+  pageSize: number;
 };
 
 const TableBlockGalleryItemsDnd = ({
@@ -43,6 +48,9 @@ const TableBlockGalleryItemsDnd = ({
   source,
   onUpdateRelation,
   relations,
+  collectionLength,
+  pageNumber,
+  pageSize,
 }: TableBlockTablePropsDnd) => {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -71,10 +79,22 @@ const TableBlockGalleryItemsDnd = ({
 
     newList.forEach((raw, index) => {
       const relation = relations.find(r => r.toEntity.id === raw.entityId);
-      if (relation) onUpdateRelation(relation, entries[index].position ?? null);
+      if (relation) {
+        onUpdateRelation(relation, entries[index].position ?? null);
+      }
     });
 
     setActiveId(null);
+  };
+
+  const handleMove = (newIndex: number, oldIndex: number) => {
+    const newList = arrayMove(entries, oldIndex, newIndex);
+    newList.forEach((raw, index) => {
+      const relation = relations.find(r => r.toEntity.id === raw.entityId);
+      if (relation) {
+        onUpdateRelation(relation, entries[index].position ?? null);
+      }
+    });
   };
 
   if (entries.length <= 1) {
@@ -118,6 +138,11 @@ const TableBlockGalleryItemsDnd = ({
                 properties={propertiesSchema}
                 source={source}
                 row={row}
+                position={index}
+                totalEntries={collectionLength}
+                pageSize={pageSize}
+                handleMove={handleMove}
+                pageNumber={pageNumber}
               />
             );
           })}
@@ -155,6 +180,11 @@ const SortableItem = ({
   properties,
   isEditing,
   row,
+  position,
+  totalEntries,
+  handleMove,
+  pageSize,
+  pageNumber,
 }: {
   row: Row;
   spaceId: string;
@@ -163,10 +193,17 @@ const SortableItem = ({
   onLinkEntry: onLinkEntryFn;
   properties?: Record<string, Property>;
   isEditing: boolean;
+  position: number;
+  totalEntries: number;
+  handleMove: (newIndex: number, oldIndex: number) => void;
+  pageSize: number;
+  pageNumber: number;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.entityId,
   });
+
+  const [hovered, setHovered] = React.useState(false);
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -196,6 +233,17 @@ const SortableItem = ({
     }
   };
 
+  let timeoutId: NodeJS.Timeout;
+
+  const handleMouseEnter = () => {
+    clearTimeout(timeoutId);
+    setHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutId = setTimeout(() => setHovered(false), 200);
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -203,7 +251,21 @@ const SortableItem = ({
       className="relative inline-block"
       onClick={handleClick}
       onClickCapture={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
+      {hovered && isEditing && (
+        <PositionBox
+          handleMove={handleMove}
+          position={position + 1}
+          totalEntries={totalEntries}
+          pageSize={pageSize}
+          pageNumber={pageNumber}
+          className="-right-[58px] top-4 z-50 flex-col-reverse items-center"
+          iconClassName=" p-[6px] rounded bg-white"
+        />
+      )}
+
       <div {...attributes} {...listeners} className="">
         <TableBlockGalleryItem
           isEditing={isEditing}

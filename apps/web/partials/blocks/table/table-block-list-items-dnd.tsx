@@ -18,6 +18,9 @@ import React from 'react';
 import { Source } from '~/core/blocks/data/source';
 import { Property, Relation, Row } from '~/core/v2.types';
 
+import { OrderDots } from '~/design-system/icons/order-dots';
+import { PositionBox } from '~/design-system/position-box';
+
 import { onChangeEntryFn, onLinkEntryFn } from './change-entry';
 import { TableBlockListItem } from './table-block-list-item';
 
@@ -31,6 +34,9 @@ type TableBlockTablePropsDnd = {
   isEditing: boolean;
   onUpdateRelation: (relation: Relation, newPosition: string | null) => void;
   relations: Relation[];
+  collectionLength: number;
+  pageNumber: number;
+  pageSize: number;
 };
 
 const TableBlockListItemsDnd = ({
@@ -43,6 +49,9 @@ const TableBlockListItemsDnd = ({
   source,
   onUpdateRelation,
   relations,
+  collectionLength,
+  pageNumber,
+  pageSize,
 }: TableBlockTablePropsDnd) => {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -75,6 +84,16 @@ const TableBlockListItemsDnd = ({
     });
 
     setActiveId(null);
+  };
+
+  const handleMove = (newIndex: number, oldIndex: number) => {
+    const newList = arrayMove(entries, oldIndex, newIndex);
+    newList.forEach((raw, index) => {
+      const relation = relations.find(r => r.toEntity.id === raw.entityId);
+      if (relation) {
+        onUpdateRelation(relation, entries[index].position ?? null);
+      }
+    });
   };
 
   if (entries.length <= 1) {
@@ -119,6 +138,11 @@ const TableBlockListItemsDnd = ({
                   properties={propertiesSchema}
                   source={source}
                   row={row}
+                  position={index}
+                  totalEntries={collectionLength}
+                  pageSize={pageSize}
+                  handleMove={handleMove}
+                  pageNumber={pageNumber}
                 />
               );
             })}
@@ -127,7 +151,11 @@ const TableBlockListItemsDnd = ({
 
         <DragOverlay>
           {activeId && activeRow ? (
-            <div className="inline-block" style={{ cursor: 'grabbing' }}>
+            <div className="relative inline-block" style={{ cursor: 'grabbing' }}>
+              <div className="absolute -left-5 flex h-full items-center justify-center">
+                <OrderDots color="#B6B6B6" />
+              </div>
+
               <TableBlockListItem
                 isEditing={isEditing}
                 key={`${activeRow.entityId}-${activeId}-grab`}
@@ -157,6 +185,11 @@ const SortableItem = ({
   properties,
   isEditing,
   row,
+  position,
+  totalEntries,
+  handleMove,
+  pageSize,
+  pageNumber,
 }: {
   row: Row;
   spaceId: string;
@@ -165,6 +198,11 @@ const SortableItem = ({
   onLinkEntry: onLinkEntryFn;
   properties?: Record<string, Property>;
   isEditing: boolean;
+  position: number;
+  totalEntries: number;
+  handleMove: (newIndex: number, oldIndex: number) => void;
+  pageSize: number;
+  pageNumber: number;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.entityId,
@@ -178,6 +216,7 @@ const SortableItem = ({
   };
 
   const [justDragged, setJustDragged] = React.useState(false);
+  const [hovered, setHovered] = React.useState(false);
 
   // Track when dragging ends to prevent click events
   React.useEffect(() => {
@@ -198,6 +237,17 @@ const SortableItem = ({
     }
   };
 
+  let timeoutId: NodeJS.Timeout;
+
+  const handleMouseEnter = () => {
+    clearTimeout(timeoutId);
+    setHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutId = setTimeout(() => setHovered(false), 200);
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -205,7 +255,19 @@ const SortableItem = ({
       className="relative inline-block"
       onClick={handleClick}
       onClickCapture={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
+      {hovered && isEditing && (
+        <PositionBox
+          handleMove={handleMove}
+          position={position + 1}
+          totalEntries={totalEntries}
+          pageSize={pageSize}
+          pageNumber={pageNumber}
+          className="-left-[152px] h-full items-center"
+        />
+      )}
       <div {...attributes} {...listeners} className="inline-flex items-center">
         <TableBlockListItem
           isEditing={isEditing}
