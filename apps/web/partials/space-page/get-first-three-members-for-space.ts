@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation';
+
 import { cache } from 'react';
 
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
@@ -14,7 +16,8 @@ export const getFirstThreeMembersForSpace = cache(async (spaceId: string): Promi
   const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
-    throw new Error("Space doesn't exist");
+    console.error(`Space does not exist: ${spaceId}`);
+    notFound();
   }
 
   const firstThreeMembers = space.members.slice(0, 3);
