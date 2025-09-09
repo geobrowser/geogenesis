@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation';
+
 import { cache } from 'react';
 
 import { fetchProfile } from '~/core/io/subgraph';
@@ -17,7 +19,8 @@ export const getMembersForSpace = cache(async (spaceId: string): Promise<Members
   const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
-    throw new Error("Space doesn't exist");
+    console.error(`Space does not exist: ${spaceId}`);
+    notFound();
   }
 
   const memberProfiles = await Promise.all(space.members.map(member => fetchProfile({ address: member })));

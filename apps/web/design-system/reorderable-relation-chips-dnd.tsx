@@ -51,11 +51,13 @@ export default function ReorderableRelationChipsDnd({
   );
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
+  const [isDragging, setIsDragging] = React.useState(false);
 
   const activeRelation = activeId ? sortedRelations.find(r => r?.id === activeId) : null;
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active?.id as string);
+    setIsDragging(true);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -70,6 +72,8 @@ export default function ReorderableRelationChipsDnd({
     newList.forEach((relation, index) => {
       onUpdateRelation(relation, sortedRelations[index].position ?? null);
     });
+
+    setIsDragging(false);
     setActiveId(null);
   };
 
