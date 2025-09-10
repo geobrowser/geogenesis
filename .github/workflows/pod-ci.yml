@@ -2,12 +2,12 @@ name: Pod CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, 'stream/v2']
     paths:
       - 'apps/pod/**'
       - '.github/workflows/pod-ci.yml'
   pull_request:
-    branches: [master]
+    branches: [master, 'stream/v2']
     paths:
       - 'apps/pod/**'
       - '.github/workflows/pod-ci.yml'
