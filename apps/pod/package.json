@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@graphprotocol/grc-20": "^0.23.1",
-    "@graphprotocol/hypergraph": "^0.3.0",
-    "@graphprotocol/hypergraph-react": "^0.3.0",
+    "@graphprotocol/hypergraph": "^0.6.3",
+    "@graphprotocol/hypergraph-react": "^0.6.3",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-slot": "^1.2.3",
     "@tanstack/react-router": "^1.130.12",

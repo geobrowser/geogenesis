@@ -1,3 +1,4 @@
+import {useQuery} from "@graphprotocol/hypergraph-react"
 import {createFileRoute, Link} from "@tanstack/react-router"
 import React from "react"
 import {Apple} from "@/components/icons/apple"
@@ -10,7 +11,7 @@ import {Hr} from "@/components/ui/hr"
 import {Scrollable} from "@/components/ui/scrollable"
 import {episodes} from "@/data/episodes"
 import {people} from "@/data/people"
-import {podcasts} from "@/data/shows"
+import {Podcast} from "@/schema"
 
 export const Route = createFileRoute("/shows_/$showId")({
 	component: RouteComponent,
@@ -32,15 +33,35 @@ const listenOn: {id: string; name: string; icon?: React.ReactNode}[] = [
 function RouteComponent() {
 	const {showId} = Route.useParams()
 
-	const show = podcasts.find((podcast) => podcast.id === showId)
+	const {data: shows} = useQuery(Podcast, {
+		mode: "public",
+		first: 1,
+		space: "35d77493-4b40-4bfb-b43d-98a796e7a233",
+		filter: {
+			name: {
+				startsWith: "The Joe Rogan Experience",
+			},
+		},
+		include: {
+			hosts: {},
+		},
+	})
+
+	console.log("shows", shows)
+
+	const show = shows?.[0]
+
+	// const show = useQueryEntity(Podcast, showId, {
+	// 	space: "35d77493-4b40-4bfb-b43d-98a796e7a233",
+	// })
 
 	if (!show) {
 		return <div>Show not found</div>
 	}
 
 	// Get hosts for this show
-	const showHosts =
-		show.hostIds.map((hostId) => people.find((person) => person.id === hostId)).filter((h) => h !== undefined) || []
+	// const showHosts =
+	// 	show.hosts.map((host) => people.find((person) => person.id === host.id)).filter((h) => h !== undefined) || []
 
 	// Get episodes for this show
 	const showEpisodes = episodes.filter((episode) => episode.showId === showId)
@@ -48,17 +69,20 @@ function RouteComponent() {
 	return (
 		<div>
 			<div className="w-full h-[324px] flex items-center justify-center relative bg-black overflow-hidden">
-				<DetailsImage imageUrl={show.imageUrl} />
+				{/* <DetailsImage imageUrl={show.imageUrl} /> */}
+				<DetailsImage imageUrl={""} />
 			</div>
 			<ConstrainedLayout>
 				<div className="space-y-10">
 					<DetailsSummary
 						id={show.id}
 						type="show"
-						description={show.description}
-						episodeCount={show.episodeCount}
-						tagIds={show.tagIds}
-						title={show.title}
+						description={show.description ?? ""}
+						// episodeCount={show.episodeCount}
+						episodeCount={0}
+						// tagIds={show.tagIds}
+						tagIds={[]}
+						title={show.name}
 					/>
 
 					<Hr />
@@ -97,7 +121,7 @@ function RouteComponent() {
 						)}
 					</div>
 					<Hr />
-					<div className={showHosts.length === 0 ? "space-y-2" : "space-y-5"}>
+					{/* <div className={showHosts.length === 0 ? "space-y-2" : "space-y-5"}>
 						<h2 className="text-medium-title">Hosts</h2>
 						<Scrollable gap="gap-3">
 							{showHosts.map((host) => (
@@ -107,7 +131,7 @@ function RouteComponent() {
 						{showHosts.length === 0 && (
 							<p className="text-secondary-light">No hosts information available.</p>
 						)}
-					</div>
+					</div> */}
 				</div>
 			</ConstrainedLayout>
 		</div>

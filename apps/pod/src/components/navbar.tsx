@@ -17,8 +17,6 @@ export function Navbar() {
 	const {identity} = useHypergraphAuth()
 	const {redirectToConnect, logout} = useHypergraphApp()
 
-	console.log("identity", identity)
-
 	const handleSignIn = () => {
 		redirectToConnect({
 			storage: localStorage,
