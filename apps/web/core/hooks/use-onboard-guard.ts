@@ -1,4 +1,4 @@
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy } from '@geogenesis/auth';
 
 import { useGeoProfile } from './use-geo-profile';
 import { useSmartAccount } from './use-smart-account';

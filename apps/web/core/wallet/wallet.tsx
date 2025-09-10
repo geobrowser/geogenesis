@@ -1,64 +1,29 @@
 'use client';
 
-import { useLogin, useWallets } from '@privy-io/react-auth';
-import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
+import { WagmiProvider, createConfig, createGeoWalletConfig, getGeoChain, mock, useGeoLogin } from '@geogenesis/auth';
 import { useSetAtom } from 'jotai';
 import { http } from 'viem';
 
 import * as React from 'react';
-
-import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
 
 import { Button } from '~/design-system/button';
 
 import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
 import { Environment } from '../environment';
-import { GEOGENESIS } from './geo-chain';
 
-const realWalletConfig = createConfig({
-  chains: [GEOGENESIS],
-  // This enables us to use a single injected connector but handle multiple wallet
-  // extensions within the browser.
-  multiInjectedProviderDiscovery: true,
-  transports: {
-    [GEOGENESIS.id]: http(Environment.getConfig().rpc),
-  },
-  ssr: true,
-  connectors: [
-    coinbaseWallet({
-      chainId: 137,
-      appName: 'Geo Genesis',
-      appLogoUrl: 'https://geobrowser.io/static/favicon-64x64.png',
-      headlessMode: true,
-    }),
-    walletConnect({
-      showQrModal: true,
-      projectId: Environment.variables.walletConnectProjectId,
-      metadata: {
-        name: 'Geo Genesis',
-        description: "Browse and organize the world's public knowledge and information in a decentralized way.",
-        url: 'https://geobrowser.io',
-        icons: ['https://geobrowser.io/static/favicon-64x64.png'],
-      },
-    }),
-    injected({
-      target() {
-        return {
-          id: 'windowProvider',
-          name: 'Window Provider',
-          provider: w => w?.ethereum,
-        };
-      },
-      shimDisconnect: true,
-    }),
-  ],
+const CHAIN = getGeoChain('TESTNET');
+
+const realWalletConfig = createGeoWalletConfig({
+  chain: CHAIN,
+  rpcUrl: Environment.getConfig().rpc,
+  walletConnectProjectId: Environment.variables.walletConnectProjectId,
 });
 
 const mockConfig = createConfig({
-  chains: [GEOGENESIS],
+  chains: [CHAIN],
   transports: {
-    [GEOGENESIS.id]: http(),
+    [CHAIN.id]: http(),
   },
   connectors: [
     mock({
@@ -79,9 +44,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function GeoConnectButton() {
-  const { setActiveWallet } = useSetActiveWallet();
-  const { wallets } = useWallets();
-
   const setName = useSetAtom(nameAtom);
   const setEntityId = useSetAtom(entityIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
@@ -96,20 +58,9 @@ export function GeoConnectButton() {
     setStep('start');
   };
 
-  const { login } = useLogin({
-    onComplete: async user => {
-      const userWallet = user.user.wallet;
-
-      if (userWallet !== undefined) {
-        const wallet = wallets.find(wallet => wallet.address === userWallet.address);
-
-        if (wallet) {
-          // @TODO: Make wallet from smart account...? Right now we set it in `useSmartAccount`
-          await setActiveWallet(wallet);
-        }
-
-        resetOnboarding();
-      }
+  const { login } = useGeoLogin({
+    onComplete: () => {
+      resetOnboarding();
     },
   });
 

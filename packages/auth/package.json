@@ -1,0 +1,37 @@
+{
+  "name": "@geogenesis/auth",
+  "version": "1.0.0",
+  "description": "",
+ "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "ascMain": "./dist/index.js",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "format": "npx prettier . --write",
+    "test": "vitest"
+  },
+  "keywords": [],
+  "author": "Byron Guina",
+  "license": "ISC",
+  "dependencies": {
+    "@privy-io/react-auth": "^2.1.0",
+    "@privy-io/wagmi": "^1.0.2",
+    "eslint": "^9.35.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-import-resolver-typescript": "^3.5.2",
+    "eslint-plugin-prettier": "^4.0.0",
+    "eslint-plugin-react": "^7.31.11",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "permissionless": "0.2.39",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.5.3",
+    "viem": "^2.37.5",
+    "wagmi": "^2.5.7"
+  }
+}

@@ -1,23 +1,12 @@
-import { Chain } from 'viem';
+import { getGeoChain } from '@geogenesis/auth';
 
 import { Environment } from '../environment';
 
 const chainId = Environment.getConfig().chainId;
 
-export const GEOGENESIS: Chain = {
-  id: Number(chainId),
-  name: 'Geo Genesis',
-  nativeCurrency: {
-    name: chainId === '80451' ? 'The Graph' : 'Ethereum',
-    symbol: chainId === '80451' ? 'GRT' : 'ETH',
-    decimals: 18,
-  },
-  rpcUrls: {
-    default: {
-      http: [Environment.getConfig().rpc],
-    },
-    public: {
-      http: [Environment.getConfig().rpc],
-    },
-  },
-};
+/**
+ * @TODO: getGeoChain should handle the chainId. Currently we use chainId to switch between
+ * TESTNET and MAINNET dynamically within the app. We should use a human-understandable label
+ * like MAINNET or TESTNET instead though.
+ */
+export const GEOGENESIS = chainId === '19411' ? getGeoChain('TESTNET') : getGeoChain('MAINNET');
