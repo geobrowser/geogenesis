@@ -15,6 +15,9 @@
     "gql:codegen": "graphql-codegen"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@effect/opentelemetry": "^0.53.2",
     "@geogenesis/auth": "workspace:*",
     "@graphprotocol/grc-20": "^0.24.1",
