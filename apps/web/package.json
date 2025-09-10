@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@effect/opentelemetry": "^0.53.2",
+    "@geogenesis/auth": "workspace:*",
     "@graphprotocol/grc-20": "^0.24.1",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@opentelemetry/exporter-trace-otlp-proto": "^0.202.0",

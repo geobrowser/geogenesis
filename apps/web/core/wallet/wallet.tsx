@@ -1,5 +1,6 @@
 'use client';
 
+import { createGeoWalletConfig } from '@geogenesis/auth';
 import { useLogin, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
@@ -7,7 +8,7 @@ import { http } from 'viem';
 
 import * as React from 'react';
 
-import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
+import { mock } from 'wagmi/connectors';
 
 import { Button } from '~/design-system/button';
 
@@ -16,43 +17,10 @@ import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '~/par
 import { Environment } from '../environment';
 import { GEOGENESIS } from './geo-chain';
 
-const realWalletConfig = createConfig({
-  chains: [GEOGENESIS],
-  // This enables us to use a single injected connector but handle multiple wallet
-  // extensions within the browser.
-  multiInjectedProviderDiscovery: true,
-  transports: {
-    [GEOGENESIS.id]: http(Environment.getConfig().rpc),
-  },
-  ssr: true,
-  connectors: [
-    coinbaseWallet({
-      chainId: 137,
-      appName: 'Geo Genesis',
-      appLogoUrl: 'https://geobrowser.io/static/favicon-64x64.png',
-      headlessMode: true,
-    }),
-    walletConnect({
-      showQrModal: true,
-      projectId: Environment.variables.walletConnectProjectId,
-      metadata: {
-        name: 'Geo Genesis',
-        description: "Browse and organize the world's public knowledge and information in a decentralized way.",
-        url: 'https://geobrowser.io',
-        icons: ['https://geobrowser.io/static/favicon-64x64.png'],
-      },
-    }),
-    injected({
-      target() {
-        return {
-          id: 'windowProvider',
-          name: 'Window Provider',
-          provider: w => w?.ethereum,
-        };
-      },
-      shimDisconnect: true,
-    }),
-  ],
+const realWalletConfig = createGeoWalletConfig({
+  chain: GEOGENESIS,
+  rpcUrl: Environment.getConfig().rpc,
+  walletConnectProjectId: Environment.variables.walletConnectProjectId,
 });
 
 const mockConfig = createConfig({
