@@ -2,10 +2,19 @@
   "name": "@geogenesis/auth",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+ "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "ascMain": "./dist/index.js",
   "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./dist/index.js"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "format": "npx prettier . --write",
+    "test": "vitest"
   },
   "keywords": [],
   "author": "Byron Guina",

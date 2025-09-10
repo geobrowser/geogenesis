@@ -1,8 +1,6 @@
 'use client';
 
-import { createGeoWalletConfig } from '@geogenesis/auth';
-import { useLogin, useWallets } from '@privy-io/react-auth';
-import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
+import { WagmiProvider, createConfig, createGeoWalletConfig, getGeoChain, useGeoLogin } from '@geogenesis/auth';
 import { useSetAtom } from 'jotai';
 import { http } from 'viem';
 
@@ -15,18 +13,19 @@ import { Button } from '~/design-system/button';
 import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
 import { Environment } from '../environment';
-import { GEOGENESIS } from './geo-chain';
+
+const CHAIN = getGeoChain('TESTNET');
 
 const realWalletConfig = createGeoWalletConfig({
-  chain: GEOGENESIS,
+  chain: CHAIN,
   rpcUrl: Environment.getConfig().rpc,
   walletConnectProjectId: Environment.variables.walletConnectProjectId,
 });
 
 const mockConfig = createConfig({
-  chains: [GEOGENESIS],
+  chains: [CHAIN],
   transports: {
-    [GEOGENESIS.id]: http(),
+    [CHAIN.id]: http(),
   },
   connectors: [
     mock({
@@ -47,9 +46,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function GeoConnectButton() {
-  const { setActiveWallet } = useSetActiveWallet();
-  const { wallets } = useWallets();
-
   const setName = useSetAtom(nameAtom);
   const setEntityId = useSetAtom(entityIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
@@ -64,20 +60,9 @@ export function GeoConnectButton() {
     setStep('start');
   };
 
-  const { login } = useLogin({
-    onComplete: async user => {
-      const userWallet = user.user.wallet;
-
-      if (userWallet !== undefined) {
-        const wallet = wallets.find(wallet => wallet.address === userWallet.address);
-
-        if (wallet) {
-          // @TODO: Make wallet from smart account...? Right now we set it in `useSmartAccount`
-          await setActiveWallet(wallet);
-        }
-
-        resetOnboarding();
-      }
+  const { login } = useGeoLogin({
+    onComplete: () => {
+      resetOnboarding();
     },
   });
 
