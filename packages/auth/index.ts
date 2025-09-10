@@ -1,6 +1,7 @@
 export * from "@privy-io/react-auth";
 export * from "@privy-io/wagmi";
-export { useWalletClient } from 'wagmi'
+export { useAccountEffect, useWalletClient } from 'wagmi'
+export { mock } from 'wagmi/connectors'
 
 export { generateSmartAccount } from "./src/account.js";
 export { getGeoChain } from "./src/chain.js";

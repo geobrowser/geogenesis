@@ -22,8 +22,6 @@
     "@opentelemetry/exporter-trace-otlp-proto": "^0.202.0",
     "@opentelemetry/sdk-trace-base": "^2.0.1",
     "@opentelemetry/sdk-trace-node": "^2.0.1",
-    "@privy-io/react-auth": "^2.1.0",
-    "@privy-io/wagmi": "^1.0.2",
     "@radix-ui/react-accordion": "^1.2.2",
     "@radix-ui/react-dialog": "^1.1.5",
     "@radix-ui/react-dropdown-menu": "^2.1.5",

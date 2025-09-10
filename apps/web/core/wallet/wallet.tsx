@@ -1,12 +1,10 @@
 'use client';
 
-import { WagmiProvider, createConfig, createGeoWalletConfig, getGeoChain, useGeoLogin } from '@geogenesis/auth';
+import { WagmiProvider, createConfig, createGeoWalletConfig, getGeoChain, mock, useGeoLogin } from '@geogenesis/auth';
 import { useSetAtom } from 'jotai';
 import { http } from 'viem';
 
 import * as React from 'react';
-
-import { mock } from 'wagmi/connectors';
 
 import { Button } from '~/design-system/button';
 
