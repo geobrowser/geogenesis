@@ -92,8 +92,7 @@
     "react-use-measure": "^2.1.1",
     "showdown": "^2.1.0",
     "tippy.js": "^6.3.7",
-    "viem": "^2.37.5",
-    "wagmi": "^2.5.7"
+    "viem": "^2.37.5"
   },
   "devDependencies": {
     "@babel/core": "^7.19.0",
