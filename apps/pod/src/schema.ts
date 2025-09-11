@@ -32,6 +32,7 @@ export class Episode extends Entity.Class<Episode>("Episode")({
 	description: Type.optional(Type.String),
 	airDate: Type.Date,
 	avatar: Type.Relation(Image),
+	duration: Type.Number, // in seconds
 	// guests: Type.Relation(Person),
 	// hosts: Type.Relation(Person),
 	// podcast: Type.Relation(Podcast)

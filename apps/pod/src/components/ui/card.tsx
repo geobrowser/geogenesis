@@ -1,4 +1,5 @@
 import {Link} from "@tanstack/react-router"
+import {formatDuration} from "@/lib/utils"
 import {PlaceholderImageLoader} from "./placeholder-image-loader"
 
 type EpisodeCardProps = {
@@ -8,7 +9,7 @@ type EpisodeCardProps = {
 	author: string
 	description?: string | null
 	publishDate: string
-	duration: string
+	duration: number
 }
 
 export function EpisodeCard({id, name, author, description, publishDate, duration, coverImg}: EpisodeCardProps) {
@@ -16,6 +17,8 @@ export function EpisodeCard({id, name, author, description, publishDate, duratio
 		month: "short",
 		day: "numeric",
 	})
+
+	const formattedDuration = formatDuration(duration)
 
 	return (
 		<Link to="/episodes/$episodeId" params={{episodeId: id}} draggable={false}>
@@ -40,7 +43,7 @@ export function EpisodeCard({id, name, author, description, publishDate, duratio
 					<div className="flex items-center gap-2 text-caption font-medium text-secondary-light">
 						<span>{formattedDate}</span>
 						<span>·</span>
-						<span>{duration}</span>
+						<span>{formattedDuration}</span>
 					</div>
 				</div>
 			</div>

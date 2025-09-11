@@ -35,6 +35,7 @@ export const mapping: Mapping.Mapping = {
 			name: Id("a126ca53-0c8e-48d5-b888-82c734c38935"),
 			description: Id("9b1f76ff-9711-404c-861e-59dc3fa7d037"),
 			airDate: Id("0ea7f892-ba89-4593-83ed-c26ff212168d"),
+			duration: Id("d4d07369-022a-4698-9a7b-21d219cbf8be")
 		},
 		relations: {
 			hosts: Id("3b9c342d-0da0-42fb-80e5-549ac674a84f"),

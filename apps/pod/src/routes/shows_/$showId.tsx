@@ -108,7 +108,7 @@ function RouteComponent() {
 								<EpisodeCard
 									key={episode.id}
 									author={show.name}
-									duration={"episode.duration"}
+									duration={episode.duration}
 									id={episode.id}
 									name={episode.name}
 									publishDate={new Date().toISOString()}
