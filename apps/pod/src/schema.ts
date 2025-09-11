@@ -10,13 +10,19 @@ export class Bookmark extends Entity.Class<Bookmark>("Bookmark")({
 	bookmarkedId: Type.String,
 }) {}
 
+export class Image extends Entity.Class<Image>('Image')({
+  url: Type.String,
+}) {}
+
 export class Person extends Entity.Class<Person>("Person")({
 	name: Type.String,
+	avatar: Type.Relation(Image),
 }) {} 
 
 export class Podcast extends Entity.Class<Podcast>("Podcast")({
 	name: Type.String,
 	description: Type.optional(Type.String),
-	hosts: Type.Relation(Person),
 	dateFounded: Type.Date,
+	avatar: Type.Relation(Image),
+	hosts: Type.Relation(Person),
 }) {}

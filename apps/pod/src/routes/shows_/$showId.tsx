@@ -11,6 +11,7 @@ import {Hr} from "@/components/ui/hr"
 import {Scrollable} from "@/components/ui/scrollable"
 import {episodes} from "@/data/episodes"
 import {people} from "@/data/people"
+import {getImagePath} from "@/lib/images"
 import {Podcast} from "@/schema"
 
 export const Route = createFileRoute("/shows_/$showId")({
@@ -43,11 +44,12 @@ function RouteComponent() {
 			},
 		},
 		include: {
-			hosts: {},
+			avatar: {},
+			hosts: {
+				avatar: {},
+			},
 		},
 	})
-
-	console.log("shows", shows)
 
 	const show = shows?.[0]
 
@@ -59,18 +61,14 @@ function RouteComponent() {
 		return <div>Show not found</div>
 	}
 
-	// Get hosts for this show
-	// const showHosts =
-	// 	show.hosts.map((host) => people.find((person) => person.id === host.id)).filter((h) => h !== undefined) || []
-
 	// Get episodes for this show
 	const showEpisodes = episodes.filter((episode) => episode.showId === showId)
+	const showAvatarUrl = show.avatar?.[0]?.url ? getImagePath(show.avatar?.[0]?.url) : null
 
 	return (
 		<div>
 			<div className="w-full h-[324px] flex items-center justify-center relative bg-black overflow-hidden">
-				{/* <DetailsImage imageUrl={show.imageUrl} /> */}
-				<DetailsImage imageUrl={""} />
+				<DetailsImage imageUrl={showAvatarUrl} />
 			</div>
 			<ConstrainedLayout>
 				<div className="space-y-10">
@@ -121,17 +119,21 @@ function RouteComponent() {
 						)}
 					</div>
 					<Hr />
-					{/* <div className={showHosts.length === 0 ? "space-y-2" : "space-y-5"}>
+					<div className={show.hosts.length === 0 ? "space-y-2" : "space-y-5"}>
 						<h2 className="text-medium-title">Hosts</h2>
 						<Scrollable gap="gap-3">
-							{showHosts.map((host) => (
-								<PersonCard key={host.id} avatarUrl={host.avatarUrl} name={host.name} />
+							{show.hosts.map((host) => (
+								<PersonCard
+									key={host.id}
+									avatarUrl={host.avatar[0]?.url ? getImagePath(host.avatar[0]?.url) : null}
+									name={host.name}
+								/>
 							))}
 						</Scrollable>
-						{showHosts.length === 0 && (
+						{show.hosts.length === 0 && (
 							<p className="text-secondary-light">No hosts information available.</p>
 						)}
-					</div> */}
+					</div>
 				</div>
 			</ConstrainedLayout>
 		</div>

@@ -92,7 +92,7 @@ export function PodcastCard({showId, imageUrl, title, episodeCount}: PodcastCard
 }
 
 type PersonCardProps = {
-	avatarUrl: string
+	avatarUrl: string | null
 	name: string
 }
 
@@ -102,7 +102,7 @@ export function PersonCard({avatarUrl, name}: PersonCardProps) {
 			<div className="w-[180px] h-[180px] rounded-full overflow-hidden relative">
 				<PlaceholderImageLoader />
 				<img
-					src={avatarUrl}
+					src={avatarUrl ?? undefined}
 					alt={name}
 					className="w-full h-full object-cover relative z-10"
 					draggable={false}

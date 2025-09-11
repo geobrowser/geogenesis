@@ -29,19 +29,15 @@ export const useBookmark = (showId: string, type: BookmarkType) => {
 	// @TODO: Space not found or not ready
 	const onBookmark = React.useCallback(
 		async (bookmark: Bookmark) => {
-			console.log({maybeBookmark, bookmark})
 			if (maybeBookmark) {
 				return await deleteBookmark(maybeBookmark.id)
 			}
 
 			const result = await createBookmark(bookmark)
-			console.log("result", {result})
 			return result
 		},
 		[maybeBookmark, deleteBookmark, createBookmark],
 	)
-
-	console.log("whats happening", {maybeBookmark})
 
 	return {
 		bookmark: maybeBookmark,

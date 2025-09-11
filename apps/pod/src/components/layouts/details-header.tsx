@@ -8,14 +8,18 @@ import {PlaceholderImageLoader} from "../ui/placeholder-image-loader"
 import {Tag} from "../ui/tag"
 
 type DetailsImageProps = {
-	imageUrl: string
+	imageUrl: string | null
 }
 
 export function DetailsImage({imageUrl}: DetailsImageProps) {
 	return (
 		<div className="w-full h-[324px] flex items-center justify-center relative bg-black overflow-hidden">
 			{/* Background image */}
-			<img src={imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover blur-[6px]" />
+			<img
+				src={imageUrl ?? undefined}
+				alt=""
+				className="absolute inset-0 w-full h-full object-cover blur-[6px]"
+			/>
 
 			{/* Combined overlay with reduced opacity */}
 			<div className="absolute inset-0 bg-gradient-to-b from-primary-black/10 to-primary-black"></div>
@@ -23,7 +27,11 @@ export function DetailsImage({imageUrl}: DetailsImageProps) {
 			{/* Centered podcast image */}
 			<div className="w-[264px] h-[264px] relative rounded-[30px] overflow-hidden shadow-image">
 				<PlaceholderImageLoader />
-				<img src={imageUrl} alt="" className="w-[264px] h-[264px] rounded-[30px] relative z-10 object-cover" />
+				<img
+					src={imageUrl ?? undefined}
+					alt=""
+					className="w-[264px] h-[264px] rounded-[30px] relative z-10 object-cover"
+				/>
 			</div>
 		</div>
 	)
