@@ -120,48 +120,6 @@ export const CodeBlockWithLineNumbers = CodeBlock.extend({
         
         return false;
       },
-
-      // Handle arrow down - exit code block if at the end of last line
-      'ArrowDown': ({ editor }) => {
-        const { state } = editor;
-        const { selection } = state;
-        const { $from } = selection;
-        
-        // Check if we're in a code block
-        if ($from.parent.type.name !== 'codeBlock') {
-          return false;
-        }
-        
-        // Check if cursor is at the very end of the code block
-        const codeBlockEnd = $from.end();
-        if ($from.pos === codeBlockEnd) {
-          // Move to the next block
-          const nextPos = $from.after();
-          if (nextPos < state.doc.content.size) {
-            const $nextPos = state.doc.resolve(nextPos);
-            editor.commands.setTextSelection($nextPos.start());
-            return true;
-          }
-        }
-        
-        // Check if cursor is on the last line and at the end of that line
-        const textContent = $from.parent.textContent;
-        const currentOffset = $from.parentOffset;
-        const textAfterCursor = textContent.slice(currentOffset);
-        
-        // If we're at the end of last line (no newlines after cursor)
-        if (!textAfterCursor.includes('\n') && currentOffset === textContent.length) {
-          // Move to the next block
-          const nextPos = $from.after();
-          if (nextPos < state.doc.content.size) {
-            const $nextPos = state.doc.resolve(nextPos);
-            editor.commands.setTextSelection($nextPos.start());
-            return true;
-          }
-        }
-        
-        return false;
-      },
     };
   },
 });

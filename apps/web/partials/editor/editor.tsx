@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
+import { StringFilter } from '~/core/gql/graphql';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
@@ -31,6 +32,31 @@ const EMOJI_CONVERSION_PATTERNS = [
   /<img[^>]*alt="([^"]*[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}][^"]*)"[^>]*\/?>/gu,
 ] as const;
 
+const shouldBeCodeBlock = (text: string): boolean => {
+  const codeIndicators = [
+    // Common code patterns
+    /^[\s]*(?:function|const|let|var|class|interface|type|import|export)\s+/m,
+    /^[\s]*(?:def|class|import|from|if __name__|#!\/)/m, // Python
+    /^[\s]*(?:public|private|protected|static|void|int|String|boolean)\s+/m, // Java/C#
+    /^[\s]*(?:fn|struct|impl|use|mod|let mut)\s+/m, // Rust
+    /^[\s]*(?:<\?php|<?=|$[a-zA-Z_])/m, // PHP
+    // JSON/Config patterns
+    /^\s*[{[][\s\S]*[}\]]\s*$/m,
+    /^\s*"[^"]*":\s*["{[]]/m,
+    // HTML/XML patterns
+    /^\s*<[a-zA-Z][^>]*>/m,
+    // CSS patterns
+    /^\s*[.#]?[a-zA-Z-]+\s*{\s*$/m,
+    // Shell/Command patterns
+    /^\s*[$#]\s+/m,
+  ];
+
+  return codeIndicators.some(pattern => {
+    if (typeof pattern === 'boolean') return pattern;
+    return pattern.test(text);
+  });
+};
+
 interface Props {
   spaceId: string;
   placeholder?: React.ReactNode;
@@ -47,7 +73,6 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   useInterceptEditorLinks(spaceId);
 
   const onBlur = (params: { editor: TiptapEditor }) => {
-    console.log('ini jalan juga');
     if (editable) {
       // Responsible for converting all editor blocks to Geo knowledge graph state
       upsertEditorState(params.editor.getJSON());
@@ -57,7 +82,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const editor = useEditor(
     {
       extensions,
-      editable: false,
+      editable: true,
       content: editorJson,
       editorProps: {
         transformPastedHTML: html => {
@@ -77,73 +102,31 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
             // Get pasted content
             const clipboardData = event.clipboardData;
             if (clipboardData) {
+              const htmlData = clipboardData.getData('text/html');
               const textData = clipboardData.getData('text/plain');
+              const lines = textData.split('\n');
+              // If there's HTML data that might contain emoji images, prevent default and handle manually
+              if (htmlData && (htmlData.includes('emoji') || htmlData.includes('twimg.com'))) {
+                event.preventDefault();
 
-              // Always prevent default and handle manually to avoid emoji conversion
-              event.preventDefault();
-
-              // Use plain text to preserve emoji as Unicode
-              if (textData) {
-                const lines = textData.split('\n');
-
-                // Check if this looks like code that should be in a code block
-                const shouldBeCodeBlock = (text: string): boolean => {
-                  const codeIndicators = [
-                    // Common code patterns
-                    /^[\s]*(?:function|const|let|var|class|interface|type|import|export)\s+/m,
-                    /^[\s]*(?:def|class|import|from|if __name__|#!\/)/m, // Python
-                    /^[\s]*(?:public|private|protected|static|void|int|String|boolean)\s+/m, // Java/C#
-                    /^[\s]*(?:fn|struct|impl|use|mod|let mut)\s+/m, // Rust
-                    /^[\s]*(?:<\?php|<?=|$[a-zA-Z_])/m, // PHP
-                    // JSON/Config patterns
-                    /^\s*[{[][\s\S]*[}\]]\s*$/m,
-                    /^\s*"[^"]*":\s*["{[]]/m,
-                    // HTML/XML patterns
-                    /^\s*<[a-zA-Z][^>]*>/m,
-                    // CSS patterns
-                    /^\s*[.#]?[a-zA-Z-]+\s*{\s*$/m,
-                    // Shell/Command patterns
-                    /^\s*[$#]\s+/m,
-                    // Has multiple lines with consistent indentation
-                    lines.length > 2 && /^\s{2,}/.test(text),
-                    // Contains typical code symbols
-                    /[{}();[\]]/g.test(text) && lines.length > 1,
-                    // Contains common operators on multiple lines
-                    /[=+\-*/%<>!&|]{1,2}/.test(text) && lines.length > 1,
-                  ];
-
-                  return codeIndicators.some(pattern => {
-                    if (typeof pattern === 'boolean') return pattern;
-                    return pattern.test(text);
-                  });
-                };
-
-                // If it looks like code and has multiple lines, create a code block
-                if (lines.length > 1 && shouldBeCodeBlock(textData)) {
-                  const { state } = view;
-
-                  // Create code block node with the pasted content
-                  const codeBlockNode = state.schema.nodes.codeBlock.create({}, state.schema.text(textData));
-
-                  const tr = state.tr.replaceSelectionWith(codeBlockNode);
-                  view.dispatch(tr);
-                  return true;
+                // Insert as plain text to avoid emoji image conversion
+                if (textData) {
+                  view.dispatch(view.state.tr.insertText(textData));
                 }
+                return true;
+              } else if (lines.length > 1 && textData && shouldBeCodeBlock(textData)) {
+                const { state } = view;
 
-                // Otherwise, handle normally line by line
-                let tr = view.state.tr;
-                lines.forEach((line, index) => {
-                  if (index > 0) {
-                    tr = tr.split(tr.selection.head);
-                  }
-                  if (line.trim()) {
-                    tr = tr.insertText(line);
-                  }
-                });
+                // Create code block node with the pasted content
+                const codeBlockNode = state.schema.nodes.codeBlock.create({}, state.schema.text(textData));
 
+                const tr = state.tr.replaceSelectionWith(codeBlockNode);
                 view.dispatch(tr);
                 return true;
               }
+              // For plain text or HTML without emoji images, let TipTap handle normally
+              // This allows lists and other formatted content to be processed correctly
+              return false;
             }
             return false;
           },

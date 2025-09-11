@@ -57,7 +57,7 @@ export const CodeBlockTriggerExtension = Extension.create({
                   tr.replaceRangeWith(start, start, codeBlockNode);
                   
                   // Position cursor inside the code block
-                  tr.setSelection(TextSelection.near(tr.doc.resolve(start + 1)));
+                  tr.setSelection(TextSelection.near(tr.doc.resolve(start)));
                   
                   view.dispatch(tr);
                 }
