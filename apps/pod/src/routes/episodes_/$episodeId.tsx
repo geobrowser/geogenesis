@@ -33,7 +33,7 @@ function RouteComponent() {
 
 	const {data: episodes} = useQuery(Episode, {
 		mode: "public",
-		first: 1,
+		space: "35d77493-4b40-4bfb-b43d-98a796e7a233",
 		include: {
 			avatar: {},
 			guests: {
