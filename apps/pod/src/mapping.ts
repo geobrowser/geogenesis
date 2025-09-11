@@ -29,4 +29,18 @@ export const mapping: Mapping.Mapping = {
 			avatar: Id("1155beff-fad5-49b7-a2e0-da4777b8792c"),
 		},
 	},
+	Episode: {
+		typeIds: [Id("aba2df6e-19d8-46a0-8e35-e97fd25ed9a0")],
+		properties: {
+			name: Id("a126ca53-0c8e-48d5-b888-82c734c38935"),
+			description: Id("9b1f76ff-9711-404c-861e-59dc3fa7d037"),
+			airDate: Id("0ea7f892-ba89-4593-83ed-c26ff212168d"),
+		},
+		relations: {
+			hosts: Id("3b9c342d-0da0-42fb-80e5-549ac674a84f"),
+			guests: Id("0575795a-d58f-4c46-884f-e454cf9762ea"),
+			avatar: Id("1155beff-fad5-49b7-a2e0-da4777b8792c"),
+			podcast: Id("71c1575f-0b6f-4b94-97fc-1a2b60d8195b")
+		},
+	},
 }

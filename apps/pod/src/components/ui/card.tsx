@@ -3,15 +3,15 @@ import {PlaceholderImageLoader} from "./placeholder-image-loader"
 
 type EpisodeCardProps = {
 	id: string
-	coverImg?: string
+	coverImg: string | null
 	name: string
 	author: string
-	description?: string
+	description?: string | null
 	publishDate: string
 	duration: string
 }
 
-export function EpisodeCard({id, name, author, description, publishDate, duration}: EpisodeCardProps) {
+export function EpisodeCard({id, name, author, description, publishDate, duration, coverImg}: EpisodeCardProps) {
 	const formattedDate = new Date(publishDate).toLocaleDateString("en-US", {
 		month: "short",
 		day: "numeric",
@@ -21,7 +21,15 @@ export function EpisodeCard({id, name, author, description, publishDate, duratio
 		<Link to="/episodes/$episodeId" params={{episodeId: id}} draggable={false}>
 			<div className="w-[373px] rounded-[30px] p-5 bg-secondary-darkest space-y-4 flex-shrink-0">
 				<div className="flex items-center gap-4">
-					<div className="w-15 h-15 bg-accent-orange rounded-lg" />
+					<div className="w-15 h-15 rounded-lg overflow-hidden relative">
+						<PlaceholderImageLoader />
+						<img
+							src={coverImg ?? undefined}
+							alt={name}
+							className="w-full h-full object-cover relative z-10"
+							draggable={false}
+						/>
+					</div>
 					<div className="space-y-1">
 						<h2 className="text-small-title">{name}</h2>
 						<h3 className="text-caption text-secondary-light font-medium">{author}</h3>

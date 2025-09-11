@@ -26,3 +26,13 @@ export class Podcast extends Entity.Class<Podcast>("Podcast")({
 	avatar: Type.Relation(Image),
 	hosts: Type.Relation(Person),
 }) {}
+
+export class Episode extends Entity.Class<Episode>("Episode")({
+	name: Type.String,
+	description: Type.optional(Type.String),
+	airDate: Type.Date,
+	avatar: Type.Relation(Image),
+	// guests: Type.Relation(Person),
+	// hosts: Type.Relation(Person),
+	// podcast: Type.Relation(Podcast)
+}) {}

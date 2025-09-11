@@ -9,10 +9,8 @@ import {Button} from "@/components/ui/button"
 import {EpisodeCard, PersonCard} from "@/components/ui/card"
 import {Hr} from "@/components/ui/hr"
 import {Scrollable} from "@/components/ui/scrollable"
-import {episodes} from "@/data/episodes"
-import {people} from "@/data/people"
 import {getImagePath} from "@/lib/images"
-import {Podcast} from "@/schema"
+import {Episode, Podcast} from "@/schema"
 
 export const Route = createFileRoute("/shows_/$showId")({
 	component: RouteComponent,
@@ -32,6 +30,7 @@ const listenOn: {id: string; name: string; icon?: React.ReactNode}[] = [
 ]
 
 function RouteComponent() {
+	// @TODO need to be able to query public spaces by entity id
 	const {showId} = Route.useParams()
 
 	const {data: shows} = useQuery(Podcast, {
@@ -53,16 +52,20 @@ function RouteComponent() {
 
 	const show = shows?.[0]
 
-	// const show = useQueryEntity(Podcast, showId, {
-	// 	space: "35d77493-4b40-4bfb-b43d-98a796e7a233",
-	// })
+	const {data: episodes} = useQuery(Episode, {
+		mode: "public",
+		space: "35d77493-4b40-4bfb-b43d-98a796e7a233",
+		include: {
+			avatar: {},
+		},
+	})
 
 	if (!show) {
 		return <div>Show not found</div>
 	}
 
-	// Get episodes for this show
-	const showEpisodes = episodes.filter((episode) => episode.showId === showId)
+	console.log("episodes", episodes)
+
 	const showAvatarUrl = show.avatar?.[0]?.url ? getImagePath(show.avatar?.[0]?.url) : null
 
 	return (
@@ -76,8 +79,7 @@ function RouteComponent() {
 						id={show.id}
 						type="show"
 						description={show.description ?? ""}
-						// episodeCount={show.episodeCount}
-						episodeCount={0}
+						episodeCount={episodes?.length ?? 0}
 						// tagIds={show.tagIds}
 						tagIds={[]}
 						title={show.name}
@@ -99,24 +101,23 @@ function RouteComponent() {
 					</div>
 					<Hr />
 
-					<div className={showEpisodes.length === 0 ? "space-y-2" : "space-y-5"}>
+					<div className={episodes.length === 0 ? "space-y-2" : "space-y-5"}>
 						<h2 className="text-medium-title">Episodes</h2>
 						<Scrollable gap="gap-3">
-							{showEpisodes.map((episode) => (
+							{episodes.map((episode) => (
 								<EpisodeCard
 									key={episode.id}
-									author={episode.author}
-									duration={episode.duration}
+									author={show.name}
+									duration={"episode.duration"}
 									id={episode.id}
 									name={episode.name}
-									publishDate={episode.publishDate}
+									publishDate={new Date().toISOString()}
 									description={episode.description}
+									coverImg={episode.avatar?.[0]?.url ? getImagePath(episode.avatar?.[0]?.url) : null}
 								/>
 							))}
 						</Scrollable>
-						{showEpisodes.length === 0 && (
-							<p className="text-secondary-light">No episodes available yet.</p>
-						)}
+						{episodes.length === 0 && <p className="text-secondary-light">No episodes available yet.</p>}
 					</div>
 					<Hr />
 					<div className={show.hosts.length === 0 ? "space-y-2" : "space-y-5"}>
