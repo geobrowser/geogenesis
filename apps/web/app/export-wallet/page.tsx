@@ -1,7 +1,5 @@
 import { ExportWalletButton } from './export-wallet';
 
-export const dynamic = 'force-dynamic';
-
 export default function ExportWalletPage() {
   return (
     <div className="mx-auto w-full max-w-[880px]">

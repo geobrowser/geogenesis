@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-export const dynamic = 'force-dynamic';
-
 import { NavUtils } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
