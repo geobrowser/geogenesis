@@ -134,4 +134,4 @@ jobs:
         run: pnpm install
 
       - name: Run linting
-        run: pnpm --filter=web lint
+        run: pnpm turbo run --filter=web lint
