@@ -1,5 +1,5 @@
 // Privy Auth exports
-export { usePrivy, useLogout, PrivyProvider } from "@privy-io/react-auth";
+export { usePrivy, useLogout, PrivyProvider, type PrivyClientConfig } from "@privy-io/react-auth";
 
 // Privy Wagmi exports  
 export { WagmiProvider } from "@privy-io/wagmi";
