@@ -1,7 +1,7 @@
 import { createConfig } from "@privy-io/wagmi";
 import type { Chain } from "viem";
 import { http } from "viem";
-import { coinbaseWallet, injected, walletConnect } from "wagmi/connectors";
+import { coinbaseWallet, injected, mock, walletConnect } from "wagmi/connectors";
 
 export type GeoWalletConfigParams = {
 	chain: Chain;
@@ -54,3 +54,15 @@ export const createGeoWalletConfig = ({
 		],
 	});
 };
+
+export const createMockConfig = (chain: Chain) => createConfig({
+  chains: [chain],
+  transports: {
+    [chain.id]: http(),
+  },
+  connectors: [
+    mock({
+      accounts: ['0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'],
+    }),
+  ],
+});

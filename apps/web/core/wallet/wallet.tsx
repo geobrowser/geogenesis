@@ -1,8 +1,7 @@
 'use client';
 
-import { WagmiProvider, createConfig, createGeoWalletConfig, getGeoChain, mock, useGeoLogin } from '@geogenesis/auth';
+import { WagmiProvider, createGeoWalletConfig, getGeoChain, createMockConfig, useGeoLogin } from '@geogenesis/auth';
 import { useSetAtom } from 'jotai';
-import { http } from 'viem';
 
 import * as React from 'react';
 
@@ -20,17 +19,7 @@ const realWalletConfig = createGeoWalletConfig({
   walletConnectProjectId: Environment.variables.walletConnectProjectId,
 });
 
-const mockConfig = createConfig({
-  chains: [CHAIN],
-  transports: {
-    [CHAIN.id]: http(),
-  },
-  connectors: [
-    mock({
-      accounts: ['0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'],
-    }),
-  ],
-});
+const mockConfig = createMockConfig(CHAIN);
 
 const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
 const config = isTestEnv ? mockConfig : realWalletConfig;
