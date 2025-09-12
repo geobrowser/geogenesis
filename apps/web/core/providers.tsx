@@ -20,21 +20,21 @@ interface Props {
 
 export function Providers({ children }: Props) {
   return (
-    <PrivyProvider>
-      <ReactQueryProvider>
-        <JotaiProvider store={store}>
-          <SyncEngineProvider>
-            <WalletProvider>
-              <Services.Provider>
-                <StatusBarContextProvider>
-                  <DiffProvider>{children}</DiffProvider>
-                </StatusBarContextProvider>
-              </Services.Provider>
-            </WalletProvider>
-            <ReactQueryDevtools initialIsOpen={false} />
-          </SyncEngineProvider>
-        </JotaiProvider>
-      </ReactQueryProvider>
-    </PrivyProvider>
+    <ReactQueryProvider>
+      <PrivyProvider>
+          <JotaiProvider store={store}>
+            <SyncEngineProvider>
+              <WalletProvider>
+                <Services.Provider>
+                  <StatusBarContextProvider>
+                    <DiffProvider>{children}</DiffProvider>
+                  </StatusBarContextProvider>
+                </Services.Provider>
+              </WalletProvider>
+              <ReactQueryDevtools initialIsOpen={false} />
+            </SyncEngineProvider>
+          </JotaiProvider>
+      </PrivyProvider>
+    </ReactQueryProvider>
   );
 }
