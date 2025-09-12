@@ -56,7 +56,7 @@ jobs:
         run: pnpm install
 
       - name: Build
-        run: pnpm --filter=web build
+        run: pnpm turbo run --filter=web build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
