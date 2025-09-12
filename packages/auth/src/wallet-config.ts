@@ -55,12 +55,11 @@ export const createGeoWalletConfig = ({
 	});
 };
 
-export const createMockConfig = (chain: Chain, queryClient?: QueryClient) => createConfig({
+export const createMockConfig = (chain: Chain) => createConfig({
   chains: [chain],
   transports: {
     [chain.id]: http(),
   },
-  queryClient,
   connectors: [
     mock({
       accounts: ['0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'],
