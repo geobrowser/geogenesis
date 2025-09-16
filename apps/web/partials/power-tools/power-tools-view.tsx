@@ -12,6 +12,8 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useCollection } from '~/core/blocks/data/use-collection';
 import { useQueryEntities, useQueryEntity, getValues, getRelations } from '~/core/sync/use-store';
+import { useQueryClient } from '@tanstack/react-query';
+import { GeoStore } from '~/core/sync/store';
 import { ID } from '~/core/id';
 import { useProperties } from '~/core/hooks/use-properties';
 import { storage } from '~/core/sync/use-mutate';
@@ -24,6 +26,7 @@ import { Text } from '~/design-system/text';
 import { BulkActionsBar } from './bulk-actions-bar';
 import { BulkEditModal, BulkEditOperation } from './bulk-edit-modal';
 import { PowerToolsTable } from './power-tools-table';
+import { useClipboard } from './use-clipboard';
 
 const BATCH_SIZE = 50;
 
@@ -34,6 +37,10 @@ export function PowerToolsView() {
   const [selectedRows, setSelectedRows] = React.useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = React.useState(false);
   const [currentOperation, setCurrentOperation] = React.useState<BulkEditOperation | null>(null);
+  const [canPaste, setCanPaste] = React.useState(false);
+  const queryClient = useQueryClient();
+
+  const { copyRowsToClipboard, pasteRowsFromClipboard, isClipboardSupported, parseRelationUUIDs } = useClipboard();
   
   // Use standard data block hooks now that we have EditorProvider
   const { blockEntity: dataBlockEntity, name: blockName } = useDataBlock();
@@ -110,14 +117,28 @@ export function PowerToolsView() {
         } else {
           const value = entity.values?.find(v => v.property.id === propertyId);
           if (value) {
-            cell.value = value.value;
-            cell.dataType = value.property.dataType;
+            (cell as any).value = value.value;
+            (cell as any).dataType = value.property.dataType;
           } else {
-            const relation = entity.relations?.find(r => r.type.id === propertyId);
-            if (relation) {
-              cell.relation = {
+            // Get ALL relations for this property, not just the first one
+            const relations = entity.relations?.filter(r => r.type.id === propertyId) || [];
+            if (relations.length === 1) {
+              // Single relation - use existing structure for backward compatibility
+              const relation = relations[0];
+              (cell as any).relation = {
                 id: relation.toEntity.id,
                 name: relation.toEntity.name,
+              };
+            } else if (relations.length > 1) {
+              // Multiple relations - store all of them
+              (cell as any).relations = relations.map(r => ({
+                id: r.toEntity.id,
+                name: r.toEntity.name,
+              }));
+              // For text display, show first relation name
+              (cell as any).relation = {
+                id: relations[0].toEntity.id,
+                name: relations[0].toEntity.name,
               };
             }
           }
@@ -236,6 +257,220 @@ export function PowerToolsView() {
     setCurrentOperation('remove-relations');
     setModalOpen(true);
   }, []);
+
+  // Copy/Paste handlers
+  const handleCopyRows = React.useCallback(async () => {
+    if (selectedRows.size === 0) return;
+
+    const selectedRowData = loadedRows.filter(row => selectedRows.has(row.entityId));
+    const success = await copyRowsToClipboard(selectedRowData, properties);
+
+    if (success) {
+      console.log(`Copied ${selectedRows.size} rows to clipboard`);
+      // You could show a toast notification here
+    }
+  }, [selectedRows, loadedRows, properties, copyRowsToClipboard]);
+
+  const handlePasteRows = React.useCallback(async () => {
+    const clipboardData = await pasteRowsFromClipboard();
+    if (!clipboardData) return;
+
+    console.log('Pasted data:', clipboardData);
+
+    try {
+      // Map headers to property IDs
+      const headerToPropertyMap = new Map<string, Property>();
+      clipboardData.headers.forEach(header => {
+        const property = properties.find(p =>
+          (p.id === SystemIds.NAME_PROPERTY && header === 'Name') ||
+          (p.name === header) ||
+          (p.id === header)
+        );
+        if (property) {
+          headerToPropertyMap.set(header, property);
+        }
+      });
+
+      const newEntityIds: string[] = [];
+
+      // Process each row with unified UUID detection logic
+      for (const rowData of clipboardData.rows) {
+        const newEntityId = ID.createEntityId();
+        newEntityIds.push(newEntityId);
+
+        // Process each cell in the row
+        rowData.forEach((cellValue: string, index: number) => {
+          const header = clipboardData.headers[index];
+          const property = headerToPropertyMap.get(header);
+
+          if (!property || !cellValue.trim()) return;
+
+          if (property.id === SystemIds.NAME_PROPERTY) {
+            // Set the entity name
+            storage.values.set({
+              id: ID.createValueId({
+                entityId: newEntityId,
+                propertyId: SystemIds.NAME_PROPERTY,
+                spaceId,
+              }),
+              entity: {
+                id: newEntityId,
+                name: cellValue.trim(),
+              },
+              property: {
+                id: SystemIds.NAME_PROPERTY,
+                name: 'Name',
+                dataType: 'TEXT',
+              },
+              spaceId,
+              value: cellValue.trim(),
+              isLocal: true,
+            });
+          } else {
+            // Try to detect UUIDs for relation properties
+            const relationUUIDs = parseRelationUUIDs(cellValue);
+
+            if (relationUUIDs.length > 0) {
+              // Create relations for detected UUIDs
+              for (const uuid of relationUUIDs) {
+                storage.relations.set({
+                  id: ID.createEntityId(),
+                  entityId: newEntityId,
+                  spaceId,
+                  position: Position.generate(),
+                  renderableType: 'RELATION',
+                  verified: false,
+                  type: {
+                    id: property.id,
+                    name: property.name || property.id,
+                  },
+                  fromEntity: {
+                    id: newEntityId,
+                    name: null,
+                  },
+                  toEntity: {
+                    id: uuid,
+                    name: null, // We don't have the name, but that's okay
+                    value: uuid,
+                  },
+                  isLocal: true,
+                });
+              }
+            } else {
+              // No UUIDs detected, treat as a regular value
+              storage.values.set({
+                id: ID.createValueId({
+                  entityId: newEntityId,
+                  propertyId: property.id,
+                  spaceId,
+                }),
+                entity: {
+                  id: newEntityId,
+                  name: null,
+                },
+                property,
+                spaceId,
+                value: cellValue.trim(),
+                isLocal: true,
+              });
+            }
+          }
+        });
+      }
+
+      // If this is a collection, add all new entities to the collection
+      if (source.type === 'COLLECTION') {
+        for (const newEntityId of newEntityIds) {
+          storage.relations.set({
+            id: ID.createEntityId(),
+            entityId: ID.createEntityId(),
+            spaceId,
+            position: Position.generate(),
+            renderableType: 'RELATION',
+            verified: false,
+            type: {
+              id: SystemIds.COLLECTION_ITEM_RELATION_TYPE,
+              name: 'Collection Item',
+            },
+            fromEntity: {
+              id: source.value, // Collection ID
+              name: null,
+            },
+            toEntity: {
+              id: newEntityId,
+              name: null,
+              value: newEntityId,
+            },
+            isLocal: true,
+          });
+        }
+      }
+
+      console.log(`Created ${clipboardData.rows.length} new entities from pasted data`);
+
+      // For queries (non-collection sources), invalidate the query cache to refresh results
+      if (source.type !== 'COLLECTION') {
+        console.log('Created entities for query-based power tools:', newEntityIds);
+        console.log('Invalidating query cache to show new entities');
+
+        // Invalidate the entities query to refresh and show new entities
+        await queryClient.invalidateQueries({
+          queryKey: GeoStore.queryKeys(where),
+        });
+      }
+
+      // Clear selection after successful paste
+      setSelectedRows(new Set());
+
+    } catch (error) {
+      console.error('Failed to create entities from pasted data:', error);
+      alert('Failed to paste data. Please check the format and try again.');
+    }
+  }, [pasteRowsFromClipboard, properties, spaceId, source, where]);
+
+  // Check clipboard permissions and update canPaste state
+  React.useEffect(() => {
+    const checkClipboard = async () => {
+      if (!isClipboardSupported) {
+        setCanPaste(false);
+        return;
+      }
+
+      try {
+        const text = await navigator.clipboard.readText();
+        setCanPaste(!!text.trim());
+      } catch {
+        setCanPaste(false);
+      }
+    };
+
+    // Check initially
+    checkClipboard();
+
+    // Check when window gains focus (user might have copied something)
+    const handleFocus = () => checkClipboard();
+    window.addEventListener('focus', handleFocus);
+
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [isClipboardSupported]);
+
+  // Keyboard shortcuts
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isCtrlOrCmd = event.ctrlKey || event.metaKey;
+
+      if (isCtrlOrCmd && event.key === 'c' && selectedRows.size > 0) {
+        event.preventDefault();
+        handleCopyRows();
+      } else if (isCtrlOrCmd && event.key === 'v' && canPaste) {
+        event.preventDefault();
+        handlePasteRows();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedRows.size, canPaste, handleCopyRows, handlePasteRows]);
   
   // Modal handlers
   const handleModalClose = React.useCallback(() => {
@@ -371,6 +606,9 @@ export function PowerToolsView() {
         onRemoveValues={handleRemoveValues}
         onAddRelations={handleAddRelations}
         onRemoveRelations={handleRemoveRelations}
+        onCopyRows={handleCopyRows}
+        onPasteRows={handlePasteRows}
+        canPaste={canPaste && isClipboardSupported}
       />
 
       {/* Content */}
