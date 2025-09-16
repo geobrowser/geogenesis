@@ -8,6 +8,7 @@ import * as React from 'react';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { NavUtils } from '~/core/utils/utils';
+import { useRouter } from 'next/navigation';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
@@ -15,6 +16,7 @@ import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { Relation } from '~/design-system/icons/relation';
+import { Tool } from '~/design-system/icons/tool';
 import { MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -28,6 +30,7 @@ export function TableBlockContextMenu() {
   const { spaceId, entityId, relationId } = useDataBlock();
   const [isEditingDataSource, setIsEditingDataSource] = React.useState(false);
   const [isEditingProperties, setIsEditingProperties] = useAtom(editingPropertiesAtom);
+  const router = useRouter();
 
   const isEditing = useUserIsEditing(spaceId);
 
@@ -91,6 +94,20 @@ export function TableBlockContextMenu() {
                     </button>
                   </MenuItem>
                 </>
+              )}
+              {isEditing && (
+                <MenuItem>
+                  <button
+                    onClick={() => {
+                      router.push(`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`);
+                      setIsMenuOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between gap-2"
+                  >
+                    <span>Open in Power Tools</span>
+                    <Tool />
+                  </button>
+                </MenuItem>
               )}
               <MenuItem>
                 <Link
