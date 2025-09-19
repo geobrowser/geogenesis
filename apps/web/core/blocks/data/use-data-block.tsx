@@ -157,8 +157,13 @@ export function useDataBlock() {
     }
 
     if (source.type === 'RELATIONS') {
-      return relationsMapping;
+      return relationsMapping?.map(item => ({
+        ...item,
+        placeholder: false,
+      } as Row)) ?? [];
     }
+
+    return [];
   })();
 
   const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
@@ -192,13 +197,13 @@ export function useDataBlock() {
         ? rows.length > PAGE_SIZE
         : false;
 
-  return {
+  const result = {
     entityId,
     spaceId,
     relationId,
 
     blockEntity: entity,
-    rows: sortRows(rows as Row[])?.slice(0, PAGE_SIZE) ?? [],
+    rows: sortRows(rows)?.slice(0, PAGE_SIZE) ?? [],
     properties: propertiesSchema ? Object.values(propertiesSchema) : [],
     propertiesSchema,
 
@@ -216,7 +221,10 @@ export function useDataBlock() {
     collectionLength,
 
     relations: entity?.relations,
+    collectionRelations: source.type === 'COLLECTION' ? collectionRelations : undefined,
   };
+
+  return result;
 }
 
 const DataBlockContext = React.createContext<{

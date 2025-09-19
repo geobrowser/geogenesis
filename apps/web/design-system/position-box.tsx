@@ -13,7 +13,7 @@ export const PositionBox = ({
 }: {
   position: number;
   totalEntries: number;
-  handleMove: (newIndex: number, oldIndex: number) => void;
+  handleMove: (targetPosition: number, currentPosition?: number) => void;
   pageSize: number;
   pageNumber: number;
   className?: string;
@@ -23,15 +23,24 @@ export const PositionBox = ({
   const [newPosition, setNewPosition] = React.useState<number | null>(null);
 
   const handleClick = () => {
+    if (newPosition === null || newPosition < 1 || newPosition > totalEntries) {
+      return;
+    }
+
     const pageMaxIndex = pageSize * (pageNumber + 1);
     const pageMinIndex = pageSize * pageNumber + 1;
-    if (Number(newPosition) > pageMaxIndex || Number(newPosition) < pageMinIndex) {
-      // TODO
-      // handle logic when position is out of the page range
-      console.log('=>> another page skip ordering');
+    const currentGlobalPosition = pageNumber * pageSize + position;
+
+    if (newPosition > pageMaxIndex || newPosition < pageMinIndex) {
+      // Cross-page move - use global move with both parameters
+      handleMove(newPosition, currentGlobalPosition);
     } else {
-      handleMove(Number(newPosition) - 1 - pageSize * pageNumber, position - 1);
+      // Within-page move - pass both target and current positions
+      handleMove(newPosition, currentGlobalPosition);
     }
+
+    setOpenedDialog(false);
+    setNewPosition(null);
   };
 
   return (
@@ -39,13 +48,18 @@ export const PositionBox = ({
       {openedDialog && (
         <div className="mr-3 flex h-[110px] w-full flex-col gap-1 rounded-md border border-grey-02 bg-white p-1">
           <input
+            type="number"
+            min="1"
+            max={totalEntries}
             value={newPosition ?? ''}
-            onChange={e => setNewPosition(Number(e.target.value))}
+            onChange={e => setNewPosition(e.target.value === '' ? null : Number(e.target.value))}
+            placeholder={`${(pageNumber * pageSize) + position}`}
             className="flex h-9 w-full items-center justify-center rounded border border-grey-02 text-center focus:outline-none"
           />
           <button
             onClick={handleClick}
-            className="flex h-6 w-full items-center justify-center rounded border border-grey-02"
+            disabled={!newPosition || newPosition < 1 || newPosition > totalEntries}
+            className="flex h-6 w-full items-center justify-center rounded border border-grey-02 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Move
           </button>

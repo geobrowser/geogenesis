@@ -110,7 +110,9 @@ function useEntries(
 
   const onUpdateRelation = (relation: Relation, newPosition: string | null) => {
     storage.relations.update(relation, draft => {
-      if (newPosition) draft.position = newPosition;
+      if (newPosition) {
+        draft.position = newPosition;
+      }
     });
   };
 
@@ -294,6 +296,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     propertiesSchema,
     totalPages,
     relations,
+    collectionRelations,
     collectionLength,
     pageSize,
   } = useDataBlock();
@@ -358,6 +361,7 @@ export const TableBlock = ({ spaceId }: Props) => {
         entries={entries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
         collectionLength={collectionLength}
         pageNumber={pageNumber}
         pageSize={pageSize}
@@ -401,6 +405,7 @@ export const TableBlock = ({ spaceId }: Props) => {
         entries={entries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
         collectionLength={collectionLength}
         pageNumber={pageNumber}
         pageSize={pageSize}

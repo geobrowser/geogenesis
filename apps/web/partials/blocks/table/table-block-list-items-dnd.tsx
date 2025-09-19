@@ -10,7 +10,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { SystemIds } from '@graphprotocol/grc-20';
+import { Position, SystemIds } from '@graphprotocol/grc-20';
 import cx from 'classnames';
 
 import React from 'react';
@@ -34,6 +34,7 @@ type TableBlockTablePropsDnd = {
   isEditing: boolean;
   onUpdateRelation: (relation: Relation, newPosition: string | null) => void;
   relations: Relation[];
+  collectionRelations: Relation[];
   collectionLength: number;
   pageNumber: number;
   pageSize: number;
@@ -49,6 +50,7 @@ const TableBlockListItemsDnd = ({
   source,
   onUpdateRelation,
   relations,
+  collectionRelations,
   collectionLength,
   pageNumber,
   pageSize,
@@ -76,24 +78,88 @@ const TableBlockListItemsDnd = ({
     const oldIndex = entries.findIndex(r => r?.entityId === active?.id);
     const newIndex = entries.findIndex(r => r?.entityId === over?.id);
 
+    // Only update the items between oldIndex and newIndex (inclusive)
+    const minIndex = Math.min(oldIndex, newIndex);
+    const maxIndex = Math.max(oldIndex, newIndex);
+
     const newList = arrayMove(entries, oldIndex, newIndex);
 
-    newList.forEach((raw, index) => {
+    // Only update positions for items that actually moved
+    for (let i = minIndex; i <= maxIndex; i++) {
+      const raw = newList[i];
       const relation = relations.find(r => r.toEntity.id === raw.entityId);
-      if (relation) onUpdateRelation(relation, entries[index].position ?? null);
-    });
+      const targetPosition = entries[i].position ?? null;
+
+      if (relation) onUpdateRelation(relation, targetPosition);
+    }
 
     setActiveId(null);
   };
 
-  const handleMove = (newIndex: number, oldIndex: number) => {
-    const newList = arrayMove(entries, oldIndex, newIndex);
-    newList.forEach((raw, index) => {
-      const relation = relations.find(r => r.toEntity.id === raw.entityId);
-      if (relation) {
-        onUpdateRelation(relation, entries[index].position ?? null);
+  const handleMove = (targetPosition: number, currentPosition?: number) => {
+    if (currentPosition !== undefined) {
+      // Position-based move (from typing): both targetPosition and currentPosition are 1-based global positions
+      const currentPageIndex = currentPosition - pageNumber * pageSize - 1;
+      const currentRow = entries[currentPageIndex];
+
+      if (!currentRow) {
+        return;
       }
-    });
+
+      const movingRelation = collectionRelations.find(r => r.toEntity.id === currentRow?.entityId);
+
+      if (!movingRelation) {
+        return;
+      }
+
+      // Sort all collection relations by position
+      const allSortedRelations = [...collectionRelations]
+        .sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+
+      // Find the current position of the moving item in the sorted list
+      const currentSortedIndex = allSortedRelations.findIndex(r => r.id === movingRelation.id);
+
+      if (currentSortedIndex === -1) return;
+
+      // Create a reordered array by moving the item to the new position (like drag-and-drop)
+      const targetIndex = Math.max(0, Math.min(targetPosition - 1, allSortedRelations.length - 1));
+      const reorderedRelations = [...allSortedRelations];
+
+      // Remove the moving item and insert it at the target position
+      const [movingItem] = reorderedRelations.splice(currentSortedIndex, 1);
+      reorderedRelations.splice(targetIndex, 0, movingItem);
+
+      // Update positions for affected items (like drag-and-drop does)
+      const minIndex = Math.min(currentSortedIndex, targetIndex);
+      const maxIndex = Math.max(currentSortedIndex, targetIndex);
+
+      for (let i = minIndex; i <= maxIndex; i++) {
+        const relationToUpdate = reorderedRelations[i];
+        const newPosition = allSortedRelations[i]?.position ?? null;
+        onUpdateRelation(relationToUpdate, newPosition);
+      }
+    } else {
+      // Drag-and-drop move: targetPosition is the new page index (0-based)
+      const oldIndex = entries.findIndex(r => r?.entityId === activeId);
+      const newIndex = targetPosition;
+
+      if (oldIndex === -1) return;
+
+      // Only update the items between oldIndex and newIndex (inclusive)
+      const minIndex = Math.min(oldIndex, newIndex);
+      const maxIndex = Math.max(oldIndex, newIndex);
+
+      const newList = arrayMove(entries, oldIndex, newIndex);
+
+      // Only update positions for items that actually moved
+      for (let i = minIndex; i <= maxIndex; i++) {
+        const raw = newList[i];
+        const relation = relations.find(r => r.toEntity.id === raw.entityId);
+        if (relation) {
+          onUpdateRelation(relation, entries[i].position ?? null);
+        }
+      }
+    }
   };
 
   if (entries.length <= 1) {
@@ -200,7 +266,7 @@ const SortableItem = ({
   isEditing: boolean;
   position: number;
   totalEntries: number;
-  handleMove: (newIndex: number, oldIndex: number) => void;
+  handleMove: (targetPosition: number, currentPosition?: number) => void;
   pageSize: number;
   pageNumber: number;
 }) => {
@@ -217,6 +283,7 @@ const SortableItem = ({
 
   const [justDragged, setJustDragged] = React.useState(false);
   const [hovered, setHovered] = React.useState(false);
+  const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Track when dragging ends to prevent click events
   React.useEffect(() => {
@@ -229,6 +296,15 @@ const SortableItem = ({
     }
   }, [isDragging, justDragged]);
 
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleClick = (e: React.MouseEvent) => {
     // Prevent navigation if we just finished dragging
     if (justDragged) {
@@ -237,15 +313,15 @@ const SortableItem = ({
     }
   };
 
-  let timeoutId: NodeJS.Timeout;
-
   const handleMouseEnter = () => {
-    clearTimeout(timeoutId);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
     setHovered(true);
   };
 
   const handleMouseLeave = () => {
-    timeoutId = setTimeout(() => setHovered(false), 200);
+    timeoutRef.current = setTimeout(() => setHovered(false), 200);
   };
 
   return (
