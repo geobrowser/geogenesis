@@ -191,6 +191,8 @@ export type Row = {
   placeholder?: boolean;
   // attributeId -> Cell
   columns: Record<string, Cell>;
+
+  position?: string;
 };
 
 export type ProposalStatus = 'ACCEPTED' | 'PROPOSED' | 'REJECTED';

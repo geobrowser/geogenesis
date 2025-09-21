@@ -283,7 +283,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     const relations = reactiveRelations.get().filter(r => r.fromEntity.id === entityId);
 
     if (!includeDeleted) {
-      relations.filter(r => Boolean(r.isDeleted) === false);
+      return relations.filter(r => Boolean(r.isDeleted) === false);
     }
 
     return relations;
