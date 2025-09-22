@@ -2,7 +2,6 @@
 
 import { SystemIds, Position } from '@graphprotocol/grc-20';
 import { useRouter } from 'next/navigation';
-import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -11,14 +10,15 @@ import { filterStateToWhere, useDataBlockInstance } from '~/core/blocks/data/use
 import { useSource } from '~/core/blocks/data/use-source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useCollection } from '~/core/blocks/data/use-collection';
-import { useQueryEntities, useQueryEntity, getValues, getRelations } from '~/core/sync/use-store';
+import { useQueryEntities, useQueryEntity, getValues, getRelations, useQueryEntitiesAsync } from '~/core/sync/use-store';
+import { useInfiniteQueryEntities } from '~/core/sync/use-infinite-query-entities';
 import { useQueryClient } from '@tanstack/react-query';
 import { GeoStore } from '~/core/sync/store';
 import { ID } from '~/core/id';
 import { useProperties } from '~/core/hooks/use-properties';
 import { storage } from '~/core/sync/use-mutate';
 import { Entities } from '~/core/utils/entity';
-import { Cell, Entity, Relation, Row } from '~/core/v2.types';
+import { Cell, Entity, Property, Relation, Row } from '~/core/v2.types';
 
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
@@ -26,15 +26,20 @@ import { Text } from '~/design-system/text';
 import { BulkActionsBar } from './bulk-actions-bar';
 import { BulkEditModal, BulkEditOperation } from './bulk-edit-modal';
 import { PowerToolsTable } from './power-tools-table';
+import { PowerToolsTableVirtual } from './power-tools-table-virtual';
 import { useClipboard } from './use-clipboard';
 
-const BATCH_SIZE = 50;
+// Load all items at once for Power Tools (bulk operations need to see everything)
+const INITIAL_BATCH_SIZE = 100;
+const LOAD_MORE_BATCH_SIZE = 50;
 
 export function PowerToolsView() {
   const router = useRouter();
-  const { entityId, spaceId, relationId } = useDataBlockInstance();
-  const [offset, setOffset] = React.useState(0);
+  const { spaceId, relationId } = useDataBlockInstance();
+  const [displayLimit, setDisplayLimit] = React.useState(INITIAL_BATCH_SIZE);
   const [selectedRows, setSelectedRows] = React.useState<Set<string>>(new Set());
+  const [isSelectingAll, setIsSelectingAll] = React.useState(false);
+  const [selectAllState, setSelectAllState] = React.useState<'none' | 'partial' | 'all'>('none');
   const [modalOpen, setModalOpen] = React.useState(false);
   const [currentOperation, setCurrentOperation] = React.useState<BulkEditOperation | null>(null);
   const [canPaste, setCanPaste] = React.useState(false);
@@ -43,7 +48,7 @@ export function PowerToolsView() {
   const { copyRowsToClipboard, pasteRowsFromClipboard, isClipboardSupported, parseRelationUUIDs } = useClipboard();
   
   // Use standard data block hooks now that we have EditorProvider
-  const { blockEntity: dataBlockEntity, name: blockName } = useDataBlock();
+  const { name: blockName } = useDataBlock();
   const { source } = useSource();
   const { filterState } = useFilters();
   const where = filterStateToWhere(filterState);
@@ -56,11 +61,28 @@ export function PowerToolsView() {
   // Get collection data (always fetch all at once for collections)
   const { collectionItems, collectionRelations, isLoading: isCollectionLoading } = useCollection({});
   
-  // For queries, fetch ALL entities at once to avoid accumulation issues
-  const { entities: queriedEntities, isLoading: isQueryLoading } = useQueryEntities({
+  // For queries, use infinite scroll to handle large datasets
+  const {
+    entities: queriedEntities,
+    hasMore: queryHasMore,
+    loadMore: queryLoadMore,
+    isLoading: isQueryLoading,
+    isLoadingMore: isQueryLoadingMore,
+  } = useInfiniteQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
   });
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('PowerToolsView: source and entities', {
+      sourceType: source.type,
+      queriedEntitiesLength: queriedEntities?.length,
+      isQueryLoading,
+      queryHasMore,
+      whereKeys: Object.keys(where || {}),
+    });
+  }, [source.type, queriedEntities?.length, isQueryLoading, queryHasMore]);
 
   // Get ALL properties (not just shown ones)
   const allPropertyIds = React.useMemo(() => {
@@ -87,7 +109,9 @@ export function PowerToolsView() {
   }, [collectionItems, queriedEntities, blockRelationEntity?.relations, source.type]);
   
   const propertiesSchema = useProperties(allPropertyIds);
-  const properties = propertiesSchema ? Object.values(propertiesSchema) : [];
+  const properties = React.useMemo(() => {
+    return propertiesSchema ? Object.values(propertiesSchema) : [];
+  }, [propertiesSchema]);
   
   // Convert entities to rows
   const entitiesToRows = React.useCallback((entities: Entity[], propertyIds: string[], collectionRels: Relation[] = []): Row[] => {
@@ -154,44 +178,51 @@ export function PowerToolsView() {
     });
   }, []);
   
-  // Build rows for display with virtual scrolling
-  const loadedRows = React.useMemo(() => {
-    let entities: Entity[] = [];
-    
+  // Get all available entities and determine hasMore/loadMore based on source type
+  const { allAvailableEntities, hasMore, loadMore } = React.useMemo(() => {
     if (source.type === 'COLLECTION' && collectionItems) {
-      // For collections, paginate through the items
-      const startIdx = offset;
-      const endIdx = Math.min(offset + BATCH_SIZE, collectionItems.length);
-      entities = collectionItems.slice(startIdx, endIdx);
-    } else if ((source.type === 'GEO' || source.type === 'SPACES') && queriedEntities) {
-      // For queries, paginate through the items
-      const startIdx = offset;
-      const endIdx = Math.min(offset + BATCH_SIZE, queriedEntities.length);
-      entities = queriedEntities.slice(startIdx, endIdx);
+      // For collections, use progressive display with client-side batching
+      return {
+        allAvailableEntities: collectionItems,
+        hasMore: displayLimit < collectionItems.length,
+        loadMore: () => {
+          if (displayLimit < collectionItems.length) {
+            setDisplayLimit(prev => prev + LOAD_MORE_BATCH_SIZE);
+          }
+        },
+      };
+    } else if ((source.type === 'GEO' || source.type === 'SPACES')) {
+      // For queries, use infinite scroll with server-side pagination
+      return {
+        allAvailableEntities: queriedEntities || [],
+        hasMore: queryHasMore,
+        loadMore: queryLoadMore,
+      };
     }
-    
+    return {
+      allAvailableEntities: [],
+      hasMore: false,
+      loadMore: () => {},
+    };
+  }, [collectionItems, queriedEntities, source.type, displayLimit, queryHasMore, queryLoadMore]);
+
+  // Build rows for display
+  const loadedRows = React.useMemo(() => {
+    // For collections, slice based on displayLimit for progressive loading
+    // For queries, use all loaded entities (infinite scroll handles the loading)
+    const entities = source.type === 'COLLECTION'
+      ? allAvailableEntities.slice(0, displayLimit)
+      : allAvailableEntities;
+
     if (entities.length === 0) return [];
-    
+
     return entitiesToRows(
       entities,
       allPropertyIds,
       source.type === 'COLLECTION' ? collectionRelations : []
     );
-  }, [collectionItems, queriedEntities, source.type, allPropertyIds, collectionRelations, entitiesToRows, offset]);
+  }, [allAvailableEntities, displayLimit, allPropertyIds, collectionRelations, entitiesToRows, source.type]);
   
-  // Determine if there are more rows to load
-  const hasMore = React.useMemo(() => {
-    if (source.type === 'COLLECTION') {
-      return collectionItems ? offset + BATCH_SIZE < collectionItems.length : false;
-    } else {
-      return queriedEntities ? offset + BATCH_SIZE < queriedEntities.length : false;
-    }
-  }, [source.type, collectionItems, queriedEntities, offset]);
-  
-  const loadMore = React.useCallback(() => {
-    if (!hasMore) return;
-    setOffset(prev => prev + BATCH_SIZE);
-  }, [hasMore]);
   
   // Selection handlers
   const handleSelectRow = React.useCallback((entityId: string, selected: boolean) => {
@@ -206,15 +237,52 @@ export function PowerToolsView() {
     });
   }, []);
   
-  const handleSelectAll = React.useCallback((selected: boolean) => {
+  const queryEntitiesAsync = useQueryEntitiesAsync();
+
+  const handleSelectAll = React.useCallback(async (selected: boolean) => {
+    console.log('handleSelectAll called with:', selected, 'source type:', source.type);
+
     if (selected) {
-      // Select all current rows
-      setSelectedRows(new Set(loadedRows.map(row => row.entityId)));
+      // Optimistic update: immediately update UI
+      setIsSelectingAll(true);
+      setSelectAllState('all');
+
+      // For collections, we have all entities already
+      if (source.type === 'COLLECTION' && collectionItems) {
+        console.log('Selecting all collection items:', collectionItems.length);
+        setSelectedRows(new Set(collectionItems.map(entity => entity.id)));
+        setIsSelectingAll(false);
+      } else if (source.type === 'GEO' || source.type === 'SPACES') {
+        // For queries, we need to fetch ALL entities, not just loaded ones
+        try {
+          console.log('Fetching all entities for selection...');
+          // Fetch with a very large limit to get all entities
+          const allEntities = await queryEntitiesAsync({
+            where,
+            first: 10000, // Large limit to get all
+            skip: 0,
+          });
+          console.log('Fetched entities:', allEntities.length);
+          setSelectedRows(new Set(allEntities.map(entity => entity.id)));
+        } catch (error) {
+          console.error('Failed to fetch all entities for selection:', error);
+          // Revert optimistic update on error
+          setSelectAllState('none');
+          // Fallback to currently loaded rows
+          console.log('Falling back to loaded rows:', loadedRows.length);
+          setSelectedRows(new Set(loadedRows.map(row => row.entityId)));
+          setSelectAllState('partial');
+        } finally {
+          setIsSelectingAll(false);
+        }
+      }
     } else {
-      // Clear selection
+      // Clear selection - this is instant
+      console.log('Clearing selection');
       setSelectedRows(new Set());
+      setSelectAllState('none');
     }
-  }, [loadedRows]);
+  }, [loadedRows, source.type, collectionItems, where, queryEntitiesAsync]);
   
   const handleSelectRange = React.useCallback((startIndex: number, endIndex: number, selected: boolean) => {
     setSelectedRows(prev => {
@@ -426,7 +494,7 @@ export function PowerToolsView() {
       console.error('Failed to create entities from pasted data:', error);
       alert('Failed to paste data. Please check the format and try again.');
     }
-  }, [pasteRowsFromClipboard, properties, spaceId, source, where]);
+  }, [pasteRowsFromClipboard, properties, spaceId, source, where, parseRelationUUIDs, queryClient]);
 
   // Check clipboard permissions and update canPaste state
   React.useEffect(() => {
@@ -575,12 +643,20 @@ export function PowerToolsView() {
   };
   
   const isLoading = isBlockRelationLoading || (source.type === 'COLLECTION' ? isCollectionLoading : isQueryLoading);
-  const isInitialLoading = isLoading && offset === 0;
+  const isInitialLoading = isLoading && (source.type === 'COLLECTION' ? displayLimit === INITIAL_BATCH_SIZE : queriedEntities.length === 0);
+  const isLoadingMore = source.type === 'COLLECTION' ? false : isQueryLoadingMore;
 
   return (
-    <div className="flex h-screen flex-col bg-white">
+    <div
+      className="bg-white overflow-hidden"
+      style={{
+        height: 'calc(100vh - 60px)', // Account for potential browser chrome/navbar
+        display: 'grid',
+        gridTemplateRows: 'auto auto 1fr'
+      }}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-grey-02 px-6 py-4">
+      <div className="flex items-center justify-between border-b border-grey-02 px-4 py-2">
         <div className="flex items-center gap-3">
           <Text variant="largeTitleMedium">Power Tools</Text>
           {blockName && (
@@ -612,23 +688,28 @@ export function PowerToolsView() {
       />
 
       {/* Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="overflow-hidden">
         {isInitialLoading ? (
           <div className="flex h-full items-center justify-center">
             <Text variant="bodyLarge" color="grey-04">Loading data...</Text>
           </div>
         ) : (
-          <PowerToolsTable
+          <PowerToolsTableVirtual
             rows={loadedRows}
-            properties={properties}
             propertiesSchema={propertiesSchema}
             spaceId={spaceId}
-            hasMore={hasMore}
-            loadMore={loadMore}
             selectedRows={selectedRows}
             onSelectRow={handleSelectRow}
             onSelectAll={handleSelectAll}
             onSelectRange={handleSelectRange}
+            hasNextPage={hasMore}
+            isFetchingNextPage={isLoadingMore}
+            fetchNextPage={loadMore}
+            totalDBRowCount={allAvailableEntities.length}
+            totalFetched={loadedRows.length}
+            allAvailableEntityIds={allAvailableEntities.map(entity => entity.id)}
+            isSelectingAll={isSelectingAll}
+            selectAllState={selectAllState}
           />
         )}
       </div>
