@@ -1,7 +1,6 @@
 'use client';
 
 import { SystemIds } from '@graphprotocol/grc-20';
-import cx from 'classnames';
 
 import * as React from 'react';
 
@@ -16,7 +15,6 @@ import { Text } from '~/design-system/text';
 
 interface Props {
   rows: Row[];
-  properties: Property[];
   propertiesSchema: Record<string, Property> | null;
   spaceId: string;
   hasMore: boolean;
@@ -25,6 +23,8 @@ interface Props {
   onSelectRow: (entityId: string, selected: boolean) => void;
   onSelectAll: (selected: boolean) => void;
   onSelectRange?: (startIndex: number, endIndex: number, selected: boolean) => void;
+  totalCount?: number;
+  isLoadingMore?: boolean;
 }
 
 // Component to render a single relation chip
@@ -85,7 +85,6 @@ function RelationCell({
 
 export function PowerToolsTable({
   rows,
-  properties,
   propertiesSchema,
   spaceId,
   hasMore,
@@ -94,9 +93,10 @@ export function PowerToolsTable({
   onSelectRow,
   onSelectAll,
   onSelectRange,
+  totalCount = 0,
+  isLoadingMore = false,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
-  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [lastSelectedIndex, setLastSelectedIndex] = React.useState<number | null>(null);
   
   // Calculate selection state
@@ -134,26 +134,41 @@ export function PowerToolsTable({
     }
   };
 
-  // Infinite scroll handler
+  // Infinite scroll handler with throttling
   React.useEffect(() => {
+    let throttleTimeout: NodeJS.Timeout | null = null;
+
     const handleScroll = () => {
       if (!tableRef.current || !hasMore || isLoadingMore) return;
 
-      const { scrollTop, scrollHeight, clientHeight } = tableRef.current;
-      
-      // Load more when user scrolls to within 200px of bottom
-      if (scrollHeight - scrollTop - clientHeight < 200) {
-        setIsLoadingMore(true);
-        loadMore();
-        // Reset loading state after a short delay
-        setTimeout(() => setIsLoadingMore(false), 500);
-      }
+      if (throttleTimeout) return; // Already throttled
+
+      throttleTimeout = setTimeout(() => {
+        if (!tableRef.current || !hasMore || isLoadingMore) {
+          throttleTimeout = null;
+          return;
+        }
+
+        const { scrollTop, scrollHeight, clientHeight } = tableRef.current;
+
+        // Load more when user scrolls to within 200px of bottom
+        if (scrollHeight - scrollTop - clientHeight < 200) {
+          loadMore();
+        }
+
+        throttleTimeout = null;
+      }, 100); // Throttle to at most once per 100ms
     };
 
     const currentRef = tableRef.current;
     if (currentRef) {
       currentRef.addEventListener('scroll', handleScroll);
-      return () => currentRef.removeEventListener('scroll', handleScroll);
+      return () => {
+        currentRef.removeEventListener('scroll', handleScroll);
+        if (throttleTimeout) {
+          clearTimeout(throttleTimeout);
+        }
+      };
     }
   }, [hasMore, loadMore, isLoadingMore]);
 
@@ -314,15 +329,18 @@ export function PowerToolsTable({
       {hasMore && (
         <div className="flex justify-center p-4">
           <Text variant="bodyMedium" color="grey-04">
-            {isLoadingMore ? 'Loading more rows...' : 'Scroll to load more'}
+            {isLoadingMore
+              ? 'Loading more rows...'
+              : `Showing ${rows.length} of ${totalCount} rows - Scroll to load more`
+            }
           </Text>
         </div>
       )}
-      
+
       {!hasMore && rows.length > 0 && (
         <div className="flex justify-center p-4">
           <Text variant="bodyMedium" color="grey-04">
-            All {rows.length} rows loaded
+            All {totalCount} rows loaded
           </Text>
         </div>
       )}
