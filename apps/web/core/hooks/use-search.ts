@@ -18,9 +18,10 @@ import { useDebouncedValue } from './use-debounced-value';
 interface SearchOptions {
   filterByTypes?: string[];
   filterBySpace?: string;
+  enabled?: boolean;
 }
 
-export function useSearch({ filterByTypes, filterBySpace }: SearchOptions = {}) {
+export function useSearch({ filterByTypes, filterBySpace, enabled = true }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
   const [query, setQuery] = React.useState<string>('');
@@ -29,7 +30,7 @@ export function useSearch({ filterByTypes, filterBySpace }: SearchOptions = {}) 
   const maybeEntityId = debouncedQuery.trim();
 
   const { data: results, isLoading } = useQuery({
-    enabled: debouncedQuery !== '',
+    enabled: enabled && debouncedQuery !== '',
     queryKey: ['search', debouncedQuery, filterByTypes?.join('-'), filterBySpace],
     queryFn: async () => {
       if (query.length === 0) return [];

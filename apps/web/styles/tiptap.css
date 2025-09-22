@@ -121,3 +121,14 @@
 .ProseMirror ul li {
   @apply ml-4 list-item list-disc;
 }
+
+/* Valid entity links */
+.ProseMirror a.entity-link-valid {
+  @apply text-grey-04 underline transition-colors duration-100;
+}
+
+/* External/Invalid link highlighting */
+.ProseMirror span.entity-link-invalid,
+.ProseMirror span[data-web2-url] {
+  @apply cursor-pointer text-red-01 underline decoration-red-01 decoration-dotted;
+}

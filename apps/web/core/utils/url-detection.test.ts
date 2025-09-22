@@ -78,7 +78,7 @@ describe('detectWeb2URLsInMarkdown', () => {
 
   it('should detect www URLs in markdown links', () => {
     const text =
-      'John Frusciante’s melodic guitar flourishes, and Chad Smith’s powerhouse drumming. [See all albums](www.rhcp.com/albums)';
+      'John Frusciante`s melodic guitar flourishes, and Chad Smith`s powerhouse drumming. [See all albums](www.rhcp.com/albums)';
     const result = detectWeb2URLsInMarkdown(text);
     expect(result).toEqual(['[See all albums](www.rhcp.com/albums)']);
   });

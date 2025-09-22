@@ -14,6 +14,12 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
 
+import { NoContent } from '../space-tabs/no-content';
+import { tiptapExtensions } from './extensions';
+import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
+import { createIdExtension } from './id-extension';
+import { ServerContent } from './server-content';
+
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
   // Twitter emoji
@@ -26,11 +32,6 @@ const EMOJI_CONVERSION_PATTERNS = [
   /<img[^>]*alt="([^"]*[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}][^"]*)"[^>]*\/?>/gu,
 ] as const;
 
-import { NoContent } from '../space-tabs/no-content';
-import { tiptapExtensions } from './extensions';
-import { createIdExtension } from './id-extension';
-import { ServerContent } from './server-content';
-
 interface Props {
   spaceId: string;
   placeholder?: React.ReactNode;
@@ -41,8 +42,16 @@ interface Props {
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   const { upsertEditorState, editorJson, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
+  const [isTransitioning, setIsTransitioning] = React.useState(false);
 
-  const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
+  // Track when editable state is changing to prevent flushSync errors
+  React.useEffect(() => {
+    setIsTransitioning(true);
+    const timer = setTimeout(() => setIsTransitioning(false), 100);
+    return () => clearTimeout(timer);
+  }, [editable]);
+
+  const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId), createGraphLinkHoverExtension(spaceId)], [spaceId]);
 
   useInterceptEditorLinks(spaceId);
 
@@ -56,18 +65,16 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const editor = useEditor(
     {
       extensions,
-      editable: editable,
+      editable: true, // Keep editor always editable to prevent recreation
       content: editorJson,
       editorProps: {
         transformPastedHTML: html => {
           // Remove id attributes and prevent emoji conversion to images
           let cleanHtml = removeIdAttributes(html);
-          
           // Apply all patterns to convert emoji images back to Unicode
           EMOJI_CONVERSION_PATTERNS.forEach(pattern => {
             cleanHtml = cleanHtml.replace(pattern, '$1');
           });
-          
           return cleanHtml;
         },
         // Handle emoji conversion on paste
@@ -77,16 +84,12 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
             const clipboardData = event.clipboardData;
             if (clipboardData) {
               const textData = clipboardData.getData('text/plain');
-              
-              
               // Always prevent default and handle manually to avoid emoji conversion
               event.preventDefault();
-              
               // Use plain text to preserve emoji as Unicode
               if (textData) {
                 const lines = textData.split('\n');
                 let tr = view.state.tr;
-                
                 lines.forEach((line, index) => {
                   if (index > 0) {
                     tr = tr.split(tr.selection.head);
@@ -95,7 +98,6 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
                     tr = tr.insertText(line);
                   }
                 });
-                
                 view.dispatch(tr);
                 return true;
               }
@@ -108,10 +110,10 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       onBlur: onBlur,
       onUpdate: ({ editor }) => {
         if (editable) {
-          const hasContent = editor.getText().trim().length > 0 || 
-                          editor.getJSON().content?.some(node => 
-                            node.type === 'image' || node.type === 'tableNode');
-          
+          const hasContent =
+            editor.getText().trim().length > 0 ||
+            editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode');
+
           // Check if we have actual content and update the state immediately
           // This will cause the properties panel to show before blur events
           if (hasContent) {
@@ -122,6 +124,18 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     },
     [editorJson, editable]
   );
+
+  // Update editor editable state without recreating the editor
+  React.useEffect(() => {
+    if (editor && !isTransitioning) {
+      // Use microtask to defer the editable state change completely outside React's render cycle
+      // queueMicrotask(() => {
+      //   if (editor && !editor.isDestroyed) {
+          editor.setEditable(editable);
+        // }
+      // });
+    }
+  }, [editor, editable, isTransitioning]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
@@ -173,15 +187,16 @@ function useInterceptEditorLinks(spaceId: string) {
     }
 
     // Mutation observer to catch and prevent emoji conversion
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
           if (node.nodeType === Node.ELEMENT_NODE) {
             const element = node as Element;
             // Check if added node is an emoji image
-            if (element.tagName === 'IMG' && 
-                (element.getAttribute('src')?.includes('emoji') || 
-                 element.getAttribute('src')?.includes('twimg.com'))) {
+            if (
+              element.tagName === 'IMG' &&
+              (element.getAttribute('src')?.includes('emoji') || element.getAttribute('src')?.includes('twimg.com'))
+            ) {
               const alt = element.getAttribute('alt');
               if (alt) {
                 const textNode = document.createTextNode(alt);
@@ -190,7 +205,7 @@ function useInterceptEditorLinks(spaceId: string) {
             }
             // Also check child nodes
             const emojiImages = element.querySelectorAll('img[src*="emoji"], img[src*="twimg.com"]');
-            emojiImages.forEach((img) => {
+            emojiImages.forEach(img => {
               const alt = img.getAttribute('alt');
               if (alt) {
                 const textNode = document.createTextNode(alt);
@@ -207,7 +222,7 @@ function useInterceptEditorLinks(spaceId: string) {
     if (editorElement) {
       observer.observe(editorElement, {
         childList: true,
-        subtree: true
+        subtree: true,
       });
     }
 

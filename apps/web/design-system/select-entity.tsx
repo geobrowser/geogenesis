@@ -17,6 +17,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
 import { useMutate } from '~/core/sync/use-mutate';
+import { detectWeb2URLs } from '~/core/utils/url-detection';
 import { getImagePath } from '~/core/utils/utils';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/v2.types';
 
@@ -35,6 +36,8 @@ import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 import { Tooltip } from '~/design-system/tooltip';
 
+import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
+
 import { ArrowLeft } from './icons/arrow-left';
 import { InfoSmall } from './icons/info-small';
 import { Search } from './icons/search';
@@ -42,7 +45,6 @@ import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
-import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 
 type SelectEntityProps = {
   onDone?: (
@@ -55,7 +57,13 @@ type SelectEntityProps = {
     // Not the best way to do this but the simplest for now to avoid breaking changes.
     fromCreateFn?: boolean
   ) => void;
-  onCreateEntity?: (result: { id: string; name: string | null; space?: string; verified?: boolean; renderableType?: SwitchableRenderableType }) => void;
+  onCreateEntity?: (result: {
+    id: string;
+    name: string | null;
+    space?: string;
+    verified?: boolean;
+    renderableType?: SwitchableRenderableType;
+  }) => void;
   spaceId: string;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
@@ -66,6 +74,8 @@ type SelectEntityProps = {
   withSelectSpace?: boolean;
   withSearchIcon?: boolean;
   advanced?: boolean;
+  autoFocus?: boolean;
+  showUrlWarning?: boolean;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -84,10 +94,13 @@ export const SelectEntity = ({
   inputClassName = '',
   withSelectSpace = true,
   withSearchIcon = false,
+  autoFocus = false,
   advanced = true,
+  showUrlWarning = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -116,6 +129,27 @@ export const SelectEntity = ({
     filterByTypes,
     filterBySpace,
   });
+
+  // Check if URL is detected
+  const isUrlDetected = showUrlWarning && query.trim() !== '' && detectWeb2URLs(query).length > 0;
+
+  // Auto focus input when component mounts
+  useEffect(() => {
+    console.log('SelectEntity autoFocus effect:', { autoFocus, inputRef: inputRef.current });
+    if (autoFocus && inputRef.current) {
+      // Add small delay to ensure the component is fully rendered and visible
+      const timer = setTimeout(() => {
+        console.log('SelectEntity attempting focus on:', inputRef.current);
+        if (inputRef.current) {
+          inputRef.current.focus();
+          console.log('SelectEntity focus completed, document.activeElement:', document.activeElement);
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [autoFocus]);
+
 
   if (query === '' && result !== null) {
     startTransition(() => {
@@ -235,6 +269,7 @@ export const SelectEntity = ({
       <Popover.Root open={!!query}>
         <Popover.Anchor asChild>
           <input
+            ref={inputRef}
             type="text"
             value={query}
             onChange={({ currentTarget: { value } }) => {
@@ -393,12 +428,17 @@ export const SelectEntity = ({
                 {!result ? (
                   <ResizableContainer>
                     <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
-                      {!results?.length && isLoading && (
+                      {isUrlDetected ? (
+                        <div className="w-full bg-white px-3 py-2">
+                          <div className="text-resultTitle text-text">
+                            External links can only be added as property values.
+                          </div>
+                        </div>
+                      ) : !results?.length && isLoading ? (
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">Loading...</div>
                         </div>
-                      )}
-                      {isEmpty ? (
+                      ) : isEmpty ? (
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">No results.</div>
                         </div>
@@ -586,10 +626,7 @@ export const SelectEntity = ({
                         <div className="text-[0.875rem] text-grey-04">IDs</div>
                       </button>
                       {isCreatingProperty && (
-                        <RenderableTypeDropdown 
-                          value={renderableType} 
-                          onChange={setRenderableType}
-                        />
+                        <RenderableTypeDropdown value={renderableType} onChange={setRenderableType} />
                       )}
                     </div>
                     <button onClick={onCreateNewEntity} className="text-resultLink text-ctaHover">
