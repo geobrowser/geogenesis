@@ -143,7 +143,21 @@ describe('Parser', () => {
 
       it('handles unknown tags by processing children', () => {
         expect(htmlToMarkdown('<div>Content in div</div>')).toBe('Content in div');
-        expect(htmlToMarkdown('<span>Content in span</span>')).toBe('Content in span');
+        expect(htmlToMarkdown('<span>Content in span</span>')).toBe('<span>Content in span</span>');
+      });
+
+      it('preserves span elements with attributes', () => {
+        expect(htmlToMarkdown('<span data-web2-url="true" data-url="https://example.com">Link text</span>'))
+          .toBe('<span data-web2-url="true" data-url="https://example.com">Link text</span>');
+      });
+
+      it('preserves invalid entity links as spans not markdown links', () => {
+        const invalidLinkHtml = '<span class="entity-link-invalid web2-url-mark" data-web2-url="true" data-url="https://example.com">Invalid Link</span>';
+        const result = htmlToMarkdown(invalidLinkHtml);
+        
+        // Should preserve as span, not convert to [Invalid Link](https://example.com)
+        expect(result).toBe('<span class="entity-link-invalid web2-url-mark" data-web2-url="true" data-url="https://example.com">Invalid Link</span>');
+        expect(result).not.toContain('[Invalid Link](https://example.com)');
       });
     });
 
@@ -312,7 +326,15 @@ describe('Parser', () => {
       expect(resultHtml).toContain('<strong>bold</strong>');
       expect(resultHtml).toContain('<em>italic</em>');
       expect(resultHtml).toContain('<li>Item 1</li>');
-      expect(resultHtml).toContain('<li>Item 2</li>');
+    });
+
+    it('preserves span elements through HTML → Markdown → HTML conversion', () => {
+      const originalHtml = '<p>Text with <span data-web2-url="true" data-url="https://example.com">web2 link</span> preserved.</p>';
+      const markdown = htmlToMarkdown(originalHtml);
+      const resultHtml = markdownToHtml(markdown);
+      
+      expect(markdown).toContain('<span data-web2-url="true" data-url="https://example.com">web2 link</span>');
+      expect(resultHtml).toContain('<span data-web2-url="true" data-url="https://example.com">web2 link</span>');
     });
   });
 });

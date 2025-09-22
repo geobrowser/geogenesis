@@ -16,6 +16,7 @@ import { Spacer } from '~/design-system/spacer';
 
 import { NoContent } from '../space-tabs/no-content';
 import { tiptapExtensions } from './extensions';
+import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
 
@@ -41,8 +42,16 @@ interface Props {
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   const { upsertEditorState, editorJson, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
+  const [isTransitioning, setIsTransitioning] = React.useState(false);
 
-  const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
+  // Track when editable state is changing to prevent flushSync errors
+  React.useEffect(() => {
+    setIsTransitioning(true);
+    const timer = setTimeout(() => setIsTransitioning(false), 100);
+    return () => clearTimeout(timer);
+  }, [editable]);
+
+  const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId), createGraphLinkHoverExtension(spaceId)], [spaceId]);
 
   useInterceptEditorLinks(spaceId);
 
@@ -56,7 +65,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const editor = useEditor(
     {
       extensions,
-      editable: editable,
+      editable: true, // Keep editor always editable to prevent recreation
       content: editorJson,
       editorProps: {
         transformPastedHTML: html => {
@@ -118,6 +127,18 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     },
     [editorJson, editable]
   );
+
+  // Update editor editable state without recreating the editor
+  React.useEffect(() => {
+    if (editor && !isTransitioning) {
+      // Use microtask to defer the editable state change completely outside React's render cycle
+      // queueMicrotask(() => {
+      //   if (editor && !editor.isDestroyed) {
+      editor.setEditable(editable);
+      // }
+      // });
+    }
+  }, [editor, editable, isTransitioning]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {

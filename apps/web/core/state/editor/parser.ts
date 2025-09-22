@@ -68,6 +68,15 @@ export function htmlToMarkdown(html: string): string {
       case 'br':
         result = '\n';
         break;
+      case 'span': {
+        // Preserve span elements with their attributes as HTML in markdown
+        const attributes = Array.from(element.attributes)
+          .map(attr => `${attr.name}="${attr.value}"`)
+          .join(' ');
+        const content = processChildren(element, indent);
+        result = `<span${attributes ? ' ' + attributes : ''}>${content}</span>`;
+        break;
+      }
       default:
         // For any other tags, just process children
         result = processChildren(element, indent);
