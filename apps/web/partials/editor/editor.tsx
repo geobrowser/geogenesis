@@ -51,7 +51,10 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     return () => clearTimeout(timer);
   }, [editable]);
 
-  const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId), createGraphLinkHoverExtension(spaceId)], [spaceId]);
+  const extensions = React.useMemo(
+    () => [...tiptapExtensions, createIdExtension(spaceId), createGraphLinkHoverExtension(spaceId)],
+    [spaceId]
+  );
 
   useInterceptEditorLinks(spaceId);
 
@@ -85,28 +88,21 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
             // Get pasted content
             const clipboardData = event.clipboardData;
             if (clipboardData) {
+              const htmlData = clipboardData.getData('text/html');
               const textData = clipboardData.getData('text/plain');
+              // If there's HTML data that might contain emoji images, prevent default and handle manually
+              if (htmlData && (htmlData.includes('emoji') || htmlData.includes('twimg.com'))) {
+                event.preventDefault();
 
-              // Always prevent default and handle manually to avoid emoji conversion
-              event.preventDefault();
-
-              // Use plain text to preserve emoji as Unicode
-              if (textData) {
-                const lines = textData.split('\n');
-                let tr = view.state.tr;
-
-                lines.forEach((line, index) => {
-                  if (index > 0) {
-                    tr = tr.split(tr.selection.head);
-                  }
-                  if (line.trim()) {
-                    tr = tr.insertText(line);
-                  }
-                });
-
-                view.dispatch(tr);
+                // Insert as plain text to avoid emoji image conversion
+                if (textData) {
+                  view.dispatch(view.state.tr.insertText(textData));
+                }
                 return true;
               }
+              // For plain text or HTML without emoji images, let TipTap handle normally
+              // This allows lists and other formatted content to be processed correctly
+              return false;
             }
             return false;
           },
