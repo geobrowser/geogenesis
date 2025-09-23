@@ -12,6 +12,7 @@ interface Props {
   onRemoveValues: () => void;
   onAddRelations: () => void;
   onRemoveRelations: () => void;
+  onAddProperty: () => void;
   onCopyRows: () => void;
   onPasteRows: () => void;
   canPaste: boolean;
@@ -24,6 +25,7 @@ export function BulkActionsBar({
   onRemoveValues,
   onAddRelations,
   onRemoveRelations,
+  onAddProperty,
   onCopyRows,
   onPasteRows,
   canPaste,
@@ -83,6 +85,13 @@ export function BulkActionsBar({
                 className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover gap-2 px-3 py-2 text-button leading-[1.125rem]"
               >
                 Add Relations
+              </button>
+
+              <button
+                onClick={onAddProperty}
+                className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover gap-2 px-3 py-2 text-button leading-[1.125rem]"
+              >
+                Add Property
               </button>
 
               <button
