@@ -4,11 +4,14 @@ import * as React from 'react';
 
 import { Property } from '~/core/v2.types';
 
+import { SystemIds } from '@graphprotocol/grc-20';
+import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { Close } from '~/design-system/icons/close';
 import { SelectEntity } from '~/design-system/select-entity';
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
-export type BulkEditOperation = 'add-values' | 'remove-values' | 'add-relations' | 'remove-relations';
+export type BulkEditOperation = 'add-values' | 'remove-values' | 'add-relations' | 'remove-relations' | 'add-property';
 
 interface Props {
   isOpen: boolean;
@@ -16,8 +19,10 @@ interface Props {
   selectedCount: number;
   properties: Property[];
   spaceId: string;
+  selectedEntityIds?: string[];
   onClose: () => void;
   onConfirm: (propertyId: string, value: string, entityId?: string) => void;
+  onAddProperty?: (propertyId: string, propertyName: string) => void;
 }
 
 export function BulkEditModal({
@@ -26,9 +31,12 @@ export function BulkEditModal({
   selectedCount,
   properties,
   spaceId,
+  selectedEntityIds,
   onClose,
   onConfirm,
+  onAddProperty,
 }: Props) {
+  const { createProperty } = useCreateProperty(spaceId);
   const [selectedPropertyId, setSelectedPropertyId] = React.useState('');
   const [inputValue, setInputValue] = React.useState('');
   const [selectedEntityId, setSelectedEntityId] = React.useState('');
@@ -55,6 +63,8 @@ export function BulkEditModal({
         return 'Add Relations';
       case 'remove-relations':
         return 'Remove Relations';
+      case 'add-property':
+        return 'Add Property';
       default:
         return 'Bulk Edit';
     }
@@ -70,6 +80,8 @@ export function BulkEditModal({
         return `Add a relation to the selected property for ${selectedCount} item${selectedCount !== 1 ? 's' : ''}`;
       case 'remove-relations':
         return `Remove relations from the selected property for ${selectedCount} item${selectedCount !== 1 ? 's' : ''}`;
+      case 'add-property':
+        return `Add a property to ${selectedCount} selected item${selectedCount !== 1 ? 's' : ''}`;
       default:
         return '';
     }
@@ -133,24 +145,63 @@ export function BulkEditModal({
         </Text>
 
         <div className="space-y-4">
-          {/* Property Selection */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-grey-04">
-              Select Property
-            </label>
-            <select
-              value={selectedPropertyId}
-              onChange={(e) => setSelectedPropertyId(e.target.value)}
-              className="w-full rounded-sm border border-grey-03 px-3 py-2 text-sm focus:border-blue-04 focus:outline-none focus:ring-1 focus:ring-blue-04"
-            >
-              <option value="">Choose a property...</option>
-              {getFilteredProperties().map(property => (
-                <option key={property.id} value={property.id}>
-                  {property.name || property.id}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Property Selection for add-property operation */}
+          {operation === 'add-property' ? (
+            <div>
+              <label className="mb-2 block text-sm font-medium text-grey-04">
+                Find or create property
+              </label>
+              <SelectEntity
+                spaceId={spaceId}
+                relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                placeholder="Find or create property..."
+                onCreateEntity={(result) => {
+                  const renderableType = result.renderableType || 'TEXT';
+
+                  const createdPropertyId = createProperty({
+                    name: result.name || '',
+                    propertyType: renderableType,
+                    verified: result.verified,
+                    space: result.space,
+                  });
+
+                  if (onAddProperty) {
+                    onAddProperty(createdPropertyId, result.name || '');
+                  }
+                  onClose();
+                }}
+                onDone={(result) => {
+                  if (result && onAddProperty) {
+                    onAddProperty(result.id, result.name || '');
+                  }
+                  onClose();
+                }}
+                containerClassName="w-full"
+                width="full"
+              />
+            </div>
+          ) : (
+            <>
+              {/* Property Selection for other operations */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-grey-04">
+                  Select Property
+                </label>
+                <select
+                  value={selectedPropertyId}
+                  onChange={(e) => setSelectedPropertyId(e.target.value)}
+                  className="w-full rounded-sm border border-grey-03 px-3 py-2 text-sm focus:border-blue-04 focus:outline-none focus:ring-1 focus:ring-blue-04"
+                >
+                  <option value="">Choose a property...</option>
+                  {getFilteredProperties().map(property => (
+                    <option key={property.id} value={property.id}>
+                      {property.name || property.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
 
           {/* Value Input */}
           {(operation === 'add-values' || operation === 'remove-values') && (
@@ -213,21 +264,23 @@ export function BulkEditModal({
         </div>
 
         {/* Actions */}
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text gap-2 px-3 py-2 text-button leading-[1.125rem]"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!canConfirm}
-            className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover gap-2 px-3 py-2 text-button leading-[1.125rem] disabled:border-transparent disabled:bg-divider disabled:text-grey-03 disabled:hover:bg-divider disabled:cursor-not-allowed"
-          >
-            {getTitle()}
-          </button>
-        </div>
+        {operation !== 'add-property' && (
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              onClick={onClose}
+              className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text gap-2 px-3 py-2 text-button leading-[1.125rem]"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={!canConfirm}
+              className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover gap-2 px-3 py-2 text-button leading-[1.125rem] disabled:border-transparent disabled:bg-divider disabled:text-grey-03 disabled:hover:bg-divider disabled:cursor-not-allowed"
+            >
+              {getTitle()}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
