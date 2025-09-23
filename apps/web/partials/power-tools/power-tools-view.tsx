@@ -10,12 +10,13 @@ import { filterStateToWhere, useDataBlockInstance } from '~/core/blocks/data/use
 import { useSource } from '~/core/blocks/data/use-source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useCollection } from '~/core/blocks/data/use-collection';
-import { useQueryEntities, useQueryEntity, getValues, getRelations, useQueryEntitiesAsync } from '~/core/sync/use-store';
+import { useQueryEntities, useQueryEntity, getValues, getRelations, useQueryEntitiesAsync, useRelations, useValues } from '~/core/sync/use-store';
 import { useInfiniteQueryEntities } from '~/core/sync/use-infinite-query-entities';
 import { useQueryClient } from '@tanstack/react-query';
 import { GeoStore } from '~/core/sync/store';
 import { ID } from '~/core/id';
 import { useProperties } from '~/core/hooks/use-properties';
+import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { storage } from '~/core/sync/use-mutate';
 import { Entities } from '~/core/utils/entity';
 import { Cell, Entity, Property, Relation, Row } from '~/core/v2.types';
@@ -46,7 +47,8 @@ export function PowerToolsView() {
   const queryClient = useQueryClient();
 
   const { copyRowsToClipboard, pasteRowsFromClipboard, isClipboardSupported, parseRelationUUIDs } = useClipboard();
-  
+  const { addPropertyToEntity } = useCreateProperty(spaceId);
+
   // Use standard data block hooks now that we have EditorProvider
   const { name: blockName } = useDataBlock();
   const { source } = useSource();
@@ -84,41 +86,14 @@ export function PowerToolsView() {
     });
   }, [source.type, queriedEntities?.length, isQueryLoading, queryHasMore]);
 
-  // Get ALL properties (not just shown ones)
-  const allPropertyIds = React.useMemo(() => {
-    const ids = new Set<string>();
-    ids.add(SystemIds.NAME_PROPERTY);
-    
-    // Add properties from block relation
-    const propertiesRelations = blockRelationEntity?.relations.filter(
-      r => r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS
-    ) || [];
-    
-    propertiesRelations.forEach(pr => {
-      ids.add(pr.toEntity.id);
-    });
-    
-    // Add all properties found in entities
-    const sampleEntities = source.type === 'COLLECTION' ? collectionItems : queriedEntities;
-    sampleEntities?.forEach(entity => {
-      entity.values?.forEach(v => ids.add(v.property.id));
-      entity.relations?.forEach(r => ids.add(r.type.id));
-    });
-    
-    return Array.from(ids);
-  }, [collectionItems, queriedEntities, blockRelationEntity?.relations, source.type]);
-  
-  const propertiesSchema = useProperties(allPropertyIds);
-  const properties = React.useMemo(() => {
-    return propertiesSchema ? Object.values(propertiesSchema) : [];
-  }, [propertiesSchema]);
   
   // Convert entities to rows
-  const entitiesToRows = React.useCallback((entities: Entity[], propertyIds: string[], collectionRels: Relation[] = []): Row[] => {
+  const entitiesToRows = React.useCallback((entities: Entity[], propertyIds: string[], collectionRels: Relation[] = [], storeRelations: Relation[] = [], storeValues: any[] = []): Row[] => {
     return entities.map(entity => {
       const columns: Record<string, Cell> = {};
       
       propertyIds.forEach(propertyId => {
+
         const cell: Cell = {
           slotId: propertyId,
           propertyId: propertyId,
@@ -139,30 +114,47 @@ export function PowerToolsView() {
             cell.verified = collectionRelation.verified;
           }
         } else {
-          const value = entity.values?.find(v => v.property.id === propertyId);
-          if (value) {
+          // Get values from the passed store data (includes local/unpublished changes)
+          const entityValues = storeValues.filter(v => v.entity.id === entity.id && v.property.id === propertyId);
+
+
+          // Check if this is a relation property with incorrect values stored
+          const currentProperty = properties.find(p => p.id === propertyId);
+          const isRelationProperty = currentProperty?.dataType === 'RELATION';
+
+          if (entityValues.length > 0 && !isRelationProperty) {
+            // Use the most recent value (they should be the same for a single property)
+            const value = entityValues[0];
             (cell as any).value = value.value;
             (cell as any).dataType = value.property.dataType;
-          } else {
-            // Get ALL relations for this property, not just the first one
-            const relations = entity.relations?.filter(r => r.type.id === propertyId) || [];
-            if (relations.length === 1) {
+          } else if (entityValues.length > 0 && isRelationProperty) {
+            // This is a relation property with incorrect values - ignore values and check relations
+            // Fall through to relation processing
+          }
+
+          // Process relations for relation properties (or when no values exist)
+          if (entityValues.length === 0 || isRelationProperty) {
+            // Get relations from the passed store data (includes local/unpublished changes)
+            const entityRelations = storeRelations.filter(r => r.fromEntity.id === entity.id && r.type.id === propertyId);
+
+
+            if (entityRelations.length === 1) {
               // Single relation - use existing structure for backward compatibility
-              const relation = relations[0];
+              const relation = entityRelations[0];
               (cell as any).relation = {
                 id: relation.toEntity.id,
                 name: relation.toEntity.name,
               };
-            } else if (relations.length > 1) {
+            } else if (entityRelations.length > 1) {
               // Multiple relations - store all of them
-              (cell as any).relations = relations.map(r => ({
+              (cell as any).relations = entityRelations.map(r => ({
                 id: r.toEntity.id,
                 name: r.toEntity.name,
               }));
               // For text display, show first relation name
               (cell as any).relation = {
-                id: relations[0].toEntity.id,
-                name: relations[0].toEntity.name,
+                id: entityRelations[0].toEntity.id,
+                name: entityRelations[0].toEntity.name,
               };
             }
           }
@@ -178,6 +170,71 @@ export function PowerToolsView() {
     });
   }, []);
   
+  // Get current entity IDs for reactive store queries
+  const currentEntityIds = React.useMemo(() => {
+    if (source.type === 'COLLECTION' && collectionItems) {
+      return collectionItems.slice(0, displayLimit).map(e => e.id);
+    } else if ((source.type === 'GEO' || source.type === 'SPACES') && queriedEntities) {
+      return queriedEntities.map(e => e.id);
+    }
+    return [];
+  }, [source.type, collectionItems, queriedEntities, displayLimit]);
+
+  // Get all relations for current entities from store (includes local changes)
+  const allRelations = useRelations({
+    selector: r => currentEntityIds.includes(r.fromEntity.id) && !r.isDeleted
+  });
+
+  // Get all values for current entities from store (includes local changes)
+  const allValues = useValues({
+    selector: v => currentEntityIds.includes(v.entity.id) && !v.isDeleted
+  });
+
+
+  // Get ALL properties (not just shown ones) - includes store properties
+  const allPropertyIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    ids.add(SystemIds.NAME_PROPERTY);
+
+    // Add properties from block relation
+    const propertiesRelations = blockRelationEntity?.relations.filter(
+      r => r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS
+    ) || [];
+
+    propertiesRelations.forEach(pr => {
+      ids.add(pr.toEntity.id);
+    });
+
+    // Add all properties found in entities
+    const sampleEntities = source.type === 'COLLECTION' ? collectionItems : queriedEntities;
+    sampleEntities?.forEach(entity => {
+      entity.values?.forEach(v => ids.add(v.property.id));
+      entity.relations?.forEach(r => ids.add(r.type.id));
+    });
+
+    // Add properties from store relations (includes local/unpublished relations)
+    allRelations.forEach(r => {
+      if (currentEntityIds.includes(r.fromEntity.id)) {
+        ids.add(r.type.id);
+      }
+    });
+
+    // Add properties from store values (includes local/unpublished values)
+    allValues.forEach(v => {
+      if (currentEntityIds.includes(v.entity.id)) {
+        ids.add(v.property.id);
+      }
+    });
+
+    return Array.from(ids);
+  }, [collectionItems, queriedEntities, blockRelationEntity?.relations, source.type, allRelations, allValues, currentEntityIds]);
+
+  const propertiesSchema = useProperties(allPropertyIds);
+  const properties = React.useMemo(() => {
+    return propertiesSchema ? Object.values(propertiesSchema) : [];
+  }, [propertiesSchema]);
+
+
   // Get all available entities and determine hasMore/loadMore based on source type
   const { allAvailableEntities, hasMore, loadMore } = React.useMemo(() => {
     if (source.type === 'COLLECTION' && collectionItems) {
@@ -219,9 +276,11 @@ export function PowerToolsView() {
     return entitiesToRows(
       entities,
       allPropertyIds,
-      source.type === 'COLLECTION' ? collectionRelations : []
+      source.type === 'COLLECTION' ? collectionRelations : [],
+      allRelations,
+      allValues
     );
-  }, [allAvailableEntities, displayLimit, allPropertyIds, collectionRelations, entitiesToRows, source.type]);
+  }, [allAvailableEntities, displayLimit, allPropertyIds, collectionRelations, entitiesToRows, source.type, allRelations, allValues]);
   
   
   // Selection handlers
@@ -323,6 +382,11 @@ export function PowerToolsView() {
   
   const handleRemoveRelations = React.useCallback(() => {
     setCurrentOperation('remove-relations');
+    setModalOpen(true);
+  }, []);
+
+  const handleAddProperty = React.useCallback(() => {
+    setCurrentOperation('add-property');
     setModalOpen(true);
   }, []);
 
@@ -594,9 +658,9 @@ export function PowerToolsView() {
       case 'add-relations': {
         const targetEntityId = entityId || value.trim();
         if (!targetEntityId) return;
-        
+
         selectedEntityIds.forEach(fromEntityId => {
-          storage.relations.set({
+          const newRelation = {
             id: ID.createEntityId(),
             entityId: fromEntityId,
             type: { id: propertyId, name: property.name },
@@ -606,7 +670,8 @@ export function PowerToolsView() {
             spaceId,
             verified: false,
             isLocal: true,
-          });
+          };
+          storage.relations.set(newRelation);
         });
         break;
       }
@@ -633,10 +698,42 @@ export function PowerToolsView() {
       default:
         console.error('Unknown operation:', currentOperation);
     }
-    
+
+    // Invalidate query cache to refresh data and show local changes
+    queryClient.invalidateQueries({
+      queryKey: GeoStore.queryKeys(where),
+    });
+
     // Clear selection after operation
     setSelectedRows(new Set());
-  }, [currentOperation, selectedRows, propertiesSchema, spaceId]);
+  }, [currentOperation, selectedRows, propertiesSchema, spaceId, queryClient, where]);
+
+  const handleAddPropertyToEntities = React.useCallback((propertyId: string, propertyName: string) => {
+    const selectedEntityIds = Array.from(selectedRows);
+
+    if (selectedEntityIds.length === 0) {
+      console.warn('No entities selected for property addition');
+      return;
+    }
+
+    console.log(`Adding property ${propertyName} (${propertyId}) to ${selectedEntityIds.length} entities`);
+
+    selectedEntityIds.forEach(entityId => {
+      addPropertyToEntity({
+        entityId,
+        propertyId,
+        propertyName,
+      });
+    });
+
+    // Invalidate query cache to refresh data and show new property
+    queryClient.invalidateQueries({
+      queryKey: GeoStore.queryKeys(where),
+    });
+
+    // Clear selection after operation
+    setSelectedRows(new Set());
+  }, [selectedRows, addPropertyToEntity, queryClient, where]);
   
   const handleClose = () => {
     router.back();
@@ -682,6 +779,7 @@ export function PowerToolsView() {
         onRemoveValues={handleRemoveValues}
         onAddRelations={handleAddRelations}
         onRemoveRelations={handleRemoveRelations}
+        onAddProperty={handleAddProperty}
         onCopyRows={handleCopyRows}
         onPasteRows={handlePasteRows}
         canPaste={canPaste && isClipboardSupported}
@@ -721,8 +819,10 @@ export function PowerToolsView() {
         selectedCount={selectedRows.size}
         properties={properties}
         spaceId={spaceId}
+        selectedEntityIds={Array.from(selectedRows)}
         onClose={handleModalClose}
         onConfirm={handleModalConfirm}
+        onAddProperty={handleAddPropertyToEntities}
       />
     </div>
   );
