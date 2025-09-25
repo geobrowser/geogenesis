@@ -1,3 +1,4 @@
+import { keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 import { Entity } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
@@ -30,26 +31,26 @@ export function useInfiniteQueryEntities({
   // Get the async query function for fetching additional batches
   const queryEntitiesAsync = useQueryEntitiesAsync();
 
-  // Initial fetch using the regular hook
+  // Set initial data only once when first loaded
+  const [hasInitialized, setHasInitialized] = React.useState(false);
+
+  // Initial fetch using the regular hook - force fresh query when space filtering
   const { entities: initialData, isLoading } = useQueryEntities({
     where,
     first: BATCH_SIZE,
     skip: 0,
     enabled,
+    placeholderData: where.spaces ? undefined : keepPreviousData, // Don't use cached data for space filters
   });
 
-  // Set initial data only once when first loaded
-  const [hasInitialized, setHasInitialized] = React.useState(false);
-
   React.useEffect(() => {
-    if (initialData && !hasInitialized) {
-      console.log('useInfiniteQueryEntities: received initial data', initialData.length);
+    if (initialData && initialData.length > 0 && (!hasInitialized || loadedEntities.length === 0)) {
       setLoadedEntities(initialData);
       setCurrentSkip(BATCH_SIZE);
       setHasReachedEnd(initialData.length < BATCH_SIZE);
       setHasInitialized(true);
     }
-  }, [initialData, hasInitialized]);
+  }, [initialData, hasInitialized, loadedEntities.length]);
 
   // Reset when where conditions change (using JSON stringify to compare)
   const whereKey = JSON.stringify(where);
@@ -62,31 +63,16 @@ export function useInfiniteQueryEntities({
 
   // Load more function
   const loadMore = React.useCallback(async () => {
-    console.log('useInfiniteQueryEntities: loadMore called', {
-      isLoadingMore,
-      hasReachedEnd,
-      enabled,
-      currentSkip
-    });
-
     if (isLoadingMore || hasReachedEnd || !enabled) return;
 
     setIsLoadingMore(true);
 
     try {
-      // Fetch next batch using the async version
-      console.log('useInfiniteQueryEntities: fetching next batch', {
-        skip: currentSkip,
-        first: BATCH_SIZE
-      });
-
       const nextBatch = await queryEntitiesAsync({
         where,
         first: BATCH_SIZE,
         skip: currentSkip,
       });
-
-      console.log('useInfiniteQueryEntities: received next batch', nextBatch.length);
 
       setLoadedEntities(prev => [...prev, ...nextBatch]);
       setCurrentSkip(prev => prev + BATCH_SIZE);
