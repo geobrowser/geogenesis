@@ -112,31 +112,33 @@ export function PowerToolsView() {
             cell.collectionId = collectionRelation.fromEntity.id;
             cell.space = collectionRelation.toSpaceId;
             cell.verified = collectionRelation.verified;
+          } else {
+            // For non-collection entities, determine space from entity data
+            // Priority: 1) Current spaceId if entity is in it, 2) First space from entity.spaces
+            cell.space = entity.spaces.includes(spaceId) ? spaceId : entity.spaces[0] || spaceId;
           }
         } else {
           // Get values from the passed store data (includes local/unpublished changes)
           const entityValues = storeValues.filter(v => v.entity.id === entity.id && v.property.id === propertyId);
 
-
-          // Check if this is a relation property with incorrect values stored
+          // Check if this is a relation property
           const currentProperty = properties.find(p => p.id === propertyId);
           const isRelationProperty = currentProperty?.dataType === 'RELATION';
 
-          if (entityValues.length > 0 && !isRelationProperty) {
+          // For relation properties, ignore any values and only process relations
+          // For non-relation properties or unknown properties, check values first
+          if (!isRelationProperty && entityValues.length > 0) {
             // Use the most recent value (they should be the same for a single property)
             const value = entityValues[0];
             (cell as any).value = value.value;
             (cell as any).dataType = value.property.dataType;
-          } else if (entityValues.length > 0 && isRelationProperty) {
-            // This is a relation property with incorrect values - ignore values and check relations
-            // Fall through to relation processing
           }
 
-          // Process relations for relation properties (or when no values exist)
-          if (entityValues.length === 0 || isRelationProperty) {
+          // Always check for relations (for relation properties or when no values exist)
+          // This handles both known relation properties and properties we don't have schema for yet
+          if (isRelationProperty || entityValues.length === 0 || (entityValues.length > 0 && entityValues[0].value === '')) {
             // Get relations from the passed store data (includes local/unpublished changes)
             const entityRelations = storeRelations.filter(r => r.fromEntity.id === entity.id && r.type.id === propertyId);
-
 
             if (entityRelations.length === 1) {
               // Single relation - use existing structure for backward compatibility
@@ -144,18 +146,34 @@ export function PowerToolsView() {
               (cell as any).relation = {
                 id: relation.toEntity.id,
                 name: relation.toEntity.name,
+                spaceId: relation.spaceId,
+                toSpaceId: relation.toSpaceId,
               };
+              // Clear any empty value if this is a relation property
+              if (isRelationProperty && (cell as any).value === '') {
+                delete (cell as any).value;
+                delete (cell as any).dataType;
+              }
             } else if (entityRelations.length > 1) {
               // Multiple relations - store all of them
               (cell as any).relations = entityRelations.map(r => ({
                 id: r.toEntity.id,
                 name: r.toEntity.name,
+                spaceId: r.spaceId,
+                toSpaceId: r.toSpaceId,
               }));
               // For text display, show first relation name
               (cell as any).relation = {
                 id: entityRelations[0].toEntity.id,
                 name: entityRelations[0].toEntity.name,
+                spaceId: entityRelations[0].spaceId,
+                toSpaceId: entityRelations[0].toSpaceId,
               };
+              // Clear any empty value if this is a relation property
+              if (isRelationProperty && (cell as any).value === '') {
+                delete (cell as any).value;
+                delete (cell as any).dataType;
+              }
             }
           }
         }
@@ -718,6 +736,38 @@ export function PowerToolsView() {
 
     console.log(`Adding property ${propertyName} (${propertyId}) to ${selectedEntityIds.length} entities`);
 
+    // First, add the property to the block's PROPERTIES relation so it shows up in the table
+    // Check if the property is already in the block's properties
+    const isPropertyAlreadyShown = blockRelationEntity?.relations.some(
+      r => (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
+           r.toEntity.id === propertyId
+    );
+
+    if (!isPropertyAlreadyShown && relationId) {
+      // Add the property to the block's PROPERTIES relation
+      storage.relations.set({
+        id: ID.createEntityId(),
+        entityId: ID.createEntityId(),
+        spaceId: spaceId,
+        position: Position.generate(),
+        renderableType: 'RELATION',
+        type: {
+          id: SystemIds.PROPERTIES,
+          name: 'Properties',
+        },
+        fromEntity: {
+          id: relationId,
+          name: blockRelationEntity?.name ?? null,
+        },
+        toEntity: {
+          id: propertyId,
+          name: propertyName,
+          value: propertyId,
+        },
+      });
+    }
+
+    // Then add the property to each selected entity
     selectedEntityIds.forEach(entityId => {
       addPropertyToEntity({
         entityId,
@@ -733,7 +783,7 @@ export function PowerToolsView() {
 
     // Clear selection after operation
     setSelectedRows(new Set());
-  }, [selectedRows, addPropertyToEntity, queryClient, where]);
+  }, [selectedRows, addPropertyToEntity, queryClient, where, blockRelationEntity, relationId, spaceId]);
   
   const handleClose = () => {
     router.back();

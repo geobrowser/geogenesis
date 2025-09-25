@@ -68,19 +68,25 @@ export function useCreateProperty(spaceId: string) {
         }
       }
 
-      storage.values.set({
-        spaceId,
-        entity: {
-          id: entityId,
-          name: entityName || null,
-        },
-        property: {
-          id: propertyId,
-          name: propertyName,
-          dataType: dataType,
-        },
-        value: defaultValue ?? '',
-      });
+      // Only create a value for non-relation properties
+      // Relation properties should remain empty until actual relations are added
+      if (dataType !== 'RELATION') {
+        storage.values.set({
+          spaceId,
+          entity: {
+            id: entityId,
+            name: entityName || null,
+          },
+          property: {
+            id: propertyId,
+            name: propertyName,
+            dataType,
+          },
+          value: defaultValue ?? '',
+        });
+      }
+      // For relation properties, we don't create anything here
+      // The property will still show up in allPropertyIds through the block's SHOWN_COLUMNS/PROPERTIES relations
     },
     [spaceId, storage, store]
   );
