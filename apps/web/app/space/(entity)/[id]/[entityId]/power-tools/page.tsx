@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
-import { useQueryEntities, useQueryEntity, getRelation } from '~/core/sync/use-store';
+import { useQueryEntities, useQueryEntity, useRelations } from '~/core/sync/use-store';
 
 import { PowerToolsView } from '~/partials/power-tools/power-tools-view';
 
@@ -25,14 +25,55 @@ export default function PowerToolsPage() {
     id: entityId,
   });
 
-  // Get the actual relation object to find the parent entity
-  const blockRelation = React.useMemo(() => {
-    if (!relationId) return null;
-    return getRelation({ id: relationId });
-  }, [relationId]);
+  // The relationId directly represents the relation - let me try to get it differently
+  // Let's see if we can extract info from the URL or find another way
+  console.log('DEBUG Power Tools:', {
+    spaceId,
+    entityId,
+    relationId,
+    dataBlockEntity,
+    isDataBlockLoading,
+  });
 
-  const parentEntityId = blockRelation?.fromEntity?.id;
-  const isRelationLoading = !relationId || !blockRelation;
+  console.log('DEBUG dataBlockEntity relations:', {
+    relations: dataBlockEntity?.relations,
+    totalRelations: dataBlockEntity?.relations?.length
+  });
+
+  // Force the useMemo to run by adding a direct call
+  if (dataBlockEntity?.relations) {
+    console.log('DEBUG: Looking through dataBlockEntity relations for relationId:', relationId);
+    console.log('DEBUG: dataBlockEntity relations:', dataBlockEntity.relations);
+    dataBlockEntity.relations.forEach((r, index) => {
+      console.log(`DEBUG: Relation ${index}:`, r.id, 'vs target:', relationId);
+    });
+  }
+
+  // The dataBlockEntity should have relations - let's check if one of them has our relationId
+  const parentEntityId = React.useMemo(() => {
+    if (!dataBlockEntity?.relations) return null;
+
+    console.log('DEBUG: Looking through dataBlockEntity relations for relationId:', relationId);
+    console.log('DEBUG: dataBlockEntity relations:', dataBlockEntity.relations);
+
+    // Look for a relation that matches our relationId
+    // This should be an incoming relation FROM the parent TO this data block
+    const matchingRelation = dataBlockEntity.relations.find(r => {
+      console.log('DEBUG: Checking relation:', r.id, 'vs', relationId);
+      return r.id === relationId;
+    });
+
+    console.log('DEBUG: Found matching relation:', matchingRelation);
+
+    if (matchingRelation) {
+      // This relation points FROM the parent TO this data block
+      const parentId = matchingRelation.fromEntity?.id;
+      console.log('DEBUG: Extracted parentId:', parentId);
+      return parentId;
+    }
+
+    return null;
+  }, [dataBlockEntity, relationId]);
 
   // Get the parent entity to fetch its blocks
   const { entity: parentEntity, isLoading: isParentLoading } = useQueryEntity({
@@ -59,7 +100,16 @@ export default function PowerToolsPage() {
     enabled: blockIds.length > 0,
   });
 
-  const isLoading = isDataBlockLoading || isRelationLoading || isParentLoading || isBlocksLoading;
+  // We don't need separate relation loading since we're using dataBlockEntity relations
+  const isLoading = isDataBlockLoading || isParentLoading || isBlocksLoading;
+
+  console.log('DEBUG Loading states:', {
+    isDataBlockLoading,
+    isParentLoading,
+    isBlocksLoading,
+    isLoading,
+    parentEntityId,
+  });
 
   if (isLoading) {
     return (
@@ -69,7 +119,13 @@ export default function PowerToolsPage() {
     );
   }
 
-  if (!dataBlockEntity || !relationId || !parentEntityId) {
+  console.log('DEBUG Final check:', {
+    hasDataBlockEntity: !!dataBlockEntity,
+    hasRelationId: !!relationId,
+    hasParentEntityId: !!parentEntityId,
+  });
+
+  if (!dataBlockEntity || !relationId) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -84,9 +140,9 @@ export default function PowerToolsPage() {
 
   return (
     <EditorProvider
-      id={parentEntityId}
+      id={parentEntityId || entityId}
       spaceId={spaceId}
-      initialBlocks={blocks || []}
+      initialBlocks={blocks || [dataBlockEntity]}
       initialBlockRelations={blockRelations}
     >
       <DataBlockProvider
