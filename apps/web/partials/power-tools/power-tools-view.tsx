@@ -60,8 +60,11 @@ export function PowerToolsView() {
     id: relationId,
   });
   
-  // Get collection data (always fetch all at once for collections)
-  const { collectionItems, collectionRelations, isLoading: isCollectionLoading } = useCollection({});
+  // Get collection data with progressive pagination
+  const { collectionItems, collectionRelations, isLoading: isCollectionLoading, collectionLength } = useCollection({
+    first: displayLimit, // Pass the display limit to control server-side pagination
+    skip: 0,
+  });
   
   // For queries, use infinite scroll to handle large datasets
   const {
@@ -75,16 +78,6 @@ export function PowerToolsView() {
     enabled: source.type === 'SPACES' || source.type === 'GEO',
   });
 
-  // Debug logging
-  React.useEffect(() => {
-    console.log('PowerToolsView: source and entities', {
-      sourceType: source.type,
-      queriedEntitiesLength: queriedEntities?.length,
-      isQueryLoading,
-      queryHasMore,
-      whereKeys: Object.keys(where || {}),
-    });
-  }, [source.type, queriedEntities?.length, isQueryLoading, queryHasMore]);
 
   
   // Convert entities to rows
@@ -191,12 +184,12 @@ export function PowerToolsView() {
   // Get current entity IDs for reactive store queries
   const currentEntityIds = React.useMemo(() => {
     if (source.type === 'COLLECTION' && collectionItems) {
-      return collectionItems.slice(0, displayLimit).map(e => e.id);
+      return collectionItems.map(e => e.id);
     } else if ((source.type === 'GEO' || source.type === 'SPACES') && queriedEntities) {
       return queriedEntities.map(e => e.id);
     }
     return [];
-  }, [source.type, collectionItems, queriedEntities, displayLimit]);
+  }, [source.type, collectionItems, queriedEntities]);
 
   // Get all relations for current entities from store (includes local changes)
   const allRelations = useRelations({
@@ -256,12 +249,12 @@ export function PowerToolsView() {
   // Get all available entities and determine hasMore/loadMore based on source type
   const { allAvailableEntities, hasMore, loadMore } = React.useMemo(() => {
     if (source.type === 'COLLECTION' && collectionItems) {
-      // For collections, use progressive display with client-side batching
+      // For collections, use server-side pagination based on total collection length
       return {
         allAvailableEntities: collectionItems,
-        hasMore: displayLimit < collectionItems.length,
+        hasMore: displayLimit < (collectionLength || 0),
         loadMore: () => {
-          if (displayLimit < collectionItems.length) {
+          if (displayLimit < (collectionLength || 0)) {
             setDisplayLimit(prev => prev + LOAD_MORE_BATCH_SIZE);
           }
         },
@@ -279,15 +272,13 @@ export function PowerToolsView() {
       hasMore: false,
       loadMore: () => {},
     };
-  }, [collectionItems, queriedEntities, source.type, displayLimit, queryHasMore, queryLoadMore]);
+  }, [collectionItems, queriedEntities, source.type, displayLimit, queryHasMore, queryLoadMore, collectionLength]);
 
   // Build rows for display
   const loadedRows = React.useMemo(() => {
-    // For collections, slice based on displayLimit for progressive loading
-    // For queries, use all loaded entities (infinite scroll handles the loading)
-    const entities = source.type === 'COLLECTION'
-      ? allAvailableEntities.slice(0, displayLimit)
-      : allAvailableEntities;
+    // Both collections and queries now use all available entities
+    // Server-side pagination is handled by the respective hooks
+    const entities = allAvailableEntities;
 
     if (entities.length === 0) return [];
 
@@ -298,7 +289,7 @@ export function PowerToolsView() {
       allRelations,
       allValues
     );
-  }, [allAvailableEntities, displayLimit, allPropertyIds, collectionRelations, entitiesToRows, source.type, allRelations, allValues]);
+  }, [allAvailableEntities, allPropertyIds, collectionRelations, entitiesToRows, source.type, allRelations, allValues]);
   
   
   // Selection handlers
