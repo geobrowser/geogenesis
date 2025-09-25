@@ -14,6 +14,8 @@ import { LinkableRelationChip } from '~/design-system/chip';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Checkbox } from '~/design-system/checkbox';
 import { Text } from '~/design-system/text';
+import { PowerToolsRelationChip } from './power-tools-relation-chip';
+import { EntitySidePanel } from './entity-side-panel';
 
 interface Props {
   rows: Row[];
@@ -39,27 +41,24 @@ interface Props {
 function RelationChip({
   relationId,
   relationName,
-  spaceId
+  spaceId,
+  relationSpaceId,
+  onEntityClick
 }: {
   relationId: string;
   relationName?: string;
   spaceId: string;
+  relationSpaceId?: string;
+  onEntityClick: (entityId: string, entitySpaceId?: string) => void;
 }) {
-  // Use the useName hook to get the actual entity name if not provided
-  const entityName = useName(relationId);
-  const displayName = relationName || entityName || relationId.slice(0, 8);
-
   return (
-    <LinkableRelationChip
-      isEditing={false}
-      currentSpaceId={spaceId}
-      entityId={relationId}
-      spaceId={spaceId}
+    <PowerToolsRelationChip
       relationId={relationId}
-      relationEntityId={relationId}
-    >
-      {displayName}
-    </LinkableRelationChip>
+      relationName={relationName}
+      spaceId={spaceId}
+      relationSpaceId={relationSpaceId}
+      onClick={onEntityClick}
+    />
   );
 }
 
@@ -67,9 +66,11 @@ function RelationChip({
 function RelationCell({
   relations,
   spaceId,
+  onEntityClick,
 }: {
   relations: string[];
   spaceId: string;
+  onEntityClick: (entityId: string, entitySpaceId?: string) => void;
 }) {
   if (!relations || relations.length === 0) {
     return <div className="text-grey-04">—</div>;
@@ -82,7 +83,12 @@ function RelationCell({
   return (
     <div className="flex flex-wrap gap-1">
       {displayRelations.map((relationId) => (
-        <RelationChip key={relationId} relationId={relationId} />
+        <RelationChip
+          key={relationId}
+          relationId={relationId}
+          spaceId={spaceId}
+          onEntityClick={onEntityClick}
+        />
       ))}
       {remainingCount > 0 && (
         <div className="inline-flex items-center rounded bg-grey-01 px-2 py-1">
@@ -116,6 +122,23 @@ export function PowerToolsTableVirtual({
   const [isResizing, setIsResizing] = React.useState<string | null>(null);
   const [startX, setStartX] = React.useState(0);
   const [startWidth, setStartWidth] = React.useState(0);
+
+  // Side panel state
+  const [sidePanelOpen, setSidePanelOpen] = React.useState(false);
+  const [selectedEntity, setSelectedEntity] = React.useState<{entityId: string, spaceId: string} | null>(null);
+
+  // Handler for opening entity in side panel
+  const handleEntityClick = React.useCallback((entityId: string, entitySpaceId?: string) => {
+    // Use the entity's actual spaceId if provided, otherwise fallback to current spaceId
+    const actualSpaceId = entitySpaceId || spaceId;
+    setSelectedEntity({ entityId, spaceId: actualSpaceId });
+    setSidePanelOpen(true);
+  }, [spaceId]);
+
+  const handleCloseSidePanel = React.useCallback(() => {
+    setSidePanelOpen(false);
+    setSelectedEntity(null);
+  }, []);
 
   // Calculate selection state - use optimistic state during loading
   const isAllSelected = React.useMemo(() => {
@@ -417,11 +440,14 @@ export function PowerToolsTableVirtual({
                         <div className="flex flex-wrap gap-1">
                           {(cell as any).relations ? (
                             (cell as any).relations.map((rel: any, index: number) => (
+                              console.log('Rendering relation:', { rowId, propertyId: property.id, rel }),
                               <RelationChip
                                 key={`${row.entityId || row.id}-${property.id}-${rel.id}-${index}`}
                                 relationId={rel.id}
                                 relationName={rel.name}
                                 spaceId={spaceId}
+                                relationSpaceId={rel.toSpaceId || rel.spaceId}
+                                onEntityClick={handleEntityClick}
                               />
                             ))
                           ) : (
@@ -430,18 +456,24 @@ export function PowerToolsTableVirtual({
                               relationId={(cell as any).relation.id}
                               relationName={(cell as any).relation.name}
                               spaceId={spaceId}
+                              relationSpaceId={(cell as any).relation.toSpaceId || (cell as any).relation.spaceId}
+                              onEntityClick={handleEntityClick}
                             />
                           )}
                         </div>
-                      ) : property.id === SystemIds.Name && (cell as any).entityId ? (
-                        <Link
-                          href={NavUtils.toEntity(spaceId, (cell as any).entityId)}
-                          className="text-blue-04 hover:underline"
+                      ) : property.id === SystemIds.NAME_PROPERTY && (cell as any).entityId ? (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleEntityClick((cell as any).entityId, (cell as any).space);
+                          }}
+                          className="text-left text-blue-04 hover:underline"
                         >
                           <Text variant="bodyMedium">
                             {(cell as any).name || (cell as any).value || 'Untitled'}
                           </Text>
-                        </Link>
+                        </button>
                       ) : (
                         <Text
                           variant="bodyMedium"
@@ -475,6 +507,16 @@ export function PowerToolsTableVirtual({
             All {totalDBRowCount} rows loaded ({totalFetched} fetched)
           </Text>
         </div>
+      )}
+
+      {/* Entity Side Panel */}
+      {selectedEntity && (
+        <EntitySidePanel
+          entityId={selectedEntity.entityId}
+          spaceId={selectedEntity.spaceId}
+          isOpen={sidePanelOpen}
+          onClose={handleCloseSidePanel}
+        />
       )}
     </div>
   );
