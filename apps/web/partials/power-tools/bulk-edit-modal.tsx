@@ -136,11 +136,11 @@ export function BulkEditModal({
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
           >
-            <Close className="h-4 w-4" />
+            <Close />
           </button>
         </div>
 
-        <Text variant="bodyMedium" color="grey-04" className="mb-6">
+        <Text variant="body" color="grey-04" className="mb-6">
           {getDescription()}
         </Text>
 

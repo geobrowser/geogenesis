@@ -90,7 +90,6 @@ export function PowerToolsView() {
         const cell: Cell = {
           slotId: propertyId,
           propertyId: propertyId,
-          entityId: entity.id,
           name: null,
         };
         
@@ -796,11 +795,11 @@ export function PowerToolsView() {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-grey-02 px-4 py-2">
         <div className="flex items-center gap-3">
-          <Text variant="largeTitleMedium">Power Tools</Text>
+          <Text variant="largeTitle">Power Tools</Text>
           {blockName && (
             <>
-              <Text variant="largeTitleMedium" color="grey-03">•</Text>
-              <Text variant="largeTitleMedium" color="grey-04">{blockName}</Text>
+              <Text variant="largeTitle" color="grey-03">•</Text>
+              <Text variant="largeTitle" color="grey-04">{blockName}</Text>
             </>
           )}
         </div>
@@ -830,7 +829,7 @@ export function PowerToolsView() {
       <div className="overflow-hidden">
         {isInitialLoading ? (
           <div className="flex h-full items-center justify-center">
-            <Text variant="bodyLarge" color="grey-04">Loading data...</Text>
+            <Text variant="body" color="grey-04">Loading data...</Text>
           </div>
         ) : (
           <PowerToolsTableVirtual
