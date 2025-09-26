@@ -200,14 +200,14 @@ export function PowerToolsTable({
     const property = propertiesSchema?.[propertyId];
 
     // Special handling for Name property
-    if (propertyId === SystemIds.NAME_PROPERTY && cell.entityId) {
+    if (propertyId === SystemIds.NAME_PROPERTY && entityId) {
       return (
         <td className="border-b border-grey-02 p-[10px] text-sm">
           <Link
-            href={NavUtils.toEntity(spaceId, cell.entityId)}
+            href={NavUtils.toEntity(spaceId, entityId)}
             className="text-blue-04 hover:underline"
           >
-            {cell.name || cell.value || 'Untitled'}
+            {cell.name || 'Untitled'}
           </Link>
         </td>
       );
@@ -227,17 +227,17 @@ export function PowerToolsTable({
     }
 
     // Handle single relation from cell data
-    if (cell.relation) {
+    if (cell.relationId) {
       return (
         <td className="border-b border-grey-02 p-[10px] text-sm">
           <LinkableRelationChip
             isEditing={false}
             currentSpaceId={spaceId}
-            entityId={cell.relation.id}
+            entityId={cell.relationId}
             spaceId={spaceId}
             relationId={undefined}
           >
-            {cell.relation.name || 'Untitled'}
+            {cell.name || 'Untitled'}
           </LinkableRelationChip>
         </td>
       );
@@ -246,7 +246,7 @@ export function PowerToolsTable({
     // Handle regular values
     return (
       <td className="border-b border-grey-02 p-[10px] text-sm">
-        {cell.value || cell.name || ''}
+        {cell.name || ''}
       </td>
     );
   };
@@ -301,7 +301,7 @@ export function PowerToolsTable({
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={(e) => handleRowSelect(row.entityId, e.target.checked, rowIndex, e.nativeEvent as React.MouseEvent)}
+                        onChange={(e) => handleRowSelect(row.entityId, e.target.checked, rowIndex, e.nativeEvent as unknown as React.MouseEvent)}
                         onClick={(e) => {
                           // Prevent the default onChange behavior for keyboard shortcuts
                           if (e.shiftKey || e.metaKey || e.ctrlKey) {
@@ -328,7 +328,7 @@ export function PowerToolsTable({
       {/* Loading indicator for infinite scroll */}
       {hasMore && (
         <div className="flex justify-center p-4">
-          <Text variant="bodyMedium" color="grey-04">
+          <Text variant="body" color="grey-04">
             {isLoadingMore
               ? 'Loading more rows...'
               : `Showing ${rows.length} of ${totalCount} rows - Scroll to load more`
@@ -339,7 +339,7 @@ export function PowerToolsTable({
 
       {!hasMore && rows.length > 0 && (
         <div className="flex justify-center p-4">
-          <Text variant="bodyMedium" color="grey-04">
+          <Text variant="body" color="grey-04">
             All {totalCount} rows loaded
           </Text>
         </div>

@@ -134,10 +134,13 @@ export function PowerToolsViewVirtual() {
     }
 
     entities.forEach(entity => {
-      const values = getValues(entity);
-      const relations = getRelations(entity);
-      [...values, ...relations].forEach(triple => {
-        ids.add(triple.attributeId);
+      const values = entity.values || [];
+      const relations = entity.relations || [];
+      values.forEach(value => {
+        ids.add(value.property.id);
+      });
+      relations.forEach(relation => {
+        ids.add(relation.type.id);
       });
     });
 
@@ -153,36 +156,34 @@ export function PowerToolsViewVirtual() {
   const entitiesToRows = React.useCallback((entities: Entity[], propertyIds: string[], collectionRels: Relation[] = []): Row[] => {
     return entities.map(entity => {
       const row: Row = {
-        id: entity.id,
-        name: entity.name || entity.id.slice(0, 8),
-        cells: {},
+        entityId: entity.id,
+        columns: {},
       };
 
-      const values = getValues(entity);
-      const relations = getRelations(entity);
+      const values = entity.values || [];
+      const relations = entity.relations || [];
 
       propertyIds.forEach(propId => {
-        const tripleValues = values.filter(t => t.attributeId === propId);
-        const tripleRelations = relations.filter(t => t.attributeId === propId);
+        const tripleValues = values.filter(t => t.property.id === propId);
+        const tripleRelations = relations.filter(t => t.type.id === propId);
 
         const cell: Cell = {
-          id: `${entity.id}-${propId}`,
+          slotId: `${entity.id}-${propId}`,
           propertyId: propId,
-          entityId: entity.id,
-          value: '',
-          relationIds: [],
+          name: null,
         };
 
         if (tripleValues.length > 0) {
-          cell.value = tripleValues.map(t => t.value).join(', ');
+          cell.name = tripleValues.map(t => t.value).join(', ');
         }
 
-        if (tripleRelations.length > 0) {
-          cell.relationIds = tripleRelations.map(t => t.linkedEntityId);
+        if (tripleRelations.length > 0 && tripleRelations[0]) {
+          cell.relationId = tripleRelations[0].id;
+          cell.name = tripleRelations[0].toEntity?.name || null;
         }
 
-        if (cell.value || cell.relationIds?.length) {
-          row.cells![propId] = cell;
+        if (cell.name || cell.relationId) {
+          row.columns[propId] = cell;
         }
       });
 
@@ -224,7 +225,7 @@ export function PowerToolsViewVirtual() {
 
   const handleSelectAll = React.useCallback((selected: boolean) => {
     if (selected) {
-      setSelectedRows(new Set(loadedRows.map(row => row.id)));
+      setSelectedRows(new Set(loadedRows.map(row => row.entityId)));
     } else {
       setSelectedRows(new Set());
     }
@@ -236,9 +237,9 @@ export function PowerToolsViewVirtual() {
       const next = new Set(prev);
       affectedRows.forEach(row => {
         if (selected) {
-          next.add(row.id);
+          next.add(row.entityId);
         } else {
-          next.delete(row.id);
+          next.delete(row.entityId);
         }
       });
       return next;
@@ -252,19 +253,19 @@ export function PowerToolsViewVirtual() {
   }, []);
 
   const handleBulkEdit = React.useCallback(async (
-    operation: BulkEditOperation,
     propertyId: string,
-    value: string
+    value: string,
+    entityId?: string
   ) => {
-    const selectedEntityIds = Array.from(selectedRows);
-    if (selectedEntityIds.length === 0) return;
+    const selectedEntityIds = entityId ? [entityId] : Array.from(selectedRows);
+    if (selectedEntityIds.length === 0 || !currentOperation) return;
 
     try {
       const edits = selectedEntityIds.map(entityId => ({
         entityId,
         propertyId,
         value,
-        operation,
+        operation: currentOperation,
       }));
 
       console.log('Performing bulk edit:', edits);
@@ -279,11 +280,11 @@ export function PowerToolsViewVirtual() {
     } catch (error) {
       console.error('Failed to perform bulk edit:', error);
     }
-  }, [selectedRows, queryClient]);
+  }, [selectedRows, queryClient, currentOperation]);
 
   // Copy/paste handlers
   const handleCopy = React.useCallback(async () => {
-    const selectedRowData = loadedRows.filter(row => selectedRows.has(row.id));
+    const selectedRowData = loadedRows.filter(row => selectedRows.has(row.entityId));
     if (selectedRowData.length === 0) return;
 
     try {
@@ -295,50 +296,26 @@ export function PowerToolsViewVirtual() {
 
   const handlePaste = React.useCallback(async () => {
     try {
-      const pastedRows = await pasteRowsFromClipboard(properties);
-      if (!pastedRows || pastedRows.length === 0) {
+      const pastedRows = await pasteRowsFromClipboard();
+      if (!pastedRows || pastedRows.rows.length === 0) {
         alert('No valid data found in clipboard');
         return;
       }
 
       // Create new entities from pasted data
-      const newEntities: Entity[] = pastedRows.map(row => {
+      const newEntities: Entity[] = pastedRows.rows.map((row, rowIndex) => {
         const entity: Entity = {
-          id: ID.create('entity').toString(),
-          spaceId: spaceId,
-          name: row.name || 'New Entity',
+          id: ID.createEntityId(),
+          name: row[0] || `New Entity ${rowIndex + 1}`,
+          description: null,
+          spaces: [spaceId],
+          types: [],
           relations: [],
-          authors: [],
+          values: [],
         };
 
-        // Add triples for each cell
-        Object.entries(row.cells || {}).forEach(([propertyId, cell]) => {
-          if (cell.value) {
-            entity.relations.push({
-              id: ID.create('triple').toString(),
-              entityId: entity.id,
-              attributeId: propertyId,
-              value: {
-                id: cell.value,
-                type: 'text',
-              },
-            });
-          }
-
-          if (cell.relationIds && cell.relationIds.length > 0) {
-            cell.relationIds.forEach(relationId => {
-              entity.relations.push({
-                id: ID.create('triple').toString(),
-                entityId: entity.id,
-                attributeId: propertyId,
-                value: {
-                  id: relationId,
-                  type: 'entity',
-                },
-              });
-            });
-          }
-        });
+        // TODO: Add proper value/relation creation from clipboard data
+        // For now, just creating basic entities
 
         return entity;
       });
@@ -374,10 +351,10 @@ export function PowerToolsViewVirtual() {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-grey-02 p-4">
         <div className="flex items-center gap-3">
-          <Text variant="h2">{blockName || 'Power Tools'}</Text>
+          <Text variant="mediumTitle">{blockName || 'Power Tools'}</Text>
           {selectedRows.size > 0 && (
             <div className="flex items-center gap-2 rounded bg-action-bg px-3 py-1">
-              <Text variant="labelMedium">{selectedRows.size} selected</Text>
+              <Text variant="metadata">{selectedRows.size} selected</Text>
               <button
                 onClick={() => setSelectedRows(new Set())}
                 className="text-grey-04 hover:text-text"
@@ -393,22 +370,22 @@ export function PowerToolsViewVirtual() {
           {selectedRows.size > 0 && (
             <>
               <button
-                onClick={() => handleBulkOperation('set')}
+                onClick={() => handleBulkOperation('add-values')}
                 className="rounded bg-action px-3 py-1.5 text-white hover:bg-action-hover"
               >
-                <Text variant="labelMedium">Set Value</Text>
+                <Text variant="metadata">Set Value</Text>
               </button>
               <button
-                onClick={() => handleBulkOperation('append')}
+                onClick={() => handleBulkOperation('add-values')}
                 className="rounded bg-action px-3 py-1.5 text-white hover:bg-action-hover"
               >
-                <Text variant="labelMedium">Append</Text>
+                <Text variant="metadata">Append</Text>
               </button>
               <button
-                onClick={() => handleBulkOperation('clear')}
+                onClick={() => handleBulkOperation('remove-values')}
                 className="rounded bg-grey-02 px-3 py-1.5 hover:bg-grey-03"
               >
-                <Text variant="labelMedium">Clear</Text>
+                <Text variant="metadata">Clear</Text>
               </button>
               {isClipboardSupported && (
                 <>
@@ -416,7 +393,7 @@ export function PowerToolsViewVirtual() {
                     onClick={handleCopy}
                     className="rounded bg-grey-02 px-3 py-1.5 hover:bg-grey-03"
                   >
-                    <Text variant="labelMedium">Copy</Text>
+                    <Text variant="metadata">Copy</Text>
                   </button>
                 </>
               )}
@@ -427,7 +404,7 @@ export function PowerToolsViewVirtual() {
               onClick={handlePaste}
               className="rounded bg-grey-02 px-3 py-1.5 hover:bg-grey-03"
             >
-              <Text variant="labelMedium">Paste</Text>
+              <Text variant="metadata">Paste</Text>
             </button>
           )}
         </div>
@@ -437,7 +414,7 @@ export function PowerToolsViewVirtual() {
       <div className="flex-1 overflow-hidden">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
-            <Text variant="bodyMedium" color="grey-04">
+            <Text variant="body" color="grey-04">
               Loading...
             </Text>
           </div>
@@ -467,6 +444,7 @@ export function PowerToolsViewVirtual() {
           operation={currentOperation}
           selectedCount={selectedRows.size}
           properties={properties}
+          spaceId={spaceId}
           onConfirm={handleBulkEdit}
         />
       )}

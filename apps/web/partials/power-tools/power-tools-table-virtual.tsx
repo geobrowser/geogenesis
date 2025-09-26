@@ -92,7 +92,7 @@ function RelationCell({
       ))}
       {remainingCount > 0 && (
         <div className="inline-flex items-center rounded bg-grey-01 px-2 py-1">
-          <Text variant="bodySm">+{remainingCount} more</Text>
+          <Text variant="body">+{remainingCount} more</Text>
         </div>
       )}
     </div>
@@ -149,7 +149,7 @@ export function PowerToolsTableVirtual({
       return allAvailableEntityIds.every(id => selectedRows.has(id));
     }
     // Fallback to visible rows if no allAvailableEntityIds provided
-    return rows.length > 0 && rows.every((row) => selectedRows.has(row.entityId || row.id));
+    return rows.length > 0 && rows.every((row) => selectedRows.has(row.entityId));
   }, [allAvailableEntityIds, selectedRows, rows, isSelectingAll, selectAllState]);
 
   const isPartiallySelected = React.useMemo(() => {
@@ -160,7 +160,7 @@ export function PowerToolsTableVirtual({
       return !isAllSelected && allAvailableEntityIds.some(id => selectedRows.has(id));
     }
     // Fallback to visible rows if no allAvailableEntityIds provided
-    return !isAllSelected && rows.some((row) => selectedRows.has(row.entityId || row.id));
+    return !isAllSelected && rows.some((row) => selectedRows.has(row.entityId));
   }, [isAllSelected, allAvailableEntityIds, selectedRows, rows, isSelectingAll, selectAllState]);
 
   // Get all unique property IDs from schema and rows
@@ -168,7 +168,7 @@ export function PowerToolsTableVirtual({
     const propertySet = new Set<string>();
 
     // Always include Name property
-    propertySet.add(SystemIds.Name);
+    propertySet.add(SystemIds.NAME_PROPERTY);
 
     // Add all properties from schema
     if (propertiesSchema) {
@@ -179,8 +179,6 @@ export function PowerToolsTableVirtual({
     rows.forEach(row => {
       if (row.columns) {
         Object.keys(row.columns).forEach(id => propertySet.add(id));
-      } else if (row.cells) {
-        Object.keys(row.cells).forEach(id => propertySet.add(id));
       }
     });
 
@@ -284,7 +282,7 @@ export function PowerToolsTableVirtual({
   // Handle selection with shift key
   const handleRowClick = (index: number, event: React.MouseEvent) => {
     const row = rows[index];
-    const rowId = row.entityId || row.id;
+    const rowId = row.entityId;
     const isCurrentlySelected = selectedRows.has(rowId);
 
     if (event.shiftKey && lastSelectedIndex !== null && onSelectRange) {
@@ -332,8 +330,6 @@ export function PowerToolsTableVirtual({
             ) : (
               <Checkbox
                 checked={isAllSelected}
-                indeterminate={isPartiallySelected}
-                readOnly
               />
             )}
           </div>
@@ -346,7 +342,7 @@ export function PowerToolsTableVirtual({
                 index < visibleProperties.length - 1 ? 'border-r' : ''
               }`}
             >
-              <Text variant="labelMedium" className="truncate">
+              <Text variant="metadata" className="truncate">
                 {property.name || property.id}
               </Text>
               {/* Resize handle */}
@@ -378,7 +374,7 @@ export function PowerToolsTableVirtual({
         {/* Virtual Rows */}
         {virtualItems.map((virtualRow) => {
           const row = rows[virtualRow.index];
-          const rowId = row.entityId || row.id;
+          const rowId = row.entityId;
           const isSelected = selectedRows.has(rowId);
 
           return (
@@ -416,13 +412,12 @@ export function PowerToolsTableVirtual({
                 >
                   <Checkbox
                     checked={isSelected}
-                    readOnly
                   />
                 </div>
 
                 {/* Cell values */}
                 {visibleProperties.map((property, cellIndex) => {
-                  const cell = row.columns?.[property.id] || row.cells?.[property.id];
+                  const cell = row.columns?.[property.id];
                   const isLastColumn = cellIndex === visibleProperties.length - 1;
 
                   return (
@@ -433,7 +428,7 @@ export function PowerToolsTableVirtual({
                       }`}
                     >
                       {!cell ? (
-                        <Text variant="bodyMedium" color="grey-04">
+                        <Text variant="body" color="grey-04">
                           —
                         </Text>
                       ) : (cell as any).relation || (cell as any).relations ? (
@@ -442,7 +437,7 @@ export function PowerToolsTableVirtual({
                             (cell as any).relations.map((rel: any, index: number) => (
                               console.log('Rendering relation:', { rowId, propertyId: property.id, rel }),
                               <RelationChip
-                                key={`${row.entityId || row.id}-${property.id}-${rel.id}-${index}`}
+                                key={`${row.entityId}-${property.id}-${rel.id}-${index}`}
                                 relationId={rel.id}
                                 relationName={rel.name}
                                 spaceId={spaceId}
@@ -452,7 +447,7 @@ export function PowerToolsTableVirtual({
                             ))
                           ) : (
                             <RelationChip
-                              key={`${row.entityId || row.id}-${property.id}-${(cell as any).relation.id}`}
+                              key={`${row.entityId}-${property.id}-${(cell as any).relation.id}`}
                               relationId={(cell as any).relation.id}
                               relationName={(cell as any).relation.name}
                               spaceId={spaceId}
@@ -461,24 +456,23 @@ export function PowerToolsTableVirtual({
                             />
                           )}
                         </div>
-                      ) : property.id === SystemIds.NAME_PROPERTY && (cell as any).entityId ? (
+                      ) : property.id === SystemIds.NAME_PROPERTY ? (
                         <button
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            handleEntityClick((cell as any).entityId, (cell as any).space);
+                            handleEntityClick(row.entityId, (cell as any).space);
                           }}
                           className="text-left text-blue-04 hover:underline"
                         >
-                          <Text variant="bodyMedium">
+                          <Text variant="body">
                             {(cell as any).name || (cell as any).value || 'Untitled'}
                           </Text>
                         </button>
                       ) : (
                         <Text
-                          variant="bodyMedium"
+                          variant="body"
                           className="line-clamp-2"
-                          title={(cell as any).value || (cell as any).name || ''}
                         >
                           {(cell as any).value || (cell as any).name || '—'}
                         </Text>
@@ -495,7 +489,7 @@ export function PowerToolsTableVirtual({
       {/* Loading indicators */}
       {isFetchingNextPage && (
         <div className="flex justify-center p-4">
-          <Text variant="bodyMedium" color="grey-04">
+          <Text variant="body" color="grey-04">
             Loading more rows...
           </Text>
         </div>
@@ -503,7 +497,7 @@ export function PowerToolsTableVirtual({
 
       {!hasNextPage && rows.length > 0 && (
         <div className="flex justify-center p-4">
-          <Text variant="bodyMedium" color="grey-04">
+          <Text variant="body" color="grey-04">
             All {totalDBRowCount} rows loaded ({totalFetched} fetched)
           </Text>
         </div>

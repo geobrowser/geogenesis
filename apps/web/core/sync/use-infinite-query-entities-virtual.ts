@@ -2,8 +2,6 @@ import * as React from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Entity } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
-import { useStore } from 'zustand';
-import { GeoStore } from './store';
 
 const BATCH_SIZE = 50;
 

@@ -158,7 +158,7 @@ export function PowerToolsEnhancedTable({
           <input
             type="checkbox"
             checked={isSelected}
-            onChange={(e) => handleRowSelect(row.original.entityId, e.target.checked, rowIndex, e.nativeEvent as React.MouseEvent)}
+            onChange={(e) => handleRowSelect(row.original.entityId, e.target.checked, rowIndex, e.nativeEvent as unknown as React.MouseEvent)}
             onClick={(e) => {
               // Prevent the default onChange behavior for keyboard shortcuts
               if (e.shiftKey || e.metaKey || e.ctrlKey) {
@@ -175,11 +175,11 @@ export function PowerToolsEnhancedTable({
   });
 
   // Format data columns (same as original TableBlockTable)
-  const formatColumns = (columns: Property[]): ColumnDef<Row>[] => {
+  const formatColumns = (columns: Property[]) => {
     const columnSize = 880 / columns.length;
 
     return columns.map((column) => {
-      return columnHelper.accessor(row => row.columns[column.id], {
+      return columnHelper.accessor((row: Row) => row.columns[column.id] as Cell, {
         id: column.id,
         header: () => {
           const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
@@ -300,9 +300,9 @@ export function PowerToolsEnhancedTable({
           isExpanded={isExpanded}
           onChangeEntry={onChangeEntry}
           onLinkEntry={onLinkEntry}
-          propertiesSchemaFromMeta={propertiesSchemaFromMeta}
+          propertiesSchemaFromMeta={propertiesSchemaFromMeta ?? null}
           sourceFromMeta={sourceFromMeta}
-          isEditable={isEditable}
+          isEditable={isEditable ?? false}
         />
       );
     },
@@ -321,7 +321,7 @@ export function PowerToolsEnhancedTable({
       isEditable: false, // Power Tools is read-only
       onChangeEntry: dummyOnChangeEntry,
       onLinkEntry: dummyOnLinkEntry,
-      propertiesSchema,
+      propertiesSchema: propertiesSchema ?? undefined,
       source,
     },
   });
@@ -408,7 +408,7 @@ export function PowerToolsEnhancedTable({
       {/* Loading indicator for infinite scroll */}
       {hasMore && (
         <div className="flex justify-center p-4">
-          <Text variant="bodyMedium" color="grey-04">
+          <Text variant="body" color="grey-04">
             {isLoadingMore ? 'Loading more rows...' : 'Scroll to load more'}
           </Text>
         </div>
@@ -416,7 +416,7 @@ export function PowerToolsEnhancedTable({
 
       {!hasMore && rows.length > 0 && (
         <div className="flex justify-center p-4">
-          <Text variant="bodyMedium" color="grey-04">
+          <Text variant="body" color="grey-04">
             All {rows.length} rows loaded
           </Text>
         </div>

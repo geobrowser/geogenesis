@@ -39,11 +39,11 @@ export function BulkActionsBar({
     <div className="border-b border-grey-02 bg-white px-6 py-3">
       <div className="flex items-center gap-4">
         {selectedCount > 0 ? (
-          <Text variant="bodyMedium" color="grey-04">
+          <Text variant="body" color="grey-04">
             {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
           </Text>
         ) : (
-          <Text variant="bodyMedium" color="grey-04">
+          <Text variant="body" color="grey-04">
             Paste available
           </Text>
         )}
@@ -120,7 +120,7 @@ export function BulkActionsBar({
               className="flex h-6 w-6 items-center justify-center rounded-sm hover:bg-grey-01"
               title="Clear selection"
             >
-              <Close className="h-4 w-4" />
+              <Close />
             </button>
           </>
         )}

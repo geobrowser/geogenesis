@@ -79,7 +79,7 @@ export default async function SpacePage(props0: Props) {
     <>
       {spaceType && <SpaceNotices spaceType={spaceType} spaceId={spaceId} entityId={props.id} />}
       <React.Suspense fallback={<SubspacesSkeleton />}>
-        <SubspacesContainer spaceId={params.id} />
+        <SubspacesContainer />
       </React.Suspense>
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
@@ -114,11 +114,7 @@ const SubspacesSkeleton = () => {
   );
 };
 
-type SubspacesContainerProps = {
-  spaceId: string;
-};
-
-const SubspacesContainer = async ({ spaceId }: SubspacesContainerProps) => {
+const SubspacesContainer = async () => {
   // const subspaces = await fetchSubspacesBySpaceId(spaceId);
   const subspaces: Subspace[] = [];
 

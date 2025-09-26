@@ -62,7 +62,7 @@ export function EntityPanelContent({ entityId, spaceId, entity }: Props) {
       <div>
         <Text variant="largeTitle">{entity?.name || 'Untitled'}</Text>
         {entity?.description && (
-          <Text variant="bodyMedium" color="grey-04" className="mt-2">
+          <Text variant="body" color="grey-04" className="mt-2">
             {entity.description}
           </Text>
         )}
@@ -82,12 +82,12 @@ export function EntityPanelContent({ entityId, spaceId, entity }: Props) {
 
             return (
               <div key={propId} className="border-l-2 border-grey-02 pl-3">
-                <Text variant="labelMedium" color="grey-04">
+                <Text variant="metadata" color="grey-04">
                   {propertyName}
                 </Text>
                 <div className="mt-1">
                   {propValues.map((value, idx) => (
-                    <Text key={idx} variant="bodyMedium">
+                    <Text key={idx} variant="body">
                       {value.value || '—'}
                     </Text>
                   ))}
@@ -112,7 +112,7 @@ export function EntityPanelContent({ entityId, spaceId, entity }: Props) {
 
             return (
               <div key={typeId} className="border-l-2 border-grey-02 pl-3">
-                <Text variant="labelMedium" color="grey-04">
+                <Text variant="metadata" color="grey-04">
                   {typeName}
                 </Text>
                 <div className="mt-1 flex flex-wrap gap-1">
@@ -120,7 +120,7 @@ export function EntityPanelContent({ entityId, spaceId, entity }: Props) {
                     <PowerToolsRelationChip
                       key={relation.id}
                       relationId={relation.toEntity.id}
-                      relationName={relation.toEntity.name}
+                      relationName={relation.toEntity.name ?? undefined}
                       spaceId={spaceId}
                       onClick={handleRelationClick}
                     />
@@ -143,7 +143,7 @@ export function EntityPanelContent({ entityId, spaceId, entity }: Props) {
 
       {/* Fallback if no content */}
       {valuesByProperty.size === 0 && relationsByType.size === 0 && (
-        <Text variant="bodyMedium" color="grey-04">
+        <Text variant="body" color="grey-04">
           No properties or relations found for this entity.
         </Text>
       )}

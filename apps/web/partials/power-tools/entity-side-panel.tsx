@@ -86,7 +86,7 @@ function CrossSpaceReadableEntityPage({ entityId, spaceId }: { entityId: string;
   if (Object.keys(renderedProperties).length === 0) {
     return (
       <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
-        <Text variant="bodyMedium" color="grey-04">
+        <Text variant="body" color="grey-04">
           No properties found for this entity.
         </Text>
       </div>
@@ -184,7 +184,7 @@ export function EntitySidePanel({ entityId, spaceId, isOpen, onClose }: Props) {
                       : "Switch to edit mode"
                   }
                 >
-                  <Edit className="h-3.5 w-3.5" />
+                  <Edit />
                   <span>{isEditing ? 'Read' : 'Edit'}</span>
                 </button>
                 <a
@@ -195,14 +195,14 @@ export function EntitySidePanel({ entityId, spaceId, isOpen, onClose }: Props) {
                   title="Open entity page"
                 >
                   <span>Open Entity Page</span>
-                  <NewTab className="h-3.5 w-3.5" />
+                  <NewTab />
                 </a>
                 <button
                   onClick={onClose}
                   className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
                   aria-label="Close panel"
                 >
-                  <Close className="h-4 w-4" />
+                  <Close />
                 </button>
               </div>
             </div>
@@ -211,7 +211,7 @@ export function EntitySidePanel({ entityId, spaceId, isOpen, onClose }: Props) {
             <div className="flex-1 overflow-y-auto p-4">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Text variant="bodyMedium" color="grey-04">
+                  <Text variant="body" color="grey-04">
                     Loading...
                   </Text>
                 </div>
@@ -224,7 +224,7 @@ export function EntitySidePanel({ entityId, spaceId, isOpen, onClose }: Props) {
                 />
               ) : (
                 <div className="flex items-center justify-center py-8">
-                  <Text variant="bodyMedium" color="grey-04">
+                  <Text variant="body" color="grey-04">
                     Entity not found
                   </Text>
                 </div>
