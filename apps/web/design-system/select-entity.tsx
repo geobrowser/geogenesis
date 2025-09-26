@@ -66,6 +66,7 @@ type SelectEntityProps = {
   withSelectSpace?: boolean;
   withSearchIcon?: boolean;
   advanced?: boolean;
+  autoFocus?: boolean;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -85,6 +86,7 @@ export const SelectEntity = ({
   withSelectSpace = true,
   withSearchIcon = false,
   advanced = true,
+  autoFocus = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
@@ -244,6 +246,7 @@ export const SelectEntity = ({
             placeholder={placeholder}
             className={inputStyles({ [variant]: true, withSearchIcon, className: inputClassName })}
             spellCheck={false}
+            autoFocus={autoFocus}
           />
         </Popover.Anchor>
         {query && (

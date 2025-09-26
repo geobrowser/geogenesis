@@ -373,6 +373,8 @@ export const TableBlock = ({ spaceId }: Props) => {
     EntriesComponent = (
       <div className="flex w-full flex-col">
         {entries.map((row, index: number) => {
+          const isPlaceholder = Boolean(row.placeholder);
+
           return (
             <TableBlockBulletedListItem
               isEditing={isEditing}
@@ -380,12 +382,13 @@ export const TableBlock = ({ spaceId }: Props) => {
               columns={row.columns}
               currentSpaceId={spaceId}
               rowEntityId={row.entityId}
-              isPlaceholder={Boolean(row.placeholder)}
+              isPlaceholder={isPlaceholder}
               onChangeEntry={onChangeEntry}
               onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
               relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
               source={source}
+              autoFocus={isPlaceholder}
             />
           );
         })}
