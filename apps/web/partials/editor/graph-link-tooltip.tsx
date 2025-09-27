@@ -98,14 +98,12 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
           if (parentTippy) {
             parentTippy.setProps({ hideOnClick: false });
           }
-          console.log('Child tippy showing');
         },
         onHide: () => {
           // Allow parent tooltip to hide normally when child is hidden
           if (parentTippy) {
             parentTippy.setProps({ hideOnClick: 'toggle' });
           }
-          console.log('Child tippy hiding');
         },
       });
     }

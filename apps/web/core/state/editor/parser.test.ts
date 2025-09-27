@@ -95,6 +95,41 @@ describe('Parser', () => {
         expect(htmlToMarkdown('<a href="https://example.com"><strong>Bold Link</strong></a>'))
           .toBe('[**Bold Link**](https://example.com)');
       });
+
+      it('handles paragraphs with links inside', () => {
+        expect(htmlToMarkdown('<p>This is a <a href="https://example.com">link</a> in a paragraph</p>'))
+          .toBe('This is a [link](https://example.com) in a paragraph');
+      });
+
+      it('handles paragraphs with graph protocol links', () => {
+        expect(htmlToMarkdown('<p>Check out <a href="graph://entity-123">this entity</a> for more info</p>'))
+          .toBe('Check out [this entity](graph://entity-123) for more info');
+      });
+
+      it('handles multiple links in a paragraph', () => {
+        expect(htmlToMarkdown('<p>Visit <a href="https://example.com">Example</a> or <a href="graph://entity-456">Entity</a></p>'))
+          .toBe('Visit [Example](https://example.com) or [Entity](graph://entity-456)');
+      });
+
+      it('handles text with link and formatting', () => {
+        expect(htmlToMarkdown('<p>This is <strong>bold</strong> and <a href="graph://123">linked</a> text</p>'))
+          .toBe('This is **bold** and [linked](graph://123) text');
+      });
+
+      it('handles links with entity-link-valid class from editor', () => {
+        expect(htmlToMarkdown('<p>Check out <a href="graph://entity-123" class="entity-link-valid">this entity</a> here</p>'))
+          .toBe('Check out [this entity](graph://entity-123) here');
+      });
+
+      it('handles multiple links with entity-link-valid class', () => {
+        expect(htmlToMarkdown('<p><a href="graph://123" class="entity-link-valid">First</a> and <a href="graph://456" class="entity-link-valid">Second</a> entity</p>'))
+          .toBe('[First](graph://123) and [Second](graph://456) entity');
+      });
+
+      it('handles links with class and other attributes', () => {
+        expect(htmlToMarkdown('<p>Visit <a href="graph://entity-789" class="entity-link-valid" rel="null" target="null">Entity</a> for info</p>'))
+          .toBe('Visit [Entity](graph://entity-789) for info');
+      });
     });
 
     describe('Lists', () => {
@@ -222,14 +257,39 @@ describe('Parser', () => {
     });
 
     describe('Links', () => {
-      it('converts markdown links', () => {
-        expect(markdownToHtml('[Example](https://example.com)'))
-          .toBe('<p><a href="https://example.com">Example</a></p>');
+      it('converts only graph protocol links to anchor tags', () => {
+        expect(markdownToHtml('[Example](graph://entity-123)'))
+          .toBe('<p><a href="graph://entity-123">Example</a></p>');
       });
 
-      it('handles links with formatted text', () => {
+      it('leaves HTTP/HTTPS links as markdown for Web2URLExtension', () => {
         expect(markdownToHtml('[**Bold Link**](https://example.com)'))
-          .toBe('<p><a href="https://example.com"><strong>Bold Link</strong></a></p>');
+          .toBe('<p>[<strong>Bold Link</strong>](https://example.com)</p>');
+      });
+
+      it('converts graph protocol links in paragraphs', () => {
+        expect(markdownToHtml('Check out [this entity](graph://entity-123) for more'))
+          .toBe('<p>Check out <a href="graph://entity-123">this entity</a> for more</p>');
+      });
+
+      it('leaves web2 URLs as markdown for Web2URLExtension to process', () => {
+        expect(markdownToHtml('testing [Duck Duck Go](https://duckduckgo.com)'))
+          .toBe('<p>testing [Duck Duck Go](https://duckduckgo.com)</p>');
+      });
+
+      it('leaves www URLs as markdown for Web2URLExtension to process', () => {
+        expect(markdownToHtml('visit [Example](www.example.com) site'))
+          .toBe('<p>visit [Example](www.example.com) site</p>');
+      });
+
+      it('handles multiple links in paragraph', () => {
+        expect(markdownToHtml('Visit [First](graph://123) and [Second](graph://456) entity'))
+          .toBe('<p>Visit <a href="graph://123">First</a> and <a href="graph://456">Second</a> entity</p>');
+      });
+
+      it('handles mixed bold and links', () => {
+        expect(markdownToHtml('This is **bold** and [linked](graph://789) text'))
+          .toBe('<p>This is <strong>bold</strong> and <a href="graph://789">linked</a> text</p>');
       });
     });
 

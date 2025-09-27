@@ -33,12 +33,10 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
           };
 
           const show = (linkElement: HTMLAnchorElement, linkUrl: string) => {
-            console.log('GraphLinkHover: show() called', { linkElement, linkUrl, isDestroyed, editorView });
 
             if (isDestroyed || !editorView) return;
 
             if (currentLinkElement === linkElement && popup && popup.state.isVisible) {
-              console.log('GraphLinkHover: Already showing for this link');
               return; // Already showing for this link
             }
 
@@ -50,11 +48,9 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
               if (isDestroyed) return;
               
               const linkText = linkElement.textContent || '';
-              console.log('GraphLinkHover: Creating tooltip with text:', linkText);
 
             try {
               if (!component) {
-                console.log('GraphLinkHover: Creating new ReactRenderer');
                 component = new ReactRenderer(GraphLinkTooltip, {
                   props: {
                     linkText,
@@ -109,9 +105,6 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
                       if (navigator.clipboard) {
                         navigator.clipboard
                           .writeText(linkUrl)
-                          .then(() => {
-                            console.log('Link copied to clipboard');
-                          })
                           .catch(err => {
                             console.error('Failed to copy link:', err);
                           });
@@ -123,7 +116,6 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
                         textArea.select();
                         document.execCommand('copy');
                         document.body.removeChild(textArea);
-                        console.log('Link copied to clipboard (fallback)');
                       }
                       hide();
                     },
@@ -175,9 +167,6 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
                     if (navigator.clipboard) {
                       navigator.clipboard
                         .writeText(linkUrl)
-                        .then(() => {
-                          console.log('Link copied to clipboard');
-                        })
                         .catch(err => {
                           console.error('Failed to copy link:', err);
                         });
@@ -189,7 +178,6 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
                       textArea.select();
                       document.execCommand('copy');
                       document.body.removeChild(textArea);
-                      console.log('Link copied to clipboard (fallback)');
                     }
                     hide();
                   },
@@ -218,11 +206,7 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
                   onHide: () => {
                     currentLinkElement = null;
                   },
-                  onShow: () => {
-                    console.log('GraphLinkHover: Tippy shown');
-                  },
                 });
-                console.log('GraphLinkHover: Tippy instance created:', popup);
 
                 // Update component with parentTippy reference
                 if (component && popup) {
@@ -234,12 +218,9 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
               }
 
               if (popup) {
-                console.log('GraphLinkHover: Showing popup');
                 popup.show();
                 currentLinkElement = linkElement;
-              } else {
-                console.log('GraphLinkHover: No popup to show');
-              }
+              } 
             } catch (error) {
               console.warn('GraphLinkHover error:', error);
             }
@@ -268,11 +249,9 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
           };
 
           const handleMouseEnter = (event: Event) => {
-            console.log('GraphLinkHover: mouseenter event', event.target);
 
             // Only show hover card in edit mode, not read mode
             if (!editorView.editable) {
-              console.log('GraphLinkHover: Editor is not editable, not showing tooltip');
               return;
             }
 
@@ -282,8 +261,6 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
             //add early exit when link element null
             if (!linkElement) return;
 
-            console.log('GraphLinkHover: Link element found:', linkElement);
-
             if (linkElement && linkElement !== currentLinkElement) {
               // Hide any existing popup first
               if (popup && currentLinkElement !== linkElement) {
@@ -292,7 +269,6 @@ export const createGraphLinkHoverExtension = (spaceId: string) => {
 
               currentLinkElement = linkElement;
               const linkUrl = linkElement.getAttribute('href') || '';
-              console.log('GraphLinkHover: Showing tooltip for:', linkUrl);
               show(linkElement, linkUrl);
             }
           };

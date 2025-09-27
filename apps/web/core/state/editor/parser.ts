@@ -174,7 +174,15 @@ export function markdownToHtml(markdown: string): string {
   function processInlineFormatting(text: string): string {
     // Process inline formatting in the correct order
     // Links first (to avoid interfering with other formatting)
-    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    // Only convert graph:// URLs to anchor tags, leave web2 URLs as markdown for Web2URLExtension to handle
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
+      // Only convert to anchor tag if it's a graph:// URL
+      if (url.startsWith('graph://')) {
+        return `<a href="${url}">${linkText}</a>`;
+      }
+      // Leave web2 URLs (http/https/www) as markdown text for Web2URLExtension to process
+      return match;
+    });
     
     // Bold (must come before italic to handle ***text*** correctly)
     text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');

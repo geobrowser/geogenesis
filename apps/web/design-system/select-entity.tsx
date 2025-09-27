@@ -135,21 +135,17 @@ export const SelectEntity = ({
 
   // Auto focus input when component mounts
   useEffect(() => {
-    console.log('SelectEntity autoFocus effect:', { autoFocus, inputRef: inputRef.current });
     if (autoFocus && inputRef.current) {
       // Add small delay to ensure the component is fully rendered and visible
       const timer = setTimeout(() => {
-        console.log('SelectEntity attempting focus on:', inputRef.current);
         if (inputRef.current) {
           inputRef.current.focus();
-          console.log('SelectEntity focus completed, document.activeElement:', document.activeElement);
         }
       }, 100);
-      
+
       return () => clearTimeout(timer);
     }
   }, [autoFocus]);
-
 
   if (query === '' && result !== null) {
     startTransition(() => {

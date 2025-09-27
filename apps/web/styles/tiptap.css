@@ -132,3 +132,10 @@
 .ProseMirror span[data-web2-url] {
   @apply cursor-pointer text-red-01 underline decoration-red-01 decoration-dotted;
 }
+
+/* Edit mode web2 URL styling - avoid TipTap Underline extension interference */
+.ProseMirror span.web2-url-edit-mode {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: #e57373;
+}
