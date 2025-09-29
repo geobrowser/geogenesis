@@ -125,7 +125,6 @@ export function TableBlockBulletedListItem({
                   }}
                   value={name ?? ''}
                   shouldDebounce={true}
-                  autoFocus={autoFocus}
                 />
               ) : (
                 <CollectionMetadata
