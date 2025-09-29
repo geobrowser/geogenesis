@@ -29,6 +29,7 @@ type Props = {
   properties?: Record<string, Property>;
   relationId?: string;
   source: Source;
+  autoFocus?: boolean;
 };
 
 export function TableBlockListItem({
@@ -42,6 +43,7 @@ export function TableBlockListItem({
   properties,
   relationId,
   source,
+  autoFocus = false,
 }: Props) {
   const { storage } = useMutate();
   const nameCell = columns[SystemIds.NAME_PROPERTY];
@@ -167,6 +169,7 @@ export function TableBlockListItem({
                   );
                 }}
                 spaceId={currentSpaceId}
+                autoFocus={autoFocus}
               />
             ) : (
               <>

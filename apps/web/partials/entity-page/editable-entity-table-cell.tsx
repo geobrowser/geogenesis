@@ -34,6 +34,7 @@ type Props = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   source: Source;
+  autoFocus?: boolean;
 };
 
 export function EditableEntityTableCell({
@@ -50,6 +51,7 @@ export function EditableEntityTableCell({
   onChangeEntry,
   onLinkEntry,
   source,
+  autoFocus = false,
 }: Props) {
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
 
@@ -98,6 +100,7 @@ export function EditableEntityTableCell({
             );
           }}
           spaceId={spaceId}
+          autoFocus={autoFocus}
         />
       );
     }
