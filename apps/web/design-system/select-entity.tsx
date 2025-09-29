@@ -392,7 +392,7 @@ export const SelectEntity = ({
                 )}
                 {!result ? (
                   <ResizableContainer>
-                    <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
+                    <div className="no-scrollbar flex max-h-[50vh] flex-col overflow-y-auto overflow-x-clip bg-white">
                       {!results?.length && isLoading && (
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">Loading...</div>
@@ -546,7 +546,7 @@ export const SelectEntity = ({
                         />
                       </div>
                     </div>
-                    <div className="flex max-h-[219px] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
+                    <div className="flex max-h-[50vh] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
                       {(result.spaces ?? []).map((space, index) => (
                         <button
                           key={index}
@@ -710,7 +710,7 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
             forceMount
           >
             <div className="pt-1">
-              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {results.map(result => (
@@ -769,7 +769,7 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
             forceMount
           >
             <div className="pt-1">
-              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {!results?.length && isLoading && (
