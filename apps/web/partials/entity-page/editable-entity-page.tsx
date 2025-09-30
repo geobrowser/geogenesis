@@ -695,8 +695,6 @@ async function applyTemplate(templateOptions: {
 
   const template = await getEntityTemplate(typeId, entityId, entityName, spaceId);
 
-  console.log('Applying template:', template);
-
   if (!template) {
     return;
   }
