@@ -56,6 +56,8 @@ export function WebUrlField({
     return <GraphUrlField currentSpaceId={spaceId} value={value as `graph://${string}`} />;
   }
 
+  const normalizedUrl = value && !value.match(/^[a-zA-Z][a-zA-Z\d+\-.]*:/) ? `https://${value}` : value;
+
   return isEditing ? (
     <input
       {...props}
@@ -65,7 +67,7 @@ export function WebUrlField({
     />
   ) : (
     <a
-      href={value}
+      href={normalizedUrl}
       target="_blank"
       rel="noreferrer"
       className={webUrlFieldStyles({ variant, editable: isEditing, className })}
