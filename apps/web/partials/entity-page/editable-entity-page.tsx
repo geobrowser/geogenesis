@@ -689,8 +689,6 @@ async function applyTemplate(templateOptions: {
 }) {
   const { entityId, entityName, propertyId, typeId, spaceId, storage } = templateOptions;
 
-  console.log('applyTemplate', { entityId, entityName, propertyId, typeId, spaceId });
-
   if (propertyId !== SystemIds.TYPES_PROPERTY) {
     return;
   }
