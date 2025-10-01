@@ -56,6 +56,8 @@ export function WebUrlField({
     return <GraphUrlField currentSpaceId={spaceId} value={value as `graph://${string}`} />;
   }
 
+  // Check if URL has a protocol (http://, https://, mailto:, tel:, etc.)
+  // If not, prepend https:// to prevent relative path behavior
   const normalizedUrl = value && !value.match(/^[a-zA-Z][a-zA-Z\d+\-.]*:/) ? `https://${value}` : value;
 
   return isEditing ? (
