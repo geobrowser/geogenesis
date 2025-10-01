@@ -26,11 +26,10 @@ export const generateOpsForSpaceType = async ({
   const ops: Op[] = [];
   const newEntityId = validateEntityId(entityId) ? (entityId as EntityId) : ID.createEntityId();
 
-  // Add name + space type for all space types
   const newEntity = Graph.createEntity({
     id: newEntityId,
     name: spaceName,
-    types: [SystemIds.SPACE_TYPE],
+    types: [], // Graph.createSpace() already adds Space type
   });
 
   ops.push(...newEntity.ops);
