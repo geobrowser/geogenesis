@@ -6,6 +6,7 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
+import { VALUE_TYPE_PROPERTY, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -102,11 +103,15 @@ export function EditableEntityPage({ id, spaceId }: Props) {
           {propertiesEntries.map(([propertyId, property]) => {
             // Hide cover/avatar/types/name property, user can upload cover using upload icon on top placeholder
             // and add types inline using the + button, add name under cover image component
+
             if (
               propertyId === SystemIds.COVER_PROPERTY ||
               propertyId === ContentIds.AVATAR_PROPERTY ||
               propertyId === SystemIds.TYPES_PROPERTY ||
-              propertyId === SystemIds.NAME_PROPERTY
+              propertyId === SystemIds.NAME_PROPERTY ||
+              propertyId === DATA_TYPE_PROPERTY ||
+              propertyId === VALUE_TYPE_PROPERTY || // @TODO temporary until we update property schema in root
+              propertyId === RENDERABLE_TYPE_PROPERTY
             ) {
               return null;
             }
