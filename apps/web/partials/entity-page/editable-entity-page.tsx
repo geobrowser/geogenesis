@@ -6,7 +6,7 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { VALUE_TYPE_PROPERTY, DATA_TYPE_PROPERTY } from '~/core/constants';
+import { VALUE_TYPE_PROPERTY, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -110,7 +110,8 @@ export function EditableEntityPage({ id, spaceId }: Props) {
               propertyId === SystemIds.TYPES_PROPERTY ||
               propertyId === SystemIds.NAME_PROPERTY ||
               propertyId === DATA_TYPE_PROPERTY ||
-              propertyId === VALUE_TYPE_PROPERTY // @TODO temporary until we update property schema in root
+              propertyId === VALUE_TYPE_PROPERTY || // @TODO temporary until we update property schema in root
+              propertyId === RENDERABLE_TYPE_PROPERTY
             ) {
               return null;
             }
