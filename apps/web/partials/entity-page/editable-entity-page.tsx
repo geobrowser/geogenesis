@@ -655,7 +655,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
     case 'POINT': {
       return (
         <>
-          {propertyId === SystemIds.GEO_LOCATION_PROPERTY && property.dataType === 'POINT' ? (
+          {property.renderableTypeStrict === 'GEO_LOCATION' ? (
             <GeoLocationPointFields
               key={propertyId}
               variant="body"
