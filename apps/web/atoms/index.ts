@@ -15,3 +15,5 @@ export const teamNoticeDismissedAtom = atomWithStorage<RepeatingNotice>('dismiss
   dismissedCount: 0,
   lastDismissed: '',
 });
+
+export const onboardCodeAtom = atomWithStorage<string>('onboardCode', '');
