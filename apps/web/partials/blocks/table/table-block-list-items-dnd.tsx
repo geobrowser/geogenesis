@@ -113,8 +113,9 @@ const TableBlockListItemsDnd = ({
       }
 
       // Sort all collection relations by position
-      const allSortedRelations = [...collectionRelations]
-        .sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+      const allSortedRelations = [...collectionRelations].sort((a, b) =>
+        Position.compare(a.position ?? null, b.position ?? null)
+      );
 
       // Find the current position of the moving item in the sorted list
       const currentSortedIndex = allSortedRelations.findIndex(r => r.id === movingRelation.id);
@@ -328,7 +329,7 @@ const SortableItem = ({
     <div
       ref={setNodeRef}
       style={style}
-      className="relative inline-block"
+      className="relative"
       onClick={handleClick}
       onClickCapture={handleClick}
       onMouseEnter={handleMouseEnter}
@@ -344,7 +345,7 @@ const SortableItem = ({
           className="-left-[152px] h-full items-center"
         />
       )}
-      <div {...attributes} {...listeners} className="inline-flex items-center">
+      <div {...attributes} {...listeners} className="flex items-center">
         <TableBlockListItem
           isEditing={isEditing}
           key={`${row.entityId}-grabbed`}
