@@ -6,7 +6,7 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { VALUE_TYPE_PROPERTY, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+import { VALUE_TYPE_PROPERTY, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, IS_TYPE_PROPERTY } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -86,6 +86,15 @@ export function EditableEntityPage({ id, spaceId }: Props) {
 
   const name = useName(id, spaceId);
 
+  // Check if this entity is a non-relation property
+  const { property: propertyData } = useQueryProperty({
+    id,
+    spaceId,
+    enabled: true,
+  });
+
+  const isNonRelationProperty = propertyData && propertyData.dataType !== 'RELATION';
+
   return (
     <ShowablePanel id={id} spaceId={spaceId} name={name} hasEntries={propertiesEntries.length > 0}>
       <div className="rounded-lg border border-grey-02 shadow-button">
@@ -111,7 +120,8 @@ export function EditableEntityPage({ id, spaceId }: Props) {
               propertyId === SystemIds.NAME_PROPERTY ||
               propertyId === DATA_TYPE_PROPERTY ||
               propertyId === VALUE_TYPE_PROPERTY || // @TODO temporary until we update property schema in root
-              propertyId === RENDERABLE_TYPE_PROPERTY
+              propertyId === RENDERABLE_TYPE_PROPERTY ||
+              (propertyId === IS_TYPE_PROPERTY && isNonRelationProperty)
             ) {
               return null;
             }
