@@ -11,7 +11,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const { spaces } = useSpaces();
   const userCanEdit = useUserIsEditing(spaceId);
 
-  const { name, setName, isLoading } = useDataBlock();
+  const { name, setName, isLoading, entitySpaces: blockSpaces } = useDataBlock();
   const { source } = useSource();
 
   const hasOverflow = source.type === 'SPACES' ? source.value.length > 3 : false;
@@ -27,6 +27,10 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
       }, 200);
     }
   }, [name, isLoading]);
+
+  if (!blockSpaces?.includes(spaceId)) {
+    return;
+  }
 
   return (
     <div className="table-block-editable-title flex flex-grow items-center gap-2">

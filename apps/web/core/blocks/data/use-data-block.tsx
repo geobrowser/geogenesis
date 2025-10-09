@@ -157,10 +157,15 @@ export function useDataBlock() {
     }
 
     if (source.type === 'RELATIONS') {
-      return relationsMapping?.map(item => ({
-        ...item,
-        placeholder: false,
-      } as Row)) ?? [];
+      return (
+        relationsMapping?.map(
+          item =>
+            ({
+              ...item,
+              placeholder: false,
+            }) as Row
+        ) ?? []
+      );
     }
 
     return [];
@@ -219,6 +224,8 @@ export function useDataBlock() {
     setName,
     totalPages,
     collectionLength,
+
+    entitySpaces: entity?.spaces,
 
     relations: entity?.relations,
     collectionRelations: source.type === 'COLLECTION' ? collectionRelations : undefined,

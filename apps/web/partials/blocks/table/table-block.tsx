@@ -299,6 +299,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     collectionRelations,
     collectionLength,
     pageSize,
+    entitySpaces: blockSpaces,
   } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
@@ -310,6 +311,10 @@ export const TableBlock = ({ spaceId }: Props) => {
     filterState,
     relations
   );
+
+  if (!blockSpaces?.includes(spaceId)) {
+    return;
+  }
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
