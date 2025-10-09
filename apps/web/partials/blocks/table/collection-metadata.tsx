@@ -10,7 +10,6 @@ import type { DataBlockView } from '~/core/blocks/data/use-view';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useQueryEntity } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
@@ -48,7 +47,6 @@ export const CollectionMetadata = ({
   currentSpaceId,
   entityId,
   spaceId,
-  collectionId,
   relationId,
   verified,
   onLinkEntry,
@@ -60,11 +58,6 @@ export const CollectionMetadata = ({
 
   const { blockEntity } = useDataBlock();
   const { space } = useSpace(spaceId ?? '');
-
-  const { entity: collectionEntity } = useQueryEntity({
-    id: collectionId,
-    spaceId,
-  });
 
   // @TODO(migration): Should we be deleting the relation entity?
   // const { entity: relationEntity } = useQueryEntity({
@@ -79,11 +72,6 @@ export const CollectionMetadata = ({
       if (blockRelation) {
         storage.relations.delete(blockRelation);
       }
-    }
-
-    if (collectionEntity) {
-      collectionEntity.values.forEach(t => storage.values.delete(t));
-      collectionEntity.relations.forEach(r => storage.relations.delete(r));
     }
 
     // @TODO(migration): Should we be deleting the relation entity?
@@ -131,6 +119,7 @@ export const CollectionMetadata = ({
                 <Popover.Trigger asChild>
                   <button
                     onMouseEnter={() => setIsPopoverOpen(true)}
+                    onMouseDown={e => e.preventDefault()}
                     className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
                   >
                     <Menu />
@@ -141,6 +130,10 @@ export const CollectionMetadata = ({
                     side="top"
                     sideOffset={-4}
                     className="group z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
+                    onOpenAutoFocus={event => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
                   >
                     {isEditing && (
                       <SelectSpaceAsPopover
@@ -153,7 +146,7 @@ export const CollectionMetadata = ({
                           onLinkEntry(relationId, result, verified);
                         }}
                         trigger={
-                          <button className="inline-flex items-center p-1">
+                          <button className="inline-flex items-center p-1" onMouseDown={e => e.preventDefault()}>
                             <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
                               {space ? (
                                 <div className="size-[8px] overflow-clip rounded-sm grayscale">
@@ -174,7 +167,11 @@ export const CollectionMetadata = ({
                       <RelationSmall />
                     </PrefetchLink>
                     {isEditing && (
-                      <button onClick={onDeleteEntry} className="p-1 hover:!text-text group-hover:text-grey-03">
+                      <button
+                        onClick={onDeleteEntry}
+                        onMouseDown={e => e.preventDefault()}
+                        className="p-1 hover:!text-text group-hover:text-grey-03"
+                      >
                         <CheckCloseSmall />
                       </button>
                     )}
@@ -184,9 +181,9 @@ export const CollectionMetadata = ({
             </div>
           )}
           <div className="pointer-events-auto absolute bottom-0 right-0 top-0  flex items-center">
-            {isEditing && isHovered && (
+            {isHovered && (
               <PrefetchLink href={`/space/${spaceId}/${entityId}`}>
-                <SquareButton icon={<RightArrowLongSmall />} />
+                <SquareButton icon={<RightArrowLongSmall />} onMouseDown={e => e.preventDefault()} />
               </PrefetchLink>
             )}
           </div>

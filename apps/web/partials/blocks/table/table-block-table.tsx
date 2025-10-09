@@ -97,8 +97,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
     const onChangeEntry = table.options.meta!.onChangeEntry;
     const onLinkEntry = table.options.meta!.onLinkEntry;
+    const onAddPlaceholder = table.options.meta!.onAddPlaceholder;
     const propertiesSchema = table.options.meta!.propertiesSchema;
     const source = table.options.meta!.source;
+    const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
 
     const cellData = getValue<Cell | undefined>();
 
@@ -125,7 +127,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;
 
-    const autofocus = Boolean(row.original.placeholder) && isNameCell;
+    const autofocus = Boolean(row.original.placeholder) && isNameCell && shouldAutoFocusPlaceholder;
 
     if (!property) {
       return null;
@@ -147,6 +149,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           verified={verified}
           onChangeEntry={onChangeEntry}
           onLinkEntry={onLinkEntry}
+          onAddPlaceholder={onAddPlaceholder}
           source={source}
           autoFocus={autofocus}
         />
@@ -182,6 +185,7 @@ type TableBlockTableProps = {
   placeholder: { text: string; image: string };
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
+  onAddPlaceholder?: () => void;
   source: Source;
 };
 
@@ -194,11 +198,31 @@ export const TableBlockTable = ({
   placeholder,
   onChangeEntry,
   onLinkEntry,
+  onAddPlaceholder,
   source,
 }: TableBlockTableProps) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells] = useState<Record<string, boolean>>({});
+  const lastPlaceholderIdRef = React.useRef<string | null>(null);
+  const [shouldAutoFocusPlaceholder, setShouldAutoFocusPlaceholder] = React.useState(false);
+
+  // Track when a new placeholder is added
+  React.useEffect(() => {
+    const placeholderRow = rows.find(row => row.placeholder);
+    if (placeholderRow) {
+      const placeholderId = placeholderRow.entityId;
+      if (lastPlaceholderIdRef.current !== placeholderId) {
+        // New placeholder detected
+        lastPlaceholderIdRef.current = placeholderId;
+        setShouldAutoFocusPlaceholder(true);
+      }
+    } else {
+      // No placeholder present, reset
+      lastPlaceholderIdRef.current = null;
+      setShouldAutoFocusPlaceholder(false);
+    }
+  }, [rows]);
 
   const table = useReactTable({
     data: rows,
@@ -219,8 +243,10 @@ export const TableBlockTable = ({
       isEditable: isEditing,
       onChangeEntry,
       onLinkEntry,
+      onAddPlaceholder,
       propertiesSchema,
       source,
+      shouldAutoFocusPlaceholder,
     },
   });
 

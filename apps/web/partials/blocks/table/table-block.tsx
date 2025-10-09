@@ -24,7 +24,6 @@ import { OmitStrict } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { sortRows } from '~/core/utils/utils';
 import { Cell, Relation, Row, SearchResult, Value } from '~/core/v2.types';
 
 import { IconButton } from '~/design-system/button';
@@ -97,6 +96,8 @@ function useEntries(
   const { setEditable } = useEditable();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
+  const lastPlaceholderIdRef = React.useRef<string | null>(null);
+  const [shouldAutoFocusPlaceholder, setShouldAutoFocusPlaceholder] = React.useState(false);
 
   const { storage } = useMutate();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
@@ -133,9 +134,30 @@ function useEntries(
 
   const placeholderEntityId = pendingEntityId || nextEntityId;
 
-  const renderedEntries = shouldShowPlaceholder
-    ? [makePlaceholderRow(placeholderEntityId, properties), ...entriesWithPosition]
-    : entriesWithPosition;
+  const renderedEntries = React.useMemo(
+    () =>
+      shouldShowPlaceholder
+        ? [makePlaceholderRow(placeholderEntityId, properties), ...entriesWithPosition]
+        : entriesWithPosition,
+    [entriesWithPosition, placeholderEntityId, properties, shouldShowPlaceholder]
+  );
+
+  // Track when a new placeholder is added
+  React.useEffect(() => {
+    const placeholderRow = renderedEntries.find(row => row.placeholder);
+    if (placeholderRow) {
+      const placeholderId = placeholderRow.entityId;
+      if (lastPlaceholderIdRef.current !== placeholderId) {
+        // New placeholder detected
+        lastPlaceholderIdRef.current = placeholderId;
+        setShouldAutoFocusPlaceholder(true);
+      }
+    } else {
+      // No placeholder present, reset
+      lastPlaceholderIdRef.current = null;
+      setShouldAutoFocusPlaceholder(false);
+    }
+  }, [renderedEntries]);
 
   const onChangeEntry: onChangeEntryFn = (context, event) => {
     if (event.type === 'EVENT') {
@@ -146,27 +168,33 @@ function useEntries(
       // send(event.data);
 
       if (event.data.type === 'UPSERT_RENDERABLE_TRIPLE_VALUE') {
-        const value: Value | OmitStrict<Value, 'id'> = {
-          id: event.data.payload.renderable.entityId ?? undefined,
-          entity: {
-            id: context.entityId,
-            name: event.data.payload.renderable.entityName,
-          },
-          property: {
-            id: event.data.payload.renderable.attributeId,
-            name: event.data.payload.renderable.attributeName,
-            dataType: event.data.payload.renderable.type,
-          },
-          spaceId,
-          value: event.data.payload.value.value ?? '',
-        };
-
-        if (!event.data.payload.renderable.entityId) {
-          storage.values.set(value);
+        // Use the specialized entities.name.set API for NAME property to ensure proper sync
+        if (event.data.payload.renderable.attributeId === SystemIds.NAME_PROPERTY) {
+          storage.entities.name.set(context.entityId, spaceId, event.data.payload.value.value);
         } else {
-          storage.values.update(value, draft => {
-            draft.value = event.data.payload.value.value;
-          });
+          // For non-name properties, use the generic values API
+          const value: Value | OmitStrict<Value, 'id'> = {
+            id: event.data.payload.renderable.entityId ?? undefined,
+            entity: {
+              id: context.entityId,
+              name: event.data.payload.renderable.entityName,
+            },
+            property: {
+              id: event.data.payload.renderable.attributeId,
+              name: event.data.payload.renderable.attributeName,
+              dataType: event.data.payload.renderable.type,
+            },
+            spaceId,
+            value: event.data.payload.value.value ?? '',
+          };
+
+          if (!event.data.payload.renderable.entityId) {
+            storage.values.set(value);
+          } else {
+            storage.values.update(value, draft => {
+              draft.value = event.data.payload.value.value;
+            });
+          }
         }
       }
     }
@@ -277,6 +305,7 @@ function useEntries(
     onChangeEntry,
     onLinkEntry,
     onUpdateRelation,
+    shouldAutoFocusPlaceholder,
   };
 }
 
@@ -303,13 +332,8 @@ export const TableBlock = ({ spaceId }: Props) => {
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
-  const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation } = useEntries(
-    rows,
-    properties,
-    spaceId,
-    filterState,
-    relations
-  );
+  const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
+    useEntries(rows, properties, spaceId, filterState, relations);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -346,6 +370,7 @@ export const TableBlock = ({ spaceId }: Props) => {
       shownColumnIds={shownColumnIds}
       onChangeEntry={onChangeEntry}
       onLinkEntry={onLinkEntry}
+      onAddPlaceholder={onAddPlaceholder}
     />
   );
 
@@ -365,6 +390,7 @@ export const TableBlock = ({ spaceId }: Props) => {
         collectionLength={collectionLength}
         pageNumber={pageNumber}
         pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
       />
     );
   }
@@ -388,7 +414,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               properties={propertiesSchema}
               relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
               source={source}
-              autoFocus={isPlaceholder}
+              autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
             />
           );
         })}
@@ -412,6 +438,7 @@ export const TableBlock = ({ spaceId }: Props) => {
         collectionLength={collectionLength}
         pageNumber={pageNumber}
         pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
       />
     );
   }
