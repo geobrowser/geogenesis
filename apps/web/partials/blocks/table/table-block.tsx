@@ -299,7 +299,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     collectionRelations,
     collectionLength,
     pageSize,
-    entitySpaces: blockSpaces,
+    isBlockedLinkedToEntity,
   } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
@@ -312,7 +312,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     relations
   );
 
-  if (!blockSpaces?.includes(spaceId)) {
+  if (!isBlockedLinkedToEntity) {
     return;
   }
 
