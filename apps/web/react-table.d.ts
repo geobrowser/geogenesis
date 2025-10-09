@@ -14,7 +14,9 @@ declare module '@tanstack/react-table' {
     isEditable: boolean;
     onChangeEntry: onChangeEntryFn;
     onLinkEntry: onLinkEntryFn;
+    onAddPlaceholder?: () => void;
     propertiesSchema: Record<string, Property> | undefined;
     source: Source;
+    shouldAutoFocusPlaceholder?: boolean;
   }
 }
