@@ -6,7 +6,7 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { VALUE_TYPE_PROPERTY, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, IS_TYPE_PROPERTY } from '~/core/constants';
+import { DATA_TYPE_PROPERTY, IS_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VALUE_TYPE_PROPERTY } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -213,6 +213,8 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                 propertyName: result.name || '',
                 entityName: name || undefined,
               });
+
+              return createdPropertyId;
             }}
             onDone={result => {
               if (result) {
