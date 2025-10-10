@@ -23,6 +23,7 @@ import {
   resultsQuery,
   spaceQuery,
   spacesQuery,
+  spacesWhereMemberQuery,
 } from './fragments';
 import { graphql } from './graphql';
 
@@ -152,6 +153,15 @@ export function getSpaces(
       offset,
       filter: spaceIds ? { id: { in: spaceIds } } : undefined,
     },
+    signal,
+  });
+}
+
+export function getSpacesWhereMember(address: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: spacesWhereMemberQuery,
+    decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((s): s is Space => s !== null) ?? [],
+    variables: { address },
     signal,
   });
 }
