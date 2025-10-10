@@ -53,7 +53,7 @@ export function useDataBlock() {
     id: pageEntityId,
   });
 
-  const isBlockedLinkedToEntity = pageEntity?.relations.map(ent => ent.toEntity.id).includes(entityId);
+  const isBlockLinkedToEntity = pageEntity?.relations.some(rel => rel.toEntity.id === entityId) ?? false;
 
   const { relationBlockSourceRelations } = useRelationsBlock();
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
@@ -235,7 +235,7 @@ export function useDataBlock() {
     totalPages,
     collectionLength,
 
-    isBlockedLinkedToEntity,
+    isBlockLinkedToEntity,
 
     relations: entity?.relations,
     collectionRelations: source.type === 'COLLECTION' ? collectionRelations : undefined,

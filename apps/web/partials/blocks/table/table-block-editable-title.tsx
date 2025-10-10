@@ -11,7 +11,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const { spaces } = useSpaces();
   const userCanEdit = useUserIsEditing(spaceId);
 
-  const { name, setName, isLoading, isBlockedLinkedToEntity } = useDataBlock();
+  const { name, setName, isLoading, isBlockLinkedToEntity } = useDataBlock();
   const { source } = useSource();
 
   const hasOverflow = source.type === 'SPACES' ? source.value.length > 3 : false;
@@ -28,8 +28,9 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
     }
   }, [name, isLoading]);
 
-  if (!isBlockedLinkedToEntity) {
-    return;
+  if (!isBlockLinkedToEntity) {
+    // Don't render data blocks that aren't linked to the current page entity
+    return null;
   }
 
   return (

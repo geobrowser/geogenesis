@@ -299,7 +299,7 @@ export const TableBlock = ({ spaceId }: Props) => {
     collectionRelations,
     collectionLength,
     pageSize,
-    isBlockedLinkedToEntity,
+    isBlockLinkedToEntity,
   } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
@@ -312,8 +312,9 @@ export const TableBlock = ({ spaceId }: Props) => {
     relations
   );
 
-  if (!isBlockedLinkedToEntity) {
-    return;
+  if (!isBlockLinkedToEntity) {
+    // Don't render data blocks that aren't linked to the current page entity
+    return null;
   }
 
   /**
