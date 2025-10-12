@@ -7,7 +7,8 @@ import * as React from 'react';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
-import { Cell, Property, Relation } from '~/core/v2.types';
+import { sortRows } from '~/core/utils/utils';
+import { Cell, Property, Relation, Row } from '~/core/v2.types';
 
 import { useProperties } from '../../hooks/use-properties';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
@@ -55,7 +56,7 @@ export function useDataBlock() {
     isLoading: isCollectionLoading,
     collectionLength,
   } = useCollection({
-    first: PAGE_SIZE + 1,
+    first: PAGE_SIZE,
     skip: pageNumber * PAGE_SIZE,
   });
 
@@ -156,8 +157,13 @@ export function useDataBlock() {
     }
 
     if (source.type === 'RELATIONS') {
-      return relationsMapping;
+      return relationsMapping?.map(item => ({
+        ...item,
+        placeholder: false,
+      } as Row)) ?? [];
     }
+
+    return [];
   })();
 
   const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
@@ -191,17 +197,18 @@ export function useDataBlock() {
         ? rows.length > PAGE_SIZE
         : false;
 
-  return {
+  const result = {
     entityId,
     spaceId,
     relationId,
 
     blockEntity: entity,
-    rows: rows?.slice(0, PAGE_SIZE) ?? [],
+    rows: sortRows(rows)?.slice(0, PAGE_SIZE) ?? [],
     properties: propertiesSchema ? Object.values(propertiesSchema) : [],
     propertiesSchema,
 
     pageNumber,
+    pageSize: PAGE_SIZE,
     hasNextPage,
     hasPreviousPage: pageNumber > 0,
     setPage,
@@ -211,7 +218,13 @@ export function useDataBlock() {
     name: entity?.name ?? null,
     setName,
     totalPages,
+    collectionLength,
+
+    relations: entity?.relations,
+    collectionRelations: source.type === 'COLLECTION' ? collectionRelations : undefined,
   };
+
+  return result;
 }
 
 const DataBlockContext = React.createContext<{

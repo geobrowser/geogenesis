@@ -6,7 +6,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation, useValues } from '~/core/sync/use-store';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -29,6 +29,7 @@ type Props = {
   properties?: Record<string, Property>;
   relationId?: string;
   source: Source;
+  autoFocus?: boolean;
 };
 
 export function TableBlockGalleryItem({
@@ -42,6 +43,7 @@ export function TableBlockGalleryItem({
   properties,
   relationId,
   source,
+  autoFocus = false,
 }: Props) {
   const { storage } = useMutate();
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
@@ -80,6 +82,11 @@ export function TableBlockGalleryItem({
 
   if (maybeCoverUrl) {
     image = maybeCoverUrl;
+  }
+
+  const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
+  if (image && imageUrl) {
+    image = imageUrl;
   }
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
@@ -125,31 +132,6 @@ export function TableBlockGalleryItem({
                   relationPropertyName: 'Cover',
                   spaceId: currentSpaceId,
                 });
-
-                // Notify the parent component about the change
-                onChangeEntry(
-                  {
-                    entityId: rowEntityId,
-                    entityName: name,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'EVENT',
-                    data: {
-                      type: 'UPSERT_RELATION',
-                      payload: {
-                        fromEntityId: rowEntityId,
-                        fromEntityName: name,
-                        toEntityId: imageId,
-                        toEntityName: null,
-                        typeOfId: SystemIds.COVER_PROPERTY,
-                        typeOfName: 'Cover',
-                        renderableType: 'IMAGE',
-                        value: imageId,
-                      },
-                    },
-                  }
-                );
               }}
             />
           )}
@@ -199,6 +181,7 @@ export function TableBlockGalleryItem({
                   );
                 }}
                 spaceId={currentSpaceId}
+                autoFocus={autoFocus}
               />
             ) : (
               <>
@@ -206,6 +189,7 @@ export function TableBlockGalleryItem({
                   <PageStringField
                     placeholder="Entity name..."
                     value={name ?? ''}
+                    shouldDebounce={true}
                     onChange={value => {
                       onChangeEntry(
                         {
@@ -328,7 +312,6 @@ export function TableBlockGalleryItem({
         <div className="flex flex-col gap-2">
           {source.type !== 'COLLECTION' ? (
             <Link href={href} className="text-smallTitle font-medium text-text">
-              entityId={rowEntityId} spaceId={currentSpaceId}
               {name || rowEntityId}
             </Link>
           ) : (

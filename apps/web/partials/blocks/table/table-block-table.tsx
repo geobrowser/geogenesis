@@ -125,6 +125,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;
 
+    const autofocus = Boolean(row.original.placeholder) && isNameCell;
+
     if (!property) {
       return null;
     }
@@ -146,6 +148,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           onChangeEntry={onChangeEntry}
           onLinkEntry={onLinkEntry}
           source={source}
+          autoFocus={autofocus}
         />
       );
     }

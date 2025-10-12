@@ -1,10 +1,8 @@
-import { usePrivy } from '@privy-io/react-auth';
+import { useAccountEffect, usePrivy } from '@geogenesis/auth';
 import { atom, useAtom } from 'jotai';
 import { useSearchParams } from 'next/navigation';
 
 import { useCallback, useEffect } from 'react';
-
-import { useAccountEffect } from 'wagmi';
 
 import { Environment } from '../environment';
 import { useGeoProfile } from './use-geo-profile';

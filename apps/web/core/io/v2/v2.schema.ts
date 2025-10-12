@@ -97,7 +97,7 @@ export const Entity = Schema.Struct({
   valuesList: Schema.Array(Value),
   relationsList: Schema.Array(Relation),
   // createdAt
-  // updatedAt
+  updatedAt: Schema.optional(Schema.String),
 });
 
 export type RemoteEntity = Schema.Schema.Type<typeof Entity>;

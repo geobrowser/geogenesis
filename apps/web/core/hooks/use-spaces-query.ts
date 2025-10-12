@@ -1,86 +1,68 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 
 import { useState } from 'react';
 
-import { Environment } from '~/core/environment';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
-import { SubstreamSpace } from '~/core/io/schema';
-import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
-import { graphql } from '~/core/io/subgraph/graphql';
+import { Subgraph } from '~/core/io';
 
-import { Space } from '../io/dto/spaces';
-import { SpaceEntity } from '../v2.types';
+import { E } from '../sync/orm';
+import { useSyncEngine } from '../sync/use-sync-engine';
 
-type NetworkResult = {
-  spaces: {
-    nodes: Array<Pick<SubstreamSpace, 'spacesMetadatum' | 'id'>>;
-  };
-};
-
-const spacesQuery = (name: string) => `
-  {
-    spaces(
-      filter: { spacesMetadatum: { version: { name: { includesInsensitive: "${name}" } } } }
-      first: 10
-    ) {
-      nodes {
-        id
-        ${spaceMetadataFragment}
-      }
-    }
-  }
-`;
+const filterByTypes = ['362c1dbd-dc64-44bb-a3c4-652f38a642d7']; // Filter only space type entities
 
 export function useSpacesQuery() {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 200);
 
-  const { data } = useQuery({
-    queryKey: ['spaces-by-name', debouncedQuery],
-    queryFn: async ({ signal }) => {
-      const queryEffect = graphql<NetworkResult>({
-        query: spacesQuery(query),
-        endpoint: Environment.getConfig().api,
-        signal,
-      });
+  const { store } = useSyncEngine();
+  const cache = useQueryClient();
 
-      const resultOrError = await Effect.runPromise(Effect.either(queryEffect));
+  const { data: fuzzyMatchedSpaces = [] } = useQuery({
+    queryKey: ['spaces-by-name', debouncedQuery],
+    queryFn: async () => {
+      const fetchResultsEffect = Effect.either(
+        Effect.tryPromise({
+          try: async () =>
+            await E.findFuzzy({
+              store,
+              cache,
+              where: {
+                name: {
+                  fuzzy: debouncedQuery,
+                },
+                types: filterByTypes?.map(t => {
+                  return {
+                    id: {
+                      equals: t,
+                    },
+                  };
+                }),
+              },
+              first: 10,
+              skip: 0,
+            }),
+          catch: error => {
+            console.error('error', error);
+            return new Subgraph.Errors.AbortError();
+          },
+        })
+      );
+
+      const resultOrError = await Effect.runPromise(fetchResultsEffect);
 
       if (Either.isLeft(resultOrError)) {
         const error = resultOrError.left;
 
         switch (error._tag) {
           case 'AbortError':
-            // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-            // the caller to consume the error channel as an effect. We throw here the typical JS
-            // way so we don't infect more of the codebase with the effect runtime.
-            throw error;
-          case 'GraphqlRuntimeError':
-            console.error(
-              `Encountered runtime graphql error in spaces-by-name.
-
-              queryString: ${spacesQuery(query)}
-              `,
-              error.message
-            );
-
-            return {
-              spaces: {
-                nodes: [],
-              },
-            };
-
+            console.log(`abort error`);
+            return [];
           default:
-            console.error(`${error._tag}: Unable to fetch spaces in spaces-by-name`);
-
-            return {
-              spaces: {
-                nodes: [],
-              },
-            };
+            console.error('useSearch error:', String(error));
+            throw error;
         }
       }
 
@@ -88,7 +70,28 @@ export function useSpacesQuery() {
     },
   });
 
-  if (!data) {
+  const spaces = fuzzyMatchedSpaces.map(space => {
+    return { id: space.spaces[0].spaceId, name: space.name, image: space.spaces[0].image };
+  });
+
+  type SpaceItem = {
+    id: string;
+    name: string | null;
+    image: string;
+  };
+
+  const uniqueSpacesById = (arr: SpaceItem[]): SpaceItem[] => {
+    const seen = new Map<string, boolean>();
+    return arr.reduce<SpaceItem[]>((acc, item) => {
+      if (!seen.has(item.id)) {
+        seen.set(item.id, true);
+        acc.push(item);
+      }
+      return acc;
+    }, []);
+  };
+
+  if (!fuzzyMatchedSpaces) {
     return {
       query,
       setQuery,
@@ -99,7 +102,6 @@ export function useSpacesQuery() {
   return {
     query,
     setQuery,
-    // @TODO(migration): Query for spaces by name
-    spaces: [] as SpaceEntity[],
+    spaces: uniqueSpacesById(spaces),
   };
 }

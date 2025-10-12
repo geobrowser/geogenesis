@@ -1,3 +1,5 @@
+import { notFound, redirect } from 'next/navigation';
+
 import { cache } from 'react';
 
 import { fetchProfile } from '~/core/io/subgraph';
@@ -19,7 +21,8 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
   const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
-    throw new Error("Space doesn't exist");
+    console.error(`Space does not exist: ${spaceId}`);
+    notFound();
   }
 
   const editorProfiles = await Promise.all(

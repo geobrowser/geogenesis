@@ -9,7 +9,9 @@ export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`
 
 export const RENDERABLE_TYPE_PROPERTY = '2316bbe1-c76f-4635-83f2-3e03b4f1fe46';
 export const DATA_TYPE_PROPERTY = '6d29d578-49bb-4959-baf7-2cc696b1671a';
-export const ROOT_SPACE = '2df11968-9d1c-489f-91b7-bdc88b472161';
+export const VALUE_TYPE_PROPERTY = 'ee26ef23-f7f1-4eb6-b742-3b0fa38c1fd8';
+export const IS_TYPE_PROPERTY = 'd2c1a101-14e3-464a-8272-f4e75b0f1407';
+export const ROOT_SPACE = '29c97d29-1c9a-41f1-a466-8a713764bc27';
 
 export const GEO_LOCATION = '9cf5c1b0-15dc-451c-bfd2-97db64806aff';
 export const FORMAT_PROPERTY = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f';

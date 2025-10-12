@@ -34,6 +34,7 @@ type Props = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   source: Source;
+  autoFocus?: boolean;
 };
 
 export function EditableEntityTableCell({
@@ -50,6 +51,7 @@ export function EditableEntityTableCell({
   onChangeEntry,
   onLinkEntry,
   source,
+  autoFocus = false,
 }: Props) {
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
 
@@ -98,6 +100,7 @@ export function EditableEntityTableCell({
             );
           }}
           spaceId={spaceId}
+          autoFocus={autoFocus}
         />
       );
     }
@@ -109,6 +112,7 @@ export function EditableEntityTableCell({
             variant="tableCell"
             placeholder="Entity name..."
             value={name ?? ''}
+            shouldDebounce={true}
             onChange={value => {
               onChangeEntry(
                 {
@@ -123,7 +127,7 @@ export function EditableEntityTableCell({
                     payload: {
                       renderable: {
                         attributeId: SystemIds.NAME_PROPERTY,
-                        entityId,
+                        entityId: `${spaceId}:${entityId}:${property.id}`,
                         spaceId: currentSpaceId,
                         attributeName: 'Name',
                         entityName: name,
@@ -282,12 +286,16 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsG
                   // );
                 }}
                 onDone={result => {
-                  onLinkEntry(r.id, {
-                    id: r.toEntity.id,
-                    name: r.toEntity.name,
-                    space: result.space,
-                    verified: result.verified,
-                  }, r.verified);
+                  onLinkEntry(
+                    r.id,
+                    {
+                      id: r.toEntity.id,
+                      name: r.toEntity.name,
+                      space: result.space,
+                      verified: result.verified,
+                    },
+                    r.verified
+                  );
                 }}
                 currentSpaceId={spaceId}
                 entityId={r.toEntity.id}

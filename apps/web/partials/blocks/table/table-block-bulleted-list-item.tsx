@@ -23,6 +23,7 @@ type Props = {
   properties?: Record<string, Property>;
   relationId?: string;
   source: Source;
+  autoFocus?: boolean;
 };
 
 export function TableBlockBulletedListItem({
@@ -35,6 +36,7 @@ export function TableBlockBulletedListItem({
   onLinkEntry,
   relationId,
   source,
+  autoFocus = false,
 }: Props) {
   const nameCell = columns[SystemIds.NAME_PROPERTY];
   const { propertyId: cellId, verified } = nameCell;
@@ -87,6 +89,7 @@ export function TableBlockBulletedListItem({
                 );
               }}
               spaceId={currentSpaceId}
+              autoFocus={autoFocus}
             />
           ) : (
             <div>
@@ -114,13 +117,14 @@ export function TableBlockBulletedListItem({
                               type: 'TEXT',
                               value: name ?? '',
                             },
-                            value: { type: 'TEXT', value: value },
+                            value: { type: 'TEXT', value },
                           },
                         },
                       }
                     );
                   }}
                   value={name ?? ''}
+                  shouldDebounce={true}
                 />
               ) : (
                 <CollectionMetadata
@@ -158,7 +162,7 @@ export function TableBlockBulletedListItem({
                                 type: 'TEXT',
                                 value: name ?? '',
                               },
-                              value: { type: 'TEXT', value: value },
+                              value: { type: 'TEXT', value },
                             },
                           },
                         }

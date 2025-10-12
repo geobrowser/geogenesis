@@ -2,8 +2,8 @@
 
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
-
 import Image from 'next/image';
+
 import * as React from 'react';
 import { useState } from 'react';
 

@@ -6,7 +6,13 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { FORMAT_PROPERTY } from '~/core/constants';
+import {
+  DATA_TYPE_PROPERTY,
+  FORMAT_PROPERTY,
+  IS_TYPE_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+  VALUE_TYPE_PROPERTY,
+} from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -19,13 +25,13 @@ import { Property, Relation, ValueOptions } from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
-import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import ReorderableRelationChipsDnd from '~/design-system/reorderable-relation-chips-dnd';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import SuggestedFormats from '~/design-system/suggested-formats-window';
@@ -87,6 +93,15 @@ export function EditableEntityPage({ id, spaceId }: Props) {
 
   const name = useName(id, spaceId);
 
+  // Check if this entity is a non-relation property
+  const { property: propertyData } = useQueryProperty({
+    id,
+    spaceId,
+    enabled: true,
+  });
+
+  const isNonRelationProperty = propertyData && propertyData.dataType !== 'RELATION';
+
   return (
     <ShowablePanel id={id} spaceId={spaceId} name={name} hasEntries={propertiesEntries.length > 0}>
       <div className="rounded-lg border border-grey-02 shadow-button">
@@ -104,11 +119,16 @@ export function EditableEntityPage({ id, spaceId }: Props) {
           {propertiesEntries.map(([propertyId, property]) => {
             // Hide cover/avatar/types/name property, user can upload cover using upload icon on top placeholder
             // and add types inline using the + button, add name under cover image component
+
             if (
               propertyId === SystemIds.COVER_PROPERTY ||
               propertyId === ContentIds.AVATAR_PROPERTY ||
               propertyId === SystemIds.TYPES_PROPERTY ||
-              propertyId === SystemIds.NAME_PROPERTY
+              propertyId === SystemIds.NAME_PROPERTY ||
+              propertyId === DATA_TYPE_PROPERTY ||
+              propertyId === VALUE_TYPE_PROPERTY || // @TODO temporary until we update property schema in root
+              propertyId === RENDERABLE_TYPE_PROPERTY ||
+              (propertyId === IS_TYPE_PROPERTY && isNonRelationProperty)
             ) {
               return null;
             }
@@ -200,6 +220,8 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                 propertyName: result.name || '',
                 entityName: name || undefined,
               });
+
+              return createdPropertyId;
             }}
             onDone={result => {
               if (result) {
@@ -259,7 +281,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   const typeOfId = property.id;
   const isType = propertyId === SystemIds.TYPES_PROPERTY;
-  
+
   const templateOptions = {
     entityId: id,
     entityName: name,
@@ -274,7 +296,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   if (isEmpty) {
     return (
-      <div className="flex flex-wrap items-center gap-1 pr-10">
+      <div className="flex flex-wrap items-center gap-1 pr-1">
         {property.renderableTypeStrict === 'IMAGE' ? (
           <div key="relation-upload-image">
             <PageImageField
@@ -297,7 +319,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
           <div key={`relation-select-entity-${property.id}`} data-testid="select-entity" className="w-full">
             <SelectEntity
               spaceId={spaceId}
-              placeholder={isType ? "Find or create type..." : undefined}
+              placeholder={isType ? 'Find or create type...' : undefined}
               relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
               onCreateEntity={result => {
                 storage.values.set({
@@ -391,13 +413,12 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1 pr-10">
-      {relations.map(r => {
-        const relationId = r.id;
-        const relationName = r.toEntity.name;
-        const relationValue = r.toEntity.id;
+    <div className="flex flex-wrap items-center gap-1 pr-1">
+      {property.renderableTypeStrict === 'IMAGE' ? (
+        relations.map(r => {
+          const relationId = r.id;
+          const relationValue = r.toEntity.id;
 
-        if (property.renderableTypeStrict === 'IMAGE') {
           return (
             <ImageRelation
               key={`image-${relationId}-${relationValue}`}
@@ -405,31 +426,18 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               spaceId={spaceId}
             />
           );
-        }
-
-        return (
-          <div key={`relation-${relationId}-${relationValue}`}>
-            <LinkableRelationChip
-              isEditing
-              onDelete={() => storage.relations.delete(r)}
-              onDone={result => {
-                storage.relations.update(r, draft => {
-                  draft.toSpaceId = result.space;
-                  draft.verified = result.verified;
-                });
-              }}
-              currentSpaceId={spaceId}
-              entityId={relationValue}
-              relationId={relationId}
-              relationEntityId={r.entityId}
-              spaceId={r.toSpaceId}
-              verified={r.verified}
-            >
-              {relationName ?? relationValue}
-            </LinkableRelationChip>
-          </div>
-        );
-      })}
+        })
+      ) : (
+        <ReorderableRelationChipsDnd
+          relations={relations}
+          spaceId={spaceId}
+          onUpdateRelation={(relation: Relation, newPosition: string | null) => {
+            storage.relations.update(relation, draft => {
+              if (newPosition) draft.position = newPosition;
+            });
+          }}
+        />
+      )}
 
       {property.renderableType !== SystemIds.IMAGE && (
         <div>
@@ -441,7 +449,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 <SquareButton icon={<Create />} />
               )
             }
-            placeholder={isType ? "Find or create type..." : undefined}
+            placeholder={isType ? 'Find or create type...' : undefined}
             relationValueTypes={relationValueTypes ? relationValueTypes : undefined}
             onCreateEntity={result => {
               storage.values.set({
@@ -671,7 +679,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
     case 'POINT': {
       return (
         <>
-          {propertyId === SystemIds.GEO_LOCATION_PROPERTY && property.dataType === 'POINT' ? (
+          {property.renderableTypeStrict === 'GEO_LOCATION' ? (
             <GeoLocationPointFields
               key={propertyId}
               variant="body"
@@ -705,13 +713,13 @@ async function applyTemplate(templateOptions: {
   storage: Mutator;
 }) {
   const { entityId, entityName, propertyId, typeId, spaceId, storage } = templateOptions;
-  
+
   if (propertyId !== SystemIds.TYPES_PROPERTY) {
     return;
   }
 
   const template = await getEntityTemplate(typeId, entityId, entityName, spaceId);
-  
+
   if (!template) {
     return;
   }

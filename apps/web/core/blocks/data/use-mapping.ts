@@ -137,9 +137,13 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionR
       {} as Record<string, Cell>
     );
 
+    // Find the position from the collection relation if it exists
+    const collectionRelation = collectionRelations?.find(relation => relation.toEntity.id === id);
+
     return {
       entityId: id,
       columns: newSlots,
+      position: collectionRelation?.position,
     };
   });
 }

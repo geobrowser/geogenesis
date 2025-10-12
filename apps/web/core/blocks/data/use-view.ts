@@ -2,9 +2,9 @@ import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
-import { getRelationEntityRelations } from '~/core/io/v2/queries';
+import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useQueryEntity, useQueryRelation } from '~/core/sync/use-store';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
 import { Entity, Relation } from '~/core/v2.types';
 
@@ -26,9 +26,12 @@ export function useView() {
     id: entityId,
   });
 
-  const { entity: blockRelation } = useQueryRelation({
+  const { blockRelations } = useEditorStore();
+  const newRelationId = blockRelations.find(relation => relation.toEntity.id === entityId)?.entityId ?? '';
+
+  const { entity: blockRelation } = useQueryEntity({
     spaceId: spaceId,
-    id: relationId,
+    id: newRelationId,
   });
 
   const viewRelation = blockRelation?.relations.find(relation => relation.type.id === SystemIds.VIEW_PROPERTY);
@@ -44,9 +47,7 @@ export function useView() {
     shownColumnRelations.map(r => r.id)
   );
 
-  // @TODO: We shouldn't need the name attribute here since it's automatically
-  // added in useMapping if it's not already part of the properties list.
-  const shownColumnIds = [...Object.keys(mapping), SystemIds.NAME_PROPERTY];
+  const shownColumnIds = [SystemIds.NAME_PROPERTY, ...shownColumnRelations.map(r => r.toEntity.id)];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
@@ -68,7 +69,7 @@ export function useView() {
             name: 'View',
           },
           fromEntity: {
-            id: relationId,
+            id: newRelationId,
             name: blockEntity?.name ?? null,
           },
           toEntity: {
@@ -189,7 +190,7 @@ export function useView() {
           name: 'Properties',
         },
         fromEntity: {
-          id: relationId,
+          id: newRelationId,
           name: blockRelation?.name ?? null,
         },
         toEntity: {

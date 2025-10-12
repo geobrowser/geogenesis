@@ -91,7 +91,9 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
       <DropdownPrimitive.Content
         align="end"
         sideOffset={4}
-        className="absolute left-0 z-10 max-h-[280px] w-[200px] overflow-hidden overflow-y-scroll rounded-lg border border-grey-02 bg-white shadow-lg"
+        collisionPadding={10}
+        avoidCollisions={true}
+        className="z-50 max-h-[50vh] w-[200px] overflow-hidden overflow-y-scroll rounded-lg border border-grey-02 bg-white shadow-lg"
       >
         <DropdownPrimitive.Group className="space-y-1 overflow-hidden rounded-lg p-1">
           {options.map((option, index) => {

@@ -1,4 +1,5 @@
 import { IdUtils } from '@graphprotocol/grc-20';
+import { Position } from '@graphprotocol/grc-20';
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
@@ -11,7 +12,7 @@ import { useValues } from '~/core/sync/use-store';
 
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/schema';
-import { Entity } from '../v2.types';
+import { Entity, Relation, Row } from '../v2.types';
 import { Entities } from './entity';
 
 export const NavUtils = {
@@ -543,3 +544,11 @@ export const getPaginationPages = (totalPages: number, activePage: number) => {
   pages.push(totalPages);
   return pages;
 };
+
+export function sortRelations(relations: Relation[]) {
+  return [...relations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+}
+
+export function sortRows(rows: Row[]) {
+  return [...rows].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+}
