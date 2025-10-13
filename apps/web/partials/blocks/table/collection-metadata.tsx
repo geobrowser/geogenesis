@@ -183,7 +183,7 @@ export const CollectionMetadata = ({
           <div className="pointer-events-auto absolute bottom-0 right-0 top-0  flex items-center">
             {isHovered && (
               <PrefetchLink href={`/space/${spaceId}/${entityId}`}>
-                <SquareButton icon={<RightArrowLongSmall />} onMouseDown={e => e.preventDefault()} />
+                <SquareButton icon={<RightArrowLongSmall />} />
               </PrefetchLink>
             )}
           </div>

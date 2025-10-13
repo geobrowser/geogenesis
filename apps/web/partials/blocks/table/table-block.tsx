@@ -14,6 +14,7 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -96,8 +97,6 @@ function useEntries(
   const { setEditable } = useEditable();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
-  const lastPlaceholderIdRef = React.useRef<string | null>(null);
-  const [shouldAutoFocusPlaceholder, setShouldAutoFocusPlaceholder] = React.useState(false);
 
   const { storage } = useMutate();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
@@ -142,22 +141,7 @@ function useEntries(
     [entriesWithPosition, placeholderEntityId, properties, shouldShowPlaceholder]
   );
 
-  // Track when a new placeholder is added
-  React.useEffect(() => {
-    const placeholderRow = renderedEntries.find(row => row.placeholder);
-    if (placeholderRow) {
-      const placeholderId = placeholderRow.entityId;
-      if (lastPlaceholderIdRef.current !== placeholderId) {
-        // New placeholder detected
-        lastPlaceholderIdRef.current = placeholderId;
-        setShouldAutoFocusPlaceholder(true);
-      }
-    } else {
-      // No placeholder present, reset
-      lastPlaceholderIdRef.current = null;
-      setShouldAutoFocusPlaceholder(false);
-    }
-  }, [renderedEntries]);
+  const shouldAutoFocusPlaceholder = usePlaceholderAutofocus(renderedEntries);
 
   const onChangeEntry: onChangeEntryFn = (context, event) => {
     if (event.type === 'EVENT') {
@@ -371,6 +355,7 @@ export const TableBlock = ({ spaceId }: Props) => {
       onChangeEntry={onChangeEntry}
       onLinkEntry={onLinkEntry}
       onAddPlaceholder={onAddPlaceholder}
+      shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
     />
   );
 

@@ -11,7 +11,6 @@ import {
 import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
 
-import * as React from 'react';
 import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
@@ -187,6 +186,7 @@ type TableBlockTableProps = {
   onLinkEntry: onLinkEntryFn;
   onAddPlaceholder?: () => void;
   source: Source;
+  shouldAutoFocusPlaceholder: boolean;
 };
 
 export const TableBlockTable = ({
@@ -200,29 +200,11 @@ export const TableBlockTable = ({
   onLinkEntry,
   onAddPlaceholder,
   source,
+  shouldAutoFocusPlaceholder,
 }: TableBlockTableProps) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells] = useState<Record<string, boolean>>({});
-  const lastPlaceholderIdRef = React.useRef<string | null>(null);
-  const [shouldAutoFocusPlaceholder, setShouldAutoFocusPlaceholder] = React.useState(false);
-
-  // Track when a new placeholder is added
-  React.useEffect(() => {
-    const placeholderRow = rows.find(row => row.placeholder);
-    if (placeholderRow) {
-      const placeholderId = placeholderRow.entityId;
-      if (lastPlaceholderIdRef.current !== placeholderId) {
-        // New placeholder detected
-        lastPlaceholderIdRef.current = placeholderId;
-        setShouldAutoFocusPlaceholder(true);
-      }
-    } else {
-      // No placeholder present, reset
-      lastPlaceholderIdRef.current = null;
-      setShouldAutoFocusPlaceholder(false);
-    }
-  }, [rows]);
 
   const table = useReactTable({
     data: rows,
