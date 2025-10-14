@@ -165,8 +165,8 @@ function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps
         isEditing={false}
         key={value}
         value={value}
-        // format={renderable.options?.format}
-        unitId={rawValue?.options?.unit}
+        format={property.format || undefined}
+        unitId={rawValue?.options?.unit || property.unit || undefined}
       />
     );
   }

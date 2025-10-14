@@ -4,7 +4,14 @@ import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+import {
+  DATA_TYPE_PROPERTY,
+  DEFAULT_NUMBER_FORMAT,
+  DEFAULT_TIME_FORMAT,
+  FORMAT_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+} from '~/core/constants';
+import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useName } from '~/core/state/entity-page-store/entity-store';
@@ -31,11 +38,14 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
   });
+
   const name = useName(entityId);
 
   const { storage } = useMutate();
 
   const editable = useUserIsEditing(spaceId);
+
+  const { addPropertyToEntity } = useCreateProperty(spaceId);
 
   // Fetch property data type to see if this is a property entity
   const { property: propertyData } = useQueryProperty({
@@ -43,6 +53,14 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
     spaceId,
     enabled: true,
   });
+
+  const { entity } = useQueryEntity({
+    id: entityId,
+    spaceId,
+    enabled: true,
+  });
+
+  const formatValue = entity?.values.find(value => value.property.id === FORMAT_PROPERTY);
 
   // Check if this entity has a Property type relation (local property check)
   const hasLocalPropertyType = relations.find(
@@ -82,6 +100,20 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
   const handlePropertyTypeChange = React.useCallback(
     (newType: SwitchableRenderableType) => {
       if (!entityId || !spaceId) return;
+
+      // Add format property if type is TIME or NUMBER
+      if (newType === 'TIME' || newType === 'NUMBER') {
+        addPropertyToEntity({
+          entityId,
+          propertyId: FORMAT_PROPERTY,
+          propertyName: 'Format',
+          entityName: name ?? '',
+          defaultValue: newType === 'TIME' ? DEFAULT_TIME_FORMAT : DEFAULT_NUMBER_FORMAT,
+        });
+      } else if (formatValue) {
+        // Remove format property if type is not TIME or NUMBER and property exists
+        storage.values.delete(formatValue);
+      }
 
       // Determine the base dataType and renderableType based on the selected type
       // Map property types to their base dataType and renderableType

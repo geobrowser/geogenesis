@@ -1,5 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { DATA_TYPE_PROPERTY, GEO_LOCATION, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+import { DATA_TYPE_PROPERTY, FORMAT_PROPERTY, GEO_LOCATION, RENDERABLE_TYPE_PROPERTY, UNIT_PROPERTY } from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { DataType, Property, Relation, Value, SwitchableRenderableType, Entity } from '~/core/v2.types';
 
@@ -134,6 +134,18 @@ export function reconstructFromStore(
                     r.type.id === RENDERABLE_TYPE_PROPERTY
   })[0];
 
+  // get the format value (if any)
+  const formatValue = getValues({
+    selector: v => v.entity.id === id && 
+                    v.property.id === FORMAT_PROPERTY
+  })[0];
+
+  // get unit (if any)
+  const unitRelation = getRelations({
+    selector: r => r.fromEntity.id === id && 
+                    r.type.id === UNIT_PROPERTY
+  })[0];
+
   // Validate and cast dataType
   const validDataTypes: DataType[] = ['TEXT', 'NUMBER', 'CHECKBOX', 'TIME', 'POINT', 'RELATION'];
   const dataTypeString = String(dataTypeValue.value);
@@ -161,6 +173,8 @@ export function reconstructFromStore(
     renderableType: renderableTypeId,
     renderableTypeStrict: getStrictRenderableType(renderableTypeId),
     isDataTypeEditable: true, // Added: local properties are editable by default
+    format: formatValue?.value || null, 
+    unit: unitRelation?.toEntity.id || null, 
   };
 
   return property;

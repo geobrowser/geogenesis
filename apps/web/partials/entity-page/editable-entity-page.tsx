@@ -6,7 +6,13 @@ import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { DATA_TYPE_PROPERTY, IS_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VALUE_TYPE_PROPERTY } from '~/core/constants';
+import {
+  DATA_TYPE_PROPERTY,
+  FORMAT_PROPERTY,
+  IS_TYPE_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+  VALUE_TYPE_PROPERTY,
+} from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -28,6 +34,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import ReorderableRelationChipsDnd from '~/design-system/reorderable-relation-chips-dnd';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
+import SuggestedFormats from '~/design-system/suggested-formats-window';
 import { Text } from '~/design-system/text';
 
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
@@ -548,6 +555,7 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
   const rawValue = useValue({
     selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
   });
+
   const value = rawValue?.value ?? '';
   const options = rawValue?.options;
 
@@ -589,14 +597,19 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
   switch (property.dataType) {
     case 'TEXT': {
       return (
-        <PageStringField
-          key={propertyId}
-          variant="body"
-          placeholder="Add value..."
-          aria-label="text-field"
-          value={value}
-          onChange={onChange}
-        />
+        <>
+          <PageStringField
+            key={propertyId}
+            variant="body"
+            placeholder="Add value..."
+            aria-label="text-field"
+            value={value}
+            onChange={onChange}
+          />
+          {property.id === FORMAT_PROPERTY && (
+            <SuggestedFormats entityId={entityId} spaceId={spaceId} value={value} onChange={onChange} />
+          )}
+        </>
       );
     }
     case 'NUMBER':
@@ -605,9 +618,8 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
           key={propertyId}
           isEditing={true}
           value={value}
-          // @TODO(migration): Fix formatting. Now on property
-          // format={renderable.options?.format}
-          unitId={options?.unit}
+          format={property.format || undefined}
+          unitId={options?.unit || property.unit || undefined}
           onChange={onChange}
         />
       );
