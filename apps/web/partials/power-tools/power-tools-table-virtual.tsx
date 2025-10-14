@@ -2,20 +2,20 @@
 
 import { SystemIds } from '@graphprotocol/grc-20';
 import { useVirtualizer } from '@tanstack/react-virtual';
-
 import * as React from 'react';
 
 import { Property, Row } from '~/core/v2.types';
-import { useQueryEntity } from '~/core/sync/use-store';
-import { useName } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { Source } from '~/core/blocks/data/source';
 
-import { LinkableRelationChip } from '~/design-system/chip';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Checkbox } from '~/design-system/checkbox';
 import { Text } from '~/design-system/text';
-import { PowerToolsRelationChip } from './power-tools-relation-chip';
+import { Plus } from '~/design-system/icons/plus';
+import { SelectEntity } from '~/design-system/select-entity';
 import { EntitySidePanel } from './entity-side-panel';
+import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
+import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 
 interface Props {
   rows: Row[];
@@ -35,68 +35,10 @@ interface Props {
   allAvailableEntityIds?: string[];
   isSelectingAll?: boolean;
   selectAllState?: 'none' | 'partial' | 'all';
-}
-
-// Component to render a single relation chip
-function RelationChip({
-  relationId,
-  relationName,
-  spaceId,
-  relationSpaceId,
-  onEntityClick
-}: {
-  relationId: string;
-  relationName?: string;
-  spaceId: string;
-  relationSpaceId?: string;
-  onEntityClick: (entityId: string, entitySpaceId?: string) => void;
-}) {
-  return (
-    <PowerToolsRelationChip
-      relationId={relationId}
-      relationName={relationName}
-      spaceId={spaceId}
-      relationSpaceId={relationSpaceId}
-      onClick={onEntityClick}
-    />
-  );
-}
-
-// Component to render a relation cell with multiple relations
-function RelationCell({
-  relations,
-  spaceId,
-  onEntityClick,
-}: {
-  relations: string[];
-  spaceId: string;
-  onEntityClick: (entityId: string, entitySpaceId?: string) => void;
-}) {
-  if (!relations || relations.length === 0) {
-    return <div className="text-grey-04">—</div>;
-  }
-
-  // Show first 3 relations and a count if there are more
-  const displayRelations = relations.slice(0, 3);
-  const remainingCount = relations.length - 3;
-
-  return (
-    <div className="flex flex-wrap gap-1">
-      {displayRelations.map((relationId) => (
-        <RelationChip
-          key={relationId}
-          relationId={relationId}
-          spaceId={spaceId}
-          onEntityClick={onEntityClick}
-        />
-      ))}
-      {remainingCount > 0 && (
-        <div className="inline-flex items-center rounded bg-grey-01 px-2 py-1">
-          <Text variant="body">+{remainingCount} more</Text>
-        </div>
-      )}
-    </div>
-  );
+  // Entity editing handlers
+  onChangeEntry: (context: any, event: any) => void;
+  onLinkEntry: (id: string, to: {id: string; name: string | null; space?: string; verified?: boolean}) => void;
+  source: Source;
 }
 
 export function PowerToolsTableVirtual({
@@ -115,6 +57,9 @@ export function PowerToolsTableVirtual({
   allAvailableEntityIds,
   isSelectingAll = false,
   selectAllState,
+  onChangeEntry,
+  onLinkEntry,
+  source,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const [lastSelectedIndex, setLastSelectedIndex] = React.useState<number | null>(null);
@@ -126,6 +71,9 @@ export function PowerToolsTableVirtual({
   // Side panel state
   const [sidePanelOpen, setSidePanelOpen] = React.useState(false);
   const [selectedEntity, setSelectedEntity] = React.useState<{entityId: string, spaceId: string} | null>(null);
+
+  // Editing state
+  const isEditing = useUserIsEditing(spaceId);
 
   // Handler for opening entity in side panel
   const handleEntityClick = React.useCallback((entityId: string, entitySpaceId?: string) => {
@@ -245,6 +193,14 @@ export function PowerToolsTableVirtual({
     return `48px ${columns}`;
   }, [visibleProperties, columnWidths]);
 
+  // Calculate total width of all columns for minWidth
+  const totalTableWidth = React.useMemo(() => {
+    const columnsTotalWidth = visibleProperties.reduce((total, prop) => {
+      return total + (columnWidths[prop.id] || 200);
+    }, 0);
+    return 48 + columnsTotalWidth; // 48px for checkbox column + all property columns
+  }, [visibleProperties, columnWidths]);
+
   // Row height estimation
   const estimateRowHeight = React.useCallback(() => 56, []);
 
@@ -308,10 +264,11 @@ export function PowerToolsTableVirtual({
       {/* Sticky Header */}
       <div
         className="sticky top-0 z-10 bg-white shadow-sm"
-        style={{ minWidth: '100%' }}
+        style={{ minWidth: `${totalTableWidth}px` }}
       >
         <div className="grid border-b border-grey-02" style={{
           gridTemplateColumns,
+          minWidth: `${totalTableWidth}px`,
         }}>
           {/* Selection checkbox header */}
           <div
@@ -376,29 +333,36 @@ export function PowerToolsTableVirtual({
           const row = rows[virtualRow.index];
           const rowId = row.entityId;
           const isSelected = selectedRows.has(rowId);
+          const isPlaceholder = row.placeholder;
 
           return (
             <div
               key={virtualRow.key}
               data-index={virtualRow.index}
               ref={(node) => virtualizer.measureElement(node)}
-              className={`absolute left-0 top-0 w-full ${
-                isSelected ? 'bg-action-bg' : 'hover:bg-grey-01'
+              className={`absolute left-0 top-0 ${
+                isPlaceholder ? 'bg-grey-01 z-40' : isSelected ? 'bg-action-bg' : 'hover:bg-grey-01'
               }`}
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
+                minWidth: `${totalTableWidth}px`,
               }}
             >
               <div
                 className="grid border-b border-grey-02"
                 style={{
                   gridTemplateColumns,
+                  minWidth: `${totalTableWidth}px`,
                 }}
               >
-                {/* Selection checkbox */}
+                {/* Selection checkbox or Plus icon for placeholder */}
                 <div
                   className="flex items-center justify-center border-r border-grey-02 p-3"
                   onClick={(e) => {
+                    if (isPlaceholder) {
+                      // Placeholder row doesn't support selection
+                      return;
+                    }
                     // Handle shift-click for range selection
                     if (e.shiftKey && lastSelectedIndex !== null && onSelectRange) {
                       const start = Math.min(lastSelectedIndex, virtualRow.index);
@@ -410,16 +374,151 @@ export function PowerToolsTableVirtual({
                     setLastSelectedIndex(virtualRow.index);
                   }}
                 >
-                  <Checkbox
-                    checked={isSelected}
-                  />
+                  {isPlaceholder ? (
+                    <Plus color="grey-04" />
+                  ) : (
+                    <Checkbox checked={isSelected} />
+                  )}
                 </div>
 
                 {/* Cell values */}
                 {visibleProperties.map((property, cellIndex) => {
                   const cell = row.columns?.[property.id];
                   const isLastColumn = cellIndex === visibleProperties.length - 1;
+                  const isFirstColumn = cellIndex === 0;
+                  const isNameProperty = property.id === SystemIds.NAME_PROPERTY;
 
+                  // For placeholder row, show SelectEntity in first column
+                  if (isPlaceholder && isFirstColumn) {
+                    return (
+                      <div
+                        key={property.id}
+                        className={`flex items-start p-3 ${
+                          !isLastColumn ? 'border-r border-grey-02' : ''
+                        }`}
+                      >
+                        <div className="relative z-50">
+                          <SelectEntity
+                            onCreateEntity={result => {
+                              onChangeEntry(
+                                {
+                                  entityId: row.entityId,
+                                  entityName: null,
+                                  spaceId: spaceId,
+                                },
+                                {
+                                  type: 'Create',
+                                  data: result,
+                                }
+                              );
+                            }}
+                            onDone={(result, fromCreateFn) => {
+                              if (fromCreateFn) {
+                                // Bail out if callback is from create function
+                                return;
+                              }
+
+                              onChangeEntry(
+                                {
+                                  entityId: row.entityId,
+                                  entityName: null,
+                                  spaceId: spaceId,
+                                },
+                                {
+                                  type: 'Find',
+                                  data: result,
+                                }
+                              );
+                            }}
+                            spaceId={spaceId}
+                            autoFocus={true}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // For placeholder row non-name columns, show empty
+                  if (isPlaceholder) {
+                    return (
+                      <div
+                        key={property.id}
+                        className={`flex items-start p-3 ${
+                          !isLastColumn ? 'border-r border-grey-02' : ''
+                        }`}
+                      >
+                        <Text variant="body" color="grey-04">
+                          —
+                        </Text>
+                      </div>
+                    );
+                  }
+
+                  if (!cell) {
+                    return (
+                      <div
+                        key={property.id}
+                        className={`flex items-start p-3 ${
+                          !isLastColumn ? 'border-r border-grey-02' : ''
+                        }`}
+                      >
+                        <Text variant="body" color="grey-04">
+                          —
+                        </Text>
+                      </div>
+                    );
+                  }
+
+                  // Get entity name from name column
+                  const nameCell = row.columns[SystemIds.NAME_PROPERTY];
+                  const entityName = nameCell?.name || null;
+                  const cellSpaceId = isNameProperty ? (nameCell?.space ?? spaceId) : spaceId;
+
+                  // For name property, use custom click handler to open side panel
+                  if (isNameProperty) {
+                    return (
+                      <div
+                        key={property.id}
+                        className={`flex items-start p-3 ${
+                          !isLastColumn ? 'border-r border-grey-02' : ''
+                        }`}
+                      >
+                        {isEditing ? (
+                          <EditableEntityTableCell
+                            entityId={row.entityId}
+                            spaceId={cellSpaceId}
+                            property={property}
+                            isPlaceholderRow={false}
+                            name={entityName}
+                            currentSpaceId={spaceId}
+                            collectionId={nameCell?.collectionId}
+                            relationId={nameCell?.relationId}
+                            toSpaceId={nameCell?.space}
+                            verified={nameCell?.verified}
+                            onChangeEntry={onChangeEntry}
+                            onLinkEntry={onLinkEntry}
+                            source={source}
+                            autoFocus={false}
+                          />
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleEntityClick(row.entityId, nameCell?.space);
+                            }}
+                            className="text-left text-blue-04 hover:underline"
+                          >
+                            <Text variant="body">
+                              {entityName || 'Untitled'}
+                            </Text>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // For all other cells, use the standard table cell components
                   return (
                     <div
                       key={property.id}
@@ -427,55 +526,38 @@ export function PowerToolsTableVirtual({
                         !isLastColumn ? 'border-r border-grey-02' : ''
                       }`}
                     >
-                      {!cell ? (
-                        <Text variant="body" color="grey-04">
-                          —
-                        </Text>
-                      ) : (cell as any).relation || (cell as any).relations ? (
-                        <div className="flex flex-wrap gap-1">
-                          {(cell as any).relations ? (
-                            (cell as any).relations.map((rel: any, index: number) => (
-                              console.log('Rendering relation:', { rowId, propertyId: property.id, rel }),
-                              <RelationChip
-                                key={`${row.entityId}-${property.id}-${rel.id}-${index}`}
-                                relationId={rel.id}
-                                relationName={rel.name}
-                                spaceId={spaceId}
-                                relationSpaceId={rel.toSpaceId || rel.spaceId}
-                                onEntityClick={handleEntityClick}
-                              />
-                            ))
-                          ) : (
-                            <RelationChip
-                              key={`${row.entityId}-${property.id}-${(cell as any).relation.id}`}
-                              relationId={(cell as any).relation.id}
-                              relationName={(cell as any).relation.name}
-                              spaceId={spaceId}
-                              relationSpaceId={(cell as any).relation.toSpaceId || (cell as any).relation.spaceId}
-                              onEntityClick={handleEntityClick}
-                            />
-                          )}
-                        </div>
-                      ) : property.id === SystemIds.NAME_PROPERTY ? (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleEntityClick(row.entityId, (cell as any).space);
-                          }}
-                          className="text-left text-blue-04 hover:underline"
-                        >
-                          <Text variant="body">
-                            {(cell as any).name || (cell as any).value || 'Untitled'}
-                          </Text>
-                        </button>
+                      {isEditing ? (
+                        <EditableEntityTableCell
+                          entityId={row.entityId}
+                          spaceId={cellSpaceId}
+                          property={property}
+                          isPlaceholderRow={false}
+                          name={entityName}
+                          currentSpaceId={spaceId}
+                          collectionId={nameCell?.collectionId}
+                          relationId={nameCell?.relationId}
+                          toSpaceId={nameCell?.space}
+                          verified={nameCell?.verified}
+                          onChangeEntry={onChangeEntry}
+                          onLinkEntry={onLinkEntry}
+                          source={source}
+                          autoFocus={false}
+                        />
                       ) : (
-                        <Text
-                          variant="body"
-                          className="line-clamp-2"
-                        >
-                          {(cell as any).value || (cell as any).name || '—'}
-                        </Text>
+                        <EntityTableCell
+                          entityId={row.entityId}
+                          spaceId={cellSpaceId}
+                          property={property}
+                          isExpanded={false}
+                          name={entityName}
+                          href={NavUtils.toEntity(nameCell?.space ?? spaceId, row.entityId)}
+                          currentSpaceId={spaceId}
+                          collectionId={nameCell?.collectionId}
+                          relationId={nameCell?.relationId}
+                          verified={nameCell?.verified}
+                          onLinkEntry={onLinkEntry}
+                          source={source}
+                        />
                       )}
                     </div>
                   );
@@ -485,23 +567,6 @@ export function PowerToolsTableVirtual({
           );
         })}
       </div>
-
-      {/* Loading indicators */}
-      {isFetchingNextPage && (
-        <div className="flex justify-center p-4">
-          <Text variant="body" color="grey-04">
-            Loading more rows...
-          </Text>
-        </div>
-      )}
-
-      {!hasNextPage && rows.length > 0 && (
-        <div className="flex justify-center p-4">
-          <Text variant="body" color="grey-04">
-            All {totalDBRowCount} rows loaded ({totalFetched} fetched)
-          </Text>
-        </div>
-      )}
 
       {/* Entity Side Panel */}
       {selectedEntity && (

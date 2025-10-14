@@ -1,7 +1,9 @@
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds, Position } from '@graphprotocol/grc-20';
 
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useValue } from '~/core/sync/use-store';
+import { storage } from '~/core/sync/use-mutate';
+import { ID } from '~/core/id';
 import { getImagePath } from '~/core/utils/utils';
 import { Property, Value } from '~/core/v2.types';
 
@@ -112,7 +114,6 @@ export function EditableEntityTableCell({
             variant="tableCell"
             placeholder="Entity name..."
             value={name ?? ''}
-            shouldDebounce={true}
             onChange={value => {
               onChangeEntry(
                 {
@@ -200,7 +201,7 @@ export function EditableEntityTableCell({
 
   return (
     <div className="flex w-full flex-wrap gap-2">
-      <ValueGroup entityId={entityId} property={property} />
+      <ValueGroup entityId={entityId} property={property} spaceId={spaceId} />
     </div>
   );
 }
@@ -220,32 +221,34 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsG
 
   if (relations.length === 0) {
     return (
-      <div key={`${entityId}-${property.id}-empty`} data-testid="select-entity" className="w-full">
+      <div key={`${entityId}-${property.id}-empty`} data-testid="select-entity" className="relative z-50 w-full">
         <SelectEntity
           spaceId={spaceId}
           relationValueTypes={property.relationValueTypes}
           onDone={result => {
-            // onChangeEntry(
-            //   {
-            //     entityId,
-            //     entityName: null,
-            //     spaceId: r.spaceId,
-            //   },
-            //   {
-            //     type: 'EVENT',
-            //     data: {
-            //       type: 'UPSERT_RELATION',
-            //       payload: {
-            //         fromEntityId: entityId,
-            //         fromEntityName: null,
-            //         toEntityId: result.id,
-            //         toEntityName: result.name,
-            //         typeOfId: r.propertyId,
-            //         typeOfName: r.propertyName,
-            //       },
-            //     },
-            //   }
-            // );
+            // Create relation using storage API
+            storage.relations.set({
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId,
+              position: Position.generate(),
+              renderableType: 'RELATION',
+              verified: false,
+              type: {
+                id: property.id,
+                name: property.name || property.id,
+              },
+              fromEntity: {
+                id: entityId,
+                name: null,
+              },
+              toEntity: {
+                id: result.id,
+                name: result.name,
+                value: result.id,
+              },
+              isLocal: true,
+            });
           }}
           variant="fixed"
         />
@@ -268,22 +271,8 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsG
               <LinkableRelationChip
                 isEditing
                 onDelete={() => {
-                  // onChangeEntry(
-                  //   {
-                  //     entityId,
-                  //     entityName: null,
-                  //     spaceId: r.spaceId,
-                  //   },
-                  //   {
-                  //     type: 'EVENT',
-                  //     data: {
-                  //       type: 'DELETE_RELATION',
-                  //       payload: {
-                  //         renderable: r,
-                  //       },
-                  //     },
-                  //   }
-                  // );
+                  // Delete relation using storage API
+                  storage.relations.delete(r);
                 }}
                 onDone={result => {
                   onLinkEntry(
@@ -316,27 +305,29 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsG
           trigger={<SquareButton icon={<Create />} />}
           relationValueTypes={property.relationValueTypes}
           onDone={result => {
-            // onChangeEntry(
-            //   {
-            //     entityId,
-            //     entityName: null,
-            //     spaceId: spaceId,
-            //   },
-            //   {
-            //     type: 'EVENT',
-            //     data: {
-            //       type: 'UPSERT_RELATION',
-            //       payload: {
-            //         fromEntityId: entityId,
-            //         fromEntityName: null,
-            //         toEntityId: result.id,
-            //         toEntityName: result.name,
-            //         typeOfId: typeOfId,
-            //         typeOfName: typeOfName,
-            //       },
-            //     },
-            //   }
-            // );
+            // Create additional relation using storage API
+            storage.relations.set({
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId,
+              position: Position.generate(),
+              renderableType: 'RELATION',
+              verified: false,
+              type: {
+                id: property.id,
+                name: property.name || property.id,
+              },
+              fromEntity: {
+                id: entityId,
+                name: null,
+              },
+              toEntity: {
+                id: result.id,
+                name: result.name,
+                value: result.id,
+              },
+              isLocal: true,
+            });
           }}
           spaceId={spaceId}
         />
@@ -348,9 +339,10 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsG
 interface ValueGroupProps {
   entityId: string;
   property: Property;
+  spaceId: string;
 }
 
-function ValueGroup({ entityId, property }: ValueGroupProps) {
+function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
   const rawValue = useValue({
     // We don't filter by space id as we want to render data from all spaces.
     selector: v => v.entity.id === entityId && v.property.id === property.id,
@@ -369,33 +361,23 @@ function ValueGroup({ entityId, property }: ValueGroupProps) {
           // @TODO(migration): Fix formatting
           // format={renderable.options?.format}
           unitId={rawValue?.options?.unit}
-          onChange={value =>
-            // onChangeEntry(
-            //   {
-            //     entityId,
-            //     entityName: null,
-            //     spaceId: renderable.spaceId,
-            //   },
-            //   {
-            //     type: 'EVENT',
-            //     data: {
-            //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-            //       payload: {
-            //         renderable,
-            //         value: {
-            //           type: 'NUMBER',
-            //           value: value,
-            //           options: {
-            //             // format: renderable.options?.format,
-            //             unit: renderable.options?.unit,
-            //           },
-            //         },
-            //       },
-            //     },
-            //   }
-            // )
-            {}
-          }
+          onChange={newValue => {
+            // Update or create value using storage API
+            if (rawValue) {
+              storage.values.update(rawValue, draft => {
+                draft.value = newValue;
+              });
+            } else {
+              storage.values.set({
+                id: ID.createValueId({ entityId, propertyId: property.id, spaceId }),
+                entity: { id: entityId, name: null },
+                property,
+                value: newValue,
+                spaceId,
+                isLocal: true,
+              });
+            }
+          }}
         />
       );
     case 'TEXT':
@@ -403,23 +385,23 @@ function ValueGroup({ entityId, property }: ValueGroupProps) {
         <TableStringField
           placeholder="Add value..."
           value={value}
-          onChange={value =>
-            // onChangeEntry(
-            //   {
-            //     entityId,
-            //     entityName: null,
-            //     spaceId: renderable.spaceId,
-            //   },
-            //   {
-            //     type: 'EVENT',
-            //     data: {
-            //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-            //       payload: { renderable, value: { type: 'TEXT', value: value } },
-            //     },
-            //   }
-            // )
-            {}
-          }
+          onChange={newValue => {
+            // Update or create value using storage API
+            if (rawValue) {
+              storage.values.update(rawValue, draft => {
+                draft.value = newValue;
+              });
+            } else {
+              storage.values.set({
+                id: ID.createValueId({ entityId, propertyId: property.id, spaceId }),
+                entity: { id: entityId, name: null },
+                property,
+                value: newValue,
+                spaceId,
+                isLocal: true,
+              });
+            }
+          }}
         />
       );
     case 'CHECKBOX': {
@@ -429,26 +411,22 @@ function ValueGroup({ entityId, property }: ValueGroupProps) {
         <Checkbox
           checked={checked}
           onChange={() => {
-            // onChangeEntry(
-            //   {
-            //     entityId,
-            //     entityName: null,
-            //     spaceId: renderable.spaceId,
-            //   },
-            //   {
-            //     type: 'EVENT',
-            //     data: {
-            //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-            //       payload: {
-            //         renderable,
-            //         value: {
-            //           type: 'CHECKBOX',
-            //           value: !checked ? '1' : '0',
-            //         },
-            //       },
-            //     },
-            //   }
-            // );
+            const newValue = !checked ? '1' : '0';
+            // Update or create value using storage API
+            if (rawValue) {
+              storage.values.update(rawValue, draft => {
+                draft.value = newValue;
+              });
+            } else {
+              storage.values.set({
+                id: ID.createValueId({ entityId, propertyId: property.id, spaceId }),
+                entity: { id: entityId, name: null },
+                property,
+                value: newValue,
+                spaceId,
+                isLocal: true,
+              });
+            }
           }}
         />
       );
@@ -459,30 +437,22 @@ function ValueGroup({ entityId, property }: ValueGroupProps) {
           isEditing={true}
           value={value}
           propertyId={property.id}
-          onBlur={value => {
-            // onChangeEntry(
-            //   {
-            //     entityId,
-            //     entityName: null,
-            //     spaceId: renderable.spaceId,
-            //   },
-            //   {
-            //     type: 'EVENT',
-            //     data: {
-            //       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-            //       payload: {
-            //         renderable,
-            //         value: {
-            //           type: 'TIME',
-            //           value: value.value,
-            //           options: {
-            //             format: value.format,
-            //           },
-            //         },
-            //       },
-            //     },
-            //   }
-            // );
+          onBlur={dateValue => {
+            // Update or create value using storage API
+            if (rawValue) {
+              storage.values.update(rawValue, draft => {
+                draft.value = dateValue.value;
+              });
+            } else {
+              storage.values.set({
+                id: ID.createValueId({ entityId, propertyId: property.id, spaceId }),
+                entity: { id: entityId, name: null },
+                property,
+                value: dateValue.value,
+                spaceId,
+                isLocal: true,
+              });
+            }
           }}
         />
       );

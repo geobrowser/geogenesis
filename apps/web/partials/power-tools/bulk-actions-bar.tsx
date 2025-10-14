@@ -2,17 +2,23 @@
 
 import * as React from 'react';
 
+import { Property } from '~/core/v2.types';
+
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
+import { PowerToolsActionsPopover } from './power-tools-actions-popover';
+
 interface Props {
   selectedCount: number;
+  spaceId: string;
+  properties: Property[];
   onClearSelection: () => void;
-  onAddValues: () => void;
-  onRemoveValues: () => void;
-  onAddRelations: () => void;
-  onRemoveRelations: () => void;
-  onAddProperty: () => void;
+  onAddValues: (propertyId: string, value?: string, entityId?: string) => void;
+  onRemoveValues: (propertyId: string, value?: string, entityId?: string) => void;
+  onAddRelations: (propertyId: string, value?: string, entityId?: string) => void;
+  onRemoveRelations: (propertyId: string, value?: string, entityId?: string) => void;
+  onAddProperty: (propertyId: string, propertyName: string) => void;
   onCopyRows: () => void;
   onPasteRows: () => void;
   canPaste: boolean;
@@ -20,6 +26,8 @@ interface Props {
 
 export function BulkActionsBar({
   selectedCount,
+  spaceId,
+  properties,
   onClearSelection,
   onAddValues,
   onRemoveValues,
@@ -35,95 +43,72 @@ export function BulkActionsBar({
     return null;
   }
 
+  const handleOperation = (
+    operation: 'add-values' | 'add-relations' | 'remove-values' | 'remove-relations',
+    propertyId: string,
+    value?: string,
+    entityId?: string
+  ) => {
+    switch (operation) {
+      case 'add-values':
+        onAddValues(propertyId, value, entityId);
+        break;
+      case 'add-relations':
+        onAddRelations(propertyId, value, entityId);
+        break;
+      case 'remove-values':
+        onRemoveValues(propertyId, value, entityId);
+        break;
+      case 'remove-relations':
+        onRemoveRelations(propertyId, value, entityId);
+        break;
+    }
+  };
+
   return (
     <div className="border-b border-grey-02 bg-white px-6 py-3">
-      <div className="flex items-center gap-4">
-        {selectedCount > 0 ? (
-          <Text variant="body" color="grey-04">
-            {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
-          </Text>
-        ) : (
-          <Text variant="body" color="grey-04">
-            Paste available
-          </Text>
-        )}
-        
-        <div className="h-6 w-px bg-grey-02" />
-        
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onCopyRows}
-            disabled={selectedCount === 0}
-            className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-grey-02 disabled:hover:bg-white gap-2 px-3 py-2 text-button leading-[1.125rem]"
-            title="Copy selected rows (Ctrl+C)"
-          >
-            Copy
-          </button>
-
-          <button
-            onClick={onPasteRows}
-            disabled={!canPaste}
-            className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-grey-02 disabled:hover:bg-white gap-2 px-3 py-2 text-button leading-[1.125rem]"
-            title="Paste rows (Ctrl+V)"
-          >
-            Paste
-          </button>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          {selectedCount > 0 ? (
+            <Text variant="body" color="grey-04">
+              {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
+            </Text>
+          ) : (
+            <Text variant="body" color="grey-04">
+              Paste available
+            </Text>
+          )}
 
           {selectedCount > 0 && (
             <>
               <div className="h-6 w-px bg-grey-02" />
 
               <button
-                onClick={onAddValues}
-                className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover gap-2 px-3 py-2 text-button leading-[1.125rem]"
+                onClick={onClearSelection}
+                className="flex h-6 w-6 items-center justify-center rounded-sm hover:bg-grey-01"
+                title="Clear selection"
               >
-                Add Values
-              </button>
-
-              <button
-                onClick={onAddRelations}
-                className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover gap-2 px-3 py-2 text-button leading-[1.125rem]"
-              >
-                Add Relations
-              </button>
-
-              <button
-                onClick={onAddProperty}
-                className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover gap-2 px-3 py-2 text-button leading-[1.125rem]"
-              >
-                Add Property
-              </button>
-
-              <button
-                onClick={onRemoveValues}
-                className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text gap-2 px-3 py-2 text-button leading-[1.125rem]"
-              >
-                Remove Values
-              </button>
-
-              <button
-                onClick={onRemoveRelations}
-                className="relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none border-grey-02 bg-white text-text shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text gap-2 px-3 py-2 text-button leading-[1.125rem]"
-              >
-                Remove Relations
+                <Close />
               </button>
             </>
           )}
         </div>
-        
-        {selectedCount > 0 && (
-          <>
-            <div className="h-6 w-px bg-grey-02" />
 
-            <button
-              onClick={onClearSelection}
-              className="flex h-6 w-6 items-center justify-center rounded-sm hover:bg-grey-01"
-              title="Clear selection"
-            >
-              <Close />
-            </button>
-          </>
-        )}
+        {/* Popover menu on the right */}
+        <div className="flex items-center gap-2">
+          {selectedCount > 0 && (
+            <PowerToolsActionsPopover
+              selectedCount={selectedCount}
+              properties={properties}
+              spaceId={spaceId}
+              onOperation={handleOperation}
+              onAddProperty={onAddProperty}
+              onCopy={onCopyRows}
+              onPaste={canPaste ? onPasteRows : undefined}
+              canPaste={canPaste}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

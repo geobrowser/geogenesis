@@ -189,7 +189,6 @@ export function TableBlockGalleryItem({
                   <PageStringField
                     placeholder="Entity name..."
                     value={name ?? ''}
-                    shouldDebounce={true}
                     onChange={value => {
                       onChangeEntry(
                         {

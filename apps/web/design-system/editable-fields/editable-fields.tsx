@@ -5,8 +5,6 @@ import Textarea from 'react-textarea-autosize';
 import * as React from 'react';
 import { ChangeEvent, useRef } from 'react';
 
-import { useDebouncedValue, useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
-import { Services } from '~/core/services';
 import { getImagePath } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
@@ -42,17 +40,11 @@ type TableStringFieldProps = {
 };
 
 export function TableStringField({ variant = 'tableCell', ...props }: TableStringFieldProps) {
-  const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
-    callback: props.onChange,
-    delay: 1000,
-    initialValue: props.value || '',
-  });
-
   return (
     <Textarea
       {...props}
-      onChange={e => setLocalValue(e.currentTarget.value)}
-      value={localValue}
+      onChange={e => props.onChange(e.currentTarget.value)}
+      value={props.value || ''}
       className={textareaStyles({ variant })}
     />
   );
@@ -63,30 +55,14 @@ type PageStringFieldProps = {
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
   value?: string;
-  shouldDebounce?: boolean;
 };
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
-  const [localValue, setLocalValue] = React.useState(props.value ?? '');
-  const debouncedValue = useDebouncedValue(localValue, 1500);
-
-  React.useEffect(() => {
-    if (props.shouldDebounce && localValue.length > 0) {
-      props.onChange(localValue);
-    }
-  }, [debouncedValue]);
-
   return (
     <Textarea
       {...props}
-      value={props.value && props.value?.length > 0 ? props.value : localValue}
-      onChange={e => {
-        if (props.shouldDebounce) {
-          setLocalValue(e.currentTarget.value);
-        } else {
-          props.onChange(e.currentTarget.value);
-        }
-      }}
+      value={props.value || ''}
+      onChange={e => props.onChange(e.currentTarget.value)}
       className={textareaStyles({ variant: props.variant })}
     />
   );
