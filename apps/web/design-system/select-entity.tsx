@@ -219,13 +219,12 @@ export const SelectEntity = ({
   }, [hasResults, selectedIndex]);
 
   const containerRef = useRef(null!);
+  const popoverRef = useRef(null!);
 
   useOnClickOutside(() => {
     onQueryChange('');
     setSelectedIndex(0);
-  }, containerRef);
-
-  const popoverRef = useRef(null!);
+  }, popoverRef);
 
   useOnClickOutside(() => {
     setResult(null);
@@ -262,15 +261,16 @@ export const SelectEntity = ({
           />
         </Popover.Anchor>
         {query && (
-          <Popover.Content
-            ref={popoverRef}
-            onOpenAutoFocus={event => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
-            forceMount
-          >
+          <Popover.Portal>
+            <Popover.Content
+              ref={popoverRef}
+              onOpenAutoFocus={event => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              className="z-[9999] w-[var(--radix-popper-anchor-width)] leading-none"
+              forceMount
+            >
             <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
               <div
                 className={cx(
@@ -612,6 +612,7 @@ export const SelectEntity = ({
               </div>
             </div>
           </Popover.Content>
+          </Popover.Portal>
         )}
       </Popover.Root>
     </div>

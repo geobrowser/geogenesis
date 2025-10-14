@@ -4,7 +4,6 @@ import Textarea from 'react-textarea-autosize';
 import * as React from 'react';
 import { useEffect } from 'react';
 
-import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useGeoCoordinates } from '~/core/hooks/use-geo-coordinates';
 import { GeoPoint } from '~/core/utils/utils';
 
@@ -36,12 +35,6 @@ interface PageGeoLocationFieldProps {
 }
 
 export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) {
-  const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
-    callback: value => props.onChange(value),
-    delay: 1000,
-    initialValue: props.value || '',
-  });
-
   const [pointValues, setPointsValues] = React.useState(() => {
     const coordinates = GeoPoint.parseCoordinates(props.value);
     return {
@@ -61,7 +54,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
       setPointsValues(updatedPoints);
       const lat = parseFloat(updatedPoints.latitude) || 0;
       const lon = parseFloat(updatedPoints.longitude) || 0;
-      setLocalValue(GeoPoint.formatCoordinates(lat, lon));
+      props.onChange(GeoPoint.formatCoordinates(lat, lon));
     } else {
       console.error(`Invalid ${label} input: "${newValue}". Coordinate values must be numeric.`);
     }
@@ -69,16 +62,19 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
 
   // Update point values when props.value changes from outside
   useEffect(() => {
-    if (props.value && props.value !== localValue) {
-      const coordinates = GeoPoint.parseCoordinates(props.value);
-      if (coordinates) {
+    const coordinates = GeoPoint.parseCoordinates(props.value);
+    if (coordinates) {
+      const newLat = coordinates.latitude.toString();
+      const newLon = coordinates.longitude.toString();
+      // Only update if values actually changed to prevent overwriting user input
+      if (pointValues.latitude !== newLat || pointValues.longitude !== newLon) {
         setPointsValues({
-          latitude: coordinates.latitude.toString(),
-          longitude: coordinates.longitude.toString(),
+          latitude: newLat,
+          longitude: newLon,
         });
       }
     }
-  }, [props.value, localValue]);
+  }, [props.value, pointValues.latitude, pointValues.longitude]);
 
   return (
     <div className="flex w-full flex-col gap-4">

@@ -205,7 +205,6 @@ export function TableBlockListItem({
                   <PageStringField
                     placeholder="Entity name..."
                     value={name ?? ''}
-                    shouldDebounce={true}
                     onChange={value => {
                       onChangeEntry(
                         {

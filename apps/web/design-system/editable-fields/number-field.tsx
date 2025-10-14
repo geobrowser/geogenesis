@@ -41,11 +41,14 @@ export function NumberField({
   className = '',
 }: Props) {
   const [localValue, setLocalValue] = React.useState(value || '');
+  const [isFocused, setIsFocused] = React.useState(false);
 
   React.useEffect(() => {
-    // Update local value if value prop changes from outside the component
-    setLocalValue(value || '');
-  }, [value]);
+    // Only update local value if not actively editing
+    if (!isFocused) {
+      setLocalValue(value || '');
+    }
+  }, [value, isFocused]);
 
   const { entity } = useQueryEntity({ id: unitId });
 
@@ -69,7 +72,11 @@ export function NumberField({
       <input
         type="text"
         className="m-0 -mb-[1px] w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
-        onBlur={e => onChangeWithValidation(e.currentTarget.value, onChange!)}
+        onFocus={() => setIsFocused(true)}
+        onBlur={e => {
+          setIsFocused(false);
+          onChangeWithValidation(e.currentTarget.value, onChange!);
+        }}
         onChange={e => onChangeWithValidation(e.currentTarget.value, setLocalValue)}
         value={localValue}
         placeholder={placeholder}

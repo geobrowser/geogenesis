@@ -42,17 +42,11 @@ type TableStringFieldProps = {
 };
 
 export function TableStringField({ variant = 'tableCell', ...props }: TableStringFieldProps) {
-  const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
-    callback: props.onChange,
-    delay: 1000,
-    initialValue: props.value || '',
-  });
-
   return (
     <Textarea
       {...props}
-      onChange={e => setLocalValue(e.currentTarget.value)}
-      value={localValue}
+      onChange={e => props.onChange(e.currentTarget.value)}
+      value={props.value || ''}
       className={textareaStyles({ variant })}
       autoFocus={props.autoFocus}
     />

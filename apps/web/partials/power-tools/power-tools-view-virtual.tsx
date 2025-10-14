@@ -17,14 +17,16 @@ import { GeoStore } from '~/core/sync/store';
 import { ID } from '~/core/id';
 import { useProperties } from '~/core/hooks/use-properties';
 import { storage } from '~/core/sync/use-mutate';
+import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { Entities } from '~/core/utils/entity';
 import { Cell, Entity, Property, Relation, Row } from '~/core/v2.types';
 
 import { Close } from '~/design-system/icons/close';
+import { Plus } from '~/design-system/icons/plus';
 import { Text } from '~/design-system/text';
 
-import { BulkEditModal, BulkEditOperation } from './bulk-edit-modal';
 import { PowerToolsTableVirtual } from './power-tools-table-virtual';
+import { PowerToolsActionsPopover } from './power-tools-actions-popover';
 import { useClipboard } from './use-clipboard';
 
 const BATCH_SIZE = 50;
@@ -66,12 +68,14 @@ export function PowerToolsViewVirtual() {
   const { spaceId, relationId } = useDataBlockInstance();
   const queryEntitiesAsync = useQueryEntitiesAsync();
   const [selectedRows, setSelectedRows] = React.useState<Set<string>>(new Set());
-  const [modalOpen, setModalOpen] = React.useState(false);
-  const [currentOperation, setCurrentOperation] = React.useState<BulkEditOperation | null>(null);
   const queryClient = useQueryClient();
   const [canPaste, setCanPaste] = React.useState(false);
 
   const { copyRowsToClipboard, pasteRowsFromClipboard, isClipboardSupported, parseRelationUUIDs } = useClipboard();
+
+  // Hook for creating new entities with filters
+  const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
+  const [showPlaceholderRow, setShowPlaceholderRow] = React.useState(false);
 
   // Use standard data block hooks
   const { name: blockName } = useDataBlock();
@@ -152,6 +156,25 @@ export function PowerToolsViewVirtual() {
     return propertiesSchema ? Object.values(propertiesSchema) : [];
   }, [propertiesSchema]);
 
+  // Create a placeholder row for adding new entities
+  const makePlaceholderRow = React.useCallback((entityId: string, propertyIds: string[]): Row => {
+    const columns: Record<string, Cell> = {};
+
+    propertyIds.forEach(propId => {
+      columns[propId] = {
+        slotId: `${entityId}-${propId}`,
+        propertyId: propId,
+        name: null,
+      };
+    });
+
+    return {
+      entityId,
+      columns,
+      placeholder: true,
+    };
+  }, []);
+
   // Convert entities to rows
   const entitiesToRows = React.useCallback((entities: Entity[], propertyIds: string[], collectionRels: Relation[] = []): Row[] => {
     return entities.map(entity => {
@@ -201,14 +224,19 @@ export function PowerToolsViewVirtual() {
       entities = queriedEntities;
     }
 
-    if (entities.length === 0) return [];
-
-    return entitiesToRows(
+    const entityRows = entities.length === 0 ? [] : entitiesToRows(
       entities,
       allPropertyIds,
       source.type === 'COLLECTION' ? collectionRelations : []
     );
-  }, [collectionItems, queriedEntities, source.type, allPropertyIds, collectionRelations, entitiesToRows]);
+
+    // Add placeholder row at the beginning if we're showing it
+    if (showPlaceholderRow) {
+      return [makePlaceholderRow(nextEntityId, allPropertyIds), ...entityRows];
+    }
+
+    return entityRows;
+  }, [collectionItems, queriedEntities, source.type, allPropertyIds, collectionRelations, entitiesToRows, showPlaceholderRow, nextEntityId, makePlaceholderRow]);
 
   // Selection handlers
   const handleSelectRow = React.useCallback((entityId: string, selected: boolean) => {
@@ -247,28 +275,24 @@ export function PowerToolsViewVirtual() {
   }, [loadedRows]);
 
   // Bulk operations handlers
-  const handleBulkOperation = React.useCallback((operation: BulkEditOperation) => {
-    setCurrentOperation(operation);
-    setModalOpen(true);
-  }, []);
-
-  const handleBulkEdit = React.useCallback(async (
+  const handleBulkOperation = React.useCallback((
+    operation: 'add-values' | 'add-relations' | 'remove-values' | 'remove-relations',
     propertyId: string,
-    value: string,
+    value?: string,
     entityId?: string
   ) => {
-    const selectedEntityIds = entityId ? [entityId] : Array.from(selectedRows);
-    if (selectedEntityIds.length === 0 || !currentOperation) return;
+    const selectedEntityIds = Array.from(selectedRows);
+    if (selectedEntityIds.length === 0) return;
 
     try {
       const edits = selectedEntityIds.map(entityId => ({
         entityId,
         propertyId,
-        value,
-        operation: currentOperation,
+        value: value || '',
+        operation,
       }));
 
-      console.log('Performing bulk edit:', edits);
+      console.log('Performing bulk operation:', edits);
 
       // Here you would implement the actual bulk edit logic
       // This would involve updating the entities in your store/database
@@ -276,11 +300,10 @@ export function PowerToolsViewVirtual() {
       // After successful edit, invalidate queries and clear selection
       queryClient.invalidateQueries();
       setSelectedRows(new Set());
-      setModalOpen(false);
     } catch (error) {
-      console.error('Failed to perform bulk edit:', error);
+      console.error('Failed to perform bulk operation:', error);
     }
-  }, [selectedRows, queryClient, currentOperation]);
+  }, [selectedRows, queryClient]);
 
   // Copy/paste handlers
   const handleCopy = React.useCallback(async () => {
@@ -333,6 +356,72 @@ export function PowerToolsViewVirtual() {
     }
   }, [pasteRowsFromClipboard, properties, spaceId, queryClient]);
 
+  // Handler for showing placeholder row (entity creation happens when user types)
+  const handleAddPlaceholder = React.useCallback(() => {
+    setShowPlaceholderRow(true);
+  }, []);
+
+  // Handler for cell changes - creates entities when placeholder row is edited
+  const handleChangeEntry = React.useCallback((context: any, event: any) => {
+    // Handle placeholder row - create entity when user types
+    if (context.entityId === nextEntityId) {
+      // Handle cancel event
+      if (event.type === 'Cancel') {
+        setShowPlaceholderRow(false);
+        return;
+      }
+
+      setShowPlaceholderRow(false);
+
+      // Only create entity if not using Find (for collections)
+      if (event.type !== 'Find') {
+        const maybeName = event.type === 'Create' ? event.data.name : undefined;
+
+        // Create the entity with any active filters
+        createEntityWithTypes({
+          name: maybeName,
+          filters: filterState,
+        });
+
+        // If this is a collection, add the new entity to the collection
+        if (source.type === 'COLLECTION' && source.value) {
+          storage.relations.set({
+            id: ID.createEntityId(),
+            entityId: ID.createEntityId(),
+            spaceId,
+            position: Position.generate(),
+            renderableType: 'RELATION',
+            verified: false,
+            type: {
+              id: SystemIds.COLLECTION_ITEM_RELATION_TYPE,
+              name: 'Collection Item',
+            },
+            fromEntity: {
+              id: source.value,
+              name: null,
+            },
+            toEntity: {
+              id: context.entityId,
+              name: null,
+              value: context.entityId,
+            },
+            isLocal: true,
+          });
+        }
+      }
+    }
+
+    // Invalidate query cache to refresh data
+    queryClient.invalidateQueries();
+  }, [nextEntityId, createEntityWithTypes, filterState, source, spaceId, queryClient]);
+
+  // Handler for linking entries (used for collection items)
+  const handleLinkEntry = React.useCallback((id: string, to: {id: string; name: string | null; space?: string; verified?: boolean}) => {
+    // This is typically used for updating relation metadata like space and verified status
+    // For now, we'll just log it
+    console.log('Link entry:', id, to);
+  }, []);
+
   // Check clipboard permissions
   React.useEffect(() => {
     if (isClipboardSupported) {
@@ -366,46 +455,28 @@ export function PowerToolsViewVirtual() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Add new entity button */}
+          <button
+            onClick={handleAddPlaceholder}
+            className="flex items-center gap-1 rounded bg-action px-3 py-1.5 text-white hover:bg-action-hover"
+            title="Add new entity"
+          >
+            <Plus />
+            <Text variant="metadata">Add Entity</Text>
+          </button>
+
+          {/* Actions popover - only show when rows are selected */}
           {selectedRows.size > 0 && (
-            <>
-              <button
-                onClick={() => handleBulkOperation('add-values')}
-                className="rounded bg-action px-3 py-1.5 text-white hover:bg-action-hover"
-              >
-                <Text variant="metadata">Set Value</Text>
-              </button>
-              <button
-                onClick={() => handleBulkOperation('add-values')}
-                className="rounded bg-action px-3 py-1.5 text-white hover:bg-action-hover"
-              >
-                <Text variant="metadata">Append</Text>
-              </button>
-              <button
-                onClick={() => handleBulkOperation('remove-values')}
-                className="rounded bg-grey-02 px-3 py-1.5 hover:bg-grey-03"
-              >
-                <Text variant="metadata">Clear</Text>
-              </button>
-              {isClipboardSupported && (
-                <>
-                  <button
-                    onClick={handleCopy}
-                    className="rounded bg-grey-02 px-3 py-1.5 hover:bg-grey-03"
-                  >
-                    <Text variant="metadata">Copy</Text>
-                  </button>
-                </>
-              )}
-            </>
-          )}
-          {isClipboardSupported && canPaste && (
-            <button
-              onClick={handlePaste}
-              className="rounded bg-grey-02 px-3 py-1.5 hover:bg-grey-03"
-            >
-              <Text variant="metadata">Paste</Text>
-            </button>
+            <PowerToolsActionsPopover
+              selectedCount={selectedRows.size}
+              properties={properties}
+              spaceId={spaceId}
+              onOperation={handleBulkOperation}
+              onCopy={isClipboardSupported ? handleCopy : undefined}
+              onPaste={isClipboardSupported && canPaste ? handlePaste : undefined}
+              canPaste={canPaste}
+            />
           )}
         </div>
       </div>
@@ -432,22 +503,13 @@ export function PowerToolsViewVirtual() {
             fetchNextPage={source.type === 'COLLECTION' ? () => {} : fetchNextPage}
             totalDBRowCount={source.type === 'COLLECTION' ? collectionItems?.length ?? 0 : (typeof totalDBRowCount === 'number' ? totalDBRowCount : queriedEntities.length)}
             totalFetched={source.type === 'COLLECTION' ? collectionItems?.length ?? 0 : totalFetched}
+            onChangeEntry={handleChangeEntry}
+            onLinkEntry={handleLinkEntry}
+            source={source}
           />
         )}
       </div>
 
-      {/* Bulk Edit Modal */}
-      {modalOpen && currentOperation && (
-        <BulkEditModal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
-          operation={currentOperation}
-          selectedCount={selectedRows.size}
-          properties={properties}
-          spaceId={spaceId}
-          onConfirm={handleBulkEdit}
-        />
-      )}
     </div>
   );
 }
