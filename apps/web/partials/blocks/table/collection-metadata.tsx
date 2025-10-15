@@ -3,7 +3,7 @@ import cx from 'classnames';
 import Image from 'next/image';
 
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
@@ -81,6 +81,16 @@ export const CollectionMetadata = ({
     // }
   };
 
+  // Cleanup for autoclose popover 500ms after mouseleave mechanism
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div
       className="relative w-full"
@@ -89,7 +99,6 @@ export const CollectionMetadata = ({
       }}
       onMouseLeave={() => {
         setIsHovered(false);
-        setIsPopoverOpen(false);
       }}
     >
       <div className="absolute -inset-2 z-0" />
@@ -133,6 +142,17 @@ export const CollectionMetadata = ({
                     onOpenAutoFocus={event => {
                       event.preventDefault();
                       event.stopPropagation();
+                    }}
+                    onMouseEnter={() => {
+                      if (closeTimeoutRef.current) {
+                        clearTimeout(closeTimeoutRef.current);
+                        closeTimeoutRef.current = null;
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      closeTimeoutRef.current = setTimeout(() => {
+                        setIsPopoverOpen(false);
+                      }, 500);
                     }}
                   >
                     {isEditing && (
