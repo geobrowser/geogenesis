@@ -116,6 +116,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
     const name = relation.toEntity.name;
     const relationId = relation.id;
     const relationValue = relation.toEntity.id;
+    const relationEntityId = relation.entityId;
 
     return (
       <LinkableRelationChip
@@ -125,6 +126,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
         entityId={relationValue}
         spaceId={relation.spaceId}
         relationId={relationId}
+        relationEntityId={relationEntityId}
       >
         {name ?? value}
       </LinkableRelationChip>
