@@ -141,13 +141,15 @@ export function PowerToolsTableVirtual({
     const widths: Record<string, number> = {};
     visibleProperties.forEach(prop => {
       if (!columnWidths[prop.id]) {
-        widths[prop.id] = 200; // Default width
+        // Date/time columns need more space for YYYY/MM/DD - 00:00 AM placeholder format
+        const isDateColumn = prop.dataType === 'TIME' || prop.renderableType === 'TIME';
+        widths[prop.id] = isDateColumn ? 300 : 200; // 1.5x width for date columns
       }
     });
     if (Object.keys(widths).length > 0) {
       setColumnWidths(prev => ({ ...prev, ...widths }));
     }
-  }, [visibleProperties]);
+  }, [visibleProperties, columnWidths]);
 
   // Handle column resize
   const handleMouseDown = (e: React.MouseEvent, propertyId: string) => {

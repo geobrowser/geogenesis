@@ -228,7 +228,7 @@ export function LinkableRelationChip({
           <Popover.Content
             side="top"
             sideOffset={-4}
-            className="z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
+            className="z-[100] flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
           >
             {isEditing && (
               <div

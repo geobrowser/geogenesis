@@ -114,6 +114,7 @@ export function PowerToolsViewVirtual() {
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     staleTime: 30000,
     refetchOnWindowFocus: false,
+    refetchOnMount: true, // Ensures data is refetched when navigating back
   });
 
   // Flatten pages of data

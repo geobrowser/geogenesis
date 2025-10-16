@@ -44,7 +44,18 @@ export function useInfiniteQueryEntities({
   });
 
   React.useEffect(() => {
-    if (initialData && initialData.length > 0 && (!hasInitialized || loadedEntities.length === 0)) {
+    console.log('[useInfiniteQueryEntities] Effect running:', {
+      hasInitialData: !!initialData,
+      initialDataLength: initialData?.length,
+      hasInitialized,
+      loadedEntitiesLength: loadedEntities.length,
+      willUpdate: !!(initialData && (!hasInitialized || loadedEntities.length === 0))
+    });
+
+    // Initialize loaded entities when we have initial data and haven't initialized yet
+    // OR when we have initial data but loadedEntities is empty (e.g., after navigation)
+    if (initialData && (!hasInitialized || loadedEntities.length === 0)) {
+      console.log('[useInfiniteQueryEntities] Setting loaded entities:', initialData.length);
       setLoadedEntities(initialData);
       setCurrentSkip(BATCH_SIZE);
       setHasReachedEnd(initialData.length < BATCH_SIZE);
@@ -54,11 +65,19 @@ export function useInfiniteQueryEntities({
 
   // Reset when where conditions change (using JSON stringify to compare)
   const whereKey = JSON.stringify(where);
+  const previousWhereKey = React.useRef<string | null>(null);
+
   React.useEffect(() => {
-    setLoadedEntities([]);
-    setCurrentSkip(0);
-    setHasReachedEnd(false);
-    setHasInitialized(false);
+    // Only reset if the where key actually changed from a previous value
+    // Don't reset on initial mount
+    if (previousWhereKey.current !== null && previousWhereKey.current !== whereKey) {
+      console.log('[useInfiniteQueryEntities] Where changed, resetting state');
+      setLoadedEntities([]);
+      setCurrentSkip(0);
+      setHasReachedEnd(false);
+      setHasInitialized(false);
+    }
+    previousWhereKey.current = whereKey;
   }, [whereKey]);
 
   // Load more function
@@ -87,11 +106,20 @@ export function useInfiniteQueryEntities({
     }
   }, [where, currentSkip, isLoadingMore, hasReachedEnd, enabled, queryEntitiesAsync]);
 
-  return {
+  const result = {
     entities: loadedEntities,
     hasMore: !hasReachedEnd,
     loadMore,
     isLoading,
     isLoadingMore,
   };
+
+  console.log('[useInfiniteQueryEntities] Returning:', {
+    entitiesLength: loadedEntities.length,
+    hasMore: !hasReachedEnd,
+    isLoading,
+    isLoadingMore,
+  });
+
+  return result;
 }
