@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 
 import * as React from 'react';
 
-import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
@@ -45,15 +44,6 @@ export function useDataBlock() {
     spaceId: spaceId,
     id: entityId,
   });
-
-  const { id: pageEntityId } = useEntityStoreInstance();
-
-  const { entity: pageEntity } = useQueryEntity({
-    spaceId: spaceId,
-    id: pageEntityId,
-  });
-
-  const isBlockLinkedToEntity = pageEntity?.relations.some(rel => rel.toEntity.id === entityId) ?? false;
 
   const { relationBlockSourceRelations } = useRelationsBlock();
   const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
@@ -234,8 +224,6 @@ export function useDataBlock() {
     setName,
     totalPages,
     collectionLength,
-
-    isBlockLinkedToEntity,
 
     relations: entity?.relations,
     collectionRelations: source.type === 'COLLECTION' ? collectionRelations : undefined,

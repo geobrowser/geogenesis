@@ -299,7 +299,6 @@ export const TableBlock = ({ spaceId }: Props) => {
     collectionRelations,
     collectionLength,
     pageSize,
-    isBlockLinkedToEntity,
   } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
@@ -311,11 +310,6 @@ export const TableBlock = ({ spaceId }: Props) => {
     filterState,
     relations
   );
-
-  if (!isBlockLinkedToEntity) {
-    // Don't render data blocks that aren't linked to the current page entity
-    return null;
-  }
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have

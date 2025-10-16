@@ -11,7 +11,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const { spaces } = useSpaces();
   const userCanEdit = useUserIsEditing(spaceId);
 
-  const { name, setName, isLoading, isBlockLinkedToEntity } = useDataBlock();
+  const { name, setName, isLoading } = useDataBlock();
   const { source } = useSource();
 
   const hasOverflow = source.type === 'SPACES' ? source.value.length > 3 : false;
@@ -27,11 +27,6 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
       }, 200);
     }
   }, [name, isLoading]);
-
-  if (!isBlockLinkedToEntity) {
-    // Don't render data blocks that aren't linked to the current page entity
-    return null;
-  }
 
   return (
     <div className="table-block-editable-title flex flex-grow items-center gap-2">
