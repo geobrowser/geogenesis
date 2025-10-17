@@ -1,10 +1,7 @@
 'use client';
 
 import { ContentIds, IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
-// import { Image } from '@graphprotocol/grc-20';
 import { useAtom } from 'jotai';
-
-import * as React from 'react';
 
 import {
   DATA_TYPE_PROPERTY,
@@ -17,9 +14,9 @@ import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { useEditorStore } from '~/core/state/editor/use-editor';
-import { useCover, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
+import { useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
-import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
+import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Property, Relation, ValueOptions } from '~/core/v2.types';
 
@@ -41,115 +38,53 @@ import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-templ
 
 import { editorHasContentAtom } from '~/atoms';
 
-function ShowablePanel({
-  name,
-  children,
-  id,
-  spaceId,
-  hasEntries,
-}: {
-  id: string;
-  name: string | null;
-  spaceId: string;
-  hasEntries: boolean;
-  children: React.ReactNode;
-}) {
-  const coverUrl = useCover(id, spaceId);
-  const types = useEntityTypes(id, spaceId);
-  const { blockIds } = useEditorStore();
-  const [editorHasContent] = useAtom(editorHasContentAtom);
-
-  // Show the properties panel when:
-  // 1. Name exists, OR
-  // 2. Cover/avatar exists, OR
-  // 3. Types exist, OR
-  // 4. Editor has content / blocks exist
-  // 5. If there are more than 0 properties
-  const showPropertiesPanel =
-    (name && name?.length > 0) ||
-    coverUrl ||
-    types.length > 0 ||
-    (blockIds && blockIds.length > 0) ||
-    editorHasContent ||
-    hasEntries;
-
-  if (!showPropertiesPanel) {
-    return null;
-  }
-
-  return <>{children}</>;
-}
-
-interface Props {
+type EditableEntityPageProps = {
   id: string;
   spaceId: string;
-}
+};
 
-export function EditableEntityPage({ id, spaceId }: Props) {
-  const renderedProperties = useEditableProperties(id, spaceId);
-  const propertiesEntries = Object.entries(renderedProperties);
-
+export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   const { createProperty, addPropertyToEntity } = useCreateProperty(spaceId);
 
   const name = useName(id, spaceId);
+  const shouldShowPanel = useShouldShowPropertiesPanel(id, spaceId);
+  const visiblePropertiesEntries = useVisiblePropertiesEntries(id, spaceId);
 
-  // Check if this entity is a non-relation property
-  const { property: propertyData } = useQueryProperty({
-    id,
-    spaceId,
-    enabled: true,
-  });
-
-  const isNonRelationProperty = propertyData && propertyData.dataType !== 'RELATION';
+  if (!shouldShowPanel) {
+    return null;
+  }
 
   return (
-    <ShowablePanel id={id} spaceId={spaceId} name={name} hasEntries={propertiesEntries.length > 0}>
-      <div className="rounded-lg border border-grey-02 shadow-button">
-        <div className="flex flex-col gap-6 p-5">
-          {propertiesEntries.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-4 text-center">
-              <Text as="p" variant="body" color="grey-04">
-                No properties added yet
-              </Text>
-              <Text as="p" variant="footnote" color="grey-03" className="mt-1">
-                Click the + button below to add properties
-              </Text>
-            </div>
-          )}
-          {propertiesEntries.map(([propertyId, property]) => {
-            // Hide cover/avatar/types/name property, user can upload cover using upload icon on top placeholder
-            // and add types inline using the + button, add name under cover image component
+    <div className="relative rounded-lg border border-grey-02 shadow-button">
+      <div className="flex flex-col gap-6 p-5">
+        {visiblePropertiesEntries.length === 0 && (
+          <div className="flex flex-col items-center justify-center text-center">
+            <Text as="p" variant="body" color="grey-04">
+              No properties added yet
+            </Text>
+            <Text as="p" variant="footnote" color="grey-03" className="mt-1">
+              Click the + button below to add properties
+            </Text>
+          </div>
+        )}
+        {visiblePropertiesEntries.map(([propertyId, property]) => {
+          return (
+            <div key={`${id}-${propertyId}`} className="relative break-words">
+              <RenderedProperty spaceId={spaceId} property={property} />
 
-            if (
-              propertyId === SystemIds.COVER_PROPERTY ||
-              propertyId === ContentIds.AVATAR_PROPERTY ||
-              propertyId === SystemIds.TYPES_PROPERTY ||
-              propertyId === SystemIds.NAME_PROPERTY ||
-              propertyId === DATA_TYPE_PROPERTY ||
-              propertyId === VALUE_TYPE_PROPERTY || // @TODO temporary until we update property schema in root
-              propertyId === RENDERABLE_TYPE_PROPERTY ||
-              (propertyId === IS_TYPE_PROPERTY && isNonRelationProperty)
-            ) {
-              return null;
-            }
-
-            return (
-              <div key={`${id}-${propertyId}`} className="relative break-words">
-                <RenderedProperty spaceId={spaceId} property={property} />
-
-                {property.dataType === 'RELATION' || property.renderableType === 'IMAGE' ? (
-                  <RelationsGroup key={propertyId} propertyId={propertyId} id={id} spaceId={spaceId} />
-                ) : (
-                  <RenderedValue key={propertyId} propertyId={propertyId} entityId={id} spaceId={spaceId} />
-                )}
-                {/* We need to pin to top for Geo Location to prevent covering the display toggle */}
-                <div
-                  className={`absolute right-0 flex items-center gap-1 ${propertyId === SystemIds.GEO_LOCATION_PROPERTY && property.dataType === 'POINT' ? 'top-0' : 'top-6'}`}
-                >
-                  {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
-                  <>
-                    {/* Formatting exists on properties now instead of value */}
-                    {/* {property.dataType === 'TIME' && (
+              {property.dataType === 'RELATION' || property.renderableType === 'IMAGE' ? (
+                <RelationsGroup key={propertyId} propertyId={propertyId} id={id} spaceId={spaceId} />
+              ) : (
+                <RenderedValue key={propertyId} propertyId={propertyId} entityId={id} spaceId={spaceId} />
+              )}
+              {/* We need to pin to top for Geo Location to prevent covering the display toggle */}
+              <div
+                className={`absolute right-0 flex items-center gap-1 ${propertyId === SystemIds.GEO_LOCATION_PROPERTY && property.dataType === 'POINT' ? 'top-0' : 'top-6'}`}
+              >
+                {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
+                <>
+                  {/* Formatting exists on properties now instead of value */}
+                  {/* {property.dataType === 'TIME' && (
                       <DateFormatDropdown
                         value={firstRenderable.value}
                         // @TODO(migration): fix formatting. Now on property
@@ -161,8 +96,8 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                         }}
                       />
                     )} */}
-                    {/* @TODO: Formatting exists on property now instead of value */}
-                    {/* {property.dataType === 'NUMBER' && (
+                  {/* @TODO: Formatting exists on property now instead of value */}
+                  {/* {property.dataType === 'NUMBER' && (
                       <NumberOptionsDropdown
                         value={firstRenderable.value}
                         // @TODO(migration): Fix format. Now defined on Property
@@ -181,10 +116,10 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                       />
                     )} */}
 
-                    {/* <RenderableTypeDropdown value={renderableType} options={[]} /> */}
+                  {/* <RenderableTypeDropdown value={renderableType} options={[]} /> */}
 
-                    {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
-                    {/* {property.dataType !== 'RELATION' && (
+                  {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
+                  {/* {property.dataType !== 'RELATION' && (
                         <SquareButton
                           icon={<Trash />}
                           onClick={() => {
@@ -192,51 +127,50 @@ export function EditableEntityPage({ id, spaceId }: Props) {
                           }}
                         />
                       )} */}
-                  </>
-                </div>
+                </>
               </div>
-            );
-          })}
-        </div>
-        <div className="p-4">
-          <SelectEntityAsPopover
-            trigger={<SquareButton icon={<Create />} />}
-            spaceId={spaceId}
-            relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-            onCreateEntity={result => {
-              const renderableType = result.renderableType || 'TEXT';
+            </div>
+          );
+        })}
+      </div>
+      <div className={visiblePropertiesEntries.length === 0 ? 'absolute bottom-0 left-0 p-4' : 'p-4'}>
+        <SelectEntityAsPopover
+          trigger={<SquareButton icon={<Create />} />}
+          spaceId={spaceId}
+          relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+          onCreateEntity={result => {
+            const renderableType = result.renderableType || 'TEXT';
 
-              const createdPropertyId = createProperty({
-                name: result.name || '',
-                propertyType: renderableType,
-                verified: result.verified,
-                space: result.space,
-              });
+            const createdPropertyId = createProperty({
+              name: result.name || '',
+              propertyType: renderableType,
+              verified: result.verified,
+              space: result.space,
+            });
 
-              // Immediately add the property to the entity
+            // Immediately add the property to the entity
+            addPropertyToEntity({
+              entityId: id,
+              propertyId: createdPropertyId,
+              propertyName: result.name || '',
+              entityName: name || undefined,
+            });
+
+            return createdPropertyId;
+          }}
+          onDone={result => {
+            if (result) {
               addPropertyToEntity({
                 entityId: id,
-                propertyId: createdPropertyId,
+                propertyId: result.id,
                 propertyName: result.name || '',
                 entityName: name || undefined,
               });
-
-              return createdPropertyId;
-            }}
-            onDone={result => {
-              if (result) {
-                addPropertyToEntity({
-                  entityId: id,
-                  propertyId: result.id,
-                  propertyName: result.name || '',
-                  entityName: name || undefined,
-                });
-              }
-            }}
-          />
-        </div>
+            }
+          }}
+        />
       </div>
-    </ShowablePanel>
+    </div>
   );
 }
 
@@ -731,4 +665,71 @@ async function applyTemplate(templateOptions: {
   for (const relation of template.relations) {
     storage.relations.set(relation);
   }
+}
+
+// System properties that are editable elsewhere
+const SYSTEM_PROPERTIES = [
+  SystemIds.NAME_PROPERTY,
+  SystemIds.TYPES_PROPERTY,
+  SystemIds.COVER_PROPERTY,
+  SystemIds.BLOCKS,
+  ContentIds.AVATAR_PROPERTY,
+  DATA_TYPE_PROPERTY,
+  VALUE_TYPE_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+  IS_TYPE_PROPERTY,
+];
+
+/**
+ * Returns filtered property entries excluding system properties and
+ * IS_TYPE_PROPERTY for non-relation properties.
+ */
+function useVisiblePropertiesEntries(entityId: string, spaceId: string): [string, Property][] {
+  const renderedProperties = useEditableProperties(entityId, spaceId);
+  const propertiesEntries = Object.entries(renderedProperties);
+
+  const { property: propertyData } = useQueryProperty({
+    id: entityId,
+    spaceId,
+    enabled: true,
+  });
+
+  const isNonRelationProperty = propertyData && propertyData.dataType !== 'RELATION';
+
+  const visibleEntries = propertiesEntries.filter(([propertyId]) => {
+    return !SYSTEM_PROPERTIES.includes(propertyId) && !(propertyId === IS_TYPE_PROPERTY && isNonRelationProperty);
+  });
+
+  return visibleEntries;
+}
+
+/**
+ * Returns true if the properties panel should be visible.
+ * Panel shows when entity has name, content, types, or non-system properties.
+ */
+function useShouldShowPropertiesPanel(entityId: string, spaceId: string): boolean {
+  const name = useName(entityId, spaceId);
+  const types = useEntityTypes(entityId, spaceId);
+
+  const { blockIds } = useEditorStore();
+  const [editorHasContent] = useAtom(editorHasContentAtom);
+
+  const values = useValues({
+    selector: v => v.entity.id === entityId && v.spaceId === spaceId && !SYSTEM_PROPERTIES.includes(v.property.id),
+  });
+
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && !SYSTEM_PROPERTIES.includes(r.type.id),
+  });
+
+  const hasActualProperties = values.length > 0 || relations.length > 0;
+
+  const shouldShow =
+    (name !== null && name.length > 0) ||
+    (blockIds && blockIds.length > 0) ||
+    editorHasContent ||
+    types.length > 0 ||
+    hasActualProperties;
+
+  return shouldShow;
 }
