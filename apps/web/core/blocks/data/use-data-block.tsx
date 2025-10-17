@@ -157,10 +157,15 @@ export function useDataBlock() {
     }
 
     if (source.type === 'RELATIONS') {
-      return relationsMapping?.map(item => ({
-        ...item,
-        placeholder: false,
-      } as Row)) ?? [];
+      return (
+        relationsMapping?.map(
+          item =>
+            ({
+              ...item,
+              placeholder: false,
+            }) as Row
+        ) ?? []
+      );
     }
 
     return [];
