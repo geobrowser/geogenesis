@@ -35,6 +35,8 @@ import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 import { Tooltip } from '~/design-system/tooltip';
 
+import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
+
 import { ArrowLeft } from './icons/arrow-left';
 import { InfoSmall } from './icons/info-small';
 import { Search } from './icons/search';
@@ -42,7 +44,6 @@ import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
-import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 
 type SelectEntityProps = {
   onDone?: (
@@ -55,7 +56,13 @@ type SelectEntityProps = {
     // Not the best way to do this but the simplest for now to avoid breaking changes.
     fromCreateFn?: boolean
   ) => void;
-  onCreateEntity?: (result: { id: string; name: string | null; space?: string; verified?: boolean; renderableType?: SwitchableRenderableType }) => void;
+  onCreateEntity?: (result: {
+    id: string;
+    name: string | null;
+    space?: string;
+    verified?: boolean;
+    renderableType?: SwitchableRenderableType;
+  }) => void | string;
   spaceId: string;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
@@ -66,6 +73,7 @@ type SelectEntityProps = {
   withSelectSpace?: boolean;
   withSearchIcon?: boolean;
   advanced?: boolean;
+  autoFocus?: boolean;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -85,6 +93,7 @@ export const SelectEntity = ({
   withSelectSpace = true,
   withSearchIcon = false,
   advanced = true,
+  autoFocus = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
@@ -137,7 +146,7 @@ export const SelectEntity = ({
   const isCreatingProperty = relationValueTypes?.some(type => type.id === SystemIds.PROPERTY);
 
   const onCreateNewEntity = () => {
-    const newEntityId = ID.createEntityId();
+    let newEntityId = ID.createEntityId();
 
     // This component is used in many different use-cases across the system, so we
     // need to be able to pass in a callback. onCreateEntity is used to enable to
@@ -146,7 +155,12 @@ export const SelectEntity = ({
     // e.g., you're in a collection and create a new entity, we want to add the current
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
-      onCreateEntity({ id: newEntityId, name: query, renderableType: isCreatingProperty ? renderableType : undefined });
+      newEntityId =
+        onCreateEntity({
+          id: newEntityId,
+          name: query,
+          renderableType: isCreatingProperty ? renderableType : undefined,
+        }) ?? newEntityId;
     } else {
       // Create new entity with name and types using internal id
       storage.entities.name.set(newEntityId, spaceId, query);
@@ -244,6 +258,7 @@ export const SelectEntity = ({
             placeholder={placeholder}
             className={inputStyles({ [variant]: true, withSearchIcon, className: inputClassName })}
             spellCheck={false}
+            autoFocus={autoFocus}
           />
         </Popover.Anchor>
         {query && (
@@ -392,7 +407,7 @@ export const SelectEntity = ({
                 )}
                 {!result ? (
                   <ResizableContainer>
-                    <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
+                    <div className="no-scrollbar flex max-h-[50vh] flex-col overflow-y-auto overflow-x-clip bg-white">
                       {!results?.length && isLoading && (
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">Loading...</div>
@@ -546,7 +561,7 @@ export const SelectEntity = ({
                         />
                       </div>
                     </div>
-                    <div className="flex max-h-[219px] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
+                    <div className="flex max-h-[50vh] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
                       {(result.spaces ?? []).map((space, index) => (
                         <button
                           key={index}
@@ -586,10 +601,7 @@ export const SelectEntity = ({
                         <div className="text-[0.875rem] text-grey-04">IDs</div>
                       </button>
                       {isCreatingProperty && (
-                        <RenderableTypeDropdown 
-                          value={renderableType} 
-                          onChange={setRenderableType}
-                        />
+                        <RenderableTypeDropdown value={renderableType} onChange={setRenderableType} />
                       )}
                     </div>
                     <button onClick={onCreateNewEntity} className="text-resultLink text-ctaHover">
@@ -710,7 +722,7 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
             forceMount
           >
             <div className="pt-1">
-              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {results.map(result => (
@@ -769,7 +781,7 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
             forceMount
           >
             <div className="pt-1">
-              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {!results?.length && isLoading && (

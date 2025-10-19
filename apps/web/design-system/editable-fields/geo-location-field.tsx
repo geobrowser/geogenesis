@@ -115,7 +115,16 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
   );
 }
 
-export function GeoLocationWrapper({ id, spaceId, propertyType }: { relationId?: string; id: string; spaceId: string; propertyType?: string }) {
+export function GeoLocationWrapper({
+  id,
+  spaceId,
+  propertyType,
+}: {
+  relationId?: string;
+  id: string;
+  spaceId: string;
+  propertyType?: string;
+}) {
   const geoData = useGeoCoordinates(id, spaceId, propertyType);
 
   // Only render if there's geo location data
@@ -125,7 +134,7 @@ export function GeoLocationWrapper({ id, spaceId, propertyType }: { relationId?:
 
   // Parse coordinates for the map
   const coordinates = GeoPoint.parseCoordinates(geoData.geoLocation);
-  
+
   if (!coordinates) {
     return null;
   }

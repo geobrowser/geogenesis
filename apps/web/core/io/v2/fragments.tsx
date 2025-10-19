@@ -6,6 +6,7 @@ export const entityFragment = graphql(/* GraphQL */ `
     name
     description
     spaceIds
+    updatedAt
 
     types {
       id
@@ -59,12 +60,13 @@ export const entityFragment = graphql(/* GraphQL */ `
 `);
 
 export const entitiesQuery = graphql(/* GraphQL */ `
-  query AllEntities($spaceId: UUID, $limit: Int, $offset: Int, $filter: EntityFilter) {
-    entities(first: $limit, offset: $offset, filter: $filter) {
+  query AllEntities($spaceId: UUID, $limit: Int, $offset: Int, $filter: EntityFilter, $orderBy: [EntitiesOrderBy!]) {
+    entities(first: $limit, offset: $offset, filter: $filter, orderBy: $orderBy) {
       id
       name
       description
       spaceIds
+      updatedAt
 
       types {
         id
@@ -434,6 +436,14 @@ export const spacesQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const spacesWhereMemberQuery = graphql(/* GraphQL */ `
+  query SpacesWhereMember($address: String!) {
+    spaces(filter: { members: { some: { address: { is: $address } } } }) {
+      ...FullSpace
+    }
+  }
+`);
+
 export const propertyFragment = graphql(/* GraphQL */ `
   fragment PropertyFragment on Property {
     id
@@ -568,3 +578,4 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
     }
   }
 `);
+

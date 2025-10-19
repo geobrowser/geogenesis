@@ -1,4 +1,4 @@
-import {  IdUtils, SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
@@ -197,12 +197,18 @@ function buildTabsForSpacePage(
     },
   ];
 
+  const ACTIVITY_TAB = {
+    label: 'Activity',
+    href: `/space/${spaceId}/activity`,
+    priority: 3 as const,
+  };
+
   // Order of how we add the tabs matters. We want to
   // show "content-based" tabs first, then "space-based" tabs.
 
-  if (typeIds.includes(SystemIds.SPACE_TYPE)) {
-    tabs.push(...ALL_SPACES_TABS);
+  tabs.push(...ALL_SPACES_TABS);
 
+  if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (DYNAMIC_TABS.length > 0) {
       tabs.push(...DYNAMIC_TABS);
     }
@@ -211,6 +217,8 @@ function buildTabsForSpacePage(
       tabs.push(...SOME_SPACES_TABS);
     }
   }
+
+  tabs.push(ACTIVITY_TAB);
 
   const seen = new Map<string, TabProps>();
 

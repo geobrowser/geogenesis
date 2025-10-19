@@ -65,32 +65,30 @@ export const cloneEntity = async (
   }
 
   triplesToClone.forEach(triple => {
-    if (triple.property.dataType === 'TEXT' && hasVariable(triple.value)) {
-      const replacedValue = replaceVariables(triple.value, {
-        entityId: parentEntityId ?? newEntityId,
-        entityName: parentEntityName ?? newEntityName ?? '${entityName}',
-      });
+    let tripleValue = triple.value;
 
-      newOps.push(
-        Ops.create({
-          entity: newEntityId,
-          value: {
-            property: Id(triple.property.id),
-            value: replacedValue,
-          },
-        })
-      );
-    } else {
-      newOps.push(
-        Ops.create({
-          entity: newEntityId,
-          value: {
-            property: Id(triple.property.id),
-            value: triple.value,
-          },
-        })
-      );
+    if (triple.property.dataType === 'TEXT') {
+      if (hasVariable(tripleValue)) {
+        tripleValue = replaceVariables(tripleValue, {
+          entityId: parentEntityId ?? newEntityId,
+          entityName: parentEntityName ?? newEntityName ?? '${entityName}',
+        });
+      }
+
+      if (triple.property.id === SystemIds.FILTER) {
+        tripleValue = replaceAuthorsFilter(tripleValue, parentEntityId ?? newEntityId);
+      }
     }
+
+    newOps.push(
+      Ops.create({
+        entity: newEntityId,
+        value: {
+          property: Id(triple.property.id),
+          value: tripleValue,
+        },
+      })
+    );
   });
 
   relationsToClone.forEach(relation => {
@@ -186,6 +184,8 @@ const SKIPPED_PROPERTYS = [
   SystemIds.BLOCKS,
 ];
 
+const AUTHORS_PROPERTY = '91a9e2f6-e51a-48f7-9976-61de8561b690';
+
 const hasVariable = (value: string) => {
   const entityIdPattern = /\$\{entityId\}/;
   const entityNamePattern = /\$\{entityName\}/;
@@ -205,4 +205,20 @@ const replaceVariables = (value: string, variables: { entityId: string; entityNa
   }
 
   return result;
+};
+
+const replaceAuthorsFilter = (filterString: string, newEntityId: string): string => {
+  try {
+    const filterObj = JSON.parse(filterString);
+
+    if (filterObj.filter && filterObj.filter[AUTHORS_PROPERTY]) {
+      filterObj.filter[AUTHORS_PROPERTY].is = newEntityId;
+      return JSON.stringify(filterObj);
+    }
+
+    return filterString;
+  } catch (error) {
+    console.warn('Failed to parse filter string:', error);
+    return filterString;
+  }
 };

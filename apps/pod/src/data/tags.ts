@@ -1,0 +1,17 @@
+export const tags = [
+	{id: "humor", name: "Humor"},
+	{id: "science", name: "Science"},
+	{id: "politics", name: "Politics"},
+	{id: "technology", name: "Technology"},
+	{id: "culture", name: "Culture"},
+	{id: "investigative", name: "Investigative"},
+	{id: "economics", name: "Economics"},
+	{id: "storytelling", name: "Storytelling"},
+	{id: "interview", name: "Interview"},
+	{id: "educational", name: "Educational"},
+	{id: "wellness", name: "Wellness"},
+	{id: "philosophy", name: "Philosophy"},
+	{id: "adventure", name: "Adventure"},
+	{id: "lifestyle", name: "Lifestyle"},
+	{id: "documentary", name: "Documentary"},
+]

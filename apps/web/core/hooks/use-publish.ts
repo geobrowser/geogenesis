@@ -283,13 +283,13 @@ function getCalldataForSpaceGovernanceType(args: GovernanceTypeCalldataArgs) {
       return encodeFunctionData({
         functionName: 'proposeEdits',
         abi: MainVotingAbi,
-        args: [stringToHex(args.cid), args.cid, args.spacePluginAddress as `0x${string}`],
+        args: [stringToHex(args.cid), args.cid, '0x', args.spacePluginAddress as `0x${string}`],
       });
     case 'PERSONAL':
       return encodeFunctionData({
         functionName: 'submitEdits',
         abi: PersonalSpaceAdminAbi,
-        args: [args.cid, args.spacePluginAddress as `0x${string}`],
+        args: [args.cid, '0x', args.spacePluginAddress as `0x${string}`],
       });
   }
 }

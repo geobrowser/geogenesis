@@ -6,6 +6,7 @@ import { RENDERABLE_TYPE_PROPERTY, ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/co
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
 import { useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
+import { sortRelations } from '~/core/utils/utils';
 import { DataType, RenderableType } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -137,10 +138,11 @@ export function RelationsGroup({
 }) {
   const { property } = useQueryProperty({ id: propertyId });
 
-  const relations = useRelations({
-    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === propertyId,
-  });
-
+  const relations = sortRelations(
+    useRelations({
+      selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === propertyId,
+    })
+  );
 
   if (relations.length === 0) {
     return null;
@@ -190,7 +192,14 @@ export function RelationsGroup({
             const relationId = r.id;
 
             if (property.renderableTypeStrict === 'IMAGE') {
-              return <ImageRelation key={`image-${relationId}-${linkedEntityId}`} linkedEntityId={linkedEntityId} relationId={relationId} spaceId={spaceId} />;
+              return (
+                <ImageRelation
+                  key={`image-${relationId}-${linkedEntityId}`}
+                  linkedEntityId={linkedEntityId}
+                  relationId={relationId}
+                  spaceId={spaceId}
+                />
+              );
             }
 
             return (
@@ -226,7 +235,7 @@ export function RelationsGroup({
 function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
   // Use the efficient hook to get only the image URL for this specific entity
   const actualImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
-  
+
   return <ImageZoom imageSrc={getImagePath(actualImageSrc || '')} />;
 }
 

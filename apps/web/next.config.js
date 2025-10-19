@@ -79,7 +79,7 @@ const nextConfig = {
     return [
       {
         source: '/',
-        destination: 'https://geo.framer.website/',
+        destination: 'https://charismatic-overlay-193901.framer.app/',
       },
       {
         source: '/ending-homelessness',
