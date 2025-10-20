@@ -68,7 +68,7 @@ type SelectEntityProps = {
   placeholder?: string;
   containerClassName?: string;
   inputClassName?: string;
-  variant?: 'floating' | 'fixed';
+  variant?: 'floating' | 'fixed' | 'tableCell';
   width?: 'clamped' | 'full';
   withSelectSpace?: boolean;
   withSearchIcon?: boolean;
@@ -626,6 +626,9 @@ const inputStyles = cva('', {
     floating: {
       true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
     },
+    tableCell: {
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-tableCell placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+    },
     withSearchIcon: {
       true: 'pl-9',
     },
@@ -633,6 +636,7 @@ const inputStyles = cva('', {
   defaultVariants: {
     fixed: true,
     floating: false,
+    tableCell: false,
     withSearchIcon: false,
   },
 });

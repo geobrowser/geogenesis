@@ -19,11 +19,20 @@ export function useDebouncedValue<T>(value: T, delay = 200): T {
 const debounce = <T extends (...args: any[]) => any>(fn: T, delay: number) => {
   let timer: number | null = null;
 
-  return (...args: Parameters<T>) => {
+  const debouncedFn = (...args: Parameters<T>) => {
     if (timer) clearTimeout(timer);
     // @ts-expect-error incorrect type
     timer = setTimeout(() => fn(...args), delay);
   };
+
+  debouncedFn.cancel = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  return debouncedFn;
 };
 
 /**
@@ -45,19 +54,41 @@ export function useOptimisticValueWithSideEffect<T>({
   initialValue: T;
 }) {
   const [value, setValue] = React.useState(initialValue);
+  const isTypingRef = React.useRef(false);
+  const isInitialMountRef = React.useRef(true);
 
-  const debouncedCallback = debounce((value: T) => {
-    callback(value);
-  }, delay);
+  const debouncedCallback = React.useMemo(
+    () =>
+      debounce((value: T) => {
+        callback(value);
+        isTypingRef.current = false;
+      }, delay),
+    [callback, delay]
+  );
 
   const onChange = (newValue: T) => {
+    isTypingRef.current = true;
     setValue(newValue);
     debouncedCallback(newValue);
   };
 
-  React.useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
+  const flush = () => {
+    debouncedCallback.cancel();
+    callback(value);
+    isTypingRef.current = false;
+  };
 
-  return { value, onChange };
+  // Sync external value changes only when not actively typing
+  React.useEffect(() => {
+    if (!isTypingRef.current && initialValue !== value) {
+      setValue(initialValue);
+    }
+  }, [initialValue, value]);
+
+  // Skip callback on initial mount
+  React.useEffect(() => {
+    isInitialMountRef.current = false;
+  }, []);
+
+  return { value, onChange, flush };
 }
