@@ -14,7 +14,7 @@ import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { useEditorStore } from '~/core/state/editor/use-editor';
-import { useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
+import { useEntityTypes, useName, useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
@@ -50,7 +50,10 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   const shouldShowPanel = useShouldShowPropertiesPanel(id, spaceId);
   const visiblePropertiesEntries = useVisiblePropertiesEntries(id, spaceId);
 
-  if (!shouldShowPanel) {
+  const relationEntityRelations = useRelationEntityRelations(id, spaceId);
+  const isRelationPage = relationEntityRelations.length > 0;
+
+  if (!shouldShowPanel && !isRelationPage) {
     return null;
   }
 

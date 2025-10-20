@@ -81,3 +81,9 @@ export function useEntitySchema(entityId: string, spaceId?: string) {
 
   return schema ?? [];
 }
+
+export function useRelationEntityRelations(entityId: string, spaceId?: string) {
+  return useRelations({
+    selector: r => r.entityId === entityId && (spaceId ? r.spaceId === spaceId : true),
+  });
+}

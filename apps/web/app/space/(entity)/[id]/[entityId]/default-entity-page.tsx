@@ -20,11 +20,10 @@ import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-serve
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
-import { EntityPageRelations } from '~/partials/entity-page/entity-page-relations';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
+import { EntityPageHeader } from './entity-page-header';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -48,8 +47,6 @@ export default async function DefaultEntityPage({
   const props = await getData(params.id, params.entityId, searchParams?.edit === 'true' ? true : false);
   const tabs = buildTabsForEntityPage(props.tabEntities, params);
 
-  const showRelations = props.isRelationEntity;
-
   return (
     <EntityStoreProvider id={props.id} spaceId={props.spaceId}>
       <EditorProvider
@@ -61,11 +58,13 @@ export default async function DefaultEntityPage({
       >
         {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
         <EntityPageContentContainer>
-          <div className="space-y-2">
-            {showRelations && <EntityPageRelations relations={props.relationEntityRelations} spaceId={props.spaceId} />}
-            {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
-            {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
-          </div>
+          <EntityPageHeader
+            showHeading={showHeading}
+            showHeader={showHeader}
+            entityId={props.id}
+            spaceId={props.spaceId}
+            serverRelations={props.relationEntityRelations}
+          />
           {tabs.length > 1 && (
             <>
               <Spacer height={40} />
@@ -182,7 +181,6 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
 
     // For relation entity pages
     relationEntityRelations,
-    isRelationEntity: relationEntityRelations.length > 0,
 
     // For entity page editor
     blockRelations: blockRelations ?? [],
