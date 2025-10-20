@@ -118,31 +118,19 @@ export function EditableEntityTableCell({
             shouldDebounce={true}
             onEnterKey={onAddPlaceholder}
             onChange={value => {
-              onChangeEntry(
-                {
-                  entityId,
-                  entityName: value,
-                  spaceId: currentSpaceId,
+              // Update name using storage API directly like other fields
+              storage.values.set({
+                id: ID.createValueId({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId }),
+                entity: { id: entityId, name: value },
+                property: {
+                  id: SystemIds.NAME_PROPERTY,
+                  name: 'Name',
+                  dataType: 'TEXT',
                 },
-                {
-                  type: 'EVENT',
-                  data: {
-                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                    payload: {
-                      renderable: {
-                        attributeId: SystemIds.NAME_PROPERTY,
-                        entityId: `${spaceId}:${entityId}:${property.id}`,
-                        spaceId: currentSpaceId,
-                        attributeName: 'Name',
-                        entityName: value,
-                        type: 'TEXT',
-                        value: value,
-                      },
-                      value: { type: 'TEXT', value },
-                    },
-                  },
-                }
-              );
+                spaceId: currentSpaceId,
+                value: value,
+                isLocal: true,
+              });
             }}
           />
         ) : (
@@ -166,31 +154,19 @@ export function EditableEntityTableCell({
                 shouldDebounce={true}
                 onEnterKey={onAddPlaceholder}
                 onChange={value => {
-                  onChangeEntry(
-                    {
-                      entityId,
-                      entityName: value,
-                      spaceId: currentSpaceId,
+                  // Update name using storage API directly like other fields
+                  storage.values.set({
+                    id: ID.createValueId({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId }),
+                    entity: { id: entityId, name: value },
+                    property: {
+                      id: SystemIds.NAME_PROPERTY,
+                      name: 'Name',
+                      dataType: 'TEXT',
                     },
-                    {
-                      type: 'EVENT',
-                      data: {
-                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                        payload: {
-                          renderable: {
-                            attributeId: SystemIds.NAME_PROPERTY,
-                            entityId,
-                            spaceId: currentSpaceId,
-                            attributeName: 'Name',
-                            entityName: value,
-                            type: 'TEXT',
-                            value: value,
-                          },
-                          value: { type: 'TEXT', value },
-                        },
-                      },
-                    }
-                  );
+                    spaceId: currentSpaceId,
+                    value: value,
+                    isLocal: true,
+                  });
                 }}
               />
             </div>

@@ -7,12 +7,16 @@ import { Property } from '~/core/v2.types';
 
 import { SystemIds } from '@graphprotocol/grc-20';
 
+import { SquareButton } from '~/design-system/button';
+import { LinkableRelationChip } from '~/design-system/chip';
 import { ChevronLeft } from '~/design-system/icons/chevron-left';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
+import { Create } from '~/design-system/icons/create';
 import { Edit } from '~/design-system/icons/edit';
 import { MenuItem } from '~/design-system/menu';
 import { SelectEntity } from '~/design-system/select-entity';
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
 type ViewState = 'main' | 'add' | 'remove' | 'add-property';
@@ -22,7 +26,7 @@ interface Props {
   selectedCount: number;
   properties: Property[];
   spaceId: string;
-  onOperation: (operation: OperationType, propertyId: string, value?: string, entityId?: string) => void;
+  onOperation: (operation: OperationType, propertyId: string, value?: string, entityIds?: string[], entityData?: Array<{ id: string; name: string | null }>) => void;
   onAddProperty?: (propertyId: string, propertyName: string) => void;
   onCopy?: () => void;
   onPaste?: () => void;
@@ -43,7 +47,7 @@ export function PowerToolsActionsPopover({
   const [currentView, setCurrentView] = React.useState<ViewState>('main');
   const [selectedPropertyId, setSelectedPropertyId] = React.useState('');
   const [inputValue, setInputValue] = React.useState('');
-  const [selectedEntityId, setSelectedEntityId] = React.useState('');
+  const [selectedRelationIds, setSelectedRelationIds] = React.useState<Array<{ id: string; name: string | null }>>([]);
   const [currentOperation, setCurrentOperation] = React.useState<OperationType | null>(null);
 
   // Reset state when closing
@@ -52,7 +56,7 @@ export function PowerToolsActionsPopover({
       setCurrentView('main');
       setSelectedPropertyId('');
       setInputValue('');
-      setSelectedEntityId('');
+      setSelectedRelationIds([]);
       setCurrentOperation(null);
     }
   }, [isOpen]);
@@ -62,7 +66,7 @@ export function PowerToolsActionsPopover({
       setCurrentView('main');
       setSelectedPropertyId('');
       setInputValue('');
-      setSelectedEntityId('');
+      setSelectedRelationIds([]);
       setCurrentOperation(null);
     }
   };
@@ -86,18 +90,20 @@ export function PowerToolsActionsPopover({
     const isRelationProperty = selectedProperty?.dataType === 'RELATION';
 
     if (currentOperation === 'add-relations' || currentOperation === 'add-values') {
-      const value = isRelationProperty ? selectedEntityId : inputValue;
-      const entityId = isRelationProperty ? selectedEntityId : undefined;
+      const value = isRelationProperty ? selectedRelationIds.map(r => r.id).join(',') : inputValue;
+      const entityIds = isRelationProperty ? selectedRelationIds.map(r => r.id) : undefined;
+      const entityData = isRelationProperty ? selectedRelationIds : undefined;
 
-      if (isRelationProperty && !selectedEntityId) return;
+      if (isRelationProperty && selectedRelationIds.length === 0) return;
 
-      onOperation(currentOperation, selectedPropertyId, value, entityId);
+      onOperation(currentOperation, selectedPropertyId, value, entityIds, entityData);
     } else {
       // Remove operations
-      const value = isRelationProperty ? selectedEntityId : inputValue;
-      const entityId = isRelationProperty ? selectedEntityId : undefined;
+      const value = isRelationProperty ? selectedRelationIds.map(r => r.id).join(',') : inputValue;
+      const entityIds = isRelationProperty ? selectedRelationIds.map(r => r.id) : undefined;
+      const entityData = isRelationProperty ? selectedRelationIds : undefined;
 
-      onOperation(currentOperation, selectedPropertyId, value, entityId);
+      onOperation(currentOperation, selectedPropertyId, value, entityIds, entityData);
     }
 
     setIsOpen(false);
@@ -107,7 +113,7 @@ export function PowerToolsActionsPopover({
   const isRelationProperty = selectedProperty?.dataType === 'RELATION';
 
   const canConfirm = selectedPropertyId.length > 0 &&
-    (currentOperation?.includes('add') && isRelationProperty ? selectedEntityId.length > 0 : true);
+    (currentOperation?.includes('add') && isRelationProperty ? selectedRelationIds.length > 0 : true);
 
   return (
     <Dropdown.Root open={isOpen} onOpenChange={setIsOpen}>
@@ -122,7 +128,7 @@ export function PowerToolsActionsPopover({
       <Dropdown.Portal>
         <Dropdown.Content
           sideOffset={8}
-          className="z-[1001] block min-w-[280px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          className="z-[1001] block min-w-[280px] max-h-[600px] overflow-y-auto rounded-lg border border-grey-02 bg-white shadow-lg"
           align="end"
         >
           {/* Main view */}
@@ -243,16 +249,56 @@ export function PowerToolsActionsPopover({
                       {isRelationProperty ? 'Entity to link' : 'Value to add'}
                     </label>
                     {isRelationProperty ? (
-                      <SelectEntity
-                        spaceId={spaceId}
-                        relationValueTypes={selectedProperty?.relationValueTypes}
-                        placeholder="Find or create entity..."
-                        onDone={(result) => {
-                          setSelectedEntityId(result.id);
-                        }}
-                        containerClassName="w-full"
-                        width="full"
-                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        {selectedRelationIds.length === 0 ? (
+                          <div className="w-full">
+                            <SelectEntity
+                              spaceId={spaceId}
+                              relationValueTypes={selectedProperty?.relationValueTypes}
+                              placeholder="Find or create entity..."
+                              onDone={(result) => {
+                                if (!selectedRelationIds.some(r => r.id === result.id)) {
+                                  setSelectedRelationIds([...selectedRelationIds, { id: result.id, name: result.name }]);
+                                }
+                              }}
+                              containerClassName="w-full"
+                              width="full"
+                              variant="fixed"
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            {selectedRelationIds.map((relation) => (
+                              <div key={relation.id} className="mt-1">
+                                <LinkableRelationChip
+                                  isEditing
+                                  onDelete={() => {
+                                    setSelectedRelationIds(selectedRelationIds.filter(r => r.id !== relation.id));
+                                  }}
+                                  currentSpaceId={spaceId}
+                                  entityId={relation.id}
+                                  spaceId={spaceId}
+                                >
+                                  {relation.name || relation.id}
+                                </LinkableRelationChip>
+                              </div>
+                            ))}
+                            <div className="mt-1">
+                              <SelectEntityAsPopover
+                                trigger={<SquareButton icon={<Create />} />}
+                                relationValueTypes={selectedProperty?.relationValueTypes}
+                                onDone={(result) => {
+                                  if (!selectedRelationIds.some(r => r.id === result.id)) {
+                                    setSelectedRelationIds([...selectedRelationIds, { id: result.id, name: result.name }]);
+                                  }
+                                }}
+                                spaceId={spaceId}
+                                zIndex={1002}
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
                     ) : (
                       <input
                         type="text"
@@ -261,11 +307,6 @@ export function PowerToolsActionsPopover({
                         placeholder="Enter value..."
                         className="w-full rounded-sm border border-grey-03 px-3 py-2 text-sm focus:border-blue-04 focus:outline-none focus:ring-1 focus:ring-blue-04"
                       />
-                    )}
-                    {isRelationProperty && selectedEntityId && (
-                      <div className="mt-2 text-xs text-grey-04">
-                        Selected: {selectedEntityId}
-                      </div>
                     )}
                   </div>
                 )}
@@ -282,7 +323,7 @@ export function PowerToolsActionsPopover({
                     <button
                       onClick={handleConfirm}
                       disabled={!canConfirm}
-                      className="rounded bg-action px-3 py-1.5 text-sm text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:bg-grey-02 disabled:text-grey-04"
+                      className="rounded border px-3 py-1.5 text-sm border-transparent bg-ctaPrimary text-white hover:bg-ctaHover disabled:cursor-not-allowed disabled:border-grey-03 disabled:bg-white disabled:text-grey-04"
                     >
                       Add
                     </button>
@@ -341,33 +382,75 @@ export function PowerToolsActionsPopover({
                       {isRelationProperty ? 'Entity to unlink (optional)' : 'Value to remove (optional)'}
                     </label>
                     {isRelationProperty ? (
-                      <SelectEntity
-                        spaceId={spaceId}
-                        relationValueTypes={selectedProperty?.relationValueTypes}
-                        placeholder="Find entity (leave empty for all)..."
-                        onDone={(result) => {
-                          setSelectedEntityId(result.id);
-                        }}
-                        containerClassName="w-full"
-                        width="full"
-                      />
+                      <>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {selectedRelationIds.length === 0 ? (
+                            <div className="w-full">
+                              <SelectEntity
+                                spaceId={spaceId}
+                                relationValueTypes={selectedProperty?.relationValueTypes}
+                                placeholder="Find entity (leave empty for all)..."
+                                onDone={(result) => {
+                                  if (!selectedRelationIds.some(r => r.id === result.id)) {
+                                    setSelectedRelationIds([...selectedRelationIds, { id: result.id, name: result.name }]);
+                                  }
+                                }}
+                                containerClassName="w-full"
+                                width="full"
+                                variant="fixed"
+                              />
+                            </div>
+                          ) : (
+                            <>
+                              {selectedRelationIds.map((relation) => (
+                                <div key={relation.id} className="mt-1">
+                                  <LinkableRelationChip
+                                    isEditing
+                                    onDelete={() => {
+                                      setSelectedRelationIds(selectedRelationIds.filter(r => r.id !== relation.id));
+                                    }}
+                                    currentSpaceId={spaceId}
+                                    entityId={relation.id}
+                                    spaceId={spaceId}
+                                  >
+                                    {relation.name || relation.id}
+                                  </LinkableRelationChip>
+                                </div>
+                              ))}
+                              <div className="mt-1">
+                                <SelectEntityAsPopover
+                                  trigger={<SquareButton icon={<Create />} />}
+                                  relationValueTypes={selectedProperty?.relationValueTypes}
+                                  onDone={(result) => {
+                                    if (!selectedRelationIds.some(r => r.id === result.id)) {
+                                      setSelectedRelationIds([...selectedRelationIds, { id: result.id, name: result.name }]);
+                                    }
+                                  }}
+                                  spaceId={spaceId}
+                                  zIndex={1002}
+                                />
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        <p className="mt-2 text-xs text-grey-04">
+                          Leave empty to remove all relations for this property
+                        </p>
+                      </>
                     ) : (
-                      <input
-                        type="text"
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        placeholder="Leave empty to remove all..."
-                        className="w-full rounded-sm border border-grey-03 px-3 py-2 text-sm focus:border-blue-04 focus:outline-none focus:ring-1 focus:ring-blue-04"
-                      />
+                      <>
+                        <input
+                          type="text"
+                          value={inputValue}
+                          onChange={(e) => setInputValue(e.target.value)}
+                          placeholder="Leave empty to remove all..."
+                          className="w-full rounded-sm border border-grey-03 px-3 py-2 text-sm focus:border-blue-04 focus:outline-none focus:ring-1 focus:ring-blue-04"
+                        />
+                        <p className="mt-2 text-xs text-grey-04">
+                          Leave empty to remove all values for this property
+                        </p>
+                      </>
                     )}
-                    {isRelationProperty && selectedEntityId && (
-                      <div className="mt-2 text-xs text-grey-04">
-                        Selected: {selectedEntityId}
-                      </div>
-                    )}
-                    <p className="mt-2 text-xs text-grey-04">
-                      Leave empty to remove all values/relations for this property
-                    </p>
                   </div>
                 )}
 
@@ -383,7 +466,7 @@ export function PowerToolsActionsPopover({
                     <button
                       onClick={handleConfirm}
                       disabled={!selectedPropertyId}
-                      className="rounded bg-grey-02 px-3 py-1.5 text-sm hover:bg-grey-03 disabled:cursor-not-allowed disabled:text-grey-04"
+                      className="rounded border px-3 py-1.5 text-sm border-transparent bg-ctaPrimary text-white hover:bg-ctaHover disabled:cursor-not-allowed disabled:border-grey-03 disabled:bg-white disabled:text-grey-04"
                     >
                       Remove
                     </button>

@@ -4,12 +4,16 @@ import * as React from 'react';
 
 import { Property } from '~/core/v2.types';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { SystemIds, Position } from '@graphprotocol/grc-20';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
+import { SquareButton } from '~/design-system/button';
+import { LinkableRelationChip } from '~/design-system/chip';
 import { Close } from '~/design-system/icons/close';
+import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
+import { ID } from '~/core/id';
 
 export type BulkEditOperation = 'add-values' | 'remove-values' | 'add-relations' | 'remove-relations' | 'add-property';
 
@@ -21,7 +25,7 @@ interface Props {
   spaceId: string;
   selectedEntityIds?: string[];
   onClose: () => void;
-  onConfirm: (propertyId: string, value: string, entityId?: string) => void;
+  onConfirm: (propertyId: string, value: string, entityIds?: string[]) => void;
   onAddProperty?: (propertyId: string, propertyName: string) => void;
 }
 
@@ -39,13 +43,13 @@ export function BulkEditModal({
   const { createProperty } = useCreateProperty(spaceId);
   const [selectedPropertyId, setSelectedPropertyId] = React.useState('');
   const [inputValue, setInputValue] = React.useState('');
-  const [selectedEntityId, setSelectedEntityId] = React.useState('');
+  const [selectedRelationIds, setSelectedRelationIds] = React.useState<Array<{ id: string; name: string | null }>>([]);
 
   React.useEffect(() => {
     if (isOpen) {
       setSelectedPropertyId('');
       setInputValue('');
-      setSelectedEntityId('');
+      setSelectedRelationIds([]);
     }
   }, [isOpen]);
 
@@ -113,19 +117,19 @@ export function BulkEditModal({
   const handleConfirm = () => {
     if (!selectedPropertyId) return;
     const isRelationOperation = operation === 'add-relations' || operation === 'remove-relations';
-    const value = isRelationOperation ? selectedEntityId : inputValue;
-    const entityId = isRelationOperation ? selectedEntityId : undefined;
-    
-    onConfirm(selectedPropertyId, value, entityId);
+    const value = isRelationOperation ? selectedRelationIds.map(r => r.id).join(',') : inputValue;
+    const entityIds = isRelationOperation ? selectedRelationIds.map(r => r.id) : undefined;
+
+    onConfirm(selectedPropertyId, value, entityIds);
     onClose();
   };
 
   const selectedProperty = properties.find(p => p.id === selectedPropertyId);
   const isRelationProperty = selectedProperty?.dataType === 'RELATION';
   const isRelationOperation = operation === 'add-relations' || operation === 'remove-relations';
-  
-  const canConfirm = selectedPropertyId.length > 0 && 
-    (isRelationOperation ? selectedEntityId.length > 0 : true);
+
+  const canConfirm = selectedPropertyId.length > 0 &&
+    (isRelationOperation ? selectedRelationIds.length > 0 : true);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
@@ -220,45 +224,60 @@ export function BulkEditModal({
           )}
 
           {/* Relation Input */}
-          {(operation === 'add-relations' || operation === 'remove-relations') && (
+          {(operation === 'add-relations' || operation === 'remove-relations') && selectedPropertyId && (
             <div>
               <label className="mb-2 block text-sm font-medium text-grey-04">
-                {operation === 'add-relations' ? 'Find or create entity to link' : 'Entity to unlink (optional)'}
+                {operation === 'add-relations' ? 'Entities to link' : 'Entities to unlink (optional)'}
               </label>
-              {operation === 'add-relations' ? (
-                <SelectEntity
-                  spaceId={spaceId}
-                  relationValueTypes={selectedProperty?.relationValueTypes}
-                  placeholder="Find or create entity to link..."
-                  onDone={(result) => {
-                    setSelectedEntityId(result.id);
-                  }}
-                  containerClassName="w-full"
-                  width="full"
-                />
-              ) : (
-                <SelectEntity
-                  spaceId={spaceId}
-                  relationValueTypes={selectedProperty?.relationValueTypes}
-                  placeholder="Find entity to unlink (leave empty for all)..."
-                  onDone={(result) => {
-                    setSelectedEntityId(result.id);
-                  }}
-                  containerClassName="w-full"
-                  width="full"
-                />
-              )}
-              {selectedEntityId && (
-                <div className="mt-2 text-sm text-grey-04">
-                  Selected: {selectedEntityId}
-                  <button
-                    onClick={() => setSelectedEntityId('')}
-                    className="ml-2 text-blue-04 hover:underline"
-                  >
-                    Clear
-                  </button>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedRelationIds.length === 0 ? (
+                  <div className="w-full">
+                    <SelectEntity
+                      spaceId={spaceId}
+                      relationValueTypes={selectedProperty?.relationValueTypes}
+                      placeholder={operation === 'add-relations' ? 'Find or create entity to link...' : 'Find entity to unlink (leave empty for all)...'}
+                      onDone={(result) => {
+                        if (!selectedRelationIds.some(r => r.id === result.id)) {
+                          setSelectedRelationIds([...selectedRelationIds, { id: result.id, name: result.name }]);
+                        }
+                      }}
+                      containerClassName="w-full"
+                      width="full"
+                      variant="fixed"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    {selectedRelationIds.map((relation) => (
+                      <div key={relation.id} className="mt-1">
+                        <LinkableRelationChip
+                          isEditing
+                          onDelete={() => {
+                            setSelectedRelationIds(selectedRelationIds.filter(r => r.id !== relation.id));
+                          }}
+                          currentSpaceId={spaceId}
+                          entityId={relation.id}
+                          spaceId={spaceId}
+                        >
+                          {relation.name || relation.id}
+                        </LinkableRelationChip>
+                      </div>
+                    ))}
+                    <div className="mt-1">
+                      <SelectEntityAsPopover
+                        trigger={<SquareButton icon={<Create />} />}
+                        relationValueTypes={selectedProperty?.relationValueTypes}
+                        onDone={(result) => {
+                          if (!selectedRelationIds.some(r => r.id === result.id)) {
+                            setSelectedRelationIds([...selectedRelationIds, { id: result.id, name: result.name }]);
+                          }
+                        }}
+                        spaceId={spaceId}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
