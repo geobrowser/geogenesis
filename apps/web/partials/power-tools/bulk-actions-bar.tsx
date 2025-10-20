@@ -14,10 +14,10 @@ interface Props {
   spaceId: string;
   properties: Property[];
   onClearSelection: () => void;
-  onAddValues: (propertyId: string, value?: string, entityId?: string) => void;
-  onRemoveValues: (propertyId: string, value?: string, entityId?: string) => void;
-  onAddRelations: (propertyId: string, value?: string, entityId?: string) => void;
-  onRemoveRelations: (propertyId: string, value?: string, entityId?: string) => void;
+  onAddValues: (propertyId: string, value?: string, entityIds?: string[], entityData?: Array<{ id: string; name: string | null }>) => void;
+  onRemoveValues: (propertyId: string, value?: string, entityIds?: string[], entityData?: Array<{ id: string; name: string | null }>) => void;
+  onAddRelations: (propertyId: string, value?: string, entityIds?: string[], entityData?: Array<{ id: string; name: string | null }>) => void;
+  onRemoveRelations: (propertyId: string, value?: string, entityIds?: string[], entityData?: Array<{ id: string; name: string | null }>) => void;
   onAddProperty: (propertyId: string, propertyName: string) => void;
   onCopyRows: () => void;
   onPasteRows: () => void;
@@ -47,20 +47,21 @@ export function BulkActionsBar({
     operation: 'add-values' | 'add-relations' | 'remove-values' | 'remove-relations',
     propertyId: string,
     value?: string,
-    entityId?: string
+    entityIds?: string[],
+    entityData?: Array<{ id: string; name: string | null }>
   ) => {
     switch (operation) {
       case 'add-values':
-        onAddValues(propertyId, value, entityId);
+        onAddValues(propertyId, value, entityIds, entityData);
         break;
       case 'add-relations':
-        onAddRelations(propertyId, value, entityId);
+        onAddRelations(propertyId, value, entityIds, entityData);
         break;
       case 'remove-values':
-        onRemoveValues(propertyId, value, entityId);
+        onRemoveValues(propertyId, value, entityIds, entityData);
         break;
       case 'remove-relations':
-        onRemoveRelations(propertyId, value, entityId);
+        onRemoveRelations(propertyId, value, entityIds, entityData);
         break;
     }
   };

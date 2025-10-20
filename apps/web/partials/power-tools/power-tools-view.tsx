@@ -511,7 +511,12 @@ export function PowerToolsView() {
     setSelectedRows(new Set());
   }, []);
   
-  const handleAddValues = React.useCallback((propertyId: string, value?: string) => {
+  const handleAddValues = React.useCallback((
+    propertyId: string,
+    value?: string,
+    _entityIds?: string[],
+    _entityData?: Array<{ id: string; name: string | null }>
+  ) => {
     if (!value?.trim()) return;
 
     const selectedEntityIds = Array.from(selectedRows);
@@ -540,7 +545,12 @@ export function PowerToolsView() {
     setSelectedRows(new Set());
   }, [selectedRows, propertiesSchema, spaceId, queryClient, where]);
 
-  const handleRemoveValues = React.useCallback((propertyId: string, value?: string) => {
+  const handleRemoveValues = React.useCallback((
+    propertyId: string,
+    value?: string,
+    _entityIds?: string[],
+    _entityData?: Array<{ id: string; name: string | null }>
+  ) => {
     const selectedEntityIds = Array.from(selectedRows);
 
     selectedEntityIds.forEach(entityId => {
@@ -564,10 +574,12 @@ export function PowerToolsView() {
     setSelectedRows(new Set());
   }, [selectedRows, spaceId, queryClient, where]);
 
-  const handleAddRelations = React.useCallback((propertyId: string, value?: string, entityId?: string) => {
-    const targetEntityId = entityId || value?.trim();
-    if (!targetEntityId) return;
-
+  const handleAddRelations = React.useCallback((
+    propertyId: string,
+    value?: string,
+    entityIds?: string[],
+    entityData?: Array<{ id: string; name: string | null }>
+  ) => {
     const selectedEntityIds = Array.from(selectedRows);
     const property = propertiesSchema?.[propertyId];
 
@@ -576,19 +588,41 @@ export function PowerToolsView() {
       return;
     }
 
+    // Normalize input: convert single entity to array format
+    let entitiesToLink: Array<{ id: string; name: string | null }>;
+
+    if (entityData && entityData.length > 0) {
+      // Multi-select case: use entityData as-is
+      entitiesToLink = entityData;
+    } else {
+      // Single entity case: convert to array format
+      const targetEntityId = entityIds?.[0] || value?.trim();
+      if (!targetEntityId) return;
+      entitiesToLink = [{ id: targetEntityId, name: null }];
+    }
+
+    // Create relations for all selected entities
     selectedEntityIds.forEach(fromEntityId => {
-      const newRelation = {
-        id: ID.createEntityId(),
-        entityId: fromEntityId,
-        type: { id: propertyId, name: property.name },
-        fromEntity: { id: fromEntityId, name: null },
-        toEntity: { id: targetEntityId, name: null, value: targetEntityId },
-        renderableType: 'TEXT' as const,
-        spaceId,
-        verified: false,
-        isLocal: true,
-      };
-      storage.relations.set(newRelation);
+      entitiesToLink.forEach(relationEntity => {
+        const newRelation = {
+          id: ID.createEntityId(),
+          entityId: ID.createEntityId(),
+          type: { id: propertyId, name: property.name },
+          fromEntity: { id: fromEntityId, name: null },
+          toEntity: {
+            id: relationEntity.id,
+            name: relationEntity.name,
+            value: relationEntity.id
+          },
+          renderableType: 'RELATION' as const,
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          isLocal: true,
+        };
+
+        storage.relations.set(newRelation);
+      });
     });
 
     // Invalidate query cache and clear selection
@@ -598,10 +632,28 @@ export function PowerToolsView() {
     setSelectedRows(new Set());
   }, [selectedRows, propertiesSchema, spaceId, queryClient, where]);
 
-  const handleRemoveRelations = React.useCallback((propertyId: string, value?: string, entityId?: string) => {
-    const targetEntityId = entityId || value?.trim();
-
+  const handleRemoveRelations = React.useCallback((
+    propertyId: string,
+    value?: string,
+    entityIds?: string[],
+    entityData?: Array<{ id: string; name: string | null }>
+  ) => {
     const selectedEntityIds = Array.from(selectedRows);
+
+    // Normalize input: extract entity IDs to remove (or undefined to remove all)
+    let targetEntityIdsToRemove: string[] | undefined;
+
+    if (entityData && entityData.length > 0) {
+      // Multi-select case: extract IDs from entityData
+      targetEntityIdsToRemove = entityData.map(e => e.id);
+    } else if (entityIds && entityIds.length > 0) {
+      // Array case: use entityIds as-is
+      targetEntityIdsToRemove = entityIds;
+    } else if (value?.trim()) {
+      // Single entity case: convert to array
+      targetEntityIdsToRemove = [value.trim()];
+    }
+    // If undefined, remove all relations for this property
 
     selectedEntityIds.forEach(fromEntityId => {
       const relations = getRelations({
@@ -609,8 +661,8 @@ export function PowerToolsView() {
       });
 
       relations.forEach(r => {
-        // If a specific relation target was provided, only remove matching relations
-        if (targetEntityId && r.toEntity.id !== targetEntityId) {
+        // If specific relation targets were provided, only remove matching relations
+        if (targetEntityIdsToRemove && !targetEntityIdsToRemove.includes(r.toEntity.id)) {
           return;
         }
         storage.relations.delete(r);
@@ -909,21 +961,21 @@ export function PowerToolsView() {
     setCurrentOperation(null);
   }, []);
   
-  const handleModalConfirm = React.useCallback((propertyId: string, value: string, entityId?: string) => {
+  const handleModalConfirm = React.useCallback((propertyId: string, value: string, entityIds?: string[]) => {
     if (!currentOperation) return;
-    
+
     const selectedEntityIds = Array.from(selectedRows);
     const property = propertiesSchema?.[propertyId];
-    
+
     if (!property) {
       console.error('Property not found:', propertyId);
       return;
     }
-    
+
     switch (currentOperation) {
       case 'add-values': {
         if (!value.trim()) return;
-        
+
         selectedEntityIds.forEach(entityId => {
           storage.values.set({
             id: ID.createValueId({ entityId, propertyId, spaceId }),
@@ -936,13 +988,13 @@ export function PowerToolsView() {
         });
         break;
       }
-      
+
       case 'remove-values': {
         selectedEntityIds.forEach(entityId => {
           const values = getValues({
             selector: v => v.entity.id === entityId && v.property.id === propertyId && !v.isDeleted
           });
-          
+
           values.forEach(v => {
             // If a specific value was provided, only remove matching values
             if (value.trim() && v.value !== value.trim()) {
@@ -953,39 +1005,57 @@ export function PowerToolsView() {
         });
         break;
       }
-      
+
       case 'add-relations': {
-        const targetEntityId = entityId || value.trim();
-        if (!targetEntityId) return;
+        // Normalize input: convert single entity to array format
+        let entitiesToLink: string[];
+
+        if (entityIds && entityIds.length > 0) {
+          entitiesToLink = entityIds;
+        } else if (value.trim()) {
+          entitiesToLink = [value.trim()];
+        } else {
+          return;
+        }
 
         selectedEntityIds.forEach(fromEntityId => {
-          const newRelation = {
-            id: ID.createEntityId(),
-            entityId: fromEntityId,
-            type: { id: propertyId, name: property.name },
-            fromEntity: { id: fromEntityId, name: null },
-            toEntity: { id: targetEntityId, name: null, value: targetEntityId },
-            renderableType: 'TEXT' as const,
-            spaceId,
-            verified: false,
-            isLocal: true,
-          };
-          storage.relations.set(newRelation);
+          entitiesToLink.forEach(targetEntityId => {
+            const newRelation = {
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              type: { id: propertyId, name: property.name },
+              fromEntity: { id: fromEntityId, name: null },
+              toEntity: { id: targetEntityId, name: null, value: targetEntityId },
+              renderableType: 'RELATION' as const,
+              spaceId,
+              position: Position.generate(),
+              verified: false,
+              isLocal: true,
+            };
+            storage.relations.set(newRelation);
+          });
         });
         break;
       }
-      
+
       case 'remove-relations': {
-        const targetEntityId = entityId || value.trim();
-        
+        // Normalize input: extract entity IDs to remove (or undefined to remove all)
+        let targetEntityIdsToRemove: string[] | undefined;
+
+        if (entityIds && entityIds.length > 0) {
+          targetEntityIdsToRemove = entityIds;
+        } else if (value.trim()) {
+          targetEntityIdsToRemove = [value.trim()];
+        }
+
         selectedEntityIds.forEach(fromEntityId => {
           const relations = getRelations({
             selector: r => r.fromEntity.id === fromEntityId && r.type.id === propertyId && !r.isDeleted
           });
-          
+
           relations.forEach(r => {
-            // If a specific relation target was provided, only remove matching relations
-            if (targetEntityId && r.toEntity.id !== targetEntityId) {
+            // If specific relation targets were provided, only remove matching relations
+            if (targetEntityIdsToRemove && !targetEntityIdsToRemove.includes(r.toEntity.id)) {
               return;
             }
             storage.relations.delete(r);
@@ -993,7 +1063,7 @@ export function PowerToolsView() {
         });
         break;
       }
-      
+
       default:
         console.error('Unknown operation:', currentOperation);
     }
