@@ -21,6 +21,7 @@ export interface AddPropertyToEntityParams {
   propertyId: string;
   propertyName: string;
   entityName?: string;
+  defaultValue?: string;
 }
 
 export function useCreateProperty(spaceId: string) {
@@ -51,7 +52,7 @@ export function useCreateProperty(spaceId: string) {
   );
 
   const addPropertyToEntity = React.useCallback(
-    ({ entityId, propertyId, propertyName, entityName }: AddPropertyToEntityParams) => {
+    ({ entityId, propertyId, propertyName, entityName, defaultValue }: AddPropertyToEntityParams) => {
       // Try to resolve the property's dataType from the store
       let dataType: DataType = 'TEXT'; // Default fallback
 
@@ -76,9 +77,9 @@ export function useCreateProperty(spaceId: string) {
         property: {
           id: propertyId,
           name: propertyName,
-          dataType,
+          dataType: dataType,
         },
-        value: '',
+        value: defaultValue ?? '',
       });
     },
     [spaceId, storage, store]

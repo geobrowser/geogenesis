@@ -16,7 +16,6 @@ import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
-import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
@@ -30,7 +29,7 @@ export function TableBlockPropertyField(props: {
   onChangeEntry: onChangeEntryFn;
   source: Source;
 }) {
-  const { spaceId, entityId, property, onChangeEntry, source } = props;
+  const { spaceId, entityId, property, source } = props;
   const isEditing = useUserIsEditing(props.spaceId);
   const isRelation = property.dataType === 'RELATION';
 
@@ -179,7 +178,7 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
               },
             });
           }}
-          variant="fixed"
+          variant="tableCell"
         />
       </div>
     );
@@ -311,9 +310,8 @@ function EditableValueGroup({ entityId, property, isEditing }: EditableValueGrou
         <NumberField
           variant="tableCell"
           value={value}
-          unitId={rawValue?.options?.unit}
-          // @TODO(migration): Fix format
-          // format={renderable.options?.format}
+          format={property.format || undefined}
+          unitId={rawValue?.options?.unit || property.unit || undefined}
           isEditing={isEditing}
           onChange={value => {
             // onChangeEntry(

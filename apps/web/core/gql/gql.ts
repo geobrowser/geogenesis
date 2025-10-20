@@ -26,6 +26,7 @@ type Documents = {
     "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    membersList {\n      address\n    }\n\n    editorsList {\n      address\n    }\n\n    page {\n      ...FullEntity\n    }\n  }\n": typeof types.FullSpaceFragmentDoc,
     "\n  query Space($id: UUID!) {\n    space(id: $id) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpaceDocument,
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, first: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpacesDocument,
+    "\n  query SpacesWhereMember($address: String!) {\n    spaces(filter: { members: { some: { address: { is: $address } } } }) {\n      ...FullSpace\n    }\n  }\n": typeof types.SpacesWhereMemberDocument,
     "\n  fragment PropertyFragment on Property {\n    id\n    name\n    dataType\n    renderableType\n    format\n    unit\n    relationValueTypes {\n      id\n      name\n    }\n  }\n": typeof types.PropertyFragmentFragmentDoc,
     "\n  query Property($id: UUID!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n": typeof types.PropertyDocument,
     "\n  query PropertiesBatch($ids: [UUID!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n": typeof types.PropertiesBatchDocument,
@@ -46,6 +47,7 @@ const documents: Documents = {
     "\n  fragment FullSpace on Space {\n    id\n    type\n    daoAddress\n    spaceAddress\n    mainVotingAddress\n    membershipAddress\n    personalAddress\n\n    membersList {\n      address\n    }\n\n    editorsList {\n      address\n    }\n\n    page {\n      ...FullEntity\n    }\n  }\n": types.FullSpaceFragmentDoc,
     "\n  query Space($id: UUID!) {\n    space(id: $id) {\n      ...FullSpace\n    }\n  }\n": types.SpaceDocument,
     "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, first: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n": types.SpacesDocument,
+    "\n  query SpacesWhereMember($address: String!) {\n    spaces(filter: { members: { some: { address: { is: $address } } } }) {\n      ...FullSpace\n    }\n  }\n": types.SpacesWhereMemberDocument,
     "\n  fragment PropertyFragment on Property {\n    id\n    name\n    dataType\n    renderableType\n    format\n    unit\n    relationValueTypes {\n      id\n      name\n    }\n  }\n": types.PropertyFragmentFragmentDoc,
     "\n  query Property($id: UUID!) {\n    property(id: $id) {\n      ...PropertyFragment\n    }\n  }\n": types.PropertyDocument,
     "\n  query PropertiesBatch($ids: [UUID!]!) {\n    properties(filter: { id: { in: $ids } }) {\n      ...PropertyFragment\n    }\n  }\n": types.PropertiesBatchDocument,
@@ -116,6 +118,10 @@ export function graphql(source: "\n  query Space($id: UUID!) {\n    space(id: $i
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, first: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n"): (typeof documents)["\n  query Spaces($filter: SpaceFilter, $limit: Int, $offset: Int) {\n    spaces(filter: $filter, first: $limit, offset: $offset) {\n      ...FullSpace\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query SpacesWhereMember($address: String!) {\n    spaces(filter: { members: { some: { address: { is: $address } } } }) {\n      ...FullSpace\n    }\n  }\n"): (typeof documents)["\n  query SpacesWhereMember($address: String!) {\n    spaces(filter: { members: { some: { address: { is: $address } } } }) {\n      ...FullSpace\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

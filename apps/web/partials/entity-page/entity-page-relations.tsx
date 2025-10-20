@@ -6,6 +6,7 @@ import pluralize from 'pluralize';
 
 import { useState } from 'react';
 
+import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
 import type { Relation } from '~/core/v2.types';
 
@@ -18,18 +19,26 @@ import { Menu, MenuItem } from '~/design-system/menu';
 import { ResizableContainer } from '~/design-system/resizable-container';
 
 type EntityPageRelationsProps = {
-  relations: Relation[];
+  entityId: string;
   spaceId: string;
+  serverRelations: Relation[];
 };
 
-export const EntityPageRelations = ({ relations, spaceId }: EntityPageRelationsProps) => {
+export const EntityPageRelations = ({ entityId, spaceId, serverRelations }: EntityPageRelationsProps) => {
   const [isOpen, setIsOpen] = useState<boolean>(true);
 
+  const localRelations = useRelationEntityRelations(entityId, spaceId);
+  const mergedRelations = mergeRelations(serverRelations, localRelations);
+
+  if (mergedRelations.length === 0) {
+    return null;
+  }
+
   return (
-    <div>
+    <div className="mb-4">
       <button onClick={() => setIsOpen(!isOpen)} className="flex w-full items-center justify-between py-3">
         <div>
-          {relations.length} {pluralize('relation', relations.length)}
+          {mergedRelations.length} {pluralize('relation', mergedRelations.length)}
         </div>
         <div className={cx(isOpen && 'scale-y-[-1]', 'transition-transform duration-300 ease-in-out')}>
           <ChevronUpBig color="text" />
@@ -38,7 +47,7 @@ export const EntityPageRelations = ({ relations, spaceId }: EntityPageRelationsP
       <ResizableContainer>
         {isOpen && (
           <div className="divide-y divide-grey-02 border-b border-t border-grey-02">
-            {relations.map(relation => (
+            {mergedRelations.map(relation => (
               <Relationship key={relation.id} relation={relation} spaceId={spaceId} />
             ))}
           </div>
@@ -47,6 +56,20 @@ export const EntityPageRelations = ({ relations, spaceId }: EntityPageRelationsP
     </div>
   );
 };
+
+function mergeRelations(serverRelations: Relation[], localRelations: Relation[]): Relation[] {
+  const relationsMap = new Map<string, Relation>();
+
+  for (const relation of serverRelations) {
+    relationsMap.set(relation.id, relation);
+  }
+
+  for (const relation of localRelations) {
+    relationsMap.set(relation.id, relation);
+  }
+
+  return Array.from(relationsMap.values()).filter(r => !r.isDeleted);
+}
 
 type RelationshipProps = {
   relation: Relation;

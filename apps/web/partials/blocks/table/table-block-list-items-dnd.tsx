@@ -38,6 +38,7 @@ type TableBlockTablePropsDnd = {
   collectionLength: number;
   pageNumber: number;
   pageSize: number;
+  shouldAutoFocusPlaceholder?: boolean;
 };
 
 const TableBlockListItemsDnd = ({
@@ -54,6 +55,7 @@ const TableBlockListItemsDnd = ({
   collectionLength,
   pageNumber,
   pageSize,
+  shouldAutoFocusPlaceholder = false,
 }: TableBlockTablePropsDnd) => {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -113,8 +115,9 @@ const TableBlockListItemsDnd = ({
       }
 
       // Sort all collection relations by position
-      const allSortedRelations = [...collectionRelations]
-        .sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+      const allSortedRelations = [...collectionRelations].sort((a, b) =>
+        Position.compare(a.position ?? null, b.position ?? null)
+      );
 
       // Find the current position of the moving item in the sorted list
       const currentSortedIndex = allSortedRelations.findIndex(r => r.id === movingRelation.id);
@@ -165,6 +168,8 @@ const TableBlockListItemsDnd = ({
   if (entries.length <= 1) {
     <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
       {entries.map((row, index) => {
+        const isPlaceholder = Boolean(row.placeholder);
+
         return (
           <TableBlockListItem
             isEditing={isEditing}
@@ -172,12 +177,13 @@ const TableBlockListItemsDnd = ({
             columns={row.columns}
             currentSpaceId={spaceId}
             rowEntityId={row.entityId}
-            isPlaceholder={Boolean(row.placeholder)}
+            isPlaceholder={isPlaceholder}
             onChangeEntry={onChangeEntry}
             onLinkEntry={onLinkEntry}
             properties={propertiesSchema}
             relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
             source={source}
+            autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
           />
         );
       })}
@@ -209,6 +215,7 @@ const TableBlockListItemsDnd = ({
                   pageSize={pageSize}
                   handleMove={handleMove}
                   pageNumber={pageNumber}
+                  shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
                 />
               );
             })}
@@ -256,6 +263,7 @@ const SortableItem = ({
   handleMove,
   pageSize,
   pageNumber,
+  shouldAutoFocusPlaceholder = false,
 }: {
   row: Row;
   spaceId: string;
@@ -269,6 +277,7 @@ const SortableItem = ({
   handleMove: (targetPosition: number, currentPosition?: number) => void;
   pageSize: number;
   pageNumber: number;
+  shouldAutoFocusPlaceholder?: boolean;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.entityId,
@@ -324,11 +333,13 @@ const SortableItem = ({
     timeoutRef.current = setTimeout(() => setHovered(false), 200);
   };
 
+  const isPlaceholder = Boolean(row.placeholder);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="relative inline-block"
+      className="relative"
       onClick={handleClick}
       onClickCapture={handleClick}
       onMouseEnter={handleMouseEnter}
@@ -344,19 +355,20 @@ const SortableItem = ({
           className="-left-[152px] h-full items-center"
         />
       )}
-      <div {...attributes} {...listeners} className="inline-flex items-center">
+      <div {...attributes} {...listeners} className="flex items-center">
         <TableBlockListItem
           isEditing={isEditing}
           key={`${row.entityId}-grabbed`}
           columns={row.columns}
           currentSpaceId={spaceId}
           rowEntityId={row.entityId}
-          isPlaceholder={Boolean(row.placeholder)}
+          isPlaceholder={isPlaceholder}
           onChangeEntry={onChangeEntry}
           onLinkEntry={onLinkEntry}
           properties={properties}
           relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
           source={source}
+          autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
         />
       </div>
     </div>

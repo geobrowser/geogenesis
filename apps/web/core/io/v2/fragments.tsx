@@ -436,6 +436,14 @@ export const spacesQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const spacesWhereMemberQuery = graphql(/* GraphQL */ `
+  query SpacesWhereMember($address: String!) {
+    spaces(filter: { members: { some: { address: { is: $address } } } }) {
+      ...FullSpace
+    }
+  }
+`);
+
 export const propertyFragment = graphql(/* GraphQL */ `
   fragment PropertyFragment on Property {
     id

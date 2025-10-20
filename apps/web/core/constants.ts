@@ -10,7 +10,53 @@ export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`
 export const RENDERABLE_TYPE_PROPERTY = '2316bbe1-c76f-4635-83f2-3e03b4f1fe46';
 export const DATA_TYPE_PROPERTY = '6d29d578-49bb-4959-baf7-2cc696b1671a';
 export const VALUE_TYPE_PROPERTY = 'ee26ef23-f7f1-4eb6-b742-3b0fa38c1fd8';
+export const IS_TYPE_PROPERTY = 'd2c1a101-14e3-464a-8272-f4e75b0f1407';
 export const ROOT_SPACE = '29c97d29-1c9a-41f1-a466-8a713764bc27';
 
 export const GEO_LOCATION = '9cf5c1b0-15dc-451c-bfd2-97db64806aff';
 export const FORMAT_PROPERTY = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f';
+export const UNIT_PROPERTY = '11b06581-20d3-41ea-b570-2ef4ee0a4ffd';
+export const DEFAULT_TIME_FORMAT = 'MMMM d, yyy';
+export const DEFAULT_NUMBER_FORMAT = ',?';
+
+export const UNICODE_LINK = 'https://unicode-org.github.io/icu/userguide/format_parse/numbers/skeletons.html';
+export const GRC_20_SPECIFICATION_LINK =
+  'https://github.com/graphprotocol/graph-improvement-proposals/blob/main/grcs/0020-knowledge-graph.md#52-number';
+
+export const SUGGESTED_NUMBER_FORMATS = [
+  {
+    format: '%',
+    label: '25%',
+  },
+  {
+    format: '.00',
+    label: '25.00',
+  },
+  {
+    format: 'K',
+    label: '25K',
+  },
+  {
+    format: DEFAULT_NUMBER_FORMAT,
+    label: '25,000',
+  },
+];
+
+export const SUGGESTED_TIME_FORMATS = [
+  {
+    format: 'h:mmaaa, MMMM d, yyyy',
+    label: '4:45pm, July 4,2024',
+  },
+  {
+    format: 'MM/dd/yy',
+    label: '07/04/24',
+  },
+  {
+    format: 'h:mmaa',
+    label: '4:45pm',
+  },
+  {
+    format: DEFAULT_TIME_FORMAT,
+    label: 'July 4, 2024',
+  },
+];

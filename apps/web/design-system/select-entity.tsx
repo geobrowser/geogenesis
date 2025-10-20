@@ -35,6 +35,8 @@ import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 import { Tooltip } from '~/design-system/tooltip';
 
+import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
+
 import { ArrowLeft } from './icons/arrow-left';
 import { InfoSmall } from './icons/info-small';
 import { Search } from './icons/search';
@@ -42,7 +44,6 @@ import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
-import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 
 type SelectEntityProps = {
   onDone?: (
@@ -55,13 +56,19 @@ type SelectEntityProps = {
     // Not the best way to do this but the simplest for now to avoid breaking changes.
     fromCreateFn?: boolean
   ) => void;
-  onCreateEntity?: (result: { id: string; name: string | null; space?: string; verified?: boolean; renderableType?: SwitchableRenderableType }) => void;
+  onCreateEntity?: (result: {
+    id: string;
+    name: string | null;
+    space?: string;
+    verified?: boolean;
+    renderableType?: SwitchableRenderableType;
+  }) => void | string;
   spaceId: string;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
   containerClassName?: string;
   inputClassName?: string;
-  variant?: 'floating' | 'fixed';
+  variant?: 'floating' | 'fixed' | 'tableCell';
   width?: 'clamped' | 'full';
   withSelectSpace?: boolean;
   withSearchIcon?: boolean;
@@ -139,7 +146,7 @@ export const SelectEntity = ({
   const isCreatingProperty = relationValueTypes?.some(type => type.id === SystemIds.PROPERTY);
 
   const onCreateNewEntity = () => {
-    const newEntityId = ID.createEntityId();
+    let newEntityId = ID.createEntityId();
 
     // This component is used in many different use-cases across the system, so we
     // need to be able to pass in a callback. onCreateEntity is used to enable to
@@ -148,7 +155,12 @@ export const SelectEntity = ({
     // e.g., you're in a collection and create a new entity, we want to add the current
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
-      onCreateEntity({ id: newEntityId, name: query, renderableType: isCreatingProperty ? renderableType : undefined });
+      newEntityId =
+        onCreateEntity({
+          id: newEntityId,
+          name: query,
+          renderableType: isCreatingProperty ? renderableType : undefined,
+        }) ?? newEntityId;
     } else {
       // Create new entity with name and types using internal id
       storage.entities.name.set(newEntityId, spaceId, query);
@@ -589,10 +601,7 @@ export const SelectEntity = ({
                         <div className="text-[0.875rem] text-grey-04">IDs</div>
                       </button>
                       {isCreatingProperty && (
-                        <RenderableTypeDropdown 
-                          value={renderableType} 
-                          onChange={setRenderableType}
-                        />
+                        <RenderableTypeDropdown value={renderableType} onChange={setRenderableType} />
                       )}
                     </div>
                     <button onClick={onCreateNewEntity} className="text-resultLink text-ctaHover">
@@ -617,6 +626,9 @@ const inputStyles = cva('', {
     floating: {
       true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
     },
+    tableCell: {
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-tableCell placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+    },
     withSearchIcon: {
       true: 'pl-9',
     },
@@ -624,6 +636,7 @@ const inputStyles = cva('', {
   defaultVariants: {
     fixed: true,
     floating: false,
+    tableCell: false,
     withSearchIcon: false,
   },
 });
