@@ -27,6 +27,7 @@ import { ImageZoom, PageImageField, PageStringField } from '~/design-system/edit
 import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
+import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import ReorderableRelationChipsDnd from '~/design-system/reorderable-relation-chips-dnd';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -34,6 +35,7 @@ import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import SuggestedFormats from '~/design-system/suggested-formats-window';
 import { Text } from '~/design-system/text';
 
+import { DataTypePill } from '~/partials/entity-page/data-type-pill';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
 import { editorHasContentAtom } from '~/atoms';
@@ -71,67 +73,29 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
           </div>
         )}
         {visiblePropertiesEntries.map(([propertyId, property]) => {
+          const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
+
           return (
-            <div key={`${id}-${propertyId}`} className="relative break-words">
+            <div key={`${id}-${propertyId}`} className="break-words">
               <RenderedProperty spaceId={spaceId} property={property} />
 
-              {property.dataType === 'RELATION' || property.renderableType === 'IMAGE' ? (
-                <RelationsGroup key={propertyId} propertyId={propertyId} id={id} spaceId={spaceId} />
+              {isRelation ? (
+                <RelationPropertyWithDelete
+                  key={propertyId}
+                  propertyId={propertyId}
+                  entityId={id}
+                  spaceId={spaceId}
+                  property={property}
+                />
               ) : (
-                <RenderedValue key={propertyId} propertyId={propertyId} entityId={id} spaceId={spaceId} />
+                <RenderedValue
+                  key={propertyId}
+                  propertyId={propertyId}
+                  entityId={id}
+                  spaceId={spaceId}
+                  property={property}
+                />
               )}
-              {/* We need to pin to top for Geo Location to prevent covering the display toggle */}
-              <div
-                className={`absolute right-0 flex items-center gap-1 ${propertyId === SystemIds.GEO_LOCATION_PROPERTY && property.dataType === 'POINT' ? 'top-0' : 'top-6'}`}
-              >
-                {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
-                <>
-                  {/* Formatting exists on properties now instead of value */}
-                  {/* {property.dataType === 'TIME' && (
-                      <DateFormatDropdown
-                        value={firstRenderable.value}
-                        // @TODO(migration): fix formatting. Now on property
-                        // format={firstRenderable.options?.format}
-                        onSelect={(value?: string, format?: string) => {
-                          storage.renderables.values.update(firstRenderable, draft => {
-                            draft.value = value ?? firstRenderable.value;
-                          });
-                        }}
-                      />
-                    )} */}
-                  {/* @TODO: Formatting exists on property now instead of value */}
-                  {/* {property.dataType === 'NUMBER' && (
-                      <NumberOptionsDropdown
-                        value={firstRenderable.value}
-                        // @TODO(migration): Fix format. Now defined on Property
-                        // format={firstRenderable.options?.format}
-                        unitId={firstRenderable.options?.unit}
-                        send={({ format, unitId }) => {
-                          storage.renderables.values.update(firstRenderable, draft => {
-                            const newOptions = {
-                              language: draft.options?.language,
-                              unit: unitId,
-                            };
-
-                            draft.options = newOptions;
-                          });
-                        }}
-                      />
-                    )} */}
-
-                  {/* <RenderableTypeDropdown value={renderableType} options={[]} /> */}
-
-                  {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
-                  {/* {property.dataType !== 'RELATION' && (
-                        <SquareButton
-                          icon={<Trash />}
-                          onClick={() => {
-                            storage.renderables.values.delete(firstRenderable as NativeRenderableProperty);
-                          }}
-                        />
-                      )} */}
-                </>
-              </div>
             </div>
           );
         })}
@@ -184,6 +148,40 @@ function RenderedProperty({ property, spaceId }: { property: Property; spaceId: 
         {property.name ?? property.id}
       </Text>
     </Link>
+  );
+}
+
+type RelationPropertyWithDeleteProps = {
+  propertyId: string;
+  entityId: string;
+  spaceId: string;
+  property: Property;
+};
+
+function RelationPropertyWithDelete({ propertyId, entityId, spaceId, property }: RelationPropertyWithDeleteProps) {
+  const { storage } = useMutate();
+
+  const propertyRelations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === propertyId,
+  });
+
+  return (
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0 flex-1">
+        <RelationsGroup key={propertyId} propertyId={propertyId} id={entityId} spaceId={spaceId} />
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <DataTypePill dataType={property.dataType} renderableType={null} spaceId={spaceId} iconOnly={true} />
+        {propertyRelations.length > 0 && (
+          <SquareButton
+            icon={<Trash />}
+            onClick={() => {
+              propertyRelations.forEach(relation => storage.relations.delete(relation));
+            }}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -485,9 +483,21 @@ function ImageRelation({ relationValue, spaceId }: { relationValue: string; spac
   return <ImageZoom imageSrc={getImagePath(actualImageSrc || '')} />;
 }
 
-function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; propertyId: string; spaceId: string }) {
+function RenderedValue({
+  entityId,
+  propertyId,
+  spaceId,
+  property: propProperty,
+}: {
+  entityId: string;
+  propertyId: string;
+  spaceId: string;
+  property: Property;
+}) {
   const { storage } = useMutate();
-  const { property } = useQueryProperty({ id: propertyId });
+  const { property: queriedProperty } = useQueryProperty({ id: propertyId });
+
+  const property = propProperty || queriedProperty;
 
   const rawValue = useValue({
     selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
@@ -531,101 +541,17 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
     });
   };
 
-  switch (property.dataType) {
-    case 'TEXT': {
-      return (
-        <>
-          <PageStringField
-            key={propertyId}
-            variant="body"
-            placeholder="Add value..."
-            aria-label="text-field"
-            value={value}
-            onChange={onChange}
-          />
-          {property.id === FORMAT_PROPERTY && (
-            <SuggestedFormats entityId={entityId} spaceId={spaceId} value={value} onChange={onChange} />
-          )}
-        </>
-      );
+  const onDelete = () => {
+    if (rawValue) {
+      storage.values.delete(rawValue);
     }
-    case 'NUMBER':
-      return (
-        <NumberField
-          key={propertyId}
-          isEditing={true}
-          value={value}
-          format={property.format || undefined}
-          unitId={options?.unit || property.unit || undefined}
-          onChange={onChange}
-        />
-      );
-    case 'CHECKBOX': {
-      const checked = getChecked(value);
+  };
 
-      return (
-        <Checkbox
-          key={`checkbox-${propertyId}-${value}`}
-          checked={checked}
-          onChange={() => {
-            onChange(checked ? '0' : '1');
-          }}
-        />
-      );
-    }
-    case 'TIME': {
-      return (
-        <DateField
-          key={propertyId}
-          // format={renderable.options?.format}
-          onBlur={({ value }) => {
-            onChange(value);
-          }}
-          isEditing={true}
-          value={value}
-          propertyId={propertyId}
-        />
-      );
-    }
-
-    // @TODO(migration): Fix url renderable
-    // case 'URL': {
-    //   return (
-    //     <WebUrlField
-    //       key={renderable.propertyId}
-    //       spaceId={spaceId}
-    //       placeholder="Add a URI"
-    //       isEditing={true}
-    //       onBlur={event =>
-    //         send({
-    //           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-    //           payload: {
-    //             value: {
-    //               value: event.target.value,
-    //               type: 'URL',
-    //             },
-    //             renderable,
-    //           },
-    //         })
-    //       }
-    //       value={renderable.value}
-    //     />
-    //   );
-    // }
-
-    case 'POINT': {
-      return (
-        <>
-          {property.renderableTypeStrict === 'GEO_LOCATION' ? (
-            <GeoLocationPointFields
-              key={propertyId}
-              variant="body"
-              placeholder="Add value..."
-              aria-label="text-field"
-              value={value}
-              onChange={onChange}
-            />
-          ) : (
+  const renderField = () => {
+    switch (property.dataType) {
+      case 'TEXT': {
+        return (
+          <>
             <PageStringField
               key={propertyId}
               variant="body"
@@ -634,11 +560,113 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
               value={value}
               onChange={onChange}
             />
-          )}
-        </>
-      );
+            {property.id === FORMAT_PROPERTY && (
+              <SuggestedFormats entityId={entityId} spaceId={spaceId} value={value} onChange={onChange} />
+            )}
+          </>
+        );
+      }
+      case 'NUMBER':
+        return (
+          <NumberField
+            key={propertyId}
+            isEditing={true}
+            value={value}
+            format={property.format || undefined}
+            unitId={options?.unit || property.unit || undefined}
+            onChange={onChange}
+          />
+        );
+      case 'CHECKBOX': {
+        const checked = getChecked(value);
+
+        return (
+          <Checkbox
+            key={`checkbox-${propertyId}-${value}`}
+            checked={checked}
+            onChange={() => {
+              onChange(checked ? '0' : '1');
+            }}
+          />
+        );
+      }
+      case 'TIME': {
+        return (
+          <DateField
+            key={propertyId}
+            // format={renderable.options?.format}
+            onBlur={({ value }) => {
+              onChange(value);
+            }}
+            isEditing={true}
+            value={value}
+            propertyId={propertyId}
+          />
+        );
+      }
+
+      // @TODO(migration): Fix url renderable
+      // case 'URL': {
+      //   return (
+      //     <WebUrlField
+      //       key={renderable.propertyId}
+      //       spaceId={spaceId}
+      //       placeholder="Add a URI"
+      //       isEditing={true}
+      //       onBlur={event =>
+      //         send({
+      //           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+      //           payload: {
+      //             value: {
+      //               value: event.target.value,
+      //               type: 'URL',
+      //             },
+      //             renderable,
+      //           },
+      //         })
+      //       }
+      //       value={renderable.value}
+      //     />
+      //   );
+      // }
+
+      case 'POINT': {
+        return (
+          <>
+            {property.renderableTypeStrict === 'GEO_LOCATION' ? (
+              <GeoLocationPointFields
+                key={propertyId}
+                variant="body"
+                placeholder="Add value..."
+                aria-label="text-field"
+                value={value}
+                onChange={onChange}
+              />
+            ) : (
+              <PageStringField
+                key={propertyId}
+                variant="body"
+                placeholder="Add value..."
+                aria-label="text-field"
+                value={value}
+                onChange={onChange}
+              />
+            )}
+          </>
+        );
+      }
     }
-  }
+  };
+
+  return (
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0 flex-1">{renderField()}</div>
+      <div className="flex shrink-0 items-center gap-1">
+        <DataTypePill dataType={property.dataType} renderableType={null} spaceId={spaceId} iconOnly={true} />
+        {rawValue && value && <SquareButton icon={<Trash />} onClick={onDelete} />}
+      </div>
+    </div>
+  );
 }
 
 async function applyTemplate(templateOptions: {
