@@ -133,10 +133,10 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
    * If we're in a valid space for the entity and the entity is
    * a space, redirect to the space front page directly.
    */
-  if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
-    console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
-    return redirect(NavUtils.toSpace(spaceId));
-  }
+  // if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
+  //   console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
+  //   return redirect(NavUtils.toSpace(spaceId));
+  // }
 
   const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 

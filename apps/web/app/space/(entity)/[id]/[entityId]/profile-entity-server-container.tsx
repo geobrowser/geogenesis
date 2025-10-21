@@ -51,12 +51,12 @@ export async function ProfileEntityServerContainer({ params }: Props) {
 
   // Redirect from space configuration page to space page. An entity might be a Person _and_ a Space.
   // In that case we want to render on the space front page.
-  if (person?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && profile?.homeSpaceId) {
-    console.log(`Redirecting from space configuration entity ${person.id} to space page ${profile?.homeSpaceId}`);
+  // if (person?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && profile?.homeSpaceId) {
+  //   console.log(`Redirecting from space configuration entity ${person.id} to space page ${profile?.homeSpaceId}`);
 
-    // We need to stay in the space that we're currently in
-    return redirect(NavUtils.toSpace(profile.homeSpaceId));
-  }
+  //   // We need to stay in the space that we're currently in
+  //   return redirect(NavUtils.toSpace(profile.homeSpaceId));
+  // }
 
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
   // the space for the entity we are rendering, so we need to redirect to the correct space.
