@@ -26,7 +26,6 @@ export type Feature = {
 export const usePlaceSearch = () => {
   const [query, setQuery] = useState('');
   const [results, setPlacesResults] = useState<Feature[]>([]);
-  const [resultEntities, setResultEntities] = useState<SearchResult[] | undefined>();
   const [isEmpty, setIsEmpty] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -40,7 +39,7 @@ export const usePlaceSearch = () => {
   // TODO replace with a proper system ID import
   const mockFilterByTypes = [PLACE_TYPE];
 
-  const { isLoading: isEntitiesLoading } = useQuery({
+  const { data: resultEntities, isLoading: isEntitiesLoading } = useQuery({
     enabled: debouncedQuery !== '',
     queryKey: ['search', debouncedQuery, mockFilterByTypes],
     queryFn: async () => {
@@ -81,7 +80,6 @@ export const usePlaceSearch = () => {
           }
         }
         console.log('resultOrError.right', resultOrError.right);
-        if (resultOrError.right) setResultEntities([resultOrError.right]);
         return resultOrError.right ? [resultOrError.right] : [];
       }
 
@@ -131,7 +129,6 @@ export const usePlaceSearch = () => {
 
       console.log('resultOrError.right', resultOrError.right);
 
-      setResultEntities(resultOrError.right);
       return resultOrError.right;
     },
     /**

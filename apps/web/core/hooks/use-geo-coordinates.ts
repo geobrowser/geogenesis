@@ -2,6 +2,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import { useEntity } from '../database/entities';
 import { EntityId } from '../io/schema';
+import { useQueryEntity } from '../sync/use-store';
 import { ADDRESS_PROPERTY } from '../system-ids';
 
 export function useGeoCoordinates(entityId: string, spaceId: string, propertyType?: string) {
@@ -11,11 +12,12 @@ export function useGeoCoordinates(entityId: string, spaceId: string, propertyTyp
   // For VENUE property or when checking if entity is a place with an address
   // Find address relation from the place entity
   const addressRelation = entity.relations.find(t => t.type.id === ADDRESS_PROPERTY);
-  
-  // Fetch Address entity - always call hook but conditionally use the result
-  const address = useEntity({ 
-    id: (addressRelation?.toEntity.id || entityId) as EntityId, 
-    spaceId 
+
+  // Fetch Address entity - skip when propertyType is ADDRESS_PROPERTY since we won't use it
+  const { entity: addressEntity } = useQueryEntity({
+    id: (addressRelation?.toEntity.id || entityId) as EntityId,
+    spaceId,
+    enabled: propertyType !== ADDRESS_PROPERTY
   });
 
   // If this is an ADDRESS property, get geo location directly from the address entity
@@ -26,10 +28,10 @@ export function useGeoCoordinates(entityId: string, spaceId: string, propertyTyp
     };
   }
   
-  if (addressRelation) {
+  if (addressRelation && addressEntity) {
     return {
-      name: address.name,
-      geoLocation: address.values.find(v => v.property.id === SystemIds.GEO_LOCATION_PROPERTY)?.value,
+      name: addressEntity.name,
+      geoLocation: addressEntity.values.find(v => v.property.id === SystemIds.GEO_LOCATION_PROPERTY)?.value,
     };
   }
 
