@@ -77,23 +77,13 @@ export function TableBlockGalleryItem({
   const maybeCoverUrl = coverRelation?.toEntity.value;
 
   // Check which image property is selected to be shown in the collection
-  const showAvatar = columns[ContentIds.AVATAR_PROPERTY] !== undefined;
   const showCover = columns[SystemIds.COVER_PROPERTY] !== undefined;
 
-  // Reset image to undefined, then only set it based on what's selected
-  // This prevents fallback to nameCell.image when the selected property doesn't exist
-  if (showAvatar || showCover) {
-    image = undefined;
-  }
-
-  // Only use avatar if it's selected to be shown
-  if (showAvatar && maybeAvatarUrl) {
-    image = maybeAvatarUrl;
-  }
-
   // Only use cover if it's selected to be shown (cover takes priority if both are shown)
-  if (showCover && maybeCoverUrl) {
+  if (showCover) {
     image = maybeCoverUrl;
+  } else {
+    image = maybeAvatarUrl;
   }
 
   const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
@@ -134,7 +124,7 @@ export function TableBlockGalleryItem({
             <BlockImageField
               variant="gallery"
               imageSrc={image ?? undefined}
-              onFileChange={async (file) => {
+              onFileChange={async file => {
                 // Use the appropriate image property based on what's selected to be shown
                 // Prefer cover if shown, otherwise use avatar
                 const usePropertyId = showCover ? SystemIds.COVER_PROPERTY : ContentIds.AVATAR_PROPERTY;
