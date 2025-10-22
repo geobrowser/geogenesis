@@ -29,10 +29,10 @@ export function useCover(entityId: string, spaceId?: string) {
 
   // Get the cover entity ID from the relation
   const coverEntityId = Entities.cover(maybeCover);
-  
+
   // Resolve the actual image URL
   const imageUrl = useImageUrlFromEntity(coverEntityId || undefined, spaceId || '');
-  
+
   return imageUrl || coverEntityId;
 }
 
@@ -43,10 +43,10 @@ export function useAvatar(entityId: string, spaceId?: string) {
 
   // Get the avatar entity ID from the relation
   const avatarEntityId = Entities.avatar(maybeAvatar);
-  
+
   // Resolve the actual image URL
   const imageUrl = useImageUrlFromEntity(avatarEntityId || undefined, spaceId || '');
-  
+
   return imageUrl || avatarEntityId;
 }
 
@@ -76,11 +76,14 @@ export function useEntitySchema(entityId: string, spaceId?: string) {
   const { data: schema } = useQuery({
     enabled: types.length > 0,
     queryKey: ['entity-schema-for-merging', entityId, types],
-    placeholderData: keepPreviousData,
-    queryFn: async () => {
-      return await getSchemaFromTypeIds(types.map(t => t.id));
-    },
+    queryFn: async () => await getSchemaFromTypeIds(types.map(t => t.id)),
   });
 
   return schema ?? [];
+}
+
+export function useRelationEntityRelations(entityId: string, spaceId?: string) {
+  return useRelations({
+    selector: r => r.entityId === entityId && (spaceId ? r.spaceId === spaceId : true),
+  });
 }

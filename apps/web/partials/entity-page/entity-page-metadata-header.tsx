@@ -31,9 +31,10 @@ import { RenderableTypeDropdown } from './renderable-type-dropdown';
 interface EntityPageMetadataHeaderProps {
   id: string;
   spaceId: string;
+  isRelationPage?: boolean;
 }
 
-export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHeaderProps) {
+export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }: EntityPageMetadataHeaderProps) {
   const { id: entityId } = useEntityStoreInstance();
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
