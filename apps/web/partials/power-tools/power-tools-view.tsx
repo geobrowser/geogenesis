@@ -52,7 +52,7 @@ export function PowerToolsView() {
 
   // Hook for creating new entities with filters
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
-  const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
+  const [placeholderRowIds, setPlaceholderRowIds] = React.useState<string[]>([]);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
 
   // Use standard data block hooks now that we have EditorProvider
@@ -386,13 +386,13 @@ export function PowerToolsView() {
         console.log('[PowerTools] Entity appeared! Clearing placeholder');
         // Entity appeared, remove the placeholder
         setPendingEntityId(null);
-        setHasPlaceholderRow(false);
+        setPlaceholderRowIds(prev => prev.filter(id => id !== pendingEntityId));
       } else {
         // Fallback: clear pending state after 3 seconds if entity doesn't appear
         const timeout = setTimeout(() => {
           console.log('[PowerTools] Timeout: clearing pending state');
           setPendingEntityId(null);
-          setHasPlaceholderRow(false);
+          setPlaceholderRowIds(prev => prev.filter(id => id !== pendingEntityId));
         }, 3000);
 
         return () => clearTimeout(timeout);
@@ -414,19 +414,21 @@ export function PowerToolsView() {
       allValues
     );
 
-    // Show the placeholder row if we're editing and either:
-    // 1. We have hasPlaceholderRow set and no row exists with nextEntityId
-    // 2. We have a pendingEntityId that hasn't appeared in rows yet
-    const shouldShowPlaceholder =
-      ((hasPlaceholderRow && !rows.find(r => r.entityId === nextEntityId)) ||
-        (pendingEntityId && !rows.find(r => r.entityId === pendingEntityId)));
+    // Create placeholder rows for all placeholder IDs that don't already exist in rows
+    const existingRowIds = new Set(rows.map(r => r.entityId));
+    const placeholderRows = placeholderRowIds
+      .filter(id => !existingRowIds.has(id))
+      .map(id => makePlaceholderRow(id, properties));
 
-    const placeholderEntityId = pendingEntityId || nextEntityId;
+    // Include pending entity ID if it's not in rows yet
+    if (pendingEntityId && !existingRowIds.has(pendingEntityId) && !placeholderRowIds.includes(pendingEntityId)) {
+      placeholderRows.push(makePlaceholderRow(pendingEntityId, properties));
+    }
 
-    return shouldShowPlaceholder
-      ? [makePlaceholderRow(placeholderEntityId, properties), ...rows]
+    return placeholderRows.length > 0
+      ? [...placeholderRows, ...rows]
       : rows;
-  }, [allAvailableEntities, allPropertyIds, collectionRelations, entitiesToRows, source.type, allRelations, allValues, hasPlaceholderRow, pendingEntityId, nextEntityId, makePlaceholderRow, properties]);
+  }, [allAvailableEntities, allPropertyIds, collectionRelations, entitiesToRows, source.type, allRelations, allValues, placeholderRowIds, pendingEntityId, makePlaceholderRow, properties]);
   
   
   // Selection handlers
@@ -1142,28 +1144,32 @@ export function PowerToolsView() {
 
   // Handler for showing placeholder row (entity creation happens when user types)
   const handleAddPlaceholder = React.useCallback(() => {
-    setHasPlaceholderRow(true);
+    const newPlaceholderId = ID.createEntityId();
+    setPlaceholderRowIds(prev => [...prev, newPlaceholderId]);
   }, []);
 
   // Handler for cell changes - creates entities when placeholder row is edited
   const handleChangeEntry = React.useCallback((context: any, event: any) => {
-    // Handle placeholder row - create entity when user types
-    if (context.entityId === nextEntityId) {
+    // Check if this is a placeholder row
+    const isPlaceholder = placeholderRowIds.includes(context.entityId);
+
+    if (isPlaceholder) {
       // Handle cancel event
       if (event.type === 'Cancel') {
-        setHasPlaceholderRow(false);
+        setPlaceholderRowIds(prev => prev.filter(id => id !== context.entityId));
         setPendingEntityId(null);
         return;
       }
 
-      setHasPlaceholderRow(false);
+      // Remove this placeholder from the list
+      setPlaceholderRowIds(prev => prev.filter(id => id !== context.entityId));
 
       // Only create entity if not using Find (for collections)
       if (event.type !== 'Find') {
         const maybeName = event.type === 'Create' ? event.data.name : undefined;
 
-        // Mark this ID as pending before creating
-        setPendingEntityId(context.entityId);
+        // Mark the nextEntityId as pending (the entity will be created with this ID)
+        setPendingEntityId(nextEntityId);
 
         // Create the entity with any active filters
         createEntityWithTypes({
@@ -1172,6 +1178,7 @@ export function PowerToolsView() {
         });
 
         // If this is a collection, add the new entity to the collection
+        // Use nextEntityId since that's what createEntityWithTypes uses
         if (source.type === 'COLLECTION' && source.value) {
           storage.relations.set({
             id: ID.createEntityId(),
@@ -1190,9 +1197,9 @@ export function PowerToolsView() {
               name: null,
             },
             toEntity: {
-              id: context.entityId,
+              id: nextEntityId,
               name: null,
-              value: context.entityId,
+              value: nextEntityId,
             },
             isLocal: true,
           });
@@ -1204,7 +1211,7 @@ export function PowerToolsView() {
     queryClient.invalidateQueries({
       queryKey: GeoStore.queryKeys(where),
     });
-  }, [nextEntityId, createEntityWithTypes, filterState, source, spaceId, queryClient, where]);
+  }, [placeholderRowIds, nextEntityId, createEntityWithTypes, filterState, source, spaceId, queryClient, where]);
 
   // Handler for linking entries (used for collection items)
   const handleLinkEntry = React.useCallback((id: string, to: {id: string; name: string | null; space?: string; verified?: boolean}) => {
