@@ -10,6 +10,7 @@ import {
   RENDERABLE_TYPE_PROPERTY,
   VALUE_TYPE_PROPERTY,
 } from '~/core/constants';
+import { ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -22,12 +23,14 @@ import { Property, Relation, ValueOptions } from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
+import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
+import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
+import { InputPlace } from '~/design-system/input-address';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import ReorderableRelationChipsDnd from '~/design-system/reorderable-relation-chips-dnd';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -250,6 +253,51 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               onImageRemove={() => console.log(`remove`)}
             />
           </div>
+        ) : propertyId === VENUE_PROPERTY ? (
+          <div key="relation-place-input">
+            <InputPlace
+              spaceId={spaceId}
+              relationValueTypes={relationValueTypes}
+              onDone={async result => {
+                const newRelationId = ID.createEntityId();
+                const newEntityId = ID.createEntityId();
+
+                const newRelation: Relation = {
+                  id: newRelationId,
+                  spaceId: spaceId,
+                  position: Position.generate(),
+                  renderableType: 'RELATION',
+                  verified: false,
+                  entityId: newEntityId,
+                  type: {
+                    id: propertyId,
+                    name: property.name,
+                  },
+                  fromEntity: {
+                    id: id,
+                    name: name,
+                  },
+                  toEntity: {
+                    id: result.id,
+                    name: result.name,
+                    value: result.id,
+                  },
+                };
+
+                if (result.space) {
+                  newRelation.toSpaceId = result.space;
+                }
+
+                if (result.verified) {
+                  newRelation.verified = true;
+                }
+
+                storage.relations.set(newRelation);
+
+                await applyTemplate({ ...templateOptions, typeId: result.id });
+              }}
+            />
+          </div>
         ) : (
           <div key={`relation-select-entity-${property.id}`} data-testid="select-entity" className="w-full">
             <SelectEntity
@@ -347,19 +395,39 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
     );
   }
 
+  // Check if we should show a map for Address or Venue properties
+  const shouldShowMap = (propertyId === ADDRESS_PROPERTY || propertyId === VENUE_PROPERTY) && relations.length > 0;
+  const firstRelation = relations[0];
+
   return (
     <div className="flex flex-wrap items-center gap-1 pr-1">
       {property.renderableTypeStrict === 'IMAGE' ? (
         relations.map(r => {
           const relationId = r.id;
+          const relationName = r.toEntity.name;
           const relationValue = r.toEntity.id;
 
           return (
-            <ImageRelation
-              key={`image-${relationId}-${relationValue}`}
-              relationValue={relationValue}
-              spaceId={spaceId}
-            />
+            <div key={`relation-${relationId}-${relationValue}`}>
+              <LinkableRelationChip
+                isEditing
+                onDelete={() => storage.relations.delete(r)}
+                onDone={result => {
+                  storage.relations.update(r, draft => {
+                    draft.toSpaceId = result.space;
+                    draft.verified = result.verified;
+                  });
+                }}
+                currentSpaceId={spaceId}
+                entityId={relationValue}
+                relationId={relationId}
+                relationEntityId={r.entityId}
+                spaceId={r.toSpaceId}
+                verified={r.verified}
+              >
+                {relationName ?? relationValue}
+              </LinkableRelationChip>
+            </div>
           );
         })
       ) : (
@@ -471,6 +539,16 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
             spaceId={spaceId}
           />
         </div>
+      )}
+
+      {/* Show geo location map for the first Address or Venue relation */}
+      {shouldShowMap && firstRelation && (
+        <GeoLocationWrapper
+          relationId={firstRelation.id}
+          id={firstRelation.toEntity.id}
+          spaceId={firstRelation.toSpaceId || spaceId}
+          propertyType={propertyId}
+        />
       )}
     </div>
   );

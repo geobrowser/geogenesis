@@ -117,6 +117,34 @@ export class GeoPoint {
   static formatCoordinates(latitude: number, longitude: number): string {
     return `${latitude}, ${longitude}`;
   }
+
+  /**
+   * Fetches coordinates from Mapbox using a mapbox ID
+   * @param mapboxId - The Mapbox place ID
+   * @returns Promise containing latitude and longitude coordinates
+   */
+  static async fetchCoordinatesFromMapbox(mapboxId: string): Promise<{ latitude: number; longitude: number } | null> {
+    try {
+      let sessionToken = sessionStorage.getItem('mapboxSessionToken');
+
+      if (!sessionToken) {
+        sessionToken = crypto.randomUUID();
+        sessionStorage.setItem('mapboxSessionToken', sessionToken);
+      }
+
+      const response = await fetch(`/api/places/coordinates?mapboxId=${encodeURIComponent(mapboxId)}&sessionToken=${sessionToken}`);
+      const data = await response.json();
+      
+      if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+        return { latitude: data.latitude, longitude: data.longitude };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch coordinates from Mapbox:', error);
+      return null;
+    }
+  }
 }
 
 export class GeoDate {

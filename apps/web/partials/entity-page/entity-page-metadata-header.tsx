@@ -90,8 +90,8 @@ export function EntityPageMetadataHeader({ id, spaceId, isRelationPage = false }
   const isPropertyEntity = !!propertyData || !!hasLocalPropertyType;
 
   const propertyDataType = React.useMemo(() => {
-    return Properties.constructDataType(propertyData, renderableTypeEntity, renderableTypeRelation, entityId);
-  }, [propertyData, renderableTypeEntity, entityId, renderableTypeRelation]);
+    return Properties.constructDataType(propertyData, renderableTypeEntity, renderableTypeRelation);
+  }, [propertyData, renderableTypeEntity, renderableTypeRelation]);
 
   // Determine the current renderable type based on property data
   const currentRenderableType = React.useMemo(() => {

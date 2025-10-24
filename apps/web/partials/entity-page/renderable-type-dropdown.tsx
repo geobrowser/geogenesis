@@ -35,6 +35,7 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   NUMBER: Number,
   POINT: GeoLocation,
   GEO_LOCATION: GeoLocation,
+  PLACE: GeoLocation,
 };
 
 
