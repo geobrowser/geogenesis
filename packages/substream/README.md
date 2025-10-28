@@ -9,6 +9,7 @@ Provide the runtime environment with the keys from `.env.example`. If running lo
 pnpm install
 
 # Run from within /packages/substream
+pnpm initialize
 pnpm build
 pnpm start
 ```
@@ -18,5 +19,5 @@ pnpm start
 `pnpm start` also accepts some optional flags to control the start block and whether to reset the sink database.
 
 ```bash
-pnpm start --start-block 620 --reset-db
+pnpm start --start-block 881 --reset-db
 ```
