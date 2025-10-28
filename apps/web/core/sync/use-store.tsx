@@ -3,12 +3,13 @@ import { createAtom } from '@xstate/store';
 import { useSelector } from '@xstate/store/react';
 import { Effect } from 'effect';
 import equal from 'fast-deep-equal';
+
 import * as React from 'react';
 
 import { getProperties, getProperty } from '../io/v2/queries';
 import { OmitStrict } from '../types';
-import { Values } from '../utils/value';
 import { Properties } from '../utils/property';
+import { Values } from '../utils/value';
 import { Property, Relation, Value } from '../v2.types';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { E, mergeRelations } from './orm';
@@ -323,13 +324,13 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
   const allProperties = React.useMemo(() => {
     const remotePropsMap = new Map((remoteProperties || []).map(p => [p.id, p]));
     const localPropsMap = new Map(localProperties.map(p => [p.id, p]));
-    
+
     const merged: Property[] = [];
-    
+
     for (const id of ids) {
       const remoteProp = remotePropsMap.get(id);
       const localProp = localPropsMap.get(id);
-      
+
       // Prefer remote property, but fall back to local
       if (remoteProp) {
         merged.push(remoteProp);
@@ -337,7 +338,7 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
         merged.push(localProp);
       }
     }
-    
+
     return merged;
   }, [remoteProperties, localProperties, ids]);
 

@@ -1,218 +1,146 @@
 'use client';
 
 import { ContentIds, IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
-// import { Image } from '@graphprotocol/grc-20';
 import { useAtom } from 'jotai';
 
-import * as React from 'react';
-
+import {
+  DATA_TYPE_PROPERTY,
+  FORMAT_PROPERTY,
+  IS_TYPE_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+  VALUE_TYPE_PROPERTY,
+} from '~/core/constants';
+import { ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import { useEditorStore } from '~/core/state/editor/use-editor';
-import { useCover, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
+import { useEntityTypes, useName, useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
-import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
+import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Property, Relation, ValueOptions } from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
+import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { GeoLocationPointFields } from '~/design-system/editable-fields/geo-location-field';
+import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
+import { Trash } from '~/design-system/icons/trash';
+import { InputPlace } from '~/design-system/input-address';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import ReorderableRelationChipsDnd from '~/design-system/reorderable-relation-chips-dnd';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
+import SuggestedFormats from '~/design-system/suggested-formats-window';
 import { Text } from '~/design-system/text';
 
+import { DataTypePill } from '~/partials/entity-page/data-type-pill';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
 import { editorHasContentAtom } from '~/atoms';
 
-function ShowablePanel({
-  name,
-  children,
-  id,
-  spaceId,
-  hasEntries,
-}: {
-  id: string;
-  name: string | null;
-  spaceId: string;
-  hasEntries: boolean;
-  children: React.ReactNode;
-}) {
-  const coverUrl = useCover(id, spaceId);
-  const types = useEntityTypes(id, spaceId);
-  const { blockIds } = useEditorStore();
-  const [editorHasContent] = useAtom(editorHasContentAtom);
-
-  // Show the properties panel when:
-  // 1. Name exists, OR
-  // 2. Cover/avatar exists, OR
-  // 3. Types exist, OR
-  // 4. Editor has content / blocks exist
-  // 5. If there are more than 0 properties
-  const showPropertiesPanel =
-    (name && name?.length > 0) ||
-    coverUrl ||
-    types.length > 0 ||
-    (blockIds && blockIds.length > 0) ||
-    editorHasContent ||
-    hasEntries;
-
-  if (!showPropertiesPanel) {
-    return null;
-  }
-
-  return <>{children}</>;
-}
-
-interface Props {
+type EditableEntityPageProps = {
   id: string;
   spaceId: string;
-}
+};
 
-export function EditableEntityPage({ id, spaceId }: Props) {
-  const renderedProperties = useEditableProperties(id, spaceId);
-  const propertiesEntries = Object.entries(renderedProperties);
-
+export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   const { createProperty, addPropertyToEntity } = useCreateProperty(spaceId);
 
   const name = useName(id, spaceId);
+  const shouldShowPanel = useShouldShowPropertiesPanel(id, spaceId);
+  const visiblePropertiesEntries = useVisiblePropertiesEntries(id, spaceId);
+
+  const relationEntityRelations = useRelationEntityRelations(id, spaceId);
+  const isRelationPage = relationEntityRelations.length > 0;
+
+  if (!shouldShowPanel && !isRelationPage) {
+    return null;
+  }
 
   return (
-    <ShowablePanel id={id} spaceId={spaceId} name={name} hasEntries={propertiesEntries.length > 0}>
-      <div className="rounded-lg border border-grey-02 shadow-button">
-        <div className="flex flex-col gap-6 p-5">
-          {propertiesEntries.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-4 text-center">
-              <Text as="p" variant="body" color="grey-04">
-                No properties added yet
-              </Text>
-              <Text as="p" variant="footnote" color="grey-03" className="mt-1">
-                Click the + button below to add properties
-              </Text>
+    <div className="relative rounded-lg border border-grey-02 shadow-button">
+      <div className="flex flex-col gap-6 p-5">
+        {visiblePropertiesEntries.length === 0 && (
+          <div className="flex flex-col items-center justify-center text-center">
+            <Text as="p" variant="body" color="grey-04">
+              No properties added yet
+            </Text>
+            <Text as="p" variant="footnote" color="grey-03" className="mt-1">
+              Click the + button below to add properties
+            </Text>
+          </div>
+        )}
+        {visiblePropertiesEntries.map(([propertyId, property]) => {
+          const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
+
+          return (
+            <div key={`${id}-${propertyId}`} className="break-words">
+              <RenderedProperty spaceId={spaceId} property={property} />
+
+              {isRelation ? (
+                <RelationPropertyWithDelete
+                  key={propertyId}
+                  propertyId={propertyId}
+                  entityId={id}
+                  spaceId={spaceId}
+                  property={property}
+                />
+              ) : (
+                <RenderedValue
+                  key={propertyId}
+                  propertyId={propertyId}
+                  entityId={id}
+                  spaceId={spaceId}
+                  property={property}
+                />
+              )}
             </div>
-          )}
-          {propertiesEntries.map(([propertyId, property]) => {
-            // Hide cover/avatar/types/name property, user can upload cover using upload icon on top placeholder
-            // and add types inline using the + button, add name under cover image component
-            if (
-              propertyId === SystemIds.COVER_PROPERTY ||
-              propertyId === ContentIds.AVATAR_PROPERTY ||
-              propertyId === SystemIds.TYPES_PROPERTY ||
-              propertyId === SystemIds.NAME_PROPERTY
-            ) {
-              return null;
-            }
+          );
+        })}
+      </div>
+      <div className={visiblePropertiesEntries.length === 0 ? 'absolute bottom-0 left-0 p-4' : 'p-4'}>
+        <SelectEntityAsPopover
+          trigger={<SquareButton icon={<Create />} />}
+          spaceId={spaceId}
+          relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+          onCreateEntity={result => {
+            const renderableType = result.renderableType || 'TEXT';
 
-            return (
-              <div key={`${id}-${propertyId}`} className="relative break-words">
-                <RenderedProperty spaceId={spaceId} property={property} />
+            const createdPropertyId = createProperty({
+              name: result.name || '',
+              propertyType: renderableType,
+              verified: result.verified,
+              space: result.space,
+            });
 
-                {property.dataType === 'RELATION' || property.renderableType === 'IMAGE' ? (
-                  <RelationsGroup key={propertyId} propertyId={propertyId} id={id} spaceId={spaceId} />
-                ) : (
-                  <RenderedValue key={propertyId} propertyId={propertyId} entityId={id} spaceId={spaceId} />
-                )}
-                {/* We need to pin to top for Geo Location to prevent covering the display toggle */}
-                <div
-                  className={`absolute right-0 flex items-center gap-1 ${propertyId === SystemIds.GEO_LOCATION_PROPERTY && property.dataType === 'POINT' ? 'top-0' : 'top-6'}`}
-                >
-                  {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
-                  <>
-                    {/* Formatting exists on properties now instead of value */}
-                    {/* {property.dataType === 'TIME' && (
-                      <DateFormatDropdown
-                        value={firstRenderable.value}
-                        // @TODO(migration): fix formatting. Now on property
-                        // format={firstRenderable.options?.format}
-                        onSelect={(value?: string, format?: string) => {
-                          storage.renderables.values.update(firstRenderable, draft => {
-                            draft.value = value ?? firstRenderable.value;
-                          });
-                        }}
-                      />
-                    )} */}
-                    {/* @TODO: Formatting exists on property now instead of value */}
-                    {/* {property.dataType === 'NUMBER' && (
-                      <NumberOptionsDropdown
-                        value={firstRenderable.value}
-                        // @TODO(migration): Fix format. Now defined on Property
-                        // format={firstRenderable.options?.format}
-                        unitId={firstRenderable.options?.unit}
-                        send={({ format, unitId }) => {
-                          storage.renderables.values.update(firstRenderable, draft => {
-                            const newOptions = {
-                              language: draft.options?.language,
-                              unit: unitId,
-                            };
+            // Immediately add the property to the entity
+            addPropertyToEntity({
+              entityId: id,
+              propertyId: createdPropertyId,
+              propertyName: result.name || '',
+              entityName: name || undefined,
+            });
 
-                            draft.options = newOptions;
-                          });
-                        }}
-                      />
-                    )} */}
-
-                    {/* <RenderableTypeDropdown value={renderableType} options={[]} /> */}
-
-                    {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
-                    {/* {property.dataType !== 'RELATION' && (
-                        <SquareButton
-                          icon={<Trash />}
-                          onClick={() => {
-                            storage.renderables.values.delete(firstRenderable as NativeRenderableProperty);
-                          }}
-                        />
-                      )} */}
-                  </>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="p-4">
-          <SelectEntityAsPopover
-            trigger={<SquareButton icon={<Create />} />}
-            spaceId={spaceId}
-            relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-            onCreateEntity={result => {
-              const renderableType = result.renderableType || 'TEXT';
-
-              const createdPropertyId = createProperty({
-                name: result.name || '',
-                propertyType: renderableType,
-                verified: result.verified,
-                space: result.space,
-              });
-
-              // Immediately add the property to the entity
+            return createdPropertyId;
+          }}
+          onDone={result => {
+            if (result) {
               addPropertyToEntity({
                 entityId: id,
-                propertyId: createdPropertyId,
+                propertyId: result.id,
                 propertyName: result.name || '',
                 entityName: name || undefined,
               });
-            }}
-            onDone={result => {
-              if (result) {
-                addPropertyToEntity({
-                  entityId: id,
-                  propertyId: result.id,
-                  propertyName: result.name || '',
-                  entityName: name || undefined,
-                });
-              }
-            }}
-          />
-        </div>
+            }
+          }}
+        />
       </div>
-    </ShowablePanel>
+    </div>
   );
 }
 
@@ -223,6 +151,40 @@ function RenderedProperty({ property, spaceId }: { property: Property; spaceId: 
         {property.name ?? property.id}
       </Text>
     </Link>
+  );
+}
+
+type RelationPropertyWithDeleteProps = {
+  propertyId: string;
+  entityId: string;
+  spaceId: string;
+  property: Property;
+};
+
+function RelationPropertyWithDelete({ propertyId, entityId, spaceId, property }: RelationPropertyWithDeleteProps) {
+  const { storage } = useMutate();
+
+  const propertyRelations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === propertyId,
+  });
+
+  return (
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0 flex-1">
+        <RelationsGroup key={propertyId} propertyId={propertyId} id={entityId} spaceId={spaceId} />
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <DataTypePill dataType={property.dataType} renderableType={null} spaceId={spaceId} iconOnly={true} />
+        {propertyRelations.length > 0 && (
+          <SquareButton
+            icon={<Trash />}
+            onClick={() => {
+              propertyRelations.forEach(relation => storage.relations.delete(relation));
+            }}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -289,6 +251,51 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 });
               }}
               onImageRemove={() => console.log(`remove`)}
+            />
+          </div>
+        ) : propertyId === VENUE_PROPERTY ? (
+          <div key="relation-place-input">
+            <InputPlace
+              spaceId={spaceId}
+              relationValueTypes={relationValueTypes}
+              onDone={async result => {
+                const newRelationId = ID.createEntityId();
+                const newEntityId = ID.createEntityId();
+
+                const newRelation: Relation = {
+                  id: newRelationId,
+                  spaceId: spaceId,
+                  position: Position.generate(),
+                  renderableType: 'RELATION',
+                  verified: false,
+                  entityId: newEntityId,
+                  type: {
+                    id: propertyId,
+                    name: property.name,
+                  },
+                  fromEntity: {
+                    id: id,
+                    name: name,
+                  },
+                  toEntity: {
+                    id: result.id,
+                    name: result.name,
+                    value: result.id,
+                  },
+                };
+
+                if (result.space) {
+                  newRelation.toSpaceId = result.space;
+                }
+
+                if (result.verified) {
+                  newRelation.verified = true;
+                }
+
+                storage.relations.set(newRelation);
+
+                await applyTemplate({ ...templateOptions, typeId: result.id });
+              }}
             />
           </div>
         ) : (
@@ -388,19 +395,39 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
     );
   }
 
+  // Check if we should show a map for Address or Venue properties
+  const shouldShowMap = (propertyId === ADDRESS_PROPERTY || propertyId === VENUE_PROPERTY) && relations.length > 0;
+  const firstRelation = relations[0];
+
   return (
     <div className="flex flex-wrap items-center gap-1 pr-1">
       {property.renderableTypeStrict === 'IMAGE' ? (
         relations.map(r => {
           const relationId = r.id;
+          const relationName = r.toEntity.name;
           const relationValue = r.toEntity.id;
 
           return (
-            <ImageRelation
-              key={`image-${relationId}-${relationValue}`}
-              relationValue={relationValue}
-              spaceId={spaceId}
-            />
+            <div key={`relation-${relationId}-${relationValue}`}>
+              <LinkableRelationChip
+                isEditing
+                onDelete={() => storage.relations.delete(r)}
+                onDone={result => {
+                  storage.relations.update(r, draft => {
+                    draft.toSpaceId = result.space;
+                    draft.verified = result.verified;
+                  });
+                }}
+                currentSpaceId={spaceId}
+                entityId={relationValue}
+                relationId={relationId}
+                relationEntityId={r.entityId}
+                spaceId={r.toSpaceId}
+                verified={r.verified}
+              >
+                {relationName ?? relationValue}
+              </LinkableRelationChip>
+            </div>
           );
         })
       ) : (
@@ -513,6 +540,16 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
           />
         </div>
       )}
+
+      {/* Show geo location map for the first Address or Venue relation */}
+      {shouldShowMap && firstRelation && (
+        <GeoLocationWrapper
+          relationId={firstRelation.id}
+          id={firstRelation.toEntity.id}
+          spaceId={firstRelation.toSpaceId || spaceId}
+          propertyType={propertyId}
+        />
+      )}
     </div>
   );
 }
@@ -524,13 +561,26 @@ function ImageRelation({ relationValue, spaceId }: { relationValue: string; spac
   return <ImageZoom imageSrc={getImagePath(actualImageSrc || '')} />;
 }
 
-function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; propertyId: string; spaceId: string }) {
+function RenderedValue({
+  entityId,
+  propertyId,
+  spaceId,
+  property: propProperty,
+}: {
+  entityId: string;
+  propertyId: string;
+  spaceId: string;
+  property: Property;
+}) {
   const { storage } = useMutate();
-  const { property } = useQueryProperty({ id: propertyId });
+  const { property: queriedProperty } = useQueryProperty({ id: propertyId });
+
+  const property = propProperty || queriedProperty;
 
   const rawValue = useValue({
     selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
   });
+
   const value = rawValue?.value ?? '';
   const options = rawValue?.options;
 
@@ -569,97 +619,17 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
     });
   };
 
-  switch (property.dataType) {
-    case 'TEXT': {
-      return (
-        <PageStringField
-          key={propertyId}
-          variant="body"
-          placeholder="Add value..."
-          aria-label="text-field"
-          value={value}
-          onChange={onChange}
-        />
-      );
+  const onDelete = () => {
+    if (rawValue) {
+      storage.values.delete(rawValue);
     }
-    case 'NUMBER':
-      return (
-        <NumberField
-          key={propertyId}
-          isEditing={true}
-          value={value}
-          // @TODO(migration): Fix formatting. Now on property
-          // format={renderable.options?.format}
-          unitId={options?.unit}
-          onChange={onChange}
-        />
-      );
-    case 'CHECKBOX': {
-      const checked = getChecked(value);
+  };
 
-      return (
-        <Checkbox
-          key={`checkbox-${propertyId}-${value}`}
-          checked={checked}
-          onChange={() => {
-            onChange(checked ? '0' : '1');
-          }}
-        />
-      );
-    }
-    case 'TIME': {
-      return (
-        <DateField
-          key={propertyId}
-          // format={renderable.options?.format}
-          onBlur={({ value }) => {
-            onChange(value);
-          }}
-          isEditing={true}
-          value={value}
-          propertyId={propertyId}
-        />
-      );
-    }
-
-    // @TODO(migration): Fix url renderable
-    // case 'URL': {
-    //   return (
-    //     <WebUrlField
-    //       key={renderable.propertyId}
-    //       spaceId={spaceId}
-    //       placeholder="Add a URI"
-    //       isEditing={true}
-    //       onBlur={event =>
-    //         send({
-    //           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-    //           payload: {
-    //             value: {
-    //               value: event.target.value,
-    //               type: 'URL',
-    //             },
-    //             renderable,
-    //           },
-    //         })
-    //       }
-    //       value={renderable.value}
-    //     />
-    //   );
-    // }
-
-    case 'POINT': {
-      return (
-        <>
-          {propertyId === SystemIds.GEO_LOCATION_PROPERTY && property.dataType === 'POINT' ? (
-            <GeoLocationPointFields
-              key={propertyId}
-              variant="body"
-              placeholder="Add value..."
-              aria-label="text-field"
-              value={value}
-              onChange={onChange}
-            />
-          ) : (
+  const renderField = () => {
+    switch (property.dataType) {
+      case 'TEXT': {
+        return (
+          <>
             <PageStringField
               key={propertyId}
               variant="body"
@@ -668,11 +638,113 @@ function RenderedValue({ entityId, propertyId, spaceId }: { entityId: string; pr
               value={value}
               onChange={onChange}
             />
-          )}
-        </>
-      );
+            {property.id === FORMAT_PROPERTY && (
+              <SuggestedFormats entityId={entityId} spaceId={spaceId} value={value} onChange={onChange} />
+            )}
+          </>
+        );
+      }
+      case 'NUMBER':
+        return (
+          <NumberField
+            key={propertyId}
+            isEditing={true}
+            value={value}
+            format={property.format || undefined}
+            unitId={options?.unit || property.unit || undefined}
+            onChange={onChange}
+          />
+        );
+      case 'CHECKBOX': {
+        const checked = getChecked(value);
+
+        return (
+          <Checkbox
+            key={`checkbox-${propertyId}-${value}`}
+            checked={checked}
+            onChange={() => {
+              onChange(checked ? '0' : '1');
+            }}
+          />
+        );
+      }
+      case 'TIME': {
+        return (
+          <DateField
+            key={propertyId}
+            // format={renderable.options?.format}
+            onBlur={({ value }) => {
+              onChange(value);
+            }}
+            isEditing={true}
+            value={value}
+            propertyId={propertyId}
+          />
+        );
+      }
+
+      // @TODO(migration): Fix url renderable
+      // case 'URL': {
+      //   return (
+      //     <WebUrlField
+      //       key={renderable.propertyId}
+      //       spaceId={spaceId}
+      //       placeholder="Add a URI"
+      //       isEditing={true}
+      //       onBlur={event =>
+      //         send({
+      //           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+      //           payload: {
+      //             value: {
+      //               value: event.target.value,
+      //               type: 'URL',
+      //             },
+      //             renderable,
+      //           },
+      //         })
+      //       }
+      //       value={renderable.value}
+      //     />
+      //   );
+      // }
+
+      case 'POINT': {
+        return (
+          <>
+            {property.renderableTypeStrict === 'GEO_LOCATION' ? (
+              <GeoLocationPointFields
+                key={propertyId}
+                variant="body"
+                placeholder="Add value..."
+                aria-label="text-field"
+                value={value}
+                onChange={onChange}
+              />
+            ) : (
+              <PageStringField
+                key={propertyId}
+                variant="body"
+                placeholder="Add value..."
+                aria-label="text-field"
+                value={value}
+                onChange={onChange}
+              />
+            )}
+          </>
+        );
+      }
     }
-  }
+  };
+
+  return (
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0 flex-1">{renderField()}</div>
+      <div className="flex shrink-0 items-center gap-1">
+        <DataTypePill dataType={property.dataType} renderableType={null} spaceId={spaceId} iconOnly={true} />
+        {rawValue && value && <SquareButton icon={<Trash />} onClick={onDelete} />}
+      </div>
+    </div>
+  );
 }
 
 async function applyTemplate(templateOptions: {
@@ -702,4 +774,71 @@ async function applyTemplate(templateOptions: {
   for (const relation of template.relations) {
     storage.relations.set(relation);
   }
+}
+
+// System properties that are editable elsewhere
+const SYSTEM_PROPERTIES = [
+  SystemIds.NAME_PROPERTY,
+  SystemIds.TYPES_PROPERTY,
+  SystemIds.COVER_PROPERTY,
+  SystemIds.BLOCKS,
+  ContentIds.AVATAR_PROPERTY,
+  DATA_TYPE_PROPERTY,
+  VALUE_TYPE_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+  IS_TYPE_PROPERTY,
+];
+
+/**
+ * Returns filtered property entries excluding system properties and
+ * IS_TYPE_PROPERTY for non-relation properties.
+ */
+function useVisiblePropertiesEntries(entityId: string, spaceId: string): [string, Property][] {
+  const renderedProperties = useEditableProperties(entityId, spaceId);
+  const propertiesEntries = Object.entries(renderedProperties);
+
+  const { property: propertyData } = useQueryProperty({
+    id: entityId,
+    spaceId,
+    enabled: true,
+  });
+
+  const isNonRelationProperty = propertyData && propertyData.dataType !== 'RELATION';
+
+  const visibleEntries = propertiesEntries.filter(([propertyId]) => {
+    return !SYSTEM_PROPERTIES.includes(propertyId) && !(propertyId === IS_TYPE_PROPERTY && isNonRelationProperty);
+  });
+
+  return visibleEntries;
+}
+
+/**
+ * Returns true if the properties panel should be visible.
+ * Panel shows when entity has name, content, types, or non-system properties.
+ */
+function useShouldShowPropertiesPanel(entityId: string, spaceId: string): boolean {
+  const name = useName(entityId, spaceId);
+  const types = useEntityTypes(entityId, spaceId);
+
+  const { blockIds } = useEditorStore();
+  const [editorHasContent] = useAtom(editorHasContentAtom);
+
+  const values = useValues({
+    selector: v => v.entity.id === entityId && v.spaceId === spaceId && !SYSTEM_PROPERTIES.includes(v.property.id),
+  });
+
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && !SYSTEM_PROPERTIES.includes(r.type.id),
+  });
+
+  const hasActualProperties = values.length > 0 || relations.length > 0;
+
+  const shouldShow =
+    (name !== null && name.length > 0) ||
+    (blockIds && blockIds.length > 0) ||
+    editorHasContent ||
+    types.length > 0 ||
+    hasActualProperties;
+
+  return shouldShow;
 }

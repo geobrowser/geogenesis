@@ -110,15 +110,12 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       onBlur: onBlur,
       onUpdate: ({ editor }) => {
         if (editable) {
-          const hasContent =
-            editor.getText().trim().length > 0 ||
-            editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode');
+          const hasContent = editor.getText().trim().length > 0 ||
+                          (editor.getJSON().content?.some(node =>
+                            node.type === 'image' || node.type === 'tableNode') ?? false);
 
-          // Check if we have actual content and update the state immediately
-          // This will cause the properties panel to show before blur events
-          if (hasContent) {
-            setHasContent(true);
-          }
+          // Update the state immediately to show/hide properties panel
+          setHasContent(hasContent);
         }
       },
     },
@@ -128,9 +125,13 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   // Update editor editable state without recreating the editor
   React.useEffect(() => {
     if (editor && !isTransitioning) {
+      // Save current state before switching to view mode
+      if (!editable) {
+        upsertEditorState(editor.getJSON());
+      }
       editor.setEditable(editable);
     }
-  }, [editor, editable, isTransitioning]);
+  }, [editor, editable, isTransitioning, upsertEditorState]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {

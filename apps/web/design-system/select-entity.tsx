@@ -63,13 +63,13 @@ type SelectEntityProps = {
     space?: string;
     verified?: boolean;
     renderableType?: SwitchableRenderableType;
-  }) => void;
+  }) => void | string;
   spaceId: string;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
   containerClassName?: string;
   inputClassName?: string;
-  variant?: 'floating' | 'fixed';
+  variant?: 'floating' | 'fixed' | 'tableCell';
   width?: 'clamped' | 'full';
   withSelectSpace?: boolean;
   withSearchIcon?: boolean;
@@ -94,8 +94,8 @@ export const SelectEntity = ({
   inputClassName = '',
   withSelectSpace = true,
   withSearchIcon = false,
-  autoFocus = false,
   advanced = true,
+  autoFocus = false,
   showUrlWarning = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
@@ -167,7 +167,7 @@ export const SelectEntity = ({
   const isCreatingProperty = relationValueTypes?.some(type => type.id === SystemIds.PROPERTY);
 
   const onCreateNewEntity = () => {
-    const newEntityId = ID.createEntityId();
+    let newEntityId = ID.createEntityId();
 
     // This component is used in many different use-cases across the system, so we
     // need to be able to pass in a callback. onCreateEntity is used to enable to
@@ -176,7 +176,12 @@ export const SelectEntity = ({
     // e.g., you're in a collection and create a new entity, we want to add the current
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
-      onCreateEntity({ id: newEntityId, name: query, renderableType: isCreatingProperty ? renderableType : undefined });
+      newEntityId =
+        onCreateEntity({
+          id: newEntityId,
+          name: query,
+          renderableType: isCreatingProperty ? renderableType : undefined,
+        }) ?? newEntityId;
     } else {
       // Create new entity with name and types using internal id
       storage.entities.name.set(newEntityId, spaceId, query);
@@ -275,6 +280,7 @@ export const SelectEntity = ({
             placeholder={placeholder}
             className={inputStyles({ [variant]: true, withSearchIcon, className: inputClassName })}
             spellCheck={false}
+            autoFocus={autoFocus}
           />
         </Popover.Anchor>
         {query && (
@@ -582,7 +588,7 @@ export const SelectEntity = ({
                         />
                       </div>
                     </div>
-                    <div className="flex max-h-[219px] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
+                    <div className="flex max-h-[50vh] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
                       {(result.spaces ?? []).map((space, index) => (
                         <button
                           key={index}
@@ -647,6 +653,9 @@ const inputStyles = cva('', {
     floating: {
       true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
     },
+    tableCell: {
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-tableCell placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+    },
     withSearchIcon: {
       true: 'pl-9',
     },
@@ -654,6 +663,7 @@ const inputStyles = cva('', {
   defaultVariants: {
     fixed: true,
     floating: false,
+    tableCell: false,
     withSearchIcon: false,
   },
 });
@@ -743,7 +753,7 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
             forceMount
           >
             <div className="pt-1">
-              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {results.map(result => (
@@ -802,7 +812,7 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
             forceMount
           >
             <div className="pt-1">
-              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {!results?.length && isLoading && (

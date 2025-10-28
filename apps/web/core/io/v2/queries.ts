@@ -1,8 +1,9 @@
+import { SystemIds } from '@graphprotocol/grc-20';
+
 import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/v2.types';
 
 import { Space } from '../dto/spaces';
-
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
@@ -23,6 +24,7 @@ import {
   resultsQuery,
   spaceQuery,
   spacesQuery,
+  spacesWhereMemberQuery,
 } from './fragments';
 import { graphql } from './graphql';
 
@@ -120,11 +122,12 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
 export function getEntityBacklinks(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: entityBacklinksQuery,
+    // prettier-ignore
     decoder: data =>
-      data.entity?.backlinksList 
+      data.entity?.backlinksList
         ? (data.entity.backlinksList
             .map((e: any) => e?.fromEntity)
-            .filter((e): e is { id: string; name?: string | null; spaceIds: string[]; types: Array<{ id: string; name: string }> } => e !== null) ?? []) 
+            .filter((e): e is { id: string; name?: string | null; spaceIds: string[]; types: Array<{ id: string; name: string }> } => e !== null) ?? [])
         : [],
     variables: { id: entityId, spaceId },
     signal,
@@ -156,6 +159,15 @@ export function getSpaces(
   });
 }
 
+export function getSpacesWhereMember(address: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: spacesWhereMemberQuery,
+    decoder: data => data.spaces?.map(SpaceDecoder.decode).filter((s): s is Space => s !== null) ?? [],
+    variables: { address },
+    signal,
+  });
+}
+
 export function getResult(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: resultQuery,
@@ -176,6 +188,10 @@ interface ResultsArgs {
 }
 
 export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
+  const filter: EntityFilter | undefined = args.typeIds
+    ? { typeIds: { in: args.typeIds } }
+    : { and: BLOCK_TYPE_EXCLUSION_FILTERS };
+
   return graphql({
     query: resultsQuery,
     decoder: data => {
@@ -186,16 +202,11 @@ export function getResults(args: ResultsArgs, signal?: AbortController['signal']
       spaceId: args.spaceId,
       limit: args.limit,
       offset: args.offset,
-      filter: args.typeIds
-        ? {
-            typeIds: { in: args.typeIds },
-          }
-        : undefined,
+      filter,
     },
     signal,
   });
 }
-
 
 export function getProperty(id: string, signal?: AbortController['signal']) {
   return graphql({
@@ -222,3 +233,9 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
     signal,
   });
 }
+
+const EXCLUDED_BLOCK_TYPES = [SystemIds.TEXT_BLOCK, SystemIds.IMAGE_BLOCK, SystemIds.DATA_BLOCK, SystemIds.IMAGE_TYPE];
+
+const BLOCK_TYPE_EXCLUSION_FILTERS = EXCLUDED_BLOCK_TYPES.map(typeId => ({
+  typeIds: { anyNotEqualTo: typeId },
+}));

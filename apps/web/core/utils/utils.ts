@@ -12,7 +12,7 @@ import { useValues } from '~/core/sync/use-store';
 
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/schema';
-import { Entity, Relation } from '../v2.types';
+import { Entity, Relation, Row } from '../v2.types';
 import { Entities } from './entity';
 
 export const NavUtils = {
@@ -116,6 +116,34 @@ export class GeoPoint {
    */
   static formatCoordinates(latitude: number, longitude: number): string {
     return `${latitude}, ${longitude}`;
+  }
+
+  /**
+   * Fetches coordinates from Mapbox using a mapbox ID
+   * @param mapboxId - The Mapbox place ID
+   * @returns Promise containing latitude and longitude coordinates
+   */
+  static async fetchCoordinatesFromMapbox(mapboxId: string): Promise<{ latitude: number; longitude: number } | null> {
+    try {
+      let sessionToken = sessionStorage.getItem('mapboxSessionToken');
+
+      if (!sessionToken) {
+        sessionToken = crypto.randomUUID();
+        sessionStorage.setItem('mapboxSessionToken', sessionToken);
+      }
+
+      const response = await fetch(`/api/places/coordinates?mapboxId=${encodeURIComponent(mapboxId)}&sessionToken=${sessionToken}`);
+      const data = await response.json();
+      
+      if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+        return { latitude: data.latitude, longitude: data.longitude };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch coordinates from Mapbox:', error);
+      return null;
+    }
   }
 }
 
@@ -547,4 +575,8 @@ export const getPaginationPages = (totalPages: number, activePage: number) => {
 
 export function sortRelations(relations: Relation[]) {
   return [...relations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+}
+
+export function sortRows(rows: Row[]) {
+  return [...rows].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
 }

@@ -70,6 +70,10 @@ describe('Parser', () => {
         expect(htmlToMarkdown('<i>italic text</i>')).toBe('*italic text*');
       });
 
+      it('converts underline text', () => {
+        expect(htmlToMarkdown('<u>underline text</u>')).toBe('<u>underline text</u>');
+      });
+
       it('handles nested formatting', () => {
         expect(htmlToMarkdown('<strong><em>bold italic</em></strong>')).toBe('***bold italic***');
         expect(htmlToMarkdown('<em><strong>italic bold</strong></em>')).toBe('***italic bold***');
@@ -78,6 +82,31 @@ describe('Parser', () => {
       it('handles mixed formatting in paragraphs', () => {
         expect(htmlToMarkdown('<p>Text with <strong>bold</strong> and <em>italic</em> words</p>'))
           .toBe('Text with **bold** and *italic* words');
+      });
+
+      it('handles mixed formatting with underline', () => {
+        expect(htmlToMarkdown('<p>Text with <strong>bold</strong>, <em>italic</em>, and <u>underline</u> words</p>'))
+          .toBe('Text with **bold**, *italic*, and <u>underline</u> words');
+      });
+
+      it('handles bold with italic inside', () => {
+        expect(htmlToMarkdown('<strong>bold <em>and italic</em></strong>'))
+          .toBe('**bold *and italic***');
+      });
+
+      it('handles italic with bold inside', () => {
+        expect(htmlToMarkdown('<em>italic <strong>and bold</strong></em>'))
+          .toBe('*italic **and bold***');
+      });
+
+      it('handles all three formatting types combined', () => {
+        expect(htmlToMarkdown('<strong><em><u>all three</u></em></strong>'))
+          .toBe('***<u>all three</u>***');
+      });
+
+      it('handles underline with bold inside', () => {
+        expect(htmlToMarkdown('<u>underline <strong>and bold</strong></u>'))
+          .toBe('<u>underline **and bold**</u>');
       });
     });
 
@@ -250,9 +279,38 @@ describe('Parser', () => {
         expect(markdownToHtml('`code`')).toBe('<p><code>code</code></p>');
       });
 
+      it('converts underline HTML tags', () => {
+        expect(markdownToHtml('<u>underline text</u>')).toBe('<p><u>underline text</u></p>');
+      });
+
       it('handles mixed formatting', () => {
         expect(markdownToHtml('Text with **bold** and *italic* and `code`'))
           .toBe('<p>Text with <strong>bold</strong> and <em>italic</em> and <code>code</code></p>');
+      });
+
+      it('handles mixed formatting with underline', () => {
+        expect(markdownToHtml('Text with **bold**, *italic*, and <u>underline</u>'))
+          .toBe('<p>Text with <strong>bold</strong>, <em>italic</em>, and <u>underline</u></p>');
+      });
+
+      it('handles bold with italic nested', () => {
+        expect(markdownToHtml('**bold and *italic* text**'))
+          .toBe('<p><strong>bold and <em>italic</em> text</strong></p>');
+      });
+
+      it('handles italic with bold nested', () => {
+        expect(markdownToHtml('*italic and **bold** text*'))
+          .toBe('<p><em>italic and <strong>bold</strong> text</em></p>');
+      });
+
+      it('handles triple asterisks (bold + italic)', () => {
+        expect(markdownToHtml('***bold and italic***'))
+          .toBe('<p><strong><em>bold and italic</em></strong></p>');
+      });
+
+      it('handles all three types combined', () => {
+        expect(markdownToHtml('***<u>all three</u>***'))
+          .toBe('<p><strong><em><u>all three</u></em></strong></p>');
       });
     });
 
@@ -382,9 +440,20 @@ describe('Parser', () => {
       const originalHtml = '<p>Text with <span data-web2-url="true" data-url="https://example.com">web2 link</span> preserved.</p>';
       const markdown = htmlToMarkdown(originalHtml);
       const resultHtml = markdownToHtml(markdown);
-      
+
       expect(markdown).toContain('<span data-web2-url="true" data-url="https://example.com">web2 link</span>');
       expect(resultHtml).toContain('<span data-web2-url="true" data-url="https://example.com">web2 link</span>');
+    });
+
+    it('preserves underline formatting through HTML → Markdown → HTML conversion', () => {
+      const originalHtml = '<p>Text with <strong>bold</strong>, <em>italic</em>, and <u>underline</u> formatting.</p>';
+      const markdown = htmlToMarkdown(originalHtml);
+      const resultHtml = markdownToHtml(markdown);
+
+      expect(markdown).toBe('Text with **bold**, *italic*, and <u>underline</u> formatting.');
+      expect(resultHtml).toContain('<strong>bold</strong>');
+      expect(resultHtml).toContain('<em>italic</em>');
+      expect(resultHtml).toContain('<u>underline</u>');
     });
   });
 });

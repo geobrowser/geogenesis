@@ -17,7 +17,6 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Position } from '@graphprotocol/grc-20';
 
 import React from 'react';
 
@@ -184,9 +183,9 @@ function SortableRelationChip({ relation, spaceId }: SortableRelationChipProps) 
   };
 
   return (
-    <div 
-      ref={setNodeRef} 
-      style={style} 
+    <div
+      ref={setNodeRef}
+      style={style}
       className="relative inline-block"
       onClick={handleClick}
       onClickCapture={handleClick}

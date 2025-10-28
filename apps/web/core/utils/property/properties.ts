@@ -1,7 +1,15 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import { DATA_TYPE_PROPERTY, GEO_LOCATION, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+
+import {
+  DATA_TYPE_PROPERTY,
+  FORMAT_PROPERTY,
+  GEO_LOCATION,
+  PLACE,
+  RENDERABLE_TYPE_PROPERTY,
+  UNIT_PROPERTY,
+} from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
-import { DataType, Property, Relation, Value, SwitchableRenderableType, Entity } from '~/core/v2.types';
+import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/v2.types';
 
 /**
  * Interface for property type mapping configuration
@@ -65,6 +73,11 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
         baseDataType: 'POINT',
         renderableTypeId: null,
       };
+    case 'PLACE':
+      return {
+        baseDataType: 'RELATION',
+        renderableTypeId: PLACE,
+      };
     default: {
       // This ensures exhaustive type checking
       const _exhaustiveCheck: never = type;
@@ -90,6 +103,7 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   TIME: 'TIME',
   POINT: 'POINT',
   GEO_LOCATION: 'POINT',
+  PLACE: 'RELATION',
 } as const;
 
 /**
@@ -102,11 +116,11 @@ export function reconstructFromStore(
   getRelations: (selector: { selector: (r: Relation) => boolean }) => Relation[]
 ): Property | null {
   // Check if this entity has a Property type relation
-  const hasPropertyType = getRelations({ 
-    selector: r => r.fromEntity.id === id && 
-                   r.type.id === SystemIds.TYPES_PROPERTY && 
-                   r.toEntity.id === SystemIds.PROPERTY
-  }).length > 0;
+  const hasPropertyType =
+    getRelations({
+      selector: r =>
+        r.fromEntity.id === id && r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === SystemIds.PROPERTY,
+    }).length > 0;
 
   if (!hasPropertyType) {
     return null;
@@ -114,8 +128,7 @@ export function reconstructFromStore(
 
   // Get the dataType value
   const dataTypeValue = getValues({
-    selector: v => v.entity.id === id && 
-                    v.property.id === DATA_TYPE_PROPERTY
+    selector: v => v.entity.id === id && v.property.id === DATA_TYPE_PROPERTY,
   })[0];
 
   if (!dataTypeValue) {
@@ -124,34 +137,41 @@ export function reconstructFromStore(
 
   // Get the name value
   const nameValue = getValues({
-    selector: v => v.entity.id === id && 
-                    v.property.id === SystemIds.NAME_PROPERTY
+    selector: v => v.entity.id === id && v.property.id === SystemIds.NAME_PROPERTY,
   })[0];
 
   // Get the renderableType relation (if any)
   const renderableTypeRelation = getRelations({
-    selector: r => r.fromEntity.id === id && 
-                    r.type.id === RENDERABLE_TYPE_PROPERTY
+    selector: r => r.fromEntity.id === id && r.type.id === RENDERABLE_TYPE_PROPERTY,
+  })[0];
+
+  // get the format value (if any)
+  const formatValue = getValues({
+    selector: v => v.entity.id === id && v.property.id === FORMAT_PROPERTY,
+  })[0];
+
+  // get unit (if any)
+  const unitRelation = getRelations({
+    selector: r => r.fromEntity.id === id && r.type.id === UNIT_PROPERTY,
   })[0];
 
   // Validate and cast dataType
   const validDataTypes: DataType[] = ['TEXT', 'NUMBER', 'CHECKBOX', 'TIME', 'POINT', 'RELATION'];
   const dataTypeString = String(dataTypeValue.value);
-  const dataType: DataType = validDataTypes.includes(dataTypeString as DataType) 
-    ? (dataTypeString as DataType) 
+  const dataType: DataType = validDataTypes.includes(dataTypeString as DataType)
+    ? (dataTypeString as DataType)
     : 'TEXT';
 
   // Get relation value types
   const relationValueTypes = getRelations({
-    selector: r => r.fromEntity.id === id && 
-                   r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE
+    selector: r => r.fromEntity.id === id && r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE,
   }).map(r => ({
     id: r.toEntity.id,
     name: r.toEntity.name || null,
   }));
 
   const renderableTypeId = renderableTypeRelation?.toEntity.id || null;
-  
+
   // Construct a Property object
   const property: Property = {
     id,
@@ -161,13 +181,12 @@ export function reconstructFromStore(
     renderableType: renderableTypeId,
     renderableTypeStrict: getStrictRenderableType(renderableTypeId),
     isDataTypeEditable: true, // Added: local properties are editable by default
+    format: formatValue?.value || null,
+    unit: unitRelation?.toEntity.id || null,
   };
 
   return property;
 }
-
-
-
 
 /**
  * Constructs property data type information from various sources
@@ -175,20 +194,19 @@ export function reconstructFromStore(
 export function constructDataType(
   propertyData: Property | null,
   renderableTypeEntity: Pick<Entity, 'id' | 'name'> | null,
-  renderableTypeRelation: Relation | null | undefined,
-  entityId: string
+  renderableTypeRelation: Relation | null | undefined
 ): { id: string; dataType: DataType; renderableType: { id: string; name: string } | null } | null {
   // If we have propertyData from the backend, use it
   if (propertyData) {
     let renderableType = null;
-    
+
     // First check if we have a renderableTypeEntity (from remote data)
     if (propertyData.renderableType && renderableTypeEntity) {
       renderableType = {
         id: renderableTypeEntity.id,
         name: renderableTypeEntity.name || '',
       };
-    } 
+    }
     // Otherwise check for local renderableType relation
     else if (renderableTypeRelation) {
       renderableType = {
@@ -203,7 +221,7 @@ export function constructDataType(
       renderableType,
     };
   }
-  
+
   return null;
 }
 
@@ -214,15 +232,12 @@ export function getCurrentRenderableType(
   propertyDataType: { dataType: string; renderableType: { id: string; name: string } | null } | null
 ): SwitchableRenderableType | undefined {
   if (!propertyDataType) return undefined;
-  
+
   // If there's a renderableType, map it to the appropriate type
   if (propertyDataType.renderableType) {
-    return getStrictRenderableType(
-      propertyDataType.renderableType.id
-    ) || 'TEXT'; // Default to TEXT if mapping fails
+    return getStrictRenderableType(propertyDataType.renderableType.id) || 'TEXT'; // Default to TEXT if mapping fails
   }
-  
+
   // Otherwise, default to the base dataType
   return propertyDataType.dataType as SwitchableRenderableType;
 }
-

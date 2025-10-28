@@ -2,7 +2,7 @@ import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { FORMAT_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+import { RENDERABLE_TYPE_PROPERTY, ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
 import { useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
@@ -13,6 +13,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -64,7 +65,6 @@ export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
 }
 
 const ReadableNumberField = ({ value, unitId, propertyId }: { value: string; unitId?: string; propertyId: string }) => {
-  const { entity } = useQueryEntity({ id: unitId });
   const { property } = useQueryProperty({ id: propertyId });
 
   // Use format and unit from the property directly
@@ -168,6 +168,10 @@ export function RelationsGroup({
     return null;
   }
 
+  // Check if we should show a map for Address or Venue properties
+  const shouldShowMap = (propertyId === ADDRESS_PROPERTY || propertyId === VENUE_PROPERTY) && relations.length > 0;
+  const firstRelation = relations[0];
+
   return (
     <>
       <div key={`${propertyId}-${property.name}`} className="break-words">
@@ -214,6 +218,15 @@ export function RelationsGroup({
             );
           })}
         </div>
+        {/* Show geo location map for the first Address or Venue relation */}
+        {shouldShowMap && firstRelation && (
+          <GeoLocationWrapper 
+            relationId={firstRelation.id} 
+            id={firstRelation.toEntity.id} 
+            spaceId={firstRelation.toSpaceId || spaceId} 
+            propertyType={propertyId}
+          />
+        )}
       </div>
     </>
   );

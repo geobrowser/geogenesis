@@ -3,18 +3,23 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSelector } from '@xstate/store/react';
+import Link from 'next/link';
 
 import * as React from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
 import { fetchHistoryVersions } from '~/core/io/subgraph/fetch-history-versions';
+import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { Create } from '~/design-system/icons/create';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
@@ -22,19 +27,17 @@ import { HistoryEmpty } from '../history/history-empty';
 import { HistoryItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { EntityPageContextMenu } from './entity-page-context-menu';
+import { EntityPageMetadataHeader } from './entity-page-metadata-header';
 
 export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   const { values } = useSyncEngine();
 
   const name = useSelector(values, v => {
-    return v.find(v =>
-      v.entity.id === entityId &&
-      v.spaceId === spaceId &&
-      v.property.id === SystemIds.NAME_PROPERTY &&
-      !v.isDeleted
+    return v.find(
+      v =>
+        v.entity.id === entityId && v.spaceId === spaceId && v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted
     )?.value;
   });
-
 
   const isEditing = useUserIsEditing(spaceId);
   const { storage } = useMutate();
@@ -68,29 +71,52 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
     storage.entities.name.set(entityId, spaceId, value);
   };
 
+  const relations = useRelationEntityRelations(entityId, spaceId);
+  const isRelationPage = relations.length > 0;
+
   return (
     <div className="relative flex items-center justify-between">
-      {isEditing ? (
-        <div className="flex-grow">
-          <PageStringField variant="mainPage" placeholder="Entity name..." value={name ?? ''} onChange={onNameChange} />
-          {/*
+      {!isRelationPage ? (
+        <>
+          {isEditing ? (
+            <div className="flex-grow">
+              <PageStringField
+                variant="mainPage"
+                placeholder="Entity name..."
+                value={name ?? ''}
+                onChange={onNameChange}
+              />
+              {/*
             This height differs from the readable page height due to how we're using an expandable textarea for editing
             the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
             have to manually adjust the spacing here to remove the layout shift.
           */}
-          <Spacer height={3.5} />
-        </div>
+              <Spacer height={3.5} />
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between">
+                <Text as="h1" variant="mainPage">
+                  {name ?? ZERO_WIDTH_SPACE}
+                </Text>
+              </div>
+              <Spacer height={12} />
+            </div>
+          )}
+        </>
       ) : (
-        <div>
-          <div className="flex items-center justify-between">
-            <Text as="h1" variant="mainPage">
-              {name ?? ZERO_WIDTH_SPACE}
-            </Text>
-          </div>
-          <Spacer height={12} />
-        </div>
+        <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isRelationPage={true} />
       )}
+
       <div className="flex items-center gap-5">
+        {isEditing && (
+          <Link
+            href={NavUtils.toEntity(spaceId, ID.createEntityId())}
+            className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+          >
+            <Create />
+          </Link>
+        )}
         <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
           {versions?.pages?.length === 0 && <HistoryEmpty />}
           {renderedVersions?.map((group, index) => (

@@ -221,6 +221,7 @@ export function useEditorStore() {
 
   const blockRelations = useBlocks(
     activeEntityId,
+    spaceId,
     isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
   );
 
@@ -238,6 +239,9 @@ export function useEditorStore() {
    * Tiptap expects a JSON representation of the editor state, but we store our block state
    * in a Knowledge Graph-specific data model. We need to map from our KG representation
    * back to the Tiptap representation whenever the KG data changes.
+   *
+   * Note: This does NOT automatically react to value changes. The editor is updated via
+   * the editor.setContent() call when switching between modes and on initial load.
    */
   const editorJson = React.useMemo(() => {
     const json = {

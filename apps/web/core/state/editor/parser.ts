@@ -51,6 +51,9 @@ export function htmlToMarkdown(html: string): string {
       case 'i':
         result = `*${processChildren(element, indent)}*`;
         break;
+      case 'u':
+        result = `<u>${processChildren(element, indent)}</u>`;
+        break;
       case 'a': {
         const href = element.getAttribute('href') || '';
         const text = processChildren(element, indent);
@@ -183,16 +186,29 @@ export function markdownToHtml(markdown: string): string {
       // Leave web2 URLs (http/https/www) as markdown text for Web2URLExtension to process
       return match;
     });
-    
-    // Bold (must come before italic to handle ***text*** correctly)
-    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    
-    // Italic
-    text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    
+
+    // Handle nested bold/italic using recursive processing
+    // Bold and italic combined (***text***)
+    text = text.replace(/\*\*\*(.+?)\*\*\*/g, (_, content) => {
+      return `<strong><em>${processInlineFormatting(content)}</em></strong>`;
+    });
+
+    // Bold (**text**) - match but don't capture if part of ***
+    text = text.replace(/\*\*(?!\*)(.+?)(?<!\*)\*\*(?!\*)/g, (_, content) => {
+      return `<strong>${processInlineFormatting(content)}</strong>`;
+    });
+
+    // Italic (*text*) - use lookahead/lookbehind to avoid matching ** from bold
+    text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, (_, content) => {
+      return `<em>${processInlineFormatting(content)}</em>`;
+    });
+
+    // Underline (preserved as HTML tags) - use non-greedy matching
+    text = text.replace(/<u>(.+?)<\/u>/g, '<u>$1</u>');
+
     // Inline code
     text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-    
+
     return text;
   }
   

@@ -33,6 +33,12 @@ export type Content =
     };
 
 type Mark = {
-  type: 'bold' | 'italic';
-  text: string;
+  type: 'bold' | 'italic' | 'underline' | 'link';
+  text?: string;
+  attrs?: {
+    href?: string;
+    target?: string;
+    rel?: string;
+    class?: string;
+  };
 };

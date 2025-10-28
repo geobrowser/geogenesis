@@ -5,8 +5,7 @@ import Textarea from 'react-textarea-autosize';
 import * as React from 'react';
 import { ChangeEvent, useRef } from 'react';
 
-import { useDebouncedValue, useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
-import { Services } from '~/core/services';
+import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { getImagePath } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
@@ -39,6 +38,7 @@ type TableStringFieldProps = {
   placeholder?: string;
   value?: string;
   variant?: 'tableCell' | 'tableProperty';
+  autoFocus?: boolean;
 };
 
 export function TableStringField({ variant = 'tableCell', ...props }: TableStringFieldProps) {
@@ -54,6 +54,7 @@ export function TableStringField({ variant = 'tableCell', ...props }: TableStrin
       onChange={e => setLocalValue(e.currentTarget.value)}
       value={localValue}
       className={textareaStyles({ variant })}
+      autoFocus={props.autoFocus}
     />
   );
 }
@@ -64,22 +65,24 @@ type PageStringFieldProps = {
   variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
   value?: string;
   shouldDebounce?: boolean;
+  autoFocus?: boolean;
+  onEnterKey?: () => void;
 };
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
-  const [localValue, setLocalValue] = React.useState(props.value ?? '');
-  const debouncedValue = useDebouncedValue(localValue, 1500);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  React.useEffect(() => {
-    if (props.shouldDebounce && localValue.length > 0) {
-      props.onChange(localValue);
-    }
-  }, [debouncedValue]);
+  const { value: localValue, onChange: setLocalValue, flush } = useOptimisticValueWithSideEffect({
+    callback: props.onChange,
+    delay: 1500,
+    initialValue: props.value || '',
+  });
 
   return (
     <Textarea
       {...props}
-      value={props.value && props.value?.length > 0 ? props.value : localValue}
+      ref={textareaRef}
+      value={localValue}
       onChange={e => {
         if (props.shouldDebounce) {
           setLocalValue(e.currentTarget.value);
@@ -87,7 +90,19 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
           props.onChange(e.currentTarget.value);
         }
       }}
+      onBlur={() => {
+        // Flush on blur to ensure changes are saved when leaving the field
+        flush();
+      }}
+      onKeyDown={e => {
+        if (e.key === 'Enter' && props.onEnterKey) {
+          e.preventDefault();
+          flush(); // Flush pending changes immediately
+          props.onEnterKey?.();
+        }
+      }}
       className={textareaStyles({ variant: props.variant })}
+      autoFocus={props.autoFocus}
     />
   );
 }

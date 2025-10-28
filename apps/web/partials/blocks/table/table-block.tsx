@@ -14,6 +14,7 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -24,7 +25,7 @@ import { OmitStrict } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { Cell, Row, SearchResult, Value } from '~/core/v2.types';
+import { Cell, Relation, Row, SearchResult, Value } from '~/core/v2.types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -43,8 +44,8 @@ import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
-import { TableBlockGalleryItem } from './table-block-gallery-item';
-import { TableBlockListItem } from './table-block-list-item';
+import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
+import TableBlockListItemsDnd from './table-block-list-items-dnd';
 import { TableBlockTable } from './table-block-table';
 
 interface Props {
@@ -88,7 +89,8 @@ function useEntries(
   entries: Row[],
   properties: { id: string; name: string | null }[],
   spaceId: string,
-  filterState: Filter[]
+  filterState: Filter[],
+  relations: Relation[] | undefined
 ) {
   const isEditing = useUserIsEditing(spaceId);
   const { source } = useSource();
@@ -98,6 +100,21 @@ function useEntries(
 
   const { storage } = useMutate();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
+
+  const entriesWithPosition = entries.map(row => {
+    return {
+      ...row,
+      position: relations?.find(relation => relation.toEntity.id === row.entityId)?.position,
+    };
+  });
+
+  const onUpdateRelation = (relation: Relation, newPosition: string | null) => {
+    storage.relations.update(relation, draft => {
+      if (newPosition) {
+        draft.position = newPosition;
+      }
+    });
+  };
 
   // Clear pending ID once it appears in entries
   React.useEffect(() => {
@@ -116,9 +133,15 @@ function useEntries(
 
   const placeholderEntityId = pendingEntityId || nextEntityId;
 
-  const renderedEntries = shouldShowPlaceholder
-    ? [makePlaceholderRow(placeholderEntityId, properties), ...entries]
-    : entries;
+  const renderedEntries = React.useMemo(
+    () =>
+      shouldShowPlaceholder
+        ? [makePlaceholderRow(placeholderEntityId, properties), ...entriesWithPosition]
+        : entriesWithPosition,
+    [entriesWithPosition, placeholderEntityId, properties, shouldShowPlaceholder]
+  );
+
+  const shouldAutoFocusPlaceholder = usePlaceholderAutofocus(renderedEntries);
 
   const onChangeEntry: onChangeEntryFn = (context, event) => {
     if (event.type === 'EVENT') {
@@ -128,28 +151,34 @@ function useEntries(
       // });
       // send(event.data);
 
-      if ((event.data.type === 'UPSERT_RENDERABLE_TRIPLE_VALUE')) {
-        const value: Value | OmitStrict<Value, 'id'> = {
-          id: event.data.payload.renderable.entityId ?? undefined,
-          entity: {
-            id: context.entityId,
-            name: event.data.payload.renderable.entityName,
-          },
-          property: {
-            id: event.data.payload.renderable.attributeId,
-            name: event.data.payload.renderable.attributeName,
-            dataType: event.data.payload.renderable.type,
-          },
-          spaceId,
-          value: event.data.payload.value.value ?? '',
-        };
-
-        if (!event.data.payload.renderable.entityId) {
-          storage.values.set(value);
+      if (event.data.type === 'UPSERT_RENDERABLE_TRIPLE_VALUE') {
+        // Use the specialized entities.name.set API for NAME property to ensure proper sync
+        if (event.data.payload.renderable.attributeId === SystemIds.NAME_PROPERTY) {
+          storage.entities.name.set(context.entityId, spaceId, event.data.payload.value.value);
         } else {
-          storage.values.update(value, draft => {
-            draft.value = event.data.payload.value.value;
-          });
+          // For non-name properties, use the generic values API
+          const value: Value | OmitStrict<Value, 'id'> = {
+            id: event.data.payload.renderable.entityId ?? undefined,
+            entity: {
+              id: context.entityId,
+              name: event.data.payload.renderable.entityName,
+            },
+            property: {
+              id: event.data.payload.renderable.attributeId,
+              name: event.data.payload.renderable.attributeName,
+              dataType: event.data.payload.renderable.type,
+            },
+            spaceId,
+            value: event.data.payload.value.value ?? '',
+          };
+
+          if (!event.data.payload.renderable.entityId) {
+            storage.values.set(value);
+          } else {
+            storage.values.update(value, draft => {
+              draft.value = event.data.payload.value.value;
+            });
+          }
         }
       }
     }
@@ -259,6 +288,8 @@ function useEntries(
     onAddPlaceholder,
     onChangeEntry,
     onLinkEntry,
+    onUpdateRelation,
+    shouldAutoFocusPlaceholder,
   };
 }
 
@@ -277,11 +308,16 @@ export const TableBlock = ({ spaceId }: Props) => {
     pageNumber,
     propertiesSchema,
     totalPages,
+    relations,
+    collectionRelations,
+    collectionLength,
+    pageSize,
   } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
-  const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry } = useEntries(rows, properties, spaceId, filterState);
+  const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
+    useEntries(rows, properties, spaceId, filterState, relations);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -318,30 +354,29 @@ export const TableBlock = ({ spaceId }: Props) => {
       shownColumnIds={shownColumnIds}
       onChangeEntry={onChangeEntry}
       onLinkEntry={onLinkEntry}
+      onAddPlaceholder={onAddPlaceholder}
+      shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
     />
   );
 
   if (view === 'LIST' && entries.length > 0) {
     EntriesComponent = (
-      <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
-        {entries.map((row, index: number) => {
-          return (
-            <TableBlockListItem
-              isEditing={isEditing}
-              key={`${row.entityId}-${index}`}
-              columns={row.columns}
-              currentSpaceId={spaceId}
-              rowEntityId={row.entityId}
-              isPlaceholder={Boolean(row.placeholder)}
-              onChangeEntry={onChangeEntry}
-              onLinkEntry={onLinkEntry}
-              properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
-              source={source}
-            />
-          );
-        })}
-      </div>
+      <TableBlockListItemsDnd
+        isEditing={isEditing}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        spaceId={spaceId}
+        entries={entries}
+        onUpdateRelation={onUpdateRelation}
+        relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+      />
     );
   }
 
@@ -349,6 +384,8 @@ export const TableBlock = ({ spaceId }: Props) => {
     EntriesComponent = (
       <div className="flex w-full flex-col">
         {entries.map((row, index: number) => {
+          const isPlaceholder = Boolean(row.placeholder);
+
           return (
             <TableBlockBulletedListItem
               isEditing={isEditing}
@@ -356,12 +393,13 @@ export const TableBlock = ({ spaceId }: Props) => {
               columns={row.columns}
               currentSpaceId={spaceId}
               rowEntityId={row.entityId}
-              isPlaceholder={Boolean(row.placeholder)}
+              isPlaceholder={isPlaceholder}
               onChangeEntry={onChangeEntry}
               onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
               relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
               source={source}
+              autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
             />
           );
         })}
@@ -371,25 +409,22 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   if (view === 'GALLERY' && entries.length > 0) {
     EntriesComponent = (
-      <div className="grid grid-cols-3 gap-x-4 gap-y-10 sm:grid-cols-2">
-        {entries.map((row, index: number) => {
-          return (
-            <TableBlockGalleryItem
-              key={`${row.entityId}-${index}`}
-              rowEntityId={row.entityId}
-              isEditing={isEditing}
-              columns={row.columns}
-              currentSpaceId={spaceId}
-              onChangeEntry={onChangeEntry}
-              onLinkEntry={onLinkEntry}
-              isPlaceholder={Boolean(row.placeholder)}
-              properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
-              source={source}
-            />
-          );
-        })}
-      </div>
+      <TableBlockGalleryItemsDnd
+        isEditing={isEditing}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        spaceId={spaceId}
+        entries={entries}
+        onUpdateRelation={onUpdateRelation}
+        relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+      />
     );
   }
 

@@ -136,7 +136,8 @@ export type SwitchableRenderableType =
   | 'CHECKBOX'
   | 'NUMBER'
   | 'POINT'
-  | 'GEO_LOCATION';
+  | 'GEO_LOCATION'
+  | 'PLACE';
 
 /**
  * Human-readable labels for switchable renderable types
@@ -151,6 +152,7 @@ export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType,
   NUMBER: 'Number',
   POINT: 'Point',
   GEO_LOCATION: 'Geo Location',
+  PLACE: 'Place',
 };
 
 export type SearchResult = {
@@ -191,6 +193,8 @@ export type Row = {
   placeholder?: boolean;
   // attributeId -> Cell
   columns: Record<string, Cell>;
+
+  position?: string;
 };
 
 export type ProposalStatus = 'ACCEPTED' | 'PROPOSED' | 'REJECTED';

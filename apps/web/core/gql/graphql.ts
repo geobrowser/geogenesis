@@ -16,8 +16,19 @@ export type Scalars = {
   Float: { input: number; output: number; }
   /** A floating point number that requires more precision than IEEE 754 binary 64 */
   BigFloat: { input: any; output: any; }
+  /**
+   * A signed eight-byte integer. The upper big integer values are greater than the
+   * max value for a JavaScript number. Therefore all big integers will be output as
+   * strings and not numbers.
+   */
+  BigInt: { input: any; output: any; }
   /** A location in a connection that can be used for resuming pagination. */
   Cursor: { input: any; output: any; }
+  /**
+   * A point in time as described by the [ISO
+   * 8601](https://en.wikipedia.org/wiki/ISO_8601) standard. May or may not include a timezone.
+   */
+  Datetime: { input: any; output: any; }
   /** A universally unique identifier as defined by [RFC 4122](https://tools.ietf.org/html/rfc4122). */
   UUID: { input: any; output: any; }
 };
@@ -46,6 +57,32 @@ export type BigFloatFilter = {
   notDistinctFrom?: InputMaybe<Scalars['BigFloat']['input']>;
   /** Not included in the specified list. */
   notIn?: InputMaybe<Array<Scalars['BigFloat']['input']>>;
+};
+
+/** A filter to be used against BigInt fields. All fields are combined with a logical ‘and.’ */
+export type BigIntFilter = {
+  /** Not equal to the specified value, treating null like an ordinary value. */
+  distinctFrom?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Greater than the specified value. */
+  greaterThan?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Greater than or equal to the specified value. */
+  greaterThanOrEqualTo?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Included in the specified list. */
+  in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  /** Equal to the specified value. */
+  is?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Not equal to the specified value. */
+  isNot?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Is null (if `true` is specified) or is not null (if `false` is specified). */
+  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Less than the specified value. */
+  lessThan?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Less than or equal to the specified value. */
+  lessThanOrEqualTo?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Equal to the specified value, treating null like an ordinary value. */
+  notDistinctFrom?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Not included in the specified list. */
+  notIn?: InputMaybe<Array<Scalars['BigInt']['input']>>;
 };
 
 /** A filter to be used against Boolean fields. All fields are combined with a logical ‘and.’ */
@@ -107,6 +144,32 @@ export type DataTypesFilter = {
   notDistinctFrom?: InputMaybe<DataTypes>;
   /** Not included in the specified list. */
   notIn?: InputMaybe<Array<DataTypes>>;
+};
+
+/** A filter to be used against Datetime fields. All fields are combined with a logical ‘and.’ */
+export type DatetimeFilter = {
+  /** Not equal to the specified value, treating null like an ordinary value. */
+  distinctFrom?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Greater than the specified value. */
+  greaterThan?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Greater than or equal to the specified value. */
+  greaterThanOrEqualTo?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Included in the specified list. */
+  in?: InputMaybe<Array<Scalars['Datetime']['input']>>;
+  /** Equal to the specified value. */
+  is?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Not equal to the specified value. */
+  isNot?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Is null (if `true` is specified) or is not null (if `false` is specified). */
+  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Less than the specified value. */
+  lessThan?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Less than or equal to the specified value. */
+  lessThanOrEqualTo?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Equal to the specified value, treating null like an ordinary value. */
+  notDistinctFrom?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Not included in the specified list. */
+  notIn?: InputMaybe<Array<Scalars['Datetime']['input']>>;
 };
 
 export type Editor = Node & {
@@ -473,6 +536,32 @@ export type EntityToManyValueFilter = {
   some?: InputMaybe<ValueFilter>;
 };
 
+/** A filter to be used against Int fields. All fields are combined with a logical ‘and.’ */
+export type IntFilter = {
+  /** Not equal to the specified value, treating null like an ordinary value. */
+  distinctFrom?: InputMaybe<Scalars['Int']['input']>;
+  /** Greater than the specified value. */
+  greaterThan?: InputMaybe<Scalars['Int']['input']>;
+  /** Greater than or equal to the specified value. */
+  greaterThanOrEqualTo?: InputMaybe<Scalars['Int']['input']>;
+  /** Included in the specified list. */
+  in?: InputMaybe<Array<Scalars['Int']['input']>>;
+  /** Equal to the specified value. */
+  is?: InputMaybe<Scalars['Int']['input']>;
+  /** Not equal to the specified value. */
+  isNot?: InputMaybe<Scalars['Int']['input']>;
+  /** Is null (if `true` is specified) or is not null (if `false` is specified). */
+  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Less than the specified value. */
+  lessThan?: InputMaybe<Scalars['Int']['input']>;
+  /** Less than or equal to the specified value. */
+  lessThanOrEqualTo?: InputMaybe<Scalars['Int']['input']>;
+  /** Equal to the specified value, treating null like an ordinary value. */
+  notDistinctFrom?: InputMaybe<Scalars['Int']['input']>;
+  /** Not included in the specified list. */
+  notIn?: InputMaybe<Array<Scalars['Int']['input']>>;
+};
+
 export type Member = Node & {
   __typename?: 'Member';
   address: Scalars['String']['output'];
@@ -775,6 +864,10 @@ export type Query = Node & {
   entities?: Maybe<Array<Entity>>;
   /** Reads and enables pagination through a set of `Entity`. */
   entitiesConnection?: Maybe<EntitiesConnection>;
+  /** Reads and enables pagination through a set of `Entity`. */
+  entitiesOrderedByProperty?: Maybe<Array<Entity>>;
+  /** Reads and enables pagination through a set of `Entity`. */
+  entitiesOrderedByPropertyConnection?: Maybe<EntitiesConnection>;
   entity?: Maybe<Entity>;
   /** Reads a single `Entity` using its globally unique `ID`. */
   entityByNodeId?: Maybe<Entity>;
@@ -807,6 +900,13 @@ export type Query = Node & {
    * which can only query top level fields if they are in a particular form.
    */
   query: Query;
+  rawAction?: Maybe<RawAction>;
+  /** Reads a single `RawAction` using its globally unique `ID`. */
+  rawActionByNodeId?: Maybe<RawAction>;
+  /** Reads a set of `RawAction`. */
+  rawActions?: Maybe<Array<RawAction>>;
+  /** Reads and enables pagination through a set of `RawAction`. */
+  rawActionsConnection?: Maybe<RawActionsConnection>;
   relation?: Maybe<Relation>;
   /** Reads a single `Relation` using its globally unique `ID`. */
   relationByNodeId?: Maybe<Relation>;
@@ -825,11 +925,26 @@ export type Query = Node & {
   spaces?: Maybe<Array<Space>>;
   /** Reads and enables pagination through a set of `Space`. */
   spacesConnection?: Maybe<SpacesConnection>;
+  subspace?: Maybe<Subspace>;
+  /** Reads a single `Subspace` using its globally unique `ID`. */
+  subspaceByNodeId?: Maybe<Subspace>;
+  /** Reads a set of `Subspace`. */
+  subspaces?: Maybe<Array<Subspace>>;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesConnection?: Maybe<SubspacesConnection>;
   type?: Maybe<Entity>;
   /** Reads and enables pagination through a set of `Entity`. */
   typesList?: Maybe<Array<Entity>>;
   /** Reads and enables pagination through a set of `Entity`. */
   typesListConnection?: Maybe<EntitiesConnection>;
+  userVote?: Maybe<UserVote>;
+  /** Reads a single `UserVote` using its globally unique `ID`. */
+  userVoteByNodeId?: Maybe<UserVote>;
+  userVoteByUserIdAndEntityIdAndSpaceId?: Maybe<UserVote>;
+  /** Reads a set of `UserVote`. */
+  userVotes?: Maybe<Array<UserVote>>;
+  /** Reads and enables pagination through a set of `UserVote`. */
+  userVotesConnection?: Maybe<UserVotesConnection>;
   value?: Maybe<Value>;
   /** Reads a single `Value` using its globally unique `ID`. */
   valueByNodeId?: Maybe<Value>;
@@ -837,6 +952,14 @@ export type Query = Node & {
   values?: Maybe<Array<Value>>;
   /** Reads and enables pagination through a set of `Value`. */
   valuesConnection?: Maybe<ValuesConnection>;
+  votesCount?: Maybe<VotesCount>;
+  votesCountByEntityIdAndSpaceId?: Maybe<VotesCount>;
+  /** Reads a single `VotesCount` using its globally unique `ID`. */
+  votesCountByNodeId?: Maybe<VotesCount>;
+  /** Reads a set of `VotesCount`. */
+  votesCounts?: Maybe<Array<VotesCount>>;
+  /** Reads and enables pagination through a set of `VotesCount`. */
+  votesCountsConnection?: Maybe<VotesCountsConnection>;
 };
 
 
@@ -889,6 +1012,31 @@ export type QueryEntitiesConnectionArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<EntitiesOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryEntitiesOrderedByPropertyArgs = {
+  filter?: InputMaybe<EntityFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  propertyId?: InputMaybe<Scalars['UUID']['input']>;
+  sortDirection?: InputMaybe<SortOrder>;
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryEntitiesOrderedByPropertyConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  filter?: InputMaybe<EntityFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  propertyId?: InputMaybe<Scalars['UUID']['input']>;
+  sortDirection?: InputMaybe<SortOrder>;
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
 };
 
 
@@ -1010,6 +1158,41 @@ export type QueryPropertyByNodeIdArgs = {
 
 
 /** The root query type which gives access points into the data universe. */
+export type QueryRawActionArgs = {
+  id: Scalars['Int']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryRawActionByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryRawActionsArgs = {
+  condition?: InputMaybe<RawActionCondition>;
+  filter?: InputMaybe<RawActionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<RawActionsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryRawActionsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<RawActionCondition>;
+  filter?: InputMaybe<RawActionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<RawActionsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
 export type QueryRelationArgs = {
   id: Scalars['UUID']['input'];
 };
@@ -1105,6 +1288,42 @@ export type QuerySpacesConnectionArgs = {
 
 
 /** The root query type which gives access points into the data universe. */
+export type QuerySubspaceArgs = {
+  childSpaceId: Scalars['UUID']['input'];
+  parentSpaceId: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySubspaceByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySubspacesArgs = {
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySubspacesConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
 export type QueryTypeArgs = {
   id?: InputMaybe<Scalars['UUID']['input']>;
 };
@@ -1128,6 +1347,49 @@ export type QueryTypesListConnectionArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryUserVoteArgs = {
+  id: Scalars['Int']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryUserVoteByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryUserVoteByUserIdAndEntityIdAndSpaceIdArgs = {
+  entityId: Scalars['UUID']['input'];
+  spaceId: Scalars['UUID']['input'];
+  userId: Scalars['String']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryUserVotesArgs = {
+  condition?: InputMaybe<UserVoteCondition>;
+  filter?: InputMaybe<UserVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<UserVotesOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryUserVotesConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<UserVoteCondition>;
+  filter?: InputMaybe<UserVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<UserVotesOrderBy>>;
 };
 
 
@@ -1164,6 +1426,175 @@ export type QueryValuesConnectionArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<ValuesOrderBy>>;
 };
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryVotesCountArgs = {
+  id: Scalars['Int']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryVotesCountByEntityIdAndSpaceIdArgs = {
+  entityId: Scalars['UUID']['input'];
+  spaceId: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryVotesCountByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryVotesCountsArgs = {
+  condition?: InputMaybe<VotesCountCondition>;
+  filter?: InputMaybe<VotesCountFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<VotesCountsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryVotesCountsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<VotesCountCondition>;
+  filter?: InputMaybe<VotesCountFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<VotesCountsOrderBy>>;
+};
+
+export type RawAction = Node & {
+  __typename?: 'RawAction';
+  actionType: Scalars['BigInt']['output'];
+  actionVersion: Scalars['BigInt']['output'];
+  blockNumber: Scalars['BigInt']['output'];
+  blockTimestamp: Scalars['Datetime']['output'];
+  entity: Scalars['UUID']['output'];
+  groupId?: Maybe<Scalars['UUID']['output']>;
+  id: Scalars['Int']['output'];
+  metadata?: Maybe<Scalars['String']['output']>;
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  sender: Scalars['String']['output'];
+  spacePov: Scalars['UUID']['output'];
+  txHash: Scalars['String']['output'];
+};
+
+/**
+ * A condition to be used against `RawAction` object types. All fields are tested
+ * for equality and combined with a logical ‘and.’
+ */
+export type RawActionCondition = {
+  /** Checks for equality with the object’s `actionType` field. */
+  actionType?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `actionVersion` field. */
+  actionVersion?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `blockNumber` field. */
+  blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `blockTimestamp` field. */
+  blockTimestamp?: InputMaybe<Scalars['Datetime']['input']>;
+  /** Checks for equality with the object’s `entity` field. */
+  entity?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `groupId` field. */
+  groupId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `id` field. */
+  id?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `metadata` field. */
+  metadata?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `sender` field. */
+  sender?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `spacePov` field. */
+  spacePov?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `txHash` field. */
+  txHash?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** A filter to be used against `RawAction` object types. All fields are combined with a logical ‘and.’ */
+export type RawActionFilter = {
+  /** Filter by the object’s `actionType` field. */
+  actionType?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `actionVersion` field. */
+  actionVersion?: InputMaybe<BigIntFilter>;
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<RawActionFilter>>;
+  /** Filter by the object’s `blockNumber` field. */
+  blockNumber?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `blockTimestamp` field. */
+  blockTimestamp?: InputMaybe<DatetimeFilter>;
+  /** Filter by the object’s `entity` field. */
+  entity?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `groupId` field. */
+  groupId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `id` field. */
+  id?: InputMaybe<IntFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<RawActionFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<RawActionFilter>>;
+  /** Filter by the object’s `sender` field. */
+  sender?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `spacePov` field. */
+  spacePov?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `txHash` field. */
+  txHash?: InputMaybe<StringFilter>;
+};
+
+/** A connection to a list of `RawAction` values. */
+export type RawActionsConnection = {
+  __typename?: 'RawActionsConnection';
+  /** A list of edges which contains the `RawAction` and cursor to aid in pagination. */
+  edges: Array<RawActionsEdge>;
+  /** A list of `RawAction` objects. */
+  nodes: Array<RawAction>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `RawAction` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `RawAction` edge in the connection. */
+export type RawActionsEdge = {
+  __typename?: 'RawActionsEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `RawAction` at the end of the edge. */
+  node: RawAction;
+};
+
+/** Methods to use when ordering `RawAction`. */
+export enum RawActionsOrderBy {
+  ActionTypeAsc = 'ACTION_TYPE_ASC',
+  ActionTypeDesc = 'ACTION_TYPE_DESC',
+  ActionVersionAsc = 'ACTION_VERSION_ASC',
+  ActionVersionDesc = 'ACTION_VERSION_DESC',
+  BlockNumberAsc = 'BLOCK_NUMBER_ASC',
+  BlockNumberDesc = 'BLOCK_NUMBER_DESC',
+  BlockTimestampAsc = 'BLOCK_TIMESTAMP_ASC',
+  BlockTimestampDesc = 'BLOCK_TIMESTAMP_DESC',
+  EntityAsc = 'ENTITY_ASC',
+  EntityDesc = 'ENTITY_DESC',
+  GroupIdAsc = 'GROUP_ID_ASC',
+  GroupIdDesc = 'GROUP_ID_DESC',
+  IdAsc = 'ID_ASC',
+  IdDesc = 'ID_DESC',
+  MetadataAsc = 'METADATA_ASC',
+  MetadataDesc = 'METADATA_DESC',
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  SenderAsc = 'SENDER_ASC',
+  SenderDesc = 'SENDER_DESC',
+  SpacePovAsc = 'SPACE_POV_ASC',
+  SpacePovDesc = 'SPACE_POV_DESC',
+  TxHashAsc = 'TX_HASH_ASC',
+  TxHashDesc = 'TX_HASH_DESC'
+}
 
 export type Relation = Node & {
   __typename?: 'Relation';
@@ -1333,6 +1764,11 @@ export enum RelationsOrderBy {
   VerifiedDesc = 'VERIFIED_DESC'
 }
 
+export enum SortOrder {
+  Asc = 'ASC',
+  Desc = 'DESC'
+}
+
 export type Space = Node & {
   __typename?: 'Space';
   daoAddress: Scalars['String']['output'];
@@ -1364,6 +1800,14 @@ export type Space = Node & {
   /** Reads and enables pagination through a set of `Relation`. */
   relationsConnection: RelationsConnection;
   spaceAddress: Scalars['String']['output'];
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByChildSpaceId: Array<Subspace>;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByChildSpaceIdConnection: SubspacesConnection;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByParentSpaceId: Array<Subspace>;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByParentSpaceIdConnection: SubspacesConnection;
   type: SpaceTypes;
   /** Reads and enables pagination through a set of `Value`. */
   values: Array<Value>;
@@ -1477,6 +1921,48 @@ export type SpaceRelationsConnectionArgs = {
 };
 
 
+export type SpaceSubspacesByChildSpaceIdArgs = {
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+export type SpaceSubspacesByChildSpaceIdConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+export type SpaceSubspacesByParentSpaceIdArgs = {
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+export type SpaceSubspacesByParentSpaceIdConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
 export type SpaceValuesArgs = {
   condition?: InputMaybe<ValueCondition>;
   filter?: InputMaybe<ValueFilter>;
@@ -1555,6 +2041,14 @@ export type SpaceFilter = {
   relationsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `spaceAddress` field. */
   spaceAddress?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `subspacesByChildSpaceIdConnection` relation. */
+  subspacesByChildSpaceIdConnection?: InputMaybe<SpaceToManySubspaceFilter>;
+  /** Some related `subspacesByChildSpaceIdConnection` exist. */
+  subspacesByChildSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `subspacesByParentSpaceIdConnection` relation. */
+  subspacesByParentSpaceIdConnection?: InputMaybe<SpaceToManySubspaceFilter>;
+  /** Some related `subspacesByParentSpaceIdConnection` exist. */
+  subspacesByParentSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `type` field. */
   type?: InputMaybe<SpaceTypesFilter>;
   /** Filter by the object’s `valuesConnection` relation. */
@@ -1591,6 +2085,16 @@ export type SpaceToManyRelationFilter = {
   none?: InputMaybe<RelationFilter>;
   /** Some related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
   some?: InputMaybe<RelationFilter>;
+};
+
+/** A filter to be used against many `Subspace` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceToManySubspaceFilter = {
+  /** Every related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<SubspaceFilter>;
+  /** No related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<SubspaceFilter>;
+  /** Some related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<SubspaceFilter>;
 };
 
 /** A filter to be used against many `Value` object types. All fields are combined with a logical ‘and.’ */
@@ -1755,6 +2259,80 @@ export type StringFilter = {
   startsWithInsensitive?: InputMaybe<Scalars['String']['input']>;
 };
 
+export type Subspace = Node & {
+  __typename?: 'Subspace';
+  /** Reads a single `Space` that is related to this `Subspace`. */
+  childSpace?: Maybe<Space>;
+  childSpaceId: Scalars['UUID']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  /** Reads a single `Space` that is related to this `Subspace`. */
+  parentSpace?: Maybe<Space>;
+  parentSpaceId: Scalars['UUID']['output'];
+};
+
+/**
+ * A condition to be used against `Subspace` object types. All fields are tested
+ * for equality and combined with a logical ‘and.’
+ */
+export type SubspaceCondition = {
+  /** Checks for equality with the object’s `childSpaceId` field. */
+  childSpaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `parentSpaceId` field. */
+  parentSpaceId?: InputMaybe<Scalars['UUID']['input']>;
+};
+
+/** A filter to be used against `Subspace` object types. All fields are combined with a logical ‘and.’ */
+export type SubspaceFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<SubspaceFilter>>;
+  /** Filter by the object’s `childSpace` relation. */
+  childSpace?: InputMaybe<SpaceFilter>;
+  /** Filter by the object’s `childSpaceId` field. */
+  childSpaceId?: InputMaybe<UuidFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<SubspaceFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<SubspaceFilter>>;
+  /** Filter by the object’s `parentSpace` relation. */
+  parentSpace?: InputMaybe<SpaceFilter>;
+  /** Filter by the object’s `parentSpaceId` field. */
+  parentSpaceId?: InputMaybe<UuidFilter>;
+};
+
+/** A connection to a list of `Subspace` values. */
+export type SubspacesConnection = {
+  __typename?: 'SubspacesConnection';
+  /** A list of edges which contains the `Subspace` and cursor to aid in pagination. */
+  edges: Array<SubspacesEdge>;
+  /** A list of `Subspace` objects. */
+  nodes: Array<Subspace>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `Subspace` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `Subspace` edge in the connection. */
+export type SubspacesEdge = {
+  __typename?: 'SubspacesEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `Subspace` at the end of the edge. */
+  node: Subspace;
+};
+
+/** Methods to use when ordering `Subspace`. */
+export enum SubspacesOrderBy {
+  ChildSpaceIdAsc = 'CHILD_SPACE_ID_ASC',
+  ChildSpaceIdDesc = 'CHILD_SPACE_ID_DESC',
+  Natural = 'NATURAL',
+  ParentSpaceIdAsc = 'PARENT_SPACE_ID_ASC',
+  ParentSpaceIdDesc = 'PARENT_SPACE_ID_DESC',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC'
+}
+
 /** A filter to be used against UUID fields. All fields are combined with a logical ‘and.’ */
 export type UuidFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
@@ -1820,6 +2398,100 @@ export type UuidListFilter = {
   /** Overlaps the specified list of values. */
   overlaps?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
 };
+
+export type UserVote = Node & {
+  __typename?: 'UserVote';
+  entityId: Scalars['UUID']['output'];
+  id: Scalars['Int']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  spaceId: Scalars['UUID']['output'];
+  userId: Scalars['String']['output'];
+  voteType: Scalars['Int']['output'];
+  votedAt: Scalars['Datetime']['output'];
+};
+
+/**
+ * A condition to be used against `UserVote` object types. All fields are tested
+ * for equality and combined with a logical ‘and.’
+ */
+export type UserVoteCondition = {
+  /** Checks for equality with the object’s `entityId` field. */
+  entityId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `id` field. */
+  id?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `spaceId` field. */
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `userId` field. */
+  userId?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `voteType` field. */
+  voteType?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `votedAt` field. */
+  votedAt?: InputMaybe<Scalars['Datetime']['input']>;
+};
+
+/** A filter to be used against `UserVote` object types. All fields are combined with a logical ‘and.’ */
+export type UserVoteFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<UserVoteFilter>>;
+  /** Filter by the object’s `entityId` field. */
+  entityId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `id` field. */
+  id?: InputMaybe<IntFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<UserVoteFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<UserVoteFilter>>;
+  /** Filter by the object’s `spaceId` field. */
+  spaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `userId` field. */
+  userId?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `voteType` field. */
+  voteType?: InputMaybe<IntFilter>;
+  /** Filter by the object’s `votedAt` field. */
+  votedAt?: InputMaybe<DatetimeFilter>;
+};
+
+/** A connection to a list of `UserVote` values. */
+export type UserVotesConnection = {
+  __typename?: 'UserVotesConnection';
+  /** A list of edges which contains the `UserVote` and cursor to aid in pagination. */
+  edges: Array<UserVotesEdge>;
+  /** A list of `UserVote` objects. */
+  nodes: Array<UserVote>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `UserVote` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `UserVote` edge in the connection. */
+export type UserVotesEdge = {
+  __typename?: 'UserVotesEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `UserVote` at the end of the edge. */
+  node: UserVote;
+};
+
+/** Methods to use when ordering `UserVote`. */
+export enum UserVotesOrderBy {
+  EntityIdAsc = 'ENTITY_ID_ASC',
+  EntityIdDesc = 'ENTITY_ID_DESC',
+  IdAsc = 'ID_ASC',
+  IdDesc = 'ID_DESC',
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  SpaceIdAsc = 'SPACE_ID_ASC',
+  SpaceIdDesc = 'SPACE_ID_DESC',
+  UserIdAsc = 'USER_ID_ASC',
+  UserIdDesc = 'USER_ID_DESC',
+  VotedAtAsc = 'VOTED_AT_ASC',
+  VotedAtDesc = 'VOTED_AT_DESC',
+  VoteTypeAsc = 'VOTE_TYPE_ASC',
+  VoteTypeDesc = 'VOTE_TYPE_DESC'
+}
 
 export type Value = Node & {
   __typename?: 'Value';
@@ -1959,6 +2631,93 @@ export enum ValuesOrderBy {
   UnitDesc = 'UNIT_DESC'
 }
 
+export type VotesCount = Node & {
+  __typename?: 'VotesCount';
+  downvotes: Scalars['BigInt']['output'];
+  entityId: Scalars['UUID']['output'];
+  id: Scalars['Int']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  spaceId: Scalars['UUID']['output'];
+  upvotes: Scalars['BigInt']['output'];
+};
+
+/**
+ * A condition to be used against `VotesCount` object types. All fields are tested
+ * for equality and combined with a logical ‘and.’
+ */
+export type VotesCountCondition = {
+  /** Checks for equality with the object’s `downvotes` field. */
+  downvotes?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `entityId` field. */
+  entityId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `id` field. */
+  id?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `spaceId` field. */
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `upvotes` field. */
+  upvotes?: InputMaybe<Scalars['BigInt']['input']>;
+};
+
+/** A filter to be used against `VotesCount` object types. All fields are combined with a logical ‘and.’ */
+export type VotesCountFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<VotesCountFilter>>;
+  /** Filter by the object’s `downvotes` field. */
+  downvotes?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `entityId` field. */
+  entityId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `id` field. */
+  id?: InputMaybe<IntFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<VotesCountFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<VotesCountFilter>>;
+  /** Filter by the object’s `spaceId` field. */
+  spaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `upvotes` field. */
+  upvotes?: InputMaybe<BigIntFilter>;
+};
+
+/** A connection to a list of `VotesCount` values. */
+export type VotesCountsConnection = {
+  __typename?: 'VotesCountsConnection';
+  /** A list of edges which contains the `VotesCount` and cursor to aid in pagination. */
+  edges: Array<VotesCountsEdge>;
+  /** A list of `VotesCount` objects. */
+  nodes: Array<VotesCount>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `VotesCount` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `VotesCount` edge in the connection. */
+export type VotesCountsEdge = {
+  __typename?: 'VotesCountsEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `VotesCount` at the end of the edge. */
+  node: VotesCount;
+};
+
+/** Methods to use when ordering `VotesCount`. */
+export enum VotesCountsOrderBy {
+  DownvotesAsc = 'DOWNVOTES_ASC',
+  DownvotesDesc = 'DOWNVOTES_DESC',
+  EntityIdAsc = 'ENTITY_ID_ASC',
+  EntityIdDesc = 'ENTITY_ID_DESC',
+  IdAsc = 'ID_ASC',
+  IdDesc = 'ID_DESC',
+  Natural = 'NATURAL',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  SpaceIdAsc = 'SPACE_ID_ASC',
+  SpaceIdDesc = 'SPACE_ID_DESC',
+  UpvotesAsc = 'UPVOTES_ASC',
+  UpvotesDesc = 'UPVOTES_DESC'
+}
+
 export type FullEntityFragment = { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, updatedAt: string, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, string?: string | null, number?: any | null, point?: string | null, boolean?: boolean | null, time?: string | null, language?: string | null, unit?: string | null, property?: (
       { __typename?: 'Property' }
       & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
@@ -2070,6 +2829,16 @@ export type SpacesQuery = { __typename?: 'Query', spaces?: Array<(
     & { ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } }
   )> | null };
 
+export type SpacesWhereMemberQueryVariables = Exact<{
+  address: Scalars['String']['input'];
+}>;
+
+
+export type SpacesWhereMemberQuery = { __typename?: 'Query', spaces?: Array<(
+    { __typename?: 'Space' }
+    & { ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } }
+  )> | null };
+
 export type PropertyFragmentFragment = { __typename?: 'Property', id: any, name?: string | null, dataType: DataTypes, renderableType?: any | null, format?: string | null, unit?: any | null, relationValueTypes?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null } & { ' $fragmentName'?: 'PropertyFragmentFragment' };
 
 export type PropertyQueryVariables = Exact<{
@@ -2131,6 +2900,7 @@ export const EntityTypesDocument = {"kind":"Document","definitions":[{"kind":"Op
 export const EntityBacklinksPageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityBacklinksPage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"backlinksList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<EntityBacklinksPageQuery, EntityBacklinksPageQueryVariables>;
 export const SpaceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Space"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"space"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"daoAddress"}},{"kind":"Field","name":{"kind":"Name","value":"spaceAddress"}},{"kind":"Field","name":{"kind":"Name","value":"mainVotingAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membershipAddress"}},{"kind":"Field","name":{"kind":"Name","value":"personalAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpaceQuery, SpaceQueryVariables>;
 export const SpacesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Spaces"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"SpaceFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaces"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"daoAddress"}},{"kind":"Field","name":{"kind":"Name","value":"spaceAddress"}},{"kind":"Field","name":{"kind":"Name","value":"mainVotingAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membershipAddress"}},{"kind":"Field","name":{"kind":"Name","value":"personalAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpacesQuery, SpacesQueryVariables>;
+export const SpacesWhereMemberDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SpacesWhereMember"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"address"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaces"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"members"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"some"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"address"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"address"}}}]}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"string"}},{"kind":"Field","name":{"kind":"Name","value":"number"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"string"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"daoAddress"}},{"kind":"Field","name":{"kind":"Name","value":"spaceAddress"}},{"kind":"Field","name":{"kind":"Name","value":"mainVotingAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membershipAddress"}},{"kind":"Field","name":{"kind":"Name","value":"personalAddress"}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpacesWhereMemberQuery, SpacesWhereMemberQueryVariables>;
 export const PropertyDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Property"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"property"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<PropertyQuery, PropertyQueryVariables>;
 export const PropertiesBatchDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"PropertiesBatch"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"ids"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"properties"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"in"},"value":{"kind":"Variable","name":{"kind":"Name","value":"ids"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Property"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataType"}},{"kind":"Field","name":{"kind":"Name","value":"renderableType"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"relationValueTypes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<PropertiesBatchQuery, PropertiesBatchQueryVariables>;
 export const ResultDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Result"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<ResultQuery, ResultQueryVariables>;

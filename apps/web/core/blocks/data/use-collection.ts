@@ -32,17 +32,21 @@ export function useCollection({ first, skip }: CollectionProps) {
     return Position.compare(a.position ?? null, z.position ?? null);
   });
 
-  const collectionItemIds = orderedCollectionRelations?.map(c => c.toEntity.id) ?? [];
+  // Get the entities for the current page based on position order
+  const pageStartIndex = skip || 0;
+  const pageEndIndex = pageStartIndex + (first || 9);
+  const currentPageRelations = orderedCollectionRelations.slice(pageStartIndex, pageEndIndex);
+  const currentPageEntityIds = currentPageRelations.map(r => r.toEntity.id);
+
 
   const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
-    enabled: collectionItemIds !== null,
+    enabled: currentPageEntityIds.length > 0,
     where: {
       id: {
-        in: collectionItemIds,
+        in: currentPageEntityIds,
       },
     },
-    first,
-    skip,
+    // Don't use first/skip here since we're already slicing the relations
     placeholderData: keepPreviousData,
   });
 
@@ -53,7 +57,7 @@ export function useCollection({ first, skip }: CollectionProps) {
    */
   const collectionItemsMap = new Map(collectionItems.map(item => [item.id, item]));
 
-  const orderedCollectionItems = orderedCollectionRelations
+  const orderedCollectionItems = currentPageRelations
     .map(relation => {
       const entity = collectionItemsMap.get(relation.toEntity.id);
 
