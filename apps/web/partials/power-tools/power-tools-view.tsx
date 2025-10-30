@@ -12,7 +12,7 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { useCollection } from '~/core/blocks/data/use-collection';
 import { useQueryEntities, useQueryEntity, getValues, getRelations, useQueryEntitiesAsync, useRelations, useValues } from '~/core/sync/use-store';
 import { useInfiniteQueryEntities } from '~/core/sync/use-infinite-query-entities';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery, keepPreviousData } from '@tanstack/react-query';
 import { GeoStore } from '~/core/sync/store';
 import { ID } from '~/core/id';
 import { useProperties } from '~/core/hooks/use-properties';
@@ -21,6 +21,7 @@ import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-
 import { storage } from '~/core/sync/use-mutate';
 import { Entities } from '~/core/utils/entity';
 import { Cell, Entity, Property, Relation, Row } from '~/core/v2.types';
+import { getSchemaFromTypeIds } from '~/core/database/entities';
 
 import { Close } from '~/design-system/icons/close';
 import { Plus } from '~/design-system/icons/plus';
@@ -312,12 +313,6 @@ export function PowerToolsView() {
     return Array.from(ids);
   }, [collectionItems, queriedEntities, blockRelationEntity?.relations, source.type, allRelations, allValues, currentEntityIds]);
 
-  const propertiesSchema = useProperties(allPropertyIds);
-  const properties = React.useMemo(() => {
-    return propertiesSchema ? Object.values(propertiesSchema) : [];
-  }, [propertiesSchema]);
-
-
   // Get all available entities and determine hasMore/loadMore based on source type
   const { allAvailableEntities, hasMore, loadMore } = React.useMemo(() => {
     if (source.type === 'COLLECTION' && collectionItems) {
@@ -375,6 +370,55 @@ export function PowerToolsView() {
     };
   }, [collectionItems, queriedEntities, source.type, displayLimit, queryHasMore, queryLoadMore, collectionLength, collectionEntityIds, spaceId, locallyCreatedEntityIds]);
 
+  // Get all unique type IDs from all entities to fetch schema properties
+  const allTypeIds = React.useMemo(() => {
+    const typeIds = new Set<string>();
+
+    // Get types from available entities
+    allAvailableEntities.forEach(entity => {
+      entity.types?.forEach(type => {
+        typeIds.add(type.id);
+      });
+    });
+
+    // Get types from store relations (includes local changes)
+    allRelations.forEach(r => {
+      if (r.type.id === SystemIds.TYPES_PROPERTY && currentEntityIds.includes(r.fromEntity.id)) {
+        typeIds.add(r.toEntity.id);
+      }
+    });
+
+    return Array.from(typeIds);
+  }, [allAvailableEntities, allRelations, currentEntityIds]);
+
+  // Fetch schema properties for all entity types
+  const { data: schemaProperties } = useQuery({
+    enabled: allTypeIds.length > 0,
+    queryKey: ['power-tools-schema', allTypeIds],
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      return await getSchemaFromTypeIds(allTypeIds);
+    },
+  });
+
+  // Merge schema properties with existing property IDs to show all columns from schemas
+  const allPropertyIdsWithSchema = React.useMemo(() => {
+    const ids = new Set(allPropertyIds);
+
+    // Add properties from entity type schemas (shows all schema columns even without values)
+    schemaProperties?.forEach(property => {
+      ids.add(property.id);
+    });
+
+    return Array.from(ids);
+  }, [allPropertyIds, schemaProperties]);
+
+  // Get properties schema using merged property IDs (includes schema properties)
+  const propertiesSchema = useProperties(allPropertyIdsWithSchema);
+  const properties = React.useMemo(() => {
+    return propertiesSchema ? Object.values(propertiesSchema) : [];
+  }, [propertiesSchema]);
+
   // Clear pending ID once the actual entity appears in the data
   React.useEffect(() => {
     if (pendingEntityId) {
@@ -408,7 +452,7 @@ export function PowerToolsView() {
 
     const rows = entities.length === 0 ? [] : entitiesToRows(
       entities,
-      allPropertyIds,
+      allPropertyIdsWithSchema,
       source.type === 'COLLECTION' ? collectionRelations : [],
       allRelations,
       allValues
@@ -428,7 +472,7 @@ export function PowerToolsView() {
     return placeholderRows.length > 0
       ? [...placeholderRows, ...rows]
       : rows;
-  }, [allAvailableEntities, allPropertyIds, collectionRelations, entitiesToRows, source.type, allRelations, allValues, placeholderRowIds, pendingEntityId, makePlaceholderRow, properties]);
+  }, [allAvailableEntities, allPropertyIdsWithSchema, collectionRelations, entitiesToRows, source.type, allRelations, allValues, placeholderRowIds, pendingEntityId, makePlaceholderRow, properties]);
   
   
   // Selection handlers
@@ -775,6 +819,41 @@ export function PowerToolsView() {
         }
       });
 
+      // First pass: collect all UUIDs we need to fetch
+      const allUUIDs = new Set<string>();
+      clipboardData.rows.forEach(rowData => {
+        rowData.forEach((cellValue: string, index: number) => {
+          const header = clipboardData.headers[index];
+          const property = headerToPropertyMap.get(header);
+          if (!property || !cellValue.trim() || property.id === SystemIds.NAME_PROPERTY) return;
+
+          const relationUUIDs = parseRelationUUIDs(cellValue);
+          relationUUIDs.forEach(uuid => allUUIDs.add(uuid));
+        });
+      });
+
+      // Fetch all entities for the UUIDs to get their names
+      const uuidToNameMap = new Map<string, string | null>();
+      if (allUUIDs.size > 0) {
+        try {
+          const fetchedEntities = await queryEntitiesAsync({
+            where: {
+              id: {
+                in: Array.from(allUUIDs),
+              },
+            },
+            first: allUUIDs.size,
+            skip: 0,
+          });
+          fetchedEntities.forEach(entity => {
+            uuidToNameMap.set(entity.id, entity.name);
+          });
+        } catch (error) {
+          console.warn('Failed to fetch entity names for UUIDs:', error);
+          // Continue without names - fallback to UUID display
+        }
+      }
+
       const newEntityIds: string[] = [];
 
       // Process each row with unified UUID detection logic
@@ -834,7 +913,7 @@ export function PowerToolsView() {
                   },
                   toEntity: {
                     id: uuid,
-                    name: null, // We don't have the name, but that's okay
+                    name: uuidToNameMap.get(uuid) || null,
                     value: uuid,
                   },
                   isLocal: true,
@@ -911,7 +990,7 @@ export function PowerToolsView() {
       console.error('Failed to create entities from pasted data:', error);
       alert('Failed to paste data. Please check the format and try again.');
     }
-  }, [pasteRowsFromClipboard, properties, spaceId, source, where, parseRelationUUIDs, queryClient]);
+  }, [pasteRowsFromClipboard, properties, spaceId, source, where, parseRelationUUIDs, queryClient, queryEntitiesAsync]);
 
   // Check clipboard permissions and update canPaste state
   React.useEffect(() => {
@@ -1286,7 +1365,7 @@ export function PowerToolsView() {
       />
 
       {/* Content */}
-      <div className="overflow-hidden">
+      <div className="h-full overflow-hidden">
         {isInitialLoading ? (
           <div className="flex h-full items-center justify-center">
             <Text variant="body" color="grey-04">Loading data...</Text>

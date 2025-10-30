@@ -326,6 +326,7 @@ export function PowerToolsTableVirtual({
       <div
         style={{
           height: virtualizer.getTotalSize(),
+          minHeight: '100%',
           width: '100%',
           position: 'relative',
         }}
