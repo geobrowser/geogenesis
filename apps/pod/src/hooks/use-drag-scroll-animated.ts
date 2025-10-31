@@ -163,6 +163,7 @@ export function useDragScrollAnimated(options: UseDragScrollAnimatedOptions = {}
 		}
 
 		const onTouchStart = (e: TouchEvent) => {
+			if (!e.touches[0]) return
 			isDragging = true
 			hasMoved = false
 			startX = e.touches[0].clientX
@@ -173,7 +174,7 @@ export function useDragScrollAnimated(options: UseDragScrollAnimatedOptions = {}
 		}
 
 		const onTouchMove = (e: TouchEvent) => {
-			if (!isDragging) return
+			if (!isDragging || !e.touches[0]) return
 
 			const deltaX = Math.abs(e.touches[0].clientX - startX)
 			if (deltaX > dragThreshold) {

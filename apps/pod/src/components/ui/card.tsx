@@ -4,12 +4,12 @@ import {PlaceholderImageLoader} from "./placeholder-image-loader"
 
 type EpisodeCardProps = {
 	id: string
-	coverImg: string | null
+	coverImg?: string | null
 	name: string
 	author: string
 	description?: string | null
 	publishDate: string
-	duration: number
+	duration: number | string
 }
 
 export function EpisodeCard({id, name, author, description, publishDate, duration, coverImg}: EpisodeCardProps) {
@@ -18,7 +18,7 @@ export function EpisodeCard({id, name, author, description, publishDate, duratio
 		day: "numeric",
 	})
 
-	const formattedDuration = formatDuration(duration)
+	const formattedDuration = typeof duration === "number" ? formatDuration(duration) : duration
 
 	return (
 		<Link to="/episodes/$episodeId" params={{episodeId: id}} draggable={false}>
