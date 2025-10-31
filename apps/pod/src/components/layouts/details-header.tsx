@@ -8,14 +8,18 @@ import {PlaceholderImageLoader} from "../ui/placeholder-image-loader"
 import {Tag} from "../ui/tag"
 
 type DetailsImageProps = {
-	imageUrl: string
+	imageUrl: string | null
 }
 
 export function DetailsImage({imageUrl}: DetailsImageProps) {
 	return (
 		<div className="w-full h-[324px] flex items-center justify-center relative bg-black overflow-hidden">
 			{/* Background image */}
-			<img src={imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover blur-[6px]" />
+			<img
+				src={imageUrl ?? undefined}
+				alt=""
+				className="absolute inset-0 w-full h-full object-cover blur-[6px]"
+			/>
 
 			{/* Combined overlay with reduced opacity */}
 			<div className="absolute inset-0 bg-gradient-to-b from-primary-black/10 to-primary-black"></div>
@@ -23,7 +27,11 @@ export function DetailsImage({imageUrl}: DetailsImageProps) {
 			{/* Centered podcast image */}
 			<div className="w-[264px] h-[264px] relative rounded-[30px] overflow-hidden shadow-image">
 				<PlaceholderImageLoader />
-				<img src={imageUrl} alt="" className="w-[264px] h-[264px] rounded-[30px] relative z-10 object-cover" />
+				<img
+					src={imageUrl ?? undefined}
+					alt=""
+					className="w-[264px] h-[264px] rounded-[30px] relative z-10 object-cover"
+				/>
 			</div>
 		</div>
 	)
@@ -33,15 +41,35 @@ type DetailsSummaryProps = {
 	id: string
 	type: "episode" | "show"
 	title: string
-	episodeCount: number
+	episodeCount?: number
+	dateFounded?: Date
+	airDate?: Date
 	description: string
 	tagIds: string[]
 }
 
-export function DetailsSummary({id, type, title, episodeCount, description, tagIds}: DetailsSummaryProps) {
+export function DetailsSummary({
+	id,
+	type,
+	title,
+	episodeCount,
+	dateFounded,
+	airDate,
+	description,
+	tagIds,
+}: DetailsSummaryProps) {
 	const renderedTags = tagIds.map((tagId) => tags.find((tag) => tag.id === tagId)).filter((t) => t !== undefined)
 
 	const {bookmark: maybeBookmark, onBookmark} = useBookmark(id, BookmarkType.Show)
+
+	const dateRange = dateFounded ? `${dateFounded.getFullYear()} - present` : null
+	const formattedAirDate = airDate
+		? airDate.toLocaleDateString("en-US", {
+				year: "numeric",
+				month: "long",
+				day: "numeric",
+			})
+		: null
 
 	return (
 		<>
@@ -58,9 +86,16 @@ export function DetailsSummary({id, type, title, episodeCount, description, tagI
 						}
 					/>
 				</div>
-				<h3 className="text-secondary-light text-caption">
-					{episodeCount} {episodeCount === 1 ? "episode" : "episodes"}
-				</h3>
+				{type === "show" && (episodeCount !== undefined || dateRange) && (
+					<h3 className="text-secondary-light text-caption">
+						{episodeCount !== undefined && `${episodeCount} ${episodeCount === 1 ? "episode" : "episodes"}`}
+						{episodeCount !== undefined && dateRange && " • "}
+						{dateRange}
+					</h3>
+				)}
+				{type === "episode" && formattedAirDate && (
+					<h3 className="text-secondary-light text-caption">{formattedAirDate}</h3>
+				)}
 			</div>
 
 			<Hr />
@@ -68,7 +103,14 @@ export function DetailsSummary({id, type, title, episodeCount, description, tagI
 			<div className="space-y-6">
 				<div className="space-y-4">
 					<h2 className="text-medium-title">Summary</h2>
-					<p>{description}</p>
+					<div className="space-y-4">
+						{description
+							.split("\n")
+							.filter((line) => line.trim())
+							.map((line, index) => (
+								<p key={index}>{line}</p>
+							))}
+					</div>
 				</div>
 				<div className="flex flex-wrap gap-2">
 					{renderedTags.map((tag) => (

@@ -1,27 +1,38 @@
 import {Link} from "@tanstack/react-router"
+import {formatDuration} from "@/lib/utils"
 import {PlaceholderImageLoader} from "./placeholder-image-loader"
 
 type EpisodeCardProps = {
 	id: string
-	coverImg?: string
+	coverImg: string | null
 	name: string
 	author: string
-	description?: string
+	description?: string | null
 	publishDate: string
-	duration: string
+	duration: number
 }
 
-export function EpisodeCard({id, name, author, description, publishDate, duration}: EpisodeCardProps) {
+export function EpisodeCard({id, name, author, description, publishDate, duration, coverImg}: EpisodeCardProps) {
 	const formattedDate = new Date(publishDate).toLocaleDateString("en-US", {
 		month: "short",
 		day: "numeric",
 	})
 
+	const formattedDuration = formatDuration(duration)
+
 	return (
 		<Link to="/episodes/$episodeId" params={{episodeId: id}} draggable={false}>
 			<div className="w-[373px] rounded-[30px] p-5 bg-secondary-darkest space-y-4 flex-shrink-0">
 				<div className="flex items-center gap-4">
-					<div className="w-15 h-15 bg-accent-orange rounded-lg" />
+					<div className="w-15 h-15 rounded-lg overflow-hidden relative">
+						<PlaceholderImageLoader />
+						<img
+							src={coverImg ?? undefined}
+							alt={name}
+							className="w-full h-full object-cover relative z-10"
+							draggable={false}
+						/>
+					</div>
 					<div className="space-y-1">
 						<h2 className="text-small-title">{name}</h2>
 						<h3 className="text-caption text-secondary-light font-medium">{author}</h3>
@@ -32,7 +43,7 @@ export function EpisodeCard({id, name, author, description, publishDate, duratio
 					<div className="flex items-center gap-2 text-caption font-medium text-secondary-light">
 						<span>{formattedDate}</span>
 						<span>·</span>
-						<span>{duration}</span>
+						<span>{formattedDuration}</span>
 					</div>
 				</div>
 			</div>
@@ -41,21 +52,25 @@ export function EpisodeCard({id, name, author, description, publishDate, duratio
 }
 
 type TopicCardProps = {
-	imageUrl: string
+	imageUrl: string | null
 	title: string
 }
 
 export function TopicCard({imageUrl, title}: TopicCardProps) {
 	return (
 		<div className="w-[180px] space-y-3">
-			<div className="w-full h-[90px] rounded-[20px] overflow-hidden relative">
-				<PlaceholderImageLoader />
-				<img
-					src={imageUrl}
-					alt={title}
-					className="w-full h-full object-cover relative z-10"
-					draggable={false}
-				/>
+			<div className="w-full h-[90px] rounded-[20px] overflow-hidden relative bg-secondary-darkest">
+				{imageUrl && (
+					<>
+						<PlaceholderImageLoader />
+						<img
+							src={imageUrl}
+							alt={title}
+							className="w-full h-full object-cover relative z-10"
+							draggable={false}
+						/>
+					</>
+				)}
 			</div>
 			<h3 className="text-small-title text-center">{title}</h3>
 		</div>
@@ -92,7 +107,7 @@ export function PodcastCard({showId, imageUrl, title, episodeCount}: PodcastCard
 }
 
 type PersonCardProps = {
-	avatarUrl: string
+	avatarUrl: string | null
 	name: string
 }
 
@@ -102,7 +117,7 @@ export function PersonCard({avatarUrl, name}: PersonCardProps) {
 			<div className="w-[180px] h-[180px] rounded-full overflow-hidden relative">
 				<PlaceholderImageLoader />
 				<img
-					src={avatarUrl}
+					src={avatarUrl ?? undefined}
 					alt={name}
 					className="w-full h-full object-cover relative z-10"
 					draggable={false}

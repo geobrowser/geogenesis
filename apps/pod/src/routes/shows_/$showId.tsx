@@ -1,3 +1,4 @@
+import {useQuery} from "@graphprotocol/hypergraph-react"
 import {createFileRoute, Link} from "@tanstack/react-router"
 import React from "react"
 import {Apple} from "@/components/icons/apple"
@@ -8,9 +9,10 @@ import {Button} from "@/components/ui/button"
 import {EpisodeCard, PersonCard} from "@/components/ui/card"
 import {Hr} from "@/components/ui/hr"
 import {Scrollable} from "@/components/ui/scrollable"
-import {episodes} from "@/data/episodes"
-import {people} from "@/data/people"
-import {podcasts} from "@/data/shows"
+import {getImagePath} from "@/lib/images"
+import {resolveShowSlug} from "@/lib/slug-mapping"
+import {Episode, Podcast} from "@/schema"
+import {PODCAST_SPACE_ID} from "@/config"
 
 export const Route = createFileRoute("/shows_/$showId")({
 	component: RouteComponent,
@@ -32,35 +34,98 @@ const listenOn: {id: string; name: string; icon?: React.ReactNode}[] = [
 function RouteComponent() {
 	const {showId} = Route.useParams()
 
-	const show = podcasts.find((podcast) => podcast.id === showId)
+	// @TODO: SDK doesn't currently support filtering by entity ID in public queries
+	// Fetching all shows and filtering client-side for now
+	const queryResult = useQuery(Podcast, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+			hosts: {
+				avatar: {},
+			},
+		},
+	})
+
+	const allShows = queryResult.data ?? []
+
+	// Resolve slug to entity ID (e.g., "the-joe-rogan-experience" -> UUID)
+	// Falls back to showId if no mapping exists (supports direct UUID URLs)
+	const entityId = resolveShowSlug(showId, allShows) ?? showId
+
+	const show = allShows.find((s) => s.id === entityId)
+
+	const {data: allEpisodes} = useQuery(Episode, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+			podcast: {},
+		},
+	})
 
 	if (!show) {
 		return <div>Show not found</div>
 	}
 
-	// Get hosts for this show
-	const showHosts =
-		show.hostIds.map((hostId) => people.find((person) => person.id === hostId)).filter((h) => h !== undefined) || []
+	// Filter episodes to only those belonging to this show
+	const episodes = (allEpisodes ?? []).filter((episode) => episode.podcast?.[0]?.id === show.id)
 
-	// Get episodes for this show
-	const showEpisodes = episodes.filter((episode) => episode.showId === showId)
+	const showAvatarUrl = show.avatar?.[0]?.url ? getImagePath(show.avatar?.[0]?.url) : null
 
 	return (
 		<div>
 			<div className="w-full h-[324px] flex items-center justify-center relative bg-black overflow-hidden">
-				<DetailsImage imageUrl={show.imageUrl} />
+				<DetailsImage imageUrl={showAvatarUrl} />
 			</div>
 			<ConstrainedLayout>
 				<div className="space-y-10">
 					<DetailsSummary
 						id={show.id}
 						type="show"
-						description={show.description}
-						episodeCount={show.episodeCount}
-						tagIds={show.tagIds}
-						title={show.title}
+						description={show.description ?? ""}
+						episodeCount={episodes?.length ?? 0}
+						dateFounded={show.dateFounded}
+						tagIds={[]}
+						title={show.name}
 					/>
 
+					<Hr />
+
+					<div className={episodes.length === 0 ? "space-y-2" : "space-y-5"}>
+						<h2 className="text-medium-title">Episodes</h2>
+						<Scrollable>
+							{episodes.map((episode) => (
+								<EpisodeCard
+									key={episode.id}
+									author={show.name}
+									duration={episode.duration}
+									id={episode.id}
+									name={episode.name}
+									publishDate={episode.airDate.toISOString()}
+									description={episode.description}
+									coverImg={episode.avatar?.[0]?.url ? getImagePath(episode.avatar?.[0]?.url) : null}
+								/>
+							))}
+						</Scrollable>
+						{episodes.length === 0 && <p className="text-secondary-light">No episodes available yet.</p>}
+					</div>
+					<Hr />
+					<div className={show.hosts.length === 0 ? "space-y-2" : "space-y-5"}>
+						<h2 className="text-medium-title">Hosts</h2>
+						<Scrollable>
+							{show.hosts.map((host) => (
+								<PersonCard
+									key={host.id}
+									avatarUrl={host.avatar?.[0]?.url ? getImagePath(host.avatar[0].url) : null}
+									name={host.name}
+								/>
+							))}
+						</Scrollable>
+						{show.hosts.length === 0 && (
+							<p className="text-secondary-light">No hosts information available.</p>
+						)}
+					</div>
 					<Hr />
 					<div className="space-y-4">
 						<h2 className="text-medium-title">Listen here</h2>
@@ -74,39 +139,6 @@ function RouteComponent() {
 								</Link>
 							))}
 						</div>
-					</div>
-					<Hr />
-
-					<div className={showEpisodes.length === 0 ? "space-y-2" : "space-y-5"}>
-						<h2 className="text-medium-title">Episodes</h2>
-						<Scrollable gap="gap-3">
-							{showEpisodes.map((episode) => (
-								<EpisodeCard
-									key={episode.id}
-									author={episode.author}
-									duration={episode.duration}
-									id={episode.id}
-									name={episode.name}
-									publishDate={episode.publishDate}
-									description={episode.description}
-								/>
-							))}
-						</Scrollable>
-						{showEpisodes.length === 0 && (
-							<p className="text-secondary-light">No episodes available yet.</p>
-						)}
-					</div>
-					<Hr />
-					<div className={showHosts.length === 0 ? "space-y-2" : "space-y-5"}>
-						<h2 className="text-medium-title">Hosts</h2>
-						<Scrollable gap="gap-3">
-							{showHosts.map((host) => (
-								<PersonCard key={host.id} avatarUrl={host.avatarUrl} name={host.name} />
-							))}
-						</Scrollable>
-						{showHosts.length === 0 && (
-							<p className="text-secondary-light">No hosts information available.</p>
-						)}
 					</div>
 				</div>
 			</ConstrainedLayout>
