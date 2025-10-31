@@ -10,6 +10,7 @@ import {Hr} from "@/components/ui/hr"
 import {Scrollable} from "@/components/ui/scrollable"
 import {getImagePath} from "@/lib/images"
 import {Episode} from "@/schema"
+import {PODCAST_SPACE_ID} from "@/config"
 
 export const Route = createFileRoute("/episodes_/$episodeId")({
 	component: RouteComponent,
@@ -33,7 +34,7 @@ function RouteComponent() {
 
 	const {data: episodes} = useQuery(Episode, {
 		mode: "public",
-		space: "35d77493-4b40-4bfb-b43d-98a796e7a233",
+		space: PODCAST_SPACE_ID,
 		include: {
 			avatar: {},
 			guests: {
@@ -72,12 +73,12 @@ function RouteComponent() {
 	// 	})
 
 	const show = episode.podcast?.[0]
-	const showAvatarUrl = show?.avatar?.[0]?.url ? getImagePath(show?.avatar?.[0]?.url) : null
+	const episodeAvatarUrl = episode.avatar?.[0]?.url ? getImagePath(episode.avatar?.[0]?.url) : null
 
 	return (
 		<div>
 			<div className="w-full h-[324px] flex items-center justify-center relative bg-black overflow-hidden">
-				<DetailsImage imageUrl={showAvatarUrl} />
+				<DetailsImage imageUrl={episodeAvatarUrl} />
 			</div>
 			<ConstrainedLayout>
 				<div className="space-y-10">
@@ -85,27 +86,10 @@ function RouteComponent() {
 						id={episode.id}
 						type="episode"
 						description={episode.description ?? ""}
-						// episodeCount={show?.episodeCount ?? 1}
-						episodeCount={0}
-						// tagIds={episode.tagIds}
+						airDate={episode.airDate}
 						tagIds={[]}
 						title={episode.name}
 					/>
-
-					<Hr />
-					<div className="space-y-4">
-						<h2 className="text-medium-title">Listen here</h2>
-						<div className="flex items-center gap-2">
-							{listenOn.map((l) => (
-								<Link key={l.id} to="/">
-									<Button variant="outline">
-										{l.icon}
-										{l.name}
-									</Button>
-								</Link>
-							))}
-						</div>
-					</div>
 
 					{/* <Hr />
 
@@ -131,7 +115,7 @@ function RouteComponent() {
 					<Hr />
 					<div className={episode.hosts.length === 0 ? "space-y-2" : "space-y-5"}>
 						<h2 className="text-medium-title">Hosts</h2>
-						<Scrollable gap="gap-3">
+						<Scrollable>
 							{episode.hosts.map((host) => (
 								<PersonCard
 									key={host.id}
@@ -150,7 +134,7 @@ function RouteComponent() {
 
 					<div className={episode.guests.length === 0 ? "space-y-2" : "space-y-5"}>
 						<h2 className="text-medium-title">Guests</h2>
-						<Scrollable gap="gap-3">
+						<Scrollable>
 							{episode.guests.map((guest) => (
 								<PersonCard
 									key={guest.id}
@@ -162,6 +146,21 @@ function RouteComponent() {
 						{episode.guests.length === 0 && (
 							<p className="text-secondary-light">No guests featured in this episode.</p>
 						)}
+					</div>
+
+					<Hr />
+					<div className="space-y-4">
+						<h2 className="text-medium-title">Listen here</h2>
+						<div className="flex items-center gap-2">
+							{listenOn.map((l) => (
+								<Link key={l.id} to="/">
+									<Button variant="outline">
+										{l.icon}
+										{l.name}
+									</Button>
+								</Link>
+							))}
+						</div>
 					</div>
 				</div>
 			</ConstrainedLayout>

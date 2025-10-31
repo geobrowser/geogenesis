@@ -1,28 +1,76 @@
+import {useQuery} from "@graphprotocol/hypergraph-react"
 import {createFileRoute} from "@tanstack/react-router"
+import {useState} from "react"
 import {ConstrainedLayout} from "@/components/layouts/constrained"
 import {ViewAll} from "@/components/ui/button"
 import {EpisodeCard, PersonCard, PodcastCard, TopicCard} from "@/components/ui/card"
 import {Hr} from "@/components/ui/hr"
 import {Scrollable} from "@/components/ui/scrollable"
 import {Tab} from "@/components/ui/tab"
-import {episodes} from "@/data/episodes"
-import {people} from "@/data/people"
-import {podcasts} from "@/data/shows"
-import {topics} from "@/data/topics"
-import {useFilter} from "@/hooks/use-filter"
+import {getImagePath} from "@/lib/images"
+import {getShowSlug} from "@/lib/slug-mapping"
+import {CATEGORIES} from "@/lib/constants"
+import {Episode, Person, Podcast, Topic} from "@/schema"
+import {PODCAST_SPACE_ID} from "@/config"
 
 export const Route = createFileRoute("/")({
 	component: Home,
 })
 
 function Home() {
-	const {selectedTag, setSelectedTag, filteredItems: filteredEpisodes, availableTags} = useFilter(episodes)
-	const {
-		selectedTag: podcastSelectedTag,
-		setSelectedTag: setPodcastSelectedTag,
-		filteredItems: filteredPodcasts,
-		availableTags: podcastAvailableTags,
-	} = useFilter(podcasts)
+	const {data: allPodcasts} = useQuery(Podcast, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+		},
+	})
+
+	const {data: allEpisodes} = useQuery(Episode, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+			podcast: {},
+		},
+	})
+
+	const {data: allTopics} = useQuery(Topic, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+		},
+	})
+
+	const {data: allPeople} = useQuery(Person, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+		},
+	})
+
+	const podcasts = allPodcasts ?? []
+	const episodes = allEpisodes ?? []
+	const topics = allTopics ?? []
+	const people = allPeople ?? []
+
+	// Tab selection state (tabs don't filter yet, just visual)
+	const [selectedTag, setSelectedTag] = useState<string>("Trending")
+	const [podcastSelectedTag, setPodcastSelectedTag] = useState<string>("Trending")
+
+	// Count episodes per podcast for display
+	const episodeCountByPodcast = episodes.reduce(
+		(acc, episode) => {
+			const podcastId = episode.podcast?.[0]?.id
+			if (podcastId) {
+				acc[podcastId] = (acc[podcastId] || 0) + 1
+			}
+			return acc
+		},
+		{} as Record<string, number>,
+	)
 
 	return (
 		<ConstrainedLayout>
@@ -33,7 +81,7 @@ function Home() {
 						<ViewAll to="/shows" />
 					</div>
 					<div className="flex items-center gap-1.5">
-						{podcastAvailableTags.map((tag) => (
+						{CATEGORIES.map((tag) => (
 							<Tab
 								key={tag}
 								variant={podcastSelectedTag === tag ? undefined : "secondary"}
@@ -44,14 +92,14 @@ function Home() {
 							</Tab>
 						))}
 					</div>
-					<Scrollable gap="gap-3">
-						{filteredPodcasts.map((podcast) => (
+					<Scrollable>
+						{podcasts.map((podcast) => (
 							<div key={podcast.id} className="flex-shrink-0">
 								<PodcastCard
-									showId={podcast.id}
-									imageUrl={podcast.imageUrl}
-									title={podcast.title}
-									episodeCount={podcast.episodeCount}
+									showId={getShowSlug(podcast)}
+									imageUrl={podcast.avatar?.[0]?.url ? getImagePath(podcast.avatar[0].url) : ""}
+									title={podcast.name}
+									episodeCount={episodeCountByPodcast[podcast.id] ?? 0}
 								/>
 							</div>
 						))}
@@ -65,7 +113,7 @@ function Home() {
 						<ViewAll to="/episodes" />
 					</div>
 					<div className="flex items-center gap-1.5">
-						{availableTags.map((tag) => (
+						{CATEGORIES.map((tag) => (
 							<Tab
 								key={tag}
 								variant={selectedTag === tag ? undefined : "secondary"}
@@ -77,15 +125,16 @@ function Home() {
 						))}
 					</div>
 					<Scrollable>
-						{filteredEpisodes.map((episode) => (
+						{episodes.map((episode) => (
 							<div key={episode.id} className="flex-shrink-0">
 								<EpisodeCard
 									id={episode.id}
 									name={episode.name}
-									author={episode.author}
+									author={episode.podcast?.[0]?.name ?? "Unknown"}
 									description={episode.description}
-									publishDate={episode.publishDate}
+									publishDate={episode.airDate.toISOString()}
 									duration={episode.duration}
+									coverImg={episode.avatar?.[0]?.url ? getImagePath(episode.avatar[0].url) : null}
 								/>
 							</div>
 						))}
@@ -100,13 +149,20 @@ function Home() {
 						<ViewAll to="/topics" />
 					</div>
 
-					<Scrollable>
-						{topics.map((topic) => (
-							<div key={topic.id} className="flex-shrink-0">
-								<TopicCard imageUrl={topic.imageUrl} title={topic.title} />
-							</div>
-						))}
-					</Scrollable>
+					{topics.length > 0 ? (
+						<Scrollable>
+							{topics.map((topic) => (
+								<div key={topic.id} className="flex-shrink-0">
+									<TopicCard
+										imageUrl={topic.avatar?.[0]?.url ? getImagePath(topic.avatar[0].url) : null}
+										title={topic.name}
+									/>
+								</div>
+							))}
+						</Scrollable>
+					) : (
+						<p className="text-secondary-light">No topics available yet.</p>
+					)}
 				</div>
 
 				<Hr />
@@ -117,13 +173,20 @@ function Home() {
 						<ViewAll to="/" />
 					</div>
 
-					<Scrollable>
-						{people.map((guest) => (
-							<div key={guest.id} className="flex-shrink-0">
-								<PersonCard avatarUrl={guest.avatarUrl} name={guest.name} />
-							</div>
-						))}
-					</Scrollable>
+					{people.length > 0 ? (
+						<Scrollable>
+							{people.map((person) => (
+								<div key={person.id} className="flex-shrink-0">
+									<PersonCard
+										avatarUrl={person.avatar?.[0]?.url ? getImagePath(person.avatar[0].url) : null}
+										name={person.name}
+									/>
+								</div>
+							))}
+						</Scrollable>
+					) : (
+						<p className="text-secondary-light">No guests available yet.</p>
+					)}
 				</div>
 			</div>
 		</ConstrainedLayout>

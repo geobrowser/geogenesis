@@ -1,81 +1,74 @@
+import {useQuery} from "@graphprotocol/hypergraph-react"
 import {createFileRoute} from "@tanstack/react-router"
 import {ConstrainedLayout} from "@/components/layouts/constrained"
-import {ViewAll} from "@/components/ui/button"
 import {EpisodeCard} from "@/components/ui/card"
 import {Hr} from "@/components/ui/hr"
 import {Scrollable} from "@/components/ui/scrollable"
-import {episodes} from "@/data/episodes"
+import {getImagePath} from "@/lib/images"
+import {CATEGORIES} from "@/lib/constants"
+import {Episode} from "@/schema"
+import {PODCAST_SPACE_ID} from "@/config"
 
 export const Route = createFileRoute("/episodes")({
 	component: RouteComponent,
 })
 
-const topicCategoriesConfig = [
-	{id: "trending", title: "Trending"},
-	{id: "business", title: "Business"},
-	{id: "crime", title: "True Crime"},
-	{id: "health", title: "Health & Wellness"},
-	{id: "technology", title: "Technology"},
-	{id: "movies", title: "Movies & Entertainment"},
-	{id: "crypto", title: "Crypto & Finance"},
-	{id: "news", title: "News & Politics"},
-	{id: "comedy", title: "Comedy"},
-	{id: "history", title: "History"},
-	{id: "food", title: "Food & Cooking"},
-	{id: "music", title: "Music"},
-	{id: "relationships", title: "Relationships & Romance"},
-	{id: "education", title: "Education"},
-	{id: "sports", title: "Sports"},
-	{id: "travel", title: "Travel"},
-	{id: "spirituality", title: "Spirituality & Wellness"},
-	{id: "arts", title: "Arts & Culture"},
-	{id: "science", title: "Science"},
-	{id: "finance", title: "Finance & Investing"},
-	{id: "politics", title: "Politics"},
-]
-
 function RouteComponent() {
+	const {data: allEpisodes} = useQuery(Episode, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+			podcast: {},
+		},
+	})
+
+	const episodes = allEpisodes ?? []
+
+	if (episodes.length === 0) {
+		return (
+			<ConstrainedLayout>
+				<div className="space-y-5">
+					<h1 className="text-large-title-desktop">Episodes</h1>
+					<p className="text-secondary-light">No episodes available yet.</p>
+				</div>
+			</ConstrainedLayout>
+		)
+	}
+
 	return (
 		<ConstrainedLayout>
 			<div className="space-y-10">
-				{topicCategoriesConfig.map((category, index) => {
-					const categoryEpisodes = episodes.filter((episode) =>
-						episode.categories.map((c) => c.toLowerCase()).includes(category.id.toLowerCase()),
-					)
-
-					if (categoryEpisodes.length === 0) return null
-
-					return (
-						<div key={category.id}>
-							<div className="space-y-5">
-								<div className="flex items-baseline justify-between">
-									<h3 className="text-large-title-desktop">{category.title}</h3>
-									<ViewAll to={`/topics/episodes/${category.id}`} />
-								</div>
-								<Scrollable>
-									{categoryEpisodes.map((episode) => (
-										<div key={episode.id} className="flex-shrink-0">
-											<EpisodeCard
-												id={episode.id}
-												name={episode.name}
-												author={episode.author}
-												description={episode.description}
-												publishDate={episode.publishDate}
-												duration={episode.duration}
-											/>
-										</div>
-									))}
-								</Scrollable>
-							</div>
-							{index < topicCategoriesConfig.length - 1 && (
-								<>
-									<div className="mt-10" />
-									<Hr />
-								</>
-							)}
+				{CATEGORIES.map((category, index) => (
+					<div key={category}>
+						<div className="space-y-5">
+							<h3 className="text-large-title-desktop">{category}</h3>
+							<Scrollable>
+								{episodes.map((episode) => (
+									<div key={episode.id} className="flex-shrink-0">
+										<EpisodeCard
+											id={episode.id}
+											name={episode.name}
+											author={episode.podcast?.[0]?.name ?? "Unknown"}
+											description={episode.description}
+											publishDate={episode.airDate.toISOString()}
+											duration={episode.duration}
+											coverImg={
+												episode.avatar?.[0]?.url ? getImagePath(episode.avatar[0].url) : null
+											}
+										/>
+									</div>
+								))}
+							</Scrollable>
 						</div>
-					)
-				})}
+						{index < CATEGORIES.length - 1 && (
+							<>
+								<div className="mt-10" />
+								<Hr />
+							</>
+						)}
+					</div>
+				))}
 			</div>
 		</ConstrainedLayout>
 	)

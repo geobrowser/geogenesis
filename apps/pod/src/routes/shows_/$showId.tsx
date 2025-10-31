@@ -10,7 +10,9 @@ import {EpisodeCard, PersonCard} from "@/components/ui/card"
 import {Hr} from "@/components/ui/hr"
 import {Scrollable} from "@/components/ui/scrollable"
 import {getImagePath} from "@/lib/images"
+import {resolveShowSlug} from "@/lib/slug-mapping"
 import {Episode, Podcast} from "@/schema"
+import {PODCAST_SPACE_ID} from "@/config"
 
 export const Route = createFileRoute("/shows_/$showId")({
 	component: RouteComponent,
@@ -30,18 +32,13 @@ const listenOn: {id: string; name: string; icon?: React.ReactNode}[] = [
 ]
 
 function RouteComponent() {
-	// @TODO need to be able to query public spaces by entity id
 	const {showId} = Route.useParams()
 
-	const {data: shows} = useQuery(Podcast, {
+	// @TODO: SDK doesn't currently support filtering by entity ID in public queries
+	// Fetching all shows and filtering client-side for now
+	const queryResult = useQuery(Podcast, {
 		mode: "public",
-		first: 1,
-		space: "35d77493-4b40-4bfb-b43d-98a796e7a233",
-		filter: {
-			name: {
-				startsWith: "The Joe Rogan Experience",
-			},
-		},
+		space: PODCAST_SPACE_ID,
 		include: {
 			avatar: {},
 			hosts: {
@@ -50,13 +47,20 @@ function RouteComponent() {
 		},
 	})
 
-	const show = shows?.[0]
+	const allShows = queryResult.data ?? []
 
-	const {data: episodes} = useQuery(Episode, {
+	// Resolve slug to entity ID (e.g., "the-joe-rogan-experience" -> UUID)
+	// Falls back to showId if no mapping exists (supports direct UUID URLs)
+	const entityId = resolveShowSlug(showId, allShows) ?? showId
+
+	const show = allShows.find((s) => s.id === entityId)
+
+	const {data: allEpisodes} = useQuery(Episode, {
 		mode: "public",
-		space: "35d77493-4b40-4bfb-b43d-98a796e7a233",
+		space: PODCAST_SPACE_ID,
 		include: {
 			avatar: {},
+			podcast: {},
 		},
 	})
 
@@ -64,7 +68,8 @@ function RouteComponent() {
 		return <div>Show not found</div>
 	}
 
-	console.log("episodes", episodes)
+	// Filter episodes to only those belonging to this show
+	const episodes = (allEpisodes ?? []).filter((episode) => episode.podcast?.[0]?.id === show.id)
 
 	const showAvatarUrl = show.avatar?.[0]?.url ? getImagePath(show.avatar?.[0]?.url) : null
 
@@ -80,11 +85,47 @@ function RouteComponent() {
 						type="show"
 						description={show.description ?? ""}
 						episodeCount={episodes?.length ?? 0}
-						// tagIds={show.tagIds}
+						dateFounded={show.dateFounded}
 						tagIds={[]}
 						title={show.name}
 					/>
 
+					<Hr />
+
+					<div className={episodes.length === 0 ? "space-y-2" : "space-y-5"}>
+						<h2 className="text-medium-title">Episodes</h2>
+						<Scrollable>
+							{episodes.map((episode) => (
+								<EpisodeCard
+									key={episode.id}
+									author={show.name}
+									duration={episode.duration}
+									id={episode.id}
+									name={episode.name}
+									publishDate={episode.airDate.toISOString()}
+									description={episode.description}
+									coverImg={episode.avatar?.[0]?.url ? getImagePath(episode.avatar?.[0]?.url) : null}
+								/>
+							))}
+						</Scrollable>
+						{episodes.length === 0 && <p className="text-secondary-light">No episodes available yet.</p>}
+					</div>
+					<Hr />
+					<div className={show.hosts.length === 0 ? "space-y-2" : "space-y-5"}>
+						<h2 className="text-medium-title">Hosts</h2>
+						<Scrollable>
+							{show.hosts.map((host) => (
+								<PersonCard
+									key={host.id}
+									avatarUrl={host.avatar?.[0]?.url ? getImagePath(host.avatar[0].url) : null}
+									name={host.name}
+								/>
+							))}
+						</Scrollable>
+						{show.hosts.length === 0 && (
+							<p className="text-secondary-light">No hosts information available.</p>
+						)}
+					</div>
 					<Hr />
 					<div className="space-y-4">
 						<h2 className="text-medium-title">Listen here</h2>
@@ -98,42 +139,6 @@ function RouteComponent() {
 								</Link>
 							))}
 						</div>
-					</div>
-					<Hr />
-
-					<div className={episodes.length === 0 ? "space-y-2" : "space-y-5"}>
-						<h2 className="text-medium-title">Episodes</h2>
-						<Scrollable gap="gap-3">
-							{episodes.map((episode) => (
-								<EpisodeCard
-									key={episode.id}
-									author={show.name}
-									duration={episode.duration}
-									id={episode.id}
-									name={episode.name}
-									publishDate={new Date().toISOString()}
-									description={episode.description}
-									coverImg={episode.avatar?.[0]?.url ? getImagePath(episode.avatar?.[0]?.url) : null}
-								/>
-							))}
-						</Scrollable>
-						{episodes.length === 0 && <p className="text-secondary-light">No episodes available yet.</p>}
-					</div>
-					<Hr />
-					<div className={show.hosts.length === 0 ? "space-y-2" : "space-y-5"}>
-						<h2 className="text-medium-title">Hosts</h2>
-						<Scrollable gap="gap-3">
-							{show.hosts.map((host) => (
-								<PersonCard
-									key={host.id}
-									avatarUrl={host.avatar[0]?.url ? getImagePath(host.avatar[0]?.url) : null}
-									name={host.name}
-								/>
-							))}
-						</Scrollable>
-						{show.hosts.length === 0 && (
-							<p className="text-secondary-light">No hosts information available.</p>
-						)}
 					</div>
 				</div>
 			</ConstrainedLayout>

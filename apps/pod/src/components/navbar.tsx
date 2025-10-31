@@ -67,7 +67,9 @@ export function Navbar() {
 		<nav className="w-full bg-black text-white border-b border-secondary-darkest">
 			<div className="max-w-[1568px] mx-auto px-5 flex items-center justify-between py-3">
 				<div className="flex items-center gap-10">
-					<Logo />
+					<Link to="/">
+						<Logo />
+					</Link>
 
 					<div className="flex items-center gap-5">
 						<Link

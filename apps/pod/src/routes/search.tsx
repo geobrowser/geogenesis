@@ -1,14 +1,15 @@
+import {useQuery} from "@graphprotocol/hypergraph-react"
 import {createFileRoute} from "@tanstack/react-router"
 import fuzzysort from "fuzzysort"
-import * as React from "react"
+import React from "react"
 import {ConstrainedLayout} from "@/components/layouts/constrained"
 import {EpisodeCard, PersonCard, PodcastCard, TopicCard} from "@/components/ui/card"
 import {Hr} from "@/components/ui/hr"
 import {Scrollable} from "@/components/ui/scrollable"
-import {episodes} from "@/data/episodes"
-import {people} from "@/data/people"
-import {podcasts} from "@/data/shows"
-import {topics} from "@/data/topics"
+import {PODCAST_SPACE_ID} from "@/config"
+import {getImagePath} from "@/lib/images"
+import {getShowSlug} from "@/lib/slug-mapping"
+import {Episode, Person, Podcast, Topic} from "@/schema"
 
 type Search = {
 	q: string
@@ -27,10 +28,71 @@ export const Route = createFileRoute("/search")({
 function SearchPage() {
 	const {q: searchText} = Route.useSearch()
 
+	// Fetch all data from GraphQL
+	const {data: allPodcasts} = useQuery(Podcast, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+		},
+	})
+
+	const {data: allEpisodes} = useQuery(Episode, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+			podcast: {},
+		},
+	})
+
+	const {data: allPeople} = useQuery(Person, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+		},
+	})
+
+	const {data: allTopics} = useQuery(Topic, {
+		mode: "public",
+		space: PODCAST_SPACE_ID,
+		include: {
+			avatar: {},
+		},
+	})
+
+	const podcasts = allPodcasts ?? []
+	const episodes = allEpisodes ?? []
+	const people = allPeople ?? []
+	const topics = allTopics ?? []
+
+	// Count episodes per podcast for display
+	const episodeCountByPodcast = episodes.reduce(
+		(acc, episode) => {
+			const podcastId = episode.podcast?.[0]?.id
+			if (podcastId) {
+				acc[podcastId] = (acc[podcastId] || 0) + 1
+			}
+			return acc
+		},
+		{} as Record<string, number>,
+	)
+
+	// Perform fuzzy search
 	const {foundShows, foundEpisodes, foundPeople, foundTopics} = React.useMemo(() => {
+		if (!searchText) {
+			return {
+				foundShows: [],
+				foundEpisodes: [],
+				foundPeople: [],
+				foundTopics: [],
+			}
+		}
+
 		const foundShows = fuzzysort.go(searchText, podcasts, {
-			keys: ["title", "description"],
-			scoreFn: (r) => r.score * (r.obj.title ? 2 : 1),
+			keys: ["name", "description"],
+			scoreFn: (r) => r.score * (r.obj.name ? 2 : 1),
 			limit: 30,
 			threshold: 0.75,
 		})
@@ -50,8 +112,8 @@ function SearchPage() {
 		})
 
 		const foundTopics = fuzzysort.go(searchText, topics, {
-			keys: ["title"],
-			scoreFn: (r) => r.score * (r.obj.title ? 2 : 1),
+			keys: ["name"],
+			scoreFn: (r) => r.score * (r.obj.name ? 2 : 1),
 			limit: 30,
 			threshold: 0.75,
 		})
@@ -62,7 +124,7 @@ function SearchPage() {
 			foundPeople: foundPeople.map((f) => f.obj),
 			foundTopics: foundTopics.map((f) => f.obj),
 		}
-	}, [searchText])
+	}, [searchText, podcasts, episodes, people, topics])
 
 	const hasNoResults =
 		searchText &&
@@ -109,68 +171,78 @@ function SearchPage() {
 		<ConstrainedLayout>
 			<div className="space-y-10">
 				{foundShows.length > 0 && (
-					<div className="space-y-5">
-						<h2 className="text-large-title-desktop">
-							{foundShows.length} {foundShows.length === 1 ? "show" : "shows"}
-						</h2>
-						<Scrollable gap="gap-3">
-							{foundShows.map((podcast) => (
-								<div key={podcast.id} className="flex-shrink-0">
-									<PodcastCard
-										showId={podcast.id}
-										imageUrl={podcast.imageUrl}
-										title={podcast.title}
-										episodeCount={podcast.episodeCount}
-									/>
-								</div>
-							))}
-						</Scrollable>
-					</div>
+					<>
+						<div className="space-y-5">
+							<h2 className="text-large-title-desktop">
+								{foundShows.length} {foundShows.length === 1 ? "show" : "shows"}
+							</h2>
+							<Scrollable>
+								{foundShows.map((podcast) => (
+									<div key={podcast.id} className="flex-shrink-0">
+										<PodcastCard
+											showId={getShowSlug(podcast)}
+											imageUrl={
+												podcast.avatar?.[0]?.url ? getImagePath(podcast.avatar[0].url) : ""
+											}
+											title={podcast.name}
+											episodeCount={episodeCountByPodcast[podcast.id] ?? 0}
+										/>
+									</div>
+								))}
+							</Scrollable>
+						</div>
+						{(foundEpisodes.length > 0 || foundTopics.length > 0 || foundPeople.length > 0) && <Hr />}
+					</>
 				)}
-
-				{foundShows.length > 0 && foundEpisodes.length > 0 && <Hr />}
 
 				{foundEpisodes.length > 0 && (
-					<div className="space-y-5">
-						<h2 className="text-large-title-desktop">
-							{foundEpisodes.length} {foundEpisodes.length === 1 ? "episode" : "episodes"}
-						</h2>
-						<Scrollable>
-							{foundEpisodes.map((episode) => (
-								<div key={episode.id} className="flex-shrink-0">
-									<EpisodeCard
-										id={episode.id}
-										name={episode.name}
-										author={episode.author}
-										description={episode.description}
-										publishDate={episode.publishDate}
-										duration={episode.duration}
-									/>
-								</div>
-							))}
-						</Scrollable>
-					</div>
+					<>
+						<div className="space-y-5">
+							<h2 className="text-large-title-desktop">
+								{foundEpisodes.length} {foundEpisodes.length === 1 ? "episode" : "episodes"}
+							</h2>
+							<Scrollable>
+								{foundEpisodes.map((episode) => (
+									<div key={episode.id} className="flex-shrink-0">
+										<EpisodeCard
+											id={episode.id}
+											name={episode.name}
+											author={episode.podcast?.[0]?.name ?? "Unknown"}
+											description={episode.description}
+											publishDate={episode.airDate.toISOString()}
+											duration={episode.duration}
+											coverImg={
+												episode.avatar?.[0]?.url ? getImagePath(episode.avatar[0].url) : null
+											}
+										/>
+									</div>
+								))}
+							</Scrollable>
+						</div>
+						{(foundTopics.length > 0 || foundPeople.length > 0) && <Hr />}
+					</>
 				)}
-
-				{(foundShows.length > 0 || foundEpisodes.length > 0) && foundTopics.length > 0 && <Hr />}
 
 				{foundTopics.length > 0 && (
-					<div className="space-y-5">
-						<h2 className="text-large-title-desktop">
-							{foundTopics.length} {foundTopics.length === 1 ? "topic" : "topics"}
-						</h2>
-						<Scrollable>
-							{foundTopics.map((topic) => (
-								<div key={topic.id} className="flex-shrink-0">
-									<TopicCard imageUrl={topic.imageUrl} title={topic.title} />
-								</div>
-							))}
-						</Scrollable>
-					</div>
+					<>
+						<div className="space-y-5">
+							<h2 className="text-large-title-desktop">
+								{foundTopics.length} {foundTopics.length === 1 ? "topic" : "topics"}
+							</h2>
+							<Scrollable>
+								{foundTopics.map((topic) => (
+									<div key={topic.id} className="flex-shrink-0">
+										<TopicCard
+											imageUrl={topic.avatar?.[0]?.url ? getImagePath(topic.avatar[0].url) : null}
+											title={topic.name}
+										/>
+									</div>
+								))}
+							</Scrollable>
+						</div>
+						{foundPeople.length > 0 && <Hr />}
+					</>
 				)}
-
-				{(foundShows.length > 0 || foundEpisodes.length > 0 || foundTopics.length > 0) &&
-					foundPeople.length > 0 && <Hr />}
 
 				{foundPeople.length > 0 && (
 					<div className="space-y-5">
@@ -180,7 +252,10 @@ function SearchPage() {
 						<Scrollable>
 							{foundPeople.map((person) => (
 								<div key={person.id} className="flex-shrink-0">
-									<PersonCard avatarUrl={person.avatarUrl} name={person.name} />
+									<PersonCard
+										avatarUrl={person.avatar?.[0]?.url ? getImagePath(person.avatar[0].url) : null}
+										name={person.name}
+									/>
 								</div>
 							))}
 						</Scrollable>

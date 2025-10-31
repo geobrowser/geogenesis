@@ -52,21 +52,25 @@ export function EpisodeCard({id, name, author, description, publishDate, duratio
 }
 
 type TopicCardProps = {
-	imageUrl: string
+	imageUrl: string | null
 	title: string
 }
 
 export function TopicCard({imageUrl, title}: TopicCardProps) {
 	return (
 		<div className="w-[180px] space-y-3">
-			<div className="w-full h-[90px] rounded-[20px] overflow-hidden relative">
-				<PlaceholderImageLoader />
-				<img
-					src={imageUrl}
-					alt={title}
-					className="w-full h-full object-cover relative z-10"
-					draggable={false}
-				/>
+			<div className="w-full h-[90px] rounded-[20px] overflow-hidden relative bg-secondary-darkest">
+				{imageUrl && (
+					<>
+						<PlaceholderImageLoader />
+						<img
+							src={imageUrl}
+							alt={title}
+							className="w-full h-full object-cover relative z-10"
+							draggable={false}
+						/>
+					</>
+				)}
 			</div>
 			<h3 className="text-small-title text-center">{title}</h3>
 		</div>
