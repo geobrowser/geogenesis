@@ -222,20 +222,32 @@ export const Web2URLExtension = Extension.create({
       new Plugin({
         key: new PluginKey(this.name),
         view(editorView) {
-          let isUpdating = false;
+          let rafId: number | null = null;
+          let updateTimeout: NodeJS.Timeout | null = null;
           let isDestroyed = false;
           let previousEditableState = editorView.editable;
 
           const updateLinkClasses = () => {
-            if (isUpdating || isDestroyed) return;
-            isUpdating = true;
+            if (isDestroyed) return;
 
-            // Use requestAnimationFrame to avoid blocking
-            requestAnimationFrame(() => {
+            // Clear any pending timeout to debounce rapid updates
+            if (updateTimeout !== null) {
+              clearTimeout(updateTimeout);
+            }
+
+            // Debounce updates to prevent excessive processing during rapid typing
+            updateTimeout = setTimeout(() => {
+              // Cancel any pending animation frame to prevent race conditions
+              if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+              }
+
+              // Use requestAnimationFrame to avoid blocking
+              rafId = requestAnimationFrame(() => {
               try {
                 // Check if the editor view is still valid
                 if (isDestroyed || !editorView || !editorView.state || editorView.isDestroyed) {
-                  isUpdating = false;
+                  rafId = null;
                   return;
                 }
 
@@ -279,7 +291,7 @@ export const Web2URLExtension = Extension.create({
                     const urls = detectWeb2URLsInMarkdown(paragraphText);
 
                     if (urls.length > 0) {
-                      urls.forEach((url: string) => {
+                      for (const url of urls) {
                         const urlIndex = paragraphText.indexOf(url);
                         if (urlIndex !== -1) {
                           // Find the actual document positions for this URL span
@@ -312,7 +324,7 @@ export const Web2URLExtension = Extension.create({
 
                             // Validate position bounds
                             if (from < 0 || to > state.doc.content.size || from >= to) {
-                              return;
+                              continue;
                             }
 
                             // Check if this range already has a web2URL mark
@@ -408,7 +420,7 @@ export const Web2URLExtension = Extension.create({
                             }
                           }
                         }
-                      });
+                      }
                     }
                   }
                 });
@@ -420,9 +432,11 @@ export const Web2URLExtension = Extension.create({
               } catch (error) {
                 console.warn('Web2URLExtension update error:', error);
               } finally {
-                isUpdating = false;
+                rafId = null;
               }
             });
+              updateTimeout = null;
+            }, 150); // Debounce delay: 150ms
           };
 
           // Update classes on initial load
@@ -456,6 +470,16 @@ export const Web2URLExtension = Extension.create({
             destroy: () => {
               // Mark as destroyed to prevent any further operations
               isDestroyed = true;
+
+              // Clean up pending timeout and animation frame
+              if (updateTimeout !== null) {
+                clearTimeout(updateTimeout);
+                updateTimeout = null;
+              }
+              if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+              }
             },
           };
         },

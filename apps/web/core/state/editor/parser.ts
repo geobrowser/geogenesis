@@ -171,7 +171,12 @@ export function markdownToHtml(markdown: string): string {
   let codeBlockContent: string[] = [];
   let i = 0;
 
-  function processInlineFormatting(text: string): string {
+  function processInlineFormatting(text: string, depth: number = 0): string {
+    // Prevent infinite recursion with malformed input (e.g., excessive nesting)
+    if (depth > 10) {
+      return text;
+    }
+
     // Process inline formatting in the correct order
     // Links first (to avoid interfering with other formatting)
     // Only convert graph:// URLs to anchor tags, leave web2 URLs as markdown for Web2URLExtension to handle
@@ -184,11 +189,24 @@ export function markdownToHtml(markdown: string): string {
       return match;
     });
 
-    // Bold (must come before italic to handle ***text*** correctly)
-    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // Handle nested bold/italic using recursive processing
+    // Bold and italic combined (***text***)
+    text = text.replace(/\*\*\*(.+?)\*\*\*/g, (_, content) => {
+      return `<strong><em>${processInlineFormatting(content, depth + 1)}</em></strong>`;
+    });
 
-    // Italic
-    text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    // Bold (**text**) - match but don't capture if part of ***
+    text = text.replace(/\*\*(?!\*)(.+?)(?<!\*)\*\*(?!\*)/g, (_, content) => {
+      return `<strong>${processInlineFormatting(content, depth + 1)}</strong>`;
+    });
+
+    // Italic (*text*) - use lookahead/lookbehind to avoid matching ** from bold
+    text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, (_, content) => {
+      return `<em>${processInlineFormatting(content, depth + 1)}</em>`;
+    });
+
+    // Underline (preserved as HTML tags) - use non-greedy matching
+    text = text.replace(/<u>(.+?)<\/u>/g, '<u>$1</u>');
 
     // Inline code
     text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
