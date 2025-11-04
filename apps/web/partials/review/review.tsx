@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import pluralize from 'pluralize';
 
@@ -51,6 +51,7 @@ const ReviewChanges = () => {
   const { store } = useSyncEngine();
   const [activeSpace, setActiveSpace] = useState<string>('');
   const { setIsReviewOpen } = useDiff();
+  const queryClient = useQueryClient();
 
   const allSpacesWithTripleChanges = useValues(
     React.useMemo(() => {
@@ -169,9 +170,44 @@ const ReviewChanges = () => {
   const { makeProposal } = usePublish();
   const [changes, isLoading] = useLocalChanges(activeSpace);
 
-  const handleDeleteActions = useCallback(() => {
-    // @TODO(database)
-  }, []);
+  const handleDeleteAttribute = useCallback((entityId: string, attributeId: string) => {
+    // Delete all values for this attribute from this entity
+    const valuesToDelete = valuesFromSpace.filter(
+      v => v.entity.id === entityId && v.property.id === attributeId
+    );
+
+    const relationsToDelete = relationsFromSpace.filter(
+      r => r.fromEntity.id === entityId && r.type.id === attributeId
+    );
+
+    // Remove from store and IndexedDB
+    if (valuesToDelete.length > 0) {
+      store.discardValues(valuesToDelete.map(v => v.id));
+    }
+
+    if (relationsToDelete.length > 0) {
+      store.discardRelations(relationsToDelete.map(r => r.id));
+    }
+
+    // Invalidate the query to refetch and update UI
+    queryClient.invalidateQueries({ queryKey: ['local-changes', activeSpace] });
+  }, [valuesFromSpace, relationsFromSpace, store, queryClient, activeSpace]);
+
+  const handleDeleteAllForEntity = useCallback((entityId: string) => {
+    const valuesToDelete = valuesFromSpace.filter(v => v.entity.id === entityId);
+    const relationsToDelete = relationsFromSpace.filter(r => r.fromEntity.id === entityId);
+
+    if (valuesToDelete.length > 0) {
+      store.discardValues(valuesToDelete.map(v => v.id));
+    }
+
+    if (relationsToDelete.length > 0) {
+      store.discardRelations(relationsToDelete.map(r => r.id));
+    }
+
+    // Invalidate the query to refetch and update UI
+    queryClient.invalidateQueries({ queryKey: ['local-changes', activeSpace] });
+  }, [valuesFromSpace, relationsFromSpace, store, queryClient, activeSpace]);
 
   const handleStaging = (entityId: string, attributeId: string) => {
     const newChanges = { ...unstagedChanges };
@@ -293,7 +329,9 @@ const ReviewChanges = () => {
               <div>
                 <SmallButton
                   onClick={() => {
-                    store.clear();
+                    store.clearAllUnpublished();
+                    // Invalidate the query to refetch and update UI
+                    queryClient.invalidateQueries({ queryKey: ['local-changes', activeSpace] });
                   }}
                 >
                   Delete all
@@ -317,31 +355,26 @@ const ReviewChanges = () => {
               <div className="absolute -bottom-10 -left-32 -right-32 h-px bg-divider" />
             </div>
             <div className="relative flex flex-col gap-16 divide-y divide-divider pt-16">
-              {JSON.stringify([...valuesFromSpace, ...relationsFromSpace], null, 2)}
-              {/* {changes.map(change => (
+              {changes.map(change => (
                 <ChangedEntity
                   key={change.id}
                   change={change}
-                  // deleteAllComponent={
-                  //   <div className="absolute right-0 top-0">
-                  //     <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
-                  //   </div>
-                  // }
-                  // renderAttributeStagingComponent={attributeId => (
-                  //   <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-                  //     <SquareButton
-                  //       onClick={handleDeleteActions}
-                  //       icon={<Trash />}
-                  //       className="opacity-0 group-hover:opacity-100"
-                  //     />
-                  //     <SquareButton
-                  //       onClick={() => handleStaging(attributeId, false)}
-                  //       icon={unstaged ? <Blank /> : <Tick />}
-                  //     />
-                  //   </div>
-                  // )}
+                  deleteAllComponent={
+                    <div className="absolute right-0 top-0">
+                      <SmallButton onClick={() => handleDeleteAllForEntity(change.id)}>Delete all</SmallButton>
+                    </div>
+                  }
+                  renderAttributeStagingComponent={attributeId => (
+                    <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+                      <SquareButton
+                        onClick={() => handleDeleteAttribute(change.id, attributeId)}
+                        icon={<Close />}
+                        className="opacity-0 group-hover:opacity-100"
+                      />
+                    </div>
+                  )}
                 />
-              ))} */}
+              ))}
             </div>
           </div>
         </div>
