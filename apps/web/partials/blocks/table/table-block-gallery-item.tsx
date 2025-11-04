@@ -76,12 +76,14 @@ export function TableBlockGalleryItem({
 
   const maybeCoverUrl = coverRelation?.toEntity.value;
 
-  if (maybeAvatarUrl) {
-    image = maybeAvatarUrl;
-  }
+  // Check which image property is selected to be shown in the collection
+  const showCover = columns[SystemIds.COVER_PROPERTY] !== undefined;
 
-  if (maybeCoverUrl) {
+  // Only use cover if it's selected to be shown (cover takes priority if both are shown)
+  if (showCover) {
     image = maybeCoverUrl;
+  } else {
+    image = maybeAvatarUrl;
   }
 
   const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
@@ -122,14 +124,19 @@ export function TableBlockGalleryItem({
             <BlockImageField
               variant="gallery"
               imageSrc={image ?? undefined}
-              onFileChange={async (file) => {
+              onFileChange={async file => {
+                // Use the appropriate image property based on what's selected to be shown
+                // Prefer cover if shown, otherwise use avatar
+                const usePropertyId = showCover ? SystemIds.COVER_PROPERTY : ContentIds.AVATAR_PROPERTY;
+                const usePropertyName = showCover ? 'Cover' : 'Avatar';
+
                 // Use the consolidated helper to create and link the image
-                const { imageId } = await storage.images.createAndLink({
+                await storage.images.createAndLink({
                   file,
                   fromEntityId: rowEntityId,
                   fromEntityName: name,
-                  relationPropertyId: SystemIds.COVER_PROPERTY,
-                  relationPropertyName: 'Cover',
+                  relationPropertyId: usePropertyId,
+                  relationPropertyName: usePropertyName,
                   spaceId: currentSpaceId,
                 });
               }}

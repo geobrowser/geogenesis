@@ -8,4 +8,5 @@ dist
 .env
 pgdata
 replay.log
-
+.output
+.nitro
