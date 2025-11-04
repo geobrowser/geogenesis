@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Read(//Users/bryandoss/Documents/EES/geogenesis/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

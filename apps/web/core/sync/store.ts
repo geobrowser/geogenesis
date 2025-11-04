@@ -4,8 +4,9 @@ import { Array as A } from 'effect';
 import produce from 'immer';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
-import { getStrictRenderableType } from '../io/dto/properties';
+import { db } from '../database/indexeddb';
 import { readTypes } from '../database/entities';
+import { getStrictRenderableType } from '../io/dto/properties';
 import { Entities } from '../utils/entity';
 import { DataType, Entity, Property, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
@@ -59,6 +60,9 @@ export class GeoStore {
      * syncing is complete.
      */
     this.stream.on(GeoEventStream.ENTITIES_SYNCED, event => this.syncEntities(event.entities));
+
+    // Restore persisted changes from IndexedDB on initialization
+    this.restoreFromIndexedDB();
   }
 
   private syncEntities(entities: Entity[]) {
@@ -68,6 +72,80 @@ export class GeoStore {
       console.log(`
 Finished syncing entities to store.
 Entity ids: ${entities.map(e => e.id).join(', ')}`);
+    }
+  }
+
+  /**
+   * Restore persisted changes from IndexedDB on store initialization
+   */
+  private async restoreFromIndexedDB() {
+    try {
+      const [persistedValues, persistedRelations] = await Promise.all([
+        db.values.toArray(),
+        db.relations.toArray()
+      ]);
+
+      if (persistedValues.length > 0) {
+        reactiveValues.set(prev => [...prev, ...persistedValues]);
+      }
+
+      if (persistedRelations.length > 0) {
+        reactiveRelations.set(prev => [...prev, ...persistedRelations]);
+      }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[GeoStore] Restored ${persistedValues.length} values and ${persistedRelations.length} relations from IndexedDB`);
+      }
+    } catch (error) {
+      console.error('[GeoStore] Failed to restore from IndexedDB:', error);
+    }
+  }
+
+  /**
+   * Persist unpublished values to IndexedDB
+   */
+  private async persistValues() {
+    try {
+      const unpublished = reactiveValues.get().filter(v => !v.hasBeenPublished && v.isLocal);
+      await db.values.clear();
+      if (unpublished.length > 0) {
+        await db.values.bulkPut(unpublished);
+      }
+    } catch (error) {
+      console.error('[GeoStore] Failed to persist values:', error);
+    }
+  }
+
+  /**
+   * Persist unpublished relations to IndexedDB
+   */
+  private async persistRelations() {
+    try {
+      const unpublished = reactiveRelations.get().filter(r => !r.hasBeenPublished && r.isLocal);
+      await db.relations.clear();
+      if (unpublished.length > 0) {
+        await db.relations.bulkPut(unpublished);
+      }
+    } catch (error) {
+      console.error('[GeoStore] Failed to persist relations:', error);
+    }
+  }
+
+  /**
+   * Clear published items from IndexedDB after successful publish
+   */
+  private async clearPublishedFromIndexedDB(valueIds: string[], relationIds: string[]) {
+    try {
+      await db.transaction('rw', [db.values, db.relations], async () => {
+        await db.values.bulkDelete(valueIds);
+        await db.relations.bulkDelete(relationIds);
+      });
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[GeoStore] Cleared ${valueIds.length} values and ${relationIds.length} relations from IndexedDB`);
+      }
+    } catch (error) {
+      console.error('[GeoStore] Failed to clear from IndexedDB:', error);
     }
   }
 
@@ -86,6 +164,24 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     this.pendingDataTypes.clear();
 
     this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entitiesToSync.map(e => e.id) });
+  }
+
+  /**
+   * Clear all unpublished local changes from the store and IndexedDB
+   */
+  public clearAllUnpublished(): void {
+    // Remove all unpublished local changes
+    reactiveValues.set(prev => {
+      return prev.filter(v => v.hasBeenPublished || !v.isLocal);
+    });
+
+    reactiveRelations.set(prev => {
+      return prev.filter(r => r.hasBeenPublished || !r.isLocal);
+    });
+
+    // Clear IndexedDB
+    this.persistValues();
+    this.persistRelations();
   }
 
   public hydrateWith(entities: Entity[]) {
@@ -310,6 +406,9 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value: newValue });
+
+    // Persist to IndexedDB (fire-and-forget)
+    this.persistValues();
   }
 
   /**
@@ -334,6 +433,9 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: newValue });
+
+    // Persist to IndexedDB (fire-and-forget)
+    this.persistValues();
   }
 
   /**
@@ -357,6 +459,9 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation: newRelation });
+
+    // Persist to IndexedDB (fire-and-forget)
+    this.persistRelations();
   }
 
   /**
@@ -381,6 +486,37 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
 
     // Emit update event
     this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation: newRelation });
+
+    // Persist to IndexedDB (fire-and-forget)
+    this.persistRelations();
+  }
+
+  /**
+   * Discard (permanently remove) unpublished values from the store and IndexedDB
+   */
+  public discardValues(valueIds: string[]): void {
+    const idsSet = new Set(valueIds);
+
+    reactiveValues.set(prev => {
+      return prev.filter(v => !idsSet.has(v.id));
+    });
+
+    // Persist to IndexedDB (fire-and-forget)
+    this.persistValues();
+  }
+
+  /**
+   * Discard (permanently remove) unpublished relations from the store and IndexedDB
+   */
+  public discardRelations(relationIds: string[]): void {
+    const idsSet = new Set(relationIds);
+
+    reactiveRelations.set(prev => {
+      return prev.filter(r => !idsSet.has(r.id));
+    });
+
+    // Persist to IndexedDB (fire-and-forget)
+    this.persistRelations();
   }
 
   /**
@@ -430,5 +566,8 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
         }),
       ];
     });
+
+    // Clear published items from IndexedDB (fire-and-forget)
+    this.clearPublishedFromIndexedDB(valueIds, relationIds);
   }
 }
