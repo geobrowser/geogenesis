@@ -4,7 +4,7 @@ export const DEFAULT_OPENGRAPH_IMAGE = 'https://www.geobrowser.io/static/geo-soc
 export const PLACEHOLDER_SPACE_IMAGE = '/placeholder.png';
 export const DEFAULT_OPENGRAPH_DESCRIPTION =
   "Browse and organize the world's public knowledge and information in a decentralized way.";
-export const IPFS_GATEWAY_PATH = 'https://node.lighthouse.storage';
+export const IPFS_GATEWAY_PATH = 'https://upload.lighthouse.storage';
 export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`;
 
 export const RENDERABLE_TYPE_PROPERTY = '2316bbe1-c76f-4635-83f2-3e03b4f1fe46';
