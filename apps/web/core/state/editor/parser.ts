@@ -266,13 +266,14 @@ export function markdownToHtml(markdown: string): string {
     }
 
     // Group consecutive plain text lines into a single paragraph with <br> tags
-    // Stop when we encounter markdown elements that need their own block-level handling
+    // The current line (at the start of this section) is plain text, but we need to check
+    // subsequent lines while grouping to see when to stop
     const paragraphLines: string[] = [];
     while (i < lines.length) {
       const currentLine = lines[i];
 
-      // Stop grouping if we hit markdown block-level elements that have dedicated handlers below
-      // These need to break out into their own HTML elements, not be included as <br> within this <p>
+      // Stop grouping if this upcoming line is a markdown element
+      // (break back to outer loop which will process it with the handlers above)
       if (!currentLine.trim() ||                      // Empty line (paragraph break)
           currentLine.match(/^(#{1,6})\s+/) ||        // Heading
           currentLine.startsWith('> ') ||             // Blockquote
