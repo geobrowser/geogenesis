@@ -137,6 +137,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
         ref={scrollRef}
         className={cx(
           'relative z-0 cursor-grab select-none overflow-x-auto overflow-y-clip active:cursor-grabbing',
+          '[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]',
           className
         )}
         onMouseDown={handleMouseDown}
