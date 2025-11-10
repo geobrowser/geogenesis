@@ -169,7 +169,7 @@ export function EditableSpaceHeading({
             onOpenChange={setIsContextMenuOpen}
             align="end"
             trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-            className={cx(!isCreatingNewVersion ? 'max-w-[160]' : 'max-w-[320px]')}
+            className={cx(!isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
           >
             {isCreatingNewVersion && (
               <CreateNewVersionInSpace
