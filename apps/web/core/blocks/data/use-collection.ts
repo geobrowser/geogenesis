@@ -1,7 +1,6 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-
-import { EntityId } from '~/core/io/schema';
+import { Position, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData } from '@tanstack/react-query';
+
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 
 import { useDataBlockInstance } from './use-data-block';
@@ -22,41 +21,32 @@ export function useCollection({ first, skip }: CollectionProps) {
     enabled: source.type === 'COLLECTION',
   });
 
-  const collectionItemsRelations =
+  const collectionRelations =
     source.type === 'COLLECTION'
-      ? (blockEntity?.relationsOut.filter(
-          r => r.fromEntity.id === source.value && r.typeOf.id === EntityId(SystemIds.COLLECTION_ITEM_RELATION_TYPE)
+      ? (blockEntity?.relations.filter(
+          r => r.fromEntity.id === source.value && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE
         ) ?? [])
       : [];
 
-  const orderedCollectionItemRelations = collectionItemsRelations.sort((a, z) =>
-    a.index.toLowerCase().localeCompare(z.index.toLowerCase())
-  );
-
-  const collectionItemIds = orderedCollectionItemRelations?.map(c => c.toEntity.id) ?? [];
-  const collectionRelationIds = orderedCollectionItemRelations?.map(c => c.id) ?? [];
-
-  const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
-    enabled: collectionItemIds !== null,
-    where: {
-      id: {
-        in: collectionItemIds,
-      },
-    },
-    first,
-    skip,
-    placeholderData: keepPreviousData,
+  const orderedCollectionRelations = collectionRelations.sort((a, z) => {
+    return Position.compare(a.position ?? null, z.position ?? null);
   });
 
-  const { entities: collectionRelations, isLoading: isCollectionRelationsLoading } = useQueryEntities({
-    enabled: collectionRelationIds !== null,
+  // Get the entities for the current page based on position order
+  const pageStartIndex = skip || 0;
+  const pageEndIndex = pageStartIndex + (first || 9);
+  const currentPageRelations = orderedCollectionRelations.slice(pageStartIndex, pageEndIndex);
+  const currentPageEntityIds = currentPageRelations.map(r => r.toEntity.id);
+
+
+  const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
+    enabled: currentPageEntityIds.length > 0,
     where: {
       id: {
-        in: collectionRelationIds,
+        in: currentPageEntityIds,
       },
     },
-    first,
-    skip,
+    // Don't use first/skip here since we're already slicing the relations
     placeholderData: keepPreviousData,
   });
 
@@ -67,19 +57,19 @@ export function useCollection({ first, skip }: CollectionProps) {
    */
   const collectionItemsMap = new Map(collectionItems.map(item => [item.id, item]));
 
-  const orderedCollectionItems = orderedCollectionItemRelations
+  const orderedCollectionItems = currentPageRelations
     .map(relation => {
       const entity = collectionItemsMap.get(relation.toEntity.id);
 
       return entity;
     })
     .filter(item => item !== undefined);
-    
+
   return {
     collectionItems: orderedCollectionItems,
-    collectionRelations,
-    isLoading: isCollectionItemsLoading || isCollectionRelationsLoading,
-    isFetched: !isCollectionItemsLoading && !isCollectionRelationsLoading,
-    collectionLength: collectionItemsRelations.length,
+    collectionRelations: orderedCollectionRelations,
+    isLoading: isCollectionItemsLoading,
+    isFetched: !isCollectionItemsLoading,
+    collectionLength: collectionRelations.length,
   };
 }

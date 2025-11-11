@@ -4,15 +4,16 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
-import { upsert } from '~/core/database/write';
+import { ID } from '~/core/id';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 
-import { Filter, fromGeoFilterState, toGeoFilterState } from './filters';
-import { Source } from './source';
+import { Filter, fromGeoFilterString, toGeoFilterState } from './filters';
 import { useDataBlockInstance } from './use-data-block';
 
 export function useFilters() {
   const { entityId, spaceId } = useDataBlockInstance();
+  const { storage } = useMutate();
 
   const { entity: blockEntity } = useQueryEntity({
     id: entityId,
@@ -20,15 +21,15 @@ export function useFilters() {
   });
 
   const filterTriple = React.useMemo(() => {
-    return blockEntity?.triples.find(t => t.attributeId === SystemIds.FILTER);
-  }, [blockEntity?.triples]);
+    return blockEntity?.values.find(t => t.property.id === SystemIds.FILTER);
+  }, [blockEntity?.values]);
 
   const geoFilterString = React.useMemo(() => {
     if (!filterTriple) return null;
 
-    if (filterTriple.value.type === 'TEXT') {
-      if (filterTriple.value.value === '') return null;
-      return filterTriple.value.value;
+    if (filterTriple.property.dataType === 'TEXT') {
+      if (filterTriple.value === '') return null;
+      return filterTriple.value;
     }
 
     return null;
@@ -47,7 +48,7 @@ export function useFilters() {
     placeholderData: keepPreviousData,
     queryKey: ['blocks', 'data', 'filter-state', geoFilterString],
     queryFn: async () => {
-      return await fromGeoFilterState(geoFilterString);
+      return await fromGeoFilterString(geoFilterString);
     },
   });
 
@@ -55,35 +56,40 @@ export function useFilters() {
     enabled: filterState !== undefined,
     queryKey: ['blocks', 'data', 'filterable-properties', filterState],
     queryFn: async () => {
-      const typesInFilter = filterState?.filter(f => f.columnId === SystemIds.TYPES_ATTRIBUTE).map(f => f.value) ?? [];
+      const typesInFilter = filterState?.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value) ?? [];
       return await getSchemaFromTypeIds(typesInFilter);
     },
   });
 
   const setFilterState = React.useCallback(
-    (filters: Filter[], source: Source) => {
+    (filters: Filter[]) => {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString = newState.length === 0 ? '' : toGeoFilterState(newState, source);
+      const newFiltersString = newState.length === 0 ? '' : toGeoFilterState(newState);
 
       const entityName = blockEntity?.name ?? '';
 
-      return upsert(
-        {
-          attributeId: SystemIds.FILTER,
-          attributeName: 'Filter',
+      storage.values.set({
+        id: ID.createValueId({
           entityId,
-          entityName,
-          value: {
-            type: 'TEXT',
-            value: newFiltersString,
-          },
+          propertyId: SystemIds.FILTER,
+          spaceId,
+        }),
+        spaceId,
+        entity: {
+          id: entityId,
+          name: entityName,
         },
-        spaceId
-      );
+        property: {
+          id: SystemIds.FILTER,
+          name: 'Filter',
+          dataType: 'TEXT',
+        },
+        value: newFiltersString,
+      });
     },
-    [entityId, spaceId, blockEntity?.name]
+    [entityId, spaceId, blockEntity?.name, storage.values]
   );
 
   return {

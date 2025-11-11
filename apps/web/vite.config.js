@@ -15,7 +15,6 @@ export default defineConfig({
       NEXT_PUBLIC_PIMLICO_API_KEY: 'a',
       NEXT_PUBLIC_ONBOARD_FLAG: 'a',
       NEXT_PUBLIC_ONBOARD_CODE: 'a',
-      GEO_PK: '0x904403559d04da2d63089de2f903aa6cebe19cb3dc6490ad3a885261880ee874',
       IPFS_KEY: 'a',
     },
   },

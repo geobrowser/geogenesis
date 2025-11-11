@@ -1,14 +1,13 @@
-import { SystemIds } from '@graphprotocol/grc-20';
 import * as Popover from '@radix-ui/react-popover';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
 import { startTransition, useState } from 'react';
 
+import { ROOT_SPACE } from '~/core/constants';
 import { useSearch } from '~/core/hooks/use-search';
-import { SearchResult } from '~/core/io/dto/search';
-import { EntityId } from '~/core/io/schema';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { SearchResult } from '~/core/v2.types';
 
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Tag } from '~/design-system/tag';
@@ -18,8 +17,8 @@ import { Spacer } from './spacer';
 import { Truncate } from './truncate';
 
 type FindEntityProps = {
-  onDone: (result: { id: EntityId; name: string | null }) => void;
-  onCreateEntity: (result: { id: EntityId; name: string | null }) => void;
+  onDone: (result: { id: string; name: string | null }) => void;
+  onCreateEntity: (result: { id: string; name: string | null }) => void;
   allowedTypes?: string[];
   placeholder?: string;
 };
@@ -64,7 +63,7 @@ export const FindEntity = ({
             value={query}
             onChange={event => {
               onQueryChange(event.target.value);
-              onCreateEntity({ id: EntityId(''), name: event.target.value });
+              onCreateEntity({ id: '', name: event.target.value });
               setHasDismissedPopover(false);
             }}
             placeholder={placeholder}
@@ -125,7 +124,7 @@ export const FindEntity = ({
                                     <button
                                       onClick={event => {
                                         event.stopPropagation();
-                                        window.open(NavUtils.toEntity(SystemIds.ROOT_SPACE_ID, result.id));
+                                        window.open(NavUtils.toEntity(ROOT_SPACE, result.id));
                                       }}
                                       className="relative text-text hover:text-ctaPrimary"
                                     >
@@ -181,7 +180,7 @@ export const FindEntity = ({
                 <div className="border-t border-grey-02 p-1">
                   <button
                     onClick={() => {
-                      onCreateEntity({ id: EntityId(''), name: query });
+                      onCreateEntity({ id: '', name: query });
                       setHasDismissedPopover(true);
                     }}
                     className="block w-full rounded-md px-2 py-1 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none"

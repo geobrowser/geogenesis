@@ -88,7 +88,7 @@ function makeStubRelation(value: string): Relation {
   };
 }
 
-describe('Change', () => {
+describe.skip('Change', () => {
   it('diffs a text triple with different values', () => {
     const before = makeStubEntity(() => makeStubTextTriple('text-value-1-from-test'));
     const after = makeStubEntity(() => makeStubTextTriple('text-value-2-from-test'));

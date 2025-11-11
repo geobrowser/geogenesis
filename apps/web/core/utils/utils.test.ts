@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderHook } from '@testing-library/react';
 
 import { IPFS_GATEWAY_READ_PATH } from '../constants';
-import { GeoDate, GeoNumber, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl, getPaginationPages, PagesPaginationPlaceholder } from './utils';
+import { GeoDate, GeoNumber, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl, getPaginationPages, PagesPaginationPlaceholder, useImageUrlFromEntity } from './utils';
+import * as useStore from '../sync/use-store';
 
 describe('GeoNumber', () => {
   let consoleErrorSpy: any;
@@ -288,5 +290,72 @@ describe('getPaginationPages', () => {
         expect(result).toContain(page);
       }
     }
+  });
+});
+
+describe('useImageUrlFromEntity', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should return undefined when imageEntityId is undefined', () => {
+    vi.spyOn(useStore, 'useValues').mockReturnValue([]);
+    
+    const { result } = renderHook(() => useImageUrlFromEntity(undefined, 'test-space'));
+    
+    expect(result.current).toBeUndefined();
+    expect(useStore.useValues).toHaveBeenCalledWith({
+      selector: expect.any(Function),
+    });
+  });
+
+  it('should return undefined when no values are found', () => {
+    vi.spyOn(useStore, 'useValues').mockReturnValue([]);
+    
+    const { result } = renderHook(() => useImageUrlFromEntity('image-123', 'test-space'));
+    
+    expect(result.current).toBeUndefined();
+    expect(useStore.useValues).toHaveBeenCalledWith({
+      selector: expect.any(Function),
+    });
+  });
+
+  it('should return the first IPFS URL when found', () => {
+    const mockValues = [
+      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'some-other-value' },
+      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'ipfs://QmHash123' },
+    ];
+    
+    vi.spyOn(useStore, 'useValues').mockReturnValue(mockValues);
+    
+    const { result } = renderHook(() => useImageUrlFromEntity('image-123', 'test-space'));
+    
+    expect(result.current).toBe('ipfs://QmHash123');
+  });
+
+  it('should return undefined when values exist but none are IPFS URLs', () => {
+    const mockValues = [
+      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'some-string-value' },
+      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 123 },
+    ];
+    
+    vi.spyOn(useStore, 'useValues').mockReturnValue(mockValues);
+    
+    const { result } = renderHook(() => useImageUrlFromEntity('image-123', 'test-space'));
+    
+    expect(result.current).toBeUndefined();
+  });
+
+  it('should filter values by entity ID and space ID', () => {
+    const mockUseValues = vi.spyOn(useStore, 'useValues').mockReturnValue([]);
+    
+    renderHook(() => useImageUrlFromEntity('image-123', 'test-space'));
+    
+    const selector = mockUseValues.mock.calls[0][0].selector;
+    
+    // Test that selector filters correctly
+    expect(selector({ entity: { id: 'image-123' }, spaceId: 'test-space' })).toBe(true);
+    expect(selector({ entity: { id: 'wrong-id' }, spaceId: 'test-space' })).toBe(false);
+    expect(selector({ entity: { id: 'image-123' }, spaceId: 'wrong-space' })).toBe(false);
   });
 });

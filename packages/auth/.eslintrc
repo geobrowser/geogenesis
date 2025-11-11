@@ -1,0 +1,48 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "node": true
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:@next/next/recommended",
+    "prettier"
+  ],
+  "overrides": [
+    {
+      "files": ["*.ts", "*.tsx"]
+    }
+  ],
+  "ignorePatterns": ["node_modules/**/*", ".next/**/*", ".turbo/**/*", ".cache/**/*"],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+  "plugins": ["react", "@typescript-eslint"],
+  "rules": {
+    "@typescript-eslint/no-non-null-assertion": 0,
+    "@typescript-eslint/no-unused-vars": 1,
+    "@typescript-eslint/no-empty-interface": 0,
+    "@typescript-eslint/no-explicit-any": 0,
+    "@next/next/no-img-element": 0,
+    "react/no-unescaped-entities": 0,
+    "react/react-in-jsx-scope": 0,
+    "react/prop-types": 0, // Use TypeScript instead of PropTypes
+    "no-undef": 1,
+    "no-unused-vars": 1, // this gets handled by @typescript-eslint/no-unused-vars
+    "@next/next/no-html-link-for-pages": 0
+  },
+  "settings": {
+    "react": {
+      "version": "detect" // Tells eslint-plugin-react to automatically detect the version of React to use
+    }
+  }
+}

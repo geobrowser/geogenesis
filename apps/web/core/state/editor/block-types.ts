@@ -1,8 +1,7 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 
-import { StoreRelation } from '~/core/database/types';
 import { EntityId } from '~/core/io/schema';
+import { Relation } from '~/core/v2.types';
 
 type BlockTypeId = typeof SystemIds.TEXT_BLOCK | typeof SystemIds.IMAGE_TYPE | typeof SystemIds.DATA_BLOCK;
 
@@ -10,17 +9,19 @@ export function getRelationForBlockType(
   fromBlockEntityId: string,
   blockTypeId: BlockTypeId,
   spaceId: string
-): StoreRelation {
+): Relation {
   return {
-    space: spaceId,
-    index: INITIAL_RELATION_INDEX_VALUE,
-    typeOf: {
-      id: EntityId(SystemIds.TYPES_ATTRIBUTE),
+    id: IdUtils.generate(),
+    entityId: IdUtils.generate(),
+    spaceId: spaceId,
+    position: Position.generate(),
+    renderableType: 'RELATION',
+    type: {
+      id: EntityId(SystemIds.TYPES_PROPERTY),
       name: 'Types',
     },
     toEntity: {
       id: EntityId(blockTypeId),
-      renderableType: 'RELATION',
       name: null,
       value: blockTypeId,
     },

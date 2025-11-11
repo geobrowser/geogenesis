@@ -11,7 +11,6 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { EntityId, SpaceId } from '~/core/io/schema';
 import { getImagePath } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -23,8 +22,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 type NavbarBreadcrumbProps = {
-  spaceId: SpaceId;
-  entityId?: EntityId;
+  spaceId: string;
+  entityId?: string;
 };
 
 const MotionContent = motion(Popover.Content);
@@ -36,18 +35,18 @@ export function NavbarBreadcrumb({ spaceId, entityId }: NavbarBreadcrumbProps) {
 }
 
 type SpaceBreadcrumbProps = {
-  spaceId: SpaceId;
+  spaceId: string;
 };
 
 const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
   const { space, isLoading } = useSpace(spaceId);
 
-  if (isLoading || !space || !space.spaceConfig) {
+  if (isLoading || !space || !space.entity) {
     return null;
   }
 
-  const spaceName = space.spaceConfig.name ?? '';
-  const spaceImage = space.spaceConfig.image;
+  const spaceName = space.entity.name ?? '';
+  const spaceImage = space.entity.image;
 
   return (
     <Link href={NavUtils.toSpace(spaceId)} className="flex items-center justify-center gap-1.5">
@@ -65,8 +64,8 @@ const SpaceBreadcrumb = ({ spaceId }: SpaceBreadcrumbProps) => {
 };
 
 type EntityBreadcrumbProps = {
-  spaceId: SpaceId;
-  entityId: EntityId;
+  spaceId: string;
+  entityId: string;
 };
 
 const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
@@ -78,12 +77,12 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
   const entity = useEntity({ id: entityId });
   const { spaces } = useSpaces();
 
-  if (isLoading || !space || !space.spaceConfig) {
+  if (isLoading || !space || !space.entity) {
     return null;
   }
 
-  const spaceName = space.spaceConfig.name ?? '';
-  const spaceImage = space.spaceConfig.image;
+  const spaceName = space.entity.name ?? '';
+  const spaceImage = space.entity.image;
 
   const otherSpaces = spaces.filter(space => spaceId !== space.id && (entity?.spaces ?? []).includes(space.id));
 
@@ -91,11 +90,11 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
 
   const renderedSpaces = !query
     ? otherSpaces
-    : otherSpaces.filter(space => space.spaceConfig.name?.toLowerCase().startsWith(formattedQuery));
+    : otherSpaces.filter(space => space.entity.name?.toLowerCase().startsWith(formattedQuery));
 
-  const showCurrentSpace = space.spaceConfig.name?.toLowerCase().startsWith(formattedQuery);
+  const showCurrentSpace = space.entity.name?.toLowerCase().startsWith(formattedQuery);
 
-  if (!entity || entity.spaces.length < 2) {
+  if (!entity || otherSpaces.length < 1) {
     return (
       <Link href={NavUtils.toSpace(spaceId)} className="flex items-center justify-center gap-1.5">
         <div className="relative h-4 w-4 overflow-hidden rounded-sm">
@@ -169,8 +168,8 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
               )}
               {renderedSpaces.map(space => {
                 const spaceId = space.id;
-                const spaceName = space.spaceConfig.name ?? '';
-                const spaceImage = space.spaceConfig.image;
+                const spaceName = space.entity.name ?? '';
+                const spaceImage = space.entity.image;
 
                 return (
                   <Link

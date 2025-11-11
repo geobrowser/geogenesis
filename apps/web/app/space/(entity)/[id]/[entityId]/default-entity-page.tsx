@@ -4,8 +4,6 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
-import { EntityId } from '~/core/io/schema';
-import { fetchEntitiesBatch } from '~/core/io/subgraph/fetch-entities-batch';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
@@ -18,14 +16,14 @@ import { TabGroup } from '~/design-system/tab-group';
 
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
+import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
+import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { EntityPageHeading } from '~/partials/entity-page/entity-page-heading';
-import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
-import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
-import { cachedFetchEntitiesBatch, cachedFetchEntity } from './cached-fetch-entity';
+import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
+import { EntityPageHeader } from './entity-page-header';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -47,20 +45,10 @@ export default async function DefaultEntityPage({
   const showSpacer = showCover || showHeading || showHeader;
 
   const props = await getData(params.id, params.entityId, searchParams?.edit === 'true' ? true : false);
-
-  const avatarUrl = Entities.avatar(props.relationsOut) ?? props.serverAvatarUrl;
-  const coverUrl = Entities.cover(props.relationsOut) ?? props.serverCoverUrl;
-
   const tabs = buildTabsForEntityPage(props.tabEntities, params);
 
   return (
-    <EntityStoreProvider
-      id={props.id}
-      spaceId={props.spaceId}
-      initialSpaces={props.spaces}
-      initialTriples={props.triples}
-      initialRelations={props.relationsOut}
-    >
+    <EntityStoreProvider id={props.id} spaceId={props.spaceId}>
       <EditorProvider
         id={props.id}
         spaceId={props.spaceId}
@@ -68,16 +56,15 @@ export default async function DefaultEntityPage({
         initialBlockRelations={props.blockRelations}
         initialTabs={props.tabs}
       >
-        {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
+        {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
         <EntityPageContentContainer>
-          <div className="space-y-2">
-            {showHeading && (
-              <EntityPageHeading spaceId={props.spaceId} entityId={props.id} />
-            )}
-            {showHeader && (
-              <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />
-            )}
-          </div>
+          <EntityPageHeader
+            showHeading={showHeading}
+            showHeader={showHeader}
+            entityId={props.id}
+            spaceId={props.spaceId}
+            serverRelations={props.relationEntityRelations}
+          />
           {tabs.length > 1 && (
             <>
               <Spacer height={40} />
@@ -88,17 +75,19 @@ export default async function DefaultEntityPage({
           )}
           {notice}
           {(showSpacer || !!notice) && <Spacer height={40} />}
+
           <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
           <ToggleEntityPage {...props} />
           <AutomaticModeToggle />
           <Spacer height={40} />
+          {/*
+             Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
+             boundary. We don't want to show any referenced by loading states but do want to
+             stream it in
+          */}
           <ErrorBoundary fallback={<EmptyErrorComponent />}>
-            {/*
-              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
-              show any referenced by loading states but do want to stream it in
-            */}
             <React.Suspense fallback={<div />}>
-              <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
+              <BacklinksServerContainer entityId={params.entityId} />
             </React.Suspense>
           </ErrorBoundary>
         </EntityPageContentContainer>
@@ -108,34 +97,56 @@ export default async function DefaultEntityPage({
 }
 
 const getData = async (spaceId: string, entityId: string, preventRedirect?: boolean) => {
-  const entity = await cachedFetchEntity(entityId, spaceId);
-  const nameTripleSpace = entity?.nameTripleSpaces?.[0];
+  const entityPage = await cachedFetchEntityPage(entityId, spaceId);
+
+  const entity = entityPage?.entity;
+  const relationEntityRelations = entityPage?.relations ?? [];
   const spaces = entity?.spaces ?? [];
 
-  // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && nameTripleSpace) {
-    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${spaceId}`);
-    return redirect(NavUtils.toSpace(spaceId));
-  }
-
-  // Redirect from an invalid space to a valid one
-  if (entity && !spaces.includes(spaceId) && !preventRedirect) {
+  /**
+   * Redirect from an invalid space to a valid one. Additionally,
+   * redirect to the space front page if the entity is a space.
+   *
+   * We need to check that spaces has data. We could be navigating
+   * to an entity with no data like a relation entity page.
+   */
+  if (entity && spaces.length > 0 && !spaces.includes(spaceId) && !preventRedirect) {
     const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
-    console.log(`Redirecting from invalid space ${spaceId} to valid space ${spaceId}`);
+    console.log(`Redirecting from invalid space ${spaceId} to valid space ${newSpaceId}`);
+
+    /**
+     * If we're not in a valid space for the entity AND the entity
+     * is a space, redirect to the space front page directly.
+     */
+    if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
+      console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
+      return redirect(NavUtils.toSpace(newSpaceId));
+    }
+
+    /**
+     * If the entity isn't a space we can redirect to the entity route
+     */
     return redirect(NavUtils.toEntity(newSpaceId, entityId));
   }
 
-  const tabIds = entity?.relationsOut
-    .filter(r => r.typeOf.id === EntityId(SystemIds.TABS_ATTRIBUTE))
-    ?.map(r => r.toEntity.id);
+  /**
+   * If we're in a valid space for the entity and the entity is
+   * a space, redirect to the space front page directly.
+   */
+  // if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
+  //   console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
+  //   return redirect(NavUtils.toSpace(spaceId));
+  // }
 
-  const tabEntities = tabIds ? await fetchEntitiesBatch({ spaceId, entityIds: tabIds }) : [];
+  const tabIds = entity?.relations.filter(r => r.type.id === SystemIds.TABS_PROPERTY)?.map(r => r.toEntity.id);
 
+  // @TODO: For performance can we wait to fetch tabs until we're on the client?
+  const tabEntities = tabIds ? await cachedFetchEntitiesBatch(tabIds, spaceId) : [];
+
+  // @TODO(migration): We can query blocks from entities now
   const tabBlocks = await Promise.all(
     tabEntities.map(async entity => {
-      const blockIds = entity?.relationsOut
-        .filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS))
-        ?.map(r => r.toEntity.id);
+      const blockIds = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS)?.map(r => r.toEntity.id);
 
       const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
       return blocks;
@@ -145,33 +156,31 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const tabs: Tabs = {};
 
   tabEntities.forEach((entity, index) => {
-    tabs[entity.id as EntityId] = {
+    tabs[entity.id] = {
       entity,
       blocks: tabBlocks[index],
     };
   });
 
-  const serverAvatarUrl = Entities.avatar(entity?.relationsOut);
-  const serverCoverUrl = Entities.cover(entity?.relationsOut);
+  const serverAvatarUrl = Entities.avatar(entity?.relations);
+  const serverCoverUrl = Entities.cover(entity?.relations);
 
-  const blockRelations = entity?.relationsOut.filter(r => r.typeOf.id === EntityId(SystemIds.BLOCKS));
+  const blockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS);
   const blockIds = blockRelations?.map(r => r.toEntity.id);
+
   const blocks = blockIds ? await cachedFetchEntitiesBatch(blockIds) : [];
 
   return {
-    triples: entity?.triples ?? [],
     id: entityId,
-    name: entity?.name ?? null,
-    description: Entities.description(entity?.triples ?? []),
     spaceId,
-    spaces,
     serverAvatarUrl,
     serverCoverUrl,
-    relationsOut: entity?.relationsOut ?? [],
-    types: entity?.types ?? [],
 
     tabs,
     tabEntities,
+
+    // For relation entity pages
+    relationEntityRelations,
 
     // For entity page editor
     blockRelations: blockRelations ?? [],
@@ -212,6 +221,11 @@ const buildTabsForEntityPage = (
   if (DYNAMIC_TABS.length > 0) {
     tabs.push(...DYNAMIC_TABS);
   }
+
+  // tabs.push({
+  //   label: 'Activity',
+  //   href: `${NavUtils.toEntity(spaceId, entityId)}/activity`,
+  // });
 
   return tabs;
 };

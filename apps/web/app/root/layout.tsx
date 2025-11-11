@@ -1,10 +1,8 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-
 import * as React from 'react';
 
 import { Metadata } from 'next';
 
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { DEFAULT_OPENGRAPH_IMAGE, ROOT_SPACE } from '~/core/constants';
 
 import Layout from '../space/[id]/layout';
 
@@ -38,9 +36,9 @@ export const metadata: Metadata = {
   robots: 'follow, index',
 };
 
-export const revalidate = 60; // 1 minute
+export const dynamic = 'force-dynamic';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const params = new Promise<{ id: string }>(resolve => resolve({ id: SystemIds.ROOT_SPACE_ID }));
+  const params = new Promise<{ id: string }>(resolve => resolve({ id: ROOT_SPACE }));
   return <Layout params={params}>{children}</Layout>;
 }

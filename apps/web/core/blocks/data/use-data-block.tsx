@@ -5,11 +5,12 @@ import { Effect } from 'effect';
 import * as React from 'react';
 
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { sortRows } from '~/core/utils/utils';
+import { Cell, Property, Relation, Row } from '~/core/v2.types';
 
-import { upsert } from '../../database/write';
 import { useProperties } from '../../hooks/use-properties';
-import { Cell, PropertySchema, Relation } from '../../types';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter } from './filters';
 import { Source } from './source';
@@ -32,11 +33,12 @@ interface RenderablesQueryKey {
 
 const queryKeys = {
   relationQuery: (args: RenderablesQueryKey) => ['blocks', 'data', 'renderables', args],
-  columnsSchema: (columns?: PropertySchema[]) => ['blocks', 'data', 'columns-schema', columns],
+  columnsSchema: (columns?: Property[]) => ['blocks', 'data', 'columns-schema', columns],
 };
 
 export function useDataBlock() {
   const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
+  const { storage } = useMutate();
 
   const { entity, isLoading: isBlockEntityLoading } = useQueryEntity({
     spaceId: spaceId,
@@ -54,7 +56,7 @@ export function useDataBlock() {
     isLoading: isCollectionLoading,
     collectionLength,
   } = useCollection({
-    first: PAGE_SIZE + 1,
+    first: PAGE_SIZE,
     skip: pageNumber * PAGE_SIZE,
   });
 
@@ -65,6 +67,7 @@ export function useDataBlock() {
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     first: PAGE_SIZE + 1,
     skip: pageNumber * PAGE_SIZE,
+    placeholderData: keepPreviousData,
   });
 
   // Use the mapping to get the potential renderable properties.
@@ -96,7 +99,7 @@ export function useDataBlock() {
                 for (const [propertyId, selector] of Object.entries(mapping)) {
                   const lexicon = parseSelectorIntoLexicon(selector);
                   const entities = await mapSelectorLexiconToSourceEntity(lexicon, relation.id);
-                  cells.push(mappingToCell(entities, propertyId, lexicon, spaceId, relation.id));
+                  cells.push(mappingToCell(entities, propertyId, lexicon));
                 }
 
                 return {
@@ -118,6 +121,7 @@ export function useDataBlock() {
         return [];
       });
 
+      // @TODO: Error handling
       return await Effect.runPromise(run);
     },
   });
@@ -145,31 +149,32 @@ export function useDataBlock() {
    */
   const rows = (() => {
     if (source.type === 'COLLECTION') {
-      return mappingToRows(collectionItems, shownColumnIds, collectionRelations, spaceId, propertiesSchema);
+      return mappingToRows(collectionItems, shownColumnIds, collectionRelations);
     }
 
     if (source.type === 'GEO' || source.type === 'SPACES') {
-      return mappingToRows(queriedEntities, shownColumnIds, [], spaceId, propertiesSchema);
+      return mappingToRows(queriedEntities, shownColumnIds, []);
     }
 
     if (source.type === 'RELATIONS') {
-      return relationsMapping;
+      return (
+        relationsMapping?.map(
+          item =>
+            ({
+              ...item,
+              placeholder: false,
+            }) as Row
+        ) ?? []
+      );
     }
+
+    return [];
   })();
 
   const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
 
   const setName = (newName: string) => {
-    upsert(
-      {
-        attributeId: SystemIds.NAME_ATTRIBUTE,
-        entityId: entityId,
-        entityName: newName,
-        attributeName: 'Name',
-        value: { type: 'TEXT', value: newName },
-      },
-      spaceId
-    );
+    storage.entities.name.set(entityId, spaceId, newName);
   };
 
   let isLoading = true;
@@ -190,21 +195,25 @@ export function useDataBlock() {
 
   // @TODO: Returned data type should be a FSM depending on the source.type
   // For collections, check if there are more items beyond the current page
-  const hasNextPage = source.type === 'COLLECTION' 
-    ? (pageNumber + 1) * PAGE_SIZE < collectionLength
-    : rows ? rows.length > PAGE_SIZE : false;
-  
-  return {
+  const hasNextPage =
+    source.type === 'COLLECTION'
+      ? (pageNumber + 1) * PAGE_SIZE < collectionLength
+      : rows
+        ? rows.length > PAGE_SIZE
+        : false;
+
+  const result = {
     entityId,
     spaceId,
     relationId,
 
     blockEntity: entity,
-    rows: rows?.slice(0, PAGE_SIZE) ?? [],
+    rows: sortRows(rows)?.slice(0, PAGE_SIZE) ?? [],
     properties: propertiesSchema ? Object.values(propertiesSchema) : [],
     propertiesSchema,
 
     pageNumber,
+    pageSize: PAGE_SIZE,
     hasNextPage,
     hasPreviousPage: pageNumber > 0,
     setPage,
@@ -214,7 +223,13 @@ export function useDataBlock() {
     name: entity?.name ?? null,
     setName,
     totalPages,
+    collectionLength,
+
+    relations: entity?.relations,
+    collectionRelations: source.type === 'COLLECTION' ? collectionRelations : undefined,
   };
+
+  return result;
 }
 
 const DataBlockContext = React.createContext<{
@@ -258,17 +273,17 @@ export function useDataBlockInstance() {
   return context;
 }
 
-function filterStateToWhere(filterState: Filter[]): WhereCondition {
+export function filterStateToWhere(filterState: Filter[]): WhereCondition {
   const where: WhereCondition = {};
 
   for (const filter of filterState) {
     if (filter.valueType === 'TEXT') {
-      if (!where.triples) {
-        where.triples = [];
+      if (!where.values) {
+        where.values = [];
       }
 
-      where['triples'].push({
-        attributeId: {
+      where['values'].push({
+        propertyId: {
           equals: filter.columnId,
         },
         value: {
@@ -283,22 +298,41 @@ function filterStateToWhere(filterState: Filter[]): WhereCondition {
         continue;
       }
 
-      if (!where.relations) {
-        where.relations = [];
-      }
+      if (filter.columnName === 'Backlink') {
+        if (!where.backlinks) {
+          where.backlinks = [];
+        }
 
-      where['relations'].push({
-        typeOf: {
-          id: {
-            equals: filter.columnId,
+        where['backlinks'].push({
+          typeOf: {
+            id: {
+              equals: filter.columnId,
+            },
           },
-        },
-        toEntity: {
-          id: {
-            equals: filter.value,
+          fromEntity: {
+            id: {
+              equals: filter.value,
+            },
           },
-        },
-      });
+        });
+      } else {
+        if (!where.relations) {
+          where.relations = [];
+        }
+
+        where['relations'].push({
+          typeOf: {
+            id: {
+              equals: filter.columnId,
+            },
+          },
+          toEntity: {
+            id: {
+              equals: filter.value,
+            },
+          },
+        });
+      }
     }
   }
 

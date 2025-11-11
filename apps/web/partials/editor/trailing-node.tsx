@@ -1,7 +1,7 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 
-export interface TrailingNodeOptions {
+interface TrailingNodeOptions {
   node: string;
   notAfter: string[];
 }

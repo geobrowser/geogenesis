@@ -19,7 +19,7 @@ export interface CommandSuggestionItem {
   command: (props: { editor: Editor; range: Range }) => void;
 }
 
-export const tableCommandItem: CommandSuggestionItem = {
+const tableCommandItem: CommandSuggestionItem = {
   icon: <EditorTable />,
   title: 'Data',
   command: ({ editor, range }) => {
@@ -37,7 +37,7 @@ export const tableCommandItem: CommandSuggestionItem = {
   },
 };
 
-export const textCommandItem: CommandSuggestionItem = {
+const textCommandItem: CommandSuggestionItem = {
   icon: <EditorText />,
   title: 'Text',
   command: ({ editor, range }) => {

@@ -3,10 +3,8 @@ import cx from 'classnames';
 import * as React from 'react';
 
 import { useEntity } from '~/core/database/entities';
-import { SearchResult } from '~/core/io/dto/search';
-import { SpaceConfigEntity } from '~/core/io/dto/spaces';
-import { EntityId } from '~/core/io/schema';
 import { getImagePath } from '~/core/utils/utils';
+import { SearchResult, SpaceEntity } from '~/core/v2.types';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
@@ -122,7 +120,10 @@ export const ResultContent = ({
       </button>
       {hasOtherSpaces && !!onChooseSpace && (
         <button
-          onClick={onChooseSpace}
+          onClick={e => {
+            e.stopPropagation();
+            onChooseSpace();
+          }}
           className="-mt-2 flex w-full items-center justify-between p-2 transition-colors duration-150 hover:bg-grey-01"
         >
           <div className="flex items-center">
@@ -147,8 +148,8 @@ export const ResultContent = ({
 
 type SpaceContentProps = {
   onClick: () => void;
-  entityId: EntityId;
-  space: SpaceConfigEntity;
+  entityId: string;
+  space: SpaceEntity;
   alreadySelected?: boolean;
   withDescription?: boolean;
 };

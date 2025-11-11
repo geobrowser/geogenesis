@@ -1,7 +1,7 @@
 'use client';
 
-import { Schema } from '@effect/schema';
 import { useQuery } from '@tanstack/react-query';
+import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 import { motion } from 'framer-motion';
 
@@ -38,7 +38,10 @@ interface Props {
 export function AddSubspaceDialog({ trigger, spaceType, spaceId }: Props) {
   const { data: subspaces } = useQuery({
     queryKey: ['subspaces', spaceId],
-    queryFn: () => fetchSubspacesBySpaceId(spaceId),
+    queryFn: async () => {
+      return [] as Subspace[];
+      // fetchSubspacesBySpaceId(spaceId)
+    },
   });
 
   const { data: inflightSubspaces } = useQuery({

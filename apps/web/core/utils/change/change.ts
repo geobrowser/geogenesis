@@ -1,19 +1,15 @@
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
+import { GraphUrl, Id, SystemIds } from '@graphprotocol/grc-20';
 import { Effect, Record } from 'effect';
 import equal from 'fast-deep-equal';
 
-import { EntityWithSchema } from '~/core/database/entities';
-import { getRelations } from '~/core/database/relations';
-import { getTriples } from '~/core/database/triples';
-import type { Entity } from '~/core/io/dto/entities';
 import { Proposal } from '~/core/io/dto/proposals';
 import { fetchParentEntityId } from '~/core/io/fetch-parent-entity-id';
-import { EntityId } from '~/core/io/schema';
-import { fetchEntitiesBatch, fetchEntitiesBatchCached } from '~/core/io/subgraph/fetch-entities-batch';
+import { getBatchEntities } from '~/core/io/v2/queries';
+import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import type { Relation, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { Entity, Relation, Value } from '~/core/v2.types';
 
 import { fetchPreviousVersionByCreatedAt } from './fetch-previous-version-by-created-at';
 import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';
@@ -28,200 +24,214 @@ import {
   TripleChangeValue,
 } from './types';
 
-export async function fromLocal(spaceId?: string) {
-  const triples = getTriples({
-    selector: t => (t.hasBeenPublished === false && spaceId ? t.space === spaceId : true),
-    includeDeleted: true,
+async function fetchEntitiesBatchCached(options: { spaceId: string; entityIds: string[] }) {
+  const { spaceId, entityIds } = options;
+
+  return queryClient.fetchQuery({
+    queryKey: ['entities-batch', spaceId, entityIds],
+    queryFn: () => Effect.runPromise(getBatchEntities(options.entityIds, options.spaceId)),
   });
+}
 
-  const localRelations = getRelations({
-    selector: r => (r.hasBeenPublished === false && spaceId ? r.space === spaceId : true),
-    includeDeleted: true,
-  });
+export async function fromLocal(spaceId?: string): Promise<EntityChange[]> {
+  return [];
+  // const values = getValues({
+  //   selector: t => (t.hasBeenPublished === false && spaceId ? t.spaceId === spaceId : true),
+  //   includeDeleted: true,
+  // });
 
-  // @TODO Space id filtering isn't working  for local relations for some reason
-  const actualLocal = localRelations.filter(r => (spaceId ? r.space === spaceId : true));
+  // const localRelations = getRelations({
+  //   selector: r => (r.hasBeenPublished === false && spaceId ? r.spaceId === spaceId : true),
+  //   includeDeleted: true,
+  // });
 
-  const entityIds = new Set([
-    ...triples.map(t => t.entityId),
-    // Relations don't alter the `from` entity directly, so in cases where a relation
-    // is modified we also need to query the `from` entity so we can render diffs
-    // from the perspective of the `from` entity.
-    ...actualLocal.map(r => r.fromEntity.id),
-  ]);
+  // // @TODO Space id filtering isn't working  for local relations for some reason
+  // const actualLocal = localRelations.filter(r => (spaceId ? r.spaceId === spaceId : true));
 
-  const entityIdsToFetch = [...entityIds.values()];
+  // const entityIds = new Set([
+  //   ...values.map(t => t.entity.id),
+  //   // Relations don't alter the `from` entity directly, so in cases where a relation
+  //   // is modified we also need to query the `from` entity so we can render diffs
+  //   // from the perspective of the `from` entity.
+  //   ...actualLocal.map(r => r.fromEntity.id),
+  // ]);
 
-  const collectEntities = Effect.gen(function* () {
-    const maybeRemoteEntitiesEffect = Effect.promise(() =>
-      fetchEntitiesBatchCached({ spaceId, entityIds: entityIdsToFetch })
-    );
+  // const entityIdsToFetch = [...entityIds.values()];
 
-    const maybeLocalEntitiesEffect = Effect.promise(async () => {
-      const localEntitiesWithRemoteData = await fetchEntitiesBatchCached({ spaceId, entityIds: entityIdsToFetch });
+  // const collectEntities = Effect.gen(function* () {
 
-      const allEntities: Entity[] = [];
+  //   const maybeRemoteEntitiesEffect = Effect.promise(() =>
+  //     fetchEntitiesBatchCached({ spaceId, entityIds: entityIdsToFetch })
+  //   );
 
-      entityIdsToFetch.forEach(entityId => {
-        const localEntityWithRemoteData = localEntitiesWithRemoteData.find(entity => entity.id === entityId);
+  //   const maybeLocalEntitiesEffect = Effect.promise(async () => {
+  //     const localEntitiesWithRemoteData = await fetchEntitiesBatchCached({ spaceId, entityIds: entityIdsToFetch });
 
-        if (localEntityWithRemoteData) {
-          allEntities.push(localEntityWithRemoteData);
-        } else {
-          allEntities.push({
-            id: EntityId(entityId),
-            name: null,
-            description: null,
-            nameTripleSpaces: [],
-            spaces: [],
-            types: [],
-            relationsOut: [],
-            triples: [],
-          });
-        }
-      });
+  //     const allEntities: Entity[] = [];
 
-      const mergedEntities = allEntities.map(e =>
-        E.merge({
-          id: e.id,
-          store: store,
-          mergeWith: e,
-        })
-      );
+  //     entityIdsToFetch.forEach(entityId => {
+  //       const localEntityWithRemoteData = localEntitiesWithRemoteData.find(entity => entity.id === entityId);
 
-      return mergedEntities;
-    });
+  //       if (localEntityWithRemoteData) {
+  //         allEntities.push(localEntityWithRemoteData);
+  //       } else {
+  //         allEntities.push({
+  //           id: entityId,
+  //           name: null,
+  //           description: null,
+  //           spaces: [],
+  //           types: [],
+  //           relations: [],
+  //           values: [],
+  //         });
+  //       }
+  //     });
 
-    const [maybeRemoteEntities, maybeLocalEntities] = yield* Effect.all(
-      [maybeRemoteEntitiesEffect, maybeLocalEntitiesEffect],
-      { concurrency: 2 }
-    );
+  //     const mergedEntities = allEntities.map(e =>
+  //       E.merge({
+  //         id: e.id,
+  //         store: store,
+  //         mergeWith: e,
+  //       })
+  //     );
 
-    const remoteEntities = maybeRemoteEntities.filter(e => e !== null);
-    const localEntities = maybeLocalEntities.filter(e => e !== null);
+  //     return mergedEntities;
+  //   });
 
-    return {
-      remoteEntities,
-      localEntities,
-    };
-  });
+  //   const [maybeRemoteEntities, maybeLocalEntities] = yield* Effect.all(
+  //     [maybeRemoteEntitiesEffect, maybeLocalEntitiesEffect],
+  //     { concurrency: 2 }
+  //   );
 
-  const { remoteEntities, localEntities } = await Effect.runPromise(collectEntities);
+  //   const remoteEntities = maybeRemoteEntities.filter(e => e !== null);
+  //   const localEntities = maybeLocalEntities.filter(e => e !== null);
 
-  const beforeEntities = remoteEntities.filter(entity => getIsRenderedAsEntity(entity));
-  const beforeEntityIdsSet = new Set(beforeEntities.map(entity => entity.id));
+  // return {
+  // remoteEntities,
+  // localEntities,
+  // };
+  // });
 
-  const afterEntities = localEntities.filter(entity => getIsRenderedAsEntity(entity));
+  // const { remoteEntities, localEntities } = await Effect.runPromise(collectEntities);
 
-  const possibleBeforeBlocks = remoteEntities.filter(entity => !getIsRenderedAsEntity(entity));
-  const possibleAfterBlocks = localEntities.filter(entity => !getIsRenderedAsEntity(entity));
-  const possibleBlockIds = possibleAfterBlocks.map(entity => entity.id);
+  // const beforeEntities = remoteEntities.filter(entity => getIsRenderedAsEntity(entity));
+  // const beforeEntityIdsSet = new Set(beforeEntities.map(entity => entity.id));
 
-  const possibleBlockParentEntityIds = await getBlockParentEntityIds(possibleBlockIds, afterEntities);
+  // const afterEntities = localEntities.filter(entity => getIsRenderedAsEntity(entity));
 
-  const parentEntityIdsSet: Set<EntityId> = new Set();
-  [...Object.values(possibleBlockParentEntityIds).filter(Boolean)].forEach(entityId => {
-    if (entityId && !entityIds.has(entityId)) {
-      parentEntityIdsSet.add(entityId);
-    }
-  });
+  // const possibleBeforeBlocks = remoteEntities.filter(entity => !getIsRenderedAsEntity(entity));
+  // const possibleAfterBlocks = localEntities.filter(entity => !getIsRenderedAsEntity(entity));
+  // const possibleBlockIds = possibleAfterBlocks.map(entity => entity.id);
 
-  const { createdBlockParentEntityIds, deletedBlockParentEntityIds } = getNewAndDeletedBlockParentEntityIds(
-    beforeEntities,
-    afterEntities
-  );
+  // const possibleBlockParentEntityIds = await getBlockParentEntityIds(possibleBlockIds, afterEntities);
 
-  const parentEntityIdsToFetch = [...parentEntityIdsSet.values()].filter(entityId => !beforeEntityIdsSet.has(entityId));
+  // const parentEntityIdsSet: Set<string> = new Set();
+  // [...Object.values(possibleBlockParentEntityIds).filter(Boolean)].forEach(entityId => {
+  //   if (entityId && !entityIds.has(entityId)) {
+  //     parentEntityIdsSet.add(entityId);
+  //   }
+  // });
 
-  const collectParentEntities = Effect.gen(function* () {
-    const maybeRemoteParentEntitiesEffect = Effect.promise(() =>
-      fetchEntitiesBatchCached({ spaceId, entityIds: parentEntityIdsToFetch })
-    );
+  // const { createdBlockParentEntityIds, deletedBlockParentEntityIds } = getNewAndDeletedBlockParentEntityIds(
+  //   beforeEntities,
+  //   afterEntities
+  // );
 
-    const maybeLocalParentEntitiesEffect = Effect.promise(async () => {
-      const localParentEntitiesWithRemoteData = await fetchEntitiesBatchCached({
-        spaceId,
-        entityIds: entityIdsToFetch,
-      });
+  // const parentEntityIdsToFetch = [...parentEntityIdsSet.values()].filter(entityId => !beforeEntityIdsSet.has(entityId));
 
-      const allParentEntities: Entity[] = [];
+  // const collectParentEntities = Effect.gen(function* () {
+  //   const maybeRemoteParentEntitiesEffect = Effect.promise(() =>
+  //     fetchEntitiesBatchCached({ spaceId, entityIds: parentEntityIdsToFetch })
+  //   );
 
-      entityIdsToFetch.forEach(entityId => {
-        const localParentEntityWithRemoteData = localParentEntitiesWithRemoteData.find(
-          entity => entity.id === entityId
-        );
+  //   const maybeLocalParentEntitiesEffect = Effect.promise(async () => {
+  //     const localParentEntitiesWithRemoteData = await fetchEntitiesBatchCached({
+  //       spaceId,
+  //       entityIds: entityIdsToFetch,
+  //     });
 
-        if (localParentEntityWithRemoteData) {
-          allParentEntities.push(localParentEntityWithRemoteData);
-        } else {
-          allParentEntities.push({
-            id: EntityId(entityId),
-            name: null,
-            description: null,
-            nameTripleSpaces: [],
-            spaces: [],
-            types: [],
-            relationsOut: [],
-            triples: [],
-          });
-        }
-      });
+  //     const allParentEntities: Entity[] = [];
 
-      const mergedParentEntities = allParentEntities.map(e =>
-        E.merge({
-          id: e.id,
-          store: store,
-          mergeWith: e,
-        })
-      );
+  //     entityIdsToFetch.forEach(entityId => {
+  //       const localParentEntityWithRemoteData = localParentEntitiesWithRemoteData.find(
+  //         entity => entity.id === entityId
+  //       );
 
-      return mergedParentEntities;
-    });
+  //       if (localParentEntityWithRemoteData) {
+  //         allParentEntities.push(localParentEntityWithRemoteData);
+  //       } else {
+  //         allParentEntities.push({
+  //           id: entityId,
+  //           name: null,
+  //           description: null,
+  //           spaces: [],
+  //           types: [],
+  //           relations: [],
+  //           values: [],
+  //         });
+  //       }
+  //     });
 
-    const [maybeRemoteParentEntities, maybeLocalParentEntities] = yield* Effect.all(
-      [maybeRemoteParentEntitiesEffect, maybeLocalParentEntitiesEffect],
-      { concurrency: 2 }
-    );
+  //     const mergedParentEntities = allParentEntities.map(e =>
+  //       E.merge({
+  //         id: e.id,
+  //         store: store,
+  //         mergeWith: e,
+  //       })
+  //     );
 
-    const remoteParentEntities = maybeRemoteParentEntities.filter(e => e !== null);
-    const localParentEntities = maybeLocalParentEntities.filter(e => e !== null);
+  //     return mergedParentEntities;
+  //   });
 
-    return {
-      remoteParentEntities,
-      localParentEntities,
-    };
-  });
+  //   const [maybeRemoteParentEntities, maybeLocalParentEntities] = yield* Effect.all(
+  //     [maybeRemoteParentEntitiesEffect, maybeLocalParentEntitiesEffect],
+  //     { concurrency: 2 }
+  //   );
 
-  const { remoteParentEntities, localParentEntities } = await Effect.runPromise(collectParentEntities);
+  //   const remoteParentEntities = maybeRemoteParentEntities.filter(e => e !== null);
+  //   const localParentEntities = maybeLocalParentEntities.filter(e => e !== null);
 
-  const beforeParentEntities = remoteParentEntities.filter(entity => getIsRenderedAsEntity(entity));
-  const afterParentEntities = localParentEntities.filter(entity => getIsRenderedAsEntity(entity));
+  //   return {
+  //     remoteParentEntities,
+  //     localParentEntities,
+  //   };
+  // });
 
-  const parentEntityIds: Record<EntityId, EntityId | null> = {
-    ...possibleBlockParentEntityIds,
-    ...createdBlockParentEntityIds,
-    ...deletedBlockParentEntityIds,
-  };
+  // const { remoteParentEntities, localParentEntities } = await Effect.runPromise(collectParentEntities);
 
-  const aggregateChangesArgs = {
-    spaceId,
-    beforeEntities: [...beforeEntities, ...beforeParentEntities],
-    afterEntities: [...afterEntities, ...afterParentEntities],
-    beforeBlocks: possibleBeforeBlocks,
-    afterBlocks: possibleAfterBlocks,
-    parentEntityIds,
-  };
+  // const beforeParentEntities = remoteParentEntities.filter(entity => getIsRenderedAsEntity(entity));
+  // const afterParentEntities = localParentEntities.filter(entity => getIsRenderedAsEntity(entity));
 
-  const changes = aggregateChanges(aggregateChangesArgs);
+  // const parentEntityIds: Record<string, string | null> = {
+  //   ...possibleBlockParentEntityIds,
+  //   ...createdBlockParentEntityIds,
+  //   ...deletedBlockParentEntityIds,
+  // };
 
-  return changes;
+  // const aggregateChangesArgs = {
+  //   spaceId,
+  //   beforeEntities: [...beforeEntities, ...beforeParentEntities],
+  //   afterEntities: [...afterEntities, ...afterParentEntities],
+  //   beforeBlocks: possibleBeforeBlocks,
+  //   afterBlocks: possibleAfterBlocks,
+  //   parentEntityIds,
+  // };
+
+  // const changes = aggregateChanges(aggregateChangesArgs);
+
+  // return changes;
 }
 
 export async function fromActiveProposal(proposal: Proposal, spaceId: string): Promise<EntityChange[]> {
   const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId, spaceId });
 
   // Version entity ids are mapped to the version.id
-  const currentVersionsForEntityIds = await fetchEntitiesBatch({ spaceId, entityIds: versionsByEditId.map(v => v.id) });
+  const currentVersionsForEntityIds = await Effect.runPromise(
+    getBatchEntities(
+      versionsByEditId.map(v => v.id),
+      spaceId
+    )
+  );
 
   const beforeEntities = currentVersionsForEntityIds
     .filter(v => v !== null)
@@ -237,7 +247,7 @@ export async function fromActiveProposal(proposal: Proposal, spaceId: string): P
 
   const possibleBlockParentEntityIds = await getBlockParentEntityIds(possibleBlockIds, beforeEntities);
 
-  const parentEntityIdsSet: Set<EntityId> = new Set();
+  const parentEntityIdsSet: Set<string> = new Set();
   [...Object.values(possibleBlockParentEntityIds).filter(Boolean)].forEach(entityId => {
     if (entityId) {
       parentEntityIdsSet.add(entityId);
@@ -251,9 +261,9 @@ export async function fromActiveProposal(proposal: Proposal, spaceId: string): P
 
   const parentEntityIdsToFetch = [...parentEntityIdsSet.values()].filter(entityId => !beforeEntityIdsSet.has(entityId));
 
-  const beforeParentEntities = await fetchEntitiesBatch({ spaceId, entityIds: parentEntityIdsToFetch });
+  const beforeParentEntities = await Effect.runPromise(getBatchEntities(parentEntityIdsToFetch, spaceId));
 
-  const parentEntityIds: Record<EntityId, EntityId | null> = {
+  const parentEntityIds: Record<string, string | null> = {
     ...possibleBlockParentEntityIds,
     ...createdBlockParentEntityIds,
     ...deletedBlockParentEntityIds,
@@ -270,65 +280,66 @@ export async function fromActiveProposal(proposal: Proposal, spaceId: string): P
 }
 
 export async function fromEndedProposal(proposal: Proposal, spaceId: string): Promise<EntityChange[]> {
-  const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId, spaceId });
+  return [];
+  // const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId, spaceId });
 
-  // const previousVersions = await fetchVersionsBatch({
-  //   versionIds: versionsByEditId.map(v => v.versionId),
+  // // const previousVersions = await fetchVersionsBatch({
+  // //   versionIds: versionsByEditId.map(v => v.versionId),
+  // // });
+
+  // // We should batch this but not sure the easiest way to do it in a single query
+  // const previousVersions = await Promise.all(
+  //   versionsByEditId.map(v => {
+  //     return fetchPreviousVersionByCreatedAt({
+  //       createdAt: proposal.createdAt,
+  //       entityId: v.id,
+  //       spaceId: proposal.space.id,
+  //     });
+  //   })
+  // );
+
+  // const beforeEntities = previousVersions.filter(e => e !== null).filter(entity => getIsRenderedAsEntity(entity));
+  // const beforeEntityIdsSet = new Set(beforeEntities.map(entity => entity.id));
+  // const afterEntities = versionsByEditId.filter(entity => getIsRenderedAsEntity(entity));
+
+  // const possibleBeforeBlocks = previousVersions
+  //   .filter(e => e !== null)
+  //   .filter(entity => !getIsRenderedAsEntity(entity));
+  // const possibleAfterBlocks = versionsByEditId.filter(entity => !getIsRenderedAsEntity(entity));
+  // const possibleBlockIds = possibleBeforeBlocks.map(entity => entity.id);
+
+  // const possibleBlockParentEntityIds = await getBlockParentEntityIds(possibleBlockIds, beforeEntities);
+
+  // const parentEntityIdsSet: Set<string> = new Set();
+  // [...Object.values(possibleBlockParentEntityIds).filter(Boolean)].forEach(entityId => {
+  //   if (entityId) {
+  //     parentEntityIdsSet.add(entityId);
+  //   }
   // });
 
-  // We should batch this but not sure the easiest way to do it in a single query
-  const previousVersions = await Promise.all(
-    versionsByEditId.map(v => {
-      return fetchPreviousVersionByCreatedAt({
-        createdAt: proposal.createdAt,
-        entityId: v.id,
-        spaceId: proposal.space.id,
-      });
-    })
-  );
+  // const { createdBlockParentEntityIds, deletedBlockParentEntityIds } = getNewAndDeletedBlockParentEntityIds(
+  //   beforeEntities,
+  //   afterEntities
+  // );
 
-  const beforeEntities = previousVersions.filter(e => e !== null).filter(entity => getIsRenderedAsEntity(entity));
-  const beforeEntityIdsSet = new Set(beforeEntities.map(entity => entity.id));
-  const afterEntities = versionsByEditId.filter(entity => getIsRenderedAsEntity(entity));
+  // const parentEntityIdsToFetch = [...parentEntityIdsSet.values()].filter(entityId => !beforeEntityIdsSet.has(entityId));
 
-  const possibleBeforeBlocks = previousVersions
-    .filter(e => e !== null)
-    .filter(entity => !getIsRenderedAsEntity(entity));
-  const possibleAfterBlocks = versionsByEditId.filter(entity => !getIsRenderedAsEntity(entity));
-  const possibleBlockIds = possibleBeforeBlocks.map(entity => entity.id);
+  // const beforeParentEntities = await Effect.runPromise(getBatchEntities(parentEntityIdsToFetch, spaceId));
 
-  const possibleBlockParentEntityIds = await getBlockParentEntityIds(possibleBlockIds, beforeEntities);
+  // const parentEntityIds: Record<string, string | null> = {
+  //   ...possibleBlockParentEntityIds,
+  //   ...createdBlockParentEntityIds,
+  //   ...deletedBlockParentEntityIds,
+  // };
 
-  const parentEntityIdsSet: Set<EntityId> = new Set();
-  [...Object.values(possibleBlockParentEntityIds).filter(Boolean)].forEach(entityId => {
-    if (entityId) {
-      parentEntityIdsSet.add(entityId);
-    }
-  });
-
-  const { createdBlockParentEntityIds, deletedBlockParentEntityIds } = getNewAndDeletedBlockParentEntityIds(
-    beforeEntities,
-    afterEntities
-  );
-
-  const parentEntityIdsToFetch = [...parentEntityIdsSet.values()].filter(entityId => !beforeEntityIdsSet.has(entityId));
-
-  const beforeParentEntities = await fetchEntitiesBatch({ spaceId, entityIds: parentEntityIdsToFetch });
-
-  const parentEntityIds: Record<EntityId, EntityId | null> = {
-    ...possibleBlockParentEntityIds,
-    ...createdBlockParentEntityIds,
-    ...deletedBlockParentEntityIds,
-  };
-
-  return aggregateChanges({
-    spaceId: proposal.space.id,
-    beforeEntities: [...beforeEntities, ...beforeParentEntities],
-    afterEntities,
-    beforeBlocks: possibleBeforeBlocks,
-    afterBlocks: possibleAfterBlocks,
-    parentEntityIds,
-  });
+  // return aggregateChanges({
+  //   spaceId: proposal.space.id,
+  //   beforeEntities: [...beforeEntities, ...beforeParentEntities],
+  //   afterEntities,
+  //   beforeBlocks: possibleBeforeBlocks,
+  //   afterBlocks: possibleAfterBlocks,
+  //   parentEntityIds,
+  // });
 }
 
 interface AggregateChangesArgs {
@@ -337,7 +348,7 @@ interface AggregateChangesArgs {
   beforeEntities: Entity[];
   afterBlocks: Entity[];
   beforeBlocks: Entity[];
-  parentEntityIds: Record<EntityId, EntityId | null>;
+  parentEntityIds: Record<string, string | null>;
 }
 
 export function aggregateChanges({
@@ -348,228 +359,227 @@ export function aggregateChanges({
   beforeBlocks,
   parentEntityIds,
 }: AggregateChangesArgs): EntityChange[] {
+  return [];
   // Aggregate remote data into a map of entities -> attributes and attributes -> triples
   // Each map is 1:1 with each entity only having one attribute per attribute id and one triple per attribute id
   //
   // Additionally, make sure that we're filtering out triples that don't match the current space id.
-  const afterTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
-    afterEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
-  );
-  const beforeTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
-    beforeEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
-  );
+  // const afterTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
+  //   afterEntities.flatMap(e => e.values).filter(t => (spaceId ? t.spaceId === spaceId : true))
+  // );
+  // const beforeTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
+  //   beforeEntities.flatMap(e => e.values).filter(t => (spaceId ? t.spaceId === spaceId : true))
+  // );
 
-  const afterRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(
-    afterEntities.flatMap(e => e.relationsOut.filter(r => (spaceId ? r.space === spaceId : true)))
-  );
-  const beforeRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(
-    beforeEntities.flatMap(e => e.relationsOut.filter(r => (spaceId ? r.space === spaceId : true)))
-  );
+  // const afterRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(
+  //   afterEntities.flatMap(e => e.relations.filter(r => (spaceId ? r.spaceId === spaceId : true)))
+  // );
+  // const beforeRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(
+  //   beforeEntities.flatMap(e => e.relations.filter(r => (spaceId ? r.spaceId === spaceId : true)))
+  // );
 
-  const afterEntityIds = afterEntities.map(entity => entity.id);
-  const changedEntitiesSet: Set<EntityId> = new Set();
-  afterEntityIds.forEach(entityId => {
-    changedEntitiesSet.add(entityId);
-  });
-  Object.values(parentEntityIds).forEach(entityId => {
-    if (entityId) {
-      changedEntitiesSet.add(entityId);
-    }
-  });
-  const changedEntities: EntityId[] = [...changedEntitiesSet.values()];
+  // const afterEntityIds = afterEntities.map(entity => entity.id);
+  // const changedEntitiesSet: Set<string> = new Set();
+  // afterEntityIds.forEach(entityId => {
+  //   changedEntitiesSet.add(entityId);
+  // });
+  // Object.values(parentEntityIds).forEach(entityId => {
+  //   if (entityId) {
+  //     changedEntitiesSet.add(entityId);
+  //   }
+  // });
+  // const changedEntities: string[] = [...changedEntitiesSet.values()];
 
-  const afterBlockIds = afterBlocks.map(block => block.id);
-  const changedBlocksSet: Set<EntityId> = new Set();
-  afterBlockIds.forEach(blockId => {
-    changedBlocksSet.add(blockId);
-  });
-  Object.keys(parentEntityIds).forEach(blockId => {
-    changedBlocksSet.add(EntityId(blockId));
-  });
-  const changedBlocks: EntityId[] = [...changedBlocksSet.values()];
+  // const afterBlockIds = afterBlocks.map(block => block.id);
+  // const changedBlocksSet: Set<string> = new Set();
+  // afterBlockIds.forEach(blockId => {
+  //   changedBlocksSet.add(blockId);
+  // });
+  // Object.keys(parentEntityIds).forEach(blockId => {
+  //   changedBlocksSet.add(blockId);
+  // });
+  // const changedBlocks: string[] = [...changedBlocksSet.values()];
 
-  // This might be a performance bottleneck for large sets of ops, so we'll need
-  // to monitor this over time.
-  const aggregatedChanges = changedEntities.map((entityId: EntityId): EntityChange => {
-    const tripleChanges: TripleChange[] = [];
-    const relationChanges: RelationChange[] = [];
+  // // This might be a performance bottleneck for large sets of ops, so we'll need
+  // // to monitor this over time.
+  // const aggregatedChanges = changedEntities.map((entityId: string): EntityChange => {
+  //   const tripleChanges: TripleChange[] = [];
+  //   const relationChanges: RelationChange[] = [];
 
-    const processedAttributes = new Set<string>();
+  //   const processedAttributes = new Set<string>();
 
-    const afterTriplesForEntity = afterTriplesByEntityId[entityId] ?? {};
-    const beforeTriplesForEntity = beforeTriplesByEntityId[entityId] ?? {};
-    const afterRelationsForEntity = afterRelationsByEntityId[entityId] ?? {};
-    const beforeRelationsForEntity = beforeRelationsByEntityId[entityId] ?? {};
+  //   const afterTriplesForEntity = afterTriplesByEntityId[entityId] ?? {};
+  //   const beforeTriplesForEntity = beforeTriplesByEntityId[entityId] ?? {};
+  //   const afterRelationsForEntity = afterRelationsByEntityId[entityId] ?? {};
+  //   const beforeRelationsForEntity = beforeRelationsByEntityId[entityId] ?? {};
 
-    if (afterEntityIds.includes(entityId)) {
-      for (const afterTriple of Object.values(afterTriplesForEntity)) {
-        if (processedAttributes.has(afterTriple.attributeId)) continue;
+  //   if (afterEntityIds.includes(entityId)) {
+  //     for (const afterTriple of Object.values(afterTriplesForEntity)) {
+  //       if (processedAttributes.has(afterTriple.property.id)) continue;
 
-        const beforeTriple: Triple | null = beforeTriplesForEntity[afterTriple.attributeId] ?? null;
-        const beforeValue = beforeTriple ? beforeTriple.value : null;
-        const before = AfterTripleDiff.diffBefore(afterTriple.value, beforeValue);
-        const after = AfterTripleDiff.diffAfter(afterTriple.value, beforeValue);
+  //       const beforeTriple: Value | null = beforeTriplesForEntity[afterTriple.property.id] ?? null;
+  //       const beforeValue = beforeTriple ? beforeTriple.value : null;
+  //       const before = AfterTripleDiff.diffBefore(afterTriple.value, beforeValue);
+  //       const after = AfterTripleDiff.diffAfter(afterTriple.value, beforeValue);
 
-        tripleChanges.push({
-          attribute: {
-            id: afterTriple.attributeId,
-            name: afterTriple.attributeName,
-          },
-          type: afterTriple.value.type,
-          before,
-          after,
-        });
+  //       tripleChanges.push({
+  //         attribute: {
+  //           id: afterTriple.property.id,
+  //           name: afterTriple.attributeName,
+  //         },
+  //         type: afterTriple.value.type,
+  //         before,
+  //         after,
+  //       });
 
-        processedAttributes.add(afterTriple.attributeId);
-      }
+  //       processedAttributes.add(afterTriple.property.id);
+  //     }
 
-      for (const beforeTriple of Object.values(beforeTriplesForEntity)) {
-        if (processedAttributes.has(beforeTriple.attributeId)) continue;
+  //     for (const beforeTriple of Object.values(beforeTriplesForEntity)) {
+  //       if (processedAttributes.has(beforeTriple.property.id)) continue;
 
-        const afterTriple: Triple | null = afterTriplesForEntity[beforeTriple.attributeId] ?? null;
-        const afterValue = afterTriple ? afterTriple.value : null;
-        const before = BeforeTripleDiff.diffBefore(beforeTriple.value, afterValue);
-        const after = BeforeTripleDiff.diffAfter(beforeTriple.value, afterValue);
+  //       const afterTriple: Value | null = afterTriplesForEntity[beforeTriple.property.id] ?? null;
+  //       const afterValue = afterTriple ? afterTriple.value : null;
+  //       const before = BeforeTripleDiff.diffBefore(beforeTriple.value, afterValue);
+  //       const after = BeforeTripleDiff.diffAfter(beforeTriple.value, afterValue);
 
-        tripleChanges.push({
-          attribute: {
-            id: beforeTriple.attributeId,
-            name: beforeTriple.attributeName,
-          },
-          type: beforeTriple.value.type,
-          before,
-          after,
-        });
+  //       tripleChanges.push({
+  //         attribute: {
+  //           id: beforeTriple.property.id,
+  //           name: beforeTriple.property.name,
+  //         },
+  //         type: beforeTriple.property.dataType,
+  //         before,
+  //         after,
+  //       });
 
-        processedAttributes.add(beforeTriple.attributeId);
-      }
+  //       processedAttributes.add(beforeTriple.property.id);
+  //     }
 
-      for (const relations of Object.values(afterRelationsForEntity)) {
-        const seenRelations: Set<EntityId> = new Set();
+  //     for (const relations of Object.values(afterRelationsForEntity)) {
+  //       const seenRelations: Set<string> = new Set();
 
-        for (const relation of relations) {
-          const beforeRelationsForAttributeId = beforeRelationsForEntity[relation.typeOf.id] ?? null;
-          const before = AfterRelationDiff.diffBefore(relation, beforeRelationsForAttributeId);
-          const after = AfterRelationDiff.diffAfter(relation, beforeRelationsForAttributeId);
+  //       for (const relation of relations) {
+  //         const beforeRelationsForAttributeId = beforeRelationsForEntity[relation.type.id] ?? null;
+  //         const before = AfterRelationDiff.diffBefore(relation, beforeRelationsForAttributeId);
+  //         const after = AfterRelationDiff.diffAfter(relation, beforeRelationsForAttributeId);
 
-          if (!seenRelations.has(relation.id)) {
-            relationChanges.push({
-              attribute: {
-                id: relation.typeOf.id,
-                name: relation.typeOf.name,
-              },
-              // Filter out the block-related relation types until we render blocks in the diff editor
-              type: relation.toEntity.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
-              before,
-              after,
-            });
-          }
+  //         if (!seenRelations.has(relation.id)) {
+  //           relationChanges.push({
+  //             attribute: {
+  //               id: relation.type.id,
+  //               name: relation.type.name,
+  //             },
+  //             // Filter out the block-related relation types until we render blocks in the diff editor
+  //             type: relation.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
+  //             before,
+  //             after,
+  //           });
+  //         }
 
-          seenRelations.add(relation.id);
-        }
-      }
+  //         seenRelations.add(relation.id);
+  //       }
+  //     }
 
-      for (const relations of Object.values(beforeRelationsForEntity)) {
-        for (const relation of relations) {
-          const afterRelationsForPropertyId = afterRelationsForEntity[relation.typeOf.id] ?? null;
-          const before = BeforeRelationDiff.diffBefore(relation, afterRelationsForPropertyId);
-          const after = BeforeRelationDiff.diffAfter(relation, afterRelationsForPropertyId);
+  //     for (const relations of Object.values(beforeRelationsForEntity)) {
+  //       for (const relation of relations) {
+  //         const afterRelationsForPropertyId = afterRelationsForEntity[relation.type.id] ?? null;
+  //         const before = BeforeRelationDiff.diffBefore(relation, afterRelationsForPropertyId);
+  //         const after = BeforeRelationDiff.diffAfter(relation, afterRelationsForPropertyId);
 
-          relationChanges.push({
-            attribute: {
-              id: relation.typeOf.id,
-              name: relation.typeOf.name,
-            },
-            // Filter out the block-related relation types until we render blocks in the diff editor
-            type: relation.toEntity.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
-            before: after,
-            after: before,
-          });
-        }
-      }
-    }
+  //         relationChanges.push({
+  //           attribute: {
+  //             id: relation.type.id,
+  //             name: relation.type.name,
+  //           },
+  //           // Filter out the block-related relation types until we render blocks in the diff editor
+  //           type: relation.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
+  //           before: after,
+  //           after: before,
+  //         });
+  //       }
+  //     }
+  //   }
 
-    const nonBlockRelationChanges = relationChanges.filter(c => c.attribute.id !== SystemIds.BLOCKS);
+  //   const nonBlockRelationChanges = relationChanges.filter(c => c.attribute.id !== SystemIds.BLOCKS);
 
-    // Filter out any "dead" changes where the values are the exact same
-    // in the before and after.
-    const realChanges = [...tripleChanges, ...nonBlockRelationChanges].filter(c => isRealChange(c.before, c.after));
+  //   // Filter out any "dead" changes where the values are the exact same
+  //   // in the before and after.
+  //   const realChanges = [...tripleChanges, ...nonBlockRelationChanges].filter(c => isRealChange(c.before, c.after));
 
-    const entity = (afterEntities.find(entity => entity.id === entityId) ??
-      beforeEntities.find(entity => entity.id === entityId)) as Entity;
+  //   const entity = (afterEntities.find(entity => entity.id === entityId) ??
+  //     beforeEntities.find(entity => entity.id === entityId)) as Entity;
 
-    const blockChanges: Array<BlockChange> = [];
+  //   const blockChanges: Array<BlockChange> = [];
 
-    changedBlocks.forEach(blockId => {
-      const isBlockForThisEntity = parentEntityIds?.[blockId] === entityId;
+  //   changedBlocks.forEach(blockId => {
+  //     const isBlockForThisEntity = parentEntityIds?.[blockId] === entityId;
 
-      if (isBlockForThisEntity) {
-        const beforeBlock = beforeBlocks.find(beforeEntity => beforeEntity.id === blockId);
-        const afterBlock = afterBlocks.find(afterEntity => afterEntity.id === blockId);
+  //     if (isBlockForThisEntity) {
+  //       const beforeBlock = beforeBlocks.find(beforeEntity => beforeEntity.id === blockId);
+  //       const afterBlock = afterBlocks.find(afterEntity => afterEntity.id === blockId);
 
-        const isTextBlock =
-          (beforeBlock?.types.some(type => type.id === EntityId(SystemIds.TEXT_BLOCK)) ||
-            afterBlock?.types.some(type => type.id === EntityId(SystemIds.TEXT_BLOCK)) ||
-            afterBlock?.relationsOut.some(relation => relation.typeOf.id === EntityId(SystemIds.TEXT_BLOCK))) ??
-          false;
+  //       const isTextBlock =
+  //         (beforeBlock?.types.some(type => type.id === SystemIds.TEXT_BLOCK) ||
+  //           afterBlock?.types.some(type => type.id === SystemIds.TEXT_BLOCK) ||
+  //           afterBlock?.relations.some(relation => relation.type.id === SystemIds.TEXT_BLOCK)) ??
+  //         false;
 
-        const isImageBlock =
-          (beforeBlock?.types?.some(type => type.id === EntityId(SystemIds.IMAGE_TYPE)) ||
-            afterBlock?.types?.some(type => type.id === EntityId(SystemIds.IMAGE_TYPE)) ||
-            afterBlock?.relationsOut.some(relation => relation.typeOf.id === EntityId(SystemIds.IMAGE_TYPE))) ??
-          false;
+  //       const isImageBlock =
+  //         (beforeBlock?.types?.some(type => type.id === SystemIds.IMAGE_TYPE) ||
+  //           afterBlock?.types?.some(type => type.id === SystemIds.IMAGE_TYPE) ||
+  //           afterBlock?.relations.some(relation => relation.type.id === SystemIds.IMAGE_TYPE)) ??
+  //         false;
 
-        const isDataBlock =
-          (beforeBlock?.types?.some(type => type.id === EntityId(SystemIds.DATA_BLOCK)) ||
-            afterBlock?.types?.some(type => type.id === EntityId(SystemIds.DATA_BLOCK)) ||
-            afterBlock?.relationsOut.some(relation => relation.typeOf.id === EntityId(SystemIds.DATA_BLOCK))) ??
-          false;
+  //       const isDataBlock =
+  //         (beforeBlock?.types?.some(type => type.id === SystemIds.DATA_BLOCK) ||
+  //           afterBlock?.types?.some(type => type.id === SystemIds.DATA_BLOCK) ||
+  //           afterBlock?.relations.some(relation => relation.type.id === SystemIds.DATA_BLOCK)) ??
+  //         false;
 
-        if (isTextBlock) {
-          const beforeTriple = beforeBlock?.triples.find(triple => triple.attributeId === SystemIds.MARKDOWN_CONTENT);
+  //       if (isTextBlock) {
+  //         const beforeTriple = beforeBlock?.values.find(triple => triple.property.id === SystemIds.MARKDOWN_CONTENT);
 
-          const afterTriple = afterBlock?.triples.find(triple => triple.attributeId === SystemIds.MARKDOWN_CONTENT);
+  //         const afterTriple = afterBlock?.values.find(triple => triple.property.id === SystemIds.MARKDOWN_CONTENT);
 
-          blockChanges.push({
-            type: 'textBlock',
-            before: `${beforeTriple?.value?.value ?? ''}`,
-            after: `${afterTriple?.value?.value ?? ''}`,
-          });
-        } else if (isImageBlock) {
-          const beforeTriple = beforeBlock?.triples.find(
-            triple => triple.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE
-          );
+  //         blockChanges.push({
+  //           type: 'textBlock',
+  //           before: `${beforeTriple?.value ?? ''}`,
+  //           after: `${afterTriple?.value ?? ''}`,
+  //         });
+  //       } else if (isImageBlock) {
+  //         const beforeTriple = beforeBlock?.values.find(triple => triple.property.id === SystemIds.IMAGE_URL_PROPERTY);
 
-          const afterTriple = afterBlock?.triples.find(triple => triple.attributeId === SystemIds.IMAGE_URL_ATTRIBUTE);
+  //         const afterTriple = afterBlock?.values.find(triple => triple.property.id === SystemIds.IMAGE_URL_PROPERTY);
 
-          blockChanges.push({
-            type: 'imageBlock',
-            before: `${beforeTriple?.value?.value ?? ''}`,
-            after: `${afterTriple?.value?.value ?? ''}`,
-          });
-        } else if (isDataBlock) {
-          const beforeName = beforeBlock?.name ?? '';
-          const afterName = afterBlock?.name ?? '';
+  //         blockChanges.push({
+  //           type: 'imageBlock',
+  //           before: `${beforeTriple?.value ?? ''}`,
+  //           after: `${afterTriple?.value ?? ''}`,
+  //         });
+  //       } else if (isDataBlock) {
+  //         const beforeName = beforeBlock?.name ?? '';
+  //         const afterName = afterBlock?.name ?? '';
 
-          blockChanges.push({
-            type: 'dataBlock',
-            before: beforeBlock ? beforeName : null,
-            after: afterBlock ? afterName : null,
-          });
-        }
-      }
-    });
+  //         blockChanges.push({
+  //           type: 'dataBlock',
+  //           before: beforeBlock ? beforeName : null,
+  //           after: afterBlock ? afterName : null,
+  //         });
+  //       }
+  //     }
+  //   });
 
-    return {
-      id: entity.id,
-      name: entity.name,
-      avatar: Entities.avatar(entity.relationsOut),
-      blockChanges,
-      changes: realChanges,
-    };
-  });
+  //   return {
+  //     id: entity.id,
+  //     name: entity.name,
+  //     avatar: Entities.avatar(entity.relations),
+  //     blockChanges,
+  //     changes: realChanges,
+  //   };
+  // });
 
-  return aggregatedChanges;
+  // return aggregatedChanges;
 }
 
 export function isRealChange(
@@ -597,27 +607,14 @@ export function isRealChange(
   return true;
 }
 
-type TripleByAttributeMap = Record<string, Triple>;
+type TripleByAttributeMap = Record<string, Value>;
 type EntityByAttributeMapMap = Record<string, TripleByAttributeMap>;
 
-const RELATION_TRIPLES = [
-  EntityId(SystemIds.RELATION_FROM_ATTRIBUTE),
-  EntityId(SystemIds.RELATION_TO_ATTRIBUTE),
-  EntityId(SystemIds.RELATION_INDEX),
-  EntityId(SystemIds.RELATION_TYPE_ATTRIBUTE),
-];
-
-function shouldFilterTriple(triple: Triple) {
-  // Filter out any triples for relation entities. This is to prevent
-  // the diffs from being noisy with metadata about the relation.
-  if (RELATION_TRIPLES.includes(EntityId(triple.attributeId))) {
-    return true;
-  }
-
+function shouldFilterTriple(value: Value) {
   if (
-    triple.attributeId === SystemIds.TYPES_ATTRIBUTE &&
-    triple.value.type === 'URL' &&
-    triple.value.value === GraphUrl.fromEntityId(SystemIds.RELATION_TYPE)
+    value.property.id === SystemIds.TYPES_PROPERTY &&
+    value.property.renderableType === SystemIds.URL &&
+    value.value === GraphUrl.fromEntityId(SystemIds.RELATION_TYPE)
   ) {
     return true;
   }
@@ -625,10 +622,10 @@ function shouldFilterTriple(triple: Triple) {
   return false;
 }
 
-function groupTriplesByEntityIdAndAttributeId(triples: Triple[]) {
-  return triples.reduce<EntityByAttributeMapMap>((acc, triple) => {
-    const entityId = triple.entityId;
-    const attributeId = triple.attributeId;
+function groupTriplesByEntityIdAndAttributeId(values: Value[]) {
+  return values.reduce<EntityByAttributeMapMap>((acc, triple) => {
+    const entityId = triple.entity.id;
+    const attributeId = triple.property.id;
 
     // Filter out any triples for relation entities. This is to prevent
     // the diffs from being noisy with metadata about the relation.
@@ -649,7 +646,7 @@ function groupTriplesByEntityIdAndAttributeId(triples: Triple[]) {
 function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
   return relations.reduce<Record<string, Record<string, Relation[]>>>((acc, relation) => {
     const entityId = relation.fromEntity.id;
-    const attributeId = relation.typeOf.id;
+    const attributeId = relation.type.id;
 
     if (!acc[entityId]) {
       acc[entityId] = {};
@@ -665,8 +662,8 @@ function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
   }, {});
 }
 
-const getIsRenderedAsEntity = (entity: Entity | EntityWithSchema) => {
-  if (entity.types.some(type => blockTypes.includes(type.id))) {
+const getIsRenderedAsEntity = (entity: Entity) => {
+  if (entity.types.some(type => blockTypes.includes(Id(type.id)))) {
     return false;
   } else {
     return true;
@@ -674,17 +671,17 @@ const getIsRenderedAsEntity = (entity: Entity | EntityWithSchema) => {
 };
 
 const blockTypes = [
-  EntityId(SystemIds.DATA_BLOCK),
-  EntityId(SystemIds.IMAGE_BLOCK),
-  EntityId(SystemIds.IMAGE_TYPE),
-  EntityId(SystemIds.RELATION_TYPE),
-  EntityId(SystemIds.TEXT_BLOCK),
+  SystemIds.DATA_BLOCK,
+  SystemIds.IMAGE_BLOCK,
+  SystemIds.IMAGE_TYPE,
+  SystemIds.RELATION_TYPE,
+  SystemIds.TEXT_BLOCK,
 ];
 
 // @TODO use attributes as a hint as well
 // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
 const blockAttributes = [
-  SystemIds.DATA_SOURCE_ATTRIBUTE,
+  SystemIds.DATA_SOURCE_PROPERTY,
   SystemIds.ENTITY_FILTER,
   SystemIds.FILTER,
   SystemIds.SHOWN_COLUMNS,
@@ -692,10 +689,10 @@ const blockAttributes = [
   SystemIds.VIEW_TYPE,
 ];
 
-const getBlockParentEntityIds = async (blockIds: EntityId[], entities: Entity[]) => {
-  const blockParentEntityIds: Record<EntityId, EntityId | null> = {};
+const getBlockParentEntityIds = async (blockIds: string[], entities: Entity[]) => {
+  const blockParentEntityIds: Record<string, string | null> = {};
 
-  const parentEntityIds: Array<EntityId | null> = await Promise.all(
+  const parentEntityIds: Array<string | null> = await Promise.all(
     blockIds.map(async blockId => {
       const possibleParentEntityId = await fetchParentEntityId(blockId);
 
@@ -703,35 +700,33 @@ const getBlockParentEntityIds = async (blockIds: EntityId[], entities: Entity[])
     })
   );
 
-  blockIds.forEach((blockId: EntityId, index: number) => {
+  blockIds.forEach((blockId: string, index: number) => {
     blockParentEntityIds[blockId] = parentEntityIds[index];
   });
 
   entities.forEach(entity => {
-    entity.relationsOut
-      .filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS))
-      .forEach(relation => {
-        blockParentEntityIds[relation.toEntity.id] = entity.id;
-      });
+    entity.relations.forEach(relation => {
+      blockParentEntityIds[relation.toEntity.id] = entity.id;
+    });
   });
 
   return blockParentEntityIds;
 };
 
 const getNewAndDeletedBlockParentEntityIds = (beforeEntities: Entity[], afterEntities: Entity[]) => {
-  const createdBlockParentEntityIds: Record<EntityId, EntityId> = {};
-  const deletedBlockParentEntityIds: Record<EntityId, EntityId> = {};
+  const createdBlockParentEntityIds: Record<string, string> = {};
+  const deletedBlockParentEntityIds: Record<string, string> = {};
 
   afterEntities.forEach(afterEntity => {
     const beforeEntity = beforeEntities.find(entity => entity.id === afterEntity.id);
 
     const beforeBlockIds =
-      beforeEntity?.relationsOut
-        .filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS))
+      beforeEntity?.relations
+        .filter(relation => relation.type.id === SystemIds.BLOCKS)
         .map(relation => relation.toEntity.id) ?? [];
 
-    const afterBlockIds = afterEntity.relationsOut
-      .filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS))
+    const afterBlockIds = afterEntity.relations
+      .filter(relation => relation.type.id === SystemIds.BLOCKS)
       .map(relation => relation.toEntity.id);
 
     const newlyCreatedBlockIds = afterBlockIds.filter(blockId => !beforeBlockIds.includes(blockId));

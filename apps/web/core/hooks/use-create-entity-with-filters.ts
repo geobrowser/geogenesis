@@ -1,33 +1,18 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { IdUtils, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { ID } from '~/core/id';
-
 import { Filter } from '../blocks/data/filters';
-import { upsert, upsertRelation } from '../database/write';
-import { EntityId } from '../io/schema';
+import { useMutate } from '../sync/use-mutate';
 
 export function useCreateEntityWithFilters(spaceId: string) {
-  const [nextEntityId, setNextEntityId] = React.useState(ID.createEntityId());
+  const [nextEntityId, setNextEntityId] = React.useState(IdUtils.generate());
+  const { storage } = useMutate();
 
   const onClick = React.useCallback(
     ({ name, filters }: { name?: string | null; filters?: Filter[] }) => {
       if (name) {
-        upsert(
-          {
-            attributeId: SystemIds.NAME_PROPERTY,
-            attributeName: 'Name',
-            entityId: nextEntityId,
-            entityName: name,
-            value: {
-              type: 'TEXT',
-              value: name,
-            },
-          },
-          spaceId
-        );
+        storage.entities.name.set(nextEntityId, spaceId, name);
       }
 
       /**
@@ -39,32 +24,30 @@ export function useCreateEntityWithFilters(spaceId: string) {
         filters?.filter(f => f.columnId !== SystemIds.SPACE_FILTER && f.valueType === 'RELATION') ?? [];
 
       for (const filter of validFilters) {
-        upsertRelation({
+        storage.relations.set({
+          id: IdUtils.generate(),
+          entityId: IdUtils.generate(),
           spaceId,
-          relation: {
-            index: INITIAL_RELATION_INDEX_VALUE,
-            space: spaceId,
-            fromEntity: {
-              id: EntityId(nextEntityId),
-              name: null,
-            },
-            toEntity: {
-              id: EntityId(filter.value),
-              name: filter.valueName,
-              renderableType: 'RELATION',
-              value: filter.value,
-            },
-            typeOf: {
-              id: EntityId(filter.columnId),
-              name: filter.columnName,
-            },
+          renderableType: 'RELATION',
+          fromEntity: {
+            id: nextEntityId,
+            name: null,
+          },
+          toEntity: {
+            id: filter.value,
+            name: filter.valueName,
+            value: filter.value,
+          },
+          type: {
+            id: filter.columnId,
+            name: filter.columnName,
           },
         });
       }
 
-      setNextEntityId(ID.createEntityId());
+      setNextEntityId(IdUtils.generate());
     },
-    [nextEntityId, spaceId]
+    [nextEntityId, spaceId, storage]
   );
 
   return {

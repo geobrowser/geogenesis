@@ -9,11 +9,20 @@
 const nextConfig = {
   // reactStrictMode: true,
   experimental: {
+    // Activate new client-side router improvements
+    // clientSegmentCache: true,
+    // Enable persistent caching for the turbopack dev server and build.
+    turbopackPersistentCaching: true,
     reactCompiler: true,
-  },
-  devIndicators: {
-    appIsrStatus: false,
-    buildActivity: false,
+    optimizePackageImports: [
+      'effect',
+      'viem',
+      'wagmi',
+      '@graphprotocol/grc-20',
+      'mapbox-gl',
+      '@tiptap/core',
+      '@tiptap/react',
+    ],
   },
   images: {
     remotePatterns: [
@@ -70,7 +79,7 @@ const nextConfig = {
     return [
       {
         source: '/',
-        destination: 'https://geo.framer.website/',
+        destination: 'https://charismatic-overlay-193901.framer.app/',
       },
       {
         source: '/ending-homelessness',
@@ -79,16 +88,6 @@ const nextConfig = {
       {
         source: '/blog',
         destination: 'https://geo-blog.vercel.app',
-      },
-      {
-        source: '/:path*',
-        has: [
-          {
-            type: 'host',
-            value: 'testnet.geobrowser.io',
-          },
-        ],
-        destination: 'https://geogenesis-git-feat-testnet-geo-browser.vercel.app/:path*',
       },
     ];
   },

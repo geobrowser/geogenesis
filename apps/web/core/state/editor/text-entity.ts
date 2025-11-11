@@ -1,29 +1,38 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { JSONContent } from '@tiptap/core';
 
-import { UpsertOp } from '~/core/database/types';
+import { ID } from '~/core/id';
+import { Value } from '~/core/v2.types';
 
 import * as Parser from './parser';
 import { getNodeId, getTextNodeHtml } from './utils';
 
-interface UpsertMarkdownOp extends UpsertOp {
-  attributeId: typeof SystemIds.MARKDOWN_CONTENT;
-  attributeName: 'Markdown Content';
-  value: { type: 'TEXT'; value: string };
-}
-
-export function getTextEntityOps(node: JSONContent): [UpsertMarkdownOp] {
+export function getTextEntityMarkdownValue(node: JSONContent): Value {
   const nodeHTML = getTextNodeHtml(node);
+  const nodeId = getNodeId(node);
   const markdown = Parser.htmlToMarkdown(nodeHTML);
 
-  return [
-    {
-      // markdown content
-      entityId: getNodeId(node),
-      entityName: null,
-      attributeId: SystemIds.MARKDOWN_CONTENT,
-      attributeName: 'Markdown Content',
-      value: { type: 'TEXT' as const, value: markdown },
+  if (!node.attrs?.spaceId) {
+    console.error('Cannot make markdown content for block. Space id not set on block.');
+    throw new Error('Cannot make markdown content for block. Space id not set on block.');
+  }
+
+  return {
+    id: ID.createValueId({
+      entityId: nodeId,
+      propertyId: SystemIds.MARKDOWN_CONTENT,
+      spaceId: node.attrs.spaceId,
+    }),
+    entity: {
+      id: nodeId,
+      name: null,
     },
-  ] as const;
+    property: {
+      id: SystemIds.MARKDOWN_CONTENT,
+      name: 'Markdown content',
+      dataType: 'TEXT',
+    },
+    spaceId: node.attrs.spaceId,
+    value: markdown,
+  };
 }

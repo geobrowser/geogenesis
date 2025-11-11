@@ -1,6 +1,6 @@
 'use client';
 
-import { useLogout } from '@privy-io/react-auth';
+import { useLogout } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';

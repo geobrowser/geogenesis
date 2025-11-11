@@ -1,79 +1,74 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { SpaceGovernanceType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { SpaceEntity } from '~/core/v2.types';
 
-import { Address, EntityId, type Address as IAddress, SpaceId, SubstreamSpace, SubstreamVersion } from '../schema';
-import { Entity } from './entities';
-import { VersionDto } from './versions';
+import { type Address, RemoteEntity, RemoteSpace } from '../v2/v2.schema';
+import { EntityDtoLive } from './entities';
 
 export type Space = {
-  id: SpaceId;
-  entityId: EntityId;
+  id: string;
   type: SpaceGovernanceType;
+  entity: SpaceEntity;
+  daoAddress: Address;
+  spaceAddress: Address;
+  mainVotingAddress: Address | null;
+  membershipAddress: Address | null;
+  personalAddress: Address | null;
+
   editors: string[];
   members: string[];
-  spaceConfig: SpaceConfigEntity;
-  daoAddress: IAddress;
-  spacePluginAddress: IAddress;
-  mainVotingPluginAddress: Address | null;
-  memberAccessPluginAddress: Address | null;
-  personalSpaceAdminPluginAddress: Address | null;
 };
 
-export type SpaceConfigEntity = Entity & {
-  spaceId: string;
-  image: string;
-};
-
-export function SpaceDto(space: SubstreamSpace): Space {
-  const spaceConfigEntity = SpaceMetadataDto(space.id, space.spacesMetadatum?.version);
+export function SpaceDto(space: RemoteSpace): Space {
+  const spaceEntity = SpaceEntityDto(space.id, space.page);
 
   return {
     id: space.id,
-    entityId: spaceConfigEntity.id,
     type: space.type,
-    editors: space.spaceEditors.nodes.map(editor => editor.accountId),
-    members: space.spaceMembers.nodes.map(member => member.accountId),
-    spaceConfig: spaceConfigEntity,
+    entity: spaceEntity,
+
+    editors: space.editorsList.map(editor => editor.address),
+    members: space.membersList.map(member => member.address),
 
     daoAddress: space.daoAddress,
-    mainVotingPluginAddress: space.mainVotingPluginAddress,
-    memberAccessPluginAddress: space.memberAccessPluginAddress,
-    personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
-    spacePluginAddress: space.spacePluginAddress,
+    mainVotingAddress: space.mainVotingAddress,
+    membershipAddress: space.membershipAddress,
+    personalAddress: space.personalAddress,
+    spaceAddress: space.spaceAddress,
   };
 }
 
-export function SpaceMetadataDto(spaceId: string, metadata: SubstreamVersion | undefined | null): SpaceConfigEntity {
-  const maybeEntity = metadata ? VersionDto(metadata) : null;
+export function SpaceEntityDto(spaceId: string, remoteEntity: RemoteEntity | null): SpaceEntity {
+  const maybeEntity = remoteEntity ? EntityDtoLive(remoteEntity) : null;
 
   let entity = null;
 
   if (maybeEntity) {
     entity = {
       ...maybeEntity,
-      triples: maybeEntity.triples.filter(triple => triple.space === spaceId),
-      relationsOut: maybeEntity.relationsOut.filter(relation => relation.space === spaceId),
+      // @TODO: Should be scoped to the space automatically by API
+      values: maybeEntity.values.filter(triple => triple.spaceId === spaceId),
+      relations: maybeEntity.relations.filter(relation => relation.spaceId === spaceId),
     };
   }
 
-  const spaceConfigWithImage: SpaceConfigEntity = entity
+  const spaceConfigWithImage: SpaceEntity = entity
     ? {
         ...entity,
         spaceId: spaceId,
-        image: Entities.avatar(entity.relationsOut) ?? Entities.cover(entity.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
+        image: Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? PLACEHOLDER_SPACE_IMAGE,
       }
     : {
-        id: EntityId(''),
+        id: '',
         spaceId: spaceId,
         name: null,
         description: null,
         image: PLACEHOLDER_SPACE_IMAGE,
-        triples: [],
+        values: [],
         types: [],
-        nameTripleSpaces: [],
         spaces: [],
-        relationsOut: [],
+        relations: [],
       };
 
   return spaceConfigWithImage;

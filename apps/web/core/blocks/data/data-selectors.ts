@@ -1,17 +1,16 @@
 import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 
-import { Entity } from '~/core/io/dto/entities';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import { RenderableProperty } from '~/core/types';
+import { Entity } from '~/core/v2.types';
 
-export type TripleSegment = {
+type TripleSegment = {
   type: 'TRIPLE';
   property: string;
 };
 
-export type RelationSegment = {
+type RelationSegment = {
   type: 'RELATION';
   property: string;
 };
@@ -72,6 +71,7 @@ export function parseSelectorIntoLexicon(selector: string | null): PathSegment[]
   return segments;
 }
 
+// @TODO(migration): Update to latest relations data model
 export async function mapSelectorLexiconToSourceEntity(
   lexicon: PathSegment[],
   startEntityId: string
@@ -85,8 +85,8 @@ export async function mapSelectorLexiconToSourceEntity(
 
     // @TODO: Need to handle if the entity is an image
     if (segment.type === 'RELATION') {
-      if (segment.property === SystemIds.RELATION_TO_ATTRIBUTE) {
-        const newInputId = input?.triples.find(t => t.attributeId === SystemIds.RELATION_TO_ATTRIBUTE)?.value.value;
+      if (segment.property === SystemIds.RELATION_TO_PROPERTY) {
+        const newInputId = input?.values.find(t => t.property.id === SystemIds.RELATION_TO_PROPERTY)?.value;
 
         if (!newInputId) {
           continue;
@@ -101,8 +101,8 @@ export async function mapSelectorLexiconToSourceEntity(
         continue;
       }
 
-      if (segment.property === SystemIds.RELATION_FROM_ATTRIBUTE) {
-        const newInputId = input?.triples.find(t => t.attributeId === SystemIds.RELATION_FROM_ATTRIBUTE)?.value.value;
+      if (segment.property === SystemIds.RELATION_FROM_PROPERTY) {
+        const newInputId = input?.values.find(t => t.property.id === SystemIds.RELATION_FROM_PROPERTY)?.value;
 
         if (!newInputId) {
           continue;
@@ -117,7 +117,7 @@ export async function mapSelectorLexiconToSourceEntity(
         continue;
       }
 
-      const relations = input?.relationsOut.filter(r => r.typeOf.id === segment.property) ?? [];
+      const relations = input?.relations.filter(r => r.type.id === segment.property) ?? [];
 
       if (relations.length === 0) {
         return [];
@@ -140,49 +140,50 @@ export async function mapSelectorLexiconToSourceEntity(
   return [];
 }
 
+const valueRenderableTypes: string[] = ['TEXT', 'NUMBER', 'TIME', 'CHECKBOX'];
+
 export function generateSelector(
   property: {
     id: string;
-    renderableType: RenderableProperty['type'];
+    renderableType: string;
   },
   where: 'TO' | 'FROM' | 'SOURCE'
 ) {
   let selector: string | null = null;
-  const tripleRenderableTypes: RenderableProperty['type'][] = ['TEXT', 'URL', 'NUMBER', 'TIME', 'CHECKBOX'];
 
-  if (tripleRenderableTypes.includes(property.renderableType)) {
+  if (valueRenderableTypes.includes(property.renderableType)) {
     if (where === 'SOURCE') {
       selector = `.[${property.id}]`;
     }
 
     if (where === 'TO') {
-      selector = `->[${SystemIds.RELATION_TO_ATTRIBUTE}]->.[${property.id}]`;
+      selector = `->[${SystemIds.RELATION_TO_PROPERTY}]->.[${property.id}]`;
 
-      if (property.id === SystemIds.NAME_ATTRIBUTE) {
-        selector = `->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
+      if (property.id === SystemIds.NAME_PROPERTY) {
+        selector = `->[${SystemIds.RELATION_TO_PROPERTY}]`;
       }
     }
 
     if (where === 'FROM') {
-      selector = `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]->.[${property.id}]`;
+      selector = `->[${SystemIds.RELATION_FROM_PROPERTY}]->.[${property.id}]`;
 
-      if (property.id === SystemIds.NAME_ATTRIBUTE) {
-        selector = `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]`;
+      if (property.id === SystemIds.NAME_PROPERTY) {
+        selector = `->[${SystemIds.RELATION_FROM_PROPERTY}]`;
       }
     }
   }
 
   if (property.renderableType === 'RELATION' || property.renderableType === 'IMAGE') {
     if (where === 'SOURCE') {
-      selector = `->[${property.id}]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
+      selector = `->[${property.id}]->[${SystemIds.RELATION_TO_PROPERTY}]`;
     }
 
     if (where === 'TO') {
-      selector = `->[${SystemIds.RELATION_TO_ATTRIBUTE}]->[${property.id}]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
+      selector = `->[${SystemIds.RELATION_TO_PROPERTY}]->[${property.id}]->[${SystemIds.RELATION_TO_PROPERTY}]`;
     }
 
     if (where === 'FROM') {
-      selector = `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]->[${property.id}]->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
+      selector = `->[${SystemIds.RELATION_FROM_PROPERTY}]->[${property.id}]->[${SystemIds.RELATION_TO_PROPERTY}]`;
     }
   }
 
@@ -195,19 +196,19 @@ export function getIsSelected(
   property: {
     id: string;
     name: string | null;
-    renderableType: RenderableProperty['type'];
+    renderableType: string;
   }
 ): boolean {
   return selectors.some(s => {
     const generatedSelector = generateSelector(property, where);
 
     // Render the name field of a TO selector to use the name
-    if (where === 'TO' && property.id === SystemIds.NAME_ATTRIBUTE) {
-      return s === `->[${SystemIds.RELATION_TO_ATTRIBUTE}]`;
+    if (where === 'TO' && property.id === SystemIds.NAME_PROPERTY) {
+      return s === `->[${SystemIds.RELATION_TO_PROPERTY}]`;
     }
 
-    if (where === 'FROM' && property.id === SystemIds.NAME_ATTRIBUTE) {
-      return s === `->[${SystemIds.RELATION_FROM_ATTRIBUTE}]`;
+    if (where === 'FROM' && property.id === SystemIds.NAME_PROPERTY) {
+      return s === `->[${SystemIds.RELATION_FROM_PROPERTY}]`;
     }
 
     return s === generatedSelector;

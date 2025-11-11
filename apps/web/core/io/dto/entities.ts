@@ -1,64 +1,39 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { RelationDtoHistorical, RelationDtoLive } from '~/core/io/dto/relations';
-import { TripleDto } from '~/core/io/dto/triples';
-import { Relation, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { Entity } from '~/core/v2.types';
 
-import { EntityId, SubstreamEntityHistorical, SubstreamEntityLive } from '../schema';
+import { EntityId, SubstreamEntityHistorical } from '../schema';
+import { RemoteEntity } from '../v2/v2.schema';
+import { ValueDto } from './values';
 
-export type Entity = {
-  id: EntityId;
-  name: string | null;
-  description: string | null;
-  nameTripleSpaces: string[];
-  spaces: string[];
-  types: { id: EntityId; name: string | null }[];
-  relationsOut: Relation[];
-  triples: Triple[];
-};
-
-export function EntityDtoLive(substreamEntity: SubstreamEntityLive): Entity {
-  const entity = substreamEntity.currentVersion.version;
-  const networkTriples = entity.triples.nodes;
-  const triples = networkTriples.map(TripleDto);
-  const nameTriples = Entities.nameTriples(triples);
-
-  const networkRelations = entity.relationsByFromVersionId.nodes;
-  const relationsOut = networkRelations.map(RelationDtoLive);
-
-  const entityTypes = relationsOut
-    .filter(relation => relation.typeOf.id === EntityId(SystemIds.TYPES_ATTRIBUTE))
-    .map(relation => {
-      return {
-        id: relation.toEntity.id,
-        name: relation.toEntity.name,
-      };
-    });
+export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
+  const relationsOut = remoteEntity.relationsList.map(r => RelationDtoLive(r));
+  const values = remoteEntity.valuesList.map(v => ValueDto(remoteEntity, v));
 
   return {
-    id: substreamEntity.id,
-    name: entity.name,
-    description: Entities.description(triples),
-    nameTripleSpaces: nameTriples.map(t => t.space),
-    spaces: entity.versionSpaces.nodes.map(node => node.spaceId),
-    types: entityTypes,
-    relationsOut,
-    triples,
+    id: remoteEntity.id,
+    name: remoteEntity.name,
+    description: remoteEntity.description,
+    spaces: [...remoteEntity.spaceIds],
+    types: [...remoteEntity.types],
+    relations: relationsOut,
+    values: values,
+    updatedAt: remoteEntity.updatedAt,
   };
 }
 
 export function EntityDtoHistorical(substreamEntity: SubstreamEntityHistorical) {
   const entity = substreamEntity.currentVersion.version;
-  const networkTriples = entity.triples.nodes;
-  const triples = networkTriples.map(TripleDto);
-  const nameTriples = Entities.nameTriples(triples);
+  // const networkTriples = entity.triples.nodes;
+  const triples: any[] = [];
 
   const networkRelations = entity.relationsByFromVersionId.nodes;
   const relationsOut = networkRelations.map(RelationDtoHistorical);
 
   const entityTypes = relationsOut
-    .filter(relation => relation.typeOf.id === EntityId(SystemIds.TYPES_ATTRIBUTE))
+    .filter(relation => relation.typeOf.id === EntityId(SystemIds.TYPES_PROPERTY))
     .map(relation => {
       return {
         id: relation.toEntity.id,
@@ -69,8 +44,10 @@ export function EntityDtoHistorical(substreamEntity: SubstreamEntityHistorical) 
   return {
     id: substreamEntity.id,
     name: entity.name,
-    description: Entities.description(triples),
-    nameTripleSpaces: nameTriples.map(t => t.space),
+    // @TODO: This Dto is using the legacy data model still, so we can't
+    // correctly read description this way
+    description: Entities.description([]),
+    nameTripleSpaces: [],
     spaces: entity.versionSpaces.nodes.map(node => node.spaceId),
     types: entityTypes,
     relationsOut,

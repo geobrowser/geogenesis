@@ -10,9 +10,9 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 
-import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
+import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 
-import { cachedFetchEntity } from './cached-fetch-entity';
+import { cachedFetchEntityPage } from './cached-fetch-entity';
 import { ProfilePageComponent } from './profile-entity-page';
 
 interface Props {
@@ -23,32 +23,40 @@ export async function ProfileEntityServerContainer({ params }: Props) {
   const spaceId = params.id;
   const entityId = params.entityId;
 
-  const [person, profile] = await Promise.all([
-    cachedFetchEntity(entityId, spaceId),
+  const [entityPage, profile] = await Promise.all([
+    cachedFetchEntityPage(entityId, spaceId),
     fetchOnchainProfileByEntityId(entityId),
   ]);
+
+  const person = entityPage?.entity;
 
   // @TODO: Real error handling
   if (!person) {
     return (
       <ProfilePageComponent
         id={params.entityId}
-        triples={[]}
+        values={[]}
         spaceId={params.id}
-        relationsOut={[]}
-        referencedByComponent={null}
+        relations={[]}
+        referencedByComponent={
+          <ErrorBoundary fallback={<EmptyErrorComponent />}>
+            <React.Suspense fallback={<div />}>
+              <BacklinksServerContainer entityId={params.entityId} />
+            </React.Suspense>
+          </ErrorBoundary>
+        }
       />
     );
   }
 
   // Redirect from space configuration page to space page. An entity might be a Person _and_ a Space.
   // In that case we want to render on the space front page.
-  if (person?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && profile?.homeSpaceId) {
-    console.log(`Redirecting from space configuration entity ${person.id} to space page ${profile?.homeSpaceId}`);
+  // if (person?.types.some(type => type.id === EntityId(SystemIds.SPACE_TYPE)) && profile?.homeSpaceId) {
+  //   console.log(`Redirecting from space configuration entity ${person.id} to space page ${profile?.homeSpaceId}`);
 
-    // We need to stay in the space that we're currently in
-    return redirect(NavUtils.toSpace(profile.homeSpaceId));
-  }
+  //   // We need to stay in the space that we're currently in
+  //   return redirect(NavUtils.toSpace(profile.homeSpaceId));
+  // }
 
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
   // the space for the entity we are rendering, so we need to redirect to the correct space.
@@ -68,17 +76,13 @@ export async function ProfileEntityServerContainer({ params }: Props) {
   return (
     <ProfilePageComponent
       id={params.entityId}
-      triples={person.triples}
+      values={person.values}
       spaceId={params.id}
-      relationsOut={person.relationsOut}
+      relations={person.relations}
       referencedByComponent={
         <ErrorBoundary fallback={<EmptyErrorComponent />}>
-          {/*
-              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
-              show any referenced by loading states but do want to stream it in
-            */}
           <React.Suspense fallback={<div />}>
-            <EntityReferencedByServerContainer entityId={params.entityId} name={person.name} spaceId={params.id} />
+            <BacklinksServerContainer entityId={params.entityId} />
           </React.Suspense>
         </ErrorBoundary>
       }

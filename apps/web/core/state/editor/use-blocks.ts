@@ -1,46 +1,37 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { useRelations } from '~/core/database/relations';
-import { EntityId, TypeId } from '~/core/io/schema';
-import { Relation, RenderableEntityType } from '~/core/types';
+import { useRelations } from '~/core/sync/use-store';
+import { Relation, RenderableEntityType } from '~/core/v2.types';
 
 export type RelationWithBlock = Relation & {
-  relationId: EntityId;
-  typeOfId: TypeId;
+  relationId: string;
+  typeOfId: string;
   index: string;
   block: {
-    id: EntityId;
+    id: string;
     type: RenderableEntityType;
     value: string;
   };
 };
 
-/**
- * Blocks are defined via relations with relation type of {@link SystemIds.BLOCKS}.
- * These relations point to entities which are renderable by the content editor. The
- * currently renderable block types are:
- * 1) Text
- * 2) Data
- * 3) Image
- *
- */
-export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
+export function useBlocks(fromEntityId: string, spaceId: string, initialBlockRelations?: Relation[]) {
   const blocks = useRelations({
-    mergeWith: initialBlockRelations,
-    selector: r => r.fromEntity.id === fromEntityId && r.typeOf.id === EntityId(SystemIds.BLOCKS),
+    mergeWith: initialBlockRelations ?? [],
+    selector: r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId,
   });
 
-  return blocks.map(relationToRelationWithBlock).sort(sortByIndex);
+  return blocks?.map(relationToRelationWithBlock).sort(sortByIndex) ?? [];
 }
 
 function relationToRelationWithBlock(r: Relation): RelationWithBlock {
   return {
     ...r,
-    typeOfId: TypeId(r.typeOf.id),
-    index: r.index,
+    typeOfId: r.type.id,
+    // @TODO(migration): default position.
+    index: r.position ?? 'a0',
     block: {
       id: r.toEntity.id,
-      type: r.toEntity.renderableType,
+      type: r.renderableType,
       value: r.toEntity.value,
     },
     relationId: r.id,

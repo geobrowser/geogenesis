@@ -1,16 +1,16 @@
 'use client';
 
-import { A, D, pipe } from '@mobily/ts-belt';
+import { Array as A, Record as R, pipe } from 'effect';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
 
-import { useTriples } from '~/core/database/triples';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { useRelations, useValues } from '~/core/sync/use-store';
 import { ReviewState } from '~/core/types';
 
 import { SmallButton } from '~/design-system/button';
@@ -27,26 +27,25 @@ export const FlowBar = () => {
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
-  const triples = useTriples(
-    React.useMemo(() => ({ selector: t => t.hasBeenPublished === false, includeDeleted: true }), [])
-  );
+  const values = useValues({
+    selector: t => t.hasBeenPublished === false && t.isLocal === true,
+    includeDeleted: true,
+  });
 
-  // @TODO: We can use Change.fromLocal to aggregate the "real" counts.
-  const opsCount = triples.length;
+  const relations = useRelations({
+    includeDeleted: true,
+    selector: r => r.hasBeenPublished === false && r.isLocal === true,
+  });
+
+  const opsCount = values.length + relations.length;
 
   const entitiesCount = pipe(
-    triples,
-    A.groupBy(t => t.entityId),
-    D.keys,
+    [...values.map(t => t.entity.id), ...relations.map(r => r.fromEntity.id)],
+    r => [...new Set(r)],
     A.length
   );
 
-  const spacesCount = pipe(
-    triples,
-    A.groupBy(t => t.space),
-    D.keys,
-    keys => new Set(keys).size
-  );
+  const spacesCount = pipe([...new Set([...values.map(t => t.spaceId), ...relations.map(r => r.spaceId)])], A.length);
 
   // Don't show the flow bar if there are no actions, if the user is not in edit mode, if there is a toast,
   // or if the status bar is rendering in place.

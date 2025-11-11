@@ -1,14 +1,12 @@
-import { SystemIds } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 
-import { StoreRelation } from '~/core/database/types';
-import { DB } from '~/core/database/write';
 import { ID } from '~/core/id';
-import { Entity } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
+import { useEditorStore } from '~/core/state/editor/use-editor';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
+import { Entity, Relation } from '~/core/v2.types';
 
 import { useDataBlockInstance } from './use-data-block';
 import { useMapping } from './use-mapping';
@@ -21,27 +19,27 @@ type Column = {
 
 export function useView() {
   const { entityId, spaceId, relationId } = useDataBlockInstance();
+  const { storage } = useMutate();
 
   const { entity: blockEntity } = useQueryEntity({
     spaceId: spaceId,
     id: entityId,
   });
 
+  const { blockRelations } = useEditorStore();
+  const newRelationId = blockRelations.find(relation => relation.toEntity.id === entityId)?.entityId ?? '';
+
   const { entity: blockRelation } = useQueryEntity({
     spaceId: spaceId,
-    id: relationId,
+    id: newRelationId,
   });
 
-  const viewRelation = blockRelation?.relationsOut.find(
-    relation => relation.typeOf.id === EntityId(SystemIds.VIEW_ATTRIBUTE)
-  );
+  const viewRelation = blockRelation?.relations.find(relation => relation.type.id === SystemIds.VIEW_PROPERTY);
 
   const shownColumnRelations =
-    blockRelation?.relationsOut.filter(
+    blockRelation?.relations.filter(
       // We fall back to an old properties used to render shown columns.
-      relation =>
-        relation.typeOf.id === EntityId(SystemIds.SHOWN_COLUMNS) ||
-        relation.typeOf.id === EntityId(SystemIds.PROPERTIES)
+      relation => relation.type.id === SystemIds.SHOWN_COLUMNS || relation.type.id === SystemIds.PROPERTIES
     ) ?? [];
 
   const { mapping, isLoading, isFetched } = useMapping(
@@ -49,9 +47,7 @@ export function useView() {
     shownColumnRelations.map(r => r.id)
   );
 
-  // @TODO: We shouldn't need the name attribute here since it's automatically
-  // added in useMapping if it's not already part of the properties list.
-  const shownColumnIds = [...Object.keys(mapping), SystemIds.NAME_ATTRIBUTE];
+  const shownColumnIds = [SystemIds.NAME_PROPERTY, ...shownColumnRelations.map(r => r.toEntity.id)];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
@@ -60,32 +56,39 @@ export function useView() {
     const isCurrentView = newView.value === view;
 
     if (!isCurrentView) {
-      if (viewRelation) {
-        DB.removeRelation({ relation: viewRelation, spaceId });
+      if (!viewRelation) {
+        const newRelation: Relation = {
+          id: IdUtils.generate(),
+          // @TODO(migration): Reuse existing entity?
+          entityId: IdUtils.generate(),
+          spaceId: spaceId,
+          position: Position.generate(),
+          renderableType: 'RELATION',
+          type: {
+            id: SystemIds.VIEW_PROPERTY,
+            name: 'View',
+          },
+          fromEntity: {
+            id: newRelationId,
+            name: blockEntity?.name ?? null,
+          },
+          toEntity: {
+            id: newView.id,
+            name: newView.name,
+            value: newView.id,
+          },
+        };
+
+        storage.relations.set(newRelation);
+        return;
       }
 
-      const newRelation: StoreRelation = {
-        space: spaceId,
-        index: INITIAL_RELATION_INDEX_VALUE,
-        typeOf: {
-          id: EntityId(SystemIds.VIEW_ATTRIBUTE),
-          name: 'View',
-        },
-        fromEntity: {
-          id: EntityId(relationId),
-          name: blockEntity?.name ?? null,
-        },
-        toEntity: {
-          id: EntityId(newView.id),
+      storage.relations.update(viewRelation, draft => {
+        draft.toEntity = {
+          id: newView.id,
           name: newView.name,
-          renderableType: 'RELATION',
-          value: EntityId(newView.id),
-        },
-      };
-
-      DB.upsertRelation({
-        relation: newRelation,
-        spaceId,
+          value: newView.id,
+        };
       });
     }
   };
@@ -95,6 +98,7 @@ export function useView() {
     const shownColumnRelation = shownColumnRelations.find(relation => relation.toEntity.id === newColumn.id);
 
     const newId = selector ? ID.createEntityId() : undefined;
+    const newRelationEntityId = IdUtils.generate();
 
     const existingMapping = mapping[newColumn.id];
 
@@ -106,55 +110,68 @@ export function useView() {
     //
     // Yes this looks janky
     if (selector && newId) {
-      if (selector === existingMapping) {
+      if (selector !== existingMapping) {
         if (shownColumnRelation) {
-          DB.removeRelation({ relation: shownColumnRelation, spaceId });
-        }
-      } else {
-        if (shownColumnRelation) {
-          // @TODO: We should instead just upsert the new selector instead of removing and creating
-          // a new relation. Main issue right now is that the block won't re-render if we use this
-          // approach due to how the mappings are queried.
-          DB.removeRelation({ relation: shownColumnRelation, spaceId });
-        }
-
-        DB.upsert(
-          {
-            attributeId: SystemIds.SELECTOR_ATTRIBUTE,
-            attributeName: 'Selector',
-            entityId: newId,
-            entityName: null,
-            value: {
-              type: 'TEXT',
-              value: selector,
+          storage.values.set({
+            id: ID.createValueId({
+              entityId: shownColumnRelation.entityId,
+              propertyId: SystemIds.SELECTOR_PROPERTY,
+              spaceId,
+            }),
+            spaceId,
+            entity: {
+              id: shownColumnRelation.entityId,
+              name: null,
             },
-          },
-          spaceId
-        );
+            property: {
+              id: SystemIds.SELECTOR_PROPERTY,
+              name: 'Selector',
+              dataType: 'TEXT',
+            },
+            value: selector,
+          });
 
-        const newRelation: StoreRelation = {
+          return;
+        }
+
+        storage.values.set({
+          id: ID.createValueId({
+            entityId: newRelationEntityId,
+            propertyId: SystemIds.SELECTOR_PROPERTY,
+            spaceId,
+          }),
+          spaceId,
+          entity: {
+            id: newRelationEntityId,
+            name: null,
+          },
+          property: {
+            id: SystemIds.SELECTOR_PROPERTY,
+            name: 'Selector',
+            dataType: 'TEXT',
+          },
+          value: selector,
+        });
+
+        storage.relations.set({
           id: newId,
-          space: spaceId,
-          index: INITIAL_RELATION_INDEX_VALUE,
-          typeOf: {
-            id: EntityId(SystemIds.PROPERTIES),
+          entityId: newRelationEntityId,
+          spaceId: spaceId,
+          position: Position.generate(),
+          renderableType: 'RELATION',
+          type: {
+            id: SystemIds.PROPERTIES,
             name: 'Properties',
           },
           fromEntity: {
-            id: EntityId(relationId),
+            id: relationId,
             name: blockRelation?.name ?? null,
           },
           toEntity: {
-            id: EntityId(newColumn.id),
+            id: newColumn.id,
             name: newColumn.name,
-            renderableType: 'RELATION',
-            value: EntityId(newColumn.id),
+            value: newColumn.id,
           },
-        };
-
-        DB.upsertRelation({
-          relation: newRelation,
-          spaceId,
         });
       }
 
@@ -162,33 +179,29 @@ export function useView() {
     }
 
     if (!isShown) {
-      const newRelation: StoreRelation = {
-        id: newId,
-        space: spaceId,
-        index: INITIAL_RELATION_INDEX_VALUE,
-        typeOf: {
-          id: EntityId(SystemIds.PROPERTIES),
+      storage.relations.set({
+        id: IdUtils.generate(),
+        entityId: newRelationEntityId,
+        spaceId: spaceId,
+        position: Position.generate(),
+        renderableType: 'RELATION',
+        type: {
+          id: SystemIds.PROPERTIES,
           name: 'Properties',
         },
         fromEntity: {
-          id: EntityId(relationId),
+          id: newRelationId,
           name: blockRelation?.name ?? null,
         },
         toEntity: {
-          id: EntityId(newColumn.id),
+          id: newColumn.id,
           name: newColumn.name,
-          renderableType: 'RELATION',
-          value: EntityId(newColumn.id),
+          value: newColumn.id,
         },
-      };
-
-      DB.upsertRelation({
-        relation: newRelation,
-        spaceId,
       });
     } else {
       if (shownColumnRelation) {
-        DB.removeRelation({ relation: shownColumnRelation, spaceId });
+        storage.relations.delete(shownColumnRelation);
       }
     }
   };
@@ -241,10 +254,10 @@ const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockV
   let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
 
   if (blockEntity) {
-    const placeholderTextTriple = blockEntity.triples.find(triple => triple.attributeId === SystemIds.PLACEHOLDER_TEXT);
+    const placeholderTextTriple = blockEntity.values.find(value => value.property.id === SystemIds.PLACEHOLDER_TEXT);
 
-    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
-      text = placeholderTextTriple.value.value;
+    if (placeholderTextTriple && placeholderTextTriple.property.dataType === 'TEXT') {
+      text = placeholderTextTriple.value;
     }
 
     // @TODO(relations): This should be a relation pointing to the image entity

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { Services } from '../services';
+import { fetchProfile } from '../io/subgraph';
 import { Profile } from '../types';
 
 export function useGeoProfile(account?: `0x${string}`): {
@@ -8,8 +8,6 @@ export function useGeoProfile(account?: `0x${string}`): {
   isLoading: boolean;
   isFetched: boolean;
 } {
-  const { subgraph } = Services.useServices();
-
   const {
     data: profile,
     isLoading,
@@ -20,7 +18,7 @@ export function useGeoProfile(account?: `0x${string}`): {
     queryFn: async () => {
       if (!account) return null;
 
-      return await subgraph.fetchProfile({
+      return await fetchProfile({
         address: account,
       });
     },

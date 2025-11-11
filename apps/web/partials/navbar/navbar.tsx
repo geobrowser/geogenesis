@@ -8,7 +8,7 @@ import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { Search } from '~/design-system/icons/search';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { CreateSpaceDropdown } from '../create-space/create-space-dropdown';
+import { CreateEntityDropdown } from '../create-entity/create-entity-dropdown';
 import { NavbarActions } from './navbar-actions';
 import { NavbarSpaceMetadata } from './navbar-space-metadata';
 
@@ -56,7 +56,7 @@ export function Navbar({ onSearchClick }: Props) {
             </a>
           )}
 
-          <CreateSpaceDropdown />
+          <CreateEntityDropdown />
 
           <button
             className="rounded-full p-2 text-grey-04 transition-colors duration-200 hover:bg-grey-01 focus:bg-grey-01 active:bg-divider"

@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
+import { Effect } from 'effect';
 
-import { fetchSpace } from '../io/subgraph';
+import { getSpace } from '../io/v2/queries';
 
-export function useSpace(spaceId: string) {
+export function useSpace(spaceId?: string) {
   const { data: space, isLoading } = useQuery({
     queryKey: ['space', spaceId],
-    queryFn: () => fetchSpace({ id: spaceId }),
+    queryFn: () => (spaceId ? Effect.runPromise(getSpace(spaceId)) : null),
+    enabled: Boolean(spaceId),
   });
 
   return {

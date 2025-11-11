@@ -52,7 +52,7 @@ export function ProposalDto(
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
     name: entity?.name ?? null,
-    image: Entities.avatar(entity?.relationsOut) ?? Entities.cover(entity?.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
+    image: Entities.avatar(entity?.relations) ?? Entities.cover(entity?.relations) ?? PLACEHOLDER_SPACE_IMAGE,
   };
 
   return {
@@ -115,7 +115,7 @@ export function ProposalWithoutVotersDto(
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
     name: entity?.name ?? null,
-    image: Entities.avatar(entity?.relationsOut) ?? Entities.cover(entity?.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
+    image: Entities.avatar(entity?.relations) ?? Entities.cover(entity?.relations) ?? PLACEHOLDER_SPACE_IMAGE,
   };
 
   return {

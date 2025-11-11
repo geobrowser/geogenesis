@@ -1,10 +1,8 @@
 import { colors } from './colors';
 
-export type TypographyScale = typeof typography;
-export type TypographyTheme = keyof TypographyScale;
-export type TypographyThemeValue = TypographyScale[TypographyTheme];
+type TypographyScale = typeof typography;
+type TypographyTheme = keyof TypographyScale;
 export type TypographyName = keyof TypographyScale[TypographyTheme];
-export type TypographyValue = TypographyThemeValue[TypographyName];
 
 const WEIGHTS = {
   regular: 400,
@@ -136,7 +134,7 @@ const baseTypography = {
   },
 };
 
-export const typography = {
+const typography = {
   light: {
     ...baseTypography.light,
     bodySemibold: {

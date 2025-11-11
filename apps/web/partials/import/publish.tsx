@@ -11,7 +11,7 @@ import { Entities } from '~/core/utils/entity';
 
 import { SlideUp } from '~/design-system/slide-up';
 
-import { actionsCountAtom, entityCountAtom, entityCountByTypeAtom, publishAtom, stepAtom, triplesAtom } from './atoms';
+import { actionsCountAtom, entityCountAtom, entityCountByTypeAtom, publishAtom, stepAtom, valuesAtom } from './atoms';
 
 type PublishProps = {
   spaceId: string;
@@ -34,40 +34,38 @@ type PublishImportProps = {
 };
 
 const PublishImport = ({ spaceId, space }: PublishImportProps) => {
-  const triples = useAtomValue(triplesAtom);
-  const actionsCount = useAtomValue(actionsCountAtom);
-  const entityCount = useAtomValue(entityCountAtom);
-  const entityCountByType = useAtomValue(entityCountByTypeAtom);
-  const setStep = useSetAtom(stepAtom);
-  const setIsPublishOpen = useSetAtom(publishAtom);
-
-  const spaceName = Entities.name(space?.spaceConfig?.triples ?? []);
-  const spaceAvatar = Entities.avatar(space?.spaceConfig?.relationsOut);
-
-  const [proposalName, setProposalName] = useState('');
-  const isReadyToPublish = proposalName.length > 3;
-  const { smartAccount } = useSmartAccount();
-  const { makeBulkProposal } = useBulkPublish();
-
-  const handlePublish = async () => {
-    if (!smartAccount) {
-      return;
-    }
-
-    await makeBulkProposal({
-      triples: triples,
-      relations: [],
-      spaceId,
-      name: proposalName,
-      onSuccess: () => {
-        setStep('done');
-        setIsPublishOpen(false);
-      },
-    });
-  };
-
-  // @TODO: fix
   return null;
+  // const triples = useAtomValue(valuesAtom);
+  // const actionsCount = useAtomValue(actionsCountAtom);
+  // const entityCount = useAtomValue(entityCountAtom);
+  // const entityCountByType = useAtomValue(entityCountByTypeAtom);
+  // const setStep = useSetAtom(stepAtom);
+  // const setIsPublishOpen = useSetAtom(publishAtom);
+
+  // const spaceName = Entities.name(space?.entity?.triples ?? []);
+  // const spaceAvatar = Entities.avatar(space?.entity?.relationsOut);
+
+  // const [proposalName, setProposalName] = useState('');
+  // const isReadyToPublish = proposalName.length > 3;
+  // const { smartAccount } = useSmartAccount();
+  // const { makeBulkProposal } = useBulkPublish();
+
+  // const handlePublish = async () => {
+  //   if (!smartAccount) {
+  //     return;
+  //   }
+
+  //   await makeBulkProposal({
+  //     values: triples,
+  //     relations: [],
+  //     spaceId,
+  //     name: proposalName,
+  //     onSuccess: () => {
+  //       setStep('done');
+  //       setIsPublishOpen(false);
+  //     },
+  //   });
+  // };
 
   // const [data, isLoading] = useLocalChanges(triples.slice(0, 150), spaceId);
 

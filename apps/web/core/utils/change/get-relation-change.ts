@@ -1,4 +1,4 @@
-import { Relation } from '~/core/types';
+import { Relation } from '~/core/v2.types';
 
 import { RelationChangeValue } from './types';
 

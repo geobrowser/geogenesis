@@ -160,16 +160,7 @@ const defaultClassNameAddTypeButton =
   'box-content flex h-6 items-center gap-[6px] rounded border border-dashed border-grey-02 px-[7px] text-[1rem] font-normal text-grey-04';
 
 export const AddTypeButton = forwardRef(function AddTypeButton(
-  {
-    icon,
-    isActive = false,
-    className = defaultClassNameAddTypeButton,
-    style = {},
-    disabled = false,
-    children,
-    label,
-    ...rest
-  }: SquareButtonProps,
+  { icon, className = defaultClassNameAddTypeButton, style = {}, label, ...rest }: SquareButtonProps,
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   return (

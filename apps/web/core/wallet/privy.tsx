@@ -1,6 +1,6 @@
 'use client';
 
-import { PrivyProvider as Privy, PrivyClientConfig } from '@privy-io/react-auth';
+import { PrivyProvider as Privy, PrivyClientConfig } from '@geogenesis/auth';
 
 import * as React from 'react';
 

@@ -11,21 +11,18 @@ import {
 import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
 
-import * as React from 'react';
 import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { PropertyId } from '~/core/hooks/use-properties';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { EntityId, SpaceId } from '~/core/io/schema';
-import { Cell, PropertySchema, Row } from '~/core/types';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
+import { Cell, Property, Row } from '~/core/v2.types';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
-import { getName } from '~/partials/blocks/table/utils';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
@@ -41,12 +38,12 @@ const ColumnHeader = ({
   spaceId,
   isLastColumn,
 }: {
-  column: PropertySchema;
+  column: Property;
   isEditMode: boolean;
   spaceId: string;
   isLastColumn: boolean;
 }) => {
-  const isNameColumn = column.id === EntityId(SystemIds.NAME_ATTRIBUTE);
+  const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
 
   return isEditMode && !isNameColumn ? (
     <div className={cx(isLastColumn ? 'pr-12' : '')}>
@@ -58,10 +55,10 @@ const ColumnHeader = ({
 };
 
 const formatColumns = (
-  columns: PropertySchema[] = [],
+  columns: { id: string; name: string | null }[] = [],
   isEditMode: boolean,
-  unpublishedColumns: PropertySchema[],
-  spaceId: SpaceId
+  unpublishedColumns: { id: string }[],
+  spaceId: string
 ) => {
   const columnSize = 880 / columns.length;
 
@@ -69,7 +66,7 @@ const formatColumns = (
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
-        const isNameColumn = column.id === EntityId(SystemIds.NAME_ATTRIBUTE);
+        const isNameColumn = column.id === SystemIds.NAME_PROPERTY;
 
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
@@ -99,8 +96,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
     const onChangeEntry = table.options.meta!.onChangeEntry;
     const onLinkEntry = table.options.meta!.onLinkEntry;
+    const onAddPlaceholder = table.options.meta!.onAddPlaceholder;
     const propertiesSchema = table.options.meta!.propertiesSchema;
     const source = table.options.meta!.source;
+    const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
 
     const cellData = getValue<Cell | undefined>();
 
@@ -109,24 +108,29 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
-    const maybePropertiesSchema = propertiesSchema?.[PropertyId(cellData.slotId)];
-    const filterableRelationTypeId = maybePropertiesSchema?.relationValueTypeId;
-    const filterableRelationTypeName = maybePropertiesSchema?.relationValueTypeName;
+    const property = propertiesSchema?.[cellData.slotId];
     const propertyId = cellData.renderedPropertyId ? cellData.renderedPropertyId : cellData.slotId;
 
-    const isNameCell = propertyId === SystemIds.NAME_ATTRIBUTE;
-    const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_ATTRIBUTE]?.space ?? space) : space;
-
-    const renderables = cellData.renderables;
+    const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
+    const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space) : space;
 
     const entityId = row.original.entityId;
-    const nameCell = row.original.columns[SystemIds.NAME_ATTRIBUTE];
+    const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
-    const name = getName(nameCell, space);
+    // We are in a component internally within react-table. eslint isn't
+    // able to infer that this is a valid React component.
+    // eslint-disable-next-line
+    const name = useName(entityId);
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;
+
+    const autofocus = Boolean(row.original.placeholder) && isNameCell && shouldAutoFocusPlaceholder;
+
+    if (!property) {
+      return null;
+    }
 
     if (isEditable && source.type !== 'RELATIONS') {
       return (
@@ -134,27 +138,19 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           key={entityId}
           entityId={entityId}
           spaceId={spaceId}
-          attributeId={propertyId}
-          renderables={renderables}
-          filterSearchByTypes={
-            filterableRelationTypeId
-              ? [
-                  {
-                    typeId: filterableRelationTypeId,
-                    typeName: filterableRelationTypeName ?? null,
-                  },
-                ]
-              : undefined
-          }
+          property={property}
           isPlaceholderRow={Boolean(row.original.placeholder)}
           name={name}
           currentSpaceId={space}
           collectionId={collectionId}
           relationId={relationId}
+          toSpaceId={nameCell?.space}
           verified={verified}
           onChangeEntry={onChangeEntry}
           onLinkEntry={onLinkEntry}
+          onAddPlaceholder={onAddPlaceholder}
           source={source}
+          autoFocus={autofocus}
         />
       );
     }
@@ -164,9 +160,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         key={entityId}
         entityId={entityId}
         spaceId={spaceId}
-        columnId={propertyId}
-        // Don't want to render placeholders in edit mode
-        renderables={renderables.filter(r => r.placeholder !== true)}
+        property={property}
         isExpanded={isExpanded}
         name={name}
         href={href}
@@ -183,14 +177,16 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 type TableBlockTableProps = {
   space: string;
-  properties: PropertySchema[];
-  propertiesSchema?: Record<PropertyId, PropertySchema>;
+  properties: Property[];
+  propertiesSchema?: Record<string, Property>;
   rows: Row[];
   shownColumnIds: string[];
   placeholder: { text: string; image: string };
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
+  onAddPlaceholder?: () => void;
   source: Source;
+  shouldAutoFocusPlaceholder: boolean;
 };
 
 export const TableBlockTable = ({
@@ -202,7 +198,9 @@ export const TableBlockTable = ({
   placeholder,
   onChangeEntry,
   onLinkEntry,
+  onAddPlaceholder,
   source,
+  shouldAutoFocusPlaceholder,
 }: TableBlockTableProps) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
@@ -210,7 +208,7 @@ export const TableBlockTable = ({
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(properties, isEditing, [], SpaceId(space)),
+    columns: formatColumns(properties, isEditing, [], space),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -227,8 +225,10 @@ export const TableBlockTable = ({
       isEditable: isEditing,
       onChangeEntry,
       onLinkEntry,
+      onAddPlaceholder,
       propertiesSchema,
       source,
+      shouldAutoFocusPlaceholder,
     },
   });
 
@@ -270,7 +270,7 @@ export const TableBlockTable = ({
                     ? 'hidden'
                     : '!bg-grey-01 !text-grey-03';
 
-                const isEditingDateTime = isEditing && DATETIME_VALUE_TYPES.includes(column.valueType);
+                const isEditingDateTime = column.dataType === 'TIME';
 
                 return (
                   <th
@@ -299,18 +299,18 @@ export const TableBlockTable = ({
           <tbody>
             {tableRows.map((row, index: number) => {
               const cells = row.getVisibleCells();
-              const entityId = cells?.[0]?.getValue<Cell>()?.cellId;
+              const entityId = cells?.[0]?.getValue<Cell>()?.propertyId;
 
               return (
                 <tr key={entityId ?? index} className="hover:bg-bg">
                   {cells.map(cell => {
                     const cellId = `${row.original.entityId}-${cell.column.id}`;
-                    const firstRenderable = cell.getValue<Cell>()?.renderables[0];
+                    const propertyId = cell.getValue<Cell>().propertyId;
 
-                    const isNameCell = Boolean(firstRenderable?.attributeId === SystemIds.NAME_ATTRIBUTE);
+                    const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
                     const isShown = shownColumnIds.includes(cell.column.id);
 
-                    const nameCell = row.original.columns[SystemIds.NAME_ATTRIBUTE];
+                    const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
                     const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
 
                     return (
@@ -336,5 +336,5 @@ export const TableBlockTable = ({
   );
 };
 
-// @TODO replace with SystemIds when package is updated
-const DATETIME_VALUE_TYPES = ['3mswMrL91GuYTfBq29EuNE', 'WDD55r9x6FHTayQnEmTn5S'];
+// @TODO(migration): Do we still need these?
+// const DATETIME_VALUE_TYPES = ['3mswMrL91GuYTfBq29EuNE', 'WDD55r9x6FHTayQnEmTn5S'];

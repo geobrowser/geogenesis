@@ -4,8 +4,6 @@ import { v4 as uuid } from 'uuid';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { slog } from '~/core/utils/utils';
 
-import { Metrics } from '../../metrics';
-import { Telemetry } from '../../telemetry';
 import { deploySpace } from './deploy';
 
 // 5 minutes
@@ -45,8 +43,6 @@ export async function GET(request: Request) {
     );
   }
 
-  const timeStart = Date.now();
-
   const deployWithRetry = Effect.retry(
     deploySpace({
       initialEditorAddress,
@@ -61,10 +57,8 @@ export async function GET(request: Request) {
       schedule: Schedule.exponential(Duration.millis(100)).pipe(
         Schedule.jittered,
         Schedule.compose(Schedule.elapsed),
-        Schedule.tapInput(() => Effect.succeed(Telemetry.metric(Metrics.deploymentRetry))),
         Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.minutes(3)))
       ),
-      while: error => error._tag !== 'WaitForSpaceToBeIndexedError',
     }
   );
 
@@ -74,9 +68,6 @@ export async function GET(request: Request) {
     )
   );
 
-  const timeEnd = Date.now() - timeStart;
-  Telemetry.metric(Metrics.timing('deploy_space_duration', timeEnd));
-
   return Either.match(result, {
     onLeft: error => {
       slog({
@@ -84,8 +75,6 @@ export async function GET(request: Request) {
         message: `Failed to deploy space. message: ${error.message} – cause: ${error.cause}`,
         requestId,
       });
-
-      Telemetry.metric(Metrics.deploymentFailure);
 
       return new Response(
         JSON.stringify({
@@ -98,7 +87,6 @@ export async function GET(request: Request) {
       );
     },
     onRight: spaceId => {
-      Telemetry.metric(Metrics.deploymentSuccess);
       return Response.json({ spaceId });
     },
   });
