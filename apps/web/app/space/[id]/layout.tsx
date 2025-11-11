@@ -6,7 +6,7 @@ import { EntityId } from '~/core/io/schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils, sortRelations } from '~/core/utils/utils';
+import { sortRelations } from '~/core/utils/utils';
 
 import { Create } from '~/design-system/icons/create';
 import { MenuItem } from '~/design-system/menu';
