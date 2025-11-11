@@ -87,7 +87,7 @@ export default async function Layout(props0: LayoutProps) {
             <SpaceTabs
               spaceId={spaceId}
               entityId={props.id}
-              initialTabRelations={props.tabRelations}
+              initialTabRelations={props.tabRelations ?? []}
               tabEntities={props.tabEntities}
               typeIds={typeIds}
             />

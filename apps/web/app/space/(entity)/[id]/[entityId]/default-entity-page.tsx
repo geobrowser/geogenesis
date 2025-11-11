@@ -69,7 +69,7 @@ export default async function DefaultEntityPage({
             <EntityTabs
               entityId={props.id}
               spaceId={props.spaceId}
-              initialTabRelations={props.tabRelations}
+              initialTabRelations={props.tabRelations ?? []}
               tabEntities={props.tabEntities}
             />
           </React.Suspense>
