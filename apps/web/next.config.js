@@ -70,7 +70,11 @@ const nextConfig = {
     return [
       {
         source: '/',
-        destination: 'https://geo.framer.website/',
+        destination: 'https://geobrowser-v2.vercel.app',
+      },
+      {
+        source: '/early-access',
+        destination: 'https://geobrowser-v2.vercel.app/early-access',
       },
       {
         source: '/ending-homelessness',
