@@ -64,16 +64,6 @@ const nextConfig = {
         destination: 'https://www.geobrowser.io/',
         permanent: false,
       },
-      {
-        source: '/',
-        destination: 'https://geobrowser-v2.vercel.app',
-        permanent: false,
-      },
-      {
-        source: '/early-access',
-        destination: 'https://geobrowser-v2.vercel.app/early-access',
-        permanent: false,
-      },
     ];
   },
   async rewrites() {
