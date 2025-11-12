@@ -70,6 +70,14 @@ const nextConfig = {
     return {
       beforeFiles: [
         {
+          source: '/',
+          destination: 'https://geo.framer.website/',
+        },
+        {
+          source: '/early-access',
+          destination: 'https://geobrowser-v2.vercel.app/early-access',
+        },
+        {
           source: '/ending-homelessness',
           destination: 'https://geo.framer.website/ending-homelessness',
         },
