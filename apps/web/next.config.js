@@ -64,10 +64,6 @@ const nextConfig = {
         destination: 'https://www.geobrowser.io/',
         permanent: false,
       },
-    ];
-  },
-  async rewrites() {
-    return [
       {
         source: '/',
         destination: 'https://geobrowser-v2.vercel.app',
@@ -76,6 +72,10 @@ const nextConfig = {
         source: '/early-access',
         destination: 'https://geobrowser-v2.vercel.app/early-access',
       },
+    ];
+  },
+  async rewrites() {
+    return [
       {
         source: '/ending-homelessness',
         destination: 'https://geo.framer.website/ending-homelessness',
