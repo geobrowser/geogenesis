@@ -104,8 +104,7 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
   const spaces = entity?.spaces ?? [];
 
   /**
-   * Redirect from an invalid space to a valid one. Additionally,
-   * redirect to the space front page if the entity is a space.
+   * Redirect from an invalid space to a valid one.
    *
    * We need to check that spaces has data. We could be navigating
    * to an entity with no data like a relation entity page.
@@ -114,18 +113,6 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     const newSpaceId = Spaces.getValidSpaceIdForEntity(entity);
     console.log(`Redirecting from invalid space ${spaceId} to valid space ${newSpaceId}`);
 
-    /**
-     * If we're not in a valid space for the entity AND the entity
-     * is a space, redirect to the space front page directly.
-     */
-    if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE)) {
-      console.log(`Redirecting from space entity ${entityId} to space page ${spaceId}`);
-      return redirect(NavUtils.toSpace(newSpaceId));
-    }
-
-    /**
-     * If the entity isn't a space we can redirect to the entity route
-     */
     return redirect(NavUtils.toEntity(newSpaceId, entityId));
   }
 
