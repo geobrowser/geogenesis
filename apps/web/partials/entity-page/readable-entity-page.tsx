@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useRelationship } from '~/core/hooks/use-relationship';
 import { useRenderables } from '~/core/hooks/use-renderables';
+import { useRelationSorting } from '~/core/hooks/use-relation-sorting';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Relation, RelationRenderableProperty, RenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
@@ -185,6 +186,9 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
   const attributeName = relations[0].attributeName;
   const spaceId = relations[0].spaceId;
 
+  // Use sorted relations hook to get relations in the correct order
+  const { sortedRelations } = useRelationSorting({ relations });
+
   // hide cover, avatar, and type properties
   // they are already rendered in the avatar cover component
   // unless this is the types group that is rendered in the header
@@ -208,7 +212,7 @@ export function RelationsGroup({ relations, isTypes }: { relations: RelationRend
         )}
 
         <div className="flex flex-wrap gap-2">
-          {relations.map(r => {
+          {sortedRelations.map(r => {
             const relationId = r.relationId;
             const relationName = r.valueName;
             const renderableType = r.type;

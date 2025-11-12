@@ -88,12 +88,13 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
         },
       });
 
-      const typePropertySchema = typePropertyValueEntities.flatMap(entity =>
+      const typePropertySchema: PropertySchema[] = typePropertyValueEntities.flatMap(entity =>
         entity.relationsOut
           .filter(relation => relation.typeOf.id === EntityId(SystemIds.PROPERTIES))
           .map(relation => ({
             id: relation.toEntity.id,
             name: relation.toEntity.name,
+            relationIndex: relation.index,
             valueType: SystemIds.RELATION as ValueTypeId,
           }))
       );
@@ -121,7 +122,7 @@ export function useRenderables(serverTriples: Triple[], spaceId: string, isRelat
 
   const renderablesGroupedByAttributeId = pipe(
     renderables,
-    renderables => sortRenderables(renderables, !!isRelationPage),
+    renderables => sortRenderables(renderables, !!isRelationPage, fullSchema),
     sortedRenderables => groupBy(sortedRenderables, r => r.attributeId)
   );
 

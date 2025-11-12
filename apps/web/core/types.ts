@@ -165,6 +165,7 @@ export interface PropertySchema {
   relationValueTypeName?: string | null;
   homeSpace?: string;
   relationValueTypes?: RelationValueType[];
+  relationIndex?: string;
 }
 
 export type Relation = {

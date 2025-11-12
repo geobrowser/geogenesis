@@ -603,7 +603,10 @@ type EntityByAttributeMapMap = Record<string, TripleByAttributeMap>;
 const RELATION_TRIPLES = [
   EntityId(SystemIds.RELATION_FROM_ATTRIBUTE),
   EntityId(SystemIds.RELATION_TO_ATTRIBUTE),
-  EntityId(SystemIds.RELATION_INDEX),
+  // TODO: RELATION_INDEX is currently excluded from diff filtering to allow
+  // drag-and-drop reordering changes to be visible in change tracking.
+  // Consider re-enabling if relation index changes create too much noise.
+  // EntityId(SystemIds.RELATION_INDEX),
   EntityId(SystemIds.RELATION_TYPE_ATTRIBUTE),
 ];
 
