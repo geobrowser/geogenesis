@@ -5,13 +5,12 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { getProperties } from '../io/v2/queries';
-import { queryClient } from '../query-client';
-import { E } from '../sync/orm';
+import { getBatchEntities, getProperties } from '../io/v2/queries';
 import { useQueryEntity } from '../sync/use-store';
-import { store as geoStore } from '../sync/use-sync-engine';
 import { Entities } from '../utils/entity';
 import { EntityWithSchema, Property, Relation } from '../v2.types';
+
+const IS_TYPE_PROPERTY_ID = 'd2c1a101-14e3-464a-8272-f4e75b0f1407';
 
 type UseEntityOptions = {
   spaceId?: string;
@@ -95,31 +94,43 @@ export const DEFAULT_ENTITY_SCHEMA: Property[] = [
 export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Property[]> {
   const dedupedTypeIds = [...new Set(typesIds)];
 
-  // @TODO(migration): Should generate schema by syncing types
-  const typeEntities = await E.findMany({
-    store: geoStore,
-    cache: queryClient,
-    where: {
-      id: {
-        in: dedupedTypeIds,
-      },
-    },
-    first: 100,
-    skip: 0,
-  });
+  const typeEntities = await Effect.runPromise(getBatchEntities(dedupedTypeIds));
 
   const propertyIds = typeEntities
-    .flatMap(entity => {
-      return entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES);
-    })
+    .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
     .map(r => r.toEntity.id);
 
   const properties = await Effect.runPromise(getProperties(propertyIds));
 
+  const propertyEntities = await Effect.runPromise(getBatchEntities(propertyIds));
+
+  const typePropertyIds = propertyEntities
+    .filter(entity => {
+      const isTypePropertyValue = entity.values.find(v => v.property.id === IS_TYPE_PROPERTY_ID);
+      return isTypePropertyValue?.value === '1';
+    })
+    .map(e => e.id);
+
+  let additionalPropertyIds: string[] = [];
+
+  if (typePropertyIds.length > 0) {
+    const typePropertyEntities = propertyEntities.filter(e => typePropertyIds.includes(e.id));
+
+    additionalPropertyIds = typePropertyEntities
+      .flatMap(entity => entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES))
+      .map(r => r.toEntity.id);
+  }
+
+  let additionalProperties: Property[] = [];
+
+  if (additionalPropertyIds.length > 0) {
+    additionalProperties = await Effect.runPromise(getProperties(additionalPropertyIds));
+  }
+
   // If the schema exists already in the list then we should dedupe it.
   // Some types might share some elements in their schemas, e.g., Person
   // and Pet both have Avatar as part of their schema.
-  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...properties], (a, b) => a.id === b.id);
+  return dedupeWith([...DEFAULT_ENTITY_SCHEMA, ...properties, ...additionalProperties], (a, b) => a.id === b.id);
 }
 
 /**
