@@ -95,6 +95,16 @@ const nextConfig = {
           ],
           destination: 'https://geogenesis-git-feat-testnet-geo-browser.vercel.app/:path*',
         },
+        {
+          source: '/:path*',
+          has: [
+            {
+              type: 'host',
+              value: 'podcasts.geobrowser.io',
+            },
+          ],
+          destination: 'https://pod-pi.vercel.app/:path*',
+        },
       ],
       afterFiles: [],
       fallback: [
