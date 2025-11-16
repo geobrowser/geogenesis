@@ -11,6 +11,7 @@ import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
+import { useLocalFilters } from '~/core/blocks/data/use-filters-local';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
@@ -298,6 +299,29 @@ export const TableBlock = ({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { spaces } = useSpaces();
+  const { filterState, setFilterState } = useFilters();
+
+  // For non-editors, initialize temporary filters with current database filters
+  // This allows them to see and modify existing filters without saving to database
+  const initialFiltersForNonEditor = React.useMemo(() => {
+    return canEdit ? [] : filterState;
+  }, [canEdit, filterState]);
+
+  // Local state for temporary filters when user cannot edit
+  const { temporaryFilters, setTemporaryFilters } = useLocalFilters(canEdit, initialFiltersForNonEditor);
+
+  // Sync temporary filters with database filters when they change for non-editors
+  // Only sync if temporary filters are empty (initial load or cleared)
+  React.useEffect(() => {
+    if (!canEdit && temporaryFilters.length === 0) {
+      setTemporaryFilters(filterState);
+    }
+  }, [canEdit, filterState, setTemporaryFilters, temporaryFilters.length]);
+
+  // Use database filter state if user can edit, otherwise use temporary filters
+  const activeFilters = canEdit ? filterState : temporaryFilters;
+  const setActiveFilters = canEdit ? setFilterState : setTemporaryFilters;
+
   const {
     properties,
     rows,
@@ -312,12 +336,12 @@ export const TableBlock = ({ spaceId }: Props) => {
     collectionRelations,
     collectionLength,
     pageSize,
-  } = useDataBlock();
-  const { filterState, setFilterState } = useFilters();
+  } = useDataBlock({ filterState: activeFilters });
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
+
   const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
-    useEntries(rows, properties, spaceId, filterState, relations);
+    useEntries(rows, properties, spaceId, activeFilters, relations);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -329,7 +353,7 @@ export const TableBlock = ({ spaceId }: Props) => {
    *
    * Name and Space are treated specially throughout this code path.
    */
-  const filtersWithPropertyName = filterState.map(f => {
+  const filtersWithPropertyName = activeFilters.map(f => {
     if (f.columnId === SystemIds.SPACE_FILTER) {
       return {
         ...f,
@@ -450,7 +474,7 @@ export const TableBlock = ({ spaceId }: Props) => {
         <div className="flex items-center gap-5">
           <IconButton
             onClick={() => setIsFilterOpen(!isFilterOpen)}
-            icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+            icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
             color="grey-04"
           />
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
@@ -478,7 +502,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               transition={{ duration: 0.15, ease: 'easeIn', delay: 0.15 }}
               className="flex items-center gap-2"
             >
-              <TableBlockEditableFilters />
+              <TableBlockEditableFilters filterState={activeFilters} setFilterState={setActiveFilters} />
 
               {filtersWithPropertyName.map((f, index) => {
                 return (
@@ -486,11 +510,11 @@ export const TableBlock = ({ spaceId }: Props) => {
                     key={`${f.columnId}-${f.value}`}
                     filter={f}
                     onDelete={() => {
-                      const newFilterState = produce(filterState, draft => {
+                      const newFilterState = produce(activeFilters, draft => {
                         draft.splice(index, 1);
                       });
 
-                      setFilterState(newFilterState);
+                      setActiveFilters(newFilterState);
                     }}
                   />
                 );

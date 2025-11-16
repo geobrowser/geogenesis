@@ -22,6 +22,24 @@ import { useRelationsBlock } from './use-relations-block';
 import { useSource } from './use-source';
 import { useView } from './use-view';
 
+// Helper function to check if a row matches the filter criteria
+function rowMatchesFilters(row: Row, filterState: Filter[]): boolean {
+  return filterState.every(filter => {
+    const cell = row.columns[filter.columnId];
+    if (!cell) return false;
+
+    if (filter.valueType === 'TEXT') {
+      return cell.name?.toLowerCase().includes(filter.value.toLowerCase()) || false;
+    }
+
+    if (filter.valueType === 'RELATION') {
+      return cell.name?.toLowerCase().includes(filter.value.toLowerCase()) || false;
+    }
+
+    return false;
+  });
+}
+
 export const PAGE_SIZE = 9;
 
 interface RenderablesQueryKey {
@@ -36,7 +54,11 @@ const queryKeys = {
   columnsSchema: (columns?: Property[]) => ['blocks', 'data', 'columns-schema', columns],
 };
 
-export function useDataBlock() {
+interface UseDataBlockOptions {
+  filterState?: Filter[];
+}
+
+export function useDataBlock(options?: UseDataBlockOptions) {
   const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
   const { storage } = useMutate();
 
@@ -46,9 +68,15 @@ export function useDataBlock() {
   });
 
   const { relationBlockSourceRelations } = useRelationsBlock();
-  const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
+  const { filterState: dbFilterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
+
+  // Use provided filter state or fall back to database filter state
+  const filterState = options?.filterState ?? dbFilterState;
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
+
+  // Fetch collection data
+  // For COLLECTION sources with filters, fetch PAGE_SIZE items from start for client-side filtering
   const {
     collectionItems,
     collectionRelations,
@@ -57,8 +85,49 @@ export function useDataBlock() {
     collectionLength,
   } = useCollection({
     first: PAGE_SIZE,
-    skip: pageNumber * PAGE_SIZE,
+    skip: source.type === 'COLLECTION' && filterState.length > 0 ? 0 : pageNumber * PAGE_SIZE,
   });
+
+  // Filter and paginate collection items
+  const collectionData = React.useMemo(() => {
+    if (source.type !== 'COLLECTION') {
+      return {
+        items: collectionItems,
+        relations: collectionRelations,
+        totalCount: collectionLength,
+      };
+    }
+
+    // No filters: use regular pagination
+    if (filterState.length === 0) {
+      return {
+        items: collectionItems,
+        relations: collectionRelations,
+        totalCount: collectionLength,
+      };
+    }
+
+    // With filters: apply client-side filtering, then paginate
+    const rows = mappingToRows(collectionItems, shownColumnIds, collectionRelations);
+    const filteredRows = rows.filter(row => rowMatchesFilters(row, filterState));
+
+    // Get filtered entity IDs
+    const filteredEntityIds = new Set(filteredRows.map(r => r.entityId));
+    const filteredRelations = collectionRelations.filter(r => filteredEntityIds.has(r.toEntity.id));
+    const filteredItems = collectionItems.filter(item => filteredEntityIds.has(item.id));
+
+    // Apply pagination to filtered results
+    const startIndex = pageNumber * PAGE_SIZE;
+    const endIndex = startIndex + PAGE_SIZE;
+    const paginatedRelations = filteredRelations.slice(startIndex, endIndex);
+    const paginatedItems = filteredItems.slice(startIndex, endIndex);
+
+    return {
+      items: paginatedItems,
+      relations: paginatedRelations,
+      totalCount: filteredRelations.length,
+    };
+  }, [source.type, filterState, collectionItems, collectionRelations, shownColumnIds, pageNumber, collectionLength]);
 
   const where = filterStateToWhere(filterState);
 
@@ -149,7 +218,7 @@ export function useDataBlock() {
    */
   const rows = (() => {
     if (source.type === 'COLLECTION') {
-      return mappingToRows(collectionItems, shownColumnIds, collectionRelations);
+      return mappingToRows(collectionData.items, shownColumnIds, collectionData.relations);
     }
 
     if (source.type === 'GEO' || source.type === 'SPACES') {
@@ -171,7 +240,7 @@ export function useDataBlock() {
     return [];
   })();
 
-  const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
+  const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
 
   const setName = (newName: string) => {
     storage.entities.name.set(entityId, spaceId, newName);
@@ -197,7 +266,7 @@ export function useDataBlock() {
   // For collections, check if there are more items beyond the current page
   const hasNextPage =
     source.type === 'COLLECTION'
-      ? (pageNumber + 1) * PAGE_SIZE < collectionLength
+      ? (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
       : rows
         ? rows.length > PAGE_SIZE
         : false;
@@ -223,10 +292,10 @@ export function useDataBlock() {
     name: entity?.name ?? null,
     setName,
     totalPages,
-    collectionLength,
+    collectionLength: collectionData.totalCount,
 
     relations: entity?.relations,
-    collectionRelations: source.type === 'COLLECTION' ? collectionRelations : undefined,
+    collectionRelations: source.type === 'COLLECTION' ? collectionData.relations : undefined,
   };
 
   return result;
