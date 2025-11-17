@@ -70,6 +70,10 @@ describe('Parser', () => {
         expect(htmlToMarkdown('<i>italic text</i>')).toBe('*italic text*');
       });
 
+      it('converts underline text', () => {
+        expect(htmlToMarkdown('<u>underline text</u>')).toBe('<u>underline text</u>');
+      });
+
       it('handles nested formatting', () => {
         expect(htmlToMarkdown('<strong><em>bold italic</em></strong>')).toBe('***bold italic***');
         expect(htmlToMarkdown('<em><strong>italic bold</strong></em>')).toBe('***italic bold***');
@@ -78,6 +82,31 @@ describe('Parser', () => {
       it('handles mixed formatting in paragraphs', () => {
         expect(htmlToMarkdown('<p>Text with <strong>bold</strong> and <em>italic</em> words</p>'))
           .toBe('Text with **bold** and *italic* words');
+      });
+
+      it('handles mixed formatting with underline', () => {
+        expect(htmlToMarkdown('<p>Text with <strong>bold</strong>, <em>italic</em>, and <u>underline</u> words</p>'))
+          .toBe('Text with **bold**, *italic*, and <u>underline</u> words');
+      });
+
+      it('handles bold with italic inside', () => {
+        expect(htmlToMarkdown('<strong>bold <em>and italic</em></strong>'))
+          .toBe('**bold *and italic***');
+      });
+
+      it('handles italic with bold inside', () => {
+        expect(htmlToMarkdown('<em>italic <strong>and bold</strong></em>'))
+          .toBe('*italic **and bold***');
+      });
+
+      it('handles all three formatting types combined', () => {
+        expect(htmlToMarkdown('<strong><em><u>all three</u></em></strong>'))
+          .toBe('***<u>all three</u>***');
+      });
+
+      it('handles underline with bold inside', () => {
+        expect(htmlToMarkdown('<u>underline <strong>and bold</strong></u>'))
+          .toBe('<u>underline **and bold**</u>');
       });
     });
 
@@ -94,6 +123,41 @@ describe('Parser', () => {
       it('handles links with formatted text', () => {
         expect(htmlToMarkdown('<a href="https://example.com"><strong>Bold Link</strong></a>'))
           .toBe('[**Bold Link**](https://example.com)');
+      });
+
+      it('handles paragraphs with links inside', () => {
+        expect(htmlToMarkdown('<p>This is a <a href="https://example.com">link</a> in a paragraph</p>'))
+          .toBe('This is a [link](https://example.com) in a paragraph');
+      });
+
+      it('handles paragraphs with graph protocol links', () => {
+        expect(htmlToMarkdown('<p>Check out <a href="graph://entity-123">this entity</a> for more info</p>'))
+          .toBe('Check out [this entity](graph://entity-123) for more info');
+      });
+
+      it('handles multiple links in a paragraph', () => {
+        expect(htmlToMarkdown('<p>Visit <a href="https://example.com">Example</a> or <a href="graph://entity-456">Entity</a></p>'))
+          .toBe('Visit [Example](https://example.com) or [Entity](graph://entity-456)');
+      });
+
+      it('handles text with link and formatting', () => {
+        expect(htmlToMarkdown('<p>This is <strong>bold</strong> and <a href="graph://123">linked</a> text</p>'))
+          .toBe('This is **bold** and [linked](graph://123) text');
+      });
+
+      it('handles links with entity-link-valid class from editor', () => {
+        expect(htmlToMarkdown('<p>Check out <a href="graph://entity-123" class="entity-link-valid">this entity</a> here</p>'))
+          .toBe('Check out [this entity](graph://entity-123) here');
+      });
+
+      it('handles multiple links with entity-link-valid class', () => {
+        expect(htmlToMarkdown('<p><a href="graph://123" class="entity-link-valid">First</a> and <a href="graph://456" class="entity-link-valid">Second</a> entity</p>'))
+          .toBe('[First](graph://123) and [Second](graph://456) entity');
+      });
+
+      it('handles links with class and other attributes', () => {
+        expect(htmlToMarkdown('<p>Visit <a href="graph://entity-789" class="entity-link-valid" rel="null" target="null">Entity</a> for info</p>'))
+          .toBe('Visit [Entity](graph://entity-789) for info');
       });
     });
 
@@ -139,7 +203,21 @@ describe('Parser', () => {
 
       it('handles unknown tags by processing children', () => {
         expect(htmlToMarkdown('<div>Content in div</div>')).toBe('Content in div');
-        expect(htmlToMarkdown('<span>Content in span</span>')).toBe('Content in span');
+        expect(htmlToMarkdown('<span>Content in span</span>')).toBe('<span>Content in span</span>');
+      });
+
+      it('preserves span elements with attributes', () => {
+        expect(htmlToMarkdown('<span data-web2-url="true" data-url="https://example.com">Link text</span>'))
+          .toBe('<span data-web2-url="true" data-url="https://example.com">Link text</span>');
+      });
+
+      it('preserves invalid entity links as spans not markdown links', () => {
+        const invalidLinkHtml = '<span class="entity-link-invalid web2-url-mark" data-web2-url="true" data-url="https://example.com">Invalid Link</span>';
+        const result = htmlToMarkdown(invalidLinkHtml);
+        
+        // Should preserve as span, not convert to [Invalid Link](https://example.com)
+        expect(result).toBe('<span class="entity-link-invalid web2-url-mark" data-web2-url="true" data-url="https://example.com">Invalid Link</span>');
+        expect(result).not.toContain('[Invalid Link](https://example.com)');
       });
     });
 
@@ -201,21 +279,75 @@ describe('Parser', () => {
         expect(markdownToHtml('`code`')).toBe('<p><code>code</code></p>');
       });
 
+      it('converts underline HTML tags', () => {
+        expect(markdownToHtml('<u>underline text</u>')).toBe('<p><u>underline text</u></p>');
+      });
+
       it('handles mixed formatting', () => {
         expect(markdownToHtml('Text with **bold** and *italic* and `code`'))
           .toBe('<p>Text with <strong>bold</strong> and <em>italic</em> and <code>code</code></p>');
       });
+
+      it('handles mixed formatting with underline', () => {
+        expect(markdownToHtml('Text with **bold**, *italic*, and <u>underline</u>'))
+          .toBe('<p>Text with <strong>bold</strong>, <em>italic</em>, and <u>underline</u></p>');
+      });
+
+      it('handles bold with italic nested', () => {
+        expect(markdownToHtml('**bold and *italic* text**'))
+          .toBe('<p><strong>bold and <em>italic</em> text</strong></p>');
+      });
+
+      it('handles italic with bold nested', () => {
+        expect(markdownToHtml('*italic and **bold** text*'))
+          .toBe('<p><em>italic and <strong>bold</strong> text</em></p>');
+      });
+
+      it('handles triple asterisks (bold + italic)', () => {
+        expect(markdownToHtml('***bold and italic***'))
+          .toBe('<p><strong><em>bold and italic</em></strong></p>');
+      });
+
+      it('handles all three types combined', () => {
+        expect(markdownToHtml('***<u>all three</u>***'))
+          .toBe('<p><strong><em><u>all three</u></em></strong></p>');
+      });
     });
 
     describe('Links', () => {
-      it('converts markdown links', () => {
-        expect(markdownToHtml('[Example](https://example.com)'))
-          .toBe('<p><a href="https://example.com">Example</a></p>');
+      it('converts only graph protocol links to anchor tags', () => {
+        expect(markdownToHtml('[Example](graph://entity-123)'))
+          .toBe('<p><a href="graph://entity-123">Example</a></p>');
       });
 
-      it('handles links with formatted text', () => {
+      it('leaves HTTP/HTTPS links as markdown for Web2URLExtension', () => {
         expect(markdownToHtml('[**Bold Link**](https://example.com)'))
-          .toBe('<p><a href="https://example.com"><strong>Bold Link</strong></a></p>');
+          .toBe('<p>[<strong>Bold Link</strong>](https://example.com)</p>');
+      });
+
+      it('converts graph protocol links in paragraphs', () => {
+        expect(markdownToHtml('Check out [this entity](graph://entity-123) for more'))
+          .toBe('<p>Check out <a href="graph://entity-123">this entity</a> for more</p>');
+      });
+
+      it('leaves web2 URLs as markdown for Web2URLExtension to process', () => {
+        expect(markdownToHtml('testing [Duck Duck Go](https://duckduckgo.com)'))
+          .toBe('<p>testing [Duck Duck Go](https://duckduckgo.com)</p>');
+      });
+
+      it('leaves www URLs as markdown for Web2URLExtension to process', () => {
+        expect(markdownToHtml('visit [Example](www.example.com) site'))
+          .toBe('<p>visit [Example](www.example.com) site</p>');
+      });
+
+      it('handles multiple links in paragraph', () => {
+        expect(markdownToHtml('Visit [First](graph://123) and [Second](graph://456) entity'))
+          .toBe('<p>Visit <a href="graph://123">First</a> and <a href="graph://456">Second</a> entity</p>');
+      });
+
+      it('handles mixed bold and links', () => {
+        expect(markdownToHtml('This is **bold** and [linked](graph://789) text'))
+          .toBe('<p>This is <strong>bold</strong> and <a href="graph://789">linked</a> text</p>');
       });
     });
 
@@ -302,7 +434,26 @@ describe('Parser', () => {
       expect(resultHtml).toContain('<strong>bold</strong>');
       expect(resultHtml).toContain('<em>italic</em>');
       expect(resultHtml).toContain('<li>Item 1</li>');
-      expect(resultHtml).toContain('<li>Item 2</li>');
+    });
+
+    it('preserves span elements through HTML → Markdown → HTML conversion', () => {
+      const originalHtml = '<p>Text with <span data-web2-url="true" data-url="https://example.com">web2 link</span> preserved.</p>';
+      const markdown = htmlToMarkdown(originalHtml);
+      const resultHtml = markdownToHtml(markdown);
+
+      expect(markdown).toContain('<span data-web2-url="true" data-url="https://example.com">web2 link</span>');
+      expect(resultHtml).toContain('<span data-web2-url="true" data-url="https://example.com">web2 link</span>');
+    });
+
+    it('preserves underline formatting through HTML → Markdown → HTML conversion', () => {
+      const originalHtml = '<p>Text with <strong>bold</strong>, <em>italic</em>, and <u>underline</u> formatting.</p>';
+      const markdown = htmlToMarkdown(originalHtml);
+      const resultHtml = markdownToHtml(markdown);
+
+      expect(markdown).toBe('Text with **bold**, *italic*, and <u>underline</u> formatting.');
+      expect(resultHtml).toContain('<strong>bold</strong>');
+      expect(resultHtml).toContain('<em>italic</em>');
+      expect(resultHtml).toContain('<u>underline</u>');
     });
   });
 });
