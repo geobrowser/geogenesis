@@ -1,7 +1,7 @@
-import { usePrivy } from '@geogenesis/auth';
+import { useAtomValue } from 'jotai';
 
-import { useGeoProfile } from './use-geo-profile';
-import { useSmartAccount } from './use-smart-account';
+import { Environment } from '../environment';
+import { onboardCodeAtom } from '~/atoms';
 
 /**
  * Temporarily hide some elements in the interface until we open up for GA.
@@ -11,12 +11,10 @@ import { useSmartAccount } from './use-smart-account';
  * user interface into the knowledge graph.
  */
 export function useOnboardGuard() {
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
-  const { user } = usePrivy();
-  const { profile } = useGeoProfile(address);
+  const onboardCode = useAtomValue(onboardCodeAtom);
+  const hasValidCode = onboardCode === Environment.variables.onboardCode;
 
   return {
-    shouldShowElement: Boolean(profile?.profileLink && user),
+    shouldShowElement: hasValidCode,
   };
 }

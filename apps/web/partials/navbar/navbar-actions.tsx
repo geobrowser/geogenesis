@@ -28,6 +28,8 @@ import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { onboardCodeAtom } from '~/atoms';
+
 import { avatarAtom, entityIdAtom, nameAtom, spaceIdAtom, stepAtom } from '../onboarding/dialog';
 
 function useUser() {
@@ -44,6 +46,7 @@ function useResetOnboarding() {
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
+  const setOnboardCode = useSetAtom(onboardCodeAtom);
 
   const resetOnboarding = () => {
     setName('');
@@ -51,6 +54,7 @@ function useResetOnboarding() {
     setAvatar('');
     setSpaceId('');
     setStep('start');
+    setOnboardCode('');
   };
 
   return resetOnboarding;
