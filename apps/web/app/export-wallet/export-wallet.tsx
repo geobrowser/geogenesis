@@ -1,6 +1,6 @@
 'use client';
 
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy } from '@geogenesis/auth';
 
 import { Button } from '~/design-system/button';
 

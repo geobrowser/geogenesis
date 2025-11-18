@@ -82,7 +82,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const editor = useEditor(
     {
       extensions,
-      editable: true,
+      editable: editable,
       content: editorJson,
       editorProps: {
         transformPastedHTML: html => {
@@ -105,13 +105,25 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
               const htmlData = clipboardData.getData('text/html');
               const textData = clipboardData.getData('text/plain');
               const lines = textData.split('\n');
+
               // If there's HTML data that might contain emoji images, prevent default and handle manually
               if (htmlData && (htmlData.includes('emoji') || htmlData.includes('twimg.com'))) {
                 event.preventDefault();
 
-                // Insert as plain text to avoid emoji image conversion
+                // Insert as plain text to avoid emoji image conversion with proper newline handling
                 if (textData) {
-                  view.dispatch(view.state.tr.insertText(textData));
+                  let tr = view.state.tr;
+
+                  lines.forEach((line, index) => {
+                    if (index > 0) {
+                      tr = tr.split(tr.selection.head);
+                    }
+                    if (line.trim()) {
+                      tr = tr.insertText(line);
+                    }
+                  });
+
+                  view.dispatch(tr);
                 }
                 return true;
               } else if (lines.length > 1 && textData && shouldBeCodeBlock(textData)) {
@@ -138,17 +150,14 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
         if (editable) {
           const hasContent =
             editor.getText().trim().length > 0 ||
-            editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode');
+            (editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode') ?? false);
 
-          // Check if we have actual content and update the state immediately
-          // This will cause the properties panel to show before blur events
-          if (hasContent) {
-            setHasContent(true);
-          }
+          // Update the state immediately to show/hide properties panel
+          setHasContent(hasContent);
         }
       },
     },
-    [editorJson]
+    [editorJson, editable]
   );
 
   // update editable options of editor when editable changes

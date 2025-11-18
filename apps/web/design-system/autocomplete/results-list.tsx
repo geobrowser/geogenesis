@@ -120,7 +120,10 @@ export const ResultContent = ({
       </button>
       {hasOtherSpaces && !!onChooseSpace && (
         <button
-          onClick={onChooseSpace}
+          onClick={e => {
+            e.stopPropagation();
+            onChooseSpace();
+          }}
           className="-mt-2 flex w-full items-center justify-between p-2 transition-colors duration-150 hover:bg-grey-01"
         >
           <div className="flex items-center">

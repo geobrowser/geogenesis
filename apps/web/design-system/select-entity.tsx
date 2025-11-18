@@ -35,6 +35,8 @@ import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 import { Tooltip } from '~/design-system/tooltip';
 
+import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
+
 import { ArrowLeft } from './icons/arrow-left';
 import { InfoSmall } from './icons/info-small';
 import { Search } from './icons/search';
@@ -42,7 +44,6 @@ import { ResizableContainer } from './resizable-container';
 import { Spacer } from './spacer';
 import { Truncate } from './truncate';
 import { showingIdsAtom } from '~/atoms';
-import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 
 type SelectEntityProps = {
   onDone?: (
@@ -55,17 +56,24 @@ type SelectEntityProps = {
     // Not the best way to do this but the simplest for now to avoid breaking changes.
     fromCreateFn?: boolean
   ) => void;
-  onCreateEntity?: (result: { id: string; name: string | null; space?: string; verified?: boolean; renderableType?: SwitchableRenderableType }) => void;
+  onCreateEntity?: (result: {
+    id: string;
+    name: string | null;
+    space?: string;
+    verified?: boolean;
+    renderableType?: SwitchableRenderableType;
+  }) => void | string;
   spaceId: string;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
   containerClassName?: string;
   inputClassName?: string;
-  variant?: 'floating' | 'fixed';
+  variant?: 'floating' | 'fixed' | 'tableCell';
   width?: 'clamped' | 'full';
   withSelectSpace?: boolean;
   withSearchIcon?: boolean;
   advanced?: boolean;
+  autoFocus?: boolean;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -85,6 +93,7 @@ export const SelectEntity = ({
   withSelectSpace = true,
   withSearchIcon = false,
   advanced = true,
+  autoFocus = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
@@ -137,7 +146,7 @@ export const SelectEntity = ({
   const isCreatingProperty = relationValueTypes?.some(type => type.id === SystemIds.PROPERTY);
 
   const onCreateNewEntity = () => {
-    const newEntityId = ID.createEntityId();
+    let newEntityId = ID.createEntityId();
 
     // This component is used in many different use-cases across the system, so we
     // need to be able to pass in a callback. onCreateEntity is used to enable to
@@ -146,7 +155,12 @@ export const SelectEntity = ({
     // e.g., you're in a collection and create a new entity, we want to add the current
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
-      onCreateEntity({ id: newEntityId, name: query, renderableType: isCreatingProperty ? renderableType : undefined });
+      newEntityId =
+        onCreateEntity({
+          id: newEntityId,
+          name: query,
+          renderableType: isCreatingProperty ? renderableType : undefined,
+        }) ?? newEntityId;
     } else {
       // Create new entity with name and types using internal id
       storage.entities.name.set(newEntityId, spaceId, query);
@@ -244,6 +258,7 @@ export const SelectEntity = ({
             placeholder={placeholder}
             className={inputStyles({ [variant]: true, withSearchIcon, className: inputClassName })}
             spellCheck={false}
+            autoFocus={autoFocus}
           />
         </Popover.Anchor>
         {query && (
@@ -259,7 +274,7 @@ export const SelectEntity = ({
             <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
               <div
                 className={cx(
-                  '-ml-px overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
+                  '-ml-px overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
                   width === 'clamped' ? 'w-[400px]' : '-mr-px',
                   withSearchIcon && 'rounded-t-none'
                 )}
@@ -392,7 +407,7 @@ export const SelectEntity = ({
                 )}
                 {!result ? (
                   <ResizableContainer>
-                    <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
+                    <div className="no-scrollbar flex max-h-[50vh] flex-col overflow-y-auto overflow-x-clip bg-white">
                       {!results?.length && isLoading && (
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">Loading...</div>
@@ -546,7 +561,7 @@ export const SelectEntity = ({
                         />
                       </div>
                     </div>
-                    <div className="flex max-h-[219px] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
+                    <div className="flex max-h-[50vh] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
                       {(result.spaces ?? []).map((space, index) => (
                         <button
                           key={index}
@@ -586,10 +601,7 @@ export const SelectEntity = ({
                         <div className="text-[0.875rem] text-grey-04">IDs</div>
                       </button>
                       {isCreatingProperty && (
-                        <RenderableTypeDropdown 
-                          value={renderableType} 
-                          onChange={setRenderableType}
-                        />
+                        <RenderableTypeDropdown value={renderableType} onChange={setRenderableType} />
                       )}
                     </div>
                     <button onClick={onCreateNewEntity} className="text-resultLink text-ctaHover">
@@ -614,6 +626,9 @@ const inputStyles = cva('', {
     floating: {
       true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
     },
+    tableCell: {
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-tableCell placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+    },
     withSearchIcon: {
       true: 'pl-9',
     },
@@ -621,6 +636,7 @@ const inputStyles = cva('', {
   defaultVariants: {
     fixed: true,
     floating: false,
+    tableCell: false,
     withSearchIcon: false,
   },
 });
@@ -632,7 +648,7 @@ const containerStyles = cva('relative', {
       full: 'w-full',
     },
     floating: {
-      true: 'rounded-md border border-divider bg-white',
+      true: 'rounded-md border border-divider bg-white shadow-lg',
     },
     isQueried: {
       true: 'rounded-b-none',
@@ -710,7 +726,7 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
             forceMount
           >
             <div className="pt-1">
-              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {results.map(result => (
@@ -769,7 +785,7 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
             forceMount
           >
             <div className="pt-1">
-              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {!results?.length && isLoading && (

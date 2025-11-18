@@ -2,6 +2,7 @@ import Bold from '@tiptap/extension-bold';
 import BulletList from '@tiptap/extension-bullet-list';
 import Document from '@tiptap/extension-document';
 import Gapcursor from '@tiptap/extension-gapcursor';
+import HardBreak from '@tiptap/extension-hard-break';
 import History from '@tiptap/extension-history';
 import Image from '@tiptap/extension-image';
 import Italic from '@tiptap/extension-italic';
@@ -61,27 +62,7 @@ export const tiptapExtensions = [
   CodeBlockTriggerExtension,
   InlineCodeTriggerExtension,
   ConfiguredCommandExtension,
-  // HardBreak.extend({
-  //   addKeyboardShortcuts() {
-  //     // Make hard breaks behave like normal paragraphs
-  //     const handleEnter = () =>
-  //       this.editor.commands.first(({ commands }) => [
-  //         () => commands.newlineInCode(),
-  //         () => commands.createParagraphNear(),
-  //         () => commands.liftEmptyBlock(),
-  //         () => commands.splitBlock(),
-  //       ]);
-
-  //     return {
-  //       // This was intercepting the 'Enter' behavior in `command-list.tsx`
-  //       // Disabling doesn't seem to make a difference so maybe it was unnecessary?
-  //       // Enter: handleEnter,
-
-  //       'Mod-Enter': handleEnter,
-  //       'Shift-Enter': handleEnter,
-  //     };
-  //   },
-  // }),
+  HardBreak,
   Gapcursor,
   TrailingNode,
   BulletList,

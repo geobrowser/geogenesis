@@ -222,6 +222,7 @@ export function useEditorStore() {
 
   const blockRelations = useBlocks(
     activeEntityId,
+    spaceId,
     isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
   );
 

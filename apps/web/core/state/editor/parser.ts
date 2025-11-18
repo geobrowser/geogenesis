@@ -256,13 +256,13 @@ export function markdownToHtml(markdown: string): string {
     
     // If we're here, it's not a list item, so close all lists
     closeListsToDepth(-1);
-    
+
     // Skip empty lines
     if (!line.trim()) {
       i++;
       continue;
     }
-    
+
     // Handle headings
     const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
     if (headingMatch) {
@@ -272,7 +272,7 @@ export function markdownToHtml(markdown: string): string {
       i++;
       continue;
     }
-    
+
     // Handle blockquotes
     if (line.startsWith('> ')) {
       const content = processInlineFormatting(line.substring(2));
@@ -280,18 +280,38 @@ export function markdownToHtml(markdown: string): string {
       i++;
       continue;
     }
-    
+
     // Handle horizontal rules
     if (line.match(/^(-{3,}|_{3,}|\*{3,})$/)) {
       output.push('<hr>');
       i++;
       continue;
     }
-    
-    // Everything else is a paragraph
-    const content = processInlineFormatting(line);
-    output.push(`<p>${content}</p>`);
-    i++;
+
+    // Group consecutive plain text lines into a single paragraph with <br> tags
+    // The current line (at the start of this section) is plain text, but we need to check
+    // subsequent lines while grouping to see when to stop
+    const paragraphLines: string[] = [];
+    while (i < lines.length) {
+      const currentLine = lines[i];
+
+      // Stop grouping if this upcoming line is a markdown element
+      // (break back to outer loop which will process it with the handlers above)
+      if (!currentLine.trim() ||                      // Empty line (paragraph break)
+          currentLine.match(/^(#{1,6})\s+/) ||        // Heading
+          currentLine.startsWith('> ') ||             // Blockquote
+          currentLine.match(/^(-{3,}|_{3,}|\*{3,})$/) || // Horizontal rule
+          currentLine.match(/^(\s*)- /)) {            // Bullet list
+        break;
+      }
+
+      paragraphLines.push(processInlineFormatting(currentLine));
+      i++;
+    }
+
+    if (paragraphLines.length > 0) {
+      output.push(`<p>${paragraphLines.join('<br>')}</p>`);
+    }
   }
   
   // Close any remaining open lists

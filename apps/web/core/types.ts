@@ -32,3 +32,8 @@ export type ReviewState =
   | 'publishing-contract'
   | 'publish-complete'
   | 'publish-error';
+
+export type TabEntity = {
+  id: string;
+  name: string | null;
+};

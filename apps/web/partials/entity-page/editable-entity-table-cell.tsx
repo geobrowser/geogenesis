@@ -3,7 +3,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useValue } from '~/core/sync/use-store';
 import { getImagePath } from '~/core/utils/utils';
-import { Property, Value } from '~/core/v2.types';
+import { Property } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -12,7 +12,6 @@ import { DateField } from '~/design-system/editable-fields/date-field';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
-import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
@@ -33,7 +32,9 @@ type Props = {
   verified?: boolean;
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
+  onAddPlaceholder?: () => void;
   source: Source;
+  autoFocus?: boolean;
 };
 
 export function EditableEntityTableCell({
@@ -49,7 +50,9 @@ export function EditableEntityTableCell({
   verified,
   onChangeEntry,
   onLinkEntry,
+  onAddPlaceholder,
   source,
+  autoFocus = false,
 }: Props) {
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
 
@@ -98,6 +101,8 @@ export function EditableEntityTableCell({
             );
           }}
           spaceId={spaceId}
+          variant="tableCell"
+          autoFocus={autoFocus}
         />
       );
     }
@@ -110,6 +115,7 @@ export function EditableEntityTableCell({
             placeholder="Entity name..."
             value={name ?? ''}
             shouldDebounce={true}
+            onEnterKey={onAddPlaceholder}
             onChange={value => {
               onChangeEntry(
                 {
@@ -127,9 +133,9 @@ export function EditableEntityTableCell({
                         entityId: `${spaceId}:${entityId}:${property.id}`,
                         spaceId: currentSpaceId,
                         attributeName: 'Name',
-                        entityName: name,
+                        entityName: value,
                         type: 'TEXT',
-                        value: name ?? '',
+                        value: value,
                       },
                       value: { type: 'TEXT', value },
                     },
@@ -151,38 +157,42 @@ export function EditableEntityTableCell({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <PageStringField
-              variant="tableCell"
-              placeholder="Entity name..."
-              value={name ?? ''}
-              onChange={value => {
-                onChangeEntry(
-                  {
-                    entityId,
-                    entityName: value,
-                    spaceId: currentSpaceId,
-                  },
-                  {
-                    type: 'EVENT',
-                    data: {
-                      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
-                      payload: {
-                        renderable: {
-                          attributeId: SystemIds.NAME_PROPERTY,
-                          entityId,
-                          spaceId: currentSpaceId,
-                          attributeName: 'Name',
-                          entityName: name,
-                          type: 'TEXT',
-                          value: name ?? '',
-                        },
-                        value: { type: 'TEXT', value },
-                      },
+            <div className="pointer-events-auto">
+              <PageStringField
+                variant="tableCell"
+                placeholder="Entity name..."
+                value={name ?? ''}
+                shouldDebounce={true}
+                onEnterKey={onAddPlaceholder}
+                onChange={value => {
+                  onChangeEntry(
+                    {
+                      entityId,
+                      entityName: value,
+                      spaceId: currentSpaceId,
                     },
-                  }
-                );
-              }}
-            />
+                    {
+                      type: 'EVENT',
+                      data: {
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable: {
+                            attributeId: SystemIds.NAME_PROPERTY,
+                            entityId,
+                            spaceId: currentSpaceId,
+                            attributeName: 'Name',
+                            entityName: value,
+                            type: 'TEXT',
+                            value: value,
+                          },
+                          value: { type: 'TEXT', value },
+                        },
+                      },
+                    }
+                  );
+                }}
+              />
+            </div>
           </CollectionMetadata>
         )}
       </>
@@ -244,7 +254,7 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsG
             //   }
             // );
           }}
-          variant="fixed"
+          variant="tableCell"
         />
       </div>
     );
@@ -363,9 +373,8 @@ function ValueGroup({ entityId, property }: ValueGroupProps) {
           variant="tableCell"
           isEditing={true}
           value={value}
-          // @TODO(migration): Fix formatting
-          // format={renderable.options?.format}
-          unitId={rawValue?.options?.unit}
+          format={property.format || undefined}
+          unitId={rawValue?.options?.unit || property.unit || undefined}
           onChange={value =>
             // onChangeEntry(
             //   {

@@ -11,7 +11,6 @@ import {
 import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
 
-import * as React from 'react';
 import { useState } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
@@ -97,8 +96,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
     const onChangeEntry = table.options.meta!.onChangeEntry;
     const onLinkEntry = table.options.meta!.onLinkEntry;
+    const onAddPlaceholder = table.options.meta!.onAddPlaceholder;
     const propertiesSchema = table.options.meta!.propertiesSchema;
     const source = table.options.meta!.source;
+    const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
 
     const cellData = getValue<Cell | undefined>();
 
@@ -125,6 +126,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;
 
+    const autofocus = Boolean(row.original.placeholder) && isNameCell && shouldAutoFocusPlaceholder;
+
     if (!property) {
       return null;
     }
@@ -145,7 +148,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           verified={verified}
           onChangeEntry={onChangeEntry}
           onLinkEntry={onLinkEntry}
+          onAddPlaceholder={onAddPlaceholder}
           source={source}
+          autoFocus={autofocus}
         />
       );
     }
@@ -179,7 +184,9 @@ type TableBlockTableProps = {
   placeholder: { text: string; image: string };
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
+  onAddPlaceholder?: () => void;
   source: Source;
+  shouldAutoFocusPlaceholder: boolean;
 };
 
 export const TableBlockTable = ({
@@ -191,7 +198,9 @@ export const TableBlockTable = ({
   placeholder,
   onChangeEntry,
   onLinkEntry,
+  onAddPlaceholder,
   source,
+  shouldAutoFocusPlaceholder,
 }: TableBlockTableProps) => {
   const isEditing = useUserIsEditing(space);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
@@ -216,8 +225,10 @@ export const TableBlockTable = ({
       isEditable: isEditing,
       onChangeEntry,
       onLinkEntry,
+      onAddPlaceholder,
       propertiesSchema,
       source,
+      shouldAutoFocusPlaceholder,
     },
   });
 

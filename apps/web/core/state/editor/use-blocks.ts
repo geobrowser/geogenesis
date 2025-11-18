@@ -14,10 +14,10 @@ export type RelationWithBlock = Relation & {
   };
 };
 
-export function useBlocks(fromEntityId: string, initialBlockRelations?: Relation[]) {
+export function useBlocks(fromEntityId: string, spaceId: string, initialBlockRelations?: Relation[]) {
   const blocks = useRelations({
     mergeWith: initialBlockRelations ?? [],
-    selector: r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS,
+    selector: r => r.fromEntity.id === fromEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId,
   });
 
   return blocks?.map(relationToRelationWithBlock).sort(sortByIndex) ?? [];
