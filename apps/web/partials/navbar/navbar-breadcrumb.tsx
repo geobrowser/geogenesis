@@ -112,12 +112,12 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger>
-        <div className="inline-flex items-center justify-center gap-1.5 rounded-md border border-grey-02 px-1.5">
-          <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-            <Image src={getImagePath(spaceImage || PLACEHOLDER_SPACE_IMAGE)} alt="" priority objectFit="cover" fill />
-          </div>
-          <Divider type="vertical" className="inline-block h-4 w-px" />
+      <div className="inline-flex items-center justify-center gap-1.5 rounded-md border border-grey-02 px-1.5">
+        <Link href={NavUtils.toSpace(spaceId)} className="relative h-4 w-4 overflow-hidden rounded-sm">
+          <Image src={getImagePath(spaceImage || PLACEHOLDER_SPACE_IMAGE)} alt="" priority objectFit="cover" fill />
+        </Link>
+        <Divider type="vertical" className="inline-block h-4 w-px" />
+        <Popover.Trigger className="flex items-center gap-1.5">
           <div className="truncate sm:max-w-[20ch]">
             <Text variant="button" className="hover:!text-text">
               {shorten(spaceName)}
@@ -126,8 +126,8 @@ const EntityBreadcrumb = ({ spaceId, entityId }: EntityBreadcrumbProps) => {
           <div className={cx('transition duration-150 ease-in-out', open && 'scale-y-[-1]')}>
             <ChevronDownSmall color="grey-03" />
           </div>
-        </div>
-      </Popover.Trigger>
+        </Popover.Trigger>
+      </div>
       <AnimatePresence mode="popLayout">
         <MotionContent
           key="entity-view-space-toggle-content"
