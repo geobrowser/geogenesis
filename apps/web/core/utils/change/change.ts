@@ -34,7 +34,98 @@ async function fetchEntitiesBatchCached(options: { spaceId: string; entityIds: s
 }
 
 export async function fromLocal(spaceId?: string): Promise<EntityChange[]> {
-  return [];
+  const values = await import('../../sync/use-store').then(m => m.getValues({
+    selector: t => t.hasBeenPublished === false && t.isLocal === true && (spaceId ? t.spaceId === spaceId : true),
+    includeDeleted: true,
+  }));
+
+  const localRelations = await import('../../sync/use-store').then(m => m.getRelations({
+    selector: r => r.hasBeenPublished === false && r.isLocal === true && (spaceId ? r.spaceId === spaceId : true),
+    includeDeleted: true,
+  }));
+
+  // Group by entity ID
+  const entitiesByid = new Map<string, { values: Value[]; relations: Relation[] }>();
+
+  for (const value of values) {
+    const entityId = value.entity.id;
+    if (!entitiesByid.has(entityId)) {
+      entitiesByid.set(entityId, { values: [], relations: [] });
+    }
+    entitiesByid.get(entityId)!.values.push(value);
+  }
+
+  for (const relation of localRelations) {
+    const entityId = relation.fromEntity.id;
+    if (!entitiesByid.has(entityId)) {
+      entitiesByid.set(entityId, { values: [], relations: [] });
+    }
+    entitiesByid.get(entityId)!.relations.push(relation);
+  }
+
+  // Convert to EntityChange format
+  const changes: EntityChange[] = [];
+
+  for (const [entityId, { values, relations }] of entitiesByid.entries()) {
+    const entityValues = values.filter(v => v.entity.id === entityId);
+    const entityRelations = relations.filter(r => r.fromEntity.id === entityId);
+
+    const renderableChanges: RenderableChange[] = [];
+
+    // Convert values to triple changes
+    for (const value of entityValues) {
+      const changeType = value.isDeleted ? 'REMOVE' : 'ADD';
+
+      renderableChanges.push({
+        type: value.property.dataType,
+        attribute: {
+          id: value.property.id,
+          name: value.property.name,
+        },
+        before: null,
+        after: {
+          type: changeType,
+          value: String(value.value),
+          valueName: null,
+          options: value.options,
+        },
+      });
+    }
+
+    // Convert relations to relation changes
+    for (const relation of entityRelations) {
+      const changeType = relation.isDeleted ? 'REMOVE' : 'ADD';
+
+      renderableChanges.push({
+        type: 'RELATION',
+        attribute: {
+          id: relation.type.id,
+          name: relation.type.name,
+        },
+        before: null,
+        after: {
+          type: changeType,
+          value: relation.toEntity.id,
+          valueName: relation.toEntity.name,
+        },
+      });
+    }
+
+    if (renderableChanges.length > 0) {
+      // Get entity name from values
+      const nameValue = entityValues.find(v => v.property.id === SystemIds.NAME_PROPERTY);
+
+      changes.push({
+        id: entityId,
+        name: nameValue ? String(nameValue.value) : null,
+        avatar: null,
+        blockChanges: [],
+        changes: renderableChanges,
+      });
+    }
+  }
+
+  return changes;
   // const values = getValues({
   //   selector: t => (t.hasBeenPublished === false && spaceId ? t.spaceId === spaceId : true),
   //   includeDeleted: true,
