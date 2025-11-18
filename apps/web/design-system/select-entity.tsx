@@ -321,7 +321,7 @@ export const SelectEntity = ({
                                       return (
                                         <FilterPill
                                           key={allowedType.id}
-                                          filterType="Relation value type"
+                                          filterType="Type"
                                           name={allowedType.name ?? ''}
                                           onDelete={() =>
                                             setAllowedTypes([...allowedTypes.filter(r => r.id !== allowedType.id)])
