@@ -11,7 +11,6 @@ import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
-import { useLocalFilters } from '~/core/blocks/data/use-filters-local';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
@@ -299,28 +298,24 @@ export const TableBlock = ({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { spaces } = useSpaces();
-  const { filterState, setFilterState } = useFilters();
 
-  // For non-editors, initialize temporary filters with current database filters
-  // This allows them to see and modify existing filters without saving to database
-  const initialFiltersForNonEditor = React.useMemo(() => {
-    return canEdit ? [] : filterState;
-  }, [canEdit, filterState]);
-
-  // Local state for temporary filters when user cannot edit
-  const { temporaryFilters, setTemporaryFilters } = useLocalFilters(canEdit, initialFiltersForNonEditor);
-
-  // Sync temporary filters with database filters when they change for non-editors
-  // Only sync if temporary filters are empty (initial load or cleared)
-  React.useEffect(() => {
-    if (!canEdit && temporaryFilters.length === 0) {
-      setTemporaryFilters(filterState);
-    }
-  }, [canEdit, filterState, setTemporaryFilters, temporaryFilters.length]);
+  // Use filters hook with canEdit parameter to enable temporary filters for non-editors
+  const { filterState, temporaryFilters, setFilterState, setTemporaryFilters } = useFilters(canEdit);
 
   // Use database filter state if user can edit, otherwise use temporary filters
   const activeFilters = canEdit ? filterState : temporaryFilters;
-  const setActiveFilters = canEdit ? setFilterState : setTemporaryFilters;
+
+  // Setter that handles both editors and non-editors correctly
+  const setActiveFilters = React.useCallback(
+    (filters: Filter[]) => {
+      if (canEdit) {
+        setFilterState(filters);
+      } else {
+        setTemporaryFilters(filters);
+      }
+    },
+    [canEdit, setFilterState, setTemporaryFilters]
+  );
 
   const {
     properties,
