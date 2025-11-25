@@ -1,11 +1,12 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import Image from 'next/legacy/image';
 
 import { Suspense } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
-import { getImagePath, getProposalName } from '~/core/utils/utils';
+import { getProposalName } from '~/core/utils/utils';
+
+import { GeoImage } from '~/design-system/geo-image';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -82,11 +83,12 @@ async function ActivityList({ searchParams, entityId }: Props) {
               <div className="flex w-full items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <Image
-                      objectFit="cover"
+                    <GeoImage
+                      style={{ objectFit: 'cover' }}
                       priority
-                      layout="fill"
-                      src={spaceImage ? getImagePath(spaceImage) : PLACEHOLDER_SPACE_IMAGE}
+                      fill
+                      value={spaceImage ?? PLACEHOLDER_SPACE_IMAGE}
+                      alt=""
                     />
                   </div>
                   <p className="text-metadataMedium">{proposalName}</p>

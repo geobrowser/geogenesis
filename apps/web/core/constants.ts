@@ -6,6 +6,7 @@ export const DEFAULT_OPENGRAPH_DESCRIPTION =
   "Browse and organize the world's public knowledge and information in a decentralized way.";
 export const IPFS_GATEWAY_PATH = 'https://upload.lighthouse.storage';
 export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`;
+export const PINATA_GATEWAY_READ_PATH = 'https://magenta-naval-crow-536.mypinata.cloud/files/';
 
 export const RENDERABLE_TYPE_PROPERTY = '2316bbe1-c76f-4635-83f2-3e03b4f1fe46';
 export const DATA_TYPE_PROPERTY = '6d29d578-49bb-4959-baf7-2cc696b1671a';

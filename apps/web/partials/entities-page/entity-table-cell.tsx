@@ -4,7 +4,6 @@ import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useValue } from '~/core/sync/use-store';
-import { getImagePath } from '~/core/utils/utils';
 import { Property } from '~/core/v2.types';
 
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -109,7 +108,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
   return relations.map(relation => {
     if (property.renderableTypeStrict === 'IMAGE') {
       const value = relation.toEntity.value;
-      return <ImageZoom key={value} variant="table-cell" imageSrc={getImagePath(value)} />;
+      return <ImageZoom key={value} variant="table-cell" imageSrc={value} />;
     }
 
     const value = relation.toEntity.value;

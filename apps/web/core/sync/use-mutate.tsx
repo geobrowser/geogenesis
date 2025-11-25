@@ -240,8 +240,10 @@ function createMutator(store: GeoStore): Mutator {
     images: {
       createAndLink: async ({ file, fromEntityId, fromEntityName, relationPropertyId, relationPropertyName, spaceId }) => {
         // Create the image entity using the Graph API
+        // Use TESTNET network to upload to Pinata via alternative gateway
         const { id: imageId, ops: createImageOps } = await Graph.createImage({
           blob: file,
+          network: 'TESTNET',
         });
 
         // Process the operations returned by Graph.createImage

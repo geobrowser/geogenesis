@@ -6,7 +6,7 @@ import * as React from 'react';
 import { ChangeEvent, useRef } from 'react';
 
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
-import { getImagePath } from '~/core/utils/utils';
+import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 
@@ -135,10 +135,12 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
 };
 
 export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
+  const { src, onError } = useImageWithFallback(imageSrc);
+
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>
-        <img src={getImagePath(imageSrc)} className="h-full rounded-lg object-cover" />
+        <img src={src} onError={onError} className="h-full rounded-lg object-cover" />
       </div>
     </Zoom>
   );

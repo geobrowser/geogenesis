@@ -1,12 +1,10 @@
 'use client';
 
-import Image from 'next/legacy/image';
-
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subspace } from '~/core/io/dto/subspaces';
 import { useTabId } from '~/core/state/editor/use-editor';
-import { getImagePath } from '~/core/utils/utils';
 
+import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Slider } from '~/design-system/slider';
 import { Spacer } from '~/design-system/spacer';
@@ -30,12 +28,12 @@ export const Subspaces = ({ subspaces }: SubspacesProps) => {
           return (
             <Link key={index} href={href} className="group">
               <div className="relative aspect-[16/9] w-full overflow-clip rounded-lg bg-grey-01">
-                <Image
-                  src={getImagePath(image)}
+                <GeoImage
+                  value={image}
                   className="transition-transform duration-150 ease-in-out group-hover:scale-105"
-                  objectFit="cover"
+                  style={{ objectFit: 'cover' }}
                   priority
-                  layout="fill"
+                  fill
                   alt=""
                 />
               </div>

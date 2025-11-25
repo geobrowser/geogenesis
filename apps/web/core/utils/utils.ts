@@ -6,7 +6,7 @@ import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
-import { IPFS_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
+import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
 import { EntityId } from '~/core/io/schema';
 import { useValues } from '~/core/sync/use-store';
 
@@ -386,16 +386,27 @@ export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId
 
 // Get the image URL from an image triple value
 // this allows us to render images on the front-end based on a raw triple value
-// e.g., ipfs://HASH -> https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH
+// e.g., ipfs://HASH -> https://example.mypinata.cloud/files/HASH
 export const getImagePath = (value: string) => {
-  // Add the IPFS gateway path for images with the ipfs:// protocol
+  // Use Pinata gateway as the primary source for IPFS images
   if (value.startsWith('ipfs://')) {
-    return `${IPFS_GATEWAY_READ_PATH}${getImageHash(value)}`;
+    return `${PINATA_GATEWAY_READ_PATH}${getImageHash(value)}`;
     // The image likely resolves to an image resource at some URL
   } else if (value.startsWith('http')) {
     return value;
   } else {
     // The image is likely a static, bundled path
+    return value;
+  }
+};
+
+// Get the fallback image URL (Lighthouse gateway) for when Pinata fails
+export const getImagePathFallback = (value: string) => {
+  if (value.startsWith('ipfs://')) {
+    return `${IPFS_GATEWAY_READ_PATH}${getImageHash(value)}`;
+  } else if (value.startsWith('http')) {
+    return value;
+  } else {
     return value;
   }
 };

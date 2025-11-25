@@ -9,7 +9,7 @@ import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { useSearch } from '~/core/hooks/use-search';
 import { EntityId } from '~/core/io/schema';
 import { getEntity } from '~/core/io/v2/queries';
-import { getImagePath } from '~/core/utils/utils';
+import { GeoImg } from '~/design-system/geo-image';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { TopRanked } from '~/design-system/icons/top-ranked';
@@ -158,7 +158,7 @@ export const SelectSpace = ({
                                   key={space.spaceId}
                                   className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
                                 >
-                                  <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
+                                  <GeoImg value={space.image} alt="" className="h-full w-full object-cover" />
                                 </div>
                                 <span className="text-[0.875rem] text-text">{space.name}</span>
                               </div>

@@ -19,8 +19,10 @@ import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useTabId } from '~/core/state/editor/use-editor';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 import { getTabSlug } from '~/core/utils/utils';
+
+import { GeoImage } from '~/design-system/geo-image';
 
 import { SmallButton } from '~/design-system/button';
 import { ClientOnly } from '~/design-system/client-only';
@@ -345,25 +347,23 @@ const spaces = [
 const JoinSpaces = () => {
   return (
     <div className="relative -top-2 flex flex-wrap gap-2 pr-4">
-      {spaces.map(space => {
-        const spaceImage = space?.image
-          ? getImagePath(`${IPFS_GATEWAY_READ_PATH}/${space.image}`)
-          : PLACEHOLDER_SPACE_IMAGE;
-
-        return (
-          <Link
-            key={space.id}
-            href={NavUtils.toSpace(space.id)}
-            className="inline-flex items-center gap-1.5 rounded bg-white p-1"
-          >
-            <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
-              <img src={spaceImage} className="absolute inset-0 h-full w-full object-cover" alt="" />
-            </span>
-            <span className="whitespace-nowrap text-breadcrumb">{space.name}</span>
-          </Link>
-        );
-      })}
+      {spaces.map(space => (
+        <JoinSpaceItem key={space.id} space={space} />
+      ))}
     </div>
+  );
+};
+
+const JoinSpaceItem = ({ space }: { space: (typeof spaces)[number] }) => {
+  const imageValue = space?.image ? `${IPFS_GATEWAY_READ_PATH}/${space.image}` : PLACEHOLDER_SPACE_IMAGE;
+
+  return (
+    <Link href={NavUtils.toSpace(space.id)} className="inline-flex items-center gap-1.5 rounded bg-white p-1">
+      <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
+        <GeoImage value={imageValue} fill style={{ objectFit: 'cover' }} alt="" />
+      </span>
+      <span className="whitespace-nowrap text-breadcrumb">{space.name}</span>
+    </Link>
   );
 };
 

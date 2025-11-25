@@ -151,7 +151,8 @@ export const generateOpsForSpaceType = async ({
   }
 
   if (spaceAvatarUri) {
-    const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceAvatarUri });
+    // Use TESTNET network to upload to Pinata via alternative gateway
+    const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceAvatarUri, network: 'TESTNET' });
 
     // Creates the image entity
     ops.push(...imageOps);
@@ -167,7 +168,8 @@ export const generateOpsForSpaceType = async ({
   }
 
   if (spaceCoverUri) {
-    const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceCoverUri });
+    // Use TESTNET network to upload to Pinata via alternative gateway
+    const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceCoverUri, network: 'TESTNET' });
 
     // Creates the image entity
     ops.push(...imageOps);

@@ -1,12 +1,11 @@
 'use client';
 
-import Image from 'next/image';
-
 import { useState } from 'react';
 
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
+import { GeoImage } from '~/design-system/geo-image';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { PrefetchLink } from '~/design-system/prefetch-link';
 import { Tag } from '~/design-system/tag';
@@ -71,7 +70,7 @@ const Backlink = ({ backlink }: BacklinkProps) => {
           <span className="inline-flex items-center gap-1.5">
             {backlink.primarySpace?.entity?.image && (
               <span className="relative h-3 w-3 overflow-hidden rounded-xs">
-                <Image layout="fill" objectFit="cover" src={getImagePath(backlink.primarySpace.entity.image)} alt="" />
+                <GeoImage fill style={{ objectFit: 'cover' }} value={backlink.primarySpace.entity.image} alt="" />
               </span>
             )}
             <span className="text-breadcrumb">

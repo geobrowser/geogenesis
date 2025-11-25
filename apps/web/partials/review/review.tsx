@@ -16,7 +16,8 @@ import { useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Publish } from '~/core/utils/publish';
-import { getImagePath } from '~/core/utils/utils';
+
+import { GeoImage } from '~/design-system/geo-image';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -92,7 +93,8 @@ const ReviewChanges = () => {
       for (const space of spaces) {
         const id = space.id;
         const config = space.entity;
-        const image = config ? getImagePath(config.image) : PLACEHOLDER_SPACE_IMAGE;
+        // Store raw image value for fallback handling
+        const image = config?.image ?? PLACEHOLDER_SPACE_IMAGE;
 
         spacesMap.set(id, {
           id,
@@ -124,11 +126,7 @@ const ReviewChanges = () => {
     label: (
       <span className="inline-flex items-center gap-2 text-button text-text">
         <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-          <img
-            src={spaces?.get(spaceId)?.image ?? undefined}
-            className="absolute inset-0 h-full w-full object-cover object-center"
-            alt=""
-          />
+          <ReviewSpaceImage imageValue={spaces?.get(spaceId)?.image ?? null} />
         </span>
         <span>{spaces?.get(spaceId)?.name}</span>
       </span>
@@ -238,11 +236,7 @@ const ReviewChanges = () => {
               {dedupedSpacesWithActions.length === 1 && (
                 <span className="inline-flex items-center gap-2 text-button text-text ">
                   <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <img
-                      src={spaces?.get(activeSpace)?.image ?? undefined}
-                      className="absolute inset-0 h-full w-full object-cover object-center"
-                      alt=""
-                    />
+                    <ReviewSpaceImage imageValue={spaces?.get(activeSpace)?.image ?? null} />
                   </span>
                   <span>{spaces?.get(activeSpace)?.name}</span>
                 </span>
@@ -252,11 +246,7 @@ const ReviewChanges = () => {
                   trigger={
                     <span className="inline-flex items-center gap-2">
                       <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-                        <img
-                          src={spaces?.get(activeSpace)?.image ?? undefined}
-                          className="absolute inset-0 h-full w-full object-cover object-center"
-                          alt=""
-                        />
+                        <ReviewSpaceImage imageValue={spaces?.get(activeSpace)?.image ?? null} />
                       </span>
                       <span>{spaces?.get(activeSpace)?.name}</span>
                     </span>
@@ -348,4 +338,10 @@ const ReviewChanges = () => {
       </div>
     </>
   );
+};
+
+// Helper component for space images with fallback
+const ReviewSpaceImage = ({ imageValue }: { imageValue: string | null }) => {
+  if (!imageValue) return null;
+  return <GeoImage value={imageValue} fill style={{ objectFit: 'cover' }} alt="" />;
 };

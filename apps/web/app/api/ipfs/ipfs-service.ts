@@ -46,21 +46,4 @@ export class IpfsService {
     });
   }
 
-  uploadFile(file: File): Effect.Effect<`ipfs://${string}`, IpfsUploadError | IpfsParseResponseError> {
-    const url = `${this.ipfsUrl}/api/v0/add`;
-
-    return Effect.gen(function* () {
-      yield* Effect.logInfo(`Uploading file to IPFS`);
-
-      const formData = new FormData();
-      formData.append('file', file);
-
-      console.log('uploading file to ipfs', url);
-      const hash = yield* upload(formData, url);
-
-      yield* Effect.logInfo(`Uploaded file to IPFS successfully`).pipe(Effect.annotateLogs({ hash }));
-
-      return hash;
-    });
-  }
 }

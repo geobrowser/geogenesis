@@ -2,7 +2,6 @@ import { SystemIds } from '@graphprotocol/grc-20';
 
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useValue } from '~/core/sync/use-store';
-import { getImagePath } from '~/core/utils/utils';
 import { Property } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
@@ -265,7 +264,7 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsG
       {relations.map(r => {
         if (property.renderableTypeStrict === 'IMAGE') {
           return (
-            <ImageZoom variant="table-cell" key={`image-${r.id}`} imageSrc={getImagePath(r.toEntity.value ?? '')} />
+            <ImageZoom variant="table-cell" key={`image-${r.id}`} imageSrc={r.toEntity.value ?? ''} />
           );
         }
 
