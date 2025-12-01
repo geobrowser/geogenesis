@@ -143,3 +143,17 @@
 .ProseMirror pre {
   @apply bg-bg px-3 py-1;
 }
+
+/* Math/Formula styling */
+.ProseMirror .Tiptap-mathematics-editor {
+  @apply rounded bg-bg px-2 py-1 font-mono;
+  color: #35363a;
+}
+
+.ProseMirror .Tiptap-mathematics-render {
+  @apply inline-block rounded px-1 py-0.5;
+}
+
+.ProseMirror .Tiptap-mathematics-editor-active {
+  @apply bg-grey-01 ring-1 ring-grey-02;
+}

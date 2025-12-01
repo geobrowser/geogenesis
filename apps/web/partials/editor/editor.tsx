@@ -82,7 +82,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const editor = useEditor(
     {
       extensions,
-      editable: editable,
+      editable: true,
       content: editorJson,
       editorProps: {
         transformPastedHTML: html => {
@@ -157,7 +157,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
         }
       },
     },
-    [editorJson, editable]
+    [editorJson]
   );
 
   // update editable options of editor when editable changes

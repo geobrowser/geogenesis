@@ -6,6 +6,7 @@ import { IpfsClient } from '~/core/io/ipfs-client';
 import { getImagePath } from '~/core/utils/utils';
 
 import { EditorCode } from '~/design-system/icons/editor-code';
+import { EditorFormula } from '~/design-system/icons/editor-formula';
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
 import { EditorH3 } from '~/design-system/icons/editor-h3';
@@ -102,9 +103,16 @@ export const commandItems: CommandSuggestionItem[] = [
   },
   {
     icon: <EditorCode />,
-    title: 'Inline Code', 
+    title: 'Inline Code',
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleMark('inlineCode').run();
+    },
+  },
+  {
+    icon: <EditorFormula />,
+    title: 'Formula',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertContent('$x^2$').run();
     },
   },
   {

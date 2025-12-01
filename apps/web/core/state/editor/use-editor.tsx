@@ -98,6 +98,8 @@ function makeNewBlockRelation({
         return 'DATA';
       case 'image':
         return 'IMAGE';
+      default:
+        return 'TEXT';
     }
   })();
 
@@ -331,12 +333,16 @@ export function useEditorStore() {
 
       const populatedContent = content.filter(node => {
         const isNonParagraph = node.type !== 'paragraph';
+
+        // Check if paragraph has meaningful content
         const isParagraphWithContent =
           node.type === 'paragraph' &&
           node.content &&
           node.content.length > 0 &&
-          node.content[0].text &&
-          !node.content[0].text.startsWith('/'); // Do not create a block if the text node starts with a slash command
+          // Check for text content OR non-text nodes like inlineMath
+          (node.content.some(child => child.type !== 'text' || (child.text && child.text.trim().length > 0))) &&
+          // Do not create a block if the text node starts with a slash command
+          !(node.content[0].text && node.content[0].text.startsWith('/'));
 
         return isNonParagraph || isParagraphWithContent;
       });

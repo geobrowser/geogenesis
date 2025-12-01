@@ -1,3 +1,4 @@
+import { MathExtension } from '@aarkue/tiptap-math-extension';
 import Bold from '@tiptap/extension-bold';
 import BulletList from '@tiptap/extension-bullet-list';
 import Document from '@tiptap/extension-document';
@@ -16,6 +17,7 @@ import { CodeBlockWithLineNumbers } from './code-block-with-line-numbers';
 import { ConfiguredCommandExtension } from './command-extension';
 import { InlineCode } from './inline-code';
 import { InlineCodeTriggerExtension } from './inline-code-extension';
+import { MathTriggerExtension } from './math-trigger-extension';
 import { DataNode } from './data-node';
 import { HeadingNode } from './heading-node';
 import { ParagraphNode } from './paragraph-node';
@@ -69,6 +71,18 @@ export const tiptapExtensions = [
   ListItem,
   DataNode,
   Image,
+  MathExtension.configure({
+    // Disable built-in input rules by providing empty custom delimiters
+    // We use our own MathTriggerExtension for better control
+    delimiters: {
+      inlineRegex: undefined,
+      blockRegex: undefined,
+    },
+    katexOptions: {
+      throwOnError: false,
+    },
+  }),
+  MathTriggerExtension,
   Placeholder.configure({
     placeholder: ({ node }) => {
       const isHeading = node.type.name === 'heading';

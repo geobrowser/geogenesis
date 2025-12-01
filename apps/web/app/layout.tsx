@@ -1,5 +1,6 @@
 import localFont from 'next/font/local';
 import { Inconsolata } from 'next/font/google';
+import 'katex/dist/katex.min.css';
 import 'react-medium-image-zoom/dist/styles.css';
 
 import * as React from 'react';

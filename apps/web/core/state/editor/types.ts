@@ -30,6 +30,13 @@ export type Content =
         id: string;
         src: string;
       };
+    }
+  | {
+      type: 'inlineMath';
+      content: Content[];
+      attrs: {
+        latex: string;
+      };
     };
 
 type Mark = {
