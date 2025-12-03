@@ -5,7 +5,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { GeoImg } from '~/design-system/geo-image';
+import { NativeGeoImage } from '~/design-system/geo-image';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Check } from '~/design-system/icons/check';
@@ -64,7 +64,7 @@ export const DataBlockSourceMenu = ({
                         return (
                           <div key={selectedSpace.id} className="-ml-1.5 rounded-sm border border-white first:-ml-0">
                             {selectedSpace.entity?.image ? (
-                              <GeoImg value={selectedSpace.entity.image} className="h-[12px] w-[12px] rounded-sm" />
+                              <NativeGeoImage value={selectedSpace.entity.image} className="h-[12px] w-[12px] rounded-sm" />
                             ) : (
                               <img src={PLACEHOLDER_SPACE_IMAGE} className="h-[12px] w-[12px] rounded-sm" />
                             )}
@@ -139,7 +139,7 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
               <div className="flex items-center gap-2">
                 <div className="flex-shrink-0">
                   {space.image ? (
-                    <GeoImg value={space.image} className="h-[12px] w-[12px] rounded-sm" />
+                    <NativeGeoImage value={space.image} className="h-[12px] w-[12px] rounded-sm" />
                   ) : (
                     <img src={PLACEHOLDER_SPACE_IMAGE} className="h-[12px] w-[12px] rounded-sm" />
                   )}

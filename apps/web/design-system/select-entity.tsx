@@ -17,7 +17,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
 import { useMutate } from '~/core/sync/use-mutate';
-import { GeoImg } from '~/design-system/geo-image';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/v2.types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
@@ -449,7 +449,7 @@ export const SelectEntity = ({
                                         <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
                                           {(result.spaces ?? []).length > 0 ? (
                                             <>
-                                              <GeoImg
+                                              <NativeGeoImage
                                                 value={result.spaces[0].image}
                                                 alt=""
                                                 className="h-full w-full object-cover"
@@ -514,7 +514,7 @@ export const SelectEntity = ({
                                             key={space.spaceId}
                                             className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
                                           >
-                                            <GeoImg
+                                            <NativeGeoImage
                                               value={space.image}
                                               alt=""
                                               className="h-full w-full object-cover"
@@ -579,7 +579,7 @@ export const SelectEntity = ({
                         >
                           <div>
                             <div className="h-[24px] w-[24px] overflow-clip rounded-md">
-                              <GeoImg value={space.image} alt="" className="h-full w-full object-cover" />
+                              <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
                             </div>
                           </div>
                           <div>
@@ -842,7 +842,7 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
                                       key={space.spaceId}
                                       className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
                                     >
-                                      <GeoImg
+                                      <NativeGeoImage
                                         value={space.image}
                                         alt=""
                                         className="h-full w-full object-cover"

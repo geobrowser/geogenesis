@@ -25,7 +25,7 @@ import {
 } from '~/core/system-ids';
 import { GeoPoint } from '~/core/utils/utils';
 
-import { GeoImg } from '~/design-system/geo-image';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { Relation } from '~/core/v2.types';
 
 import { Tag } from '~/design-system/tag';
@@ -457,7 +457,7 @@ export const InputPlace = ({
                                             key={space.spaceId}
                                             className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
                                           >
-                                            <GeoImg
+                                            <NativeGeoImage
                                               value={space.image}
                                               alt=""
                                               className="h-full w-full object-cover"

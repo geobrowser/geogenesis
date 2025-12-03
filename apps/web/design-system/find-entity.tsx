@@ -9,7 +9,7 @@ import { useSearch } from '~/core/hooks/use-search';
 import { NavUtils } from '~/core/utils/utils';
 import { SearchResult } from '~/core/v2.types';
 
-import { GeoImg } from '~/design-system/geo-image';
+import { NativeGeoImage } from '~/design-system/geo-image';
 
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Tag } from '~/design-system/tag';
@@ -161,7 +161,7 @@ export const FindEntity = ({
                                         key={space.spaceId}
                                         className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
                                       >
-                                        <GeoImg
+                                        <NativeGeoImage
                                           value={space.image}
                                           alt=""
                                           className="h-full w-full object-cover"

@@ -2,6 +2,7 @@
 
 import Image, { ImageProps } from 'next/image';
 import { useCallback, useState } from 'react';
+import type { ImgHTMLAttributes } from 'react';
 
 import { getImagePath, getImagePathFallback } from '~/core/utils/utils';
 
@@ -29,8 +30,7 @@ export function GeoImage({ value, alt = '', ...props }: GeoImageProps) {
 
   return <Image {...props} src={src} alt={alt} onError={handleError} />;
 }
-
-type GeoImgProps = Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onError'> & {
+type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onError'> & {
   /** The raw image value (ipfs:// URI, http URL, or static path) */
   value: string;
 };
@@ -40,7 +40,7 @@ type GeoImgProps = Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onEr
  * Tries Pinata gateway first, falls back to Lighthouse if that fails.
  * Use this when you need a native img element instead of Next.js Image.
  */
-export function GeoImg({ value, alt = '', ...props }: GeoImgProps) {
+export function NativeGeoImage({ value, alt = '', ...props }: NativeGeoImageProps) {
   const [useFallback, setUseFallback] = useState(false);
 
   const handleError = useCallback(() => {
