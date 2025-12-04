@@ -1,3 +1,4 @@
+import React from 'react';
 import { Content } from '~/core/state/editor/types';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -100,15 +101,31 @@ const Block = ({ block }: BlockProps) => {
     }
 
     case 'text': {
-      if (block?.marks?.[0]?.type === 'bold') {
-        return <strong>{block.text}</strong>;
+      // Handle multiple marks by wrapping text in all applicable formatting
+      let content: React.ReactNode = block.text;
+
+      if (block?.marks && block.marks.length > 0) {
+        // Apply marks in reverse order so they nest correctly
+        for (let i = block.marks.length - 1; i >= 0; i--) {
+          const mark = block.marks[i];
+          switch (mark.type) {
+            case 'bold':
+              content = <strong>{content}</strong>;
+              break;
+            case 'italic':
+              content = <em>{content}</em>;
+              break;
+            case 'underline':
+              content = <u>{content}</u>;
+              break;
+            case 'link':
+              content = <a href={mark.attrs?.href}>{content}</a>;
+              break;
+          }
+        }
       }
 
-      if (block?.marks?.[0]?.type === 'italic') {
-        return <em>{block.text}</em>;
-      }
-
-      return <>{block.text}</>;
+      return <>{content}</>;
     }
 
     case 'image': {
