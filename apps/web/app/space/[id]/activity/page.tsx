@@ -10,7 +10,6 @@ interface Props {
 
 export default async function Activity(props: Props) {
   const params = await props.params;
-
   return (
     <Suspense fallback={<ActivitySkeleton />}>
       <ActivityServerContainer spaceId={params.id} />
