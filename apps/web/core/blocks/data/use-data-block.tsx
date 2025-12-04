@@ -22,24 +22,6 @@ import { useRelationsBlock } from './use-relations-block';
 import { useSource } from './use-source';
 import { useView } from './use-view';
 
-// Helper function to check if a row matches the filter criteria
-function rowMatchesFilters(row: Row, filterState: Filter[]): boolean {
-  return filterState.every(filter => {
-    const cell = row.columns[filter.columnId];
-    if (!cell) return false;
-
-    if (filter.valueType === 'TEXT') {
-      return cell.name?.toLowerCase().includes(filter.value.toLowerCase()) || false;
-    }
-
-    if (filter.valueType === 'RELATION') {
-      return cell.name?.toLowerCase().includes(filter.value.toLowerCase()) || false;
-    }
-
-    return false;
-  });
-}
-
 export const PAGE_SIZE = 9;
 
 interface RenderablesQueryKey {
@@ -75,8 +57,9 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
 
-  // Fetch collection data
-  // For COLLECTION sources with filters, fetch PAGE_SIZE items from start for client-side filtering
+  const where = filterStateToWhere(filterState);
+
+  // Fetch collection data with server-side filtering
   const {
     collectionItems,
     collectionRelations,
@@ -85,51 +68,19 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     collectionLength,
   } = useCollection({
     first: PAGE_SIZE,
-    skip: source.type === 'COLLECTION' && filterState.length > 0 ? 0 : pageNumber * PAGE_SIZE,
+    skip: pageNumber * PAGE_SIZE,
+    where: where,
   });
 
-  // Filter and paginate collection items
+  // For COLLECTION sources, server-side filtering is now applied in useCollection
+  // We just need to organize the data here
   const collectionData = React.useMemo(() => {
-    if (source.type !== 'COLLECTION') {
-      return {
-        items: collectionItems,
-        relations: collectionRelations,
-        totalCount: collectionLength,
-      };
-    }
-
-    // No filters: use regular pagination
-    if (filterState.length === 0) {
-      return {
-        items: collectionItems,
-        relations: collectionRelations,
-        totalCount: collectionLength,
-      };
-    }
-
-    // With filters: apply client-side filtering, then paginate
-    const rows = mappingToRows(collectionItems, shownColumnIds, collectionRelations);
-    const filteredRows = rows.filter(row => rowMatchesFilters(row, filterState));
-
-    // Get filtered entity IDs
-    const filteredEntityIds = new Set(filteredRows.map(r => r.entityId));
-    const filteredRelations = collectionRelations.filter(r => filteredEntityIds.has(r.toEntity.id));
-    const filteredItems = collectionItems.filter(item => filteredEntityIds.has(item.id));
-
-    // Apply pagination to filtered results
-    const startIndex = pageNumber * PAGE_SIZE;
-    const endIndex = startIndex + PAGE_SIZE;
-    const paginatedRelations = filteredRelations.slice(startIndex, endIndex);
-    const paginatedItems = filteredItems.slice(startIndex, endIndex);
-
     return {
-      items: paginatedItems,
-      relations: paginatedRelations,
-      totalCount: filteredRelations.length,
+      items: collectionItems,
+      relations: collectionRelations,
+      totalCount: collectionLength,
     };
-  }, [source.type, filterState, collectionItems, collectionRelations, shownColumnIds, pageNumber, collectionLength]);
-
-  const where = filterStateToWhere(filterState);
+  }, [collectionItems, collectionRelations, collectionLength]);
 
   const { entities: queriedEntities, isLoading: isQueryEntitiesLoading } = useQueryEntities({
     where: where,
@@ -347,18 +298,25 @@ export function filterStateToWhere(filterState: Filter[]): WhereCondition {
 
   for (const filter of filterState) {
     if (filter.valueType === 'TEXT') {
-      if (!where.values) {
-        where.values = [];
+      // For NAME_PROPERTY, filter on the entity name field directly
+      if (filter.columnId === SystemIds.NAME_PROPERTY) {
+        where['name'] = {
+          contains: filter.value,
+        };
+      } else {
+        // For other text properties, filter on values
+        if (!where.values) {
+          where.values = [];
+        }
+        where['values'].push({
+          propertyId: {
+            equals: filter.columnId,
+          },
+          value: {
+            contains: filter.value,
+          },
+        });
       }
-
-      where['values'].push({
-        propertyId: {
-          equals: filter.columnId,
-        },
-        value: {
-          equals: filter.value,
-        },
-      });
     }
 
     if (filter.valueType === 'RELATION') {

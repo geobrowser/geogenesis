@@ -163,7 +163,17 @@ export class E {
         return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
       });
 
-      return entities.filter(e => e !== null);
+      const nonNullEntities = entities.filter(e => e !== null);
+
+      // Apply additional filters (like name, values, etc.) if present
+      // Check if there are any filters beyond just id.in
+      const hasAdditionalFilters = Object.keys(where).some(key => key !== 'id');
+      if (hasAdditionalFilters) {
+        const localQuery = new EntityQuery(nonNullEntities).where(where);
+        return localQuery.execute();
+      }
+
+      return nonNullEntities;
     }
 
     const limit = first;

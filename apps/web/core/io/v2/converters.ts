@@ -32,23 +32,27 @@ function convertStringConditionToStringFilter(condition: StringCondition | undef
     return filter;
   }
 
-  // Map StringCondition operators to StringFilter operators
+  // Map StringCondition operators to StringFilter operators (case-insensitive)
   if (condition.equals !== undefined) {
     // Note: The comment in the code mentions using startsWith for equals
     // to match previous filter behavior
-    filter.startsWith = condition.equals;
+    // Use case-insensitive variant for better UX
+    filter.startsWithInsensitive = condition.equals;
   }
 
   if (condition.fuzzy !== undefined || condition.contains !== undefined) {
-    filter.includes = condition.fuzzy || condition.contains;
+    // Use case-insensitive variant for partial text matching
+    filter.includesInsensitive = condition.fuzzy || condition.contains;
   }
 
   if (condition.startsWith !== undefined) {
-    filter.startsWith = condition.startsWith;
+    // Use case-insensitive variant
+    filter.startsWithInsensitive = condition.startsWith;
   }
 
   if (condition.endsWith !== undefined) {
-    filter.endsWith = condition.endsWith;
+    // Use case-insensitive variant
+    filter.endsWithInsensitive = condition.endsWith;
   }
 
   if (condition.in !== undefined) {

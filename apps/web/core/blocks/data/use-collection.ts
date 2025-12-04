@@ -1,6 +1,7 @@
 import { Position, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData } from '@tanstack/react-query';
 
+import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 
 import { useDataBlockInstance } from './use-data-block';
@@ -9,9 +10,10 @@ import { useSource } from './use-source';
 export interface CollectionProps {
   first?: number;
   skip?: number;
+  where?: WhereCondition;
 }
 
-export function useCollection({ first, skip }: CollectionProps) {
+export function useCollection({ first, skip, where }: CollectionProps) {
   const { entityId, spaceId } = useDataBlockInstance();
   const { source } = useSource();
 
@@ -28,27 +30,71 @@ export function useCollection({ first, skip }: CollectionProps) {
         ) ?? [])
       : [];
 
-  const orderedCollectionRelations = collectionRelations.sort((a, z) => {
+  // Deduplicate relations by toEntity.id - keep the first occurrence (by position)
+  // This handles cases where multiple collection relations point to the same entity
+  const seenEntityIds = new Set<string>();
+  const deduplicatedRelations = collectionRelations.filter(relation => {
+    if (seenEntityIds.has(relation.toEntity.id)) {
+      return false;
+    }
+    seenEntityIds.add(relation.toEntity.id);
+    return true;
+  });
+
+  const orderedCollectionRelations = deduplicatedRelations.sort((a, z) => {
     return Position.compare(a.position ?? null, z.position ?? null);
   });
 
-  // Get the entities for the current page based on position order
-  const pageStartIndex = skip || 0;
-  const pageEndIndex = pageStartIndex + (first || 9);
-  const currentPageRelations = orderedCollectionRelations.slice(pageStartIndex, pageEndIndex);
-  const currentPageEntityIds = currentPageRelations.map(r => r.toEntity.id);
+  // When filters are present, we need to fetch ALL collection items first,
+  // apply the filter, then paginate the filtered results
+  const hasFilters = where && Object.keys(where).length > 0;
 
+  // Get all entity IDs when filtering, or just the current page when not filtering
+  const entityIdsToFetch = hasFilters
+    ? orderedCollectionRelations.map(r => r.toEntity.id)
+    : orderedCollectionRelations.slice(skip || 0, (skip || 0) + (first || 9)).map(r => r.toEntity.id);
+
+  // Build the where condition for collection items
+  const collectionItemsWhere: WhereCondition = {
+    id: {
+      in: entityIdsToFetch,
+    },
+    ...(where ?? {}),
+  };
 
   const { entities: collectionItems, isLoading: isCollectionItemsLoading } = useQueryEntities({
-    enabled: currentPageEntityIds.length > 0,
-    where: {
-      id: {
-        in: currentPageEntityIds,
-      },
-    },
-    // Don't use first/skip here since we're already slicing the relations
+    enabled: entityIdsToFetch.length > 0,
+    where: collectionItemsWhere,
     placeholderData: keepPreviousData,
   });
+
+  /**
+   * When filtering is active, we need to:
+   * 1. Get all entities that match both the collection AND the filter
+   * 2. Filter the relations to only include those that point to filtered entities
+   * 3. Deduplicate filtered relations (in case filtering reveals duplicates)
+   * 4. Apply pagination to the filtered relations
+   * 5. Return the paginated items in the correct order
+   */
+  let filteredRelations = hasFilters
+    ? orderedCollectionRelations.filter(r => collectionItems.some(item => item.id === r.toEntity.id))
+    : orderedCollectionRelations;
+
+  // Deduplicate filtered relations again (filtering may reveal duplicates that weren't caught initially)
+  if (hasFilters) {
+    const seenFilteredIds = new Set<string>();
+    filteredRelations = filteredRelations.filter(relation => {
+      if (seenFilteredIds.has(relation.toEntity.id)) {
+        return false;
+      }
+      seenFilteredIds.add(relation.toEntity.id);
+      return true;
+    });
+  }
+
+  const pageStartIndex = skip || 0;
+  const pageEndIndex = pageStartIndex + (first || 9);
+  const paginatedRelations = hasFilters ? filteredRelations.slice(pageStartIndex, pageEndIndex) : filteredRelations;
 
   /**
    * There's currently no guarantee of ordering when using the `id: { in: [...]}`
@@ -57,19 +103,18 @@ export function useCollection({ first, skip }: CollectionProps) {
    */
   const collectionItemsMap = new Map(collectionItems.map(item => [item.id, item]));
 
-  const orderedCollectionItems = currentPageRelations
+  const orderedCollectionItems = paginatedRelations
     .map(relation => {
       const entity = collectionItemsMap.get(relation.toEntity.id);
-
       return entity;
     })
     .filter(item => item !== undefined);
 
   return {
     collectionItems: orderedCollectionItems,
-    collectionRelations: orderedCollectionRelations,
+    collectionRelations: paginatedRelations,
     isLoading: isCollectionItemsLoading,
     isFetched: !isCollectionItemsLoading,
-    collectionLength: collectionRelations.length,
+    collectionLength: hasFilters ? filteredRelations.length : collectionRelations.length,
   };
 }
