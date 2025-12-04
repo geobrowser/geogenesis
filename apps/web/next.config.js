@@ -12,7 +12,7 @@ const nextConfig = {
     // Activate new client-side router improvements
     // clientSegmentCache: true,
     // Enable persistent caching for the turbopack dev server and build.
-    turbopackPersistentCaching: true,
+    // turbopackPersistentCaching: true, // canary-only feature, disabled for stable
     reactCompiler: true,
     optimizePackageImports: [
       'effect',
