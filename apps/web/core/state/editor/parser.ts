@@ -43,6 +43,22 @@ export function htmlToMarkdown(html: string): string {
       case 'p':
         result = `${processChildren(element, indent)}\n\n`;
         break;
+      case 'span': {
+        // Handle inline math nodes
+        const dataType = element.getAttribute('data-type');
+        if (dataType === 'inlineMath') {
+          const latex = element.getAttribute('data-latex') || element.textContent || '';
+          const isBlock = element.getAttribute('data-display') === 'yes';
+          if (isBlock) {
+            result = `$$${latex}$$`;
+          } else {
+            result = `$${latex}$`;
+          }
+        } else {
+          result = processChildren(element, indent);
+        }
+        break;
+      }
       case 'strong':
       case 'b':
         result = `**${processChildren(element, indent)}**`;
@@ -65,6 +81,29 @@ export function htmlToMarkdown(html: string): string {
         // This shouldn't be called directly, handled by ul/ol
         result = processChildren(element, indent);
         break;
+      case 'pre': {
+        // Handle code blocks - look for nested code element
+        const codeElement = element.querySelector('code');
+        if (codeElement) {
+          const codeContent = codeElement.textContent || '';
+          result = `\`\`\`\n${codeContent}\n\`\`\`\n`;
+        } else {
+          result = `\`\`\`\n${processChildren(element, indent)}\n\`\`\`\n`;
+        }
+        break;
+      }
+      case 'code': {
+        // Handle inline code or code blocks
+        const parentTag = element.parentElement?.tagName.toLowerCase();
+        if (parentTag === 'pre') {
+          // This is part of a code block, handled by the pre case
+          result = element.textContent || '';
+        } else {
+          // This is inline code
+          result = `\`${element.textContent || ''}\``;
+        }
+        break;
+      }
       case 'br':
         result = '\n';
         break;
@@ -166,16 +205,26 @@ export function markdownToHtml(markdown: string): string {
     // Process inline formatting in the correct order
     // Links first (to avoid interfering with other formatting)
     text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-    
+
     // Bold (must come before italic to handle ***text*** correctly)
     text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    
+
     // Italic
     text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    
-    // Inline code
+
+    // Inline code (but not $$ which is block math)
     text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-    
+
+    // Block math ($$...$$) - must come before inline math
+    text = text.replace(/\$\$([^$]+)\$\$/g, (_, latex) =>
+      `<span data-type="inlineMath" data-latex="${latex}" data-display="yes">$$${latex}$$</span>`
+    );
+
+    // Inline math ($...$) - use negative lookbehind/lookahead to avoid matching $$
+    text = text.replace(/(?<!\$)\$(?!\$)([^$]+?)\$(?!\$)/g, (_, latex) =>
+      `<span data-type="inlineMath" data-latex="${latex}" data-display="no">$${latex}$</span>`
+    );
+
     return text;
   }
   
@@ -298,8 +347,10 @@ export function markdownToHtml(markdown: string): string {
   if (inCodeBlock && codeBlockContent.length > 0) {
     output.push(`<pre><code>${codeBlockContent.join('\n')}</code></pre>`);
   }
-  
-  return output.join('\n').trim();
+
+  const result = output.join('\n').trim();
+
+  return result;
 }
 
 export function htmlToPlainText(html: string) {

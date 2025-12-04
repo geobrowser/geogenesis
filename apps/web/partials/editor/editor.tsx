@@ -7,12 +7,18 @@ import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
+import { StringFilter } from '~/core/gql/graphql';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
+
+import { NoContent } from '../space-tabs/no-content';
+import { tiptapExtensions } from './extensions';
+import { createIdExtension } from './id-extension';
+import { ServerContent } from './server-content';
 
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
@@ -26,10 +32,30 @@ const EMOJI_CONVERSION_PATTERNS = [
   /<img[^>]*alt="([^"]*[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}][^"]*)"[^>]*\/?>/gu,
 ] as const;
 
-import { NoContent } from '../space-tabs/no-content';
-import { tiptapExtensions } from './extensions';
-import { createIdExtension } from './id-extension';
-import { ServerContent } from './server-content';
+const shouldBeCodeBlock = (text: string): boolean => {
+  const codeIndicators = [
+    // Common code patterns
+    /^[\s]*(?:function|const|let|var|class|interface|type|import|export)\s+/m,
+    /^[\s]*(?:def|class|import|from|if __name__|#!\/)/m, // Python
+    /^[\s]*(?:public|private|protected|static|void|int|String|boolean)\s+/m, // Java/C#
+    /^[\s]*(?:fn|struct|impl|use|mod|let mut)\s+/m, // Rust
+    /^[\s]*(?:<\?php|<?=|$[a-zA-Z_])/m, // PHP
+    // JSON/Config patterns
+    /^\s*[{[][\s\S]*[}\]]\s*$/m,
+    /^\s*"[^"]*":\s*["{[]]/m,
+    // HTML/XML patterns
+    /^\s*<[a-zA-Z][^>]*>/m,
+    // CSS patterns
+    /^\s*[.#]?[a-zA-Z-]+\s*{\s*$/m,
+    // Shell/Command patterns
+    /^\s*[$#]\s+/m,
+  ];
+
+  return codeIndicators.some(pattern => {
+    if (typeof pattern === 'boolean') return pattern;
+    return pattern.test(text);
+  });
+};
 
 interface Props {
   spaceId: string;
@@ -56,18 +82,18 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const editor = useEditor(
     {
       extensions,
-      editable: editable,
+      editable: true,
       content: editorJson,
       editorProps: {
         transformPastedHTML: html => {
           // Remove id attributes and prevent emoji conversion to images
           let cleanHtml = removeIdAttributes(html);
-          
+
           // Apply all patterns to convert emoji images back to Unicode
           EMOJI_CONVERSION_PATTERNS.forEach(pattern => {
             cleanHtml = cleanHtml.replace(pattern, '$1');
           });
-          
+
           return cleanHtml;
         },
         // Handle emoji conversion on paste
@@ -76,29 +102,43 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
             // Get pasted content
             const clipboardData = event.clipboardData;
             if (clipboardData) {
+              const htmlData = clipboardData.getData('text/html');
               const textData = clipboardData.getData('text/plain');
-              
-              
-              // Always prevent default and handle manually to avoid emoji conversion
-              event.preventDefault();
-              
-              // Use plain text to preserve emoji as Unicode
-              if (textData) {
-                const lines = textData.split('\n');
-                let tr = view.state.tr;
-                
-                lines.forEach((line, index) => {
-                  if (index > 0) {
-                    tr = tr.split(tr.selection.head);
-                  }
-                  if (line.trim()) {
-                    tr = tr.insertText(line);
-                  }
-                });
-                
+              const lines = textData.split('\n');
+
+              // If there's HTML data that might contain emoji images, prevent default and handle manually
+              if (htmlData && (htmlData.includes('emoji') || htmlData.includes('twimg.com'))) {
+                event.preventDefault();
+
+                // Insert as plain text to avoid emoji image conversion with proper newline handling
+                if (textData) {
+                  let tr = view.state.tr;
+
+                  lines.forEach((line, index) => {
+                    if (index > 0) {
+                      tr = tr.split(tr.selection.head);
+                    }
+                    if (line.trim()) {
+                      tr = tr.insertText(line);
+                    }
+                  });
+
+                  view.dispatch(tr);
+                }
+                return true;
+              } else if (lines.length > 1 && textData && shouldBeCodeBlock(textData)) {
+                const { state } = view;
+
+                // Create code block node with the pasted content
+                const codeBlockNode = state.schema.nodes.codeBlock.create({}, state.schema.text(textData));
+
+                const tr = state.tr.replaceSelectionWith(codeBlockNode);
                 view.dispatch(tr);
                 return true;
               }
+              // For plain text or HTML without emoji images, let TipTap handle normally
+              // This allows lists and other formatted content to be processed correctly
+              return false;
             }
             return false;
           },
@@ -108,17 +148,25 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       onBlur: onBlur,
       onUpdate: ({ editor }) => {
         if (editable) {
-          const hasContent = editor.getText().trim().length > 0 ||
-                          (editor.getJSON().content?.some(node =>
-                            node.type === 'image' || node.type === 'tableNode') ?? false);
+          const hasContent =
+            editor.getText().trim().length > 0 ||
+            (editor.getJSON().content?.some(node => node.type === 'image' || node.type === 'tableNode') ?? false);
 
           // Update the state immediately to show/hide properties panel
           setHasContent(hasContent);
         }
       },
     },
-    [editorJson, editable]
+    [editorJson]
   );
+
+  // update editable options of editor when editable changes
+  // if editable put in useEditor dependency list, the editor will recreate every editable changes
+  React.useEffect(() => {
+    if (editor) {
+      editor.setEditable(editable);
+    }
+  }, [editor, editable]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
@@ -170,15 +218,16 @@ function useInterceptEditorLinks(spaceId: string) {
     }
 
     // Mutation observer to catch and prevent emoji conversion
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
           if (node.nodeType === Node.ELEMENT_NODE) {
             const element = node as Element;
             // Check if added node is an emoji image
-            if (element.tagName === 'IMG' && 
-                (element.getAttribute('src')?.includes('emoji') || 
-                 element.getAttribute('src')?.includes('twimg.com'))) {
+            if (
+              element.tagName === 'IMG' &&
+              (element.getAttribute('src')?.includes('emoji') || element.getAttribute('src')?.includes('twimg.com'))
+            ) {
               const alt = element.getAttribute('alt');
               if (alt) {
                 const textNode = document.createTextNode(alt);
@@ -187,7 +236,7 @@ function useInterceptEditorLinks(spaceId: string) {
             }
             // Also check child nodes
             const emojiImages = element.querySelectorAll('img[src*="emoji"], img[src*="twimg.com"]');
-            emojiImages.forEach((img) => {
+            emojiImages.forEach(img => {
               const alt = img.getAttribute('alt');
               if (alt) {
                 const textNode = document.createTextNode(alt);
@@ -204,7 +253,7 @@ function useInterceptEditorLinks(spaceId: string) {
     if (editorElement) {
       observer.observe(editorElement, {
         childList: true,
-        subtree: true
+        subtree: true,
       });
     }
 

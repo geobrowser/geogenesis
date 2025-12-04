@@ -1,3 +1,4 @@
+import { MathExtension } from '@aarkue/tiptap-math-extension';
 import Bold from '@tiptap/extension-bold';
 import BulletList from '@tiptap/extension-bullet-list';
 import Document from '@tiptap/extension-document';
@@ -11,7 +12,12 @@ import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
 import Text from '@tiptap/extension-text';
 
+import { CodeBlockTriggerExtension } from './code-block-extension';
+import { CodeBlockWithLineNumbers } from './code-block-with-line-numbers';
 import { ConfiguredCommandExtension } from './command-extension';
+import { InlineCode } from './inline-code';
+import { InlineCodeTriggerExtension } from './inline-code-extension';
+import { MathTriggerExtension } from './math-trigger-extension';
 import { DataNode } from './data-node';
 import { HeadingNode } from './heading-node';
 import { ParagraphNode } from './paragraph-node';
@@ -31,6 +37,12 @@ export const tiptapExtensions = [
   }),
   Bold,
   Italic,
+  InlineCode.configure({
+    HTMLAttributes: {
+      class: 'inline-code',
+      spellcheck: 'false',
+    },
+  }),
   // StarterKit.configure({
   //   // We're probably only using the Document and Text from the starterkit. Might
   //   // save us bytes to use it directly instead of through the kit.
@@ -44,6 +56,13 @@ export const tiptapExtensions = [
   // }),
   ParagraphNode,
   HeadingNode,
+  CodeBlockWithLineNumbers.configure({
+    HTMLAttributes: {
+      class: 'code-block font-mono',
+    },
+  }),
+  CodeBlockTriggerExtension,
+  InlineCodeTriggerExtension,
   ConfiguredCommandExtension,
   HardBreak,
   Gapcursor,
@@ -52,6 +71,18 @@ export const tiptapExtensions = [
   ListItem,
   DataNode,
   Image,
+  MathExtension.configure({
+    // Disable built-in input rules by providing empty custom delimiters
+    // We use our own MathTriggerExtension for better control
+    delimiters: {
+      inlineRegex: undefined,
+      blockRegex: undefined,
+    },
+    katexOptions: {
+      throwOnError: false,
+    },
+  }),
+  MathTriggerExtension,
   Placeholder.configure({
     placeholder: ({ node }) => {
       const isHeading = node.type.name === 'heading';

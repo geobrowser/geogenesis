@@ -1,6 +1,6 @@
 export type Content =
   | {
-      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem' | 'tableNode';
+      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem' | 'tableNode' | 'codeBlock';
       content: Content[];
       attrs: {
         id: string;
@@ -29,6 +29,13 @@ export type Content =
       attrs: {
         id: string;
         src: string;
+      };
+    }
+  | {
+      type: 'inlineMath';
+      content: Content[];
+      attrs: {
+        latex: string;
       };
     };
 

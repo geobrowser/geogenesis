@@ -1,3 +1,5 @@
+import katex from 'katex';
+
 import { Content } from '~/core/state/editor/types';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -128,6 +130,19 @@ const Block = ({ block }: BlockProps) => {
           </div>
         </>
       );
+    }
+
+    case 'inlineMath': {
+      const latex = block.attrs?.latex ?? '';
+      try {
+        const html = katex.renderToString(latex, {
+          throwOnError: false,
+          displayMode: false,
+        });
+        return <span className="inline-math" dangerouslySetInnerHTML={{ __html: html }} />;
+      } catch {
+        return <span className="inline-math">{latex}</span>;
+      }
     }
   }
 };

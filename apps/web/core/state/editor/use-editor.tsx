@@ -92,11 +92,14 @@ function makeNewBlockRelation({
       case 'listItem':
       case 'bulletList':
       case 'orderedList':
+      case 'codeBlock':
         return 'TEXT';
       case 'tableNode':
         return 'DATA';
       case 'image':
         return 'IMAGE';
+      default:
+        return 'TEXT';
     }
   })();
 
@@ -247,12 +250,20 @@ export function useEditorStore() {
         // @TODO(migration): We should be using the sync store to read all data for
         // the app. We need to be able to pre-hydrate the store with values based
         // on the data from the server or else the store won't have any data.
+        // Try to get values from local storage first, then fallback to initial values
         const markdownValuesForBlockId = getValues({
-          mergeWith: initialBlockValues,
           selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,
         });
 
-        const markdownValueForBlockId = markdownValuesForBlockId?.[0];
+        // If no values found in local storage, try with initial values as fallback
+        const finalMarkdownValues = markdownValuesForBlockId.length > 0 
+          ? markdownValuesForBlockId 
+          : getValues({
+              mergeWith: initialBlockValues,
+              selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,
+            });
+
+        const markdownValueForBlockId = finalMarkdownValues?.[0];
         const relationForBlockId = blockRelations.find(r => r.block.id === block.block.id);
 
         const toEntity = relationForBlockId?.block;
@@ -322,12 +333,16 @@ export function useEditorStore() {
 
       const populatedContent = content.filter(node => {
         const isNonParagraph = node.type !== 'paragraph';
+
+        // Check if paragraph has meaningful content
         const isParagraphWithContent =
           node.type === 'paragraph' &&
           node.content &&
           node.content.length > 0 &&
-          node.content[0].text &&
-          !node.content[0].text.startsWith('/'); // Do not create a block if the text node starts with a slash command
+          // Check for text content OR non-text nodes like inlineMath
+          (node.content.some(child => child.type !== 'text' || (child.text && child.text.trim().length > 0))) &&
+          // Do not create a block if the text node starts with a slash command
+          !(node.content[0].text && node.content[0].text.startsWith('/'));
 
         return isNonParagraph || isParagraphWithContent;
       });
@@ -375,6 +390,8 @@ export function useEditorStore() {
               return SystemIds.DATA_BLOCK;
             case 'bulletList':
             case 'paragraph':
+            case 'heading':
+            case 'codeBlock':
               return SystemIds.TEXT_BLOCK;
             case 'image':
               return SystemIds.IMAGE_TYPE;
@@ -465,7 +482,8 @@ export function useEditorStore() {
             break;
           case 'bulletList':
           case 'heading':
-          case 'paragraph': {
+          case 'paragraph':
+          case 'codeBlock': {
             const markdownValue = TextEntity.getTextEntityMarkdownValue(node);
             storage.values.set(markdownValue);
 

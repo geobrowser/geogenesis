@@ -121,3 +121,39 @@
 .ProseMirror ul li {
   @apply ml-4 list-item list-disc;
 }
+
+/* Inline code styling */
+.ProseMirror code.inline-code {
+  @apply rounded bg-bg px-1 py-0.5 font-mono font-medium;
+  color: #35363a;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+/* Inline code inside other elements */
+.ProseMirror p code.inline-code,
+.ProseMirror li code.inline-code {
+  @apply rounded-sm border border-grey-02 bg-bg px-1 py-0.5 font-mono font-medium;
+  color: #35363a;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+/* Fallback styles for any remaining pre/code elements */
+.ProseMirror pre {
+  @apply bg-bg px-3 py-1;
+}
+
+/* Math/Formula styling */
+.ProseMirror .Tiptap-mathematics-editor {
+  @apply rounded bg-bg px-2 py-1 font-mono;
+  color: #35363a;
+}
+
+.ProseMirror .Tiptap-mathematics-render {
+  @apply inline-block rounded px-1 py-0.5;
+}
+
+.ProseMirror .Tiptap-mathematics-editor-active {
+  @apply bg-grey-01 ring-1 ring-grey-02;
+}
