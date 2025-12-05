@@ -36,7 +36,11 @@ const queryKeys = {
   columnsSchema: (columns?: Property[]) => ['blocks', 'data', 'columns-schema', columns],
 };
 
-export function useDataBlock() {
+interface UseDataBlockOptions {
+  filterState?: Filter[];
+}
+
+export function useDataBlock(options?: UseDataBlockOptions) {
   const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
   const { storage } = useMutate();
 
@@ -46,9 +50,16 @@ export function useDataBlock() {
   });
 
   const { relationBlockSourceRelations } = useRelationsBlock();
-  const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
+  const { filterState: dbFilterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
+
+  // Use provided filter state or fall back to database filter state
+  const effectiveFilterState = options?.filterState ?? dbFilterState;
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
+
+  const where = filterStateToWhere(effectiveFilterState);
+
+  // Fetch collection data with server-side filtering
   const {
     collectionItems,
     collectionRelations,
@@ -58,9 +69,18 @@ export function useDataBlock() {
   } = useCollection({
     first: PAGE_SIZE,
     skip: pageNumber * PAGE_SIZE,
+    where: where,
   });
 
-  const where = filterStateToWhere(filterState);
+  // For COLLECTION sources, server-side filtering is now applied in useCollection
+  // We just need to organize the data here
+  const collectionData = React.useMemo(() => {
+    return {
+      items: collectionItems,
+      relations: collectionRelations,
+      totalCount: collectionLength,
+    };
+  }, [collectionItems, collectionRelations, collectionLength]);
 
   const { entities: queriedEntities, isLoading: isQueryEntitiesLoading } = useQueryEntities({
     where: where,
@@ -149,7 +169,7 @@ export function useDataBlock() {
    */
   const rows = (() => {
     if (source.type === 'COLLECTION') {
-      return mappingToRows(collectionItems, shownColumnIds, collectionRelations);
+      return mappingToRows(collectionData.items, shownColumnIds, collectionData.relations);
     }
 
     if (source.type === 'GEO' || source.type === 'SPACES') {
@@ -171,7 +191,7 @@ export function useDataBlock() {
     return [];
   })();
 
-  const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
+  const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
 
   const setName = (newName: string) => {
     storage.entities.name.set(entityId, spaceId, newName);
@@ -197,7 +217,7 @@ export function useDataBlock() {
   // For collections, check if there are more items beyond the current page
   const hasNextPage =
     source.type === 'COLLECTION'
-      ? (pageNumber + 1) * PAGE_SIZE < collectionLength
+      ? (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
       : rows
         ? rows.length > PAGE_SIZE
         : false;
@@ -223,10 +243,10 @@ export function useDataBlock() {
     name: entity?.name ?? null,
     setName,
     totalPages,
-    collectionLength,
+    collectionLength: collectionData.totalCount,
 
     relations: entity?.relations,
-    collectionRelations: source.type === 'COLLECTION' ? collectionRelations : undefined,
+    collectionRelations: source.type === 'COLLECTION' ? collectionData.relations : undefined,
   };
 
   return result;
@@ -278,18 +298,25 @@ export function filterStateToWhere(filterState: Filter[]): WhereCondition {
 
   for (const filter of filterState) {
     if (filter.valueType === 'TEXT') {
-      if (!where.values) {
-        where.values = [];
+      // For NAME_PROPERTY, filter on the entity name field directly
+      if (filter.columnId === SystemIds.NAME_PROPERTY) {
+        where['name'] = {
+          contains: filter.value,
+        };
+      } else {
+        // For other text properties, filter on values
+        if (!where.values) {
+          where.values = [];
+        }
+        where['values'].push({
+          propertyId: {
+            equals: filter.columnId,
+          },
+          value: {
+            contains: filter.value,
+          },
+        });
       }
-
-      where['values'].push({
-        propertyId: {
-          equals: filter.columnId,
-        },
-        value: {
-          equals: filter.value,
-        },
-      });
     }
 
     if (filter.valueType === 'RELATION') {

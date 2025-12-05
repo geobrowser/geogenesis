@@ -11,7 +11,7 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import { Filter, fromGeoFilterString, toGeoFilterState } from './filters';
 import { useDataBlockInstance } from './use-data-block';
 
-export function useFilters() {
+export function useFilters(canEdit?: boolean) {
   const { entityId, spaceId } = useDataBlockInstance();
   const { storage } = useMutate();
 
@@ -61,6 +61,29 @@ export function useFilters() {
     },
   });
 
+  // Local state for temporary filters when user cannot edit
+  const [temporaryFilters, setTemporaryFilters] = React.useState<Filter[]>([]);
+
+  // Track if temporary filters have been initialized
+  const temporaryFiltersInitialized = React.useRef(false);
+
+  // Initialize temporary filters with database filters when user cannot edit
+  // Only initialize once to avoid overwriting user changes
+  React.useEffect(() => {
+    // Only use temporary filters if canEdit is explicitly false (not undefined)
+    if (canEdit === false && filterState !== undefined && !temporaryFiltersInitialized.current) {
+      setTemporaryFilters(filterState);
+      temporaryFiltersInitialized.current = true;
+    }
+  }, [canEdit, filterState]);
+
+  // Reset initialization when canEdit changes to true (user gains edit access)
+  React.useEffect(() => {
+    if (canEdit === true) {
+      temporaryFiltersInitialized.current = false;
+    }
+  }, [canEdit]);
+
   const setFilterState = React.useCallback(
     (filters: Filter[]) => {
       const newState = filters.length === 0 ? [] : filters;
@@ -94,9 +117,11 @@ export function useFilters() {
 
   return {
     filterState: filterState ?? [],
+    temporaryFilters,
     filterableProperties: filterableProperties ?? [],
     isLoading,
     isFetched,
     setFilterState,
+    setTemporaryFilters,
   };
 }

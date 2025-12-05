@@ -1,5 +1,4 @@
 import { Filter } from '~/core/blocks/data/filters';
-import { useEditable } from '~/core/state/editable-store';
 
 import { IconButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
@@ -19,7 +18,6 @@ function PublishedFilterIconFilled() {
 }
 
 export function TableBlockFilterPill({ filter, onDelete }: { filter: Filter; onDelete: () => void }) {
-  const { editable } = useEditable();
   const value = filter.valueType === 'RELATION' ? filter.valueName : filter.value;
 
   return (
@@ -31,7 +29,7 @@ export function TableBlockFilterPill({ filter, onDelete }: { filter: Filter; onD
         <span>·</span>
         <span>{value}</span>
       </div>
-      {editable && <IconButton icon={<CheckCloseSmall />} color="grey-04" onClick={onDelete} />}
+      <IconButton icon={<CheckCloseSmall />} color="grey-04" onClick={onDelete} />
     </div>
   );
 }

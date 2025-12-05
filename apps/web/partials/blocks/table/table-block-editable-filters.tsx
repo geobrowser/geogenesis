@@ -12,9 +12,18 @@ import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 
 type RenderableFilter = Filter & { columnName: string };
 
-export function TableBlockEditableFilters() {
+interface TableBlockEditableFiltersProps {
+  filterState?: Filter[];
+  setFilterState?: (filters: Filter[]) => void;
+}
+
+export function TableBlockEditableFilters({ filterState, setFilterState }: TableBlockEditableFiltersProps) {
   const { source } = useSource();
-  const { setFilterState, filterState, filterableProperties } = useFilters();
+  const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
+
+  // Use provided props or fall back to the hook
+  const effectiveFilterState = filterState ?? dbFilterState;
+  const effectiveSetFilterState = setFilterState ?? dbSetFilterState;
 
   // We treat Name, Typs and Space as special filters even though they are not
   // always columns on the type schema for a table. We allow users to be able
@@ -77,8 +86,8 @@ export function TableBlockEditableFilters() {
     valueName: string | null;
     columnName: string;
   }) => {
-    setFilterState([
-      ...filterState,
+    const newFilters = [
+      ...effectiveFilterState,
       {
         valueType,
         columnId,
@@ -86,7 +95,8 @@ export function TableBlockEditableFilters() {
         value,
         valueName,
       },
-    ]);
+    ];
+    effectiveSetFilterState(newFilters);
   };
 
   return (
