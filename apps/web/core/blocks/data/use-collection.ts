@@ -3,9 +3,25 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { Relation } from '~/core/v2.types';
 
 import { useDataBlockInstance } from './use-data-block';
 import { useSource } from './use-source';
+
+/**
+ * Deduplicates relations by toEntity.id, keeping the first occurrence.
+ * This handles cases where multiple collection relations point to the same entity.
+ */
+function deduplicateRelationsByEntityId<T extends Pick<Relation, 'toEntity'>>(relations: T[]): T[] {
+  const seen = new Set<string>();
+  return relations.filter(relation => {
+    if (seen.has(relation.toEntity.id)) {
+      return false;
+    }
+    seen.add(relation.toEntity.id);
+    return true;
+  });
+}
 
 export interface CollectionProps {
   first?: number;
@@ -30,16 +46,7 @@ export function useCollection({ first, skip, where }: CollectionProps) {
         ) ?? [])
       : [];
 
-  // Deduplicate relations by toEntity.id - keep the first occurrence (by position)
-  // This handles cases where multiple collection relations point to the same entity
-  const seenEntityIds = new Set<string>();
-  const deduplicatedRelations = collectionRelations.filter(relation => {
-    if (seenEntityIds.has(relation.toEntity.id)) {
-      return false;
-    }
-    seenEntityIds.add(relation.toEntity.id);
-    return true;
-  });
+  const deduplicatedRelations = deduplicateRelationsByEntityId(collectionRelations);
 
   const orderedCollectionRelations = deduplicatedRelations.sort((a, z) => {
     return Position.compare(a.position ?? null, z.position ?? null);
@@ -76,21 +83,11 @@ export function useCollection({ first, skip, where }: CollectionProps) {
    * 4. Apply pagination to the filtered relations
    * 5. Return the paginated items in the correct order
    */
-  let filteredRelations = hasFilters
-    ? orderedCollectionRelations.filter(r => collectionItems.some(item => item.id === r.toEntity.id))
+  const filteredRelations = hasFilters
+    ? deduplicateRelationsByEntityId(
+        orderedCollectionRelations.filter(r => collectionItems.some(item => item.id === r.toEntity.id))
+      )
     : orderedCollectionRelations;
-
-  // Deduplicate filtered relations again (filtering may reveal duplicates that weren't caught initially)
-  if (hasFilters) {
-    const seenFilteredIds = new Set<string>();
-    filteredRelations = filteredRelations.filter(relation => {
-      if (seenFilteredIds.has(relation.toEntity.id)) {
-        return false;
-      }
-      seenFilteredIds.add(relation.toEntity.id);
-      return true;
-    });
-  }
 
   const pageStartIndex = skip || 0;
   const pageEndIndex = pageStartIndex + (first || 9);

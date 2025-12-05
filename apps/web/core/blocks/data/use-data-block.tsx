@@ -53,11 +53,11 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const { filterState: dbFilterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
 
   // Use provided filter state or fall back to database filter state
-  const filterState = options?.filterState ?? dbFilterState;
+  const effectiveFilterState = options?.filterState ?? dbFilterState;
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
 
-  const where = filterStateToWhere(filterState);
+  const where = filterStateToWhere(effectiveFilterState);
 
   // Fetch collection data with server-side filtering
   const {
