@@ -1,11 +1,10 @@
 'use client';
 
-import Image from 'next/image';
-
 import { Entities } from '~/core/utils/entity';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 import { Entity } from '~/core/v2.types';
 
+import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 type ActivityProps = {
@@ -33,7 +32,7 @@ const EntityRow = ({ spaceId, entity }: EntityRowProps) => {
 
   // @TODO move validation into Entities.avatar util
   const validAvatarUrl =
-    avatarUrl && (avatarUrl.startsWith('ipfs://') || avatarUrl.startsWith('http')) ? getImagePath(avatarUrl) : null;
+    avatarUrl && (avatarUrl.startsWith('ipfs://') || avatarUrl.startsWith('http')) ? avatarUrl : null;
 
   const timestamp = entity.updatedAt ? Number(entity.updatedAt) : null;
   const date = timestamp ? new Date(timestamp * 1000) : null;
@@ -63,7 +62,7 @@ const EntityRow = ({ spaceId, entity }: EntityRowProps) => {
     >
       <div className="relative size-10 flex-shrink-0 overflow-hidden rounded-md bg-grey-01">
         {validAvatarUrl ? (
-          <Image src={validAvatarUrl} className="object-cover" alt="" fill priority />
+          <GeoImage value={validAvatarUrl} className="object-cover" alt="" fill priority />
         ) : (
           <div className="bg-gradient-geo flex h-full w-full" />
         )}

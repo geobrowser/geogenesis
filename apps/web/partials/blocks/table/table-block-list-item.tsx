@@ -6,10 +6,11 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation, useValues } from '~/core/sync/use-store';
-import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
+import { NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 
@@ -122,8 +123,8 @@ export function TableBlockListItem({
       <div className="group flex w-full max-w-full items-start justify-start gap-6 p-1 pr-5">
         <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-clip rounded-[0.625rem] bg-grey-01">
           {image ? (
-            <NextImage
-              src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
+            <GeoImage
+              value={image}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
               alt=""
               fill
@@ -353,12 +354,21 @@ export function TableBlockListItem({
       className="group flex w-full max-w-full grow items-start justify-start gap-6 rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider"
     >
       <div className="relative h-16 w-16 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
-        <NextImage
-          src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
-          className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-          alt=""
-          fill
-        />
+        {image ? (
+          <GeoImage
+            value={image}
+            className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+            alt=""
+            fill
+          />
+        ) : (
+          <NextImage
+            src={PLACEHOLDER_SPACE_IMAGE}
+            className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+            alt=""
+            fill
+          />
+        )}
       </div>
       <div className="w-full">
         {source.type !== 'COLLECTION' ? (

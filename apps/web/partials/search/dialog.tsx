@@ -12,8 +12,10 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/schema';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { getImagePath, validateEntityId } from '~/core/utils/utils';
+import { validateEntityId } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
+
+import { GeoImage } from '~/design-system/geo-image';
 
 import { ResultContent, ResultsList, SpaceContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
@@ -312,28 +314,35 @@ const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: Cr
         <Input value={query} onChange={event => setQuery(event.target.value)} withSearchIcon />
       </div>
       <div className="max-h-[190px] space-y-1 overflow-auto p-1">
-        {renderedSpaces.map(space => {
-          return (
-            <Command.Item
-              key={space.id}
-              onSelect={() => {
-                router.push(NavUtils.toEntity(space.id, entityId, true));
-                onDone?.();
-              }}
-              className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01"
-            >
-              <div className="relative size-4 rounded bg-grey-01">
-                <img
-                  src={getImagePath(space.entity.image)}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              </div>
-              <div className="text-button text-text">{space.entity.name}</div>
-            </Command.Item>
-          );
-        })}
+        {renderedSpaces.map(space => (
+          <CreateNewEntitySpaceItem key={space.id} space={space} entityId={entityId} onDone={onDone} />
+        ))}
       </div>
     </div>
+  );
+};
+
+type CreateNewEntitySpaceItemProps = {
+  space: ReturnType<typeof useSpacesWhereMember>[number];
+  entityId: EntityId;
+  onDone?: () => void;
+};
+
+const CreateNewEntitySpaceItem = ({ space, entityId, onDone }: CreateNewEntitySpaceItemProps) => {
+  const router = useRouter();
+
+  return (
+    <Command.Item
+      onSelect={() => {
+        router.push(NavUtils.toEntity(space.id, entityId, true));
+        onDone?.();
+      }}
+      className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01"
+    >
+      <div className="relative size-4 rounded bg-grey-01">
+        <GeoImage value={space.entity.image} fill style={{ objectFit: 'cover' }} alt="" />
+      </div>
+      <div className="text-button text-text">{space.entity.name}</div>
+    </Command.Item>
   );
 };

@@ -7,7 +7,6 @@ import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useValue } from '~/core/sync/use-store';
-import { getImagePath } from '~/core/utils/utils';
 import { Property } from '~/core/v2.types';
 
 import { SquareButton } from '~/design-system/button';
@@ -196,7 +195,7 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
             <ImageZoom
               variant="table-cell"
               key={`image-${relationId}-${relationValue}`}
-              imageSrc={getImagePath(relationValue ?? '')}
+              imageSrc={relationValue ?? ''}
             />
           );
         }

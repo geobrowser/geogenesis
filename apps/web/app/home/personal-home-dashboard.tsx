@@ -9,7 +9,9 @@ import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
+
+import { GeoImage } from '~/design-system/geo-image';
 
 import { SmallButton } from '~/design-system/button';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
@@ -278,22 +280,25 @@ const JoinSpaces = () => {
 
         if (!space) return null;
 
-        const spaceImage = space.entity?.image ? getImagePath(space.entity?.image) : PLACEHOLDER_SPACE_IMAGE;
-
-        return (
-          <Link
-            key={space.id}
-            href={NavUtils.toSpace(space.id)}
-            className="inline-flex items-center gap-1.5 rounded bg-white p-1 text-breadcrumb"
-          >
-            <span className="relative h-3 w-3 overflow-hidden rounded-sm">
-              <img src={spaceImage} className="absolute inset-0 h-full w-full object-cover object-center" alt="" />
-            </span>
-            <span>{space.entity?.name ?? space.id}</span>
-          </Link>
-        );
+        return <JoinSpaceItem key={space.id} space={space} />;
       })}
     </div>
+  );
+};
+
+const JoinSpaceItem = ({ space }: { space: ReturnType<typeof useSpaces>['spaces'][number] }) => {
+  const imageValue = space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE;
+
+  return (
+    <Link
+      href={NavUtils.toSpace(space.id)}
+      className="inline-flex items-center gap-1.5 rounded bg-white p-1 text-breadcrumb"
+    >
+      <span className="relative h-3 w-3 overflow-hidden rounded-sm">
+        <GeoImage value={imageValue} fill style={{ objectFit: 'cover' }} alt="" />
+      </span>
+      <span>{space.entity?.name ?? space.id}</span>
+    </Link>
   );
 };
 

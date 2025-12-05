@@ -1,7 +1,6 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
-import LegacyImage from 'next/legacy/image';
 
 import { ChangeEvent, useRef } from 'react';
 import { useState } from 'react';
@@ -11,8 +10,9 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation } from '~/core/sync/use-store';
-import { getImagePath } from '~/core/utils/utils';
 import { Relation } from '~/core/v2.types';
+
+import { GeoImage } from '~/design-system/geo-image';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -194,9 +194,10 @@ const AvatarCoverInput = ({
         }`}
       >
         {imgUrl && (
-          <LegacyImage
-            layout="fill"
-            src={getImagePath(imgUrl)}
+          <GeoImage
+            fill
+            value={imgUrl}
+            alt=""
             className="h-full w-full rounded-lg border border-white bg-white object-cover"
           />
         )}

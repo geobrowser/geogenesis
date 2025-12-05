@@ -5,7 +5,7 @@ import * as React from 'react';
 import { RENDERABLE_TYPE_PROPERTY, ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
 import { useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
-import { GeoNumber, GeoPoint, NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
+import { GeoNumber, GeoPoint, NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
 import { sortRelations } from '~/core/utils/utils';
 import { DataType, RenderableType } from '~/core/v2.types';
 
@@ -236,7 +236,7 @@ function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; re
   // Use the efficient hook to get only the image URL for this specific entity
   const actualImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
 
-  return <ImageZoom imageSrc={getImagePath(actualImageSrc || '')} />;
+  return <ImageZoom imageSrc={actualImageSrc || ''} />;
 }
 
 function RenderedValue({

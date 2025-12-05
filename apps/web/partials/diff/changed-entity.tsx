@@ -6,13 +6,13 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
-import Image from 'next/image';
-
 import * as React from 'react';
 
 import { useQueryEntity } from '~/core/sync/use-store';
 import { BlockChange, EntityChange, RenderableChange, TripleChangeValue } from '~/core/utils/change/types';
-import { GeoDate, GeoNumber, getImagePath, groupBy } from '~/core/utils/utils';
+import { GeoDate, GeoNumber, groupBy } from '~/core/utils/utils';
+
+import { GeoImage } from '~/design-system/geo-image';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { Minus } from '~/design-system/icons/minus';
@@ -60,11 +60,7 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
         <div className="flex w-1/2 items-center gap-4 pr-8">
           <div className="relative size-10 shrink-0 overflow-clip rounded bg-grey-01">
             {change.avatar && (
-              <img
-                src={getImagePath(change.avatar)}
-                className="absolute inset-0 h-full w-full object-cover object-center"
-                alt=""
-              />
+              <ChangedEntityAvatar avatar={change.avatar} />
             )}
           </div>
           <div className="truncate text-mediumTitle">{change.name ?? change.id}</div>
@@ -149,8 +145,8 @@ const ChangedBlock = ({ index, blockChange }: ChangedBlockProps) => {
             <div>
               {before && (
                 <span className="inline-block w-full rounded-lg bg-errorTertiary p-1">
-                  <Image
-                    src={getImagePath(before)}
+                  <GeoImage
+                    value={before}
                     className="!h-auto !w-full !rounded-lg"
                     width={560}
                     height={560}
@@ -164,8 +160,8 @@ const ChangedBlock = ({ index, blockChange }: ChangedBlockProps) => {
             <div>
               {after && (
                 <span className="inline-block w-full rounded-lg bg-successTertiary p-1">
-                  <Image
-                    src={getImagePath(after)}
+                  <GeoImage
+                    value={after}
                     className="!h-auto !w-full !rounded-lg"
                     width={560}
                     height={560}
@@ -464,11 +460,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                     {changes.map(c => {
                       if (!c.before?.value) return null;
 
-                      return (
-                        <span key={c.before.value} className="inline-block rounded-lg bg-errorTertiary p-1">
-                          <img src={getImagePath(c.before.value)} className="h-24 w-auto rounded-lg" />
-                        </span>
-                      );
+                      return <ChangedImageBefore key={c.before.value} value={c.before.value} />;
                     })}
                   </div>
                 </div>
@@ -486,11 +478,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                     {changes.map(c => {
                       if (!c.after?.value) return null;
 
-                      return (
-                        <span key={c.after.value} className="inline-block rounded-lg bg-successTertiary p-1">
-                          <img src={getImagePath(c.after.value)} className="h-24 w-auto rounded-lg" />
-                        </span>
-                      );
+                      return <ChangedImageAfter key={c.after.value} value={c.after.value} />;
                     })}
                   </div>
                 </div>
@@ -856,5 +844,26 @@ const Corners = () => {
         </div>
       </div>
     </>
+  );
+};
+
+// Helper components for fallback images
+const ChangedEntityAvatar = ({ avatar }: { avatar: string }) => {
+  return <GeoImage value={avatar} fill style={{ objectFit: 'cover' }} alt="" />;
+};
+
+const ChangedImageBefore = ({ value }: { value: string }) => {
+  return (
+    <span className="inline-block rounded-lg bg-errorTertiary p-1">
+      <GeoImage value={value} className="h-24 w-auto rounded-lg" width={96} height={96} alt="" />
+    </span>
+  );
+};
+
+const ChangedImageAfter = ({ value }: { value: string }) => {
+  return (
+    <span className="inline-block rounded-lg bg-successTertiary p-1">
+      <GeoImage value={value} className="h-24 w-auto rounded-lg" width={96} height={96} alt="" />
+    </span>
   );
 };

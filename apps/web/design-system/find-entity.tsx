@@ -6,8 +6,10 @@ import { startTransition, useState } from 'react';
 
 import { ROOT_SPACE } from '~/core/constants';
 import { useSearch } from '~/core/hooks/use-search';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 import { SearchResult } from '~/core/v2.types';
+
+import { NativeGeoImage } from '~/design-system/geo-image';
 
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Tag } from '~/design-system/tag';
@@ -159,8 +161,8 @@ export const FindEntity = ({
                                         key={space.spaceId}
                                         className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
                                       >
-                                        <img
-                                          src={getImagePath(space.image)}
+                                        <NativeGeoImage
+                                          value={space.image}
                                           alt=""
                                           className="h-full w-full object-cover"
                                         />

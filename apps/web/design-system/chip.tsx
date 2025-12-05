@@ -2,15 +2,15 @@
 
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
-import Image from 'next/image';
 
 import * as React from 'react';
 import { useState } from 'react';
 
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
-import { getImagePath } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
+
+import { GeoImage } from '~/design-system/geo-image';
 
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
@@ -250,7 +250,7 @@ export function LinkableRelationChip({
                       <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
                         {space ? (
                           <div className="size-[8px] overflow-clip rounded-sm grayscale">
-                            <Image fill src={getImagePath(space.entity.image)} alt="" />
+                            <GeoImage fill value={space.entity.image} alt="" />
                           </div>
                         ) : (
                           <TopRanked />

@@ -1,5 +1,4 @@
 import { cookies } from 'next/headers';
-import Image from 'next/legacy/image';
 
 import * as React from 'react';
 
@@ -8,7 +7,6 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 import { fetchProfile } from '~/core/io/subgraph';
 import {
   NavUtils,
-  getImagePath,
   getIsProposalEnded,
   getIsProposalExecutable,
   getNoVotePercentage,
@@ -16,6 +14,8 @@ import {
   getUserVote,
   getYesVotePercentage,
 } from '~/core/utils/utils';
+
+import { GeoImage } from '~/design-system/geo-image';
 
 import { Avatar } from '~/design-system/avatar';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -202,11 +202,11 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
         >
           <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
             <div className="relative h-3 w-3 overflow-hidden rounded-full">
-              <Image
-                src={getImagePath(space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE)}
+              <GeoImage
+                value={space.entity?.image ?? PLACEHOLDER_SPACE_IMAGE}
                 alt={`Cover image for space ${space.entity?.name ?? space.id}`}
-                layout="fill"
-                objectFit="cover"
+                fill
+                style={{ objectFit: 'cover' }}
               />
             </div>
             <p>{space.entity?.name}</p>

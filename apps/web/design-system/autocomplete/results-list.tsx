@@ -3,8 +3,9 @@ import cx from 'classnames';
 import * as React from 'react';
 
 import { useEntity } from '~/core/database/entities';
-import { getImagePath } from '~/core/utils/utils';
 import { SearchResult, SpaceEntity } from '~/core/v2.types';
+
+import { NativeGeoImage } from '~/design-system/geo-image';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
@@ -132,7 +133,7 @@ export const ResultContent = ({
                 key={space.spaceId}
                 className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
               >
-                <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
+                <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
               </div>
             ))}
             <div className="ml-1 text-footnoteMedium text-grey-04">+ {otherSpaces.length} spaces</div>

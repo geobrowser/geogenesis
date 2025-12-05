@@ -18,7 +18,7 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useEntityTypes, useName, useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
-import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
+import { NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Property, Relation, ValueOptions } from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
@@ -558,7 +558,7 @@ function ImageRelation({ relationValue, spaceId }: { relationValue: string; spac
   // Use the efficient hook to get only the image URL for this specific entity
   const actualImageSrc = useImageUrlFromEntity(relationValue, spaceId);
 
-  return <ImageZoom imageSrc={getImagePath(actualImageSrc || '')} />;
+  return <ImageZoom imageSrc={actualImageSrc || ''} />;
 }
 
 function RenderedValue({

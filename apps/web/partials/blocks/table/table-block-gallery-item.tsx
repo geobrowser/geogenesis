@@ -6,8 +6,10 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation, useValues } from '~/core/sync/use-store';
-import { NavUtils, getImagePath, useImageUrlFromEntity } from '~/core/utils/utils';
+import { NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
+
+import { GeoImage } from '~/design-system/geo-image';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -114,8 +116,8 @@ export function TableBlockGalleryItem({
       <div className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2">
         <div className="relative flex aspect-[2/1] w-full items-center justify-center overflow-clip rounded-lg bg-grey-01">
           {image ? (
-            <NextImage
-              src={getImagePath(image)}
+            <GeoImage
+              value={image}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
               alt=""
               fill
@@ -308,12 +310,21 @@ export function TableBlockGalleryItem({
       className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2 transition duration-200 hover:bg-divider"
     >
       <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
-        <NextImage
-          src={image ? getImagePath(image) : PLACEHOLDER_SPACE_IMAGE}
-          className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-          alt=""
-          fill
-        />
+        {image ? (
+          <GeoImage
+            value={image}
+            className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+            alt=""
+            fill
+          />
+        ) : (
+          <NextImage
+            src={PLACEHOLDER_SPACE_IMAGE}
+            className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+            alt=""
+            fill
+          />
+        )}
       </div>
       <div className="flex w-full flex-col px-1">
         <div className="flex flex-col gap-2">

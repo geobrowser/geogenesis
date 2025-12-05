@@ -1,9 +1,6 @@
-import Image from 'next/legacy/image';
-
 import * as React from 'react';
 
-import { getImagePath } from '~/core/utils/utils';
-
+import { GeoImage } from './geo-image';
 import { Spacer } from './spacer';
 import { Text } from './text';
 
@@ -18,13 +15,7 @@ export function Breadcrumb({ children, img }: BreadcrumbProps) {
       {img && (
         <>
           <div className="relative h-3 w-3 overflow-hidden rounded-sm">
-            <Image
-              priority
-              layout="fill"
-              objectFit="cover"
-              src={getImagePath(img)}
-              alt="Image representing the current Space"
-            />
+            <GeoImage priority fill style={{ objectFit: 'cover' }} value={img} alt="Image representing the current Space" />
           </div>
           <Spacer width={4} />
         </>

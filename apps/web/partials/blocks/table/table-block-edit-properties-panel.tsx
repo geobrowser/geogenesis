@@ -16,7 +16,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { getProperties } from '~/core/io/v2/queries';
 import { useQueryEntityAsync } from '~/core/sync/use-store';
-import { getImagePath } from '~/core/utils/utils';
+import { GeoImage } from '~/design-system/geo-image';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { Dots } from '~/design-system/dots';
@@ -103,10 +103,11 @@ function RelationsPropertySelector() {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
                 <div className="relative h-4 w-4 overflow-hidden rounded">
-                  <Image
-                    src={maybeSourceEntityImage ? getImagePath(maybeSourceEntityImage) : PLACEHOLDER_SPACE_IMAGE}
-                    layout="fill"
-                  />
+                  {maybeSourceEntityImage ? (
+                    <GeoImage value={maybeSourceEntityImage} fill alt="" />
+                  ) : (
+                    <Image src={PLACEHOLDER_SPACE_IMAGE} layout="fill" />
+                  )}
                 </div>
                 {/* <span className="text-footnoteMedium text-grey-04">0 selected</span> */}
               </div>

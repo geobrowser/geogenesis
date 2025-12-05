@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { Ipfs, SystemIds } from '@graphprotocol/grc-20';
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -12,11 +12,11 @@ import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useDeploySpace } from '~/core/hooks/use-deploy-space';
+import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { queryClient } from '~/core/query-client';
-import { Services } from '~/core/services';
-import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
+import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -243,7 +243,6 @@ type StepOnboardingProps = {
 };
 
 function StepOnboarding({ onNext }: StepOnboardingProps) {
-  const { ipfs } = Services.useServices();
   const [name, setName] = useAtom(nameAtom);
   const [entityId, setEntityId] = useAtom(entityIdAtom);
 
@@ -262,8 +261,8 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const ipfsUri = await ipfs.uploadFile(file);
-      setAvatar(ipfsUri);
+      const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET');
+      setAvatar(cid);
     }
   };
 
@@ -277,20 +276,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
             <div className="overflow-hidden rounded-lg bg-cover bg-center shadow-lg">
               <div className="group relative overflow-hidden rounded-lg">
                 {avatar ? (
-                  <>
-                    <div
-                      style={{
-                        backgroundImage: `url(${getImagePath(avatar)})`,
-                        height: 152,
-                        width: 152,
-                        backgroundSize: 'cover',
-                        backgroundRepeat: 'no-repeat',
-                      }}
-                    />
-                    <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
-                      <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
-                    </div>
-                  </>
+                  <OnboardingAvatarPreview avatar={avatar} onRemove={() => setAvatar('')} />
                 ) : (
                   <img src="/images/onboarding/no-avatar.png" alt="" className="size-[152px] object-cover" />
                 )}
@@ -487,5 +473,30 @@ export const Animation = ({ active = false }) => {
         </div>
       </div>
     </div>
+  );
+};
+
+// Helper component for avatar preview with fallback
+const OnboardingAvatarPreview = ({ avatar, onRemove }: { avatar: string; onRemove: () => void }) => {
+  const { src, onError } = useImageWithFallback(avatar);
+
+  return (
+    <>
+      <div
+        style={{
+          backgroundImage: `url(${src})`,
+          height: 152,
+          width: 152,
+          backgroundSize: 'cover',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
+        {/* Hidden img to trigger fallback if needed */}
+        <img src={src} onError={onError} alt="" style={{ display: 'none' }} />
+      </div>
+      <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+        <SquareButton disabled={avatar === ''} onClick={onRemove} icon={<Trash />} />
+      </div>
+    </>
   );
 };

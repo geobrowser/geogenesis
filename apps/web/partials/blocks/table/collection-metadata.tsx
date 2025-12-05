@@ -10,7 +10,7 @@ import type { DataBlockView } from '~/core/blocks/data/use-view';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
 import { useMutate } from '~/core/sync/use-mutate';
-import { getImagePath } from '~/core/utils/utils';
+import { GeoImage } from '~/design-system/geo-image';
 
 import { SquareButton } from '~/design-system/button';
 import { CheckCircle } from '~/design-system/icons/check-circle';
@@ -170,7 +170,7 @@ export const CollectionMetadata = ({
                             <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
                               {space ? (
                                 <div className="size-[8px] overflow-clip rounded-sm grayscale">
-                                  <Image fill src={getImagePath(space.entity.image)} alt="" />
+                                  <GeoImage fill value={space.entity.image} alt="" />
                                 </div>
                               ) : (
                                 <TopRanked />

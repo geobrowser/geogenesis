@@ -5,7 +5,7 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
-import { getImagePath } from '~/core/utils/utils';
+import { NativeGeoImage } from '~/design-system/geo-image';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Check } from '~/design-system/icons/check';
@@ -63,10 +63,11 @@ export const DataBlockSourceMenu = ({
 
                         return (
                           <div key={selectedSpace.id} className="-ml-1.5 rounded-sm border border-white first:-ml-0">
-                            <img
-                              src={getImagePath(selectedSpace.entity?.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
-                              className="h-[12px] w-[12px] rounded-sm"
-                            />
+                            {selectedSpace.entity?.image ? (
+                              <NativeGeoImage value={selectedSpace.entity.image} className="h-[12px] w-[12px] rounded-sm" />
+                            ) : (
+                              <img src={PLACEHOLDER_SPACE_IMAGE} className="h-[12px] w-[12px] rounded-sm" />
+                            )}
                           </div>
                         );
                       })}
@@ -137,10 +138,11 @@ const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
             <MenuItem key={space.id} onClick={() => handleToggleSpace(space.id)} active={active} className="group">
               <div className="flex items-center gap-2">
                 <div className="flex-shrink-0">
-                  <img
-                    src={getImagePath(space.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
-                    className="h-[12px] w-[12px] rounded-sm"
-                  />
+                  {space.image ? (
+                    <NativeGeoImage value={space.image} className="h-[12px] w-[12px] rounded-sm" />
+                  ) : (
+                    <img src={PLACEHOLDER_SPACE_IMAGE} className="h-[12px] w-[12px] rounded-sm" />
+                  )}
                 </div>
                 <div className="flex-grow truncate text-button text-text">{space.name}</div>
                 {active && (

@@ -133,8 +133,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/auth
       '@graphprotocol/grc-20':
-        specifier: ^0.25.2
-        version: 0.25.2(bufferutil@4.0.9)(ox@0.6.7(typescript@5.7.3)(zod@4.1.5))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@4.1.5)
+        specifier: ^0.25.6
+        version: 0.25.6(bufferutil@4.0.9)(ox@0.6.7(typescript@5.7.3)(zod@4.1.5))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@4.1.5)
       '@graphql-typed-document-node/core':
         specifier: ^3.2.0
         version: 3.2.0(graphql@15.10.1)
@@ -684,10 +684,10 @@ importers:
         version: 1.21.4(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       vite:
         specifier: ^5.2.11
-        version: 5.4.14(@types/node@24.3.2)(lightningcss@1.30.1)(terser@5.44.0)
+        version: 5.4.14(@types/node@24.10.1)(lightningcss@1.30.1)(terser@5.44.0)
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@24.3.2)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(lightningcss@1.30.1)(terser@5.44.0)
+        version: 1.6.0(@types/node@24.10.1)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(lightningcss@1.30.1)(terser@5.44.0)
     devDependencies:
       '@bufbuild/buf':
         specifier: ^1.31.0
@@ -751,10 +751,10 @@ importers:
         version: 2.3.5
       commander:
         specifier: latest
-        version: 14.0.1
+        version: 14.0.2
       dotenv:
         specifier: latest
-        version: 17.2.2
+        version: 17.2.3
       effect:
         specifier: ^2.4.19
         version: 2.4.19
@@ -800,7 +800,7 @@ importers:
         version: 4.3.0(prettier@3.4.2)
       '@types/node':
         specifier: latest
-        version: 24.3.2
+        version: 24.10.1
       '@types/pg':
         specifier: ^8.10.9
         version: 8.11.11
@@ -842,10 +842,10 @@ importers:
         version: 5.7.3
       vite:
         specifier: ^5.2.10
-        version: 5.4.14(@types/node@24.3.2)(lightningcss@1.30.1)(terser@5.44.0)
+        version: 5.4.14(@types/node@24.10.1)(lightningcss@1.30.1)(terser@5.44.0)
       vitest:
         specifier: ^1.5.2
-        version: 1.6.0(@types/node@24.3.2)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(lightningcss@1.30.1)(terser@5.44.0)
+        version: 1.6.0(@types/node@24.10.1)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(lightningcss@1.30.1)(terser@5.44.0)
 
 packages:
 
@@ -2643,8 +2643,8 @@ packages:
   '@graphprotocol/grc-20@0.23.1':
     resolution: {integrity: sha512-6x35ZJUYyPtmUnukthZdMcaQ80bLalNg8GPLxA73PLGTvCmYCjdr9HbzHVxPsoTqS584In1TwfWXAzgIXNIdLw==}
 
-  '@graphprotocol/grc-20@0.25.2':
-    resolution: {integrity: sha512-8DO0PZc8YU85hr5JeCniEU741Fxec2NUz18z5XDJfj72uhPZsDJcjunNzfsho39DGNLt5d4g+sYesyEOKsyByA==}
+  '@graphprotocol/grc-20@0.25.6':
+    resolution: {integrity: sha512-PAPCaD9BcgXn8UuKr1a2WxmOzmoT1BgAp205/JzLTTCW00juM2O4rbgGdeuRekraJJ8fo89Vmf3b91Krp6Qg1Q==}
 
   '@graphprotocol/grc-20@0.9.4':
     resolution: {integrity: sha512-Dod9W8nvAgc0LpM4AwtNSghsj/eJ1pvzLF0ItYlcJz7e+kCS/9NQ0ysdupqZ/ITwfOF9sS5igLsGIvvNQ5MmXQ==}
@@ -4934,6 +4934,7 @@ packages:
 
   '@simplewebauthn/types@9.0.1':
     resolution: {integrity: sha512-tGSRP1QvsAvsJmnOlRQyw/mvK9gnPtjEc5fg2+m8n+QUa+D7rvrKkOYyfpy42GTs90X3RDOnqJgfHt+qO67/+w==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   '@sinclair/typebox@0.27.8':
     resolution: {integrity: sha512-+Fj43pSMwJs4KRrH/938Uf+uAELIgVBmQzg/q1YG10djyfA3TnrU8N8XzqCh/okZdszqBQTZf96idMfE5lnwTA==}
@@ -5645,11 +5646,11 @@ packages:
   '@types/node@22.18.1':
     resolution: {integrity: sha512-rzSDyhn4cYznVG+PCzGe1lwuMYJrcBS1fc3JqSa2PvtABwWo+dZ1ij5OVok3tqfpEBCBoaR4d7upFJk73HRJDw==}
 
+  '@types/node@24.10.1':
+    resolution: {integrity: sha512-GNWcUTRBgIRJD5zj+Tq0fKOJ5XZajIiBroOF0yvj2bSU1WvNdYS/dn9UxwsujGW4JX06dnHyjV2y9rRaybH0iQ==}
+
   '@types/node@24.3.1':
     resolution: {integrity: sha512-3vXmQDXy+woz+gnrTvuvNrPzekOi+Ds0ReMxw0LzBiK3a+1k0kQn9f2NWk+lgD4rJehFUmYy2gMhJ2ZI+7YP9g==}
-
-  '@types/node@24.3.2':
-    resolution: {integrity: sha512-6L8PkB+m1SSb2kaGGFk3iXENxl8lrs7cyVl7AXH6pgdMfulDfM6yUrVdjtxdnGrLrGzzuav8fFnZMY+rcscqcA==}
 
   '@types/pbf@3.0.5':
     resolution: {integrity: sha512-j3pOPiEcWZ34R6a6mN07mUkM4o4Lwf6hPNt8eilOeZhTFbxFXmKhvXl9Y28jotFPaI1bpPDJsbCprUoNke6OrA==}
@@ -6701,8 +6702,8 @@ packages:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
     engines: {node: '>= 0.8'}
 
-  commander@14.0.1:
-    resolution: {integrity: sha512-2JkV3gUZUVrbNA+1sjBOYLsMZ5cEEl8GTFP2a4AVz5hvasAMCQ1D2l2le/cX+pV4N6ZU17zjUahLpIXRrnWL8A==}
+  commander@14.0.2:
+    resolution: {integrity: sha512-TywoWNNRbhoD0BXs1P3ZEScW8W5iKrnbithIl0YH+uCmBd0QpPOA8yc82DS3BIE5Ma6FnBVUsJ7wVUDz4dvOWQ==}
     engines: {node: '>=20'}
 
   commander@2.20.3:
@@ -7192,8 +7193,8 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  dotenv@17.2.2:
-    resolution: {integrity: sha512-Sf2LSQP+bOlhKWWyhFsn0UsfdK/kCWRv1iuA2gXAwt3dyNabr6QSj00I2V10pidqz69soatm9ZwZvpQMTIOd5Q==}
+  dotenv@17.2.3:
+    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
     engines: {node: '>=12'}
 
   dset@3.1.4:
@@ -11401,6 +11402,9 @@ packages:
   undici-types@7.10.0:
     resolution: {integrity: sha512-t5Fy/nfn+14LuOc2KNYg75vZqClpAiqscVvMygNnlsHBFpSXdJaYtXMcdNLpl/Qvc3P2cB3s6lOV51nqsFq4ag==}
 
+  undici-types@7.16.0:
+    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
+
   undici@5.28.5:
     resolution: {integrity: sha512-zICwjrDrcrUE0pyyJc1I2QzBkLM8FINsgOrt6WjA+BgajVq9Nxu2PbFFXUrAggLfDXlZGZBVZYw7WNV5KiBiBA==}
     engines: {node: '>=14.0'}
@@ -14329,7 +14333,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@graphprotocol/grc-20@0.25.2(bufferutil@4.0.9)(ox@0.6.7(typescript@5.7.3)(zod@4.1.5))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@4.1.5)':
+  '@graphprotocol/grc-20@0.25.6(bufferutil@4.0.9)(ox@0.6.7(typescript@5.7.3)(zod@4.1.5))(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@4.1.5)':
     dependencies:
       '@bufbuild/protobuf': 1.10.1
       effect: 3.17.13
@@ -16893,7 +16897,7 @@ snapshots:
   '@safe-global/safe-apps-sdk@9.1.0(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@4.1.5)':
     dependencies:
       '@safe-global/safe-gateway-typescript-sdk': 3.22.9
-      viem: 2.37.5(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@4.1.5)
+      viem: 2.37.6(bufferutil@4.0.9)(typescript@5.7.3)(utf-8-validate@5.0.10)(zod@4.1.5)
     transitivePeerDependencies:
       - bufferutil
       - typescript
@@ -16903,7 +16907,7 @@ snapshots:
   '@safe-global/safe-apps-sdk@9.1.0(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.1.5)':
     dependencies:
       '@safe-global/safe-gateway-typescript-sdk': 3.22.9
-      viem: 2.37.5(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.1.5)
+      viem: 2.37.6(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.1.5)
     transitivePeerDependencies:
       - bufferutil
       - typescript
@@ -18003,11 +18007,11 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/node@24.3.1':
+  '@types/node@24.10.1':
     dependencies:
-      undici-types: 7.10.0
+      undici-types: 7.16.0
 
-  '@types/node@24.3.2':
+  '@types/node@24.3.1':
     dependencies:
       undici-types: 7.10.0
 
@@ -19570,7 +19574,7 @@ snapshots:
       chokidar: 4.0.3
       confbox: 0.2.2
       defu: 6.1.4
-      dotenv: 17.2.2
+      dotenv: 17.2.3
       exsolve: 1.0.7
       giget: 2.0.0
       jiti: 2.5.1
@@ -19852,7 +19856,7 @@ snapshots:
     dependencies:
       delayed-stream: 1.0.0
 
-  commander@14.0.1: {}
+  commander@14.0.2: {}
 
   commander@2.20.3: {}
 
@@ -20249,7 +20253,7 @@ snapshots:
 
   dotenv@16.6.1: {}
 
-  dotenv@17.2.2: {}
+  dotenv@17.2.3: {}
 
   dset@3.1.4: {}
 
@@ -25522,6 +25526,8 @@ snapshots:
 
   undici-types@7.10.0: {}
 
+  undici-types@7.16.0: {}
+
   undici@5.28.5:
     dependencies:
       '@fastify/busboy': 2.1.1
@@ -25882,13 +25888,30 @@ snapshots:
       - utf-8-validate
       - zod
 
-  vite-node@1.6.0(@types/node@24.3.2)(lightningcss@1.30.1)(terser@5.44.0):
+  viem@2.37.6(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.1.5):
+    dependencies:
+      '@noble/curves': 1.9.1
+      '@noble/hashes': 1.8.0
+      '@scure/bip32': 1.7.0
+      '@scure/bip39': 1.6.0
+      abitype: 1.1.0(typescript@5.9.2)(zod@4.1.5)
+      isows: 1.0.7(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+      ox: 0.9.3(typescript@5.9.2)(zod@4.1.5)
+      ws: 8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+    optionalDependencies:
+      typescript: 5.9.2
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+      - zod
+
+  vite-node@1.6.0(@types/node@24.10.1)(lightningcss@1.30.1)(terser@5.44.0):
     dependencies:
       cac: 6.7.14
       debug: 4.4.0
       pathe: 1.1.2
       picocolors: 1.1.1
-      vite: 5.4.14(@types/node@24.3.2)(lightningcss@1.30.1)(terser@5.44.0)
+      vite: 5.4.14(@types/node@24.10.1)(lightningcss@1.30.1)(terser@5.44.0)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -25951,13 +25974,13 @@ snapshots:
       lightningcss: 1.30.1
       terser: 5.44.0
 
-  vite@5.4.14(@types/node@24.3.2)(lightningcss@1.30.1)(terser@5.44.0):
+  vite@5.4.14(@types/node@24.10.1)(lightningcss@1.30.1)(terser@5.44.0):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.5.3
       rollup: 4.32.1
     optionalDependencies:
-      '@types/node': 24.3.2
+      '@types/node': 24.10.1
       fsevents: 2.3.3
       lightningcss: 1.30.1
       terser: 5.44.0
@@ -25983,7 +26006,7 @@ snapshots:
     optionalDependencies:
       vite: 6.3.6(@types/node@22.18.1)(jiti@2.5.1)(lightningcss@1.30.1)(terser@5.44.0)(tsx@4.19.2)(yaml@2.7.0)
 
-  vitest@1.6.0(@types/node@24.3.2)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(lightningcss@1.30.1)(terser@5.44.0):
+  vitest@1.6.0(@types/node@24.10.1)(jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(lightningcss@1.30.1)(terser@5.44.0):
     dependencies:
       '@vitest/expect': 1.6.0
       '@vitest/runner': 1.6.0
@@ -26002,11 +26025,11 @@ snapshots:
       strip-literal: 2.1.1
       tinybench: 2.9.0
       tinypool: 0.8.4
-      vite: 5.4.14(@types/node@24.3.2)(lightningcss@1.30.1)(terser@5.44.0)
-      vite-node: 1.6.0(@types/node@24.3.2)(lightningcss@1.30.1)(terser@5.44.0)
+      vite: 5.4.14(@types/node@24.10.1)(lightningcss@1.30.1)(terser@5.44.0)
+      vite-node: 1.6.0(@types/node@24.10.1)(lightningcss@1.30.1)(terser@5.44.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 24.3.2
+      '@types/node': 24.10.1
       jsdom: 20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - less

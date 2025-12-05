@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@graphprotocol/grc-20';
+import { Ipfs, SystemIds } from '@graphprotocol/grc-20';
 import * as Dialog from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -11,10 +11,10 @@ import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useDeploySpace } from '~/core/hooks/use-deploy-space';
+import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { Services } from '~/core/services';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
-import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
+import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -397,7 +397,6 @@ const allowedTypesBySpaceType: Record<SpaceType, string[]> = {
 };
 
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {
-  const { ipfs } = Services.useServices();
   const [name, setName] = useAtom(nameAtom);
   const [entityId, setEntityId] = useAtom(entityIdAtom);
   const spaceType = useAtomValue(spaceTypeAtom);
@@ -418,8 +417,8 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const ipfsUri = await ipfs.uploadFile(file);
-      setImage(ipfsUri);
+      const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET');
+      setImage(cid);
     }
   };
 
@@ -436,20 +435,12 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
               {isCompany ? (
                 <>
                   {image ? (
-                    <>
-                      <div
-                        style={{
-                          backgroundImage: `url(${getImagePath(image)})`,
-                          height: 152,
-                          width: 152,
-                          backgroundSize: 'cover',
-                          backgroundRepeat: 'no-repeat',
-                        }}
-                      />
-                      <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
-                        <SquareButton disabled={image === ''} onClick={() => setImage('')} icon={<Trash />} />
-                      </div>
-                    </>
+                    <CreateSpaceImagePreview
+                      image={image}
+                      height={152}
+                      width={152}
+                      onRemove={() => setImage('')}
+                    />
                   ) : (
                     <img src="/images/onboarding/no-avatar.png" alt="" className="size-[152px] object-cover" />
                   )}
@@ -457,20 +448,12 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
               ) : (
                 <>
                   {image ? (
-                    <>
-                      <div
-                        style={{
-                          backgroundImage: `url(${getImagePath(image)})`,
-                          height: 100,
-                          width: 250,
-                          backgroundSize: 'cover',
-                          backgroundRepeat: 'no-repeat',
-                        }}
-                      />
-                      <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
-                        <SquareButton disabled={image === ''} onClick={() => setImage('')} icon={<Trash />} />
-                      </div>
-                    </>
+                    <CreateSpaceImagePreview
+                      image={image}
+                      height={100}
+                      width={250}
+                      onRemove={() => setImage('')}
+                    />
                   ) : (
                     <img src="/placeholder-cover.png" alt="" className="h-[100px] w-[250px] object-cover" />
                   )}
@@ -648,3 +631,35 @@ function GovernanceTypeButton({ onClick, label, image, sublabel }: GovernanceTyp
     </button>
   );
 }
+
+// Helper component for image preview with fallback
+type CreateSpaceImagePreviewProps = {
+  image: string;
+  height: number;
+  width: number;
+  onRemove: () => void;
+};
+
+const CreateSpaceImagePreview = ({ image, height, width, onRemove }: CreateSpaceImagePreviewProps) => {
+  const { src, onError } = useImageWithFallback(image);
+
+  return (
+    <>
+      <div
+        style={{
+          backgroundImage: `url(${src})`,
+          height,
+          width,
+          backgroundSize: 'cover',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
+        {/* Hidden img to trigger fallback if needed */}
+        <img src={src} onError={onError} alt="" style={{ display: 'none' }} />
+      </div>
+      <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+        <SquareButton disabled={image === ''} onClick={onRemove} icon={<Trash />} />
+      </div>
+    </>
+  );
+};
