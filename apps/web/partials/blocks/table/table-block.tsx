@@ -298,6 +298,16 @@ export const TableBlock = ({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { spaces } = useSpaces();
+
+  // Track if unfiltered data has multiple pages (to keep pagination visible when filtering)
+  const [hasMultiplePagesWhenUnfiltered, setHasMultiplePagesWhenUnfiltered] = React.useState(false);
+
+  // Use filters hook with canEdit parameter to enable temporary filters for non-editors
+  const { filterState, temporaryFilters, setFilterState, setTemporaryFilters } = useFilters(canEdit);
+
+  // Use database filter state if user can edit, otherwise use temporary filters
+  const activeFilters = canEdit ? filterState : temporaryFilters;
+
   const {
     properties,
     rows,
@@ -312,12 +322,34 @@ export const TableBlock = ({ spaceId }: Props) => {
     collectionRelations,
     collectionLength,
     pageSize,
-  } = useDataBlock();
-  const { filterState, setFilterState } = useFilters();
+  } = useDataBlock({ filterState: activeFilters });
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
+
+  // Setter that handles both editors and non-editors correctly
+  // Also resets to page 1 when filters change
+  const setActiveFilters = React.useCallback(
+    (filters: Filter[]) => {
+      if (canEdit) {
+        setFilterState(filters);
+      } else {
+        setTemporaryFilters(filters);
+      }
+      // Reset to first page when filters change
+      setPage(0);
+    },
+    [canEdit, setFilterState, setTemporaryFilters, setPage]
+  );
+
   const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
-    useEntries(rows, properties, spaceId, filterState, relations);
+    useEntries(rows, properties, spaceId, activeFilters, relations);
+
+  // Track if unfiltered data has multiple pages
+  React.useEffect(() => {
+    if (activeFilters.length === 0 && totalPages > 1) {
+      setHasMultiplePagesWhenUnfiltered(true);
+    }
+  }, [activeFilters.length, totalPages]);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -329,7 +361,7 @@ export const TableBlock = ({ spaceId }: Props) => {
    *
    * Name and Space are treated specially throughout this code path.
    */
-  const filtersWithPropertyName = filterState.map(f => {
+  const filtersWithPropertyName = activeFilters.map(f => {
     if (f.columnId === SystemIds.SPACE_FILTER) {
       return {
         ...f,
@@ -341,7 +373,11 @@ export const TableBlock = ({ spaceId }: Props) => {
     return f;
   });
 
-  const hasPagination = hasPreviousPage || hasNextPage || totalPages > 1;
+  // Show pagination if:
+  // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
+  // 2. OR filters are active and unfiltered data had multiple pages
+  const hasPagination =
+    hasPreviousPage || hasNextPage || totalPages > 1 || (activeFilters.length > 0 && hasMultiplePagesWhenUnfiltered);
 
   let EntriesComponent = (
     <TableBlockTable
@@ -443,14 +479,16 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   const renderPlusButtonAsInline = source.type !== 'RELATIONS' && canEdit;
 
+  const toggleFilterHandler = () => setIsFilterOpen(!isFilterOpen);
+
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
       <div className="mb-2 flex h-8 items-center justify-between">
         <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
           <IconButton
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-            icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+            onClick={toggleFilterHandler}
+            icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
             color="grey-04"
           />
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
@@ -478,7 +516,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               transition={{ duration: 0.15, ease: 'easeIn', delay: 0.15 }}
               className="flex items-center gap-2"
             >
-              <TableBlockEditableFilters />
+              <TableBlockEditableFilters filterState={activeFilters} setFilterState={setActiveFilters} />
 
               {filtersWithPropertyName.map((f, index) => {
                 return (
@@ -486,11 +524,11 @@ export const TableBlock = ({ spaceId }: Props) => {
                     key={`${f.columnId}-${f.value}`}
                     filter={f}
                     onDelete={() => {
-                      const newFilterState = produce(filterState, draft => {
+                      const newFilterState = produce(activeFilters, draft => {
                         draft.splice(index, 1);
                       });
 
-                      setFilterState(newFilterState);
+                      setActiveFilters(newFilterState);
                     }}
                   />
                 );
