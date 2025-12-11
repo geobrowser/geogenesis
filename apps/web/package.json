@@ -82,6 +82,7 @@
     "mapbox-gl": "^3.11.0",
     "next": "15.1.10",
     "permissionless": "0.2.39",
+    "pino": "^10.1.0",
     "pluralize": "^8.0.0",
     "react": "19.2.2",
     "react-cookie": "^7.1.4",
