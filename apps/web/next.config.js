@@ -76,20 +76,45 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    return [
-      {
-        source: '/',
-        destination: 'https://charismatic-overlay-193901.framer.app/',
-      },
-      {
-        source: '/ending-homelessness',
-        destination: 'https://geo.framer.website/ending-homelessness',
-      },
-      {
-        source: '/blog',
-        destination: 'https://geo-blog.vercel.app',
-      },
-    ];
+    return {
+      beforeFiles: [
+        {
+          source: '/',
+          destination: 'https://geo.framer.website/',
+        },
+        {
+          source: '/early-access',
+          destination: 'https://geobrowser-v2.vercel.app/early-access',
+        },
+        {
+          source: '/ending-homelessness',
+          destination: 'https://geo.framer.website/ending-homelessness',
+        },
+        {
+          source: '/blog',
+          destination: 'https://geo-blog.vercel.app',
+        },
+        {
+          source: '/:path*',
+          has: [
+            {
+              type: 'host',
+              value: 'testnet.geobrowser.io',
+            },
+          ],
+          destination: 'https://geogenesis-git-feat-testnet-geo-browser.vercel.app/:path*',
+        },
+      ],
+      afterFiles: [],
+      fallback: [
+        // Fallback for any assets that don't exist in the Next.js app
+        // This will catch marketing site assets without conflicting with /api or /public
+        {
+          source: '/:path*',
+          destination: 'https://geobrowser-v2.vercel.app/:path*',
+        },
+      ],
+    };
   },
 };
 
