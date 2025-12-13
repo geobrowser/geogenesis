@@ -435,12 +435,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
               {isCompany ? (
                 <>
                   {image ? (
-                    <CreateSpaceImagePreview
-                      image={image}
-                      height={152}
-                      width={152}
-                      onRemove={() => setImage('')}
-                    />
+                    <CreateSpaceImagePreview image={image} height={152} width={152} onRemove={() => setImage('')} />
                   ) : (
                     <img src="/images/onboarding/no-avatar.png" alt="" className="size-[152px] object-cover" />
                   )}
@@ -448,12 +443,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
               ) : (
                 <>
                   {image ? (
-                    <CreateSpaceImagePreview
-                      image={image}
-                      height={100}
-                      width={250}
-                      onRemove={() => setImage('')}
-                    />
+                    <CreateSpaceImagePreview image={image} height={100} width={250} onRemove={() => setImage('')} />
                   ) : (
                     <img src="/placeholder-cover.png" alt="" className="h-[100px] w-[250px] object-cover" />
                   )}

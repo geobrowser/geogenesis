@@ -1,5 +1,5 @@
-import { SystemIds, Graph, Position } from '@graphprotocol/grc-20';
-import produce, { Draft } from 'immer';
+import { Graph, Position, SystemIds } from '@graphprotocol/grc-20';
+import { Draft, produce } from 'immer';
 
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { ID } from '../id';
@@ -33,10 +33,10 @@ export interface Mutator {
     };
   };
   properties: {
-    create: (params: { 
-      entityId: string; 
-      spaceId: string; 
-      name: string; 
+    create: (params: {
+      entityId: string;
+      spaceId: string;
+      name: string;
       dataType: DataType;
       renderableTypeId: string | null;
       verified?: boolean;
@@ -99,7 +99,16 @@ function createMutator(store: GeoStore): Mutator {
       },
     },
     properties: {
-      create: ({ entityId, spaceId, name, dataType, renderableTypeId, verified = false, toSpaceId, skipTypeRelation = false }) => {
+      create: ({
+        entityId,
+        spaceId,
+        name,
+        dataType,
+        renderableTypeId,
+        verified = false,
+        toSpaceId,
+        skipTypeRelation = false,
+      }) => {
         // Set the name value
         const nameValue: Value = {
           id: ID.createValueId({
@@ -238,7 +247,14 @@ function createMutator(store: GeoStore): Mutator {
       },
     },
     images: {
-      createAndLink: async ({ file, fromEntityId, fromEntityName, relationPropertyId, relationPropertyName, spaceId }) => {
+      createAndLink: async ({
+        file,
+        fromEntityId,
+        fromEntityName,
+        relationPropertyId,
+        relationPropertyName,
+        spaceId,
+      }) => {
         // Create the image entity using the Graph API
         // Use TESTNET network to upload to Pinata via alternative gateway
         const { id: imageId, ops: createImageOps } = await Graph.createImage({
@@ -295,7 +311,7 @@ function createMutator(store: GeoStore): Mutator {
             }
           }
         }
-        
+
         // Create relation from parent entity to image entity
         const relationId = ID.createEntityId();
         store.setRelation({

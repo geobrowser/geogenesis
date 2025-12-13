@@ -10,7 +10,6 @@ import { NavUtils } from '~/core/utils/utils';
 import { SearchResult } from '~/core/v2.types';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
-
 import { NewTab } from '~/design-system/icons/new-tab';
 import { Tag } from '~/design-system/tag';
 

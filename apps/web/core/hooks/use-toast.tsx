@@ -50,7 +50,7 @@ const flowVariants = {
     opacity: custom ? 1 : 0,
     y: custom ? '0px' : '4px',
     transition: {
-      type: 'spring',
+      type: 'spring' as const,
       duration: 0.5,
       bounce: 0,
       delay: custom ? 0.5 : 0,
@@ -58,4 +58,4 @@ const flowVariants = {
   }),
 };
 
-const transition = { type: 'spring', duration: 0.5, bounce: 0 };
+const transition = { type: 'spring' as const, duration: 0.5, bounce: 0 };

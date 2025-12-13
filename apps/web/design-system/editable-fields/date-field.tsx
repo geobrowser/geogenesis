@@ -5,8 +5,8 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
-import { FORMAT_PROPERTY } from '~/core/constants';
 
+import { FORMAT_PROPERTY } from '~/core/constants';
 import { useFieldWithValidation } from '~/core/hooks/use-field-with-validation';
 import { useFormWithValidation } from '~/core/hooks/use-form-with-validation';
 import { useQueryEntity } from '~/core/sync/use-store';

@@ -22,10 +22,9 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';
 import { getTabSlug } from '~/core/utils/utils';
 
-import { GeoImage } from '~/design-system/geo-image';
-
 import { SmallButton } from '~/design-system/button';
 import { ClientOnly } from '~/design-system/client-only';
+import { GeoImage } from '~/design-system/geo-image';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ResizableContainer } from '~/design-system/resizable-container';

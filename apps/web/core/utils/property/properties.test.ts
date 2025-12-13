@@ -1,13 +1,10 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { SystemIds } from '@graphprotocol/grc-20';
-import { RENDERABLE_TYPE_PROPERTY, DATA_TYPE_PROPERTY } from '~/core/constants';
-import { 
-  mapPropertyType,
-  reconstructFromStore,
-  constructDataType,
-  getCurrentRenderableType
-} from './properties';
-import { SwitchableRenderableType, Property, Relation } from '~/core/v2.types';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+import { Property, Relation, SwitchableRenderableType } from '~/core/v2.types';
+
+import { constructDataType, getCurrentRenderableType, mapPropertyType, reconstructFromStore } from './properties';
 
 // Mock the constants to ensure they're available in tests
 vi.mock('~/core/constants', () => ({
@@ -112,7 +109,7 @@ describe('Properties', () => {
 
     it('should reconstruct property from values and relations', () => {
       const propertyId = 'test-property-id';
-      
+
       // Mock values based on selector
       mockGetValues.mockImplementation(({ selector }) => {
         const values = [
@@ -165,7 +162,7 @@ describe('Properties', () => {
 
     it('should handle property with renderableType relation', () => {
       const propertyId = 'test-property-id';
-      
+
       mockGetValues.mockImplementation(({ selector }) => {
         const values = [
           {
@@ -221,13 +218,7 @@ describe('Properties', () => {
         renderableType: 'URL',
       };
 
-      const result = constructDataType(
-        mockPropertyData,
-        null,
-        null,
-        'prop-1',
-        false
-      );
+      const result = constructDataType(mockPropertyData, null, null, 'prop-1', false);
 
       expect(result).toEqual({
         id: 'prop-1',
@@ -242,12 +233,7 @@ describe('Properties', () => {
         name: 'Url',
       };
 
-      const result = constructDataType(
-        null,
-        mockRenderableTypeEntity,
-        null,
-        'prop-1'
-      );
+      const result = constructDataType(null, mockRenderableTypeEntity, null, 'prop-1');
 
       expect(result).toBeNull();
     });
@@ -265,12 +251,7 @@ describe('Properties', () => {
         renderableType: 'RELATION',
       };
 
-      const result = constructDataType(
-        null,
-        null,
-        mockRenderableTypeRelation,
-        'prop-1'
-      );
+      const result = constructDataType(null, null, mockRenderableTypeRelation, 'prop-1');
 
       expect(result).toBeNull();
     });

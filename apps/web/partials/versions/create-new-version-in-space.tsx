@@ -9,7 +9,6 @@ import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
-
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Input } from '~/design-system/input';
 

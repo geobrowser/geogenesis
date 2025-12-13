@@ -11,7 +11,6 @@ import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
-
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { RelationSmall } from '~/design-system/icons/relation-small';

@@ -8,12 +8,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // reactStrictMode: true,
+  reactCompiler: true,
+  // Exclude test files from node_modules that reference dev dependencies
+  webpack: config => {
+    config.module.rules.push({
+      test: /\.test\.(js|ts)$/,
+      include: /node_modules/,
+      use: 'ignore-loader',
+    });
+    return config;
+  },
   experimental: {
     // Activate new client-side router improvements
     // clientSegmentCache: true,
     // Enable persistent caching for the turbopack dev server and build.
     // turbopackPersistentCaching: true, // canary-only feature, disabled for stable
-    reactCompiler: true,
     optimizePackageImports: [
       'effect',
       'viem',

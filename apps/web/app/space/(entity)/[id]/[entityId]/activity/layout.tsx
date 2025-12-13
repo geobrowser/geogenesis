@@ -10,9 +10,7 @@ interface Props {
 export default async function Layout(props: Props) {
   const params = await props.params;
 
-  const {
-    children
-  } = props;
+  const { children } = props;
 
   return <ActivityLayout params={params}>{children}</ActivityLayout>;
 }

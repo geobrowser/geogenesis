@@ -30,11 +30,12 @@ function upload(formData: FormData, url: string) {
 export class IpfsService {
   constructor(public ipfsUrl: string) {}
 
-  upload(binary: Uint8Array): Effect.Effect<`ipfs://${string}`, IpfsUploadError | IpfsParseResponseError> {
+  upload(binary: Uint8Array | Buffer): Effect.Effect<`ipfs://${string}`, IpfsUploadError | IpfsParseResponseError> {
     const url = `${this.ipfsUrl}/api/v0/add`;
 
     return Effect.gen(function* () {
-      const blob = new Blob([binary], { type: 'application/octet-stream' });
+      const arrayBuffer = binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength) as ArrayBuffer;
+      const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
       const formData = new FormData();
       formData.append('file', blob);
 
@@ -45,5 +46,4 @@ export class IpfsService {
       return hash;
     });
   }
-
 }

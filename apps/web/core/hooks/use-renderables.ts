@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useEntitySchema } from '../state/entity-page-store/entity-store';
 import { useRelations, useValues } from '../sync/use-store';
 import { DataType, Property, Relation, Value } from '../v2.types';
-import { useProperties, sortProperties } from './use-properties';
+import { sortProperties, useProperties } from './use-properties';
 
 const SKIPPED_PROPERTIES: string[] = [SystemIds.BLOCKS];
 
@@ -94,14 +94,11 @@ export function useEditableProperties(entityId: string, spaceId: string) {
   const renderedProperties = useRenderedProperties(entityId, spaceId);
   const placeholderProperties = usePlaceholderProperties(entityId, spaceId);
 
-  const allProperties = [
-    ...Object.values(placeholderProperties),
-    ...Object.values(renderedProperties)
-  ];
+  const allProperties = [...Object.values(placeholderProperties), ...Object.values(renderedProperties)];
 
   // Apply the same sorting logic used in useProperties to ensure consistent order
   const sortedProperties = sortProperties(allProperties);
-  
+
   const properties: Record<string, Property> = {};
   for (const p of sortedProperties) {
     properties[p.id] = p;

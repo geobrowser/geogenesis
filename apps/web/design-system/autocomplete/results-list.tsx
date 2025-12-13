@@ -5,9 +5,8 @@ import * as React from 'react';
 import { useEntity } from '~/core/database/entities';
 import { SearchResult, SpaceEntity } from '~/core/v2.types';
 
-import { NativeGeoImage } from '~/design-system/geo-image';
-
 import { Breadcrumb } from '~/design-system/breadcrumb';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Spacer } from '~/design-system/spacer';

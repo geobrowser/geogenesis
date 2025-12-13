@@ -12,10 +12,9 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { useRelation } from '~/core/sync/use-store';
 import { Relation } from '~/core/v2.types';
 
-import { GeoImage } from '~/design-system/geo-image';
-
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
+import { GeoImage } from '~/design-system/geo-image';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
@@ -125,10 +124,10 @@ const AvatarCoverInput = ({
 
   const onImageChange = async (file: File) => {
     const propertyName = isCover ? 'Cover' : 'Avatar';
-    
+
     try {
       setIsUploading(true);
-      
+
       // Use the consolidated helper to create and link the image
       await storage.images.createAndLink({
         file,
@@ -148,7 +147,7 @@ const AvatarCoverInput = ({
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      
+
       try {
         // Only delete the old image after the new one is successfully uploaded
         if (imgUrl && firstRenderable) {
