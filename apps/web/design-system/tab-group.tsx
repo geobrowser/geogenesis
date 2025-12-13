@@ -107,7 +107,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
         className={cx(
           'relative z-0 select-none overflow-x-auto overflow-y-clip',
           isScrollable.current && 'cursor-grab active:cursor-grabbing',
-          '[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]',
+          '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
           className
         )}
         onPointerDown={handlePointerDown}

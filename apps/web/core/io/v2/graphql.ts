@@ -36,7 +36,7 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
 }) {
   return Effect.gen(function* () {
     const apiUrl = getConfig().api;
-    
+
     const client = new GraphQLClient(apiUrl, {
       signal,
     });
@@ -47,54 +47,51 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
       try: () => client.request<QueryResult<TDocument>>(query, variables),
       catch: error => {
         const errorDetails: any = {};
-        
+
         if (error instanceof Error) {
           errorDetails.message = error.message;
-          
+
           // Extract status code and response from graphql-request errors
           if ('response' in error) {
             errorDetails.response = (error as any).response;
             errorDetails.status = (error as any).response?.status;
           }
-          
+
           if ('request' in error) {
             errorDetails.request = {
               query: query,
               variables: variables,
-              url: getConfig().api
+              url: getConfig().api,
             };
           }
         }
-        
-        return new GraphqlRequestError(
-          String(error),
-          errorDetails
-        );
+
+        return new GraphqlRequestError(String(error), errorDetails);
       },
     });
 
-    const dataResult = yield* Effect.either(run)
+    const dataResult = yield* Effect.either(run);
 
     if (Either.isLeft(dataResult)) {
       const error = dataResult.left;
       console.error('GraphQL request failed:', error.message);
-      
+
       if (error.status) {
         console.error('Status code:', error.status);
       }
-      
+
       if (error.response) {
         console.error('Response:', error.response);
       }
-      
+
       if (error.request) {
         console.error('Request details:', {
           url: error.request.url,
           query: error.request.query,
-          variables: error.request.variables
+          variables: error.request.variables,
         });
       }
-      
+
       return yield* Effect.fail(error);
     }
 

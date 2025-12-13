@@ -3,7 +3,7 @@
 import { useLogout } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
-import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
+import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useSetAtom } from 'jotai';
 
 import * as React from 'react';
@@ -177,7 +177,7 @@ const variants = {
     x: shake,
     transition: {
       duration: 0.15,
-      type: 'spring',
+      type: 'spring' as const,
       bounce: 0,
     },
   },
@@ -306,7 +306,7 @@ function ModeToggle() {
   );
 }
 
-function AnimatedTogglePill({ controls }: { controls: AnimationControls }) {
+function AnimatedTogglePill({ controls }: { controls: ReturnType<typeof useAnimation> }) {
   return (
     <motion.div
       animate={controls}

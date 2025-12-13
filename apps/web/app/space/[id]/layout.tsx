@@ -30,7 +30,6 @@ type LayoutProps = {
   children: React.ReactNode;
 };
 
-
 export default async function Layout(props0: LayoutProps) {
   const params = await props0.params;
 

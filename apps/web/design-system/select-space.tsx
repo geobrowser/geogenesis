@@ -9,9 +9,9 @@ import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { useSearch } from '~/core/hooks/use-search';
 import { EntityId } from '~/core/io/schema';
 import { getEntity } from '~/core/io/v2/queries';
-import { NativeGeoImage } from '~/design-system/geo-image';
 
 import { Checkbox } from '~/design-system/checkbox';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { TopRanked } from '~/design-system/icons/top-ranked';
 import { Tag } from '~/design-system/tag';
 import { Tooltip } from '~/design-system/tooltip';

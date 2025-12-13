@@ -1,6 +1,6 @@
 'use client';
 
-import { WagmiProvider, createGeoWalletConfig, getGeoChain, createMockConfig, useGeoLogin } from '@geogenesis/auth';
+import { WagmiProvider, createGeoWalletConfig, createMockConfig, getGeoChain, useGeoLogin } from '@geogenesis/auth';
 import { useSetAtom } from 'jotai';
 
 import * as React from 'react';

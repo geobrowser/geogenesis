@@ -132,13 +132,15 @@ export class GeoPoint {
         sessionStorage.setItem('mapboxSessionToken', sessionToken);
       }
 
-      const response = await fetch(`/api/places/coordinates?mapboxId=${encodeURIComponent(mapboxId)}&sessionToken=${sessionToken}`);
+      const response = await fetch(
+        `/api/places/coordinates?mapboxId=${encodeURIComponent(mapboxId)}&sessionToken=${sessionToken}`
+      );
       const data = await response.json();
-      
+
       if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
         return { latitude: data.latitude, longitude: data.longitude };
       }
-      
+
       return null;
     } catch (error) {
       console.error('Failed to fetch coordinates from Mapbox:', error);

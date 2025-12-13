@@ -15,7 +15,13 @@ export function Breadcrumb({ children, img }: BreadcrumbProps) {
       {img && (
         <>
           <div className="relative h-3 w-3 overflow-hidden rounded-sm">
-            <GeoImage priority fill style={{ objectFit: 'cover' }} value={img} alt="Image representing the current Space" />
+            <GeoImage
+              priority
+              fill
+              style={{ objectFit: 'cover' }}
+              value={img}
+              alt="Image representing the current Space"
+            />
           </div>
           <Spacer width={4} />
         </>

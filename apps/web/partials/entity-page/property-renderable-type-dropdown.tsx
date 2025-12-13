@@ -4,7 +4,7 @@ import cx from 'classnames';
 import * as React from 'react';
 import { Dispatch, SetStateAction, useState } from 'react';
 
-import { SwitchableRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '~/core/v2.types';
+import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/v2.types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -36,7 +36,6 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   GEO_LOCATION: GeoLocation,
   PLACE: GeoLocation,
 };
-
 
 export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Props) => {
   const [selectedValue, setSelectedValue] = useState<SwitchableRenderableType | undefined>(value);

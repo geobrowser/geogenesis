@@ -263,9 +263,7 @@ function RelationsGroup({ entityId, property, spaceId, onLinkEntry }: RelationsG
     <div className="flex flex-wrap items-center gap-2">
       {relations.map(r => {
         if (property.renderableTypeStrict === 'IMAGE') {
-          return (
-            <ImageZoom variant="table-cell" key={`image-${r.id}`} imageSrc={r.toEntity.value ?? ''} />
-          );
+          return <ImageZoom variant="table-cell" key={`image-${r.id}`} imageSrc={r.toEntity.value ?? ''} />;
         }
 
         return (

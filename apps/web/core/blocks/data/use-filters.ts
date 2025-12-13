@@ -15,7 +15,7 @@ export function useFilters(canEdit?: boolean) {
   const { entityId, spaceId } = useDataBlockInstance();
   const { storage } = useMutate();
 
-  const { entity: blockEntity } = useQueryEntity({
+  const { entity: blockEntity, isLoading: isBlockEntityLoading } = useQueryEntity({
     id: entityId,
     spaceId,
   });
@@ -39,12 +39,17 @@ export function useFilters(canEdit?: boolean) {
    * The filter state is derived from the filter string and the source. The source
    * might include a list of spaceIds to include in the filter. The filter string
    * only includes _data_ filters, but not _where_ to query from.
+   *
+   * We wait for the block entity to load before running this query to ensure we have
+   * the correct filter string. Otherwise, on first render we'd query with null and
+   * get empty filters, then re-query once the entity loads.
    */
   const {
     data: filterState,
     isLoading,
     isFetched,
   } = useQuery({
+    enabled: !isBlockEntityLoading,
     placeholderData: keepPreviousData,
     queryKey: ['blocks', 'data', 'filter-state', geoFilterString],
     queryFn: async () => {

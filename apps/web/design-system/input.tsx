@@ -24,7 +24,8 @@ const inputStyles = cva(
 );
 
 interface Props
-  extends React.DetailedHTMLProps<React.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>,
+  extends
+    React.DetailedHTMLProps<React.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>,
     VariantProps<typeof inputStyles> {
   value?: string;
 }

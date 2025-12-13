@@ -133,7 +133,7 @@ export function TableBlockListItem({
             <BlockImageField
               variant="avatar"
               imageSrc={image ?? undefined}
-              onFileChange={async (file) => {
+              onFileChange={async file => {
                 // Use the appropriate image property based on what's selected to be shown
                 // Prefer cover if shown, otherwise use avatar
                 const usePropertyId = showCover ? SystemIds.COVER_PROPERTY : ContentIds.AVATAR_PROPERTY;

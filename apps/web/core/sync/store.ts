@@ -1,11 +1,11 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
-import produce from 'immer';
+import { produce } from 'immer';
 
 import { RENDERABLE_TYPE_PROPERTY } from '../constants';
-import { getStrictRenderableType } from '../io/dto/properties';
 import { readTypes } from '../database/entities';
+import { getStrictRenderableType } from '../io/dto/properties';
 import { Entities } from '../utils/entity';
 import { DataType, Entity, Property, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
@@ -274,7 +274,6 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   getStableDataType(id: string): DataType | null {
     return this.dataTypes.get(id) ?? null;
   }
-
 
   /**
    * Get all relations for an entity including optimistic updates

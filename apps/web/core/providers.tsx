@@ -21,16 +21,16 @@ export function Providers({ children }: Props) {
   return (
     <PrivyProvider>
       <ReactQueryProvider>
-        <JotaiProvider store={store}>
-          <SyncEngineProvider>
-            <WalletProvider>
+        <WalletProvider>
+          <JotaiProvider store={store}>
+            <SyncEngineProvider>
               <StatusBarContextProvider>
                 <DiffProvider>{children}</DiffProvider>
               </StatusBarContextProvider>
-            </WalletProvider>
-            <ReactQueryDevtools initialIsOpen={false} />
-          </SyncEngineProvider>
-        </JotaiProvider>
+              <ReactQueryDevtools initialIsOpen={false} />
+            </SyncEngineProvider>
+          </JotaiProvider>
+        </WalletProvider>
       </ReactQueryProvider>
     </PrivyProvider>
   );

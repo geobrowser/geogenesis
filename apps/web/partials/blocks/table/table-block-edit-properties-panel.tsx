@@ -16,10 +16,10 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { getProperties } from '~/core/io/v2/queries';
 import { useQueryEntityAsync } from '~/core/sync/use-store';
-import { GeoImage } from '~/design-system/geo-image';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { Dots } from '~/design-system/dots';
+import { GeoImage } from '~/design-system/geo-image';
 import { EntitySmall } from '~/design-system/icons/entity-small';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';

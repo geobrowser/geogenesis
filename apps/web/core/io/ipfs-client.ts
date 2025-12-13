@@ -68,7 +68,8 @@ export class IpfsClient {
    * @param binary - The binary to upload as a Uint8Array.
    */
   static async upload(binary: Uint8Array): Promise<`ipfs://${string}`> {
-    const blob = new Blob([binary], { type: 'application/octet-stream' });
+    const arrayBuffer = binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength) as ArrayBuffer;
+    const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
     const formData = new FormData();
     formData.append('file', blob);
     console.log('[IPFS][binary] Uploading binary');

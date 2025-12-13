@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { htmlToMarkdown, markdownToHtml, htmlToPlainText } from './parser';
+
+import { htmlToMarkdown, htmlToPlainText, markdownToHtml } from './parser';
 
 // Mock window for SSR tests
 const mockWindow = (exists: boolean) => {
@@ -51,7 +52,9 @@ describe('Parser', () => {
       });
 
       it('handles multiple paragraphs', () => {
-        expect(htmlToMarkdown('<p>First paragraph</p><p>Second paragraph</p>')).toBe('First paragraph\n\nSecond paragraph');
+        expect(htmlToMarkdown('<p>First paragraph</p><p>Second paragraph</p>')).toBe(
+          'First paragraph\n\nSecond paragraph'
+        );
       });
 
       it('handles empty paragraphs', () => {
@@ -76,15 +79,15 @@ describe('Parser', () => {
       });
 
       it('handles mixed formatting in paragraphs', () => {
-        expect(htmlToMarkdown('<p>Text with <strong>bold</strong> and <em>italic</em> words</p>'))
-          .toBe('Text with **bold** and *italic* words');
+        expect(htmlToMarkdown('<p>Text with <strong>bold</strong> and <em>italic</em> words</p>')).toBe(
+          'Text with **bold** and *italic* words'
+        );
       });
     });
 
     describe('Links', () => {
       it('converts basic links', () => {
-        expect(htmlToMarkdown('<a href="https://example.com">Example</a>'))
-          .toBe('[Example](https://example.com)');
+        expect(htmlToMarkdown('<a href="https://example.com">Example</a>')).toBe('[Example](https://example.com)');
       });
 
       it('handles links without href', () => {
@@ -92,8 +95,9 @@ describe('Parser', () => {
       });
 
       it('handles links with formatted text', () => {
-        expect(htmlToMarkdown('<a href="https://example.com"><strong>Bold Link</strong></a>'))
-          .toBe('[**Bold Link**](https://example.com)');
+        expect(htmlToMarkdown('<a href="https://example.com"><strong>Bold Link</strong></a>')).toBe(
+          '[**Bold Link**](https://example.com)'
+        );
       });
     });
 
@@ -147,10 +151,10 @@ describe('Parser', () => {
       it('uses simple tag stripping when window is undefined', () => {
         const originalWindow = global.window;
         mockWindow(false);
-        
+
         const html = '<p>Simple <strong>text</strong> with <a href="#">link</a></p>';
         expect(htmlToMarkdown(html)).toBe('Simple text with link');
-        
+
         global.window = originalWindow;
       });
     });
@@ -183,8 +187,9 @@ describe('Parser', () => {
       });
 
       it('handles multiple paragraphs separated by blank lines', () => {
-        expect(markdownToHtml('First paragraph\n\nSecond paragraph'))
-          .toBe('<p>First paragraph</p>\n<p>Second paragraph</p>');
+        expect(markdownToHtml('First paragraph\n\nSecond paragraph')).toBe(
+          '<p>First paragraph</p>\n<p>Second paragraph</p>'
+        );
       });
     });
 
@@ -202,20 +207,23 @@ describe('Parser', () => {
       });
 
       it('handles mixed formatting', () => {
-        expect(markdownToHtml('Text with **bold** and *italic* and `code`'))
-          .toBe('<p>Text with <strong>bold</strong> and <em>italic</em> and <code>code</code></p>');
+        expect(markdownToHtml('Text with **bold** and *italic* and `code`')).toBe(
+          '<p>Text with <strong>bold</strong> and <em>italic</em> and <code>code</code></p>'
+        );
       });
     });
 
     describe('Links', () => {
       it('converts markdown links', () => {
-        expect(markdownToHtml('[Example](https://example.com)'))
-          .toBe('<p><a href="https://example.com">Example</a></p>');
+        expect(markdownToHtml('[Example](https://example.com)')).toBe(
+          '<p><a href="https://example.com">Example</a></p>'
+        );
       });
 
       it('handles links with formatted text', () => {
-        expect(markdownToHtml('[**Bold Link**](https://example.com)'))
-          .toBe('<p><a href="https://example.com"><strong>Bold Link</strong></a></p>');
+        expect(markdownToHtml('[**Bold Link**](https://example.com)')).toBe(
+          '<p><a href="https://example.com"><strong>Bold Link</strong></a></p>'
+        );
       });
     });
 
@@ -228,7 +236,8 @@ describe('Parser', () => {
 
       it('converts nested lists with proper indentation', () => {
         const markdown = '- Item 1\n- Item 2\n  - Nested 1\n  - Nested 2\n- Item 3';
-        const expected = '<ul>\n  <li>Item 1</li>\n  <li>Item 2</li>\n  <ul>\n    <li>Nested 1</li>\n    <li>Nested 2</li>\n  </ul>\n  <li>Item 3</li>\n</ul>';
+        const expected =
+          '<ul>\n  <li>Item 1</li>\n  <li>Item 2</li>\n  <ul>\n    <li>Nested 1</li>\n    <li>Nested 2</li>\n  </ul>\n  <li>Item 3</li>\n</ul>';
         expect(markdownToHtml(markdown)).toBe(expected);
       });
 
@@ -276,13 +285,13 @@ describe('Parser', () => {
 
   describe('htmlToPlainText', () => {
     it('extracts plain text from HTML', () => {
-      expect(htmlToPlainText('<p>Simple <strong>text</strong> with <em>formatting</em></p>'))
-        .toBe('Simple text with formatting');
+      expect(htmlToPlainText('<p>Simple <strong>text</strong> with <em>formatting</em></p>')).toBe(
+        'Simple text with formatting'
+      );
     });
 
     it('handles nested HTML structures', () => {
-      expect(htmlToPlainText('<div><p>Paragraph in <span>div</span></p></div>'))
-        .toBe('Paragraph in div');
+      expect(htmlToPlainText('<div><p>Paragraph in <span>div</span></p></div>')).toBe('Paragraph in div');
     });
 
     it('returns empty string for empty HTML', () => {
@@ -293,10 +302,11 @@ describe('Parser', () => {
 
   describe('Round-trip Conversions', () => {
     it('preserves content through HTML → Markdown → HTML conversion', () => {
-      const originalHtml = '<h1>Title</h1>\n<p>Paragraph with <strong>bold</strong> and <em>italic</em>.</p>\n<ul>\n  <li>Item 1</li>\n  <li>Item 2</li>\n</ul>';
+      const originalHtml =
+        '<h1>Title</h1>\n<p>Paragraph with <strong>bold</strong> and <em>italic</em>.</p>\n<ul>\n  <li>Item 1</li>\n  <li>Item 2</li>\n</ul>';
       const markdown = htmlToMarkdown(originalHtml);
       const resultHtml = markdownToHtml(markdown);
-      
+
       // The exact HTML might differ slightly, but the content should be preserved
       expect(resultHtml).toContain('<h1>Title</h1>');
       expect(resultHtml).toContain('<strong>bold</strong>');

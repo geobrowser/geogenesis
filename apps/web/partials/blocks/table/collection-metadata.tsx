@@ -10,9 +10,9 @@ import type { DataBlockView } from '~/core/blocks/data/use-view';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
 import { useMutate } from '~/core/sync/use-mutate';
-import { GeoImage } from '~/design-system/geo-image';
 
 import { SquareButton } from '~/design-system/button';
+import { GeoImage } from '~/design-system/geo-image';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Menu } from '~/design-system/icons/menu';

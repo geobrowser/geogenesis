@@ -6,15 +6,15 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
+
 import * as React from 'react';
 
 import { useQueryEntity } from '~/core/sync/use-store';
 import { BlockChange, EntityChange, RenderableChange, TripleChangeValue } from '~/core/utils/change/types';
 import { GeoDate, GeoNumber, groupBy } from '~/core/utils/utils';
 
-import { GeoImage } from '~/design-system/geo-image';
-
 import { Checkbox, getChecked } from '~/design-system/checkbox';
+import { GeoImage } from '~/design-system/geo-image';
 import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 import { colors } from '~/design-system/theme/colors';
@@ -59,9 +59,7 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
       <div className="flex flex-col gap-5">
         <div className="flex w-1/2 items-center gap-4 pr-8">
           <div className="relative size-10 shrink-0 overflow-clip rounded bg-grey-01">
-            {change.avatar && (
-              <ChangedEntityAvatar avatar={change.avatar} />
-            )}
+            {change.avatar && <ChangedEntityAvatar avatar={change.avatar} />}
           </div>
           <div className="truncate text-mediumTitle">{change.name ?? change.id}</div>
         </div>
@@ -145,13 +143,7 @@ const ChangedBlock = ({ index, blockChange }: ChangedBlockProps) => {
             <div>
               {before && (
                 <span className="inline-block w-full rounded-lg bg-errorTertiary p-1">
-                  <GeoImage
-                    value={before}
-                    className="!h-auto !w-full !rounded-lg"
-                    width={560}
-                    height={560}
-                    alt=""
-                  />
+                  <GeoImage value={before} className="!h-auto !w-full !rounded-lg" width={560} height={560} alt="" />
                 </span>
               )}
             </div>
@@ -160,13 +152,7 @@ const ChangedBlock = ({ index, blockChange }: ChangedBlockProps) => {
             <div>
               {after && (
                 <span className="inline-block w-full rounded-lg bg-successTertiary p-1">
-                  <GeoImage
-                    value={after}
-                    className="!h-auto !w-full !rounded-lg"
-                    width={560}
-                    height={560}
-                    alt=""
-                  />
+                  <GeoImage value={after} className="!h-auto !w-full !rounded-lg" width={560} height={560} alt="" />
                 </span>
               )}
             </div>

@@ -180,4 +180,3 @@ const getData = async (spaceId: string, entityId: string, preventRedirect?: bool
     blocks,
   };
 };
-

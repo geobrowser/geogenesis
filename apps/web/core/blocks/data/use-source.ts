@@ -1,5 +1,5 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import produce from 'immer';
+import { produce } from 'immer';
 
 import { ID } from '~/core/id';
 import { EntityId, SpaceId } from '~/core/io/schema';

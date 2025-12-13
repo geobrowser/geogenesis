@@ -3,6 +3,7 @@
 import * as Popover from '@radix-ui/react-popover';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
+
 import { useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -11,9 +12,8 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { NavUtils } from '~/core/utils/utils';
 
-import { GeoImage } from '~/design-system/geo-image';
-
 import { Divider } from '~/design-system/divider';
+import { GeoImage } from '~/design-system/geo-image';
 import { Check } from '~/design-system/icons/check';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';

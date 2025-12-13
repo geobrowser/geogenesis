@@ -4,7 +4,8 @@ import cx from 'classnames';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { SwitchableRenderableType, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '~/core/v2.types';
+import { Properties } from '~/core/utils/property';
+import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/v2.types';
 
 import { CheckboxChecked } from '~/design-system/icons/checkbox-checked';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -17,7 +18,6 @@ import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
 import { ColorName } from '~/design-system/theme/colors';
-import { Properties } from '~/core/utils/property';
 
 interface Props {
   value?: SwitchableRenderableType;
@@ -38,8 +38,6 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   PLACE: GeoLocation,
 };
 
-
-
 export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props) => {
   const [open, setOpen] = useState(false);
 
@@ -49,7 +47,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     if (!baseDataType) {
       return Object.keys(SWITCHABLE_RENDERABLE_TYPE_LABELS) as SwitchableRenderableType[];
     }
-    
+
     // Filter options to only those with matching base dataType (published property)
     return (Object.keys(SWITCHABLE_RENDERABLE_TYPE_LABELS) as SwitchableRenderableType[]).filter(
       type => Properties.typeToBaseDataType[type] === baseDataType
@@ -74,7 +72,6 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
   if (value) {
     label = SWITCHABLE_RENDERABLE_TYPE_LABELS[value];
   }
-
 
   return (
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>

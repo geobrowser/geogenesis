@@ -2,13 +2,13 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 
-import { getSpace, getProperty } from '~/core/io/v2/queries';
+import { getProperty, getSpace } from '~/core/io/v2/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
 import { OmitStrict } from '~/core/types';
-import { FilterableValueType } from '~/core/value-types';
 import { Property } from '~/core/v2.types';
+import { FilterableValueType } from '~/core/value-types';
 
 export type Filter = {
   columnId: string;
@@ -264,21 +264,12 @@ async function getResolvedFilter(filter: PropertyFilter): Promise<Filter> {
     valueType = 'RELATION';
   }
 
-  
   const [maybePropertyEntity, maybeValueEntity] = await Promise.all([
     E.findOne({ store, cache: queryClient, id: filter.property }),
     // Only fetch value entity for RELATION types
-    valueType === 'RELATION'
-      ? E.findOne({ store, cache: queryClient, id: filter.is })
-      : undefined,
+    valueType === 'RELATION' ? E.findOne({ store, cache: queryClient, id: filter.is }) : undefined,
   ]);
-  
-  console.log('Resolved filter debug', { 
-    valueName: maybeValueEntity?.name ?? null,
-    property: property,
-    is: filter.is,
-  });
-  
+
   return {
     columnId: filter.property,
     columnName: maybePropertyEntity?.name ?? null,

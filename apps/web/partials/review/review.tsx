@@ -17,10 +17,9 @@ import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Publish } from '~/core/utils/publish';
 
-import { GeoImage } from '~/design-system/geo-image';
-
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
+import { GeoImage } from '~/design-system/geo-image';
 import { Blank } from '~/design-system/icons/blank';
 import { Close } from '~/design-system/icons/close';
 import { Dash } from '~/design-system/icons/dash';

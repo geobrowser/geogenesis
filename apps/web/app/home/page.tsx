@@ -1,6 +1,5 @@
 import { cookies } from 'next/headers';
 
-
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { fetchProposalCountByUser } from '~/core/io/fetch-proposal-count-by-user';
 import { fetchProfile } from '~/core/io/subgraph';
@@ -31,12 +30,12 @@ export default async function PersonalHomePage(props: Props) {
   const acceptedProposalsCount = proposalsCount ?? 0;
 
   return (
-    (<Component
+    <Component
       header={<PersonalHomeHeader person={person} address={connectedAddress ?? null} />}
       proposalType={(await props.searchParams).proposalType}
       acceptedProposalsCount={acceptedProposalsCount}
       connectedAddress={connectedAddress}
-    />)
+    />
   );
 }
 

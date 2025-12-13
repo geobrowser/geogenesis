@@ -1,10 +1,10 @@
 // Re-export Place constants from core/constants for backward compatibility
-export { 
+export {
   PLACE as PLACE_TYPE,
   ADDRESS as ADDRESS_TYPE,
   VENUE_PROPERTY,
-  ADDRESS_PROPERTY, 
-  MAPBOX_PROPERTY
+  ADDRESS_PROPERTY,
+  MAPBOX_PROPERTY,
 } from '~/core/constants';
 
 // Additional constants for Place functionality

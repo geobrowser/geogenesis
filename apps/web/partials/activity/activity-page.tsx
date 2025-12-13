@@ -7,7 +7,6 @@ import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { getProposalName } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
-
 import { Spacer } from '~/design-system/spacer';
 
 import { ActivityLoading } from './activity-loading';

@@ -15,10 +15,9 @@ import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { validateEntityId } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 
-import { GeoImage } from '~/design-system/geo-image';
-
 import { ResultContent, ResultsList, SpaceContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
+import { GeoImage } from '~/design-system/geo-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Search } from '~/design-system/icons/search';
