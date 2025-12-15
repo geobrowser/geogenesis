@@ -11,7 +11,6 @@ import { graphql } from '~/core/io/subgraph/graphql';
 import { getSpace } from '~/core/io/v2/queries';
 
 import { GeoImage } from '~/design-system/geo-image';
-
 import { AddTo } from '~/design-system/icons/add-to';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { Member } from '~/design-system/icons/member';

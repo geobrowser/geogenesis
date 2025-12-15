@@ -72,7 +72,11 @@ type PageStringFieldProps = {
 export function PageStringField({ ...props }: PageStringFieldProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { value: localValue, onChange: setLocalValue, flush } = useOptimisticValueWithSideEffect({
+  const {
+    value: localValue,
+    onChange: setLocalValue,
+    flush,
+  } = useOptimisticValueWithSideEffect({
     callback: props.onChange,
     delay: 1500,
     initialValue: props.value || '',

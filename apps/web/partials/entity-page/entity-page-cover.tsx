@@ -1,8 +1,8 @@
 'use client';
 
-import * as React from 'react';
-
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+
+import * as React from 'react';
 
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useRelations } from '~/core/sync/use-store';

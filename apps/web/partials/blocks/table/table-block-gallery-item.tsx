@@ -9,9 +9,8 @@ import { useRelation, useValues } from '~/core/sync/use-store';
 import { NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
-import { GeoImage } from '~/design-system/geo-image';
-
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 

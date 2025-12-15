@@ -1,6 +1,7 @@
 import { useParams } from 'next/navigation';
 
 import { usePathSegments } from '~/core/hooks/use-path-segments';
+
 import { ROOT_SPACE } from '../constants';
 
 export const useSpaceId = () => {

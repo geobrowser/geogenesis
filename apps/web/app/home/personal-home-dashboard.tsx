@@ -11,9 +11,8 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { NavUtils } from '~/core/utils/utils';
 
-import { GeoImage } from '~/design-system/geo-image';
-
 import { SmallButton } from '~/design-system/button';
+import { GeoImage } from '~/design-system/geo-image';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';

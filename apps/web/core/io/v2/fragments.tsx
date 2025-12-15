@@ -578,4 +578,3 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
     }
   }
 `);
-

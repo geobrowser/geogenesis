@@ -53,13 +53,13 @@ export const PositionBox = ({
             max={totalEntries}
             value={newPosition ?? ''}
             onChange={e => setNewPosition(e.target.value === '' ? null : Number(e.target.value))}
-            placeholder={`${(pageNumber * pageSize) + position}`}
+            placeholder={`${pageNumber * pageSize + position}`}
             className="flex h-9 w-full items-center justify-center rounded border border-grey-02 text-center focus:outline-none"
           />
           <button
             onClick={handleClick}
             disabled={!newPosition || newPosition < 1 || newPosition > totalEntries}
-            className="flex h-6 w-full items-center justify-center rounded border border-grey-02 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex h-6 w-full items-center justify-center rounded border border-grey-02 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Move
           </button>

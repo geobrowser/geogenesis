@@ -17,7 +17,7 @@ export function useGeoCoordinates(entityId: string, spaceId: string, propertyTyp
   const { entity: addressEntity } = useQueryEntity({
     id: (addressRelation?.toEntity.id || entityId) as EntityId,
     spaceId,
-    enabled: propertyType !== ADDRESS_PROPERTY
+    enabled: propertyType !== ADDRESS_PROPERTY,
   });
 
   // If this is an ADDRESS property, get geo location directly from the address entity
@@ -27,7 +27,7 @@ export function useGeoCoordinates(entityId: string, spaceId: string, propertyTyp
       geoLocation: entity.values.find(v => v.property.id === SystemIds.GEO_LOCATION_PROPERTY)?.value,
     };
   }
-  
+
   if (addressRelation && addressEntity) {
     return {
       name: addressEntity.name,

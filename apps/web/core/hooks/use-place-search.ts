@@ -12,9 +12,9 @@ import { validateEntityId } from '~/core/utils/utils';
 import { mergeSearchResult } from '../database/result';
 import { SearchResultDto } from '../io/dto/search';
 import { E } from '../sync/orm';
-import { SearchResult } from '../v2.types';
 import { useSyncEngine } from '../sync/use-sync-engine';
 import { PLACE_TYPE } from '../system-ids';
+import { SearchResult } from '../v2.types';
 import { useDebouncedValue } from './use-debounced-value';
 
 export type Feature = {

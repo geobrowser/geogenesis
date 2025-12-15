@@ -8,26 +8,25 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { startTransition, useState } from 'react';
 
-import { useMutate } from '~/core/sync/use-mutate';
 import { Feature } from '~/core/hooks/use-place-search';
 import { usePlaceSearch } from '~/core/hooks/use-place-search';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
+import { useMutate } from '~/core/sync/use-mutate';
 import {
   ADDRESS_PROPERTY,
   ADDRESS_TYPE,
   MAPBOX_PROPERTY,
   PLACE_TYPE,
-  SOURCES_TYPE,
-  SOURCE_DATABASE_IDENTIFIER_PROPERTY,
   PROPERTIES_SOURCED,
   RELATIONS_SOURCED,
+  SOURCES_TYPE,
+  SOURCE_DATABASE_IDENTIFIER_PROPERTY,
 } from '~/core/system-ids';
 import { GeoPoint } from '~/core/utils/utils';
-
-import { NativeGeoImage } from '~/design-system/geo-image';
 import { Relation } from '~/core/v2.types';
 
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { Tag } from '~/design-system/tag';
 import { Toggle } from '~/design-system/toggle';
 import { Tooltip } from '~/design-system/tooltip';
@@ -193,14 +192,7 @@ export const InputPlace = ({
     }
 
     // Add type to Address entity
-    createRelation(
-      ADDRESS_TYPE,
-      'Address',
-      addressEntityId,
-      result.text,
-      SystemIds.TYPES_PROPERTY,
-      'Types'
-    );
+    createRelation(ADDRESS_TYPE, 'Address', addressEntityId, result.text, SystemIds.TYPES_PROPERTY, 'Types');
 
     // Add source to Address entity
     const newRelationSourceId = createRelation(
@@ -234,14 +226,7 @@ export const InputPlace = ({
     });
 
     // Add relations to properties sources (name/geo location)
-    createRelation(
-      SystemIds.NAME_PROPERTY,
-      'Name',
-      newRelationSourceId,
-      '',
-      PROPERTIES_SOURCED,
-      'Properties Sourced'
-    );
+    createRelation(SystemIds.NAME_PROPERTY, 'Name', newRelationSourceId, '', PROPERTIES_SOURCED, 'Properties Sourced');
     createRelation(
       SystemIds.GEO_LOCATION_PROPERTY,
       'Geo Location',
@@ -315,7 +300,7 @@ export const InputPlace = ({
       ADDRESS_PROPERTY, // TODO use system ID
       'Address'
     );
-    
+
     // Add the address entity to "Relations sourced" on the Address property under Properties Sourced
     createRelation(
       addressEntityId,

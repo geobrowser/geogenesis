@@ -15,9 +15,8 @@ import {
   getYesVotePercentage,
 } from '~/core/utils/utils';
 
-import { GeoImage } from '~/design-system/geo-image';
-
 import { Avatar } from '~/design-system/avatar';
+import { GeoImage } from '~/design-system/geo-image';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';

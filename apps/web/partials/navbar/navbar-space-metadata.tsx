@@ -15,7 +15,6 @@ export function NavbarSpaceMetadata() {
   const spaceId: string | undefined = params?.['id'] as string | undefined;
   const entityId: string | undefined = params?.['entityId'] as string | undefined;
 
-
   const { space } = useSpace(spaceId);
 
   return (

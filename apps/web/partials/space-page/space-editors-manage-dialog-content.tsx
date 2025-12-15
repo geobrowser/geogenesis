@@ -39,10 +39,10 @@ export function SpaceEditorsManageDialogContent({ members, votingPluginAddress, 
     status === 'idle'
       ? 'Add member'
       : status === 'pending'
-      ? 'Adding member...'
-      : status === 'success'
-      ? 'Member added!'
-      : 'Add member';
+        ? 'Adding member...'
+        : status === 'success'
+          ? 'Member added!'
+          : 'Add member';
 
   return (
     <div className="flex flex-col gap-4">

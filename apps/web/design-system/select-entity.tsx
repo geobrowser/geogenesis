@@ -17,7 +17,6 @@ import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Space } from '~/core/io/dto/spaces';
 import { useMutate } from '~/core/sync/use-mutate';
-import { NativeGeoImage } from '~/design-system/geo-image';
 import { Property, SearchResult, SwitchableRenderableType } from '~/core/v2.types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
@@ -25,6 +24,7 @@ import { ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { IconButton } from '~/design-system/button';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { TopRanked } from '~/design-system/icons/top-ranked';
