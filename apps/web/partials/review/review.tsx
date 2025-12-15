@@ -233,7 +233,7 @@ const ReviewChanges = () => {
             <div className="inline-flex items-center gap-2">
               <span className="text-metadataMedium leading-none">Review your edits in</span>
               {dedupedSpacesWithActions.length === 1 && (
-                <span className="inline-flex items-center gap-2 text-button text-text ">
+                <span className="inline-flex items-center gap-2 text-button text-text">
                   <span className="relative h-4 w-4 overflow-hidden rounded-sm">
                     <ReviewSpaceImage imageValue={spaces?.get(activeSpace)?.image ?? null} />
                   </span>
@@ -289,7 +289,7 @@ const ReviewChanges = () => {
                 </SmallButton>
               </div>
             </div>
-            <div className="relative flex flex-col ">
+            <div className="relative flex flex-col">
               <div className="text-body">Proposal name</div>
               <input
                 type="text"

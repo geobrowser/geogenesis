@@ -200,7 +200,7 @@ export const CollectionMetadata = ({
               </Popover.Root>
             </div>
           )}
-          <div className="pointer-events-auto absolute bottom-0 right-0 top-0  flex items-center">
+          <div className="pointer-events-auto absolute bottom-0 right-0 top-0 flex items-center">
             {isHovered && (
               <PrefetchLink href={`/space/${spaceId}/${entityId}`}>
                 <SquareButton icon={<RightArrowLongSmall />} />

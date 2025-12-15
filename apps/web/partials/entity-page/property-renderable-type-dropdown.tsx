@@ -102,7 +102,7 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
       <DropdownPrimitive.Trigger className="text-text" asChild>
         <button
-          className={`flex items-center gap-[6px] rounded-[6px] border  px-[6px] text-[1rem] ${open ? 'border-text' : 'border-grey-02'}`}
+          className={`flex items-center gap-[6px] rounded-[6px] border px-[6px] text-[1rem] ${open ? 'border-text' : 'border-grey-02'}`}
         >
           <Icon color={open ? 'text' : 'grey-04'} />
           {label}

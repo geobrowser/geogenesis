@@ -398,7 +398,7 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
             <>
               <Spacer height={32} />
               {showRetry && (
-                <p className=" mt-4 text-center text-smallButton">
+                <p className="mt-4 text-center text-smallButton">
                   {retryMessage[step]}{' '}
                   <button onClick={onRetry} className="text-ctaPrimary">
                     Retry

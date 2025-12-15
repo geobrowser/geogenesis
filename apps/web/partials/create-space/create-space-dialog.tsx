@@ -284,7 +284,7 @@ function StepSelectType() {
                     setStep('enter-profile');
                   }
                 }}
-                className="flex items-center gap-3 rounded-lg border border-divider bg-white  py-2 pl-2 pr-3 transition-colors duration-150 ease-in-out hover:bg-divider"
+                className="flex items-center gap-3 rounded-lg border border-divider bg-white py-2 pl-2 pr-3 transition-colors duration-150 ease-in-out hover:bg-divider"
               >
                 <div className="size-8 flex-shrink-0 overflow-clip rounded">
                   <img src={spaceType.image} alt="" className="block h-full w-full object-cover" />
@@ -571,7 +571,7 @@ function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
             <>
               <Spacer height={32} />
               {showRetry && (
-                <p className=" mt-4 text-center text-smallButton">
+                <p className="mt-4 text-center text-smallButton">
                   Space creation failed
                   <button onClick={onRetry} className="text-ctaPrimary">
                     Retry

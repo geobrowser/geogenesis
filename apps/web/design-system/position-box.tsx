@@ -44,7 +44,7 @@ export const PositionBox = ({
   };
 
   return (
-    <div className={`absolute flex w-[152px] justify-end  pr-3 ${className ? className : ''}`}>
+    <div className={`absolute flex w-[152px] justify-end pr-3 ${className ? className : ''}`}>
       {openedDialog && (
         <div className="mr-3 flex h-[110px] w-full flex-col gap-1 rounded-md border border-grey-02 bg-white p-1">
           <input
@@ -63,7 +63,7 @@ export const PositionBox = ({
           >
             Move
           </button>
-          <div className="flex h-[34px] flex-grow flex-col items-center justify-center rounded-md bg-divider p-1 ">
+          <div className="flex h-[34px] flex-grow flex-col items-center justify-center rounded-md bg-divider p-1">
             <span className="text-center text-[11px] font-normal leading-[13px]">Current position</span>
             <span className="text-[11px] font-medium leading-[13px]">
               {pageNumber * pageSize + position}/{totalEntries}

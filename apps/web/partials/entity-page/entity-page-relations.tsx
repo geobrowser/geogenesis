@@ -117,7 +117,7 @@ const Relationship = ({ relation, spaceId }: RelationshipProps) => {
       <div className="flex-1 p-3">
         <Link
           href={NavUtils.toEntity(relation.spaceId ?? spaceId, relation.toEntity.id)}
-          className="inline-flex  items-center gap-2"
+          className="inline-flex items-center gap-2"
         >
           {relation.toEntity.name}
           {relation.verified && (

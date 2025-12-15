@@ -83,7 +83,7 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
   return (
     <div className="flex w-full flex-col gap-4">
       {!props.hideInputs && (
-        <div className="mt-[3px] flex w-full justify-between  leading-[29px]">
+        <div className="mt-[3px] flex w-full justify-between leading-[29px]">
           <div className="flex items-center gap-5">
             <div className="flex items-center gap-2">
               <label className="text-[19px] text-bodySemibold font-normal text-text">Latitude</label>

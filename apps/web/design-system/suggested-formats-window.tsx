@@ -46,7 +46,7 @@ const SuggestedFormats = ({
           <span className="h-[2px] w-[2px] rounded-full bg-grey-04"></span>
           <span>{renderableFormats.find(f => f.format === value)?.label}</span>
         </div>
-        <div className="mt-3  w-full rounded-md bg-grey-01 p-3">
+        <div className="mt-3 w-full rounded-md bg-grey-01 p-3">
           <div className="flex w-full justify-between">
             <span className="text-tableProperty font-medium leading-5 text-text">
               Other common {dataType === 'TIME' ? 'time' : 'number'} formats

@@ -66,7 +66,7 @@ export const DateFormatDropdown = ({ value, format = GeoDate.defaultFormat, onSe
         className="z-10 w-[250px] origin-top-right self-end overflow-hidden rounded-lg border border-grey-02 bg-white"
       >
         <DropdownPrimitive.Item
-          className="flex h-[28px] w-full select-none gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04  hover:!bg-bg focus:outline-none"
+          className="flex h-[28px] w-full select-none gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04 hover:!bg-bg focus:outline-none"
           // Suppress default to prevent the dropdown from closing when clicking the percentage toggle
           onClick={suppressDefault}
         >
@@ -77,7 +77,7 @@ export const DateFormatDropdown = ({ value, format = GeoDate.defaultFormat, onSe
             </div>
           </div>
         </DropdownPrimitive.Item>
-        <DropdownPrimitive.Group className=" overflow-hidden rounded-lg">
+        <DropdownPrimitive.Group className="overflow-hidden rounded-lg">
           {formatOptions.map((option, index) => (
             <DropdownPrimitive.Item
               key={`triple-type-dropdown-${index}`}
