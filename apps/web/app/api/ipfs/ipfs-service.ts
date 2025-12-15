@@ -34,6 +34,7 @@ export class IpfsService {
     const url = `${this.ipfsUrl}/api/v0/add`;
 
     return Effect.gen(function* () {
+      // @TODO fix Argument of type 'Buffer' is not assignable to parameter of type 'Uint8Array<ArrayBufferLike>'
       const blob = new Blob([binary as any], { type: 'application/octet-stream' });
       const formData = new FormData();
       formData.append('file', blob);
