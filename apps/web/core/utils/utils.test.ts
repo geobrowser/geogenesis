@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { IPFS_GATEWAY_READ_PATH } from '../constants';
+import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '../constants';
 import * as useStore from '../sync/use-store';
 import {
   GeoDate,
@@ -196,7 +196,7 @@ describe('GeoDate', () => {
 
 describe('getImagePath', () => {
   it('an IPFS pre-fixed string returns the Geo IPFS gateway path', () => {
-    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(`${IPFS_GATEWAY_READ_PATH}QmBananaSandwich`);
+    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(`${PINATA_GATEWAY_READ_PATH}QmBananaSandwich`);
   });
 
   it('an HTTP pre-fixed string returns the same string', () => {
