@@ -20,7 +20,7 @@ function getFetchTabEntityIdQuery(spaceId: string, pageTypeEntityId: string) {
             relationsByFromVersionId: {
               some: {
                 typeOf: {
-                  id: { equalTo: "${SystemIds.PAGE_TYPE_ATTRIBUTE}" }
+                  id: { equalTo: "${SystemIds.PAGE_TYPE_PROPERTY}" }
                 }
                 toEntity: {
                   id: { equalTo: "${pageTypeEntityId}" }
@@ -39,7 +39,7 @@ function getFetchTabEntityIdQuery(spaceId: string, pageTypeEntityId: string) {
   }`;
 }
 
-export interface FetchTabEntityIdOptions {
+interface FetchTabEntityIdOptions {
   spaceId: string;
   pageTypeEntityId: string;
 }

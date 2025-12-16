@@ -1,17 +1,16 @@
-import { Schema } from '@effect/schema';
+import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
-import Image from 'next/legacy/image';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubspaceDto } from '~/core/io/dto/subspaces';
 import { SubstreamSubspace } from '~/core/io/schema';
-import { fetchSpace } from '~/core/io/subgraph';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { getImagePath } from '~/core/utils/utils';
+import { getSpace } from '~/core/io/v2/queries';
 
+import { GeoImage } from '~/design-system/geo-image';
 import { AddTo } from '~/design-system/icons/add-to';
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { Member } from '~/design-system/icons/member';
@@ -23,7 +22,7 @@ interface Props {
 export async function SubspaceProposal({ proposal }: Props) {
   const [subspace, space] = await Promise.all([
     fetchProposedSubspace(proposal.id, proposal.space.id),
-    fetchSpace({ id: proposal.space.id }),
+    Effect.runPromise(getSpace(proposal.space.id)),
   ]);
 
   if (!subspace) {
@@ -32,10 +31,6 @@ export async function SubspaceProposal({ proposal }: Props) {
   }
 
   const isAddSubspace = proposal.type === 'ADD_SUBSPACE';
-  const spaceImage = space?.spaceConfig?.image ? getImagePath(space.spaceConfig.image) : PLACEHOLDER_SPACE_IMAGE;
-  const subspaceImage = subspace?.spaceConfig?.image
-    ? getImagePath(subspace?.spaceConfig?.image)
-    : PLACEHOLDER_SPACE_IMAGE;
 
   return (
     <div className="flex w-full justify-center">
@@ -43,16 +38,16 @@ export async function SubspaceProposal({ proposal }: Props) {
         <div className="flex w-full flex-col gap-5 divide-y divide-grey-02">
           <div className="flex w-full flex-col items-center gap-6">
             <div className="relative h-[72px] w-[72px] overflow-hidden rounded-lg border border-white object-cover shadow-lg">
-              <Image
-                src={spaceImage}
-                alt={`Space cover image for ${space?.spaceConfig?.name ?? space?.id}`}
+              <GeoImage
+                value={space?.entity?.image ?? PLACEHOLDER_SPACE_IMAGE}
+                alt={`Space cover image for ${space?.entity?.name ?? space?.id}`}
                 className="h-[72px] w-[72px] rounded-lg"
-                objectFit="cover"
-                layout="fill"
+                style={{ objectFit: 'cover' }}
+                fill
               />
             </div>
             <div className="space-y-5">
-              <h2 className="break-all text-mainPage">{space?.spaceConfig?.name ?? space?.id}</h2>
+              <h2 className="break-all text-mainPage">{space?.entity?.name ?? space?.id}</h2>
               <div className="flex items-center justify-center gap-2">
                 <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">
                   Space
@@ -81,12 +76,12 @@ export async function SubspaceProposal({ proposal }: Props) {
 
                 <div className="flex items-center gap-2">
                   <div className="relative h-4 w-4 overflow-hidden rounded-sm object-cover">
-                    <Image
-                      src={subspaceImage}
+                    <GeoImage
+                      value={subspace?.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE}
                       alt={`Space cover image for ${subspace?.spaceConfig?.name ?? space?.id}`}
                       className="h-4 w-4 rounded-sm"
-                      objectFit="cover"
-                      layout="fill"
+                      style={{ objectFit: 'cover' }}
+                      fill
                     />
                   </div>
                 </div>

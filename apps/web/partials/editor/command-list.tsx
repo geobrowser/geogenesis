@@ -10,11 +10,11 @@ import { Text } from '~/design-system/text';
 
 import { CommandSuggestionItem } from './command-items';
 
-export interface CommandListRef {
+interface CommandListRef {
   onKeyDown: (o: { event: KeyboardEvent }) => boolean;
 }
 
-export interface CommandListProps {
+interface CommandListProps {
   items: CommandSuggestionItem[];
   screen?: ReactNode;
   editor: Editor;
@@ -64,7 +64,12 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
               key={index}
               data-index={index}
               onMouseOver={() => setSelectedIndex(index)}
-              onClick={() => command(items[selectedIndex])}
+              onClick={() => {
+                command(items[selectedIndex]);
+              }}
+              onMouseDown={e => {
+                e.preventDefault();
+              }}
             >
               <div
                 className={cx(

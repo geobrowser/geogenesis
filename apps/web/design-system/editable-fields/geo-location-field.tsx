@@ -5,6 +5,7 @@ import * as React from 'react';
 import { useEffect } from 'react';
 
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
+import { useGeoCoordinates } from '~/core/hooks/use-geo-coordinates';
 import { GeoPoint } from '~/core/utils/utils';
 
 import { Map } from '../map';
@@ -31,6 +32,7 @@ interface PageGeoLocationFieldProps {
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle';
   value?: string;
+  hideInputs?: boolean;
 }
 
 export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) {
@@ -76,35 +78,70 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
         });
       }
     }
-  }, [props.value]);
+  }, [props.value, localValue]);
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <div className="mt-[3px] flex w-full justify-between  leading-[29px]">
-        <div className="flex items-center gap-5">
-          <div className="flex items-center gap-2">
-            <label className="text-[19px] text-bodySemibold font-normal text-text">Latitude</label>
-            <span className="w-[11px] border-t border-t-[#606060]"></span>
-            <Textarea
-              {...props}
-              onChange={e => handlePointValueChange('latitude', e.currentTarget.value)}
-              value={pointValues.latitude}
-              className={`${textareaStyles({ variant: props.variant })} max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-[19px] text-bodySemibold font-normal text-text">Longitude</label>
-            <span className="w-[11px] border-t border-t-[#606060]"></span>
-            <Textarea
-              {...props}
-              onChange={e => handlePointValueChange('longitude', e.currentTarget.value)}
-              value={pointValues.longitude}
-              className={`${textareaStyles({ variant: props.variant })} max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
-            />
+      {!props.hideInputs && (
+        <div className="mt-[3px] flex w-full justify-between leading-[29px]">
+          <div className="flex items-center gap-5">
+            <div className="flex items-center gap-2">
+              <label className="text-[19px] text-bodySemibold font-normal text-text">Latitude</label>
+              <span className="w-[11px] border-t border-t-[#606060]"></span>
+              <Textarea
+                {...props}
+                onChange={e => handlePointValueChange('latitude', e.currentTarget.value)}
+                value={pointValues.latitude}
+                maxRows={1}
+                className={`${textareaStyles({ variant: props.variant })} max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-[19px] text-bodySemibold font-normal text-text">Longitude</label>
+              <span className="w-[11px] border-t border-t-[#606060]"></span>
+              <Textarea
+                {...props}
+                onChange={e => handlePointValueChange('longitude', e.currentTarget.value)}
+                value={pointValues.longitude}
+                maxRows={1}
+                className={`${textareaStyles({ variant: props.variant })} max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap font-normal placeholder:font-normal`}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
       <Map latitude={parseFloat(pointValues.latitude) || 0} longitude={parseFloat(pointValues.longitude) || 0} />
+    </div>
+  );
+}
+
+export function GeoLocationWrapper({
+  id,
+  spaceId,
+  propertyType,
+}: {
+  relationId?: string;
+  id: string;
+  spaceId: string;
+  propertyType?: string;
+}) {
+  const geoData = useGeoCoordinates(id, spaceId, propertyType);
+
+  // Only render if there's geo location data
+  if (!geoData?.geoLocation) {
+    return null;
+  }
+
+  // Parse coordinates for the map
+  const coordinates = GeoPoint.parseCoordinates(geoData.geoLocation);
+
+  if (!coordinates) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 w-full">
+      <Map latitude={coordinates.latitude} longitude={coordinates.longitude} />
     </div>
   );
 }

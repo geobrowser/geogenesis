@@ -5,7 +5,8 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { getImagePath } from '~/core/utils/utils';
+
+import { NativeGeoImage } from '~/design-system/geo-image';
 
 export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const { spaces } = useSpaces();
@@ -32,7 +33,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
     <div className="table-block-editable-title flex flex-grow items-center gap-2">
       {source.type === 'GEO' && (
         <img
-          src={getImagePath(PLACEHOLDER_SPACE_IMAGE)}
+          src={PLACEHOLDER_SPACE_IMAGE}
           className="flex !size-[16px] flex-shrink-0 overflow-clip !rounded-sm border border-white object-cover"
         />
       )}
@@ -43,10 +44,16 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
 
             if (!selectedSpace) return null;
 
-            return (
+            return selectedSpace.entity?.image ? (
+              <NativeGeoImage
+                key={selectedSpace.id}
+                value={selectedSpace.entity.image}
+                className="-ml-1.5 block !size-[16px] flex-shrink-0 overflow-clip !rounded-sm border border-white object-cover first:-ml-0"
+              />
+            ) : (
               <img
                 key={selectedSpace.id}
-                src={getImagePath(selectedSpace.spaceConfig?.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
+                src={PLACEHOLDER_SPACE_IMAGE}
                 className="-ml-1.5 block !size-[16px] flex-shrink-0 overflow-clip !rounded-sm border border-white object-cover first:-ml-0"
               />
             );
@@ -69,12 +76,13 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
                 return (
                   <div key={space.id} className="flex items-center gap-1.5">
                     <div className="flex-shrink-0">
-                      <img
-                        src={getImagePath(space.spaceConfig?.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
-                        className="!size-[16px] !rounded-sm"
-                      />
+                      {space.entity?.image ? (
+                        <NativeGeoImage value={space.entity.image} className="!size-[16px] !rounded-sm" />
+                      ) : (
+                        <img src={PLACEHOLDER_SPACE_IMAGE} className="!size-[16px] !rounded-sm" />
+                      )}
                     </div>
-                    <div className="flex-grow truncate text-button text-text">{space.spaceConfig?.name}</div>
+                    <div className="flex-grow truncate text-button text-text">{space.entity?.name}</div>
                   </div>
                 );
               })}

@@ -1,17 +1,22 @@
 'use client';
 
+import { Atom } from '@xstate/store';
+
 import { ReactNode, createContext, useContext } from 'react';
 
 import { queryClient } from '../query-client';
+import { Entity, Relation, Value } from '../v2.types';
 import { SyncEngine } from './engine';
-import { EntityQuery } from './experimental_query-layer';
-import { GeoStore } from './store';
+import { GeoStore, reactiveRelations, reactiveValues } from './store';
 import { GeoEventStream } from './stream';
 
 const SyncEngineContext = createContext<{
   stream: GeoEventStream;
   store: GeoStore;
-  query: EntityQuery;
+  hydrate: (entityIds?: string[]) => void;
+  hydrateWith: (entities: Entity[]) => void;
+  values: Atom<Value[]>;
+  relations: Atom<Relation[]>;
 } | null>(null);
 
 export function useSyncEngine() {
@@ -24,9 +29,29 @@ export function useSyncEngine() {
 
 export const stream = new GeoEventStream();
 export const store = new GeoStore(stream);
-const query = new EntityQuery(store);
 export const engine = new SyncEngine(stream, queryClient, store);
 
 export function SyncEngineProvider({ children }: { children: ReactNode }) {
-  return <SyncEngineContext.Provider value={{ store, stream, query }}>{children}</SyncEngineContext.Provider>;
+  const hydrate = (entityIds?: string[]) => {
+    if (!entityIds || entityIds.length === 0) {
+      return;
+    }
+
+    stream.emit({ type: 'hydrate', entities: entityIds });
+  };
+
+  return (
+    <SyncEngineContext.Provider
+      value={{
+        store,
+        stream,
+        hydrate,
+        hydrateWith: store.hydrateWith,
+        values: reactiveValues,
+        relations: reactiveRelations,
+      }}
+    >
+      {children}
+    </SyncEngineContext.Provider>
+  );
 }

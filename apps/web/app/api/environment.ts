@@ -1,13 +1,9 @@
-import { GEO_PK, TELEMETRY_TOKEN, TELEMETRY_URL } from './config';
+import { TELEMETRY_TOKEN } from './config';
 
 type ServerEnvironment = {
-  geoPk: string;
-  telemetryUrl?: string;
-  telemetryApiKey?: string;
+  telemetryToken?: string;
 };
 
 export const ServerEnvironment: ServerEnvironment = {
-  geoPk: GEO_PK!,
-  telemetryUrl: TELEMETRY_URL,
-  telemetryApiKey: TELEMETRY_TOKEN,
+  telemetryToken: TELEMETRY_TOKEN,
 };

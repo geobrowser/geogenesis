@@ -1,16 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
+import { Effect } from 'effect';
 
 import * as React from 'react';
 
 import { useEffectOnce } from '~/core/hooks/use-effect-once';
 import { useSearch } from '~/core/hooks/use-search';
 import { EntityId } from '~/core/io/schema';
-import { fetchEntity } from '~/core/io/subgraph';
-import { getImagePath } from '~/core/utils/utils';
+import { getEntity } from '~/core/io/v2/queries';
 
 import { Checkbox } from '~/design-system/checkbox';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { TopRanked } from '~/design-system/icons/top-ranked';
 import { Tag } from '~/design-system/tag';
 import { Tooltip } from '~/design-system/tooltip';
@@ -20,7 +21,7 @@ import { ResizableContainer } from './resizable-container';
 import { Truncate } from './truncate';
 
 type SelectSpaceProps = {
-  onDone: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
+  onDone: (result: { id: string; name: string | null; space?: EntityId; verified?: boolean }) => void;
   entityId: string;
   spaceId?: string;
   verified?: boolean;
@@ -64,7 +65,7 @@ export const SelectSpace = ({
     queryFn: async () => {
       return await Promise.all(
         (result?.spaces ?? []).map(async space => {
-          const entity = await fetchEntity({ id: entityId, spaceId: space.spaceId });
+          const entity = await Effect.runPromise(getEntity(entityId, space.id));
           return { space, entity };
         })
       );
@@ -103,11 +104,13 @@ export const SelectSpace = ({
                           onDone({
                             id: result.id,
                             name: result.name,
+                            space: undefined,
+                            verified: false,
                           });
                         }}
                         className={cx(
-                          'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150  focus:outline-none',
-                          spaceId ? 'hover:bg-grey-01' : 'bg-divider'
+                          'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 focus:outline-none',
+                          !spaceId ? 'bg-divider' : 'hover:bg-grey-01 focus:bg-grey-01'
                         )}
                       >
                         <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
@@ -155,7 +158,7 @@ export const SelectSpace = ({
                                   key={space.spaceId}
                                   className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
                                 >
-                                  <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
+                                  <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
                                 </div>
                                 <span className="text-[0.875rem] text-text">{space.name}</span>
                               </div>

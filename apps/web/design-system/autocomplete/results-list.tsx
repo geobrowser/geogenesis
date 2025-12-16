@@ -3,12 +3,10 @@ import cx from 'classnames';
 import * as React from 'react';
 
 import { useEntity } from '~/core/database/entities';
-import { SearchResult } from '~/core/io/dto/search';
-import { SpaceConfigEntity } from '~/core/io/dto/spaces';
-import { EntityId } from '~/core/io/schema';
-import { getImagePath } from '~/core/utils/utils';
+import { SearchResult, SpaceEntity } from '~/core/v2.types';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Spacer } from '~/design-system/spacer';
@@ -122,7 +120,10 @@ export const ResultContent = ({
       </button>
       {hasOtherSpaces && !!onChooseSpace && (
         <button
-          onClick={onChooseSpace}
+          onClick={e => {
+            e.stopPropagation();
+            onChooseSpace();
+          }}
           className="-mt-2 flex w-full items-center justify-between p-2 transition-colors duration-150 hover:bg-grey-01"
         >
           <div className="flex items-center">
@@ -131,7 +132,7 @@ export const ResultContent = ({
                 key={space.spaceId}
                 className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
               >
-                <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
+                <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
               </div>
             ))}
             <div className="ml-1 text-footnoteMedium text-grey-04">+ {otherSpaces.length} spaces</div>
@@ -147,8 +148,8 @@ export const ResultContent = ({
 
 type SpaceContentProps = {
   onClick: () => void;
-  entityId: EntityId;
-  space: SpaceConfigEntity;
+  entityId: string;
+  space: SpaceEntity;
   alreadySelected?: boolean;
   withDescription?: boolean;
 };

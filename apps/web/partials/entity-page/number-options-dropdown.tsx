@@ -82,7 +82,7 @@ const PercentageToggle = ({
 
   return (
     <DropdownPrimitive.Item
-      className="flex h-[28px] w-full select-none gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04  hover:!bg-bg focus:outline-none"
+      className="flex h-[28px] w-full select-none gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04 hover:!bg-bg focus:outline-none"
       // Suppress default to prevent the dropdown from closing when clicking the percentage toggle
       onClick={suppressDefault}
     >
@@ -103,7 +103,7 @@ const BackButton = ({ onClick }: { onClick: (e: React.MouseEvent) => void }) => 
 
   return (
     <DropdownPrimitive.Item
-      className="flex h-[28px] w-full select-none gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04  hover:!bg-bg focus:outline-none"
+      className="flex h-[28px] w-full select-none gap-2 border-b border-grey-02 px-3 py-2 text-smallButton font-medium text-grey-04 hover:!bg-bg focus:outline-none"
       onClick={suppressDefault}
     >
       <div className="flex w-full items-center gap-2 hover:cursor-pointer" onClick={onClick}>
@@ -121,7 +121,7 @@ const NumberFormatView = ({ formatOptions, value }: { formatOptions?: NumberForm
         key={`format-option-${index}`}
         onClick={onClick}
         className={cx(
-          'flex w-full select-none items-center justify-between px-3 py-2 text-button  hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+          'flex w-full select-none items-center justify-between px-3 py-2 text-button hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
           isSelected && '!bg-grey-01'
         )}
       >
@@ -142,7 +142,7 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     isLoading: isSearchLoading,
     results: searchResults,
   } = useSearch({
-    filterByTypes: [SystemIds.CURRENCY_ATTRIBUTE],
+    filterByTypes: [SystemIds.CURRENCY_PROPERTY],
   });
 
   const { entities, isLoading: isEntitiesLoading } = useQueryEntities({
@@ -153,8 +153,8 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
     () =>
       entities.map(entity => ({
         name: entity.name,
-        symbol: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value,
-        sign: entity.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+        symbol: entity.values.find(t => t.property.id === SystemIds.CURRENCY_SYMBOL_PROPERTY)?.value,
+        sign: entity.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
         id: entity.id,
       })),
     [entities]
@@ -173,17 +173,17 @@ const CurrencySubmenuOption = ({ type, onSelect }: { type: 'FIAT' | 'CRYPTO'; on
       {
         name: 'United States Dollar',
         symbol: 'USD',
-        id: SystemIds.CURRENCY_USD_ATTRIBUTE,
+        id: SystemIds.CURRENCY_USD_PROPERTY,
       },
       {
         name: 'Pound Sterling',
         symbol: 'GBP',
-        id: SystemIds.CURRENCY_GBP_ATTRIBUTE,
+        id: SystemIds.CURRENCY_GBP_PROPERTY,
       },
       {
         name: 'Euro',
         symbol: 'EUR',
-        id: SystemIds.CURRENCY_EUR_ATTRIBUTE,
+        id: SystemIds.CURRENCY_EUR_PROPERTY,
       },
     ],
     []
@@ -262,7 +262,7 @@ export const NumberOptionsDropdown = ({ value, format = GeoNumber.defaultFormat,
 
   React.useEffect(() => {
     setSelectedCurrencySymbol(
-      (unitId && entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SYMBOL_ATTRIBUTE)?.value?.value) || null
+      (unitId && entity?.values.find(t => t.property.id === SystemIds.CURRENCY_SYMBOL_PROPERTY)?.value) || null
     );
   }, [unitId, entity]);
 

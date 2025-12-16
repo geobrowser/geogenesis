@@ -1,15 +1,14 @@
-import { Entity } from '~/core/io/dto/entities';
-import { SpaceId } from '~/core/io/schema';
+import { Entity } from '~/core/v2.types';
 
 export const getValidSpaceIdForEntity = (entity: Entity) => {
-  const validSpaces = (entity?.spaces ?? []) as SpaceId[];
+  const validSpaces = entity?.spaces ?? [];
   // @TODO replace with ranking algorithm
   const spaceId = getRandomSpaceId(validSpaces);
 
   return spaceId;
 };
 
-const getRandomSpaceId = (spaceIds: SpaceId[]) => {
+const getRandomSpaceId = (spaceIds: string[]) => {
   const randomIndex = crypto.getRandomValues(new Uint32Array(1))[0] % spaceIds.length;
 
   return spaceIds[randomIndex];

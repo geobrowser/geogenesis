@@ -1,7 +1,4 @@
-import Image from 'next/legacy/image';
-
-import { getImagePath } from '~/core/utils/utils';
-
+import { GeoImage } from '~/design-system/geo-image';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
@@ -17,11 +14,11 @@ export function NavbarLinkMenuItem({ children, onClick, img }: NavbarLinkMenuIte
       {img && (
         <>
           <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-            <Image
+            <GeoImage
               priority
-              layout="fill"
-              objectFit="cover"
-              src={getImagePath(img)}
+              fill
+              style={{ objectFit: 'cover' }}
+              value={img}
               alt="Image representing the current Space"
             />
           </div>

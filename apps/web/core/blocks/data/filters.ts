@@ -1,17 +1,14 @@
-import { Schema } from '@effect/schema';
 import { SystemIds } from '@graphprotocol/grc-20';
-import { Either } from 'effect';
+import { Schema } from 'effect';
+import { Effect, Either } from 'effect';
 
-import { EntityId } from '~/core/io/schema';
-import { fetchSpace } from '~/core/io/subgraph';
+import { getProperty, getSpace } from '~/core/io/v2/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import { OmitStrict, ValueTypeId } from '~/core/types';
-import type { RelationValueType } from '~/core/types';
-import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
-
-import { Source } from './source';
+import { OmitStrict } from '~/core/types';
+import { Property } from '~/core/v2.types';
+import { FilterableValueType } from '~/core/value-types';
 
 export type Filter = {
   columnId: string;
@@ -19,7 +16,7 @@ export type Filter = {
   valueType: FilterableValueType;
   value: string;
   valueName: string | null;
-  relationValueTypes?: RelationValueType[];
+  relationValueTypes?: { id: string; name: string | null }[];
 };
 
 /**
@@ -28,88 +25,99 @@ export type Filter = {
  * semantics.
  *
  * e.g.,
- * attribute: SystemIds.TYPES_ATTRIBUTE, is: SystemIds.PERSON_TYPE
+ * attribute: SystemIds.TYPES_PROPERTY, is: SystemIds.PERSON_TYPE
  * The above returns all entities that are type: Person
  *
- * entity: '1234', relationType: SystemIds.TYPES_ATTRIBUTE
+ * entity: '1234', relationType: SystemIds.TYPES_PROPERTY
  * The above returns all the type relations for entity 1234
  *
  * The latter is basically a "Relations View" on an entity where the latter
  * is a query across the knowledge graph data set.
  */
-const AttributeFilter = Schema.Struct({
-  attribute: Schema.String,
+const PropertyFilter = Schema.Struct({
+  property: Schema.String,
   is: Schema.String,
 });
 
-type AttributeFilter = Schema.Schema.Type<typeof AttributeFilter>;
+type PropertyFilter = Schema.Schema.Type<typeof PropertyFilter>;
 
-const Property = Schema.Union(AttributeFilter);
+// const Property = Schema.Union(PropertyFilter);
 
 const FilterString = Schema.Struct({
-  where: Schema.Struct({
-    spaces: Schema.optional(Schema.Array(Schema.String)),
-    AND: Schema.optional(Schema.Array(Property)),
-    OR: Schema.optional(Schema.Array(Property)),
-  }),
+  spaceId: Schema.optional(
+    Schema.Struct({
+      in: Schema.Array(Schema.String),
+    })
+  ),
+  filter: Schema.optional(
+    Schema.Record({
+      key: Schema.String,
+      value: Schema.Union(
+        // Property filter
+        Schema.Struct({
+          is: Schema.String,
+        }),
+        // Entity filter
+        Schema.Struct({
+          fromEntity: Schema.Struct({
+            is: Schema.String,
+          }),
+          type: Schema.Struct({
+            is: Schema.String,
+          }),
+        })
+      ),
+    })
+  ),
 });
 
 export type FilterString = Schema.Schema.Type<typeof FilterString>;
 
-export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], source: Source): string {
-  let filter: FilterString | null = null;
+const FilterMap = Schema.mutable(
+  Schema.Record({
+    key: Schema.String,
+    value: Schema.Union(
+      Schema.Struct({
+        is: Schema.String,
+      }),
+      Schema.Struct({
+        fromEntity: Schema.Struct({
+          is: Schema.String,
+        }),
+        type: Schema.Struct({
+          is: Schema.String,
+        }),
+      })
+    ),
+  })
+);
 
-  switch (source.type) {
-    case 'RELATIONS':
-      filter = {
-        where: {
-          AND: filters
-            .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
-            .map(f => {
-              return {
-                attribute: f.columnId,
-                is: f.value,
-              };
-            }),
-        },
-      };
-      break;
-    case 'SPACES':
-      filter = {
-        where: {
-          spaces: filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value),
-          AND: filters
-            .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
-            .map(f => {
-              return {
-                attribute: f.columnId,
-                is: f.value,
-              };
-            }),
-        },
-      };
-      break;
-    case 'COLLECTION':
-    case 'GEO':
-      filter = {
-        where: {
-          AND: filters
-            .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
-            .map(f => {
-              return {
-                attribute: f.columnId,
-                is: f.value,
-              };
-            }),
-        },
-      };
-      break;
-  }
+type FilterMap = Schema.Schema.Type<typeof FilterMap>;
 
-  if (filter === null) {
-    console.error('[toGeoFilterState] Invalid source type', source.type);
-    throw new Error(`[toGeoFilterState] Invalid source type ${source.type}`);
-  }
+export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[]): string {
+  const spaces = filters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value);
+
+  const filterMap: FilterMap = {};
+
+  filters
+    .filter(f => f.columnId !== SystemIds.SPACE_FILTER)
+    .forEach(f => {
+      // Entity filter
+      if (f.columnName === 'Backlink') {
+        filterMap['_relation'] = {
+          fromEntity: { is: f.value },
+          type: { is: f.columnId },
+        };
+        // Property filter
+      } else {
+        filterMap[f.columnId] = { is: f.value };
+      }
+    });
+
+  const filter: FilterString = {
+    ...(spaces.length > 0 && { spaceId: { in: spaces } }),
+    ...(Object.keys(filterMap).length > 0 && { filter: filterMap }),
+  };
 
   const maybeEncoded = Schema.encodeUnknownEither(FilterString)(filter);
 
@@ -124,7 +132,7 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], sou
   });
 }
 
-export async function fromGeoFilterState(filterString: string | null): Promise<Filter[]> {
+export async function fromGeoFilterString(filterString: string | null): Promise<Filter[]> {
   if (!filterString) {
     return [];
   }
@@ -139,9 +147,31 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       return null;
     },
     onRight: value => {
+      let entity = undefined;
+      const filters: Array<{ property: string; is: string }> = [];
+
+      if (value.filter) {
+        Object.entries(value.filter).forEach(([key, filterValue]) => {
+          // Entity filter
+          if (key === '_relation' && 'fromEntity' in filterValue && 'type' in filterValue) {
+            entity = {
+              fromEntity: filterValue.fromEntity.is,
+              typeOf: filterValue.type.is,
+            };
+            // Property filter
+          } else if ('is' in filterValue) {
+            filters.push({
+              property: key,
+              is: filterValue.is,
+            });
+          }
+        });
+      }
+
       return {
-        spaces: value.where.spaces,
-        AND: value.where.AND ?? [],
+        spaces: value.spaceId?.in ?? [],
+        filters,
+        entity: entity as { fromEntity: string; typeOf: string } | undefined,
       };
     },
   });
@@ -169,11 +199,12 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
       )
     : [];
 
-  const maybeFromFilter = filtersFromString.AND.find(f => f.attribute === SystemIds.RELATION_FROM_ATTRIBUTE);
-  const unresolvedEntityFilter = maybeFromFilter ? getResolvedEntity(maybeFromFilter.is) : null;
+  const unresolvedEntityFilter = filtersFromString.entity
+    ? getResolvedEntityFilter(filtersFromString.entity.fromEntity, filtersFromString.entity.typeOf)
+    : null;
 
   const unresolvedAttributeFilters = Promise.all(
-    filtersFromString.AND.filter(f => f.attribute !== SystemIds.RELATION_FROM_ATTRIBUTE).map(async filter => {
+    filtersFromString.filters.map(async filter => {
       return await getResolvedFilter(filter);
     })
   );
@@ -185,63 +216,65 @@ export async function fromGeoFilterState(filterString: string | null): Promise<F
   ]);
 
   filters.push(...spaceFilters);
+
   filters.push(...attributeFilters);
-  if (entityFilter) filters.push(entityFilter);
+
+  if (entityFilter) {
+    filters.push(entityFilter);
+  }
 
   return filters;
 }
 
 async function getSpaceName(spaceId: string) {
-  const space = await fetchSpace({ id: spaceId });
-  return space?.spaceConfig.name ?? null;
+  const space = await Effect.runPromise(getSpace(spaceId));
+  return space?.entity.name ?? null;
 }
 
-async function getResolvedEntity(entityId: string): Promise<Filter> {
-  const entity = await E.findOne({ store, cache: queryClient, id: entityId });
-
-  if (!entity) {
-    return {
-      columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
-      columnName: 'From',
-      valueType: 'RELATION',
-      value: entityId,
-      valueName: null,
-    };
-  }
+async function getResolvedEntityFilter(entityId: string, typeId: string): Promise<Filter> {
+  const [fromEntity] = await Promise.all([
+    E.findOne({ store, cache: queryClient, id: entityId }),
+    E.findOne({ store, cache: queryClient, id: typeId }),
+  ]);
 
   return {
-    columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
-    columnName: 'From',
+    columnId: typeId,
+    columnName: 'Backlink',
     valueType: 'RELATION',
     value: entityId,
-    valueName: entity.name,
+    valueName: fromEntity?.name ?? null,
   };
 }
 
-async function getResolvedFilter(filter: AttributeFilter): Promise<Filter> {
-  const maybeAttributeEntity = await E.findOne({ store, cache: queryClient, id: filter.attribute });
-  const valueType = maybeAttributeEntity?.relationsOut.find(
-    r => r.typeOf.id === EntityId(SystemIds.VALUE_TYPE_ATTRIBUTE)
-  )?.toEntity.id;
+async function getResolvedFilter(filter: PropertyFilter): Promise<Filter> {
+  let property: Property | null = null;
 
-  if (valueType === EntityId(SystemIds.RELATION)) {
-    const valueEntity = await E.findOne({ store, cache: queryClient, id: filter.is });
-
-    return {
-      columnId: filter.attribute,
-      columnName: maybeAttributeEntity?.name ?? null,
-      value: filter.is,
-      valueName: valueEntity?.name ?? null,
-      valueType: 'RELATION',
-    };
+  try {
+    const remoteProperty = await Effect.runPromise(getProperty(filter.property));
+    property = remoteProperty;
+  } catch (error) {
+    console.warn('Failed to fetch remote property', filter.property, error);
   }
 
-  // @TODO: Can get property name here
+  // Use the property's actual data type, or try to infer it if property not found
+  let valueType: FilterableValueType;
+  if (property?.dataType) {
+    valueType = property.dataType;
+  } else {
+    valueType = 'RELATION';
+  }
+
+  const [maybePropertyEntity, maybeValueEntity] = await Promise.all([
+    E.findOne({ store, cache: queryClient, id: filter.property }),
+    // Only fetch value entity for RELATION types
+    valueType === 'RELATION' ? E.findOne({ store, cache: queryClient, id: filter.is }) : undefined,
+  ]);
+
   return {
-    columnId: filter.attribute,
-    columnName: maybeAttributeEntity?.name ?? null,
+    columnId: filter.property,
+    columnName: maybePropertyEntity?.name ?? null,
     value: filter.is,
-    valueName: null,
-    valueType: VALUE_TYPES[(valueType ?? SystemIds.TEXT) as ValueTypeId] ?? SystemIds.TEXT,
+    valueName: maybeValueEntity?.name ?? null,
+    valueType,
   };
 }

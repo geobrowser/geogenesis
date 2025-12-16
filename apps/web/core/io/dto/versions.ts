@@ -1,7 +1,9 @@
 import { Profile } from '~/core/types';
+import { Entity } from '~/core/v2.types';
 
 import { SubstreamVersion, SubstreamVersionHistorical } from '../schema';
-import { Entity, EntityDtoHistorical, EntityDtoLive } from './entities';
+import { RemoteEntity } from '../v2/v2.schema';
+import { EntityDtoHistorical, EntityDtoLive } from './entities';
 
 export type Version = Entity & {
   versionId: string;
@@ -17,12 +19,8 @@ export type HistoryVersion = Entity & {
 
 export function VersionDto(version: SubstreamVersion): Version {
   return {
-    ...EntityDtoLive({
-      id: version.entityId,
-      currentVersion: {
-        version,
-      },
-    }),
+    // @TODO(migration): Fix types
+    ...EntityDtoLive(version as unknown as RemoteEntity),
     versionId: version.id,
   };
 }
@@ -47,5 +45,6 @@ export function HistoryVersionDto(version: SubstreamVersionHistorical, profile?:
       name: null,
       profileLink: '',
     },
-  };
+    // @TODO(migration): Fix types
+  } as unknown as HistoryVersion;
 }

@@ -1,13 +1,12 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import Image from 'next/legacy/image';
 
 import { Suspense } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
-import { EntityId } from '~/core/io/schema';
-import { getImagePath, getProposalName } from '~/core/utils/utils';
+import { getProposalName } from '~/core/utils/utils';
 
+import { GeoImage } from '~/design-system/geo-image';
 import { Spacer } from '~/design-system/spacer';
 
 import { ActivityLoading } from './activity-loading';
@@ -42,7 +41,7 @@ async function ActivityList({ searchParams, entityId }: Props) {
   // Fetch the activity based on the wallets defined on the entity's Wallets triple
   // Right now we assume it's set as an entity value but it might be a collection at
   // some point in the future.
-  const address = entity?.relationsOut.find(t => t.typeOf.id === EntityId(SystemIds.ACCOUNTS_ATTRIBUTE))?.toEntity.name;
+  const address = entity?.relations.find(t => t.type.id === SystemIds.ACCOUNTS_PROPERTY)?.toEntity.name;
 
   const proposals = address
     ? await fetchProposalsByUser({
@@ -83,11 +82,12 @@ async function ActivityList({ searchParams, entityId }: Props) {
               <div className="flex w-full items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <Image
-                      objectFit="cover"
+                    <GeoImage
+                      style={{ objectFit: 'cover' }}
                       priority
-                      layout="fill"
-                      src={spaceImage ? getImagePath(spaceImage) : PLACEHOLDER_SPACE_IMAGE}
+                      fill
+                      value={spaceImage ?? PLACEHOLDER_SPACE_IMAGE}
+                      alt=""
                     />
                   </div>
                   <p className="text-metadataMedium">{proposalName}</p>

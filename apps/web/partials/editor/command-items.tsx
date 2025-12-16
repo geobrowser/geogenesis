@@ -1,8 +1,8 @@
+import { Ipfs } from '@graphprotocol/grc-20';
 import { Editor, Range } from '@tiptap/core';
 
 import * as React from 'react';
 
-import { IpfsClient } from '~/core/io/ipfs-client';
 import { getImagePath } from '~/core/utils/utils';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';
@@ -19,7 +19,7 @@ export interface CommandSuggestionItem {
   command: (props: { editor: Editor; range: Range }) => void;
 }
 
-export const tableCommandItem: CommandSuggestionItem = {
+const tableCommandItem: CommandSuggestionItem = {
   icon: <EditorTable />,
   title: 'Data',
   command: ({ editor, range }) => {
@@ -37,7 +37,7 @@ export const tableCommandItem: CommandSuggestionItem = {
   },
 };
 
-export const textCommandItem: CommandSuggestionItem = {
+const textCommandItem: CommandSuggestionItem = {
   icon: <EditorText />,
   title: 'Text',
   command: ({ editor, range }) => {
@@ -103,8 +103,8 @@ export const commandItems: CommandSuggestionItem[] = [
       input.onchange = async (e: any) => {
         if (!e?.target?.files?.[0]) return;
         const file = e.target.files[0];
-        const ipfsUri = await IpfsClient.uploadFile(file);
-        const src = getImagePath(ipfsUri);
+        const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET');
+        const src = getImagePath(cid);
 
         editor.chain().focus().deleteRange(range).setImage({ src }).run();
       };

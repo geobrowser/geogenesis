@@ -6,8 +6,7 @@ import * as React from 'react';
 import { ChangeEvent, useRef } from 'react';
 
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
-import { Services } from '~/core/services';
-import { getImagePath } from '~/core/utils/utils';
+import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 
@@ -39,6 +38,7 @@ type TableStringFieldProps = {
   placeholder?: string;
   value?: string;
   variant?: 'tableCell' | 'tableProperty';
+  autoFocus?: boolean;
 };
 
 export function TableStringField({ variant = 'tableCell', ...props }: TableStringFieldProps) {
@@ -54,6 +54,7 @@ export function TableStringField({ variant = 'tableCell', ...props }: TableStrin
       onChange={e => setLocalValue(e.currentTarget.value)}
       value={localValue}
       className={textareaStyles({ variant })}
+      autoFocus={props.autoFocus}
     />
   );
 }
@@ -63,21 +64,49 @@ type PageStringFieldProps = {
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
   value?: string;
+  shouldDebounce?: boolean;
+  autoFocus?: boolean;
+  onEnterKey?: () => void;
 };
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
-  const { value: localValue, onChange: setLocalValue } = useOptimisticValueWithSideEffect({
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const {
+    value: localValue,
+    onChange: setLocalValue,
+    flush,
+  } = useOptimisticValueWithSideEffect({
     callback: props.onChange,
-    delay: 1000,
+    delay: 1500,
     initialValue: props.value || '',
   });
 
   return (
     <Textarea
       {...props}
+      ref={textareaRef}
       value={localValue}
-      onChange={e => setLocalValue(e.currentTarget.value)}
+      onChange={e => {
+        if (props.shouldDebounce) {
+          setLocalValue(e.currentTarget.value);
+        } else {
+          props.onChange(e.currentTarget.value);
+        }
+      }}
+      onBlur={() => {
+        // Flush on blur to ensure changes are saved when leaving the field
+        flush();
+      }}
+      onKeyDown={e => {
+        if (e.key === 'Enter' && props.onEnterKey) {
+          e.preventDefault();
+          flush(); // Flush pending changes immediately
+          props.onEnterKey?.();
+        }
+      }}
       className={textareaStyles({ variant: props.variant })}
+      autoFocus={props.autoFocus}
     />
   );
 }
@@ -110,10 +139,12 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
 };
 
 export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
+  const { src, onError } = useImageWithFallback(imageSrc);
+
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>
-        <img src={getImagePath(imageSrc)} className="h-full rounded-lg object-cover" />
+        <img src={src} onError={onError} className="h-full rounded-lg object-cover" />
       </div>
     </Zoom>
   );
@@ -130,10 +161,9 @@ const blockImagePlaceholderImgs: Record<string, Record<'default' | 'hover', stri
   },
 };
 
-export function BlockImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
-  const [isUploading, setIsUploading] = React.useState(false);
-  const { ipfs } = Services.useServices();
+export function BlockImageField({ imageSrc, onFileChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
   const [hovered, setHovered] = React.useState(false);
+  const [isUploading, setIsUploading] = React.useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputClick = () => {
@@ -145,11 +175,13 @@ export function BlockImageField({ imageSrc, onImageChange, onImageRemove, varian
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setIsUploading(true);
       const file = e.target.files[0];
-      const imageSrc = await ipfs.uploadFile(file);
-      onImageChange(imageSrc);
-      setIsUploading(false);
+      setIsUploading(true);
+      try {
+        await onFileChange(file);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -178,9 +210,9 @@ export function BlockImageField({ imageSrc, onImageChange, onImageRemove, varian
         {isUploading ? (
           <Dots />
         ) : (
-          <label htmlFor="avatar-file" className="cursor-pointer">
+          <div className="cursor-pointer">
             <Upload color={hovered ? 'grey-04' : 'grey-03'} />
-          </label>
+          </div>
         )}
         {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash color={hovered ? 'grey-04' : 'grey-03'} />} />}
       </div>
@@ -199,15 +231,14 @@ export function BlockImageField({ imageSrc, onImageChange, onImageRemove, varian
 
 interface ImageFieldProps {
   imageSrc?: string;
-  onImageChange: (imageSrc: string) => void;
+  onFileChange: (file: File) => Promise<void> | void;
   onImageRemove?: () => void;
   variant?: ImageVariant;
   horizontal?: boolean;
 }
 
-export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
-  const { ipfs } = Services.useServices();
-
+export function PageImageField({ imageSrc, onFileChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+  const [isUploading, setIsUploading] = React.useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputClick = () => {
     // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
@@ -217,10 +248,14 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
   };
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
+    if (e.target.files && onFileChange) {
       const file = e.target.files[0];
-      const imageSrc = await ipfs.uploadFile(file);
-      onImageChange(imageSrc);
+      setIsUploading(true);
+      try {
+        await onFileChange(file);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -233,11 +268,9 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
       )}
 
       <div className="flex justify-center gap-2 pt-2">
-        <label htmlFor="avatar-file">
-          <SmallButton onClick={handleFileInputClick} icon={<Upload />}>
-            Upload
-          </SmallButton>
-        </label>
+        <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
+          {isUploading ? 'Uploading...' : 'Upload'}
+        </SmallButton>
         {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash />} />}
       </div>
 
@@ -253,8 +286,8 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
   );
 }
 
-export function TableImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
-  const { ipfs } = Services.useServices();
+export function TableImageField({ imageSrc, onFileChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+  const [isUploading, setIsUploading] = React.useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputClick = () => {
     // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
@@ -266,8 +299,12 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const imageSrc = await ipfs.uploadFile(file);
-      onImageChange(imageSrc);
+      setIsUploading(true);
+      try {
+        await onFileChange(file);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -278,18 +315,14 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
           <ImageZoom variant={variant} imageSrc={imageSrc} />
         </div>
       ) : (
-        <label htmlFor="avatar-file">
-          <SmallButton onClick={handleFileInputClick} icon={<Upload />}>
-            Upload
-          </SmallButton>
-        </label>
+        <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
+          {isUploading ? 'Uploading...' : 'Upload'}
+        </SmallButton>
       )}
 
       {imageSrc && (
         <div className="flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
-          <label htmlFor="avatar-file">
-            <SquareButton onClick={handleFileInputClick} icon={<Upload />} />
-          </label>
+          <SquareButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />} />
           <SquareButton onClick={onImageRemove} icon={<Trash />} />
         </div>
       )}

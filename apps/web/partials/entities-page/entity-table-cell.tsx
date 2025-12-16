@@ -1,17 +1,17 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import Link from 'next/link';
 
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import { RenderableProperty } from '~/core/types';
-import { getImagePath } from '~/core/utils/utils';
+import { useRelations, useValue } from '~/core/sync/use-store';
+import { Property } from '~/core/v2.types';
 
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { CellContent } from '~/design-system/table/cell-content';
 
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
@@ -20,8 +20,7 @@ import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata'
 type Props = {
   entityId: string;
   spaceId: string;
-  columnId: string;
-  renderables: RenderableProperty[];
+  property: Property;
   isExpanded: boolean;
   name: string | null;
   href: string;
@@ -36,8 +35,7 @@ type Props = {
 export const EntityTableCell = ({
   entityId,
   spaceId,
-  columnId,
-  renderables,
+  property,
   isExpanded,
   name,
   href,
@@ -48,13 +46,14 @@ export const EntityTableCell = ({
   onLinkEntry,
   source,
 }: Props) => {
-  const isNameCell = columnId === SystemIds.NAME_ATTRIBUTE;
+  const isNameCell = property.id === SystemIds.NAME_PROPERTY;
+  const isRelation = property.dataType === 'RELATION';
 
   if (isNameCell) {
     return (
       <Fragment key={entityId}>
         {source.type !== 'COLLECTION' ? (
-          <Link href={href} className="text-tableCell text-ctaHover hover:underline">
+          <Link entityId={entityId} href={href} className="text-tableCell text-ctaHover hover:underline">
             {name || entityId}
           </Link>
         ) : (
@@ -70,7 +69,12 @@ export const EntityTableCell = ({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <Link href={href} className="text-tableCell text-ctaHover hover:underline">
+            <Link
+              entityId={entityId}
+              spaceId={spaceId}
+              href={href}
+              className="text-tableCell text-ctaHover hover:underline"
+            >
               {name || entityId}
             </Link>
           </CollectionMetadata>
@@ -81,81 +85,90 @@ export const EntityTableCell = ({
 
   return (
     <div className="flex flex-wrap gap-2">
-      {renderables.map(renderable => {
-        if (renderable.type === 'IMAGE') {
-          const value = renderable.value;
-          return <ImageZoom key={value} variant="table-cell" imageSrc={getImagePath(value)} />;
-        }
-
-        if (renderable.type === 'RELATION') {
-          const value = renderable.value;
-          const name = renderable.valueName;
-          const relationId = renderable.relationId;
-          const relationValue = renderable.value;
-
-          return (
-            <LinkableRelationChip
-              key={value}
-              isEditing={false}
-              currentSpaceId={spaceId}
-              entityId={relationValue}
-              spaceId={renderable.spaceId}
-              relationId={relationId}
-            >
-              {name ?? value}
-            </LinkableRelationChip>
-          );
-        }
-
-        if (renderable.type === 'URL') {
-          return (
-            <WebUrlField
-              variant="tableCell"
-              isEditing={false}
-              key={renderable.value}
-              spaceId={spaceId}
-              value={renderable.value}
-            />
-          );
-        }
-
-        if (renderable.type === 'TIME') {
-          return (
-            <DateField
-              variant="tableCell"
-              isEditing={false}
-              key={renderable.value}
-              value={renderable.value}
-              format={renderable.options?.format}
-            />
-          );
-        }
-        if (renderable.type === 'CHECKBOX') {
-          return (
-            <input
-              type="checkbox"
-              disabled
-              key={`checkbox-${renderable.attributeId}-${renderable.value}`}
-              checked={renderable.value === '1'}
-            />
-          );
-        }
-
-        if (renderable.type === 'NUMBER') {
-          return (
-            <NumberField
-              variant="tableCell"
-              isEditing={false}
-              key={renderable.value}
-              value={renderable.value}
-              format={renderable.options?.format}
-              unitId={renderable.options?.unit}
-            />
-          );
-        }
-
-        return <CellContent key={renderable.value} isExpanded={isExpanded} value={renderable.value} />;
-      })}
+      {isRelation ? (
+        <RelationGroup entityId={entityId} property={property} spaceId={spaceId} />
+      ) : (
+        <ValueGroup entityId={entityId} property={property} spaceId={spaceId} isExpanded={isExpanded} />
+      )}
     </div>
   );
 };
+
+type RelationGroupProps = {
+  entityId: string;
+  property: Property;
+  spaceId: string;
+};
+
+function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
+  const relations = useRelations({
+    selector: r => r.fromEntity.id === entityId && r.type.id === property.id,
+  });
+
+  return relations.map(relation => {
+    if (property.renderableTypeStrict === 'IMAGE') {
+      const value = relation.toEntity.value;
+      return <ImageZoom key={value} variant="table-cell" imageSrc={value} />;
+    }
+
+    const value = relation.toEntity.value;
+    const name = relation.toEntity.name;
+    const relationId = relation.id;
+    const relationValue = relation.toEntity.id;
+
+    return (
+      <LinkableRelationChip
+        key={relation.toEntity.value}
+        isEditing={false}
+        currentSpaceId={spaceId}
+        entityId={relationValue}
+        spaceId={relation.spaceId}
+        relationId={relationId}
+      >
+        {name ?? value}
+      </LinkableRelationChip>
+    );
+  });
+}
+
+type ValueGroupProps = {
+  entityId: string;
+  property: Property;
+  spaceId: string;
+  isExpanded?: boolean;
+};
+
+function ValueGroup({ entityId, property, spaceId, isExpanded }: ValueGroupProps) {
+  const rawValue = useValue({
+    selector: v => v.entity.id === entityId && v.property.id === property.id,
+  });
+  const value = rawValue?.value ?? '';
+  const renderableType = property.renderableTypeStrict ?? property.dataType;
+
+  if (renderableType === 'URL') {
+    return <WebUrlField variant="tableCell" isEditing={false} key={value} spaceId={spaceId} value={value} />;
+  }
+
+  if (renderableType === 'TIME') {
+    return <DateField variant="tableCell" isEditing={false} key={value} value={value} propertyId={property.id} />;
+  }
+
+  if (renderableType === 'CHECKBOX') {
+    return <input type="checkbox" disabled key={`checkbox-${property.id}-${value}`} checked={value === '1'} />;
+  }
+
+  if (renderableType === 'NUMBER') {
+    return (
+      <NumberField
+        variant="tableCell"
+        isEditing={false}
+        key={value}
+        value={value}
+        format={property.format || undefined}
+        unitId={rawValue?.options?.unit || property.unit || undefined}
+      />
+    );
+  }
+
+  return <CellContent key={value} isExpanded={isExpanded} value={value} />;
+}

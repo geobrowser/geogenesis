@@ -1,21 +1,37 @@
-import { ActivityPage } from '~/partials/activity/activity-page';
+import { Suspense } from 'react';
 
-import { cachedFetchSpace } from '../cached-fetch-space';
+import { Skeleton } from '~/design-system/skeleton';
+
+import { ActivityServerContainer } from '~/partials/activity/activity-server-container';
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{
-    spaceId?: string;
-  }>;
 }
 
-// The ActivityPage component is used both on the [entityId]/activity route
-// and the space/[id]/activity route. We can share the components for this
-// layout by using the same component for both routes.
 export default async function Activity(props: Props) {
-  const searchParams = await props.searchParams;
   const params = await props.params;
-  const space = await cachedFetchSpace(params.id);
-
-  return <ActivityPage entityId={space?.spaceConfig?.id ?? null} searchParams={searchParams} />;
+  return (
+    <Suspense fallback={<ActivitySkeleton />}>
+      <ActivityServerContainer spaceId={params.id} />
+    </Suspense>
+  );
 }
+
+const ActivitySkeleton = () => {
+  return (
+    <div className="divide-y divide-divider">
+      {new Array(3).fill(0).map(i => (
+        <div key={i} className="flex items-center gap-5 py-4">
+          <div>
+            <Skeleton className="size-10 rounded-md" />
+          </div>
+          <div className="flex-1">
+            <Skeleton className="h-[21px] w-1/2" />
+            <Skeleton className="mt-1 h-[32px] w-3/4" />
+            <Skeleton className="mt-3 h-[15px] w-1/4" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};

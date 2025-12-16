@@ -8,12 +8,30 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // reactStrictMode: true,
-  experimental: {
-    reactCompiler: true,
+  reactCompiler: true,
+  // Exclude test files from node_modules that reference dev dependencies
+  webpack: config => {
+    config.module.rules.push({
+      test: /\.test\.(js|ts)$/,
+      include: /node_modules/,
+      use: 'ignore-loader',
+    });
+    return config;
   },
-  devIndicators: {
-    appIsrStatus: false,
-    buildActivity: false,
+  experimental: {
+    // Activate new client-side router improvements
+    // clientSegmentCache: true,
+    // Enable persistent caching for the turbopack dev server and build.
+    // turbopackPersistentCaching: true, // canary-only feature, disabled for stable
+    optimizePackageImports: [
+      'effect',
+      'viem',
+      'wagmi',
+      '@graphprotocol/grc-20',
+      'mapbox-gl',
+      '@tiptap/core',
+      '@tiptap/react',
+    ],
   },
   images: {
     remotePatterns: [
@@ -93,7 +111,7 @@ const nextConfig = {
               value: 'testnet.geobrowser.io',
             },
           ],
-          destination: 'https://geogenesis-git-feat-testnet-geo-browser.vercel.app/:path*',
+          destination: 'https://geogenesis-git-stream-v2-geo-browser.vercel.app/:path*',
         },
       ],
       afterFiles: [],

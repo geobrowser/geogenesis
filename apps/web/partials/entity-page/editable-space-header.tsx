@@ -7,12 +7,12 @@ import { usePathname } from 'next/navigation';
 import * as React from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
-import { useEditEvents } from '~/core/events/edit-events';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
 import { fetchCompletedProposals } from '~/core/io/subgraph/fetch-completed-proposals';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useName } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -44,7 +44,7 @@ export function EditableSpaceHeading({
   entityId: string;
   addSubspaceComponent?: React.ReactElement<any>;
 }) {
-  const { name } = useEntityPageStore();
+  const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
 
   const path = usePathname();
@@ -95,22 +95,11 @@ export function EditableSpaceHeading({
       console.error('Failed to copy entity ID in: ', entityId);
     }
   };
-  
-  const send = useEditEvents({
-    context: {
-      entityId,
-      spaceId,
-      entityName: name ?? '',
-    },
-  });
+
+  const { storage } = useMutate();
 
   const onNameChange = (value: string) => {
-    send({
-      type: 'EDIT_ENTITY_NAME',
-      payload: {
-        name: value,
-      },
-    });
+    storage.entities.name.set(entityId, spaceId, value);
   };
 
   return (
@@ -180,7 +169,7 @@ export function EditableSpaceHeading({
             onOpenChange={setIsContextMenuOpen}
             align="end"
             trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-            className={cx(!isCreatingNewVersion ? 'max-w-[160]' : 'max-w-[320px]')}
+            className={cx(!isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
           >
             {isCreatingNewVersion && (
               <CreateNewVersionInSpace

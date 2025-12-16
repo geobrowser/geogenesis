@@ -1,37 +1,42 @@
 'use client';
 
 import * as React from 'react';
-import { createContext, useContext, useMemo } from 'react';
 
-import { OmitStrict, Relation, SpaceId, Triple } from '~/core/types';
+import { useHydrateEntity } from '~/core/sync/use-store';
+import { OmitStrict } from '~/core/types';
 
-const EntityStoreContext = createContext<OmitStrict<Props, 'children'> | undefined>(undefined);
+const EntityStoreContext = React.createContext<OmitStrict<Props, 'children'> | undefined>(undefined);
 
 interface Props {
   id: string;
   spaceId: string;
   children: React.ReactNode;
-  initialSpaces: SpaceId[];
-  initialTriples: Triple[];
-  initialRelations: Relation[];
 }
 
-export function EntityStoreProvider({ id, spaceId, children, initialSpaces, initialTriples, initialRelations }: Props) {
-  const store = useMemo(() => {
+export function EntityStoreProvider({ id, spaceId, children }: Props) {
+  /**
+   * We hydrate the entity in the provider to ensure that all downstream
+   * consumers of entity data are guaranteed to be able to query for the
+   * entity. We trigger it here instead of in another component to ensure
+   * the hydration is triggered as early/high as possible in the component
+   * tree.
+   */
+  useHydrateEntity({
+    id,
+  });
+
+  const store = React.useMemo(() => {
     return {
       spaceId,
-      initialSpaces,
-      initialTriples,
-      initialRelations,
       id,
     };
-  }, [spaceId, initialSpaces, initialTriples, initialRelations, id]);
+  }, [spaceId, id]);
 
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;
 }
 
 export function useEntityStoreInstance() {
-  const value = useContext(EntityStoreContext);
+  const value = React.useContext(EntityStoreContext);
 
   if (!value) {
     throw new Error(`Missing EntityStoreProvider`);

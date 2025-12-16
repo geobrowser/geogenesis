@@ -1,26 +1,25 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { Effect } from 'effect';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useRelations } from '~/core/database/relations';
-import { useTriples } from '~/core/database/triples';
-import { DB } from '~/core/database/write';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
-import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
+import { getSpaces } from '~/core/io/v2/queries';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { Triples } from '~/core/utils/triples';
-import { getImagePath } from '~/core/utils/utils';
+import { Publish } from '~/core/utils/publish';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
+import { GeoImage } from '~/design-system/geo-image';
 import { Blank } from '~/design-system/icons/blank';
 import { Close } from '~/design-system/icons/close';
 import { Dash } from '~/design-system/icons/dash';
@@ -53,14 +52,14 @@ const ReviewChanges = () => {
   const [activeSpace, setActiveSpace] = useState<string>('');
   const { setIsReviewOpen } = useDiff();
 
-  const allSpacesWithTripleChanges = useTriples(
+  const allSpacesWithTripleChanges = useValues(
     React.useMemo(() => {
       return {
         selector: t => t.hasBeenPublished === false,
         includeDeleted: true,
       };
     }, [])
-  ).map(t => t.space);
+  ).map(t => t.spaceId);
 
   const allSpacesWithRelationChanges = useRelations(
     React.useMemo(() => {
@@ -69,7 +68,7 @@ const ReviewChanges = () => {
         includeDeleted: true,
       };
     }, [])
-  ).map(r => r.space);
+  ).map(r => r.spaceId);
 
   const dedupedSpacesWithActions = React.useMemo(() => {
     return [...new Set([...allSpacesWithTripleChanges, ...allSpacesWithRelationChanges]).values()];
@@ -84,16 +83,17 @@ const ReviewChanges = () => {
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', dedupedSpacesWithActions],
     queryFn: async () => {
-      const maybeSpaces = await fetchSpacesById(dedupedSpacesWithActions);
+      const maybeSpaces = await Effect.runPromise(getSpaces({ spaceIds: dedupedSpacesWithActions }));
 
-      const spaces = maybeSpaces.filter(s => s.spaceConfig !== null);
+      const spaces = maybeSpaces.filter(s => s.entity !== null);
 
       const spacesMap = new Map<string, { id: string; name: string | null; image: string | null }>();
 
       for (const space of spaces) {
         const id = space.id;
-        const config = space.spaceConfig;
-        const image = config ? getImagePath(config.image) : PLACEHOLDER_SPACE_IMAGE;
+        const config = space.entity;
+        // Store raw image value for fallback handling
+        const image = config?.image ?? PLACEHOLDER_SPACE_IMAGE;
 
         spacesMap.set(id, {
           id,
@@ -125,11 +125,7 @@ const ReviewChanges = () => {
     label: (
       <span className="inline-flex items-center gap-2 text-button text-text">
         <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-          <img
-            src={spaces?.get(spaceId)?.image ?? undefined}
-            className="absolute inset-0 h-full w-full object-cover object-center"
-            alt=""
-          />
+          <ReviewSpaceImage imageValue={spaces?.get(spaceId)?.image ?? null} />
         </span>
         <span>{spaces?.get(spaceId)?.name}</span>
       </span>
@@ -144,10 +140,10 @@ const ReviewChanges = () => {
   // Entity Id -> Attribute Id -> boolean
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
 
-  const triplesFromSpace = useTriples(
+  const valuesFromSpace = useValues(
     React.useMemo(() => {
       return {
-        selector: t => t.space === activeSpace,
+        selector: t => t.spaceId === activeSpace && t.isLocal === true,
         includeDeleted: true,
       };
     }, [activeSpace])
@@ -156,7 +152,7 @@ const ReviewChanges = () => {
   const relationsFromSpace = useRelations(
     React.useMemo(() => {
       return {
-        selector: r => r.space === activeSpace,
+        selector: r => r.spaceId === activeSpace && r.isLocal === true,
         includeDeleted: true,
       };
     }, [activeSpace])
@@ -164,7 +160,7 @@ const ReviewChanges = () => {
 
   const isReadyToPublish =
     proposalName?.length > 0 &&
-    Triples.prepareTriplesForPublishing(triplesFromSpace, relationsFromSpace, activeSpace).opsToPublish.length > 0;
+    Publish.prepareLocalDataForPublishing(valuesFromSpace, relationsFromSpace, activeSpace).length > 0;
 
   const [isPublishing, setIsPublishing] = useState(false);
   const { makeProposal } = usePublish();
@@ -207,7 +203,7 @@ const ReviewChanges = () => {
     // @TODO: Selectable publishing
 
     await makeProposal({
-      triples: triplesFromSpace,
+      values: valuesFromSpace,
       relations: relationsFromSpace,
       spaceId: activeSpace,
       name: proposalName,
@@ -217,7 +213,7 @@ const ReviewChanges = () => {
     });
 
     setIsPublishing(false);
-  }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace, relationsFromSpace]);
+  }, [activeSpace, proposalName, proposals, makeProposal, valuesFromSpace, relationsFromSpace]);
 
   if (isLoading || !changes || isSpacesLoading) {
     return <div>Loading...</div>;
@@ -237,13 +233,9 @@ const ReviewChanges = () => {
             <div className="inline-flex items-center gap-2">
               <span className="text-metadataMedium leading-none">Review your edits in</span>
               {dedupedSpacesWithActions.length === 1 && (
-                <span className="inline-flex items-center gap-2 text-button text-text ">
+                <span className="inline-flex items-center gap-2 text-button text-text">
                   <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <img
-                      src={spaces?.get(activeSpace)?.image ?? undefined}
-                      className="absolute inset-0 h-full w-full object-cover object-center"
-                      alt=""
-                    />
+                    <ReviewSpaceImage imageValue={spaces?.get(activeSpace)?.image ?? null} />
                   </span>
                   <span>{spaces?.get(activeSpace)?.name}</span>
                 </span>
@@ -253,11 +245,7 @@ const ReviewChanges = () => {
                   trigger={
                     <span className="inline-flex items-center gap-2">
                       <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-                        <img
-                          src={spaces?.get(activeSpace)?.image ?? undefined}
-                          className="absolute inset-0 h-full w-full object-cover object-center"
-                          alt=""
-                        />
+                        <ReviewSpaceImage imageValue={spaces?.get(activeSpace)?.image ?? null} />
                       </span>
                       <span>{spaces?.get(activeSpace)?.name}</span>
                     </span>
@@ -294,7 +282,6 @@ const ReviewChanges = () => {
               <div>
                 <SmallButton
                   onClick={() => {
-                    DB.deleteAll(activeSpace);
                     store.clear();
                   }}
                 >
@@ -302,7 +289,7 @@ const ReviewChanges = () => {
                 </SmallButton>
               </div>
             </div>
-            <div className="relative flex flex-col ">
+            <div className="relative flex flex-col">
               <div className="text-body">Proposal name</div>
               <input
                 type="text"
@@ -319,7 +306,8 @@ const ReviewChanges = () => {
               <div className="absolute -bottom-10 -left-32 -right-32 h-px bg-divider" />
             </div>
             <div className="relative flex flex-col gap-16 divide-y divide-divider pt-16">
-              {changes.map(change => (
+              {JSON.stringify([...valuesFromSpace, ...relationsFromSpace], null, 2)}
+              {/* {changes.map(change => (
                 <ChangedEntity
                   key={change.id}
                   change={change}
@@ -342,11 +330,17 @@ const ReviewChanges = () => {
                   //   </div>
                   // )}
                 />
-              ))}
+              ))} */}
             </div>
           </div>
         </div>
       </div>
     </>
   );
+};
+
+// Helper component for space images with fallback
+const ReviewSpaceImage = ({ imageValue }: { imageValue: string | null }) => {
+  if (!imageValue) return null;
+  return <GeoImage value={imageValue} fill style={{ objectFit: 'cover' }} alt="" />;
 };

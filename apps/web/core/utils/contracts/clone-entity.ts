@@ -1,10 +1,11 @@
-import { ContentIds, Op, Relation, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, Graph, Id, Op, SystemIds } from '@graphprotocol/grc-20';
+import { Effect } from 'effect';
 
+import { ROOT_SPACE } from '~/core/constants';
 import { ID } from '~/core/id';
-import { Subgraph } from '~/core/io';
-import { EntityId } from '~/core/io/schema';
-import { Relation as RelationType } from '~/core/types';
+import { getEntity } from '~/core/io/v2/queries';
 import { Ops } from '~/core/utils/ops';
+import { Relation } from '~/core/v2.types';
 
 type Options = {
   oldEntityId: string;
@@ -12,6 +13,7 @@ type Options = {
   entityName?: string | null;
   parentEntityId?: string | null;
   parentEntityName?: string | null;
+  spaceId?: string;
 };
 
 export const cloneEntity = async (
@@ -22,9 +24,16 @@ export const cloneEntity = async (
     throw new Error(`Must specify entity to clone.`);
   }
 
-  const { oldEntityId, entityId = null, entityName, parentEntityId = null, parentEntityName = null } = options;
+  const {
+    oldEntityId,
+    entityId = null,
+    entityName,
+    parentEntityId = null,
+    parentEntityName = null,
+    spaceId = ROOT_SPACE,
+  } = options;
 
-  const oldEntity = await Subgraph.fetchEntity({ id: oldEntityId, spaceId: SystemIds.ROOT_SPACE_ID });
+  const oldEntity = await Effect.runPromise(getEntity(oldEntityId, spaceId));
 
   if (!oldEntity) return [[], previouslySeenEntityIds ?? new Set()];
 
@@ -38,20 +47,17 @@ export const cloneEntity = async (
   const newEntityName = entityName;
   const newOps: Array<Op> = [];
 
-  const triplesToClone = oldEntity.triples.filter(triple => !SKIPPED_ATTRIBUTES.includes(EntityId(triple.attributeId)));
-  const relationsToClone = oldEntity.relationsOut.filter(relation => !SKIPPED_ATTRIBUTES.includes(relation.typeOf.id));
-  const tabsToClone = oldEntity.relationsOut.filter(
-    relation => relation.typeOf.id === EntityId(SystemIds.TABS_ATTRIBUTE)
-  );
-  const blocksToClone = oldEntity.relationsOut.filter(relation => relation.typeOf.id === EntityId(SystemIds.BLOCKS));
+  const triplesToClone = oldEntity.values.filter(triple => !SKIPPED_PROPERTYS.includes(Id(triple.property.id)));
+  const relationsToClone = oldEntity.relations.filter(relation => !SKIPPED_PROPERTYS.includes(Id(relation.type.id)));
+  const tabsToClone = oldEntity.relations.filter(relation => relation.type.id === SystemIds.TABS_PROPERTY);
+  const blocksToClone = oldEntity.relations.filter(relation => relation.type.id === SystemIds.BLOCKS);
 
   if (newEntityName) {
     newOps.push(
       Ops.create({
         entity: newEntityId,
-        attribute: SystemIds.NAME_ATTRIBUTE,
         value: {
-          type: 'TEXT',
+          property: SystemIds.NAME_PROPERTY,
           value: newEntityName,
         },
       })
@@ -59,45 +65,41 @@ export const cloneEntity = async (
   }
 
   triplesToClone.forEach(triple => {
-    if (triple.value.type === 'TEXT' && hasVariable(triple.value.value)) {
-      const replacedValue = replaceVariables(triple.value.value, {
-        entityId: parentEntityId ?? newEntityId,
-        entityName: parentEntityName ?? newEntityName ?? '${entityName}',
-      });
+    let tripleValue = triple.value;
 
-      newOps.push(
-        Ops.create({
-          entity: newEntityId,
-          attribute: triple.attributeId,
-          value: {
-            type: triple.value.type,
-            value: replacedValue,
-          },
-        })
-      );
-    } else {
-      newOps.push(
-        Ops.create({
-          entity: newEntityId,
-          attribute: triple.attributeId,
-          value: {
-            type: triple.value.type,
-            value: triple.value.value,
-          },
-        })
-      );
+    if (triple.property.dataType === 'TEXT') {
+      if (hasVariable(tripleValue)) {
+        tripleValue = replaceVariables(tripleValue, {
+          entityId: parentEntityId ?? newEntityId,
+          entityName: parentEntityName ?? newEntityName ?? '${entityName}',
+        });
+      }
+
+      if (triple.property.id === SystemIds.FILTER) {
+        tripleValue = replaceAuthorsFilter(tripleValue, parentEntityId ?? newEntityId);
+      }
     }
+
+    newOps.push(
+      Ops.create({
+        entity: newEntityId,
+        value: {
+          property: Id(triple.property.id),
+          value: tripleValue,
+        },
+      })
+    );
   });
 
   relationsToClone.forEach(relation => {
-    newOps.push(
-      Relation.make({
-        fromId: newEntityId,
-        toId: relation.toEntity.id,
-        relationTypeId: relation.typeOf.id,
-        position: relation.index,
-      })
-    );
+    const { ops } = Graph.createRelation({
+      type: Id(relation.type.id),
+      fromEntity: newEntityId,
+      toEntity: relation.toEntity.id,
+      position: relation.position,
+    });
+
+    newOps.push(...ops);
   });
 
   const [tabOps, newlySeenTabEntityIds] = await cloneRelatedEntities(
@@ -105,7 +107,8 @@ export const cloneEntity = async (
     newEntityId,
     allSeenEntityIds,
     parentEntityId ?? newEntityId,
-    parentEntityName ?? newEntityName
+    parentEntityName ?? newEntityName,
+    spaceId
   );
   newOps.push(...tabOps);
   newlySeenTabEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
@@ -115,7 +118,8 @@ export const cloneEntity = async (
     newEntityId,
     allSeenEntityIds,
     parentEntityId ?? newEntityId,
-    parentEntityName ?? newEntityName
+    parentEntityName ?? newEntityName,
+    spaceId
   );
   newOps.push(...blockOps);
   newlySeenBlockEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
@@ -124,11 +128,12 @@ export const cloneEntity = async (
 };
 
 const cloneRelatedEntities = async (
-  relatedEntitiesToClone: Array<RelationType>,
+  relatedEntitiesToClone: Array<Relation>,
   newEntityId: string,
   previouslySeenEntityIds: Set<string>,
   parentEntityId: string | null,
-  parentEntityName: string | null | undefined
+  parentEntityName: string | null | undefined,
+  spaceId: string
 ) => {
   const allSeenEntityIds: Set<string> = new Set();
 
@@ -144,11 +149,11 @@ const cloneRelatedEntities = async (
 
       const newRelatedEntityId = ID.createEntityId();
 
-      const relationshipOp = Relation.make({
-        fromId: newEntityId,
-        toId: newRelatedEntityId,
-        relationTypeId: relation.typeOf.id,
-        position: relation.index,
+      const { ops: relationshipOps } = Graph.createRelation({
+        type: Id(relation.type.id),
+        fromEntity: newEntityId,
+        toEntity: newRelatedEntityId,
+        position: relation.position,
       });
 
       const [newRelatedEntityOps, newlySeenEntityIds] = await cloneEntity(
@@ -158,25 +163,28 @@ const cloneRelatedEntities = async (
           entityName: relation.toEntity.name ?? '',
           parentEntityId,
           parentEntityName,
+          spaceId,
         },
         allSeenEntityIds
       );
       newlySeenEntityIds.forEach(entityId => allSeenEntityIds.add(entityId));
 
-      return [relationshipOp, ...newRelatedEntityOps];
+      return [...relationshipOps, ...newRelatedEntityOps];
     })
   );
 
   return [allOps.flat(), allSeenEntityIds] as const;
 };
 
-const SKIPPED_ATTRIBUTES = [
-  EntityId(SystemIds.NAME_ATTRIBUTE),
-  EntityId(SystemIds.DESCRIPTION_ATTRIBUTE),
-  EntityId(ContentIds.AVATAR_ATTRIBUTE),
-  EntityId(SystemIds.TABS_ATTRIBUTE),
-  EntityId(SystemIds.BLOCKS),
+const SKIPPED_PROPERTYS = [
+  SystemIds.NAME_PROPERTY,
+  SystemIds.DESCRIPTION_PROPERTY,
+  ContentIds.AVATAR_PROPERTY,
+  SystemIds.TABS_PROPERTY,
+  SystemIds.BLOCKS,
 ];
+
+const AUTHORS_PROPERTY = '91a9e2f6-e51a-48f7-9976-61de8561b690';
 
 const hasVariable = (value: string) => {
   const entityIdPattern = /\$\{entityId\}/;
@@ -197,4 +205,20 @@ const replaceVariables = (value: string, variables: { entityId: string; entityNa
   }
 
   return result;
+};
+
+const replaceAuthorsFilter = (filterString: string, newEntityId: string): string => {
+  try {
+    const filterObj = JSON.parse(filterString);
+
+    if (filterObj.filter && filterObj.filter[AUTHORS_PROPERTY]) {
+      filterObj.filter[AUTHORS_PROPERTY].is = newEntityId;
+      return JSON.stringify(filterObj);
+    }
+
+    return filterString;
+  } catch (error) {
+    console.warn('Failed to parse filter string:', error);
+    return filterString;
+  }
 };

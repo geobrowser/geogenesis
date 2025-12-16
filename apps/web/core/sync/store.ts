@@ -1,15 +1,21 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import { createAtom } from '@xstate/store';
+import { Array as A } from 'effect';
+import { produce } from 'immer';
 
+import { RENDERABLE_TYPE_PROPERTY } from '../constants';
 import { readTypes } from '../database/entities';
-import { ID } from '../id';
-import { Entity } from '../io/dto/entities';
-import { EntityId } from '../io/schema';
-import { Relation, Triple } from '../types';
+import { getStrictRenderableType } from '../io/dto/properties';
 import { Entities } from '../utils/entity';
+import { DataType, Entity, Property, Relation, Value } from '../v2.types';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
+
+export const reactiveValues = createAtom<Value[]>([]);
+export const reactiveRelations = createAtom<Relation[]>([]);
+export const syncedEntities = new Map<string, Entity>();
 
 /**
  * The GeoStore is a local cache of data representing entities in the application.
@@ -18,22 +24,29 @@ type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
  * These synced changes get written back to the GeoStore asynchronously.
  */
 export class GeoStore {
-  // Core data storage
-  private entities: Map<string, Entity> = new Map();
-  private triples: Map<string, Triple[]> = new Map();
-  private relations: Map<string, Relation[]> = new Map();
-  private deletedEntities: Set<string> = new Set();
+  // Properties are entities, but with a required dataType field. The property's
+  // dataType is unique across the entire knowledge graph. The other fields of
+  // the property are space-specific, and derived from the data of an entity.
+  //
+  // @NOTE that properties can't be deleted
+  //
+  // @TODO: Should we model relation value types, renderable types as data on
+  // the property? Or should it be derived from the entity representation of
+  // the property? Probably the latter to avoid having multiple sources of truth
+  /**
+   * How should we model writing and syncing properties? Are they basically the
+   * same as writing and syncing entities?
+   */
+  private properties: Map<string, Property> = new Map();
 
-  // Pending optimistic updates
-  // @TODO:
-  // We don't need pending data since we don't actually _write_ anything
-  // to the network, we only read and merge.
-  private pendingTriples: Map<string, Map<string, Triple>> = new Map();
-  private pendingRelations: Map<string, Map<string, Relation>> = new Map();
-  private pendingEntityDeletes: Set<string> = new Set();
+  /**
+   * @TODO
+   * - [ ] Set/delete relation value types
+   * - [ ] Set/delete renderable type
+   */
+  private dataTypes: Map<string, DataType> = new Map();
+  private pendingDataTypes: Map<string, DataType> = new Map();
 
-  // Need to also store the ops. We can emit an event to create ops based on events
-  // here
   private stream: GeoEventStream;
 
   constructor(stream: GeoEventStream) {
@@ -49,22 +62,7 @@ export class GeoStore {
   }
 
   private syncEntities(entities: Entity[]) {
-    for (const entity of entities) {
-      this.entities.set(entity.id, entity);
-      this.triples.set(entity.id, entity.triples);
-
-      // @TODO: Do we still need this? Or is merging handled correctly before syncing here?
-      // const newRelations: Relation[] = [];
-      // const existingRelationIds = new Set(this.getResolvedRelations(entity.id)?.map(r => r.id) ?? []);
-
-      // for (const relation of entity.relationsOut) {
-      //   if (!existingRelationIds.has(relation.id)) {
-      //     newRelations.push(relation);
-      //   }
-      // }
-
-      this.relations.set(entity.id, entity.relationsOut);
-    }
+    this.hydrateWith(entities);
 
     if (process.env.NODE_ENV === 'development') {
       console.log(`
@@ -77,22 +75,51 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
     return ['store', 'entity', id];
   }
 
-  static queryKeys(where: WhereCondition) {
-    return ['store', 'entities', where];
+  static queryKeys(where: WhereCondition, first?: number, skip?: number) {
+    return ['store', 'entities', JSON.stringify(where), first, skip];
   }
 
   clear() {
     const entitiesToSync = this.getEntities();
 
-    this.entities.clear();
-    this.triples.clear();
-    this.relations.clear();
-    this.deletedEntities.clear();
-    this.pendingTriples.clear();
-    this.pendingRelations.clear();
-    this.pendingEntityDeletes.clear();
+    this.properties.clear();
+    this.pendingDataTypes.clear();
 
-    this.stream.emit({ type: GeoEventStream.CHANGES_CLEARED, entities: entitiesToSync });
+    this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entitiesToSync.map(e => e.id) });
+  }
+
+  public hydrateWith(entities: Entity[]) {
+    /**
+     * We set the synced entities before we update values and relations
+     * so that the synced entities are immediately available as soon as
+     * any downstream reactive consumers update as a result of changes to
+     * reactiveValues or reactiveRelations.
+     */
+    for (const entity of entities) {
+      syncedEntities.set(entity.id, entity);
+    }
+
+    const newValues = entities.flatMap(e => e.values);
+    const newRelations = entities.flatMap(e => e.relations);
+
+    const valueIdsToWrite = new Set(newValues.map(t => t.id));
+    const relationIdsToWrite = new Set(newRelations.map(t => t.id));
+
+    reactiveValues.set(prev => {
+      const unchangedValues = prev.filter(t => {
+        return !valueIdsToWrite.has(t.id);
+      });
+
+      return [...unchangedValues, ...newValues];
+    });
+
+    reactiveRelations.set(prev => {
+      const unchangedRelations = prev.filter(t => {
+        return !relationIdsToWrite.has(t.id);
+      });
+
+      return [...unchangedRelations, ...newRelations];
+    });
   }
 
   /**
@@ -101,26 +128,23 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   public getEntity(id: string, options: ReadOptions = {}): Entity | undefined {
     const { includeDeleted = false } = options;
 
-    // Check if the entity is deleted
-    if (this.isEntityDeleted(id) && !options.includeDeleted) return undefined;
-
     // Get the base entity
-    const entity = this.entities.get(id);
+    const entity = syncedEntities.get(id);
 
     // Get triples including any pending optimistic updates
-    const triples = this.getResolvedTriples(id, options.includeDeleted);
+    const values = this.getResolvedValues(id, options.includeDeleted);
 
     // Get relations including any pending optimistic updates
     const relations = this.getResolvedRelations(id, options.includeDeleted);
 
-    if (!entity && triples.length === 0 && relations.length === 0) {
+    if (!entity && values.length === 0 && relations.length === 0) {
       return undefined;
     }
 
-    const name = Entities.name(triples);
-    const description = Entities.description(triples);
+    const name = Entities.name(values);
+    const description = Entities.description(values);
     const types = readTypes(relations);
-    const spaces = Entities.spaces(triples, relations);
+    const spaces = Entities.spaces(values, relations);
 
     // Return fully resolved entity
     const resolvedEntity: Entity = {
@@ -134,35 +158,29 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
             description: description ?? entity.description,
           }
         : {
-            id: EntityId(id),
+            id: id,
             name,
             description,
             types,
             spaces,
             nameTripleSpaces: spaces,
           }),
-      triples: triples.filter(t =>
-        includeDeleted ? true : Boolean(t.isDeleted) === false && options.spaceId ? t.space === options.spaceId : true
-      ),
-      relationsOut: relations.filter(r =>
-        includeDeleted ? true : Boolean(r.isDeleted) === false && options.spaceId ? r.space === options.spaceId : true
+      values: values.filter(t => (options.spaceId ? t.spaceId === options.spaceId : true)),
+      relations: relations.filter(r =>
+        includeDeleted ? true : Boolean(r.isDeleted) === false && options.spaceId ? r.spaceId === options.spaceId : true
       ),
     };
 
-    const resolvedRelations = resolvedEntity.relationsOut.map(r => {
+    const resolvedRelations = resolvedEntity.relations.map(r => {
       let maybeToEntity: Entity | null = null;
-      let maybeRelationEntity: Entity | null = null;
 
       if (r.toEntity.id !== id) {
-        maybeToEntity = this.entities.get(r.toEntity.id) ?? null;
-        maybeRelationEntity = this.entities.get(r.id) ?? null;
+        maybeToEntity = syncedEntities.get(r.toEntity.id) ?? null;
       }
 
       return {
         ...r,
-        index:
-          maybeRelationEntity?.triples.find(t => t.attributeId === EntityId(SystemIds.RELATION_INDEX))?.value.value ??
-          r.index,
+        position: r.position,
         toEntity: {
           ...r.toEntity,
           name: maybeToEntity?.name ?? r.toEntity.name,
@@ -170,7 +188,7 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
       };
     });
 
-    resolvedEntity.relationsOut = resolvedRelations;
+    resolvedEntity.relations = resolvedRelations;
 
     return resolvedEntity;
   }
@@ -179,216 +197,189 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
    * Get multiple entities by ID with full resolution
    */
   public getEntities(options: ReadOptions = {}): Entity[] {
-    return Array.from(this.entities.keys())
-      .filter(id => (options.includeDeleted ? true : this.isEntityDeleted(id) === false))
-      .map(id => this.getEntity(id, options))
-      .filter(entity => entity !== undefined);
-  }
-
-  /**
-   * Set or update an entity's base properties (without triples or relations)
-   */
-  public setEntity(entity: Entity): void {
-    const baseEntity = { ...entity, triples: [], relationsOut: [] };
-    this.entities.set(entity.id as string, baseEntity);
-
-    // Set entity triples
-    if (entity.triples && entity.triples.length > 0) {
-      entity.triples.forEach(triple => {
-        this.setTriple(triple);
-      });
-    }
-
-    // Set entity relations
-    if (entity.relationsOut && entity.relationsOut.length > 0) {
-      entity.relationsOut.forEach(relation => {
-        this.setRelation(relation);
-      });
-    }
-
-    this.stream.emit({ type: GeoEventStream.ENTITY_UPDATED, entity });
-  }
-
-  /**
-   * Get triples for an entity (without pending changes)
-   */
-  private getBaseTriples(entityId: string): Triple[] {
-    return this.triples.get(entityId) || [];
+    return [...syncedEntities.keys()].map(id => this.getEntity(id, options)).filter(entity => entity !== undefined);
   }
 
   /**
    * Get all triples for an entity including optimistic updates
    */
-  public getResolvedTriples(entityId: string, includeDeleted = false): Triple[] {
-    const baseTriples = this.getBaseTriples(entityId);
-    const pendingTripleMap = this.pendingTriples.get(entityId);
+  public getResolvedValues(entityId: string, includeDeleted = false): Value[] {
+    const values = reactiveValues.get().filter(v => v.entity.id === entityId);
 
-    if (!pendingTripleMap || pendingTripleMap.size === 0) {
-      return baseTriples;
+    if (!includeDeleted) {
+      return values.filter(v => Boolean(v.isDeleted) === false);
     }
 
-    // Create a map of base triples for easier merging
-    const tripleMap = new Map<string, Triple>();
-
-    // Function to generate a unique key for each triple
-    const getTripleKey = (triple: Triple): string =>
-      ID.createTripleId({
-        attributeId: triple.attributeId,
-        entityId: triple.entityId,
-        space: triple.space,
-      });
-
-    // Add base triples to the map
-    baseTriples.forEach(triple => {
-      tripleMap.set(getTripleKey(triple), triple);
-    });
-
-    // Apply pending triple changes
-    pendingTripleMap.forEach(pendingTriple => {
-      const key = getTripleKey(pendingTriple);
-      if (pendingTriple.isDeleted && !includeDeleted) {
-        tripleMap.delete(key);
-      } else {
-        tripleMap.set(key, pendingTriple);
-      }
-    });
-
-    return Array.from(tripleMap.values());
+    return values;
   }
 
-  /**
-   * Get relations for an entity (without pending changes)
-   */
-  private getBaseRelations(entityId: string): Relation[] {
-    return this.relations.get(entityId) || [];
+  getValue(id: string, entityId: string): Value | null {
+    return this.getResolvedValues(entityId).find(v => v.id === id) ?? null;
+  }
+
+  getRelation(id: string, entityId: string): Relation | null {
+    return this.getResolvedRelations(entityId).find(r => r.id === id) ?? null;
+  }
+
+  public setDataType(id: string, dataType: DataType) {
+    this.pendingDataTypes.set(id, dataType);
+
+    this.stream.emit({ type: GeoEventStream.DATA_TYPE_CREATED, property: { id, dataType } });
+  }
+
+  public getProperty(id: string): Property | null {
+    const entity = this.getEntity(id);
+
+    const stableDataType = this.getStableDataType(id);
+    const pendingDataType = this.pendingDataTypes.get(id);
+
+    /**
+     * Always favor the stable data type. The stable data type should
+     * come from the server. If the property already exists in the
+     * knowledge graph then the data type is immutable.
+     */
+    const dataType = stableDataType ?? pendingDataType ?? null;
+
+    if (!dataType) {
+      return null;
+    }
+
+    const relationValueTypes = entity?.relations
+      .filter(t => t.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
+      .map(r => ({
+        id: r.toEntity.id,
+        name: r.toEntity.name,
+      }));
+
+    const renderableType = entity?.relations.find(t => t.type.id === RENDERABLE_TYPE_PROPERTY);
+
+    const renderableTypeId = renderableType ? renderableType.toEntity.id : null;
+
+    return {
+      id,
+      name: entity?.name ?? null,
+      dataType: dataType,
+      relationValueTypes,
+      renderableType: renderableTypeId,
+      renderableTypeStrict: getStrictRenderableType(renderableTypeId),
+
+      /**
+       * A data type is still editable as long as there's no
+       * stable representation of the property on the server.
+       */
+      isDataTypeEditable: !stableDataType,
+    };
+  }
+
+  getStableDataType(id: string): DataType | null {
+    return this.dataTypes.get(id) ?? null;
   }
 
   /**
    * Get all relations for an entity including optimistic updates
    */
-  private getResolvedRelations(entityId: string, includeDeleted = false): Relation[] {
-    const baseRelations = this.getBaseRelations(entityId);
-    const pendingRelationMap = this.pendingRelations.get(entityId);
+  public getResolvedRelations(entityId: string, includeDeleted = false): Relation[] {
+    const relations = reactiveRelations.get().filter(r => r.fromEntity.id === entityId);
 
-    if (!pendingRelationMap || pendingRelationMap.size === 0) {
-      return baseRelations;
+    if (!includeDeleted) {
+      return relations.filter(r => Boolean(r.isDeleted) === false);
     }
 
-    // Create a map of base relations for easier merging
-    const relationMap = new Map<string, Relation>();
-
-    // Add base relations to the map
-    baseRelations.forEach(relation => {
-      relationMap.set(relation.id, relation);
-    });
-
-    // Apply pending relation changes
-    pendingRelationMap.forEach(pendingRelation => {
-      if (pendingRelation.isDeleted && !includeDeleted) {
-        relationMap.delete(pendingRelation.id);
-      } else {
-        relationMap.set(pendingRelation.id, pendingRelation);
-      }
-    });
-
-    return Array.from(relationMap.values());
+    return relations;
   }
 
   /**
-   * Check if entity is marked as deleted (including pending deletes)
+   * Add or update a value with optimistic updates
    */
-  public isEntityDeleted(id: string): boolean {
-    return this.deletedEntities.has(id) || this.pendingEntityDeletes.has(id);
-  }
-
-  /**
-   * Add or update a triple with optimistic updates
-   */
-  public setTriple(triple: Triple): void {
-    const entityId = triple.entityId;
-
-    // Create a composite key for the triple
-    const tripleKey = ID.createTripleId({
-      attributeId: triple.attributeId,
-      entityId: triple.entityId,
-      space: triple.space,
+  public setValue(value: Value): void {
+    const newValue = produce(value, draft => {
+      draft.hasBeenPublished = false;
+      draft.isDeleted = false;
+      draft.isLocal = true;
+      draft.timestamp = new Date().toISOString();
     });
-    // Get or create the pending triples map for this entity
-    if (!this.pendingTriples.has(entityId)) {
-      this.pendingTriples.set(entityId, new Map());
-    }
 
-    // Add to pending changes
-    this.pendingTriples.get(entityId)!.set(tripleKey, triple);
+    reactiveValues.set(prev => {
+      const unchangedValues = prev.filter(t => {
+        return t.id !== newValue.id;
+      });
+
+      return [...unchangedValues, newValue];
+    });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.TRIPLES_CREATED, triple });
+    this.stream.emit({ type: GeoEventStream.VALUES_CREATED, value: newValue });
   }
 
   /**
-   * Delete a triple with optimistic updates
+   * Delete a value with optimistic updates
    */
-  public deleteTriple(triple: Triple): void {
-    // Mark the triple as deleted in pending changes
-    const entityId = triple.entityId;
-    const tripleKey = ID.createTripleId({
-      attributeId: triple.attributeId,
-      entityId: triple.entityId,
-      space: triple.space,
+  public deleteValue(value: Value): void {
+    const newValue = produce(value, draft => {
+      draft.hasBeenPublished = false;
+      draft.isDeleted = true;
+      draft.isLocal = true;
+      draft.timestamp = new Date().toISOString();
     });
-    triple.isDeleted = true;
 
-    // Get or create the pending triples map for this entity
-    if (!this.pendingTriples.has(entityId)) {
-      this.pendingTriples.set(entityId, new Map());
-    }
+    // Remove from reactive values
+    reactiveValues.set(prev => {
+      const unchangedValues = prev.filter(t => {
+        return t.id !== newValue.id;
+      });
 
-    // Add a deleted version to pending changes
-    this.pendingTriples.get(entityId)!.set(tripleKey, triple);
+      return [...unchangedValues, newValue];
+    });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.TRIPLES_DELETED, triple });
+    this.stream.emit({ type: GeoEventStream.VALUES_DELETED, value: newValue });
   }
 
   /**
    * Add or update a relation with optimistic updates
    */
   public setRelation(relation: Relation): void {
-    const entityId = relation.fromEntity.id;
+    const newRelation = produce(relation, draft => {
+      draft.hasBeenPublished = false;
+      draft.isDeleted = false;
+      draft.isLocal = true;
+      draft.timestamp = new Date().toISOString();
+    });
 
-    // Get or create the pending relations map for this entity
-    if (!this.pendingRelations.has(entityId)) {
-      this.pendingRelations.set(entityId, new Map());
-    }
+    reactiveRelations.set(prev => {
+      const unchangedRelations = prev.filter(t => {
+        return t.id !== relation.id;
+      });
 
-    // @TODO: Optimistically set types
-
-    // Add to pending changes
-    this.pendingRelations.get(entityId)!.set(relation.id, relation);
+      return [...unchangedRelations, newRelation];
+    });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation });
+    this.stream.emit({ type: GeoEventStream.RELATION_CREATED, relation: newRelation });
   }
 
   /**
    * Delete a relation with optimistic updates
    */
   public deleteRelation(relation: Relation): void {
-    const entityId = relation.fromEntity.id;
-    relation.isDeleted = true;
+    const newRelation = produce(relation, draft => {
+      draft.hasBeenPublished = false;
+      draft.isDeleted = true;
+      draft.isLocal = true;
+      draft.timestamp = new Date().toISOString();
+    });
 
-    // Get or create the pending relations map for this entity
-    if (!this.pendingRelations.has(entityId)) {
-      this.pendingRelations.set(entityId, new Map());
-    }
+    // Remove from reactive relations
+    reactiveRelations.set(prev => {
+      const unchangedRelations = prev.filter(t => {
+        return t.id !== newRelation.id;
+      });
 
-    // @TODO: Optimistically set types
-
-    // Add a deleted version to pending changes
-    this.pendingRelations.get(entityId)!.set(relation.id, relation);
+      return [...unchangedRelations, newRelation];
+    });
 
     // Emit update event
-    this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation });
+    this.stream.emit({ type: GeoEventStream.RELATION_DELETED, relation: newRelation });
   }
 
   /**
@@ -397,27 +388,46 @@ Entity ids: ${entities.map(e => e.id).join(', ')}`);
   public findReferencingEntities(id: string): string[] {
     const referencingEntities: string[] = [];
 
+    const relations = reactiveRelations.get();
+
     // Check base relations
-    this.relations.forEach((relationsArray, entityId) => {
-      for (const relation of relationsArray) {
-        if (relation.toEntity.id === id) {
-          referencingEntities.push(entityId);
-          break;
-        }
+    relations.forEach(relation => {
+      if (relation.toEntity.id === id) {
+        referencingEntities.push(relation.fromEntity.id);
       }
     });
 
-    // Check pending relations
-    this.pendingRelations.forEach((pendingMap, entityId) => {
-      pendingMap.forEach(relation => {
-        if (relation.toEntity.id === id && !relation.isDeleted) {
-          if (!referencingEntities.includes(entityId)) {
-            referencingEntities.push(entityId);
-          }
-        }
-      });
+    return referencingEntities;
+  }
+
+  public setAsPublished(valueIds: string[], relationIds: string[]) {
+    const valueIdsSet = new Set(valueIds);
+    const relationIdsSet = new Set(relationIds);
+
+    reactiveValues.set(prev => {
+      const [unpublished, published] = A.partition(prev, v => valueIdsSet.has(v.id));
+
+      return [
+        ...unpublished,
+        ...published.map(p => {
+          return produce(p, draft => {
+            draft.hasBeenPublished = true;
+          });
+        }),
+      ];
     });
 
-    return referencingEntities;
+    reactiveRelations.set(prev => {
+      const [unpublished, published] = A.partition(prev, r => relationIdsSet.has(r.id));
+
+      return [
+        ...unpublished,
+        ...published.map(p => {
+          return produce(p, draft => {
+            draft.hasBeenPublished = true;
+          });
+        }),
+      ];
+    });
   }
 }

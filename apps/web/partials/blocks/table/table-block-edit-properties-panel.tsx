@@ -1,7 +1,7 @@
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
-import { pipe } from 'effect';
+import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 import { useAtomValue, useSetAtom } from 'jotai';
 import Image from 'next/legacy/image';
@@ -14,22 +14,18 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
-import { EntityId } from '~/core/io/schema';
-import { useQueryEntitiesAsync, useQueryEntityAsync } from '~/core/sync/use-store';
-import { RenderableProperty } from '~/core/types';
-import { toRenderables } from '~/core/utils/to-renderables';
-import { getImagePath } from '~/core/utils/utils';
+import { getProperties } from '~/core/io/v2/queries';
+import { useQueryEntityAsync } from '~/core/sync/use-store';
 
 import { Checkbox } from '~/design-system/checkbox';
 import { Dots } from '~/design-system/dots';
+import { GeoImage } from '~/design-system/geo-image';
 import { EntitySmall } from '~/design-system/icons/entity-small';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { MenuItem } from '~/design-system/menu';
-
-import { sortRenderables } from '~/partials/entity-page/entity-page-utils';
 
 import { editingPropertiesAtom } from '~/atoms';
 
@@ -56,7 +52,7 @@ function RelationsPropertySelector() {
 
   const [selectedEntities, setSelectedEntities] = React.useState<{
     type: 'TO' | 'FROM' | 'SOURCE';
-    entityIds: EntityId[];
+    entityIds: string[];
   } | null>(null);
   const setIsEditingProperties = useSetAtom(editingPropertiesAtom);
 
@@ -76,13 +72,12 @@ function RelationsPropertySelector() {
   }
 
   // @TODO: This should be stored as a data structure somewhere
-  const filteredPropertyId = filterState.find(r => r.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE)?.value;
-  const relationIds = sourceEntity.relationsOut.filter(r => r.typeOf.id === filteredPropertyId).map(r => r.id);
-  const toIds = sourceEntity.relationsOut.filter(r => r.typeOf.id === filteredPropertyId).map(r => r.toEntity.id);
+  const filteredPropertyId = filterState.find(r => r.columnId === SystemIds.RELATION_TYPE_PROPERTY)?.value;
+  const relationIds = sourceEntity.relations.filter(r => r.type.id === filteredPropertyId).map(r => r.id);
+  const toIds = sourceEntity.relations.filter(r => r.type.id === filteredPropertyId).map(r => r.toEntity.id);
 
-  const maybeSourceEntityImage = sourceEntity.relationsOut.find(
-    r => r.typeOf.id === EntityId(ContentIds.AVATAR_ATTRIBUTE)
-  )?.toEntity.value;
+  const maybeSourceEntityImage = sourceEntity.relations.find(r => r.type.id === ContentIds.AVATAR_PROPERTY)?.toEntity
+    .value;
 
   const onBack = () => {
     if (selectedEntities && selectedEntities.entityIds.length > 0) {
@@ -108,10 +103,11 @@ function RelationsPropertySelector() {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
                 <div className="relative h-4 w-4 overflow-hidden rounded">
-                  <Image
-                    src={maybeSourceEntityImage ? getImagePath(maybeSourceEntityImage) : PLACEHOLDER_SPACE_IMAGE}
-                    layout="fill"
-                  />
+                  {maybeSourceEntityImage ? (
+                    <GeoImage value={maybeSourceEntityImage} fill alt="" />
+                  ) : (
+                    <Image src={PLACEHOLDER_SPACE_IMAGE} layout="fill" />
+                  )}
                 </div>
                 {/* <span className="text-footnoteMedium text-grey-04">0 selected</span> */}
               </div>
@@ -157,7 +153,7 @@ function DefaultPropertySelector() {
     queryKey: ['available-columns', filterState],
     queryFn: async () => {
       const schema = await getSchemaFromTypeIds(
-        filterState.filter(f => f.columnId === SystemIds.TYPES_ATTRIBUTE).map(f => f.value)
+        filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => f.value)
       );
 
       return schema;
@@ -198,7 +194,7 @@ function DefaultPropertySelector() {
 }
 
 type PropertySelectorProps = {
-  entityIds: EntityId[];
+  entityIds: string[];
   where: 'TO' | 'FROM' | 'SOURCE';
 };
 
@@ -211,8 +207,6 @@ type PropertySelectorProps = {
  * user can select Name, Description or Spouse.
  */
 function PropertySelector({ entityIds, where }: PropertySelectorProps) {
-  const findMany = useQueryEntitiesAsync();
-
   const { toggleProperty: setProperty, mapping } = useView();
 
   const { data: availableProperties, isLoading } = useQuery({
@@ -223,38 +217,17 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
         return [];
       }
 
-      const entities = await findMany({
-        where: {
-          id: {
-            in: entityIds,
-          },
-        },
-      });
-
-      const availableProperties = entities.flatMap(e => {
-        return pipe(
-          toRenderables({
-            entityId: e.id,
-            entityName: e.name,
-            spaceId: e.spaces[0],
-            triples: e.triples,
-            relations: e.relationsOut,
-          }),
-          sortRenderables,
-          renderables =>
-            renderables
-              .map(t => {
-                return {
-                  id: t.attributeId,
-                  name: t.attributeName,
-                  renderableType: t.type,
-                };
-              })
-              .filter(t => t.name !== null)
-        );
-      });
-
-      return dedupeWith(availableProperties, (a, b) => a.id === b.id);
+      const properties = await Effect.runPromise(getProperties(entityIds));
+      return dedupeWith(
+        properties.map(e => {
+          return {
+            id: e.id,
+            name: e.name,
+            renderableType: e.renderableType ?? e.dataType,
+          };
+        }),
+        (a, b) => a.id === b.id
+      );
     },
   });
 
@@ -270,11 +243,7 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
     return <MenuItem>No available properties</MenuItem>;
   }
 
-  const onSelectProperty = (property: {
-    id: string;
-    name: string | null;
-    renderableType: RenderableProperty['type'];
-  }) => {
+  const onSelectProperty = (property: { id: string; name: string | null; renderableType: string }) => {
     const selector = generateSelector(property, where);
 
     setProperty(

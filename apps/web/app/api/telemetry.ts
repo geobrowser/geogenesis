@@ -1,42 +1,21 @@
+import { NodeSdk } from '@effect/opentelemetry';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+
 import { ServerEnvironment } from './environment';
 
-export type Metric = {
-  name: string;
-} & (
-  | {
-      counter: {
-        value: number;
-      };
-    }
-  | {
-      gauge: {
-        value: number;
-      };
-    }
-);
-
-export class Telemetry {
-  static metric(metric: Metric) {
-    const { telemetryApiKey, telemetryUrl } = ServerEnvironment;
-
-    if (!telemetryUrl || !telemetryApiKey) {
-      return;
-    }
-
-    // @TODO proper o11y with tracing, logging, metrics, profiling, sampling, etc.
-    fetch(telemetryUrl, {
-      method: 'POST',
+const exporter = ServerEnvironment.telemetryToken
+  ? new OTLPTraceExporter({
+      url: 'https://api.axiom.co/v1/traces', // Axiom API endpoint for trace data
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${telemetryApiKey}`,
+        Authorization: ServerEnvironment.telemetryToken,
+        'X-Axiom-Dataset': 'web',
       },
-      body: JSON.stringify({
-        dt: new Date()
-          .toISOString()
-          .replace('T', ' ')
-          .replace(/\.\d+Z$/, ' UTC'),
-        ...metric,
-      }),
-    });
-  }
-}
+    })
+  : undefined;
+
+// Set up tracing with the OpenTelemetry SDK
+export const Telemetry = NodeSdk.layer(() => ({
+  resource: { serviceName: 'web' },
+  spanProcessor: exporter ? new BatchSpanProcessor(exporter) : undefined,
+}));

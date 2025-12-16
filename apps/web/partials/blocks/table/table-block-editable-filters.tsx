@@ -3,7 +3,7 @@ import { SystemIds } from '@graphprotocol/grc-20';
 import { Filter } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
-import { FilterableValueType, VALUE_TYPES } from '~/core/value-types';
+import { FilterableValueType } from '~/core/value-types';
 
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
@@ -12,9 +12,18 @@ import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 
 type RenderableFilter = Filter & { columnName: string };
 
-export function TableBlockEditableFilters() {
+interface TableBlockEditableFiltersProps {
+  filterState?: Filter[];
+  setFilterState?: (filters: Filter[]) => void;
+}
+
+export function TableBlockEditableFilters({ filterState, setFilterState }: TableBlockEditableFiltersProps) {
   const { source } = useSource();
-  const { setFilterState, filterState, filterableProperties } = useFilters();
+  const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
+
+  // Use provided props or fall back to the hook
+  const effectiveFilterState = filterState ?? dbFilterState;
+  const effectiveSetFilterState = setFilterState ?? dbSetFilterState;
 
   // We treat Name, Typs and Space as special filters even though they are not
   // always columns on the type schema for a table. We allow users to be able
@@ -25,7 +34,7 @@ export function TableBlockEditableFilters() {
           // @TODO(data blocks): We should add the default filters to the data model
           // itself instead of manually here.
           // {
-          //   columnId: SystemIds.NAME_ATTRIBUTE,
+          //   columnId: SystemIds.NAME_PROPERTY,
           //   columnName: 'Name',
           //   valueType: valueTypes[SystemIds.TEXT],
           //   value: '',
@@ -36,7 +45,7 @@ export function TableBlockEditableFilters() {
               return {
                 columnId: c.id,
                 columnName: c.name ?? '',
-                valueType: VALUE_TYPES[c.valueType],
+                valueType: c.dataType,
                 value: '',
                 valueName: null,
                 relationValueTypes: c.relationValueTypes,
@@ -47,14 +56,14 @@ export function TableBlockEditableFilters() {
         ]
       : [
           {
-            columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+            columnId: SystemIds.RELATION_FROM_PROPERTY,
             columnName: 'From',
             valueType: 'RELATION',
             value: '',
             valueName: null,
           },
           {
-            columnId: SystemIds.RELATION_TYPE_ATTRIBUTE,
+            columnId: SystemIds.RELATION_TYPE_PROPERTY,
             columnName: 'Relation type',
             valueType: 'RELATION',
             value: '',
@@ -69,25 +78,25 @@ export function TableBlockEditableFilters() {
     value,
     valueType,
     valueName,
+    columnName,
   }: {
     columnId: string;
     value: string;
     valueType: FilterableValueType;
     valueName: string | null;
+    columnName: string;
   }) => {
-    setFilterState(
-      [
-        ...filterState,
-        {
-          valueType,
-          columnId,
-          columnName: null,
-          value,
-          valueName,
-        },
-      ],
-      source
-    );
+    const newFilters = [
+      ...effectiveFilterState,
+      {
+        valueType,
+        columnId,
+        columnName: null,
+        value,
+        valueName,
+      },
+    ];
+    effectiveSetFilterState(newFilters);
   };
 
   return (
@@ -109,12 +118,12 @@ function sortFilters(filters: RenderableFilter[]): RenderableFilter[] {
     const { columnId: attributeIdA, columnName: attributeNameA } = renderableA;
     const { columnId: attributeIdB, columnName: attributeNameB } = renderableB;
 
-    const isNameA = attributeIdA === SystemIds.NAME_ATTRIBUTE;
-    const isNameB = attributeIdB === SystemIds.NAME_ATTRIBUTE;
-    const isDescriptionA = attributeIdA === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isDescriptionB = attributeIdB === SystemIds.DESCRIPTION_ATTRIBUTE;
-    const isTypesA = attributeIdA === SystemIds.TYPES_ATTRIBUTE;
-    const isTypesB = attributeIdB === SystemIds.TYPES_ATTRIBUTE;
+    const isNameA = attributeIdA === SystemIds.NAME_PROPERTY;
+    const isNameB = attributeIdB === SystemIds.NAME_PROPERTY;
+    const isDescriptionA = attributeIdA === SystemIds.DESCRIPTION_PROPERTY;
+    const isDescriptionB = attributeIdB === SystemIds.DESCRIPTION_PROPERTY;
+    const isTypesA = attributeIdA === SystemIds.TYPES_PROPERTY;
+    const isTypesB = attributeIdB === SystemIds.TYPES_PROPERTY;
 
     if (isNameA && !isNameB) return -1;
     if (!isNameA && isNameB) return 1;

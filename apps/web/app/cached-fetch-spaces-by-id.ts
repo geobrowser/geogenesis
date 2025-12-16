@@ -1,7 +1,9 @@
+import { Effect } from 'effect';
+
 import { cache } from 'react';
 
-import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
+import { getSpaces } from '~/core/io/v2/queries';
 
 export const cachedFetchSpacesById = cache(async (spaceIds: string[]) => {
-  return fetchSpacesById(spaceIds);
+  return Effect.runPromise(getSpaces({ spaceIds }));
 });

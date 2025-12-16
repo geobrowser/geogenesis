@@ -118,7 +118,6 @@ export function TableBlockContextMenu() {
               </MenuItem>
             </>
           )}
-
           {isEditingDataSource && <DataBlockSourceMenu onBack={() => setIsEditingDataSource(false)} />}
           <TableBlockEditPropertiesPanel />
         </Dropdown.Content>

@@ -1,8 +1,9 @@
 import { SystemIds } from '@graphprotocol/grc-20';
+import { produce } from 'immer';
 
-import { upsert } from '~/core/database/write';
+import { ID } from '~/core/id';
 import { EntityId, SpaceId } from '~/core/io/schema';
-// import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Source, getSource, removeSourceType, upsertSourceType } from './source';
@@ -12,8 +13,8 @@ import { useView } from './use-view';
 
 export function useSource() {
   const { entityId, spaceId } = useDataBlockInstance();
-  // const { name: fromEntityName } = useEntityPageStore();
   const { shownColumnRelations, toggleProperty } = useView();
+  const { storage } = useMutate();
 
   const { filterState, setFilterState } = useFilters();
 
@@ -24,33 +25,28 @@ export function useSource() {
 
   const source: Source = getSource({
     blockId: EntityId(entityId),
-    dataEntityRelations: blockEntity?.relationsOut ?? [],
+    dataEntityRelations: blockEntity?.relations ?? [],
     currentSpaceId: SpaceId(spaceId),
     filterState,
   });
 
   const setSource = (newSource: Source) => {
     removeSourceType({
-      relations: blockEntity?.relationsOut ?? [],
-      spaceId: SpaceId(spaceId),
+      relations: blockEntity?.relations ?? [],
     });
     upsertSourceType({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
 
     if (newSource.type === 'RELATIONS') {
-      const maybeExistingRelationType = filterState.filter(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE);
-
       setFilterState(
-        [
-          ...maybeExistingRelationType,
-          {
-            columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+        produce(filterState, draft => {
+          draft.push({
+            columnId: SystemIds.RELATION_FROM_PROPERTY,
             columnName: 'From',
             valueType: 'RELATION',
             value: newSource.value,
             valueName: newSource.name,
-          },
-        ],
-        newSource
+          });
+        })
       );
 
       // @NOTE disabled since overwrites user set titles if changing source before onBlur writes ops
@@ -58,7 +54,7 @@ export function useSource() {
       // if (fromEntityName && blockEntity?.name !== undefined && blockEntity?.name !== null) {
       //   upsert(
       //     {
-      //       attributeId: SystemIds.NAME_ATTRIBUTE,
+      //       attributeId: SystemIds.NAME_PROPERTY,
       //       entityId: entityId,
       //       entityName: fromEntityName,
       //       attributeName: 'Name',
@@ -74,27 +70,35 @@ export function useSource() {
        * relation then we create it.
        */
       const maybeExistingNamePropertyRelation = shownColumnRelations.find(
-        t => t.toEntity.id === EntityId(SystemIds.NAME_ATTRIBUTE)
+        t => t.toEntity.id === EntityId(SystemIds.NAME_PROPERTY)
       );
 
       if (maybeExistingNamePropertyRelation) {
-        upsert(
-          {
-            attributeId: SystemIds.SELECTOR_ATTRIBUTE,
-            attributeName: 'Selector',
-            entityId: maybeExistingNamePropertyRelation.id,
-            entityName: null,
-            value: { type: 'TEXT', value: `->[${SystemIds.RELATION_TO_ATTRIBUTE}]` },
+        storage.values.set({
+          id: ID.createValueId({
+            entityId: maybeExistingNamePropertyRelation.entityId,
+            propertyId: SystemIds.SELECTOR_PROPERTY,
+            spaceId,
+          }),
+          entity: {
+            id: maybeExistingNamePropertyRelation.entityId,
+            name: null,
           },
-          spaceId
-        );
+          property: {
+            id: SystemIds.SELECTOR_PROPERTY,
+            name: 'Selector',
+            dataType: 'TEXT',
+          },
+          spaceId,
+          value: `->[${SystemIds.RELATION_TO_PROPERTY}]`,
+        });
       } else {
         toggleProperty(
           {
-            id: SystemIds.NAME_ATTRIBUTE,
+            id: SystemIds.NAME_PROPERTY,
             name: 'Name',
           },
-          `->[${SystemIds.RELATION_TO_ATTRIBUTE}]`
+          `->[${SystemIds.RELATION_TO_PROPERTY}]`
         );
       }
     }
@@ -104,23 +108,20 @@ export function useSource() {
       // adding the new one.
       const filtersWithoutSpaces = filterState?.filter(f => f.columnId !== SystemIds.SPACE_FILTER) ?? [];
 
-      setFilterState(
-        [
-          ...filtersWithoutSpaces,
-          {
-            columnId: SystemIds.SPACE_FILTER,
-            columnName: 'Space',
-            valueType: 'RELATION',
-            value: newSource.value[0],
-            valueName: null,
-          },
-        ],
-        newSource
-      );
+      setFilterState([
+        ...filtersWithoutSpaces,
+        {
+          columnId: SystemIds.SPACE_FILTER,
+          columnName: 'Space',
+          valueType: 'RELATION',
+          value: newSource.value[0],
+          valueName: null,
+        },
+      ]);
     }
 
     if (newSource.type === 'GEO') {
-      setFilterState([], newSource);
+      setFilterState([]);
     }
   };
 

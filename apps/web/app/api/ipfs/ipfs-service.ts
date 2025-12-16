@@ -2,9 +2,6 @@ import { Effect } from 'effect';
 
 import { IpfsParseResponseError, IpfsUploadError } from '~/core/errors';
 
-import { Metrics } from '../metrics';
-import { Telemetry } from '../telemetry';
-
 function upload(formData: FormData, url: string) {
   return Effect.gen(function* () {
     yield* Effect.logInfo(`Posting IPFS content to url`, url);
@@ -37,38 +34,14 @@ export class IpfsService {
     const url = `${this.ipfsUrl}/api/v0/add`;
 
     return Effect.gen(function* () {
-      const startTime = Date.now();
-
-      const blob = new Blob([binary], { type: 'application/octet-stream' });
+      // @TODO fix Argument of type 'Buffer' is not assignable to parameter of type 'Uint8Array<ArrayBufferLike>'
+      const blob = new Blob([binary as any], { type: 'application/octet-stream' });
       const formData = new FormData();
       formData.append('file', blob);
 
       const hash = yield* upload(formData, url);
 
-      const endTime = Date.now() - startTime;
-      Telemetry.metric(Metrics.timing('ipfs_upload_binary_duration', endTime));
       yield* Effect.logInfo(`Uploaded binary to IPFS successfully`).pipe(Effect.annotateLogs({ hash }));
-
-      return hash;
-    });
-  }
-
-  uploadFile(file: File): Effect.Effect<`ipfs://${string}`, IpfsUploadError | IpfsParseResponseError> {
-    const url = `${this.ipfsUrl}/api/v0/add`;
-
-    return Effect.gen(function* () {
-      yield* Effect.logInfo(`Uploading file to IPFS`);
-      const startTime = Date.now();
-
-      const formData = new FormData();
-      formData.append('file', file);
-
-      console.log('uploading file to ipfs', url);
-      const hash = yield* upload(formData, url);
-
-      const endTime = Date.now() - startTime;
-      Telemetry.metric(Metrics.timing('ipfs_upload_file_duration', endTime));
-      yield* Effect.logInfo(`Uploaded file to IPFS successfully`).pipe(Effect.annotateLogs({ hash }));
 
       return hash;
     });

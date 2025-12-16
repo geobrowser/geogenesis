@@ -1,4 +1,4 @@
-import { Schema } from '@effect/schema';
+import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 

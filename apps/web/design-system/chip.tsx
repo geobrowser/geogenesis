@@ -1,19 +1,16 @@
 'use client';
 
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
-import Image from 'next/image';
 
 import * as React from 'react';
 import { useState } from 'react';
 
-import { DB } from '~/core/database/write';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
 import { NavUtils } from '~/core/utils/utils';
-import { getImagePath } from '~/core/utils/utils';
 
+import { GeoImage } from '~/design-system/geo-image';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { RelationSmall } from '~/design-system/icons/relation-small';
@@ -59,10 +56,12 @@ type LinkableRelationChipProps = {
   currentSpaceId: string;
   entityId: string;
   spaceId?: string;
+  relationEntityId?: string;
   relationId?: string;
   verified?: boolean;
 
   onDelete?: () => void;
+  onDone?: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
   small?: boolean;
   className?: string;
   children: React.ReactNode;
@@ -161,9 +160,11 @@ export function LinkableRelationChip({
   currentSpaceId,
   entityId,
   spaceId,
+  relationEntityId,
   relationId,
   verified,
   onDelete,
+  onDone,
   small = false,
   className = '',
   children,
@@ -177,10 +178,11 @@ export function LinkableRelationChip({
 
   const shouldClamp = typeof children === 'string' && children.length >= 42;
 
-  const { space } = useSpace(spaceId ?? '');
+  const { space } = useSpace(spaceId);
 
   return (
     <div
+      onMouseLeave={() => setIsPopoverOpen(false)}
       className={linkableRelationChipStyles({
         shouldClamp,
         isDotsHovered,
@@ -191,7 +193,13 @@ export function LinkableRelationChip({
         className,
       })}
     >
-      <Link href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}>{children}</Link>
+      <Link
+        entityId={entityId}
+        spaceId={spaceId ?? currentSpaceId}
+        href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
+      >
+        {children}
+      </Link>
       {verified && (
         <span className="inline-block pl-1.5">
           <CheckCircle color="current" />
@@ -222,8 +230,7 @@ export function LinkableRelationChip({
             sideOffset={-4}
             className="z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
           >
-            {/* @TODO restore with GRC-20 */}
-            {/* {isEditing && (
+            {isEditing && (
               <div
                 className="-mt-1 inline-block"
                 onMouseEnter={() => setIsSpaceHovered(true)}
@@ -234,60 +241,15 @@ export function LinkableRelationChip({
                   spaceId={spaceId}
                   verified={verified}
                   onDone={result => {
-                    if (!relationId) return;
-
-                    DB.upsert(
-                      {
-                        attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
-                        attributeName: 'To Entity',
-                        entityId: relationId,
-                        entityName: null,
-                        value: {
-                          type: 'URL',
-                          value: result.space
-                            ? GraphUrl.fromEntityId(result.id, { spaceId: result.space })
-                            : GraphUrl.fromEntityId(result.id),
-                        },
-                      },
-                      currentSpaceId
-                    );
-
-                    if (verified && !result.verified) {
-                      DB.upsert(
-                        {
-                          attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
-                          attributeName: 'Verified Source',
-                          entityId: relationId,
-                          entityName: null,
-                          value: {
-                            type: 'CHECKBOX',
-                            value: '0',
-                          },
-                        },
-                        currentSpaceId
-                      );
-                    } else if (result.verified) {
-                      DB.upsert(
-                        {
-                          attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
-                          attributeName: 'Verified Source',
-                          entityId: relationId,
-                          entityName: null,
-                          value: {
-                            type: 'CHECKBOX',
-                            value: '1',
-                          },
-                        },
-                        currentSpaceId
-                      );
-                    }
+                    if (!relationId || !onDone) return;
+                    onDone(result);
                   }}
                   trigger={
                     <button className="inline-flex items-center p-1">
                       <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
                         {space ? (
                           <div className="size-[8px] overflow-clip rounded-sm grayscale">
-                            <Image fill src={getImagePath(space.spaceConfig.image)} alt="" />
+                            <GeoImage fill value={space.entity.image} alt="" />
                           </div>
                         ) : (
                           <TopRanked />
@@ -297,10 +259,12 @@ export function LinkableRelationChip({
                   }
                 />
               </div>
-            )} */}
-            {relationId && (
+            )}
+            {relationEntityId && (
               <Link
-                href={NavUtils.toEntity(currentSpaceId, relationId)}
+                entityId={relationEntityId}
+                spaceId={currentSpaceId}
+                href={NavUtils.toEntity(currentSpaceId, relationEntityId)}
                 onMouseEnter={() => setIsRelationHovered(true)}
                 onMouseLeave={() => setIsRelationHovered(false)}
                 className={relationChipRelationIconStyles({ isRelationHovered, isDeleteHovered })}
@@ -321,51 +285,6 @@ export function LinkableRelationChip({
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
-    </div>
-  );
-}
-
-type DeletableChipButtonProps = {
-  onClick?: () => void;
-  children: React.ReactNode;
-  href: string;
-};
-
-const deletableChipStyles = cva(
-  'group inline-flex min-h-[1.5rem] items-center gap-1 break-words rounded-sm bg-white px-2 py-1 text-left text-metadataMedium !font-normal !leading-[1.125rem] text-text shadow-inner shadow-text hover:cursor-pointer hover:bg-ctaTertiary hover:text-ctaPrimary hover:shadow-ctaPrimary focus:bg-ctaTertiary focus:text-ctaPrimary focus:shadow-inner-lg focus:shadow-ctaPrimary',
-  {
-    variants: {
-      isWarning: {
-        true: 'bg-red-02 text-red-01 shadow-red-01 hover:bg-red-02 hover:text-red-01 hover:shadow-red-01',
-      },
-    },
-  }
-);
-
-const deleteButtonStyles = cva('cursor-pointer hover:!opacity-100 group-hover:opacity-50', {
-  variants: {
-    isWarning: {
-      true: 'opacity-100',
-    },
-  },
-});
-
-export function DeletableChipButton({ onClick, children, href }: DeletableChipButtonProps) {
-  const [isWarning, setIsWarning] = useState(false);
-
-  return (
-    <div className={deletableChipStyles({ isWarning })}>
-      <Link href={href} className="text-current">
-        {children}
-      </Link>
-      <button
-        className={deleteButtonStyles({ isWarning })}
-        onClick={onClick}
-        onMouseOver={() => setIsWarning(true)}
-        onMouseOut={() => setIsWarning(false)}
-      >
-        <CheckCloseSmall />
-      </button>
     </div>
   );
 }

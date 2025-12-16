@@ -18,7 +18,8 @@ export async function POST(request: Request) {
   const ipfs = new IpfsService(Environment.getConfig().ipfs);
 
   const effect = Effect.retry(
-    ipfs.upload(Buffer.from(await file.arrayBuffer())),
+    // @TODO fix Argument of type 'Buffer' is not assignable to parameter of type 'Uint8Array<ArrayBufferLike>'
+    ipfs.upload(Buffer.from(await file.arrayBuffer()) as any),
     Schedule.exponential('100 millis').pipe(Schedule.jittered)
   );
 

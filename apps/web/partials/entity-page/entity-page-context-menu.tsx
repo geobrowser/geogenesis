@@ -5,11 +5,11 @@ import cx from 'classnames';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { removeRelation, useWriteOps } from '~/core/database/write';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { EntityId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useMutate } from '~/core/sync/use-mutate';
+import { useRelations, useValues } from '~/core/sync/use-store';
 
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
@@ -27,12 +27,18 @@ type Props = {
 
 export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-
+  const { storage } = useMutate();
   const { isMember } = useAccessControl(spaceId);
 
   const { editable, setEditable } = useEditable();
-  const { triples, relations } = useEntityPageStore();
-  const { remove } = useWriteOps();
+
+  const values = useValues({
+    selector: v => v.entity.id === entityId && v.spaceId === spaceId,
+  });
+
+  const relations = useRelations({
+    selector: v => v.fromEntity.id === entityId && v.spaceId === spaceId,
+  });
 
   const onCopyEntityId = async () => {
     try {
@@ -45,15 +51,16 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
 
   const onDelete = () => {
     if (editable) {
-      triples.forEach(t => remove(t, t.space));
-      relations.forEach(r => removeRelation({ relation: r, spaceId }));
+      values.forEach(t => storage.values.delete(t));
+      relations.forEach(r => storage.relations.delete(r));
       setIsMenuOpen(false);
     } else {
       setEditable(true);
 
+      // Why?
       setTimeout(() => {
-        triples.forEach(t => remove(t, t.space));
-        relations.forEach(r => removeRelation({ relation: r, spaceId }));
+        values.forEach(t => storage.values.delete(t));
+        relations.forEach(r => storage.relations.delete(r));
         setIsMenuOpen(false);
       }, 500);
     }

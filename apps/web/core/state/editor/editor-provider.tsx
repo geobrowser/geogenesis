@@ -2,17 +2,16 @@
 
 import * as React from 'react';
 
-import { Entity } from '~/core/io/dto/entities';
-import { EntityId } from '~/core/io/schema';
-import { OmitStrict, Relation, SpaceId } from '~/core/types';
+import { OmitStrict } from '~/core/types';
+import { Entity, Relation } from '~/core/v2.types';
 
 const EditorContext = React.createContext<OmitStrict<EditorProviderProps, 'children'> | null>(null);
 
-export type Tabs = Record<EntityId, { entity: Entity; blocks: Entity[] }>;
+export type Tabs = Record<string, { entity: Entity; blocks: Entity[] }>;
 
 type EditorProviderProps = {
   id: string;
-  spaceId: SpaceId;
+  spaceId: string;
   initialBlocks: Entity[];
   initialBlockRelations: Relation[];
   initialTabs?: Tabs;

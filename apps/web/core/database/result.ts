@@ -1,13 +1,12 @@
-import { Duration } from 'effect';
+import { Duration, Effect } from 'effect';
 
-import { SearchResult } from '../io/dto/search';
-import { EntityId } from '../io/schema';
-import { fetchResult, fetchSpaces } from '../io/subgraph';
+import { getResult, getSpaces } from '../io/v2/queries';
 import { queryClient } from '../query-client';
 import { GeoStore } from '../sync/store';
+import { SearchResult } from '../v2.types';
 
-export interface FetchResultOptions {
-  id: EntityId;
+interface FetchResultOptions {
+  id: string;
   store: GeoStore;
   signal?: AbortController['signal'];
 }
@@ -17,13 +16,11 @@ export async function mergeSearchResult(args: FetchResultOptions) {
 
   const cachedRemoteResult = await queryClient.fetchQuery({
     queryKey: ['merge-search-result', args],
-    queryFn: () =>
-      fetchResult({
-        id: args.id,
-        signal: args.signal,
-      }),
+    queryFn: () => Effect.runPromise(getResult(args.id)),
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
+
+  console.log('remote', cachedRemoteResult);
 
   let merged = cachedRemoteResult
     ? localEntity
@@ -33,28 +30,33 @@ export async function mergeSearchResult(args: FetchResultOptions) {
       ? localEntity
       : null;
 
-  const localOnlyEntitySpaceIds = !cachedRemoteResult ? (localEntity ? localEntity.nameTripleSpaces : []) : [];
+  if (!merged) {
+    return null;
+  }
 
-  const localEntitySpaces = await queryClient.fetchQuery({
-    queryKey: ['merge-local-entity-spaces', localOnlyEntitySpaceIds],
-    queryFn: () => fetchSpaces({ spaceIds: localOnlyEntitySpaceIds }),
+  // Collect all space IDs from both local and remote entities
+  const allSpaceIds = [
+    ...(localEntity?.spaces || []),
+    ...(cachedRemoteResult?.spaces?.map(s => (typeof s === 'string' ? s : s.spaceId)) || []),
+  ];
+  const uniqueSpaceIds = [...new Set(allSpaceIds)];
+
+  // Fetch space entities for all space IDs
+  const spaceEntities = await queryClient.fetchQuery({
+    queryKey: ['merge-search-result-spaces', uniqueSpaceIds],
+    queryFn: () => Effect.runPromise(getSpaces({ spaceIds: uniqueSpaceIds })),
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
 
-  const localEntitySpacesBySpaceId = Object.fromEntries(localEntitySpaces.map(s => [s.id, s.spaceConfig]));
+  console.log('spaces', spaceEntities);
 
-  const hasLocalEntitySpaces = Object.keys(localEntitySpacesBySpaceId).length !== 0;
+  const spaceEntitiesBySpaceId = Object.fromEntries(spaceEntities.map(s => [s.id, s.entity]));
 
-  if (localEntity && merged && hasLocalEntitySpaces) {
-    merged = {
-      ...merged,
-      spaces: localEntity.nameTripleSpaces
-        .map(spaceId => {
-          return localEntitySpacesBySpaceId[spaceId] ?? null;
-        })
-        .filter(s => s !== null),
-    };
-  }
+  // Map space IDs to space entities
+  merged = {
+    ...merged,
+    spaces: uniqueSpaceIds.map(spaceId => spaceEntitiesBySpaceId[spaceId]).filter(s => s !== undefined),
+  };
 
-  return merged as SearchResult | null;
+  return merged as SearchResult;
 }

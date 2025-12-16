@@ -1,15 +1,14 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { Effect } from 'effect';
 
-import { Services } from '../services';
+import { getSpaces } from '../io/v2/queries';
 
 export const useSpaces = () => {
-  const { subgraph } = Services.useServices();
-
   const { data: spaces } = useQuery({
     queryKey: ['spaces'],
-    queryFn: () => subgraph.fetchSpaces(),
+    queryFn: () => Effect.runPromise(getSpaces()),
   });
 
   return {

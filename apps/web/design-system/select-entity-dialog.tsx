@@ -4,17 +4,23 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { useKey } from '~/core/hooks/use-key';
-import { EntityId } from '~/core/io/schema';
-import type { RelationValueType } from '~/core/types';
+import { Property, SwitchableRenderableType } from '~/core/v2.types';
 
 import { SelectEntity } from './select-entity';
 
 type SelectEntityAsPopoverProps = {
   trigger: React.ReactNode;
   spaceId: string;
-  onDone: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
-  onCreateEntity?: (result: { id: string; name: string | null; space?: string }) => void;
-  relationValueTypes?: RelationValueType[];
+  onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
+  onCreateEntity?: (result: {
+    id: string;
+    name: string | null;
+    space?: string;
+    verified?: boolean;
+    renderableType?: SwitchableRenderableType;
+  }) => void;
+  relationValueTypes?: Property['relationValueTypes'];
+  placeholder?: string;
 };
 
 export function SelectEntityAsPopover({
@@ -23,6 +29,7 @@ export function SelectEntityAsPopover({
   onCreateEntity,
   spaceId,
   relationValueTypes,
+  placeholder,
 }: SelectEntityAsPopoverProps) {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -37,12 +44,13 @@ export function SelectEntityAsPopover({
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
       <Popover.Portal>
-        <Popover.Content sideOffset={4} align="start" className="z-30">
+        <Popover.Content sideOffset={4} align="start" className="z-30" collisionPadding={10} avoidCollisions={true}>
           <SelectEntity
             key={JSON.stringify(relationValueTypes)}
             withSearchIcon={true}
             spaceId={spaceId}
             relationValueTypes={relationValueTypes}
+            placeholder={placeholder}
             onDone={onDone}
             onCreateEntity={onCreateEntity}
             variant="floating"

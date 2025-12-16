@@ -1,177 +1,122 @@
-import { ContentIds, Id, SystemIds } from '@graphprotocol/grc-20';
+import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
 
 import * as React from 'react';
 
-import { useRelationship } from '~/core/hooks/use-relationship';
-import { useRenderables } from '~/core/hooks/use-renderables';
-import { useQueryEntity } from '~/core/sync/use-store';
-import { Relation, RelationRenderableProperty, RenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
-import { GeoNumber, GeoPoint, NavUtils, getImagePath } from '~/core/utils/utils';
+import { ADDRESS_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
+import { useRenderedProperties } from '~/core/hooks/use-renderables';
+import { useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
+import { GeoNumber, GeoPoint, NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
+import { sortRelations } from '~/core/utils/utils';
+import { DataType, RenderableType } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-type Renderables = Record<string, RenderableProperty[]>;
-
 interface Props {
-  triples: Triple[];
-  relations: Relation[];
   id: string;
   spaceId: string;
 }
 
-export function ReadableEntityPage({ triples: serverTriples, id, spaceId }: Props) {
-  const entityId = id;
+const SKIPPED_PROPERTIES: string[] = [
+  SystemIds.TYPES_PROPERTY,
+  SystemIds.NAME_PROPERTY,
+  SystemIds.COVER_PROPERTY,
+  ContentIds.AVATAR_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
+];
 
-  const [isRelationPage] = useRelationship(entityId, spaceId);
+function countRenderableProperty(renderedProperties: string[]): number {
+  let count = 0;
+  renderedProperties.forEach(propertyId => {
+    if (!SKIPPED_PROPERTIES.includes(propertyId)) {
+      count++;
+    }
+  });
+  return count;
+}
 
-  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples, spaceId, isRelationPage);
+export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
+  const renderedProperties = useRenderedProperties(entityId, spaceId);
 
-  function countRenderableProperty(renderables: Renderables): number {
-    let count = 0;
-    Object.values(renderables).forEach((renderable) => {
-      const attributeId = renderable[0].attributeId;
-      if (![SystemIds.TYPES_PROPERTY, SystemIds.NAME_PROPERTY, SystemIds.COVER_PROPERTY, ContentIds.AVATAR_PROPERTY].includes(attributeId as Id.Id)) {
-        count++;
-      }
-    });
-    return count;
-  }
-
-  if (countRenderableProperty(renderables) <= 0) {
+  if (countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
     return null;
   }
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
-      {Object.entries(renderables).map(([attributeId, renderable]) => {
-        const isRelation = renderable[0].type === 'RELATION' || renderable[0].type === 'IMAGE';
+      {Object.entries(renderedProperties).map(([propertyId, property]) => {
+        const isRelation = property.dataType === 'RELATION';
 
         if (isRelation) {
-          return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableProperty[]} />;
+          return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
         }
 
-        return (
-          <TriplesGroup
-            key={attributeId}
-            entityId={entityId}
-            triples={renderable as TripleRenderableProperty[]}
-            spaceId={spaceId}
-          />
-        );
+        return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
       })}
     </div>
   );
 }
 
-const ReadableNumberField = ({ value, format, unitId }: { value: string; format?: string; unitId?: string }) => {
-  const { entity } = useQueryEntity({ id: unitId });
+const ReadableNumberField = ({ value, unitId, propertyId }: { value: string; unitId?: string; propertyId: string }) => {
+  const { property } = useQueryProperty({ id: propertyId });
+
+  // Use format and unit from the property directly
+  const format = property?.format || undefined;
+  const propertyUnitId = property?.unit || undefined;
+
+  // Use unitId from value options if available, otherwise fall back to property unit
+  const actualUnitId = unitId || propertyUnitId || undefined;
+  const { entity: unitEntity } = useQueryEntity({ id: actualUnitId });
 
   const currencySign = React.useMemo(
-    () => entity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
-    [entity]
+    () => unitEntity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value || '',
+    [unitEntity]
   );
 
   return <Text as="p">{GeoNumber.format(value, format, currencySign)}</Text>;
 };
 
-function TriplesGroup({
-  entityId,
-  triples,
-  spaceId,
-}: {
-  entityId: string;
-  triples: TripleRenderableProperty[];
-  spaceId: string;
-}) {
+function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spaceId: string; propertyId: string }) {
+  // @TODO: This should be prefetched with _all_ the properties
+  const { property } = useQueryProperty({ id: propertyId });
+
+  const values = useValues({
+    selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
+  });
+
+  if (!property) {
+    return null;
+  }
+
   return (
     <>
-      {triples.map((t, index) => {
+      {values.map((t, index) => {
         // hide name property, it is already rendered in the header
-        if (t.attributeId === SystemIds.NAME_PROPERTY) {
+        // @TODO: filter ahead of time rather than returning null here
+        if (propertyId === SystemIds.NAME_PROPERTY) {
           return null;
         }
         return (
-          <div key={`${entityId}-${t.attributeId}-${index}`} className="break-words">
-            <Text as="p" variant="bodySemibold">
-              {triples[0].attributeName || t.attributeId}
-            </Text>
+          <div key={`${entityId}-${propertyId}-${index}`} className="break-words">
+            <Link href={NavUtils.toEntity(spaceId, propertyId)}>
+              <Text as="p" variant="bodySemibold">
+                {property.name || propertyId}
+              </Text>
+            </Link>
             <div className="flex flex-wrap gap-2">
-              {triples.map(renderable => {
-                switch (renderable.type) {
-                  case 'TEXT': {
-                    return (
-                      <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-                        {renderable.value}
-                      </Text>
-                    );
-                  }
-                  case 'POINT': {
-                    if (renderable.attributeId === SystemIds.GEO_LOCATION_PROPERTY) {
-                      // Parse the coordinates using the GeoPoint utility
-                      const coordinates = GeoPoint.parseCoordinates(renderable.value);
-                      return (
-                        <div
-                          key={`string-${renderable.attributeId}-${renderable.value}`}
-                          className="flex w-full flex-col gap-2"
-                        >
-                          <Text as="p">({renderable.value})</Text>
-                          <Map latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
-                        </div>
-                      );
-                    } else {
-                      return (
-                        <div className="flex w-full flex-col gap-2">
-                          <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-                            ({renderable.value})
-                          </Text>
-                        </div>
-                      );
-                    }
-                  }
-                  case 'NUMBER':
-                    return (
-                      <ReadableNumberField
-                        value={renderable.value}
-                        format={renderable.options?.format}
-                        unitId={renderable.options?.unit}
-                      />
-                    );
-                  case 'CHECKBOX': {
-                    const checked = getChecked(renderable.value);
-
-                    return (
-                      <Checkbox key={`checkbox-${renderable.attributeId}-${renderable.value}`} checked={checked} />
-                    );
-                  }
-                  case 'TIME': {
-                    return (
-                      <DateField
-                        key={`time-${renderable.attributeId}-${renderable.value}`}
-                        isEditing={false}
-                        value={renderable.value}
-                        format={renderable.options?.format}
-                      />
-                    );
-                  }
-                  case 'URL': {
-                    return (
-                      <WebUrlField
-                        key={`uri-${renderable.attributeId}-${renderable.value}`}
-                        isEditing={false}
-                        spaceId={spaceId}
-                        value={renderable.value}
-                      />
-                    );
-                  }
-                }
-              })}
+              <RenderedValue
+                propertyId={propertyId}
+                entityId={entityId}
+                spaceId={t.spaceId}
+                renderableType={property.renderableTypeStrict ?? property.dataType}
+              />
             </div>
           </div>
         );
@@ -180,60 +125,191 @@ function TriplesGroup({
   );
 }
 
-export function RelationsGroup({ relations, isTypes }: { relations: RelationRenderableProperty[]; isTypes?: boolean }) {
-  const attributeId = relations[0].attributeId;
-  const attributeName = relations[0].attributeName;
-  const spaceId = relations[0].spaceId;
+export function RelationsGroup({
+  entityId,
+  spaceId,
+  propertyId,
+  isMetadataHeader,
+}: {
+  entityId: string;
+  propertyId: string;
+  spaceId: string;
+  isMetadataHeader?: boolean;
+}) {
+  const { property } = useQueryProperty({ id: propertyId });
+
+  const relations = sortRelations(
+    useRelations({
+      selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === propertyId,
+    })
+  );
+
+  if (relations.length === 0) {
+    return null;
+  }
+
+  if (!property) {
+    return null;
+  }
+
+  if (relations.length === 0) {
+    return null;
+  }
 
   // hide cover, avatar, and type properties
   // they are already rendered in the avatar cover component
   // unless this is the types group that is rendered in the header
   if (
-    attributeId === SystemIds.COVER_PROPERTY ||
-    attributeId === ContentIds.AVATAR_PROPERTY ||
-    (attributeId === SystemIds.TYPES_PROPERTY && !isTypes)
+    propertyId === SystemIds.COVER_PROPERTY ||
+    propertyId === ContentIds.AVATAR_PROPERTY ||
+    (propertyId === SystemIds.TYPES_PROPERTY && !isMetadataHeader) ||
+    propertyId === RENDERABLE_TYPE_PROPERTY
   ) {
     return null;
   }
 
+  // Check if we should show a map for Address or Venue properties
+  const shouldShowMap = (propertyId === ADDRESS_PROPERTY || propertyId === VENUE_PROPERTY) && relations.length > 0;
+  const firstRelation = relations[0];
+
   return (
     <>
-      <div key={`${attributeId}-${attributeName}`} className="break-words">
-        {attributeId !== SystemIds.TYPES_PROPERTY && (
-          <Link href={NavUtils.toEntity(spaceId, attributeId)}>
+      <div key={`${propertyId}-${property.name}`} className="break-words">
+        {propertyId !== SystemIds.TYPES_PROPERTY && (
+          <Link href={NavUtils.toEntity(spaceId, propertyId)}>
             <Text as="p" variant="bodySemibold">
-              {attributeName ?? attributeId}
+              {property.name ?? propertyId}
             </Text>
           </Link>
         )}
 
         <div className="flex flex-wrap gap-2">
           {relations.map(r => {
-            const relationId = r.relationId;
-            const relationName = r.valueName;
-            const renderableType = r.type;
-            const relationValue = r.value;
+            const linkedEntityId = r.toEntity.id;
+            const linkedSpaceId = r.spaceId;
+            const relationName = r.toEntity.name;
+            const relationEntityId = r.entityId;
+            const relationId = r.id;
 
-            if (renderableType === 'IMAGE') {
-              const imagePath = getImagePath(relationValue ?? '');
-              return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={imagePath} />;
+            if (property.renderableTypeStrict === 'IMAGE') {
+              return (
+                <ImageRelation
+                  key={`image-${relationId}-${linkedEntityId}`}
+                  linkedEntityId={linkedEntityId}
+                  relationId={relationId}
+                  spaceId={spaceId}
+                />
+              );
             }
 
             return (
-              <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
+              <div key={`relation-${relationId}-${linkedEntityId}`} className="mt-1">
                 <LinkableRelationChip
                   isEditing={false}
                   currentSpaceId={spaceId}
-                  entityId={relationValue}
+                  entityId={linkedEntityId}
+                  spaceId={linkedSpaceId}
+                  relationEntityId={relationEntityId}
                   relationId={relationId}
                 >
-                  {relationName ?? relationValue}
+                  {relationName ?? linkedEntityId}
                 </LinkableRelationChip>
               </div>
             );
           })}
         </div>
+        {/* Show geo location map for the first Address or Venue relation */}
+        {shouldShowMap && firstRelation && (
+          <GeoLocationWrapper
+            relationId={firstRelation.id}
+            id={firstRelation.toEntity.id}
+            spaceId={firstRelation.toSpaceId || spaceId}
+            propertyType={propertyId}
+          />
+        )}
       </div>
     </>
   );
+}
+
+function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
+  // Use the efficient hook to get only the image URL for this specific entity
+  const actualImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+
+  return <ImageZoom imageSrc={actualImageSrc || ''} />;
+}
+
+function RenderedValue({
+  entityId,
+  propertyId,
+  renderableType,
+  spaceId,
+}: {
+  entityId: string;
+  propertyId: string;
+  spaceId: string;
+  renderableType: DataType | RenderableType;
+}) {
+  // Seems like we really want useRenderables to query entity data + property data
+  // more granularly?
+  //
+  // Why is this super slow
+  const valueData = useValue({
+    selector: v => v.entity.id === entityId && v.spaceId === spaceId && v.property.id === propertyId,
+  });
+
+  // Should only be one value for a given (space, entity, property) tuple
+  const value = valueData?.value ?? '';
+  const options = valueData?.options;
+
+  if (propertyId === SystemIds.NAME_PROPERTY) {
+    return null;
+  }
+
+  switch (renderableType) {
+    case 'URL':
+      return <WebUrlField key={`uri-${propertyId}-${value}`} isEditing={false} spaceId={spaceId} value={value} />;
+    case 'TEXT':
+      return (
+        <Text key={`string-${propertyId}-${value}`} as="p">
+          {value}
+        </Text>
+      );
+    case 'GEO_LOCATION': {
+      // Parse the coordinates using the GeoPoint utility
+      const coordinates = GeoPoint.parseCoordinates(value);
+      return (
+        <div key={`string-${propertyId}-${value}`} className="flex w-full flex-col gap-2">
+          <Text as="p">({value})</Text>
+          <Map latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
+        </div>
+      );
+    }
+    case 'POINT': {
+      return (
+        <div className="flex w-full flex-col gap-2">
+          <Text key={`string-${propertyId}-${value}`} as="p">
+            ({value})
+          </Text>
+        </div>
+      );
+    }
+    case 'NUMBER':
+      return (
+        <ReadableNumberField
+          key={`number-${propertyId}-${value}`}
+          value={value}
+          propertyId={propertyId}
+          unitId={options?.unit ?? undefined}
+        />
+      );
+    case 'CHECKBOX': {
+      const checked = getChecked(value);
+
+      return <Checkbox key={`checkbox-${propertyId}-${value}`} checked={checked} />;
+    }
+    case 'TIME': {
+      return <DateField key={`time-${propertyId}-${value}`} isEditing={false} value={value} propertyId={propertyId} />;
+    }
+  }
 }

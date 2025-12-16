@@ -1,18 +1,22 @@
-import { Op, Value } from '@graphprotocol/grc-20';
+import { Id, Op, Value } from '@graphprotocol/grc-20';
 
 interface CreateArgs {
   entity: string;
-  attribute: string;
   value: Value;
 }
 
-export function create({ entity, attribute, value }: CreateArgs): Op {
+export function create({ entity, value }: CreateArgs): Op {
   return {
-    type: 'SET_TRIPLE',
-    triple: {
-      attribute,
-      entity,
-      value,
+    type: 'UPDATE_ENTITY',
+    entity: {
+      id: Id(entity),
+      values: [
+        {
+          property: Id(value.property),
+          value: value.value,
+          options: value.options,
+        },
+      ],
     },
   };
 }

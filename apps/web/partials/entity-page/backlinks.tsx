@@ -1,0 +1,91 @@
+'use client';
+
+import { useState } from 'react';
+
+import { NavUtils } from '~/core/utils/utils';
+
+import { SmallButton } from '~/design-system/button';
+import { GeoImage } from '~/design-system/geo-image';
+import { ChevronRight } from '~/design-system/icons/chevron-right';
+import { PrefetchLink } from '~/design-system/prefetch-link';
+import { Tag } from '~/design-system/tag';
+
+type BacklinksProps = {
+  backlinks: Backlink[];
+};
+
+export type Backlink = {
+  id: string;
+  name?: string | null;
+  spaceIds: Array<string>;
+  types: Array<{ id: string; name: string }>;
+  primarySpace: { id: string; entity: { name: string; image?: string } };
+};
+
+export const Backlinks = ({ backlinks }: BacklinksProps) => {
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
+
+  return (
+    <div>
+      <div className="text-mediumTitle">Referenced by</div>
+      <div className="mt-4 flex flex-col gap-6">
+        {isExpanded || backlinks.length <= 3 ? (
+          <>
+            {backlinks.map(backlink => (
+              <Backlink key={backlink.id} backlink={backlink} />
+            ))}
+          </>
+        ) : (
+          <>
+            {backlinks.slice(0, 3).map(backlink => (
+              <Backlink key={backlink.id} backlink={backlink} />
+            ))}
+            <div>
+              <SmallButton variant="secondary" onClick={() => setIsExpanded(true)}>
+                Show more
+              </SmallButton>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+type BacklinkProps = {
+  backlink: Backlink;
+};
+
+const Backlink = ({ backlink }: BacklinkProps) => {
+  return (
+    <div>
+      <PrefetchLink
+        href={NavUtils.toEntity(backlink.primarySpace.id, backlink.id)}
+        entityId={backlink.id}
+        spaceId={backlink.primarySpace.id}
+        className="inline-flex flex-col"
+      >
+        <span className="text-metadataMedium">{backlink.name}</span>
+        <span className="mt-1.5 inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1.5">
+            {backlink.primarySpace?.entity?.image && (
+              <span className="relative h-3 w-3 overflow-hidden rounded-xs">
+                <GeoImage fill style={{ objectFit: 'cover' }} value={backlink.primarySpace.entity.image} alt="" />
+              </span>
+            )}
+            <span className="text-breadcrumb">
+              {backlink.primarySpace?.entity?.name || `Space: ${backlink.primarySpace.id}`}
+            </span>
+          </span>
+          <ChevronRight />
+          <span className="inline-flex items-center gap-1.5">
+            {backlink.types.map((t, index) => (
+              // An entity may have the same type multiple times, so we use the index to differentiate them
+              <Tag key={`backlink-${t.id}=${index}`}>{t.name}</Tag>
+            ))}
+          </span>
+        </span>
+      </PrefetchLink>
+    </div>
+  );
+};

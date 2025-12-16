@@ -6,8 +6,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
 
+import { FORMAT_PROPERTY } from '~/core/constants';
 import { useFieldWithValidation } from '~/core/hooks/use-field-with-validation';
 import { useFormWithValidation } from '~/core/hooks/use-form-with-validation';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { GeoDate } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -18,9 +20,9 @@ interface DateFieldProps {
   onBlur?: ({ value, format }: { value: string; format?: string }) => void;
   variant?: 'body' | 'tableCell' | 'tableProperty';
   value: string;
-  format?: string;
   isEditing?: boolean;
   className?: string;
+  propertyId: string;
 }
 
 interface DateInputProps {
@@ -642,9 +644,13 @@ function DateInput({ variant, initialDate, onDateChange, label }: DateInputProps
   );
 }
 
-export function DateField({ value, format, isEditing, variant, onBlur, className = '' }: DateFieldProps) {
+export function DateField({ value, isEditing, variant, onBlur, className = '', propertyId }: DateFieldProps) {
   const isDateInterval = React.useMemo(() => GeoDate.isDateInterval(value), [value]);
   const [intervalError, setIntervalError] = React.useState<string | null>(null);
+
+  const { entity } = useQueryEntity({ id: propertyId });
+
+  const format = entity?.values.find(value => value.property.id === FORMAT_PROPERTY)?.value;
 
   const [startDate, endDate] = React.useMemo(() => {
     if (isDateInterval && value) {

@@ -3,22 +3,19 @@
 import * as React from 'react';
 import { memo, useState } from 'react';
 
-import { useEditEvents } from '~/core/events/edit-events';
-import { PropertySchema } from '~/core/types';
-import { toRenderables } from '~/core/utils/to-renderables';
+import { useMutate } from '~/core/sync/use-mutate';
 
-import { getRenderableTypeFromValueType, getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
-  column: PropertySchema;
+  column: { id: string; name: string | null };
   // This spaceId is the spaceId of the attribute, not the current space.
   // We need the attribute spaceId to get the actions for the attribute
   // (since actions are grouped by spaceId) to be able to keep the updated
   // name in sync.
-  spaceId?: string;
+  spaceId: string;
   entityId: string;
-  unpublishedColumns: PropertySchema[];
+  unpublishedColumns: { id: string }[];
 }
 
 export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({
@@ -31,30 +28,14 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   // around this issue by using local state.
   const [localName, setLocalName] = useState(column.name ?? '');
 
-  const send = useEditEvents({
-    context: {
-      entityId,
-      spaceId: spaceId ?? '',
-      entityName: column.name ?? '',
-    },
-  });
+  const { storage } = useMutate();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const valueType = column.valueType;
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
-  const selectorOptions = getRenderableTypeSelectorOptions(
-    toRenderables({
-      triples: [],
-      relations: [],
-      spaceId: spaceId ?? '',
-      entityId,
-      entityName: localName,
-    })[0],
-    () => {},
-    send
-  );
-  const value = getRenderableTypeFromValueType(valueType);
+
+  // @TODO(migration): Value type comes from property
+  const value = 'TEXT';
 
   return (
     <div className="relative flex w-full items-center justify-between">
@@ -62,11 +43,14 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
         className="w-full bg-transparent text-smallTitle placeholder:text-grey-02 focus:outline-none"
         onChange={e => setLocalName(e.currentTarget.value)}
         placeholder="Column name..."
-        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { name: e.target.value } })}
+        onBlur={e => {
+          storage.entities.name.set(entityId, spaceId, e.currentTarget.value);
+        }}
         value={localName}
       />
 
-      {isUnpublished && <RenderableTypeDropdown value={value} options={selectorOptions} />}
+      {/* @TODO: Data type should now come from Property */}
+      {isUnpublished && <RenderableTypeDropdown value={value} />}
     </div>
   );
 });

@@ -1,17 +1,16 @@
 import { SystemIds } from '@graphprotocol/grc-20';
-import Link from 'next/link';
 
 import { Source } from '~/core/blocks/data/source';
-import { PropertyId } from '~/core/hooks/use-properties';
-import { Cell, PropertySchema } from '~/core/types';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 import { NavUtils } from '~/core/utils/utils';
+import { Cell, Property } from '~/core/v2.types';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
-import { getName } from '~/partials/blocks/table/utils';
 
 type Props = {
   columns: Record<string, Cell>;
@@ -21,9 +20,10 @@ type Props = {
   isPlaceholder: boolean;
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
-  properties?: Record<PropertyId, PropertySchema>;
+  properties?: Record<string, Property>;
   relationId?: string;
   source: Source;
+  autoFocus?: boolean;
 };
 
 export function TableBlockBulletedListItem({
@@ -36,11 +36,13 @@ export function TableBlockBulletedListItem({
   onLinkEntry,
   relationId,
   source,
+  autoFocus = false,
 }: Props) {
-  const nameCell = columns[SystemIds.NAME_ATTRIBUTE];
-  const { cellId, verified } = nameCell;
+  const nameCell = columns[SystemIds.NAME_PROPERTY];
+  const { propertyId: cellId, verified } = nameCell;
 
-  const name = getName(nameCell, currentSpaceId);
+  // const name = getName(nameCell, currentSpaceId);
+  const name = useName(rowEntityId);
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
@@ -87,6 +89,7 @@ export function TableBlockBulletedListItem({
                 );
               }}
               spaceId={currentSpaceId}
+              autoFocus={autoFocus}
             />
           ) : (
             <div>
@@ -106,7 +109,7 @@ export function TableBlockBulletedListItem({
                           type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                           payload: {
                             renderable: {
-                              attributeId: SystemIds.NAME_ATTRIBUTE,
+                              attributeId: SystemIds.NAME_PROPERTY,
                               entityId: rowEntityId,
                               spaceId: currentSpaceId,
                               attributeName: 'Name',
@@ -114,13 +117,14 @@ export function TableBlockBulletedListItem({
                               type: 'TEXT',
                               value: name ?? '',
                             },
-                            value: { type: 'TEXT', value: value },
+                            value: { type: 'TEXT', value },
                           },
                         },
                       }
                     );
                   }}
                   value={name ?? ''}
+                  shouldDebounce={true}
                 />
               ) : (
                 <CollectionMetadata
@@ -130,6 +134,7 @@ export function TableBlockBulletedListItem({
                   currentSpaceId={currentSpaceId}
                   entityId={rowEntityId}
                   spaceId={nameCell?.space}
+                  collectionId={nameCell?.collectionId}
                   relationId={relationId}
                   verified={verified}
                   onLinkEntry={onLinkEntry}
@@ -149,7 +154,7 @@ export function TableBlockBulletedListItem({
                             type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                             payload: {
                               renderable: {
-                                attributeId: SystemIds.NAME_ATTRIBUTE,
+                                attributeId: SystemIds.NAME_PROPERTY,
                                 entityId: rowEntityId,
                                 spaceId: currentSpaceId,
                                 attributeName: 'Name',
@@ -157,7 +162,7 @@ export function TableBlockBulletedListItem({
                                 type: 'TEXT',
                                 value: name ?? '',
                               },
-                              value: { type: 'TEXT', value: value },
+                              value: { type: 'TEXT', value },
                             },
                           },
                         }
@@ -178,7 +183,7 @@ export function TableBlockBulletedListItem({
     <div className="group relative flex w-full gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
       <div className="mt-1 flex-shrink-0 text-xl leading-none text-text">•</div>
       {source.type !== 'COLLECTION' ? (
-        <Link href={href} className="text-body">
+        <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
           {name}
         </Link>
       ) : (
@@ -189,11 +194,12 @@ export function TableBlockBulletedListItem({
           currentSpaceId={currentSpaceId}
           entityId={rowEntityId}
           spaceId={nameCell?.space}
+          collectionId={nameCell?.collectionId}
           relationId={relationId}
           verified={verified}
           onLinkEntry={onLinkEntry}
         >
-          <Link href={href} className="text-body">
+          <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="text-body">
             {name}
           </Link>
         </CollectionMetadata>

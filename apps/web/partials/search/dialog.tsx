@@ -1,4 +1,3 @@
-import { A } from '@mobily/ts-belt';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -12,11 +11,13 @@ import { useSearch } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/schema';
-import { getImagePath, validateEntityId } from '~/core/utils/utils';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import { validateEntityId } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent, ResultsList, SpaceContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
+import { GeoImage } from '~/design-system/geo-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Search } from '~/design-system/icons/search';
@@ -39,6 +40,7 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 const SearchDialogComponent = ({ open, onDone }: Props) => {
   const router = useRouter();
   const autocomplete = useSearch();
+  const { hydrate } = useSyncEngine();
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [openSpacesIndex, setOpenSpacesIndex] = useState<number | null>(null);
@@ -121,7 +123,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
             )}
             {view === 'selectEntity' && (
               <>
-                <div className={cx('relative p-1', A.isNotEmpty(autocomplete.results) && 'border-b border-grey-02')}>
+                <div className={cx('relative p-1', autocomplete.results.length > 0 && 'border-b border-grey-02')}>
                   <AnimatePresence mode="wait">
                     {autocomplete.isLoading ? (
                       <div className="absolute left-4 top-[50%] z-100">
@@ -176,6 +178,10 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                       >
                         <div>
                           <Command.Item
+                            onMouseEnter={() => {
+                              router.prefetch(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
+                              hydrate([result.id]);
+                            }}
                             onSelect={() => {
                               router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
                               autocomplete.onQueryChange('');
@@ -290,7 +296,7 @@ const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: Cr
   const renderedSpaces =
     query.length === 0
       ? spaces
-      : spaces.filter(space => space?.spaceConfig?.name?.toLowerCase()?.startsWith(query.toLowerCase()));
+      : spaces.filter(space => space?.entity?.name?.toLowerCase()?.startsWith(query.toLowerCase()));
 
   return (
     <div>
@@ -307,28 +313,35 @@ const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: Cr
         <Input value={query} onChange={event => setQuery(event.target.value)} withSearchIcon />
       </div>
       <div className="max-h-[190px] space-y-1 overflow-auto p-1">
-        {renderedSpaces.map(space => {
-          return (
-            <Command.Item
-              key={space.id}
-              onSelect={() => {
-                router.push(NavUtils.toEntity(space.id, entityId, true));
-                onDone?.();
-              }}
-              className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01"
-            >
-              <div className="relative size-4 rounded bg-grey-01">
-                <img
-                  src={getImagePath(space.spaceConfig.image)}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              </div>
-              <div className="text-button text-text">{space.spaceConfig.name}</div>
-            </Command.Item>
-          );
-        })}
+        {renderedSpaces.map(space => (
+          <CreateNewEntitySpaceItem key={space.id} space={space} entityId={entityId} onDone={onDone} />
+        ))}
       </div>
     </div>
+  );
+};
+
+type CreateNewEntitySpaceItemProps = {
+  space: ReturnType<typeof useSpacesWhereMember>[number];
+  entityId: EntityId;
+  onDone?: () => void;
+};
+
+const CreateNewEntitySpaceItem = ({ space, entityId, onDone }: CreateNewEntitySpaceItemProps) => {
+  const router = useRouter();
+
+  return (
+    <Command.Item
+      onSelect={() => {
+        router.push(NavUtils.toEntity(space.id, entityId, true));
+        onDone?.();
+      }}
+      className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01"
+    >
+      <div className="relative size-4 rounded bg-grey-01">
+        <GeoImage value={space.entity.image} fill style={{ objectFit: 'cover' }} alt="" />
+      </div>
+      <div className="text-button text-text">{space.entity.name}</div>
+    </Command.Item>
   );
 };

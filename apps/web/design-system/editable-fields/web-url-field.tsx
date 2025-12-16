@@ -5,8 +5,7 @@ import { cva } from 'class-variance-authority';
 
 import * as React from 'react';
 
-import { useEntity } from '~/core/database/entities';
-import { EntityId } from '~/core/io/schema';
+import { useName } from '~/core/state/entity-page-store/entity-store';
 
 import { LinkableChip } from '~/design-system/chip';
 
@@ -15,7 +14,7 @@ const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 fo
     variant: {
       body: 'text-body',
       tableCell: 'text-tableCell',
-      tableProperty: '!text-link !text-tableProperty !underline decoration-[1px] hover:!text-text',
+      tableProperty: '!text-tableProperty !text-link !underline decoration-[1px] hover:!text-text',
     },
     editable: {
       false: 'truncate text-ctaPrimary no-underline transition-colors duration-75 hover:text-ctaHover hover:underline',
@@ -57,6 +56,10 @@ export function WebUrlField({
     return <GraphUrlField currentSpaceId={spaceId} value={value as `graph://${string}`} />;
   }
 
+  // Check if URL has a protocol (http://, https://, mailto:, tel:, etc.)
+  // If not, prepend https:// to prevent relative path behavior
+  const normalizedUrl = value && !value.match(/^[a-zA-Z][a-zA-Z\d+\-.]*:/) ? `https://${value}` : value;
+
   return isEditing ? (
     <input
       {...props}
@@ -66,7 +69,7 @@ export function WebUrlField({
     />
   ) : (
     <a
-      href={value}
+      href={normalizedUrl}
       target="_blank"
       rel="noreferrer"
       className={webUrlFieldStyles({ variant, editable: isEditing, className })}
@@ -84,10 +87,9 @@ type GraphUrlFieldProps = {
 const GraphUrlField = ({ currentSpaceId, value }: GraphUrlFieldProps) => {
   const entityId = GraphUrl.toEntityId(value);
   const spaceId = GraphUrl.toSpaceId(value) ?? currentSpaceId;
+  const name = useName(entityId);
 
-  const entity = useEntity({ id: EntityId(entityId) });
-
-  const entityName = entity.name || value;
+  const entityName = name ?? value;
   const href = `/space/${spaceId}/${entityId}`;
 
   return <LinkableChip href={href}>{entityName}</LinkableChip>;

@@ -1,7 +1,7 @@
 'use client';
 
-import { Schema } from '@effect/schema';
 import { useQuery } from '@tanstack/react-query';
+import { Schema } from 'effect';
 import { Effect, Either } from 'effect';
 import { motion } from 'framer-motion';
 
@@ -38,7 +38,10 @@ interface Props {
 export function AddSubspaceDialog({ trigger, spaceType, spaceId }: Props) {
   const { data: subspaces } = useQuery({
     queryKey: ['subspaces', spaceId],
-    queryFn: () => fetchSubspacesBySpaceId(spaceId),
+    queryFn: async () => {
+      return [] as Subspace[];
+      // fetchSubspacesBySpaceId(spaceId)
+    },
   });
 
   const { data: inflightSubspaces } = useQuery({
@@ -226,7 +229,9 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
               // from the height and flow of the dialog component
               className="fixed z-[102] mt-1 max-h-[243px] w-[460px] divide-y divide-grey-02 overflow-hidden overflow-y-auto rounded-lg border border-grey-02 bg-white"
             >
-              {queriedSpaces?.map(s => <SpaceQueryResult key={s.daoAddress} subspace={s} spaceId={spaceId} />)}
+              {queriedSpaces?.map(s => (
+                <SpaceQueryResult key={s.daoAddress} subspace={s} spaceId={spaceId} />
+              ))}
             </motion.div>
           )}
         </div>

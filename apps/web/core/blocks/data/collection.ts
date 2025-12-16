@@ -1,18 +1,18 @@
-import { GraphUrl, SystemIds } from '@graphprotocol/grc-20';
-import { INITIAL_RELATION_INDEX_VALUE } from '@graphprotocol/grc-20/constants';
+import { IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 
-import { StoreRelation } from '~/core/database/types';
-import { DB } from '~/core/database/write';
-import { EntityId, SpaceId } from '~/core/io/schema';
+import { storage } from '~/core/sync/use-mutate';
+import { Relation } from '~/core/v2.types';
 
 type CreateCollectionItemRelationArgs = {
-  relationId?: EntityId;
-  collectionId: EntityId;
-  spaceId: SpaceId;
+  relationId?: string;
+  collectionId: string;
+  spaceId: string;
   toEntity: {
-    id: EntityId;
+    id: string;
     name: string | null;
   };
+  toSpaceId?: string;
+  verified?: boolean;
 };
 
 /**
@@ -28,79 +28,26 @@ export function upsertCollectionItemRelation({
   collectionId,
   spaceId,
   toEntity,
+  toSpaceId,
+  verified,
 }: CreateCollectionItemRelationArgs) {
   // Create a relation for the Collection Item pointing from the collection to the new entity
-  DB.upsertRelation({
-    relation: {
-      ...(relationId ? { id: relationId } : {}),
-      ...makeRelationForCollectionItem({
-        collectionId,
-        toEntityId: toEntity.id,
-        toEntityName: toEntity.name,
-        spaceId,
-      }),
-    },
-    spaceId,
+  storage.relations.set({
+    ...(relationId ? { id: relationId } : {}),
+    ...makeRelationForCollectionItem({
+      collectionId,
+      toEntityId: toEntity.id,
+      toEntityName: toEntity.name,
+      spaceId,
+    }),
+    ...(toSpaceId !== undefined ? { toSpaceId } : {}),
+    ...(verified !== undefined ? { verified } : {}),
   });
 }
 
-type UpsertSourceSpaceCollectionItemArgs = {
-  collectionItemId: EntityId;
-  spaceId: SpaceId;
-  sourceSpaceId?: string;
-  toId: EntityId;
-};
-
-export function upsertSourceSpaceOnCollectionItem({
-  collectionItemId,
-  spaceId,
-  toId,
-  sourceSpaceId,
-}: UpsertSourceSpaceCollectionItemArgs) {
-  DB.upsert(
-    {
-      attributeId: SystemIds.RELATION_TO_ATTRIBUTE,
-      attributeName: 'To Entity',
-      entityId: collectionItemId,
-      entityName: null,
-      value: {
-        type: 'URL',
-        value: sourceSpaceId ? GraphUrl.fromEntityId(toId, { spaceId: sourceSpaceId }) : GraphUrl.fromEntityId(toId),
-      },
-    },
-    spaceId
-  );
-}
-
-type UpsertVerifiedSourceCollectionItemArgs = {
-  collectionItemId: EntityId;
-  spaceId: SpaceId;
-  verified?: boolean;
-};
-
-export function upsertVerifiedSourceOnCollectionItem({
-  collectionItemId,
-  spaceId,
-  verified = true,
-}: UpsertVerifiedSourceCollectionItemArgs) {
-  DB.upsert(
-    {
-      attributeId: SystemIds.VERIFIED_SOURCE_ATTRIBUTE,
-      attributeName: 'Verified Source',
-      entityId: collectionItemId,
-      entityName: null,
-      value: {
-        type: 'CHECKBOX',
-        value: verified ? '1' : '0',
-      },
-    },
-    spaceId
-  );
-}
-
-type GetRelationForCollectionItemArgs = {
-  collectionId: EntityId;
-  toEntityId: EntityId;
+type MakeRelationForCollectionItemArgs = {
+  collectionId: string;
+  toEntityId: string;
   toEntityName: string | null;
   spaceId: string;
 };
@@ -117,14 +64,18 @@ function makeRelationForCollectionItem({
   toEntityId,
   toEntityName,
   spaceId,
-}: GetRelationForCollectionItemArgs): StoreRelation {
+}: MakeRelationForCollectionItemArgs): Relation {
   // Create a relation that points from the collection to the entity with Relation Type -> CollectionItem
   // 1. Relation type -> CollectionItem
   return {
-    space: spaceId,
-    index: INITIAL_RELATION_INDEX_VALUE,
-    typeOf: {
-      id: EntityId(SystemIds.COLLECTION_ITEM_RELATION_TYPE),
+    id: IdUtils.generate(),
+    // @TODO(migration): Potentially reuse relation entity
+    entityId: IdUtils.generate(),
+    spaceId: spaceId,
+    position: Position.generate(),
+    renderableType: 'RELATION',
+    type: {
+      id: SystemIds.COLLECTION_ITEM_RELATION_TYPE,
       name: 'Collection Item',
     },
     fromEntity: {
@@ -134,7 +85,6 @@ function makeRelationForCollectionItem({
     toEntity: {
       id: toEntityId,
       name: toEntityName,
-      renderableType: 'RELATION',
       value: toEntityId,
     },
   };

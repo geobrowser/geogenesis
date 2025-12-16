@@ -1,7 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
 import { useQueryEntity } from '~/core/sync/use-store';
-import { Relation } from '~/core/types';
+import { Relation } from '~/core/v2.types';
 
 import { Filter } from './filters';
 import { useFilters } from './use-filters';
@@ -17,7 +17,7 @@ export function useRelationsBlock() {
   });
 
   const relationBlockSourceRelations = getRelevantRelationsForRelationBlock(
-    relationBlockSourceEntity?.relationsOut ?? [],
+    relationBlockSourceEntity?.relations ?? [],
     filterState
   );
 
@@ -25,8 +25,8 @@ export function useRelationsBlock() {
 }
 
 function getRelevantRelationsForRelationBlock(relations: Relation[], filterState: Filter[]) {
-  const maybeFilter = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE);
+  const maybeFilter = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY);
   const relationType = maybeFilter?.value;
 
-  return relations.filter(r => r.typeOf.id === relationType);
+  return relations.filter(r => r.type.id === relationType);
 }

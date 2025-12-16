@@ -1,30 +1,25 @@
-import { Base58 } from '@graphprotocol/grc-20';
-import { SystemIds } from '@graphprotocol/grc-20';
+import { IdUtils } from '@graphprotocol/grc-20';
+import { Position } from '@graphprotocol/grc-20';
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
-import { IPFS_GATEWAY_READ_PATH } from '~/core/constants';
+import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
 import { EntityId } from '~/core/io/schema';
+import { useValues } from '~/core/sync/use-store';
 
-import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/schema';
+import { Entity, Relation, Row } from '../v2.types';
 import { Entities } from './entity';
-
-export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
-  return elements.flatMap((element, index) =>
-    index === 0 ? [element] : [separator instanceof Function ? separator({ index }) : separator, element]
-  );
-}
 
 export const NavUtils = {
   toRoot: () => '/root',
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
-  toSpace: (spaceId: string) => (spaceId === SystemIds.ROOT_SPACE_ID ? `/root` : `/space/${spaceId}`),
+  toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),
   toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
   toEntity: (spaceId: string, newEntityId: string, editParam?: boolean, newEntityName?: string) => {
     return `/space/${spaceId}/${newEntityId}${editParam ? '?edit=true' : ''}${editParam && newEntityName ? `&entityName=${newEntityName}` : ''}`;
@@ -121,6 +116,36 @@ export class GeoPoint {
    */
   static formatCoordinates(latitude: number, longitude: number): string {
     return `${latitude}, ${longitude}`;
+  }
+
+  /**
+   * Fetches coordinates from Mapbox using a mapbox ID
+   * @param mapboxId - The Mapbox place ID
+   * @returns Promise containing latitude and longitude coordinates
+   */
+  static async fetchCoordinatesFromMapbox(mapboxId: string): Promise<{ latitude: number; longitude: number } | null> {
+    try {
+      let sessionToken = sessionStorage.getItem('mapboxSessionToken');
+
+      if (!sessionToken) {
+        sessionToken = crypto.randomUUID();
+        sessionStorage.setItem('mapboxSessionToken', sessionToken);
+      }
+
+      const response = await fetch(
+        `/api/places/coordinates?mapboxId=${encodeURIComponent(mapboxId)}&sessionToken=${sessionToken}`
+      );
+      const data = await response.json();
+
+      if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+        return { latitude: data.latitude, longitude: data.longitude };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch coordinates from Mapbox:', error);
+      return null;
+    }
   }
 }
 
@@ -311,12 +336,12 @@ export const getOpenGraphImageUrl = (value: string) => {
 
 export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
   const entityName = entity?.name ?? null;
-  const serverAvatarUrl = Entities.avatar(entity?.relationsOut) ?? null;
-  const serverCoverUrl = Entities.cover(entity?.relationsOut);
+  const serverAvatarUrl = Entities.avatar(entity?.relations) ?? null;
+  const serverCoverUrl = Entities.cover(entity?.relations);
 
   const imageUrl = serverAvatarUrl ?? serverCoverUrl ?? '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entities.description(entity?.triples ?? []);
+  const description = Entities.description(entity?.values ?? []);
 
   return {
     entityName,
@@ -342,18 +367,48 @@ export const getImageHash = (value: string) => {
   }
 };
 
+/**
+ * Hook to efficiently get image URL for a specific entity
+ * @param imageEntityId The ID of the image entity
+ * @param spaceId The space ID to query within
+ * @returns The IPFS URL string or undefined if not found
+ */
+export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId: string): string | undefined {
+  const imageValues = useValues({
+    selector: v => v.entity.id === imageEntityId && v.spaceId === spaceId,
+  });
+
+  if (!imageEntityId || imageValues.length === 0) return undefined;
+
+  // Find the first value that is a string starting with 'ipfs://'
+  const imageUrlValue = imageValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+
+  return imageUrlValue?.value;
+}
+
 // Get the image URL from an image triple value
 // this allows us to render images on the front-end based on a raw triple value
-// e.g., ipfs://HASH -> https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH
+// e.g., ipfs://HASH -> https://example.mypinata.cloud/files/HASH
 export const getImagePath = (value: string) => {
-  // Add the IPFS gateway path for images with the ipfs:// protocol
+  // Use Pinata gateway as the primary source for IPFS images
   if (value.startsWith('ipfs://')) {
-    return `${IPFS_GATEWAY_READ_PATH}${getImageHash(value)}`;
+    return `${PINATA_GATEWAY_READ_PATH}${getImageHash(value)}`;
     // The image likely resolves to an image resource at some URL
   } else if (value.startsWith('http')) {
     return value;
   } else {
     // The image is likely a static, bundled path
+    return value;
+  }
+};
+
+// Get the fallback image URL (Lighthouse gateway) for when Pinata fails
+export const getImagePathFallback = (value: string) => {
+  if (value.startsWith('ipfs://')) {
+    return `${IPFS_GATEWAY_READ_PATH}${getImageHash(value)}`;
+  } else if (value.startsWith('http')) {
+    return value;
+  } else {
     return value;
   }
 };
@@ -473,19 +528,8 @@ export const uuidValidateV4 = (uuid: string) => {
 export const validateEntityId = (maybeEntityId: EntityId | string | null | undefined) => {
   if (typeof maybeEntityId !== 'string') return false;
 
-  if (!VALID_ENTITY_ID_LENGTHS.includes(maybeEntityId.length)) return false;
-
-  for (const char of maybeEntityId) {
-    const index = Base58.BASE58_ALLOWED_CHARS.indexOf(char);
-    if (index === -1) {
-      return false;
-    }
-  }
-
-  return true;
+  return IdUtils.isValid(maybeEntityId);
 };
-
-const VALID_ENTITY_ID_LENGTHS = [21, 22];
 
 export const getTabSlug = (label: string) => {
   return label
@@ -528,12 +572,12 @@ export const getPaginationPages = (totalPages: number, activePage: number) => {
   } else {
     // Current page is in the middle: show 1 2 ... (current-3) (current-2) (current-1) current ... last
     pages.push(PagesPaginationPlaceholder.skip);
-    
+
     // Show 3 pages before current and current page itself
     for (let i = activePage - 3; i <= activePage; i++) {
       pages.push(i);
     }
-    
+
     pages.push(PagesPaginationPlaceholder.skip);
   }
 
@@ -541,3 +585,11 @@ export const getPaginationPages = (totalPages: number, activePage: number) => {
   pages.push(totalPages);
   return pages;
 };
+
+export function sortRelations(relations: Relation[]) {
+  return [...relations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+}
+
+export function sortRows(rows: Row[]) {
+  return [...rows].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+}

@@ -3,17 +3,16 @@ import cx from 'classnames';
 import Image from 'next/image';
 
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
-import { removeRelation, useWriteOps } from '~/core/database/write';
 import { useSpace } from '~/core/hooks/use-space';
 import { EntityId } from '~/core/io/schema';
-import { useQueryEntity } from '~/core/sync/use-store';
-import { getImagePath } from '~/core/utils/utils';
+import { useMutate } from '~/core/sync/use-mutate';
 
 import { SquareButton } from '~/design-system/button';
+import { GeoImage } from '~/design-system/geo-image';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Menu } from '~/design-system/icons/menu';
@@ -48,7 +47,6 @@ export const CollectionMetadata = ({
   currentSpaceId,
   entityId,
   spaceId,
-  collectionId,
   relationId,
   verified,
   onLinkEntry,
@@ -56,40 +54,42 @@ export const CollectionMetadata = ({
 }: CollectionMetadataProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
+  const { storage } = useMutate();
 
   const { blockEntity } = useDataBlock();
   const { space } = useSpace(spaceId ?? '');
-  const { remove } = useWriteOps();
 
-  const { entity: collectionEntity } = useQueryEntity({
-    id: collectionId,
-    spaceId,
-  });
-
-  const { entity: relationEntity } = useQueryEntity({
-    id: relationId,
-    spaceId,
-  });
+  // @TODO(migration): Should we be deleting the relation entity?
+  // const { entity: relationEntity } = useQueryEntity({
+  //   id: relationId,
+  //   spaceId,
+  // });
 
   const onDeleteEntry = async () => {
     if (blockEntity) {
-      const blockRelation = blockEntity.relationsOut.find(r => r.toEntity.id === entityId);
+      const blockRelation = blockEntity.relations.find(r => r.toEntity.id === entityId);
 
       if (blockRelation) {
-        removeRelation({ relation: blockRelation, spaceId: currentSpaceId });
+        storage.relations.delete(blockRelation);
       }
     }
 
-    if (collectionEntity) {
-      collectionEntity.triples.forEach(t => remove(t, t.space));
-      collectionEntity.relationsOut.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
-    }
-
-    if (relationEntity) {
-      relationEntity.triples.forEach(t => remove(t, t.space));
-      relationEntity.relationsOut.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
-    }
+    // @TODO(migration): Should we be deleting the relation entity?
+    // if (relationEntity) {
+    //   relationEntity.values.forEach(t => remove(t, t.space));
+    //   relationEntity.relations.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
+    // }
   };
+
+  // Cleanup for autoclose popover 500ms after mouseleave mechanism
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div
@@ -99,7 +99,6 @@ export const CollectionMetadata = ({
       }}
       onMouseLeave={() => {
         setIsHovered(false);
-        setIsPopoverOpen(false);
       }}
     >
       <div className="absolute -inset-2 z-0" />
@@ -129,6 +128,7 @@ export const CollectionMetadata = ({
                 <Popover.Trigger asChild>
                   <button
                     onMouseEnter={() => setIsPopoverOpen(true)}
+                    onMouseDown={e => e.preventDefault()}
                     className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
                   >
                     <Menu />
@@ -139,6 +139,21 @@ export const CollectionMetadata = ({
                     side="top"
                     sideOffset={-4}
                     className="group z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
+                    onOpenAutoFocus={event => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onMouseEnter={() => {
+                      if (closeTimeoutRef.current) {
+                        clearTimeout(closeTimeoutRef.current);
+                        closeTimeoutRef.current = null;
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      closeTimeoutRef.current = setTimeout(() => {
+                        setIsPopoverOpen(false);
+                      }, 500);
+                    }}
                   >
                     {isEditing && (
                       <SelectSpaceAsPopover
@@ -151,11 +166,11 @@ export const CollectionMetadata = ({
                           onLinkEntry(relationId, result, verified);
                         }}
                         trigger={
-                          <button className="inline-flex items-center p-1">
+                          <button className="inline-flex items-center p-1" onMouseDown={e => e.preventDefault()}>
                             <span className="inline-flex size-[12px] items-center justify-center rounded-sm border hover:!border-text hover:!text-text group-hover:border-grey-03 group-hover:text-grey-03">
                               {space ? (
                                 <div className="size-[8px] overflow-clip rounded-sm grayscale">
-                                  <Image fill src={getImagePath(space.spaceConfig.image)} alt="" />
+                                  <GeoImage fill value={space.entity.image} alt="" />
                                 </div>
                               ) : (
                                 <TopRanked />
@@ -172,7 +187,11 @@ export const CollectionMetadata = ({
                       <RelationSmall />
                     </PrefetchLink>
                     {isEditing && (
-                      <button onClick={onDeleteEntry} className="p-1 hover:!text-text group-hover:text-grey-03">
+                      <button
+                        onClick={onDeleteEntry}
+                        onMouseDown={e => e.preventDefault()}
+                        className="p-1 hover:!text-text group-hover:text-grey-03"
+                      >
                         <CheckCloseSmall />
                       </button>
                     )}
@@ -181,8 +200,8 @@ export const CollectionMetadata = ({
               </Popover.Root>
             </div>
           )}
-          <div className="pointer-events-auto absolute bottom-0 right-0 top-0  flex items-center">
-            {isEditing && isHovered && (
+          <div className="pointer-events-auto absolute bottom-0 right-0 top-0 flex items-center">
+            {isHovered && (
               <PrefetchLink href={`/space/${spaceId}/${entityId}`}>
                 <SquareButton icon={<RightArrowLongSmall />} />
               </PrefetchLink>

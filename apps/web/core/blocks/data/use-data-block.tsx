@@ -5,11 +5,12 @@ import { Effect } from 'effect';
 import * as React from 'react';
 
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { sortRows } from '~/core/utils/utils';
+import { Cell, Property, Relation, Row } from '~/core/v2.types';
 
-import { upsert } from '../../database/write';
 import { useProperties } from '../../hooks/use-properties';
-import { Cell, PropertySchema, Relation } from '../../types';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter } from './filters';
 import { Source } from './source';
@@ -32,11 +33,16 @@ interface RenderablesQueryKey {
 
 const queryKeys = {
   relationQuery: (args: RenderablesQueryKey) => ['blocks', 'data', 'renderables', args],
-  columnsSchema: (columns?: PropertySchema[]) => ['blocks', 'data', 'columns-schema', columns],
+  columnsSchema: (columns?: Property[]) => ['blocks', 'data', 'columns-schema', columns],
 };
 
-export function useDataBlock() {
+interface UseDataBlockOptions {
+  filterState?: Filter[];
+}
+
+export function useDataBlock(options?: UseDataBlockOptions) {
   const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
+  const { storage } = useMutate();
 
   const { entity, isLoading: isBlockEntityLoading } = useQueryEntity({
     spaceId: spaceId,
@@ -44,9 +50,16 @@ export function useDataBlock() {
   });
 
   const { relationBlockSourceRelations } = useRelationsBlock();
-  const { filterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
+  const { filterState: dbFilterState, isLoading: isLoadingFilterState, isFetched: isFilterStateFetched } = useFilters();
+
+  // Use provided filter state or fall back to database filter state
+  const effectiveFilterState = options?.filterState ?? dbFilterState;
   const { shownColumnIds, mapping, isLoading: isViewLoading, isFetched: isViewFetched } = useView();
   const { source } = useSource();
+
+  const where = filterStateToWhere(effectiveFilterState);
+
+  // Fetch collection data with server-side filtering
   const {
     collectionItems,
     collectionRelations,
@@ -54,17 +67,27 @@ export function useDataBlock() {
     isLoading: isCollectionLoading,
     collectionLength,
   } = useCollection({
-    first: PAGE_SIZE + 1,
+    first: PAGE_SIZE,
     skip: pageNumber * PAGE_SIZE,
+    where: where,
   });
 
-  const where = filterStateToWhere(filterState);
+  // For COLLECTION sources, server-side filtering is now applied in useCollection
+  // We just need to organize the data here
+  const collectionData = React.useMemo(() => {
+    return {
+      items: collectionItems,
+      relations: collectionRelations,
+      totalCount: collectionLength,
+    };
+  }, [collectionItems, collectionRelations, collectionLength]);
 
   const { entities: queriedEntities, isLoading: isQueryEntitiesLoading } = useQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     first: PAGE_SIZE + 1,
     skip: pageNumber * PAGE_SIZE,
+    placeholderData: keepPreviousData,
   });
 
   // Use the mapping to get the potential renderable properties.
@@ -96,7 +119,7 @@ export function useDataBlock() {
                 for (const [propertyId, selector] of Object.entries(mapping)) {
                   const lexicon = parseSelectorIntoLexicon(selector);
                   const entities = await mapSelectorLexiconToSourceEntity(lexicon, relation.id);
-                  cells.push(mappingToCell(entities, propertyId, lexicon, spaceId, relation.id));
+                  cells.push(mappingToCell(entities, propertyId, lexicon));
                 }
 
                 return {
@@ -118,6 +141,7 @@ export function useDataBlock() {
         return [];
       });
 
+      // @TODO: Error handling
       return await Effect.runPromise(run);
     },
   });
@@ -145,31 +169,32 @@ export function useDataBlock() {
    */
   const rows = (() => {
     if (source.type === 'COLLECTION') {
-      return mappingToRows(collectionItems, shownColumnIds, collectionRelations, spaceId, propertiesSchema);
+      return mappingToRows(collectionData.items, shownColumnIds, collectionData.relations);
     }
 
     if (source.type === 'GEO' || source.type === 'SPACES') {
-      return mappingToRows(queriedEntities, shownColumnIds, [], spaceId, propertiesSchema);
+      return mappingToRows(queriedEntities, shownColumnIds, []);
     }
 
     if (source.type === 'RELATIONS') {
-      return relationsMapping;
+      return (
+        relationsMapping?.map(
+          item =>
+            ({
+              ...item,
+              placeholder: false,
+            }) as Row
+        ) ?? []
+      );
     }
+
+    return [];
   })();
 
-  const totalPages = Math.ceil(collectionLength / PAGE_SIZE);
+  const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
 
   const setName = (newName: string) => {
-    upsert(
-      {
-        attributeId: SystemIds.NAME_ATTRIBUTE,
-        entityId: entityId,
-        entityName: newName,
-        attributeName: 'Name',
-        value: { type: 'TEXT', value: newName },
-      },
-      spaceId
-    );
+    storage.entities.name.set(entityId, spaceId, newName);
   };
 
   let isLoading = true;
@@ -190,21 +215,25 @@ export function useDataBlock() {
 
   // @TODO: Returned data type should be a FSM depending on the source.type
   // For collections, check if there are more items beyond the current page
-  const hasNextPage = source.type === 'COLLECTION' 
-    ? (pageNumber + 1) * PAGE_SIZE < collectionLength
-    : rows ? rows.length > PAGE_SIZE : false;
-  
-  return {
+  const hasNextPage =
+    source.type === 'COLLECTION'
+      ? (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
+      : rows
+        ? rows.length > PAGE_SIZE
+        : false;
+
+  const result = {
     entityId,
     spaceId,
     relationId,
 
     blockEntity: entity,
-    rows: rows?.slice(0, PAGE_SIZE) ?? [],
+    rows: sortRows(rows)?.slice(0, PAGE_SIZE) ?? [],
     properties: propertiesSchema ? Object.values(propertiesSchema) : [],
     propertiesSchema,
 
     pageNumber,
+    pageSize: PAGE_SIZE,
     hasNextPage,
     hasPreviousPage: pageNumber > 0,
     setPage,
@@ -214,7 +243,13 @@ export function useDataBlock() {
     name: entity?.name ?? null,
     setName,
     totalPages,
+    collectionLength: collectionData.totalCount,
+
+    relations: entity?.relations,
+    collectionRelations: source.type === 'COLLECTION' ? collectionData.relations : undefined,
   };
+
+  return result;
 }
 
 const DataBlockContext = React.createContext<{
@@ -258,23 +293,30 @@ export function useDataBlockInstance() {
   return context;
 }
 
-function filterStateToWhere(filterState: Filter[]): WhereCondition {
+export function filterStateToWhere(filterState: Filter[]): WhereCondition {
   const where: WhereCondition = {};
 
   for (const filter of filterState) {
     if (filter.valueType === 'TEXT') {
-      if (!where.triples) {
-        where.triples = [];
+      // For NAME_PROPERTY, filter on the entity name field directly
+      if (filter.columnId === SystemIds.NAME_PROPERTY) {
+        where['name'] = {
+          contains: filter.value,
+        };
+      } else {
+        // For other text properties, filter on values
+        if (!where.values) {
+          where.values = [];
+        }
+        where['values'].push({
+          propertyId: {
+            equals: filter.columnId,
+          },
+          value: {
+            contains: filter.value,
+          },
+        });
       }
-
-      where['triples'].push({
-        attributeId: {
-          equals: filter.columnId,
-        },
-        value: {
-          equals: filter.value,
-        },
-      });
     }
 
     if (filter.valueType === 'RELATION') {
@@ -283,22 +325,41 @@ function filterStateToWhere(filterState: Filter[]): WhereCondition {
         continue;
       }
 
-      if (!where.relations) {
-        where.relations = [];
-      }
+      if (filter.columnName === 'Backlink') {
+        if (!where.backlinks) {
+          where.backlinks = [];
+        }
 
-      where['relations'].push({
-        typeOf: {
-          id: {
-            equals: filter.columnId,
+        where['backlinks'].push({
+          typeOf: {
+            id: {
+              equals: filter.columnId,
+            },
           },
-        },
-        toEntity: {
-          id: {
-            equals: filter.value,
+          fromEntity: {
+            id: {
+              equals: filter.value,
+            },
           },
-        },
-      });
+        });
+      } else {
+        if (!where.relations) {
+          where.relations = [];
+        }
+
+        where['relations'].push({
+          typeOf: {
+            id: {
+              equals: filter.columnId,
+            },
+          },
+          toEntity: {
+            id: {
+              equals: filter.value,
+            },
+          },
+        });
+      }
     }
   }
 

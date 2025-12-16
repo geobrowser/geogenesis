@@ -1,7 +1,7 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 import { atom } from 'jotai';
 
-import { Triple } from '~/core/types';
+import { Value } from '~/core/v2.types';
 
 export const loadingAtom = atom<boolean>(false);
 
@@ -25,9 +25,9 @@ export const entityCountAtom = atom(get => {
 });
 
 export const entityCountByTypeAtom = atom(get => {
-  const actions = get(triplesAtom);
+  const actions = get(valuesAtom);
 
-  const typeActions = actions.filter(action => action.attributeId === SystemIds.TYPES_ATTRIBUTE);
+  const typeActions = actions.filter(action => action.property.id === SystemIds.TYPES_PROPERTY);
 
   const entitySetByType: Record<string, Set<string>> = {};
 
@@ -52,10 +52,10 @@ export const entityCountByTypeAtom = atom(get => {
   return entityCountByType;
 });
 
-export const triplesAtom = atom<Array<Triple>>([]);
+export const valuesAtom = atom<Array<Value>>([]);
 
 export const actionsCountAtom = atom(get => {
-  const actions = get(triplesAtom);
+  const actions = get(valuesAtom);
   return actions.length.toLocaleString('en-US', { style: 'decimal' });
 });
 

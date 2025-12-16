@@ -1,7 +1,19 @@
+import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { IPFS_GATEWAY_READ_PATH } from '../constants';
-import { GeoDate, GeoNumber, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl, getPaginationPages, PagesPaginationPlaceholder } from './utils';
+import { IPFS_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '../constants';
+import * as useStore from '../sync/use-store';
+import {
+  GeoDate,
+  GeoNumber,
+  PagesPaginationPlaceholder,
+  formatShortAddress,
+  getImageHash,
+  getImagePath,
+  getOpenGraphImageUrl,
+  getPaginationPages,
+  useImageUrlFromEntity,
+} from './utils';
 
 describe('GeoNumber', () => {
   let consoleErrorSpy: any;
@@ -184,7 +196,7 @@ describe('GeoDate', () => {
 
 describe('getImagePath', () => {
   it('an IPFS pre-fixed string returns the Geo IPFS gateway path', () => {
-    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(`${IPFS_GATEWAY_READ_PATH}QmBananaSandwich`);
+    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(`${PINATA_GATEWAY_READ_PATH}QmBananaSandwich`);
   });
 
   it('an HTTP pre-fixed string returns the same string', () => {
@@ -254,8 +266,28 @@ describe('getPaginationPages', () => {
   });
 
   it('shows ellipsis between page 2 and current-3 when current page is past 7', () => {
-    expect(getPaginationPages(11, 8)).toEqual([1, 2, PagesPaginationPlaceholder.skip, 5, 6, 7, 8, PagesPaginationPlaceholder.skip, 11]);
-    expect(getPaginationPages(20, 10)).toEqual([1, 2, PagesPaginationPlaceholder.skip, 7, 8, 9, 10, PagesPaginationPlaceholder.skip, 20]);
+    expect(getPaginationPages(11, 8)).toEqual([
+      1,
+      2,
+      PagesPaginationPlaceholder.skip,
+      5,
+      6,
+      7,
+      8,
+      PagesPaginationPlaceholder.skip,
+      11,
+    ]);
+    expect(getPaginationPages(20, 10)).toEqual([
+      1,
+      2,
+      PagesPaginationPlaceholder.skip,
+      7,
+      8,
+      9,
+      10,
+      PagesPaginationPlaceholder.skip,
+      20,
+    ]);
   });
 
   it('removes trailing ellipsis when on second-to-last or last page', () => {
@@ -273,20 +305,87 @@ describe('getPaginationPages', () => {
 
   it('correctly handles all pages from 1 to last with arrow navigation', () => {
     const totalPages = 15;
-    
+
     // Test that we can navigate to every page
     for (let page = 1; page <= totalPages; page++) {
       const result = getPaginationPages(totalPages, page);
-      
+
       // Every result should include page 1, 2, and last page
       expect(result).toContain(1);
       expect(result).toContain(2);
       expect(result).toContain(totalPages);
-      
+
       // If current page > 2, it should be included
       if (page > 2) {
         expect(result).toContain(page);
       }
     }
+  });
+});
+
+describe('useImageUrlFromEntity', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should return undefined when imageEntityId is undefined', () => {
+    vi.spyOn(useStore, 'useValues').mockReturnValue([]);
+
+    const { result } = renderHook(() => useImageUrlFromEntity(undefined, 'test-space'));
+
+    expect(result.current).toBeUndefined();
+    expect(useStore.useValues).toHaveBeenCalledWith({
+      selector: expect.any(Function),
+    });
+  });
+
+  it('should return undefined when no values are found', () => {
+    vi.spyOn(useStore, 'useValues').mockReturnValue([]);
+
+    const { result } = renderHook(() => useImageUrlFromEntity('image-123', 'test-space'));
+
+    expect(result.current).toBeUndefined();
+    expect(useStore.useValues).toHaveBeenCalledWith({
+      selector: expect.any(Function),
+    });
+  });
+
+  it('should return the first IPFS URL when found', () => {
+    const mockValues = [
+      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'some-other-value' },
+      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'ipfs://QmHash123' },
+    ];
+
+    vi.spyOn(useStore, 'useValues').mockReturnValue(mockValues);
+
+    const { result } = renderHook(() => useImageUrlFromEntity('image-123', 'test-space'));
+
+    expect(result.current).toBe('ipfs://QmHash123');
+  });
+
+  it('should return undefined when values exist but none are IPFS URLs', () => {
+    const mockValues = [
+      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 'some-string-value' },
+      { entity: { id: 'image-123' }, spaceId: 'test-space', value: 123 },
+    ];
+
+    vi.spyOn(useStore, 'useValues').mockReturnValue(mockValues);
+
+    const { result } = renderHook(() => useImageUrlFromEntity('image-123', 'test-space'));
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('should filter values by entity ID and space ID', () => {
+    const mockUseValues = vi.spyOn(useStore, 'useValues').mockReturnValue([]);
+
+    renderHook(() => useImageUrlFromEntity('image-123', 'test-space'));
+
+    const selector = mockUseValues.mock.calls[0][0].selector;
+
+    // Test that selector filters correctly
+    expect(selector({ entity: { id: 'image-123' }, spaceId: 'test-space' })).toBe(true);
+    expect(selector({ entity: { id: 'wrong-id' }, spaceId: 'test-space' })).toBe(false);
+    expect(selector({ entity: { id: 'image-123' }, spaceId: 'wrong-space' })).toBe(false);
   });
 });

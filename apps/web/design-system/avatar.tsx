@@ -1,8 +1,6 @@
 import BoringAvatar from 'boring-avatars';
-import Image from 'next/legacy/image';
 
-import { getImagePath } from '~/core/utils/utils';
-
+import { GeoImage } from './geo-image';
 import { colors } from './theme/colors';
 
 interface Props {
@@ -16,7 +14,7 @@ interface Props {
 
 export const Avatar = ({ value, avatarUrl, priority = false, alt = '', size = 12, square = false }: Props) => {
   return avatarUrl ? (
-    <Image objectFit="cover" priority={priority} layout="fill" src={getImagePath(avatarUrl)} alt={alt} />
+    <GeoImage fill style={{ objectFit: 'cover' }} priority={priority} value={avatarUrl} alt={alt} />
   ) : (
     <BoringAvatar
       size={size}

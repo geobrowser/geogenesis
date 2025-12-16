@@ -6,15 +6,15 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
-import Image from 'next/image';
 
 import * as React from 'react';
 
 import { useQueryEntity } from '~/core/sync/use-store';
 import { BlockChange, EntityChange, RenderableChange, TripleChangeValue } from '~/core/utils/change/types';
-import { GeoDate, GeoNumber, getImagePath, groupBy } from '~/core/utils/utils';
+import { GeoDate, GeoNumber, groupBy } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
+import { GeoImage } from '~/design-system/geo-image';
 import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 import { colors } from '~/design-system/theme/colors';
@@ -31,8 +31,8 @@ type ChangedEntityProps = {
 
 const getIsNewRelation = (changes: RenderableChange[]) => {
   return (
-    changes.some(change => change.before === null && change.attribute.id === SystemIds.RELATION_FROM_ATTRIBUTE) &&
-    changes.some(change => change.before === null && change.attribute.id === SystemIds.RELATION_TO_ATTRIBUTE)
+    changes.some(change => change.before === null && change.attribute.id === SystemIds.RELATION_FROM_PROPERTY) &&
+    changes.some(change => change.before === null && change.attribute.id === SystemIds.RELATION_TO_PROPERTY)
   );
 };
 
@@ -59,13 +59,7 @@ export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagi
       <div className="flex flex-col gap-5">
         <div className="flex w-1/2 items-center gap-4 pr-8">
           <div className="relative size-10 shrink-0 overflow-clip rounded bg-grey-01">
-            {change.avatar && (
-              <img
-                src={getImagePath(change.avatar)}
-                className="absolute inset-0 h-full w-full object-cover object-center"
-                alt=""
-              />
-            )}
+            {change.avatar && <ChangedEntityAvatar avatar={change.avatar} />}
           </div>
           <div className="truncate text-mediumTitle">{change.name ?? change.id}</div>
         </div>
@@ -149,13 +143,7 @@ const ChangedBlock = ({ index, blockChange }: ChangedBlockProps) => {
             <div>
               {before && (
                 <span className="inline-block w-full rounded-lg bg-errorTertiary p-1">
-                  <Image
-                    src={getImagePath(before)}
-                    className="!h-auto !w-full !rounded-lg"
-                    width={560}
-                    height={560}
-                    alt=""
-                  />
+                  <GeoImage value={before} className="!h-auto !w-full !rounded-lg" width={560} height={560} alt="" />
                 </span>
               )}
             </div>
@@ -164,13 +152,7 @@ const ChangedBlock = ({ index, blockChange }: ChangedBlockProps) => {
             <div>
               {after && (
                 <span className="inline-block w-full rounded-lg bg-successTertiary p-1">
-                  <Image
-                    src={getImagePath(after)}
-                    className="!h-auto !w-full !rounded-lg"
-                    width={560}
-                    height={560}
-                    alt=""
-                  />
+                  <GeoImage value={after} className="!h-auto !w-full !rounded-lg" width={560} height={560} alt="" />
                 </span>
               )}
             </div>
@@ -464,11 +446,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                     {changes.map(c => {
                       if (!c.before?.value) return null;
 
-                      return (
-                        <span key={c.before.value} className="inline-block rounded-lg bg-errorTertiary p-1">
-                          <img src={getImagePath(c.before.value)} className="h-24 w-auto rounded-lg" />
-                        </span>
-                      );
+                      return <ChangedImageBefore key={c.before.value} value={c.before.value} />;
                     })}
                   </div>
                 </div>
@@ -486,11 +464,7 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
                     {changes.map(c => {
                       if (!c.after?.value) return null;
 
-                      return (
-                        <span key={c.after.value} className="inline-block rounded-lg bg-successTertiary p-1">
-                          <img src={getImagePath(c.after.value)} className="h-24 w-auto rounded-lg" />
-                        </span>
-                      );
+                      return <ChangedImageAfter key={c.after.value} value={c.after.value} />;
                     })}
                   </div>
                 </div>
@@ -538,52 +512,52 @@ const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedA
               </div>
             );
           }
-          case 'URL': {
-            return (
-              <div key={index} className="-mt-px flex gap-16">
-                <div className="flex-1 border border-grey-02 p-4">
-                  <div className="text-bodySemibold capitalize">{name}</div>
-                  <div className="truncate text-wrap text-ctaPrimary no-underline">
-                    {changes.map(c => {
-                      const checkedBefore = c.before ? c.before.value : '';
-                      const checkedAfter = c.after ? c.after.value : '';
-                      const differences = diffWords(checkedBefore, checkedAfter);
+          // case 'URL': {
+          //   return (
+          //     <div key={index} className="-mt-px flex gap-16">
+          //       <div className="flex-1 border border-grey-02 p-4">
+          //         <div className="text-bodySemibold capitalize">{name}</div>
+          //         <div className="truncate text-wrap text-ctaPrimary no-underline">
+          //           {changes.map(c => {
+          //             const checkedBefore = c.before ? c.before.value : '';
+          //             const checkedAfter = c.after ? c.after.value : '';
+          //             const differences = diffWords(checkedBefore, checkedAfter);
 
-                      return differences
-                        .filter(item => !item.added)
-                        .map((difference, index) => (
-                          <span
-                            key={index}
-                            className={cx(difference.removed && 'rounded bg-errorTertiary line-through')}
-                          >
-                            {difference.value}
-                          </span>
-                        ));
-                    })}
-                  </div>
-                </div>
-                <div className="group relative flex-1 border border-grey-02 p-4">
-                  {renderAttributeStagingComponent?.(attributeId)}
-                  <div className="text-bodySemibold capitalize">{name}</div>
-                  <div className="truncate text-wrap text-ctaPrimary no-underline">
-                    {changes.map(c => {
-                      const checkedBefore = c.before ? c.before.value : '';
-                      const checkedAfter = c.after ? c.after.value : '';
-                      const differences = diffWords(checkedBefore, checkedAfter);
+          //             return differences
+          //               .filter(item => !item.added)
+          //               .map((difference, index) => (
+          //                 <span
+          //                   key={index}
+          //                   className={cx(difference.removed && 'rounded bg-errorTertiary line-through')}
+          //                 >
+          //                   {difference.value}
+          //                 </span>
+          //               ));
+          //           })}
+          //         </div>
+          //       </div>
+          //       <div className="group relative flex-1 border border-grey-02 p-4">
+          //         {renderAttributeStagingComponent?.(attributeId)}
+          //         <div className="text-bodySemibold capitalize">{name}</div>
+          //         <div className="truncate text-wrap text-ctaPrimary no-underline">
+          //           {changes.map(c => {
+          //             const checkedBefore = c.before ? c.before.value : '';
+          //             const checkedAfter = c.after ? c.after.value : '';
+          //             const differences = diffWords(checkedBefore, checkedAfter);
 
-                      return differences
-                        .filter(item => !item.removed)
-                        .map((difference, index) => (
-                          <span key={index} className={cx(difference.added && 'rounded bg-successTertiary')}>
-                            {difference.value}
-                          </span>
-                        ));
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          }
+          //             return differences
+          //               .filter(item => !item.removed)
+          //               .map((difference, index) => (
+          //                 <span key={index} className={cx(difference.added && 'rounded bg-successTertiary')}>
+          //                   {difference.value}
+          //                 </span>
+          //               ));
+          //           })}
+          //         </div>
+          //       </div>
+          //     </div>
+          //   );
+          // }
           default: {
             return null;
           }
@@ -600,26 +574,29 @@ interface NumberDiffProps {
 }
 
 const NumberDiff = ({ before, after, mode }: NumberDiffProps) => {
-  const hasFormatChanged = before?.options?.format !== after?.options?.format;
+  // const hasFormatChanged = before?.options?.format !== after?.options?.format;
   const { entity: beforeUnitEntity } = useQueryEntity({ id: before?.options?.unit });
   const { entity: afterUnitEntity } = useQueryEntity({ id: after?.options?.unit });
 
   const [currencySignBefore, currencySignAfter] = React.useMemo(
     () => [
       before?.options?.unit &&
-        beforeUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+        beforeUnitEntity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
       after?.options?.unit &&
-        afterUnitEntity?.triples.find(t => t.attributeId === SystemIds.CURRENCY_SIGN_ATTRIBUTE)?.value?.value,
+        afterUnitEntity?.values.find(t => t.property.id === SystemIds.CURRENCY_SIGN_PROPERTY)?.value,
     ],
     [before, beforeUnitEntity, after, afterUnitEntity]
   );
 
-  const formattedNumberBefore = before?.value
-    ? GeoNumber.format(before.value, before?.options?.format, currencySignBefore)
-    : null;
-  const formattedNumberAfter = after?.value
-    ? GeoNumber.format(after.value, after?.options?.format, currencySignAfter)
-    : null;
+  const formattedNumberBefore = null;
+  // @TODO(migration): formatting lives on property now
+  // const formattedNumberBefore = before?.value
+  //   ? GeoNumber.format(before.value, before?.options?.format, currencySignBefore)
+  //   : null;
+  const formattedNumberAfter = null;
+  // const formattedNumberAfter = after?.value
+  // ? GeoNumber.format(after.value, after?.options?.format, currencySignAfter)
+  // : null;
 
   const [formattedNumber, rawNumber, highlightClassName] =
     mode === 'before'
@@ -651,8 +628,11 @@ type DateTimeType = {
 };
 
 export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
-  const formattedDateBefore = before?.value ? GeoDate.format(before.value, before?.options?.format) : null;
-  const formattedDateAfter = after?.value ? GeoDate.format(after.value, after?.options?.format) : null;
+  // @TODO(migration): format now lives on property
+  const formattedDateBefore = null;
+  // const formattedDateBefore = before?.value ? GeoDate.format(before.value, before?.options?.format) : null;
+  const formattedDateAfter = null;
+  // const formattedDateAfter = after?.value ? GeoDate.format(after.value, after?.options?.format) : null;
 
   const [formattedDate, highlightClassName] =
     mode === 'before'
@@ -795,7 +775,7 @@ function parseMarkdown(markdownString: string) {
 //     typeIds: [],
 //   });
 //   const filtersWithColumnName = filters.map(f => {
-//     if (f.columnId === SystemIds.NAME_ATTRIBUTE) {
+//     if (f.columnId === SystemIds.NAME_PROPERTY) {
 //       return {
 //         ...f,
 //         columnName: 'Name',
@@ -850,5 +830,26 @@ const Corners = () => {
         </div>
       </div>
     </>
+  );
+};
+
+// Helper components for fallback images
+const ChangedEntityAvatar = ({ avatar }: { avatar: string }) => {
+  return <GeoImage value={avatar} fill style={{ objectFit: 'cover' }} alt="" />;
+};
+
+const ChangedImageBefore = ({ value }: { value: string }) => {
+  return (
+    <span className="inline-block rounded-lg bg-errorTertiary p-1">
+      <GeoImage value={value} className="h-24 w-auto rounded-lg" width={96} height={96} alt="" />
+    </span>
+  );
+};
+
+const ChangedImageAfter = ({ value }: { value: string }) => {
+  return (
+    <span className="inline-block rounded-lg bg-successTertiary p-1">
+      <GeoImage value={value} className="h-24 w-auto rounded-lg" width={96} height={96} alt="" />
+    </span>
   );
 };

@@ -8,7 +8,6 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
-import { useWriteOps } from '~/core/database/write';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useKey } from '~/core/hooks/use-key';
 import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
@@ -16,17 +15,16 @@ import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { SearchResult } from '~/core/io/dto/search';
 import { Space } from '~/core/io/dto/spaces';
-import { EntityId, SpaceId } from '~/core/io/schema';
-import type { RelationValueType } from '~/core/types';
-import { getImagePath } from '~/core/utils/utils';
+import { useMutate } from '~/core/sync/use-mutate';
+import { Property, SearchResult, SwitchableRenderableType } from '~/core/v2.types';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { IconButton } from '~/design-system/button';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { TopRanked } from '~/design-system/icons/top-ranked';
@@ -36,6 +34,8 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 import { Tooltip } from '~/design-system/tooltip';
+
+import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
 
 import { ArrowLeft } from './icons/arrow-left';
 import { InfoSmall } from './icons/info-small';
@@ -47,7 +47,7 @@ import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
   onDone?: (
-    result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean },
+    result: { id: string; name: string | null; space?: string; primarySpace?: string; verified?: boolean },
     // This is used to determine if the onDone is called from within the create function
     // internal to SelectEntity. Some consumers in the codebase want to either listen to
     // the onDone OR onCreateEntity callback but not both. This lets them bail out of
@@ -56,17 +56,24 @@ type SelectEntityProps = {
     // Not the best way to do this but the simplest for now to avoid breaking changes.
     fromCreateFn?: boolean
   ) => void;
-  onCreateEntity?: (result: { id: EntityId; name: string | null; space?: EntityId; verified?: boolean }) => void;
+  onCreateEntity?: (result: {
+    id: string;
+    name: string | null;
+    space?: string;
+    verified?: boolean;
+    renderableType?: SwitchableRenderableType;
+  }) => void | string;
   spaceId: string;
-  relationValueTypes?: RelationValueType[];
+  relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
   containerClassName?: string;
   inputClassName?: string;
-  variant?: 'floating' | 'fixed';
+  variant?: 'floating' | 'fixed' | 'tableCell';
   width?: 'clamped' | 'full';
   withSelectSpace?: boolean;
   withSearchIcon?: boolean;
   advanced?: boolean;
+  autoFocus?: boolean;
 };
 
 type SpaceFilter = { spaceId: string; spaceName: string | null };
@@ -86,13 +93,17 @@ export const SelectEntity = ({
   withSelectSpace = true,
   withSearchIcon = false,
   advanced = true,
+  autoFocus = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
+  const { storage } = useMutate();
 
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
-  const [allowedTypes, setAllowedTypes] = useState<RelationValueType[]>(() => relationValueTypes ?? []);
+  const [allowedTypes, setAllowedTypes] = useState<NonNullable<Property['relationValueTypes']>>(
+    () => relationValueTypes ?? []
+  );
 
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
   const [isAddingFilter, setIsAddingFilter] = useState<boolean>(false);
@@ -100,13 +111,14 @@ export const SelectEntity = ({
 
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
+  const [renderableType, setRenderableType] = useState<SwitchableRenderableType>('TEXT');
 
   const filterBySpace = spaceFilter?.spaceId ?? undefined;
 
   const filterByTypes = typeFilter
-    ? [typeFilter.typeId, ...(allowedTypes.length > 0 ? allowedTypes.map(r => r.typeId) : [])]
+    ? [typeFilter.typeId, ...(allowedTypes.length > 0 ? allowedTypes.map(r => r.id) : [])]
     : allowedTypes.length > 0
-      ? allowedTypes.map(r => r.typeId)
+      ? allowedTypes.map(r => r.id)
       : undefined;
 
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
@@ -129,10 +141,12 @@ export const SelectEntity = ({
   };
 
   const [, setToast] = useToast();
-  const { upsert } = useWriteOps();
+
+  // Check if we're creating a property entity
+  const isCreatingProperty = relationValueTypes?.some(type => type.id === SystemIds.PROPERTY);
 
   const onCreateNewEntity = () => {
-    const newEntityId = ID.createEntityId();
+    let newEntityId = ID.createEntityId();
 
     // This component is used in many different use-cases across the system, so we
     // need to be able to pass in a callback. onCreateEntity is used to enable to
@@ -141,22 +155,15 @@ export const SelectEntity = ({
     // e.g., you're in a collection and create a new entity, we want to add the current
     // filters to the created entity. This enables the caller to hook into the creation.
     if (onCreateEntity) {
-      onCreateEntity({ id: newEntityId, name: query });
+      newEntityId =
+        onCreateEntity({
+          id: newEntityId,
+          name: query,
+          renderableType: isCreatingProperty ? renderableType : undefined,
+        }) ?? newEntityId;
     } else {
       // Create new entity with name and types using internal id
-      upsert(
-        {
-          entityId: newEntityId,
-          attributeId: SystemIds.NAME_ATTRIBUTE,
-          entityName: query,
-          attributeName: 'Name',
-          value: {
-            type: 'TEXT',
-            value: query,
-          },
-        },
-        spaceId
-      );
+      storage.entities.name.set(newEntityId, spaceId, query);
     }
     onDone?.({ id: newEntityId, name: query }, true);
     onQueryChange('');
@@ -178,6 +185,7 @@ export const SelectEntity = ({
       onDone?.({
         id: result.id,
         name: result.name,
+        primarySpace: result.spaces?.[0]?.spaceId ? result.spaces[0].spaceId : undefined,
       });
       onQueryChange('');
     }
@@ -250,6 +258,7 @@ export const SelectEntity = ({
             placeholder={placeholder}
             className={inputStyles({ [variant]: true, withSearchIcon, className: inputClassName })}
             spellCheck={false}
+            autoFocus={autoFocus}
           />
         </Popover.Anchor>
         {query && (
@@ -265,7 +274,7 @@ export const SelectEntity = ({
             <div className={cx(variant === 'fixed' && 'pt-1', width === 'full' && 'w-full')}>
               <div
                 className={cx(
-                  '-ml-px overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
+                  '-ml-px overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
                   width === 'clamped' ? 'w-[400px]' : '-mr-px',
                   withSearchIcon && 'rounded-t-none'
                 )}
@@ -311,13 +320,11 @@ export const SelectEntity = ({
                                     {allowedTypes.map(allowedType => {
                                       return (
                                         <FilterPill
-                                          key={allowedType.typeId}
-                                          filterType="Relation value type"
-                                          name={allowedType.typeName ?? ''}
+                                          key={allowedType.id}
+                                          filterType="Type"
+                                          name={allowedType.name ?? ''}
                                           onDelete={() =>
-                                            setAllowedTypes([
-                                              ...allowedTypes.filter(r => r.typeId !== allowedType.typeId),
-                                            ])
+                                            setAllowedTypes([...allowedTypes.filter(r => r.id !== allowedType.id)])
                                           }
                                         />
                                       );
@@ -371,7 +378,7 @@ export const SelectEntity = ({
                                     <SpaceFilterInput
                                       onSelect={result => {
                                         setSpaceFilter({
-                                          spaceId: SpaceId(result.id),
+                                          spaceId: result.id,
                                           spaceName: result.name,
                                         });
                                         setIsAddingFilter(false);
@@ -382,7 +389,7 @@ export const SelectEntity = ({
                                     <TypeFilterInput
                                       onSelect={result => {
                                         setTypeFilter({
-                                          typeId: EntityId(result.id),
+                                          typeId: result.id,
                                           typeName: result.name,
                                         });
                                         setIsAddingFilter(false);
@@ -400,7 +407,7 @@ export const SelectEntity = ({
                 )}
                 {!result ? (
                   <ResizableContainer>
-                    <div className="no-scrollbar flex max-h-[219px] flex-col overflow-y-auto overflow-x-clip bg-white">
+                    <div className="no-scrollbar flex max-h-[50vh] flex-col overflow-y-auto overflow-x-clip bg-white">
                       {!results?.length && isLoading && (
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">Loading...</div>
@@ -421,6 +428,7 @@ export const SelectEntity = ({
                                     onDone?.({
                                       id: result.id,
                                       name: result.name,
+                                      primarySpace: result.spaces?.[0]?.spaceId ? result.spaces[0].spaceId : undefined,
                                     });
                                     onQueryChange('');
                                     setSelectedIndex(0);
@@ -441,8 +449,8 @@ export const SelectEntity = ({
                                         <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
                                           {(result.spaces ?? []).length > 0 ? (
                                             <>
-                                              <img
-                                                src={getImagePath(result.spaces[0].image)}
+                                              <NativeGeoImage
+                                                value={result.spaces[0].image}
                                                 alt=""
                                                 className="h-full w-full object-cover"
                                               />
@@ -506,8 +514,8 @@ export const SelectEntity = ({
                                             key={space.spaceId}
                                             className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
                                           >
-                                            <img
-                                              src={getImagePath(space.image)}
+                                            <NativeGeoImage
+                                              value={space.image}
                                               alt=""
                                               className="h-full w-full object-cover"
                                             />
@@ -553,7 +561,7 @@ export const SelectEntity = ({
                         />
                       </div>
                     </div>
-                    <div className="flex max-h-[219px] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
+                    <div className="flex max-h-[50vh] flex-col divide-y divide-divider overflow-y-auto overflow-x-clip bg-white">
                       {(result.spaces ?? []).map((space, index) => (
                         <button
                           key={index}
@@ -562,7 +570,7 @@ export const SelectEntity = ({
                             onDone?.({
                               id: result.id,
                               name: result.name,
-                              space: EntityId(space.spaceId),
+                              space: space.spaceId,
                             });
                             onQueryChange('');
                             setSelectedIndex(0);
@@ -571,7 +579,7 @@ export const SelectEntity = ({
                         >
                           <div>
                             <div className="h-[24px] w-[24px] overflow-clip rounded-md">
-                              <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
+                              <NativeGeoImage value={space.image} alt="" className="h-full w-full object-cover" />
                             </div>
                           </div>
                           <div>
@@ -587,10 +595,15 @@ export const SelectEntity = ({
                 )}
                 {!result && (
                   <div className="flex w-full items-center justify-between border-t border-grey-02 px-4 py-2">
-                    <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
-                      <Toggle checked={isShowingIds} />
-                      <div className="text-[0.875rem] text-grey-04">IDs</div>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button onClick={handleShowIds} className="inline-flex items-center gap-1.5">
+                        <Toggle checked={isShowingIds} />
+                        <div className="text-[0.875rem] text-grey-04">IDs</div>
+                      </button>
+                      {isCreatingProperty && (
+                        <RenderableTypeDropdown value={renderableType} onChange={setRenderableType} />
+                      )}
+                    </div>
                     <button onClick={onCreateNewEntity} className="text-resultLink text-ctaHover">
                       Create new
                     </button>
@@ -613,6 +626,9 @@ const inputStyles = cva('', {
     floating: {
       true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
     },
+    tableCell: {
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-tableCell placeholder:text-grey-03 focus:outline-none focus:placeholder:text-grey-03',
+    },
     withSearchIcon: {
       true: 'pl-9',
     },
@@ -620,6 +636,7 @@ const inputStyles = cva('', {
   defaultVariants: {
     fixed: true,
     floating: false,
+    tableCell: false,
     withSearchIcon: false,
   },
 });
@@ -631,7 +648,7 @@ const containerStyles = cva('relative', {
       full: 'w-full',
     },
     floating: {
-      true: 'rounded-md border border-divider bg-white',
+      true: 'rounded-md border border-divider bg-white shadow-lg',
     },
     isQueried: {
       true: 'rounded-b-none',
@@ -682,14 +699,14 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
   const debouncedQuery = useDebouncedValue(query, 100);
   const { spaces } = useSpaces();
 
-  const results = spaces.filter(s => s.spaceConfig?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
+  const results = spaces.filter(s => s.entity?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
 
   const onSelectSpace = (space: Space) => {
     onQueryChange('');
 
     onSelect({
       id: space.id,
-      name: space.spaceConfig?.name ?? null,
+      name: space.entity?.name ?? null,
     });
   };
 
@@ -709,21 +726,19 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
             forceMount
           >
             <div className="pt-1">
-              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {results.map(result => (
                       <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
                         <div className="flex w-full items-center justify-between leading-[1rem]">
                           <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                            {result.spaceConfig?.name ?? result.id}
+                            {result.entity?.name ?? result.id}
                           </Text>
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 overflow-hidden">
-                          {(result.spaceConfig?.name ?? result.id) && (
-                            <Breadcrumb img={result.spaceConfig?.image ?? ''}>
-                              {result.spaceConfig?.name ?? result.id}
-                            </Breadcrumb>
+                          {(result.entity?.name ?? result.id) && (
+                            <Breadcrumb img={result.entity?.image ?? ''}>{result.entity?.name ?? result.id}</Breadcrumb>
                           )}
                           <span style={{ rotate: '270deg' }}>
                             <ChevronDownSmall color="grey-04" />
@@ -770,7 +785,7 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
             forceMount
           >
             <div className="pt-1">
-              <div className="flex max-h-[340px] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
+              <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                 <ResizableContainer>
                   <ResultsList>
                     {!results?.length && isLoading && (
@@ -827,8 +842,8 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
                                       key={space.spaceId}
                                       className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
                                     >
-                                      <img
-                                        src={getImagePath(space.image)}
+                                      <NativeGeoImage
+                                        value={space.image}
                                         alt=""
                                         className="h-full w-full object-cover"
                                       />

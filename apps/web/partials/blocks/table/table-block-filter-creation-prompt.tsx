@@ -12,7 +12,8 @@ import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Space } from '~/core/io/dto/spaces';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
+import { useName } from '~/core/state/entity-page-store/entity-store';
+import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { FilterableValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -37,6 +38,7 @@ interface TableBlockFilterPromptProps {
     value: string;
     valueType: FilterableValueType;
     valueName: string | null;
+    columnName: string;
   }) => void;
 }
 
@@ -157,7 +159,7 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
     case 'done':
       return {
         open: false,
-        selectedColumn: SystemIds.NAME_ATTRIBUTE,
+        selectedColumn: SystemIds.NAME_PROPERTY,
         value: {
           type: 'string',
           value: '',
@@ -166,7 +168,7 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
     case 'reset':
       return {
         ...state,
-        selectedColumn: SystemIds.NAME_ATTRIBUTE,
+        selectedColumn: SystemIds.NAME_PROPERTY,
         value: {
           type: 'string',
           value: '',
@@ -178,7 +180,7 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
 function getInitialState(source: Source): PromptState {
   if (source.type === 'RELATIONS') {
     return {
-      selectedColumn: SystemIds.RELATION_TYPE_ATTRIBUTE,
+      selectedColumn: SystemIds.RELATION_TYPE_PROPERTY,
       value: {
         type: 'entity',
         entityId: source.value,
@@ -189,7 +191,7 @@ function getInitialState(source: Source): PromptState {
   }
 
   return {
-    selectedColumn: SystemIds.NAME_ATTRIBUTE,
+    selectedColumn: SystemIds.NAME_PROPERTY,
     value: {
       type: 'string',
       value: '',
@@ -237,7 +239,9 @@ function ToggleQueryMode({ queryMode, setQueryMode, localSource }: ToggleQueryMo
 }
 
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const { id: fromId, name: fromName } = useEntityPageStore();
+  const { id: fromId, spaceId } = useEntityStoreInstance();
+  const fromName = useName(fromId, spaceId);
+
   const { source } = useSource();
   const { filterState } = useFilters();
   const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
@@ -251,7 +255,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
     value: fromId,
   });
   const [relationType, setRelationType] = React.useState<Filter | null>(
-    filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_ATTRIBUTE) ?? null
+    filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY) ?? null
   );
 
   const onToggleQueryMode = (newQueryMode: 'RELATIONS' | 'ENTITIES') => {
@@ -271,6 +275,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
       value: getFilterValue(state.value),
       valueType: options.find(o => o.columnId === state.selectedColumn)?.valueType ?? 'TEXT',
       valueName: getFilterValueName(state.value),
+      columnName: state.value.type,
     });
     dispatch({ type: 'done' });
   };
@@ -376,7 +381,7 @@ function DynamicFilters({ options, dispatch, state }: DynamicFiltersProps) {
           ) : selectedOption?.valueType === 'RELATION' ? (
             <TableBlockEntityFilterInput
               filterByTypes={
-                selectedOption.relationValueTypes ? selectedOption.relationValueTypes.map(r => r.typeId) : undefined
+                selectedOption.relationValueTypes ? selectedOption.relationValueTypes.map(r => r.id) : undefined
               }
               selectedValue={getFilterValueName(state.value) ?? ''}
               onSelect={onSelectEntityValue}
@@ -406,28 +411,25 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
 
   const onSetRelationType = (entity: { id: string; name: string | null }) => {
     setRelationType({
-      columnId: SystemIds.RELATION_FROM_ATTRIBUTE,
+      columnId: SystemIds.RELATION_FROM_PROPERTY,
       columnName: 'From',
       value: entity.id,
       valueName: entity.name,
       valueType: 'RELATION',
     });
 
-    const withoutRelationType = filterState.filter(f => f.columnId !== SystemIds.RELATION_TYPE_ATTRIBUTE);
+    const withoutRelationType = filterState.filter(f => f.columnId !== SystemIds.RELATION_TYPE_PROPERTY);
 
-    setFilterState(
-      [
-        ...withoutRelationType,
-        {
-          columnId: SystemIds.RELATION_TYPE_ATTRIBUTE,
-          columnName: null,
-          value: entity.id,
-          valueName: entity.name,
-          valueType: 'RELATION',
-        },
-      ],
-      source
-    );
+    setFilterState([
+      ...withoutRelationType,
+      {
+        columnId: SystemIds.RELATION_TYPE_PROPERTY,
+        columnName: null,
+        value: entity.id,
+        valueName: entity.name,
+        valueType: 'RELATION',
+      },
+    ]);
   };
 
   const onSetSource = (entity: { id: string; name: string | null }) => {
@@ -520,14 +522,14 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
   const debouncedQuery = useDebouncedValue(query, 100);
   const { spaces } = useSpaces();
 
-  const results = spaces.filter(s => s.spaceConfig?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
+  const results = spaces.filter(s => s.entity?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
 
   const onSelectSpace = (space: Space) => {
     onQueryChange('');
 
     onSelect({
       id: space.id,
-      name: space.spaceConfig?.name ?? null,
+      name: space.entity?.name ?? null,
     });
   };
 
@@ -548,15 +550,13 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
                   <ResultItem onClick={() => onSelectSpace(result)}>
                     <div className="flex w-full items-center justify-between leading-[1rem]">
                       <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                        {result.spaceConfig?.name ?? result.id}
+                        {result.entity?.name ?? result.id}
                       </Text>
                     </div>
                     <Spacer height={4} />
                     <div className="flex items-center gap-1.5 overflow-hidden">
-                      {(result.spaceConfig?.name ?? result.id) && (
-                        <Breadcrumb img={result.spaceConfig?.image ?? ''}>
-                          {result.spaceConfig?.name ?? result.id}
-                        </Breadcrumb>
+                      {(result.entity?.name ?? result.id) && (
+                        <Breadcrumb img={result.entity?.image ?? ''}>{result.entity?.name ?? result.id}</Breadcrumb>
                       )}
                       <span style={{ rotate: '270deg' }}>
                         <ChevronDownSmall color="grey-04" />

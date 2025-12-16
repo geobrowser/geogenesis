@@ -7,29 +7,25 @@ import produce from 'immer';
 
 import * as React from 'react';
 
-import {
-  upsertCollectionItemRelation,
-  upsertSourceSpaceOnCollectionItem,
-  upsertVerifiedSourceOnCollectionItem,
-} from '~/core/blocks/data/collection';
+import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
-import { editEvent } from '~/core/events/edit-events';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { SearchResult } from '~/core/io/dto/search';
-import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
-import { Cell, PropertySchema, Row } from '~/core/types';
+import { useMutate } from '~/core/sync/use-mutate';
+import { getRelation } from '~/core/sync/use-store';
+import { OmitStrict } from '~/core/types';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
 import { NavUtils } from '~/core/utils/utils';
 import { getPaginationPages } from '~/core/utils/utils';
-import { VALUE_TYPES } from '~/core/value-types';
+import { Cell, Relation, Row, SearchResult, Value } from '~/core/v2.types';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -48,51 +44,31 @@ import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
-import { TableBlockGalleryItem } from './table-block-gallery-item';
-import { TableBlockListItem } from './table-block-list-item';
+import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
+import TableBlockListItemsDnd from './table-block-list-items-dnd';
 import { TableBlockTable } from './table-block-table';
 
 interface Props {
   spaceId: string;
 }
 
-function makePlaceholderRow(entityId: string, spaceId: string, properties: PropertySchema[]) {
+function makePlaceholderRow(entityId: string, properties: { id: string; name: string | null }[]) {
   const columns: Record<string, Cell> = {};
 
-  columns[SystemIds.NAME_ATTRIBUTE] = {
-    slotId: SystemIds.NAME_ATTRIBUTE,
-    cellId: ID.createEntityId(),
+  columns[SystemIds.NAME_PROPERTY] = {
+    slotId: SystemIds.NAME_PROPERTY,
+    propertyId: ID.createEntityId(),
     name: null,
-    renderables: [],
   };
 
   for (const p of properties) {
-    // Why were we skipping the name attribute?
-    // if (p.id === EntityId(SystemIds.NAME_ATTRIBUTE)) {
-    //   continue;
-    // }
-
     const maybeColumn = columns[p.id];
 
-    if (!maybeColumn || maybeColumn?.renderables.length === 0) {
+    if (!maybeColumn) {
       columns[p.id] = {
         slotId: p.id,
-        cellId: ID.createEntityId(),
+        propertyId: ID.createEntityId(),
         name: null,
-        renderables: [
-          {
-            type: VALUE_TYPES[p.valueType] ?? 'TEXT',
-            relationId: p.id,
-            valueName: p.name,
-            entityId: entityId,
-            entityName: null,
-            attributeId: p.id,
-            attributeName: p.name,
-            spaceId,
-            value: '',
-            placeholder: true,
-          },
-        ],
       };
     }
   }
@@ -109,14 +85,36 @@ function makePlaceholderRow(entityId: string, spaceId: string, properties: Prope
 //
 // We might want a way to store this in some local state so changes are optimistic
 // and we don't have to enter loading states when adding/removing entries
-function useEntries(entries: Row[], properties: PropertySchema[], spaceId: string, filterState: Filter[]) {
+function useEntries(
+  entries: Row[],
+  properties: { id: string; name: string | null }[],
+  spaceId: string,
+  filterState: Filter[],
+  relations: Relation[] | undefined
+) {
   const isEditing = useUserIsEditing(spaceId);
   const { source } = useSource();
   const { setEditable } = useEditable();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
 
+  const { storage } = useMutate();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
+
+  const entriesWithPosition = entries.map(row => {
+    return {
+      ...row,
+      position: relations?.find(relation => relation.toEntity.id === row.entityId)?.position,
+    };
+  });
+
+  const onUpdateRelation = (relation: Relation, newPosition: string | null) => {
+    storage.relations.update(relation, draft => {
+      if (newPosition) {
+        draft.position = newPosition;
+      }
+    });
+  };
 
   // Clear pending ID once it appears in entries
   React.useEffect(() => {
@@ -135,17 +133,54 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
   const placeholderEntityId = pendingEntityId || nextEntityId;
 
-  const renderedEntries = shouldShowPlaceholder
-    ? [makePlaceholderRow(placeholderEntityId, spaceId, properties), ...entries]
-    : entries;
+  const renderedEntries = React.useMemo(
+    () =>
+      shouldShowPlaceholder
+        ? [makePlaceholderRow(placeholderEntityId, properties), ...entriesWithPosition]
+        : entriesWithPosition,
+    [entriesWithPosition, placeholderEntityId, properties, shouldShowPlaceholder]
+  );
+
+  const shouldAutoFocusPlaceholder = usePlaceholderAutofocus(renderedEntries);
 
   const onChangeEntry: onChangeEntryFn = (context, event) => {
     if (event.type === 'EVENT') {
-      const send = editEvent({
-        context,
-      });
+      // @TODO(migration): Editable data block content
+      // const send = action({
+      //   context,
+      // });
+      // send(event.data);
 
-      send(event.data);
+      if (event.data.type === 'UPSERT_RENDERABLE_TRIPLE_VALUE') {
+        // Use the specialized entities.name.set API for NAME property to ensure proper sync
+        if (event.data.payload.renderable.attributeId === SystemIds.NAME_PROPERTY) {
+          storage.entities.name.set(context.entityId, spaceId, event.data.payload.value.value);
+        } else {
+          // For non-name properties, use the generic values API
+          const value: Value | OmitStrict<Value, 'id'> = {
+            id: event.data.payload.renderable.entityId ?? undefined,
+            entity: {
+              id: context.entityId,
+              name: event.data.payload.renderable.entityName,
+            },
+            property: {
+              id: event.data.payload.renderable.attributeId,
+              name: event.data.payload.renderable.attributeName,
+              dataType: event.data.payload.renderable.type,
+            },
+            spaceId,
+            value: event.data.payload.value.value ?? '',
+          };
+
+          if (!event.data.payload.renderable.entityId) {
+            storage.values.set(value);
+          } else {
+            storage.values.update(value, draft => {
+              draft.value = event.data.payload.value.value;
+            });
+          }
+        }
+      }
     }
 
     // Adding a collection item shouldn't _only_ be for FOC. Should be for adding any data
@@ -154,7 +189,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       const maybeHasCollectionItem = entries.find(e => e.entityId === context.entityId);
 
       if (!maybeHasCollectionItem) {
-        let to: (Pick<SearchResult, 'id' | 'name'> & { space?: EntityId; verified?: boolean }) | null = null;
+        let to: (Pick<SearchResult, 'id' | 'name'> & { space?: string; verified?: boolean }) | null = null;
 
         if (event.type === 'Find') {
           to = event.data;
@@ -169,9 +204,9 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
 
         if (event.type === 'EVENT') {
           to = {
-            id: EntityId(context.entityId),
+            id: context.entityId,
             name: context.entityName,
-            space: EntityId(context.spaceId),
+            space: context.spaceId,
             verified: false,
           };
         }
@@ -180,33 +215,16 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
           const id = ID.createEntityId();
 
           upsertCollectionItemRelation({
-            relationId: EntityId(id),
-            collectionId: EntityId(source.value),
-            spaceId: SpaceId(spaceId),
+            relationId: id,
+            collectionId: source.value,
+            spaceId: spaceId,
             toEntity: {
-              id: EntityId(to.id),
+              id: to.id,
               name: to.name,
             },
+            toSpaceId: to.space,
+            verified: to.verified,
           });
-
-          // Callers can optionally pass a selected entity in the case of Find or Create
-          // to set the collection. We allow setting any data or using FOC.
-          if (to.space) {
-            upsertSourceSpaceOnCollectionItem({
-              collectionItemId: EntityId(id),
-              toId: EntityId(to.id),
-              spaceId: SpaceId(spaceId),
-              sourceSpaceId: to.space,
-            });
-          }
-
-          if (to.space && to.verified) {
-            upsertVerifiedSourceOnCollectionItem({
-              collectionItemId: EntityId(id),
-              spaceId: SpaceId(spaceId),
-              verified: true,
-            });
-          }
 
           // Mark this ID as pending to keep the placeholder visible
           setPendingEntityId(to.id);
@@ -214,7 +232,7 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
       }
     }
 
-    if (context.entityId === nextEntityId || context.entityId === pendingEntityId) {
+    if (context.entityId === nextEntityId) {
       setHasPlaceholderRow(false);
 
       /**
@@ -242,31 +260,20 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
   const onLinkEntry = (
     id: string,
     to: {
-      id: EntityId;
+      id: string;
       name: string | null;
-      space?: EntityId;
+      space?: string;
       verified?: boolean;
-    },
-    currentlyVerified?: boolean
+    }
   ) => {
-    upsertSourceSpaceOnCollectionItem({
-      collectionItemId: EntityId(id),
-      toId: EntityId(to.id),
-      spaceId: SpaceId(spaceId),
-      sourceSpaceId: to.space,
+    const relation = getRelation({
+      selector: r => r.spaceId === spaceId && r.id === id,
     });
 
-    if (to.space && to.verified) {
-      upsertVerifiedSourceOnCollectionItem({
-        collectionItemId: EntityId(id),
-        spaceId: SpaceId(spaceId),
-        verified: true,
-      });
-    } else if (to.space && !to.verified && currentlyVerified) {
-      upsertVerifiedSourceOnCollectionItem({
-        collectionItemId: EntityId(id),
-        spaceId: SpaceId(spaceId),
-        verified: false,
+    if (relation) {
+      storage.relations.update(relation, draft => {
+        draft.toSpaceId = to.space;
+        draft.verified = to.verified;
       });
     }
   };
@@ -281,6 +288,8 @@ function useEntries(entries: Row[], properties: PropertySchema[], spaceId: strin
     onAddPlaceholder,
     onChangeEntry,
     onLinkEntry,
+    onUpdateRelation,
+    shouldAutoFocusPlaceholder,
   };
 }
 
@@ -289,6 +298,16 @@ export const TableBlock = ({ spaceId }: Props) => {
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { spaces } = useSpaces();
+
+  // Track if unfiltered data has multiple pages (to keep pagination visible when filtering)
+  const [hasMultiplePagesWhenUnfiltered, setHasMultiplePagesWhenUnfiltered] = React.useState(false);
+
+  // Use filters hook with canEdit parameter to enable temporary filters for non-editors
+  const { filterState, temporaryFilters, setFilterState, setTemporaryFilters } = useFilters(canEdit);
+
+  // Use database filter state if user can edit, otherwise use temporary filters
+  const activeFilters = canEdit ? filterState : temporaryFilters;
+
   const {
     properties,
     rows,
@@ -299,11 +318,38 @@ export const TableBlock = ({ spaceId }: Props) => {
     pageNumber,
     propertiesSchema,
     totalPages,
-  } = useDataBlock();
-  const { filterState, setFilterState } = useFilters();
+    relations,
+    collectionRelations,
+    collectionLength,
+    pageSize,
+  } = useDataBlock({ filterState: activeFilters });
   const { view, placeholder, shownColumnIds } = useView();
   const { source } = useSource();
-  const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry } = useEntries(rows, properties, spaceId, filterState);
+
+  // Setter that handles both editors and non-editors correctly
+  // Also resets to page 1 when filters change
+  const setActiveFilters = React.useCallback(
+    (filters: Filter[]) => {
+      if (canEdit) {
+        setFilterState(filters);
+      } else {
+        setTemporaryFilters(filters);
+      }
+      // Reset to first page when filters change
+      setPage(0);
+    },
+    [canEdit, setFilterState, setTemporaryFilters, setPage]
+  );
+
+  const { entries, onAddPlaceholder, onChangeEntry, onLinkEntry, onUpdateRelation, shouldAutoFocusPlaceholder } =
+    useEntries(rows, properties, spaceId, activeFilters, relations);
+
+  // Track if unfiltered data has multiple pages
+  React.useEffect(() => {
+    if (activeFilters.length === 0 && totalPages > 1) {
+      setHasMultiplePagesWhenUnfiltered(true);
+    }
+  }, [activeFilters.length, totalPages]);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -315,19 +361,23 @@ export const TableBlock = ({ spaceId }: Props) => {
    *
    * Name and Space are treated specially throughout this code path.
    */
-  const filtersWithPropertyName = filterState.map(f => {
+  const filtersWithPropertyName = activeFilters.map(f => {
     if (f.columnId === SystemIds.SPACE_FILTER) {
       return {
         ...f,
         columnName: 'Space',
-        value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
+        value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.entity?.name ?? f.value,
       };
     }
 
     return f;
   });
 
-  const hasPagination = hasPreviousPage || hasNextPage || totalPages > 1;
+  // Show pagination if:
+  // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
+  // 2. OR filters are active and unfiltered data had multiple pages
+  const hasPagination =
+    hasPreviousPage || hasNextPage || totalPages > 1 || (activeFilters.length > 0 && hasMultiplePagesWhenUnfiltered);
 
   let EntriesComponent = (
     <TableBlockTable
@@ -340,30 +390,29 @@ export const TableBlock = ({ spaceId }: Props) => {
       shownColumnIds={shownColumnIds}
       onChangeEntry={onChangeEntry}
       onLinkEntry={onLinkEntry}
+      onAddPlaceholder={onAddPlaceholder}
+      shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
     />
   );
 
   if (view === 'LIST' && entries.length > 0) {
     EntriesComponent = (
-      <div className={cx('flex w-full flex-col', isEditing ? 'gap-10' : 'gap-4')}>
-        {entries.map((row, index: number) => {
-          return (
-            <TableBlockListItem
-              isEditing={isEditing}
-              key={`${row.entityId}-${index}`}
-              columns={row.columns}
-              currentSpaceId={spaceId}
-              rowEntityId={row.entityId}
-              isPlaceholder={Boolean(row.placeholder)}
-              onChangeEntry={onChangeEntry}
-              onLinkEntry={onLinkEntry}
-              properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
-              source={source}
-            />
-          );
-        })}
-      </div>
+      <TableBlockListItemsDnd
+        isEditing={isEditing}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        spaceId={spaceId}
+        entries={entries}
+        onUpdateRelation={onUpdateRelation}
+        relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+      />
     );
   }
 
@@ -371,6 +420,8 @@ export const TableBlock = ({ spaceId }: Props) => {
     EntriesComponent = (
       <div className="flex w-full flex-col">
         {entries.map((row, index: number) => {
+          const isPlaceholder = Boolean(row.placeholder);
+
           return (
             <TableBlockBulletedListItem
               isEditing={isEditing}
@@ -378,12 +429,13 @@ export const TableBlock = ({ spaceId }: Props) => {
               columns={row.columns}
               currentSpaceId={spaceId}
               rowEntityId={row.entityId}
-              isPlaceholder={Boolean(row.placeholder)}
+              isPlaceholder={isPlaceholder}
               onChangeEntry={onChangeEntry}
               onLinkEntry={onLinkEntry}
               properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
+              relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
               source={source}
+              autoFocus={isPlaceholder && shouldAutoFocusPlaceholder}
             />
           );
         })}
@@ -393,25 +445,22 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   if (view === 'GALLERY' && entries.length > 0) {
     EntriesComponent = (
-      <div className="grid grid-cols-3 gap-x-4 gap-y-10 sm:grid-cols-2">
-        {entries.map((row, index: number) => {
-          return (
-            <TableBlockGalleryItem
-              key={`${row.entityId}-${index}`}
-              rowEntityId={row.entityId}
-              isEditing={isEditing}
-              columns={row.columns}
-              currentSpaceId={spaceId}
-              onChangeEntry={onChangeEntry}
-              onLinkEntry={onLinkEntry}
-              isPlaceholder={Boolean(row.placeholder)}
-              properties={propertiesSchema}
-              relationId={row.columns[SystemIds.NAME_ATTRIBUTE]?.relationId}
-              source={source}
-            />
-          );
-        })}
-      </div>
+      <TableBlockGalleryItemsDnd
+        isEditing={isEditing}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        spaceId={spaceId}
+        entries={entries}
+        onUpdateRelation={onUpdateRelation}
+        relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+      />
     );
   }
 
@@ -430,20 +479,20 @@ export const TableBlock = ({ spaceId }: Props) => {
 
   const renderPlusButtonAsInline = source.type !== 'RELATIONS' && canEdit;
 
+  const toggleFilterHandler = () => setIsFilterOpen(!isFilterOpen);
+
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
       <div className="mb-2 flex h-8 items-center justify-between">
         <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
           <IconButton
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-            icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+            onClick={toggleFilterHandler}
+            icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
             color="grey-04"
           />
-
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu />
-
           {renderPlusButtonAsInline && (
             <button onClick={onAddPlaceholder}>
               <Create />
@@ -467,7 +516,7 @@ export const TableBlock = ({ spaceId }: Props) => {
               transition={{ duration: 0.15, ease: 'easeIn', delay: 0.15 }}
               className="flex items-center gap-2"
             >
-              <TableBlockEditableFilters />
+              <TableBlockEditableFilters filterState={activeFilters} setFilterState={setActiveFilters} />
 
               {filtersWithPropertyName.map((f, index) => {
                 return (
@@ -475,11 +524,11 @@ export const TableBlock = ({ spaceId }: Props) => {
                     key={`${f.columnId}-${f.value}`}
                     filter={f}
                     onDelete={() => {
-                      const newFilterState = produce(filterState, draft => {
+                      const newFilterState = produce(activeFilters, draft => {
                         draft.splice(index, 1);
                       });
 
-                      setFilterState(newFilterState, source);
+                      setActiveFilters(newFilterState);
                     }}
                   />
                 );
@@ -501,15 +550,27 @@ export const TableBlock = ({ spaceId }: Props) => {
           <>
             <Spacer height={12} />
             <PageNumberContainer>
-              {source.type === 'COLLECTION' ? getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
-                return page === PagesPaginationPlaceholder.skip ? (
-                  <Text key={`ellipsis-${index}`} color="grey-03" className="flex justify-center" variant="metadataMedium">
-                    ...
-                  </Text>
-                ) : (
-                  <PageNumber key={`page-${page}`} number={page} onClick={() => setPage(page - 1)} isActive={page === pageNumber + 1} />
-                );
-              }) : (
+              {source.type === 'COLLECTION' ? (
+                getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
+                  return page === PagesPaginationPlaceholder.skip ? (
+                    <Text
+                      key={`ellipsis-${index}`}
+                      color="grey-03"
+                      className="flex justify-center"
+                      variant="metadataMedium"
+                    >
+                      ...
+                    </Text>
+                  ) : (
+                    <PageNumber
+                      key={`page-${page}`}
+                      number={page}
+                      onClick={() => setPage(page - 1)}
+                      isActive={page === pageNumber + 1}
+                    />
+                  );
+                })
+              ) : (
                 <>
                   {pageNumber > 1 && (
                     <>

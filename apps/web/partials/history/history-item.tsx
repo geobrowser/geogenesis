@@ -44,7 +44,7 @@ export function HistoryItem({ spaceId, proposalId, createdAt, createdBy, name }:
           {versionName}
         </Text>
       </div>
-      <div className="flex items-center justify-between ">
+      <div className="flex items-center justify-between">
         <div className="flex items-center justify-between gap-1">
           <div className="relative h-3 w-3 overflow-hidden rounded-full">
             <Avatar
