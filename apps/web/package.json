@@ -124,7 +124,7 @@
     "@vitest/ui": "^0.25.6",
     "autoprefixer": "^10.4.23",
     "eslint": "^8.21.0",
-    "eslint-config-next": "16.0.10",
+    "eslint-config-next": "15.5.9",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^3.5.2",
     "eslint-plugin-prettier": "^5.5.4",
