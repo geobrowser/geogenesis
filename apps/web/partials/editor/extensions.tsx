@@ -16,6 +16,7 @@ import { DataNode } from './data-node';
 import { HeadingNode } from './heading-node';
 import { ParagraphNode } from './paragraph-node';
 import { TrailingNode } from './trailing-node';
+import { VideoNode } from './video-node';
 
 export const tiptapExtensions = [
   Document,
@@ -52,6 +53,7 @@ export const tiptapExtensions = [
   ListItem,
   DataNode,
   Image,
+  VideoNode,
   Placeholder.configure({
     placeholder: ({ node }) => {
       const isHeading = node.type.name === 'heading';
