@@ -111,7 +111,7 @@ const nextConfig = {
               value: 'testnet.geobrowser.io',
             },
           ],
-          destination: 'https://geobrowser.io/:path*',
+          destination: 'https://geogenesis-git-stream-v2-geo-browser.vercel.app/:path*',
         },
       ],
       afterFiles: [],
