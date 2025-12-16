@@ -30,6 +30,14 @@ export type Content =
         id: string;
         src: string;
       };
+    }
+  | {
+      type: 'video';
+      content: Content[];
+      attrs: {
+        id: string;
+        src: string;
+      };
     };
 
 type Mark = {

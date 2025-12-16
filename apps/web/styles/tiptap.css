@@ -106,6 +106,14 @@
   @apply rounded-lg;
 }
 
+.ProseMirror video {
+  @apply h-auto w-full rounded-lg;
+}
+
+.ProseMirror .video-node {
+  @apply my-4;
+}
+
 .ProseMirror > * {
   margin-bottom: 16px;
 }

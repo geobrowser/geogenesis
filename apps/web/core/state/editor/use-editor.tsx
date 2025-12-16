@@ -8,9 +8,10 @@ import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
+import { VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { storage } from '~/core/sync/use-mutate';
 import { getValues } from '~/core/sync/use-store';
-import { getImageHash, getImagePath, validateEntityId } from '~/core/utils/utils';
+import { getImageHash, getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
 import { tiptapExtensions } from '~/partials/editor/extensions';
@@ -97,6 +98,8 @@ function makeNewBlockRelation({
         return 'DATA';
       case 'image':
         return 'IMAGE';
+      case 'video':
+        return 'VIDEO';
     }
   })();
 
@@ -271,6 +274,33 @@ export function useEditorStore() {
           };
         }
 
+        if (toEntity?.type === 'VIDEO') {
+          // Read video URL from Values using VIDEO_URL_PROPERTY
+          const videoUrlValues = getValues({
+            mergeWith: initialBlockValues,
+            selector: value => value.entity.id === block.block.id && value.property.id === VIDEO_URL_PROPERTY,
+          });
+          const videoUrlValue = videoUrlValues?.[0]?.value || toEntity.value;
+
+          // Read video title from Values using NAME_PROPERTY
+          const titleValues = getValues({
+            mergeWith: initialBlockValues,
+            selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.NAME_PROPERTY,
+          });
+          const titleValue = titleValues?.[0]?.value || '';
+
+          return {
+            type: 'video',
+            attrs: {
+              id: block.block.id,
+              src: getVideoPath(videoUrlValue),
+              title: titleValue,
+              relationId: block.relationId,
+              spaceId,
+            },
+          };
+        }
+
         if (toEntity?.type === 'DATA') {
           return {
             type: 'tableNode',
@@ -378,6 +408,8 @@ export function useEditorStore() {
               return SystemIds.TEXT_BLOCK;
             case 'image':
               return SystemIds.IMAGE_TYPE;
+            case 'video':
+              return VIDEO_BLOCK_TYPE;
             default:
               return SystemIds.TEXT_BLOCK;
           }
@@ -418,6 +450,12 @@ export function useEditorStore() {
 
             break;
           }
+          case VIDEO_BLOCK_TYPE: {
+            // Create a Types relation to mark this entity as a Video Block type
+            const relation = getRelationForBlockType(node.id, VIDEO_BLOCK_TYPE, spaceId);
+            storage.relations.set(relation);
+            break;
+          }
           case SystemIds.DATA_BLOCK: {
             // @TODO(performance): upsertMany
             for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId)) {
@@ -437,17 +475,27 @@ export function useEditorStore() {
       makeBlocksRelations({
         nextBlocks: newBlocks,
         addedBlocks: addedBlocks.map(block => {
-          const imageHash = getImageHash(block.attrs?.src ?? '');
-          const imageUrl = `ipfs://${imageHash}`;
-
-          return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
+          // For image blocks, store the ipfs URL in toEntity.value
+          // For video blocks, just use the block ID (URL is stored as a Value with VIDEO_URL_PROPERTY)
+          if (block.type === 'image') {
+            const imageHash = getImageHash(block.attrs?.src ?? '');
+            const imageUrl = `ipfs://${imageHash}`;
+            return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
+          }
+          // Video blocks and other blocks use block ID as the value
+          return { id: block.id, value: block.id };
         }),
         removedBlockIds: removed,
         movedBlocks: movedBlocks.map(block => {
-          const imageHash = getImageHash(block.attrs?.src ?? '');
-          const imageUrl = `ipfs://${imageHash}`;
-
-          return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
+          // For image blocks, store the ipfs URL in toEntity.value
+          // For video blocks, just use the block ID (URL is stored as a Value with VIDEO_URL_PROPERTY)
+          if (block.type === 'image') {
+            const imageHash = getImageHash(block.attrs?.src ?? '');
+            const imageUrl = `ipfs://${imageHash}`;
+            return { id: block.id, value: imageHash === '' ? block.id : imageUrl };
+          }
+          // Video blocks and other blocks use block ID as the value
+          return { id: block.id, value: block.id };
         }),
         spaceId,
         blockRelations: blockRelations,
@@ -471,7 +519,29 @@ export function useEditorStore() {
 
             break;
           }
-          case 'image':
+          case 'image': {
+            // Update the relation if the image src has changed
+            const existingRelation = blockRelations.find(r => r.block.id === node.attrs?.id);
+            if (existingRelation && node.attrs?.src) {
+              const imageHash = getImageHash(node.attrs.src);
+              const imageUrl = `ipfs://${imageHash}`;
+              // Only update if the value has changed
+              if (existingRelation.toEntity.value !== imageUrl && imageHash !== '') {
+                const updatedRelation: Relation = {
+                  ...existingRelation,
+                  toEntity: {
+                    ...existingRelation.toEntity,
+                    value: imageUrl,
+                  },
+                };
+                storage.relations.set(updatedRelation);
+              }
+            }
+            break;
+          }
+          case 'video':
+            // Video block persistence is handled directly in video-node.tsx component
+            // using storage.entities.name.set() for title
             break;
           default:
             break;
