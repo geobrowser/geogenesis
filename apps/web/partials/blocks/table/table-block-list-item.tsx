@@ -372,14 +372,7 @@ export function TableBlockListItem({
       </div>
       <div className="w-full">
         {source.type !== 'COLLECTION' ? (
-          <Link
-            entityId={rowEntityId}
-            spaceId={currentSpaceId}
-            href={href}
-            className="text-smallTitle font-medium text-text"
-          >
-            {name || rowEntityId}
-          </Link>
+          <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
         ) : (
           <CollectionMetadata
             view="LIST"
@@ -393,14 +386,7 @@ export function TableBlockListItem({
             verified={verified}
             onLinkEntry={onLinkEntry}
           >
-            <Link
-              entityId={rowEntityId}
-              spaceId={currentSpaceId}
-              href={href}
-              className="text-smallTitle font-medium text-text"
-            >
-              {name || rowEntityId}
-            </Link>
+            <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
           </CollectionMetadata>
         )}
         {description && <div className="line-clamp-4 text-metadata text-text md:line-clamp-3">{description}</div>}
