@@ -9,13 +9,7 @@ export function ValueDto(entity: { id: string; name: string | null }, remoteValu
   const value = getValueFromDataType(mappedDataType, remoteValue);
 
   if (value === null && mappedDataType !== 'RELATION') {
-    console.error('Could not parse valid value for remote value. Defaulting to empty string.', {
-      dataType: mappedDataType,
-      remoteDataType: remoteValue.property.dataType,
-      propertyId: remoteValue.property.id,
-      propertyName: remoteValue.property.name,
-      remoteValue,
-    });
+    console.error('Could not parse valid value for remote value. Defaulting to empty string.', remoteValue);
   }
 
   return {
