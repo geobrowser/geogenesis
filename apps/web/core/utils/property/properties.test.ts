@@ -11,6 +11,8 @@ vi.mock('~/core/constants', () => ({
   RENDERABLE_TYPE_PROPERTY: 'RENDERABLE_TYPE_PROPERTY_ID',
   DATA_TYPE_PROPERTY: 'DATA_TYPE_PROPERTY_ID',
   GEO_LOCATION: 'GEO_LOCATION_ID',
+  FORMAT_PROPERTY: 'FORMAT_PROPERTY_ID',
+  UNIT_PROPERTY: 'UNIT_PROPERTY_ID',
 }));
 
 describe('Properties', () => {
@@ -149,6 +151,8 @@ describe('Properties', () => {
         renderableType: null,
         renderableTypeStrict: undefined,
         isDataTypeEditable: true,
+        format: null,
+        unit: null,
       });
     });
 
@@ -205,6 +209,8 @@ describe('Properties', () => {
         renderableType: SystemIds.URL,
         renderableTypeStrict: 'URL',
         isDataTypeEditable: true,
+        format: null,
+        unit: null,
       });
     });
   });

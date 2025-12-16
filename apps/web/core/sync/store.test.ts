@@ -235,7 +235,7 @@ describe('GeoStore', () => {
       expect(entity).toBeDefined();
       expect(entity!.id).toBe('entity-1');
       expect(entity!.values).toHaveLength(1); // Only non-deleted values by default
-      expect(entity!.relations).toHaveLength(2); // Relations filtering has a bug in the actual code
+      expect(entity!.relations).toHaveLength(1); // Deleted relations are filtered out by default
     });
 
     it('should filter out deleted values and relations by default', () => {
@@ -417,7 +417,7 @@ describe('GeoStore', () => {
     it('should map renderable type correctly', () => {
       const property = store.getProperty('prop-1');
 
-      expect(property!.renderableType).toBe('URL');
+      expect(property!.renderableType).toBe(SystemIds.URL);
     });
 
     it('should return null for non-existent property', () => {
@@ -443,15 +443,14 @@ describe('GeoStore', () => {
     it('should return relations for specific entity', () => {
       const relations = store.getResolvedRelations('entity-1');
 
-      expect(relations).toHaveLength(2);
+      expect(relations).toHaveLength(1); // Only non-deleted relations
     });
 
     it('should filter out deleted relations by default', () => {
       const relations = store.getResolvedRelations('entity-1');
 
-      // Note: The current implementation has a bug - it doesn't properly filter deleted relations
-      // This test documents the current behavior
-      expect(relations).toHaveLength(2);
+      // The implementation now correctly filters out deleted relations
+      expect(relations).toHaveLength(1);
     });
   });
 

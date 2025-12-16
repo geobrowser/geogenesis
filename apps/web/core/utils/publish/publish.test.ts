@@ -1,4 +1,10 @@
-import { CreateRelationOp, DeleteRelationOp, Id, UnsetEntityValuesOp, UpdateEntityOp } from '@graphprotocol/grc-20';
+import {
+  CreateRelationOp,
+  DeleteRelationOp,
+  IdUtils,
+  UnsetEntityValuesOp,
+  UpdateEntityOp,
+} from '@graphprotocol/grc-20';
 import { describe, expect, it } from 'vitest';
 
 import { Relation, Value } from '~/core/v2.types';
