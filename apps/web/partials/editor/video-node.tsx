@@ -7,13 +7,13 @@ import { Node, NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttri
 import * as React from 'react';
 import { useRef, useState } from 'react';
 
-import { VIDEO_URL_PROPERTY } from '~/core/constants';
+import { VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { storage } from '~/core/sync/use-mutate';
-import { useValues } from '~/core/sync/use-store';
+import { useHydrateEntity, useRelations, useValues } from '~/core/sync/use-store';
 import { getVideoPath } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
@@ -99,6 +99,9 @@ function VideoNodeChildren({
   relationId: string;
   onRemove: () => void;
 }) {
+  // Hydrate the video block entity from remote to populate the reactive store
+  useHydrateEntity({ id: entityId });
+
   const isEditing = useUserIsEditing(spaceId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -121,6 +124,15 @@ function VideoNodeChildren({
     selector: v => v.entity.id === entityId && v.property.id === VIDEO_URL_PROPERTY && v.spaceId === spaceId,
   });
   const storedVideoUrl = videoUrlValues?.[0]?.value ?? '';
+
+  // Read the Types relation (to VIDEO_BLOCK_TYPE) for deletion
+  const typeRelations = useRelations({
+    selector: r =>
+      r.fromEntity.id === entityId &&
+      r.type.id === SystemIds.TYPES_PROPERTY &&
+      r.toEntity.id === VIDEO_BLOCK_TYPE &&
+      r.spaceId === spaceId,
+  });
 
   const [localName, setLocalName] = useState(storedName);
 
@@ -294,8 +306,30 @@ function VideoNodeChildren({
 
   const onRemoveBlock = () => {
     setIsMenuOpen(false);
+
+    // Delete the video URL value
+    const videoUrlValue = videoUrlValues?.[0];
+    if (videoUrlValue) {
+      storage.values.delete(videoUrlValue);
+    }
+
+    // Delete the name value
+    const nameValue = nameValues?.[0];
+    if (nameValue) {
+      storage.values.delete(nameValue);
+    }
+
+    // Delete the Types relation (VIDEO_BLOCK_TYPE)
+    const typeRelation = typeRelations?.[0];
+    if (typeRelation) {
+      storage.relations.delete(typeRelation);
+    }
+
+    // Remove the node from the editor (this triggers upsertEditorState which handles block relation deletion)
     onRemove();
   };
+
+  console.log('VideoNodeChildren render', { storedVideoUrl });
 
   const hasVideo = Boolean(storedVideoUrl);
   const videoSrc = hasVideo ? getVideoPath(storedVideoUrl) : '';
