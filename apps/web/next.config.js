@@ -51,7 +51,7 @@ const nextConfig = {
             value: 'testnet.geobrowser.io',
           },
         ],
-        destination: 'https://geobrowser.io/:path*',
+        destination: 'https://www.geobrowser.io/:path*',
         permanent: false,
       },
       {
