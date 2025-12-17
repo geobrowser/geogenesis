@@ -108,7 +108,7 @@ const nextConfig = {
         },
         {
           source: '/curator-program',
-          destination: 'https://geobrowser-v2.vercel.app/early-access',
+          destination: 'https://geobrowser-v2.vercel.app/curator-program',
         },
         {
           source: '/ending-homelessness',
