@@ -407,6 +407,7 @@ export function TableBlockListItem({
                 property={property}
                 onChangeEntry={onChangeEntry}
                 source={source}
+                disableLink={true}
               />
             </div>
           );

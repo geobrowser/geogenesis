@@ -19,10 +19,10 @@ const nextConfig = {
     return config;
   },
   experimental: {
-    // Activate new client-side router improvements
-    // clientSegmentCache: true,
-    // Enable persistent caching for the turbopack dev server
-    // turbopackFileSystemCacheForDev: true,
+    // Enable filesystem caching for `next dev`
+    turbopackFileSystemCacheForDev: true,
+    // Enable filesystem caching for `next build`
+    turbopackFileSystemCacheForBuild: false, // wait for 16.1
     optimizePackageImports: [
       'effect',
       'viem',

@@ -125,14 +125,9 @@ export function NavbarActions() {
             </Link>
           </AvatarMenuItem>
         )}
-        <AvatarMenuItem>
-          <button
-            onClick={logout}
-            className="m-0 flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-0"
-          >
-            <p className="text-button">Sign out</p>
-            <DisconnectWallet />
-          </button>
+        <AvatarMenuItem onClick={logout}>
+          <p className="text-button">Sign out</p>
+          <DisconnectWallet />
         </AvatarMenuItem>
       </Menu>
     </div>
@@ -177,8 +172,7 @@ const variants = {
     x: shake,
     transition: {
       duration: 0.15,
-      type: 'spring' as const,
-      bounce: 0,
+      type: 'keyframes' as const,
     },
   },
 };

@@ -27,8 +27,9 @@ export function TableBlockPropertyField(props: {
   property: Property;
   onChangeEntry: onChangeEntryFn;
   source: Source;
+  disableLink?: boolean;
 }) {
-  const { spaceId, entityId, property, source } = props;
+  const { spaceId, entityId, property, source, disableLink = false } = props;
   const isEditing = useUserIsEditing(props.spaceId);
   const isRelation = property.dataType === 'RELATION';
 
@@ -37,7 +38,7 @@ export function TableBlockPropertyField(props: {
       return (
         <div className="space-y-1">
           <div className="text-metadata text-grey-04">{property.name}</div>
-          <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} />
+          <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} />
         </div>
       );
     }
@@ -56,7 +57,7 @@ export function TableBlockPropertyField(props: {
 
   return (
     <div className="flex flex-wrap gap-x-2">
-      <RenderedProperty entityId={entityId} property={property} spaceId={spaceId} />
+      <RenderedProperty entityId={entityId} property={property} spaceId={spaceId} disableLink={disableLink} />
     </div>
   );
 }
@@ -66,9 +67,10 @@ type PropertyProps = {
   property: Property;
   spaceId: string;
   className?: string;
+  disableLink?: boolean;
 };
 
-const RenderedProperty = ({ entityId, property, spaceId }: PropertyProps) => {
+const RenderedProperty = ({ entityId, property, spaceId, disableLink = false }: PropertyProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
 
   const isRelation = property.dataType === 'RELATION';
@@ -95,7 +97,7 @@ const RenderedProperty = ({ entityId, property, spaceId }: PropertyProps) => {
         </div>
       </div>
       {isRelation ? (
-        <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} />
+        <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} />
       ) : (
         <EditableValueGroup entityId={entityId} property={property} isEditing={false} />
       )}
@@ -107,9 +109,10 @@ type EditableRelationsGroupProps = {
   spaceId: string;
   entityId: string;
   property: Property;
+  disableLink?: boolean;
 };
 
-function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelationsGroupProps) {
+function EditableRelationsGroup({ entityId, spaceId, property, disableLink = false }: EditableRelationsGroupProps) {
   const { storage } = useMutate();
 
   const typeOfId = property.id;
@@ -201,31 +204,30 @@ function EditableRelationsGroup({ entityId, spaceId, property }: EditableRelatio
         }
 
         return (
-          <>
-            <div key={`relation-${relationId}-${relationValue}`} className="mt-2">
-              <LinkableRelationChip
-                isEditing
-                onDelete={() => {
-                  storage.relations.delete(r);
-                }}
-                onDone={result => {
-                  storage.relations.update(r, draft => {
-                    draft.toSpaceId = result.space;
-                    draft.verified = result.verified;
-                  });
-                }}
-                currentSpaceId={spaceId}
-                entityId={relationValue}
-                relationId={relationId}
-                relationEntityId={r.entityId}
-                spaceId={r.toSpaceId}
-                verified={r.verified}
-                small
-              >
-                {relationName ?? relationValue}
-              </LinkableRelationChip>
-            </div>
-          </>
+          <div key={`relation-${relationId}-${relationValue}`} className="mt-2">
+            <LinkableRelationChip
+              isEditing
+              onDelete={() => {
+                storage.relations.delete(r);
+              }}
+              onDone={result => {
+                storage.relations.update(r, draft => {
+                  draft.toSpaceId = result.space;
+                  draft.verified = result.verified;
+                });
+              }}
+              currentSpaceId={spaceId}
+              entityId={relationValue}
+              relationId={relationId}
+              relationEntityId={r.entityId}
+              spaceId={r.toSpaceId}
+              verified={r.verified}
+              small
+              disableLink={disableLink}
+            >
+              {relationName ?? relationValue}
+            </LinkableRelationChip>
+          </div>
         );
       })}
       {!isEmpty && (
