@@ -1,9 +1,10 @@
 import * as Popover from '@radix-ui/react-popover';
 import cx from 'classnames';
-import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import type { MouseEvent } from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
@@ -82,6 +83,7 @@ export const CollectionMetadata = ({
   };
 
   // Cleanup for autoclose popover 500ms after mouseleave mechanism
+  // eslint-disable-next-line no-undef
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     return () => {
@@ -201,14 +203,23 @@ export const CollectionMetadata = ({
             </div>
           )}
           <div className="pointer-events-auto absolute bottom-0 right-0 top-0 flex items-center">
-            {isHovered && (
-              <PrefetchLink href={`/space/${spaceId}/${entityId}`}>
-                <SquareButton icon={<RightArrowLongSmall />} />
-              </PrefetchLink>
-            )}
+            {isHovered && <NavigateButton spaceId={spaceId} entityId={entityId} />}
           </div>
         </div>
       </div>
     </div>
   );
+};
+
+const NavigateButton = ({ spaceId, entityId }: { spaceId?: string; entityId: string }) => {
+  const router = useRouter();
+
+  if (!spaceId) return null;
+
+  const handleClick = (e: MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/space/${spaceId}/${entityId}`);
+  };
+
+  return <SquareButton icon={<RightArrowLongSmall />} onClick={handleClick} />;
 };

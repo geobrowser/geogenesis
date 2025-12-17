@@ -4,6 +4,7 @@ import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 import { Entity } from '~/core/v2.types';
 
+import { ClientOnly } from '~/design-system/client-only';
 import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -73,9 +74,11 @@ const EntityRow = ({ spaceId, entity }: EntityRowProps) => {
           <p className="mt-1 line-clamp-2 block text-resultLink text-grey-04">{entity.description}</p>
         )}
         {date && (
-          <p className="mt-3 text-breadcrumb text-grey-04">
-            Last edited {formattedDate} · {formattedTime}
-          </p>
+          <ClientOnly>
+            <p className="mt-3 text-breadcrumb text-grey-04">
+              Last edited {formattedDate} · {formattedTime}
+            </p>
+          </ClientOnly>
         )}
       </div>
     </Link>

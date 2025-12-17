@@ -71,24 +71,14 @@ export function TableBlockContextMenu() {
             <>
               {isEditing && (
                 <>
-                  <MenuItem>
-                    <button
-                      onClick={() => setIsEditingDataSource(true)}
-                      className="flex w-full items-center justify-between gap-2"
-                    >
-                      <span>Change data source</span>
-                      <ChevronRight />
-                    </button>
+                  <MenuItem onClick={() => setIsEditingDataSource(true)}>
+                    <span>Change data source</span>
+                    <ChevronRight />
                   </MenuItem>
-                  <MenuItem>
-                    <button
-                      onClick={() => setIsEditingProperties(true)}
-                      className="flex w-full items-center justify-between gap-2"
-                    >
-                      <TableBlockEditPropertiesPanel />
-                      <span>Edit properties</span>
-                      <ChevronRight />
-                    </button>
+                  <MenuItem onClick={() => setIsEditingProperties(true)}>
+                    <TableBlockEditPropertiesPanel />
+                    <span>Edit properties</span>
+                    <ChevronRight />
                   </MenuItem>
                 </>
               )}
@@ -110,11 +100,9 @@ export function TableBlockContextMenu() {
                   <Relation />
                 </Link>
               </MenuItem>
-              <MenuItem>
-                <button onClick={onCopyBlockId} className="flex w-full items-center justify-between gap-2">
-                  <span>Copy block ID</span>
-                  <Copy />
-                </button>
+              <MenuItem onClick={onCopyBlockId}>
+                <span>Copy block ID</span>
+                <Copy />
               </MenuItem>
             </>
           )}
