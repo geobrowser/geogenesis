@@ -107,6 +107,10 @@ const nextConfig = {
           destination: 'https://geobrowser-v2.vercel.app/early-access',
         },
         {
+          source: '/curator-program',
+          destination: 'https://geobrowser-v2.vercel.app/early-access',
+        },
+        {
           source: '/ending-homelessness',
           destination: 'https://geo.framer.website/ending-homelessness',
         },
