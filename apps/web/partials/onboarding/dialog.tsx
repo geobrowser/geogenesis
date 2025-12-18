@@ -41,8 +41,8 @@ export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
-const MotionContent = motion(Content);
-const MotionOverlay = motion(Overlay);
+const MotionContent = motion.create(Content);
+const MotionOverlay = motion.create(Overlay);
 
 export const OnboardingDialog = () => {
   const { isOnboardingVisible } = useOnboarding();

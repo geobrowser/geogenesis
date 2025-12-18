@@ -28,8 +28,9 @@ export function GeoImage({ value, alt = '', ...props }: GeoImageProps) {
   }, [useFallback, value]);
 
   const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
+  const imageProps = props.fill && !props.sizes ? { ...props, sizes: '25vw' } : props;
 
-  return <Image {...props} src={src} alt={alt} onError={handleError} />;
+  return <Image {...imageProps} src={src} alt={alt} onError={handleError} />;
 }
 type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onError'> & {
   /** The raw image value (ipfs:// URI, http URL, or static path) */
