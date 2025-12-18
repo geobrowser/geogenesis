@@ -13,8 +13,6 @@ import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
-const shouldLog = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_STORE_LOGGING !== '0';
-
 export const reactiveValues = createAtom<Value[]>([]);
 export const reactiveRelations = createAtom<Relation[]>([]);
 export const syncedEntities = new Map<string, Entity>();
@@ -66,7 +64,7 @@ export class GeoStore {
   private syncEntities(entities: Entity[]) {
     this.hydrateWith(entities);
 
-    if (shouldLog) {
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_STORE_LOGGING !== '0') {
       console.log(`
 Finished syncing entities to store.
 Entity ids: ${entities.map(e => e.id).join(', ')}`);
