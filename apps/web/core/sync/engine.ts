@@ -34,6 +34,8 @@ export class SyncEngine {
     this.cache = cache;
     this.store = store;
 
+    const shouldLog = this.env === 'development' && process.env.NEXT_PUBLIC_ENGINE_LOGGING !== '0';
+
     /**
      * We often trigger many sync events in a short time frame, especially for
      * entities with many data blocks or when quickly navigating and preloading.
@@ -67,49 +69,49 @@ export class SyncEngine {
     this.batcher.start();
 
     const onEntityUpdated = this.stream.on(GeoEventStream.ENTITY_UPDATED, event => {
-      if (this.env === 'development') {
+      if (shouldLog) {
         console.log(`queueing sync after ${GeoEventStream.ENTITY_UPDATED}`, event);
       }
       this.batcher.addItem(event);
     });
 
     const onTriplesUpdated = this.stream.on(GeoEventStream.VALUES_CREATED, event => {
-      if (this.env === 'development') {
+      if (shouldLog) {
         console.log(`queueing sync after ${GeoEventStream.VALUES_CREATED}`, event);
       }
       this.batcher.addItem(event);
     });
 
     const onRelationsUpdated = this.stream.on(GeoEventStream.RELATION_CREATED, event => {
-      if (this.env === 'development') {
+      if (shouldLog) {
         console.log(`queueing sync after ${GeoEventStream.RELATION_CREATED}`, event);
       }
       this.batcher.addItem(event);
     });
 
     const onEntityDeleted = this.stream.on(GeoEventStream.ENTITY_DELETED, event => {
-      if (this.env === 'development') {
+      if (shouldLog) {
         console.log(`queueing sync after ${GeoEventStream.ENTITY_DELETED}`, event);
       }
       this.batcher.addItem(event);
     });
 
     const onTriplesDeleted = this.stream.on(GeoEventStream.VALUES_DELETED, event => {
-      if (this.env === 'development') {
+      if (shouldLog) {
         console.log(`queueing sync after ${GeoEventStream.VALUES_DELETED}`, event);
       }
       this.batcher.addItem(event);
     });
 
     const onRelationsDeleted = this.stream.on(GeoEventStream.RELATION_DELETED, event => {
-      if (this.env === 'development') {
+      if (shouldLog) {
         console.log(`queueing sync after ${GeoEventStream.RELATION_DELETED}`, event);
       }
       this.batcher.addItem(event);
     });
 
     const onEntitiesRevalidated = this.stream.on(GeoEventStream.HYDRATE, event => {
-      if (this.env === 'development') {
+      if (shouldLog) {
         console.log(`queueing sync after ${GeoEventStream.HYDRATE}`, event);
       }
       this.batcher.addItem(event);

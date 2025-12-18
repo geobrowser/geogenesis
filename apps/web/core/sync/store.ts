@@ -64,7 +64,7 @@ export class GeoStore {
   private syncEntities(entities: Entity[]) {
     this.hydrateWith(entities);
 
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_STORE_LOGGING !== '0') {
       console.log(`
 Finished syncing entities to store.
 Entity ids: ${entities.map(e => e.id).join(', ')}`);
