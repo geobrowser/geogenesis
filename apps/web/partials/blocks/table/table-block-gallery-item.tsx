@@ -10,7 +10,7 @@ import { NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
 import { Cell, Property } from '~/core/v2.types';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { GeoImage } from '~/design-system/geo-image';
+import { DEFAULT_IMAGE_SIZES, GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 
@@ -322,6 +322,8 @@ export function TableBlockGalleryItem({
             className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
             alt=""
             fill
+            sizes={DEFAULT_IMAGE_SIZES}
+            loading="eager"
           />
         )}
       </div>
