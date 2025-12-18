@@ -177,7 +177,7 @@ const variants = {
   },
 };
 
-const MotionPopoverContent = motion(Popover.Content);
+const MotionPopoverContent = motion.create(Popover.Content);
 
 function ModeToggle() {
   const controls = useAnimation();
