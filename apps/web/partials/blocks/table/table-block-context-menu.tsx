@@ -95,20 +95,18 @@ export function TableBlockContextMenu() {
                   </MenuItem>
                 </>
               )}
-              {isEditing && (
-                <MenuItem>
-                  <button
-                    onClick={() => {
-                      router.push(`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`);
-                      setIsMenuOpen(false);
-                    }}
-                    className="flex w-full items-center justify-between gap-2"
-                  >
-                    <span>Open in Power Tools</span>
-                    <Tool />
-                  </button>
-                </MenuItem>
-              )}
+              <MenuItem>
+                <button
+                  onClick={() => {
+                    router.push(`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`);
+                    setIsMenuOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between gap-2"
+                >
+                  <span>Open in Power Tools</span>
+                  <Tool />
+                </button>
+              </MenuItem>
               <MenuItem>
                 <Link
                   href={NavUtils.toEntity(spaceId, entityId)}

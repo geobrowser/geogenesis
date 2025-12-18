@@ -18,6 +18,8 @@ import { ID } from '~/core/id';
 import { useProperties } from '~/core/hooks/use-properties';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { useEditableSpaces } from '~/core/hooks/use-editable-spaces';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { storage } from '~/core/sync/use-mutate';
 import { Entities } from '~/core/utils/entity';
 import { Cell, Entity, Property, Relation, Row } from '~/core/v2.types';
@@ -50,6 +52,8 @@ export function PowerToolsView() {
 
   const { copyRowsToClipboard, pasteRowsFromClipboard, isClipboardSupported, parseRelationUUIDs } = useClipboard();
   const { addPropertyToEntity } = useCreateProperty(spaceId);
+  const { editableSpaceIds } = useEditableSpaces();
+  const isEditing = useUserIsEditing(spaceId);
 
   // Hook for creating new entities with filters
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
@@ -157,12 +161,14 @@ export function PowerToolsView() {
           if (collectionRelation) {
             cell.relationId = collectionRelation.id;
             cell.collectionId = collectionRelation.fromEntity.id;
-            cell.space = collectionRelation.toSpaceId;
+            // Use toSpaceId if available, otherwise fall back to entity's primary space
+            cell.space = collectionRelation.toSpaceId ?? entity.spaces?.[0];
             cell.verified = collectionRelation.verified;
           } else {
             // For non-collection entities, determine space from entity data
-            // Priority: 1) Current spaceId if entity is in it, 2) First space from entity.spaces
-            cell.space = entity.spaces.includes(spaceId) ? spaceId : entity.spaces[0] || spaceId;
+            // Use the entity's primary space (spaces[0])
+            // This determines where edits would actually go
+            cell.space = entity.spaces?.[0] ?? spaceId;
           }
         } else {
           // Get values from the passed store data (includes local/unpublished changes)
@@ -241,14 +247,9 @@ export function PowerToolsView() {
     });
   }, []);
   
-  // For non-collections, get locally created entities from the store
-  const locallyCreatedEntityIds = useValues({
-    selector: v =>
-      (source.type === 'GEO' || source.type === 'SPACES') &&
-      v.property.id === SystemIds.NAME_PROPERTY &&
-      v.isLocal === true &&
-      v.isDeleted !== true
-  }).map(v => v.entity.id);
+  // NOTE: We intentionally do NOT prepend locally created entities for non-collection sources.
+  // The data block uses useQueryEntities which handles filtering server-side.
+  // Prepending local entities would show entities that don't match the filter criteria.
 
   // Get current entity IDs for reactive store queries
   const currentEntityIds = React.useMemo(() => {
@@ -256,13 +257,11 @@ export function PowerToolsView() {
       // Use collectionEntityIds which includes local relations (newly created entities)
       return collectionEntityIds;
     } else if ((source.type === 'GEO' || source.type === 'SPACES') && queriedEntities) {
-      // Include both queried entities and locally created entities
-      const queriedIds = queriedEntities.map(e => e.id);
-      const combined = [...new Set([...queriedIds, ...locallyCreatedEntityIds])];
-      return combined;
+      // Use only queried entities - they are already filtered by the server
+      return queriedEntities.map(e => e.id);
     }
     return [];
-  }, [source.type, collectionEntityIds, queriedEntities, locallyCreatedEntityIds]);
+  }, [source.type, collectionEntityIds, queriedEntities]);
 
   // Get all relations for current entities from store (includes local changes)
   const allRelations = useRelations({
@@ -342,23 +341,10 @@ export function PowerToolsView() {
         },
       };
     } else if ((source.type === 'GEO' || source.type === 'SPACES')) {
-      // For queries, check if there are locally created entities that aren't in query results yet
-      const existingEntityIds = new Set((queriedEntities || []).map(e => e.id));
-      const missingEntityIds = locallyCreatedEntityIds.filter(id => !existingEntityIds.has(id));
-
-      // Create placeholder entities for locally created entities not yet in query results
-      const placeholderEntities = missingEntityIds.map(id => ({
-        id,
-        name: null,
-        description: null,
-        values: [],
-        relations: [],
-        spaces: [spaceId],
-        types: [],
-      }));
-
+      // For queries, use only the filtered entities from the server
+      // Don't prepend local entities - they would bypass filter criteria
       return {
-        allAvailableEntities: [...placeholderEntities, ...(queriedEntities || [])],
+        allAvailableEntities: queriedEntities || [],
         hasMore: queryHasMore,
         loadMore: queryLoadMore,
       };
@@ -368,7 +354,7 @@ export function PowerToolsView() {
       hasMore: false,
       loadMore: () => {},
     };
-  }, [collectionItems, queriedEntities, source.type, displayLimit, queryHasMore, queryLoadMore, collectionLength, collectionEntityIds, spaceId, locallyCreatedEntityIds]);
+  }, [collectionItems, queriedEntities, source.type, displayLimit, queryHasMore, queryLoadMore, collectionLength, collectionEntityIds, spaceId]);
 
   // Get all unique type IDs from all entities to fetch schema properties
   const allTypeIds = React.useMemo(() => {
@@ -422,19 +408,14 @@ export function PowerToolsView() {
   // Clear pending ID once the actual entity appears in the data
   React.useEffect(() => {
     if (pendingEntityId) {
-      console.log('[PowerTools] Waiting for entity to appear:', pendingEntityId);
-      console.log('[PowerTools] Current entities:', allAvailableEntities.map(e => e.id));
-
       // Check in all available entities
       if (allAvailableEntities.find(e => e.id === pendingEntityId)) {
-        console.log('[PowerTools] Entity appeared! Clearing placeholder');
         // Entity appeared, remove the placeholder
         setPendingEntityId(null);
         setPlaceholderRowIds(prev => prev.filter(id => id !== pendingEntityId));
       } else {
         // Fallback: clear pending state after 3 seconds if entity doesn't appear
         const timeout = setTimeout(() => {
-          console.log('[PowerTools] Timeout: clearing pending state');
           setPendingEntityId(null);
           setPlaceholderRowIds(prev => prev.filter(id => id !== pendingEntityId));
         }, 3000);
@@ -473,8 +454,36 @@ export function PowerToolsView() {
       ? [...placeholderRows, ...rows]
       : rows;
   }, [allAvailableEntities, allPropertyIdsWithSchema, collectionRelations, entitiesToRows, source.type, allRelations, allValues, placeholderRowIds, pendingEntityId, makePlaceholderRow, properties]);
-  
-  
+
+  // Compute which entities are editable based on their space
+  const editableEntityIds = React.useMemo(() => {
+    const editable = new Set<string>();
+
+    loadedRows.forEach(row => {
+      // Placeholder rows are always editable (they're being created in current space)
+      if (row.placeholder) {
+        editable.add(row.entityId);
+        return;
+      }
+
+      // Get the entity's space from the name column
+      const nameCell = row.columns[SystemIds.NAME_PROPERTY];
+      const entitySpaceId = nameCell?.space ?? spaceId;
+
+      // Check if user can edit this space
+      if (editableSpaceIds.has(entitySpaceId)) {
+        editable.add(row.entityId);
+      }
+    });
+
+    return editable;
+  }, [loadedRows, editableSpaceIds, spaceId]);
+
+  // Compute editable selected count
+  const editableSelectedCount = React.useMemo(() => {
+    return Array.from(selectedRows).filter(id => editableEntityIds.has(id)).length;
+  }, [selectedRows, editableEntityIds]);
+
   // Selection handlers
   const handleSelectRow = React.useCallback((entityId: string, selected: boolean) => {
     setSelectedRows(prev => {
@@ -491,8 +500,6 @@ export function PowerToolsView() {
   const queryEntitiesAsync = useQueryEntitiesAsync();
 
   const handleSelectAll = React.useCallback(async (selected: boolean) => {
-    console.log('handleSelectAll called with:', selected, 'source type:', source.type);
-
     if (selected) {
       // Optimistic update: immediately update UI
       setIsSelectingAll(true);
@@ -500,27 +507,23 @@ export function PowerToolsView() {
 
       // For collections, we have all entities already
       if (source.type === 'COLLECTION' && collectionItems) {
-        console.log('Selecting all collection items:', collectionItems.length);
         setSelectedRows(new Set(collectionItems.map(entity => entity.id)));
         setIsSelectingAll(false);
       } else if (source.type === 'GEO' || source.type === 'SPACES') {
         // For queries, we need to fetch ALL entities, not just loaded ones
         try {
-          console.log('Fetching all entities for selection...');
           // Fetch with a very large limit to get all entities
           const allEntities = await queryEntitiesAsync({
             where,
             first: 10000, // Large limit to get all
             skip: 0,
           });
-          console.log('Fetched entities:', allEntities.length);
           setSelectedRows(new Set(allEntities.map(entity => entity.id)));
         } catch (error) {
           console.error('Failed to fetch all entities for selection:', error);
           // Revert optimistic update on error
           setSelectAllState('none');
           // Fallback to currently loaded rows
-          console.log('Falling back to loaded rows:', loadedRows.length);
           setSelectedRows(new Set(loadedRows.map(row => row.entityId)));
           setSelectAllState('partial');
         } finally {
@@ -528,8 +531,7 @@ export function PowerToolsView() {
         }
       }
     } else {
-      // Clear selection - this is instant
-      console.log('Clearing selection');
+      // Clear selection
       setSelectedRows(new Set());
       setSelectAllState('none');
     }
@@ -565,11 +567,17 @@ export function PowerToolsView() {
   ) => {
     if (!value?.trim()) return;
 
-    const selectedEntityIds = Array.from(selectedRows);
+    // Only apply to editable entities
+    const selectedEntityIds = Array.from(selectedRows).filter(id => editableEntityIds.has(id));
     const property = propertiesSchema?.[propertyId];
 
     if (!property) {
       console.error('Property not found:', propertyId);
+      return;
+    }
+
+    if (selectedEntityIds.length === 0) {
+      console.warn('No editable entities selected');
       return;
     }
 
@@ -589,7 +597,7 @@ export function PowerToolsView() {
       queryKey: GeoStore.queryKeys(where),
     });
     setSelectedRows(new Set());
-  }, [selectedRows, propertiesSchema, spaceId, queryClient, where]);
+  }, [selectedRows, editableEntityIds, propertiesSchema, spaceId, queryClient, where]);
 
   const handleRemoveValues = React.useCallback((
     propertyId: string,
@@ -597,7 +605,13 @@ export function PowerToolsView() {
     _entityIds?: string[],
     _entityData?: Array<{ id: string; name: string | null }>
   ) => {
-    const selectedEntityIds = Array.from(selectedRows);
+    // Only apply to editable entities
+    const selectedEntityIds = Array.from(selectedRows).filter(id => editableEntityIds.has(id));
+
+    if (selectedEntityIds.length === 0) {
+      console.warn('No editable entities selected');
+      return;
+    }
 
     selectedEntityIds.forEach(entityId => {
       const values = getValues({
@@ -618,7 +632,7 @@ export function PowerToolsView() {
       queryKey: GeoStore.queryKeys(where),
     });
     setSelectedRows(new Set());
-  }, [selectedRows, spaceId, queryClient, where]);
+  }, [selectedRows, editableEntityIds, queryClient, where]);
 
   const handleAddRelations = React.useCallback((
     propertyId: string,
@@ -626,11 +640,17 @@ export function PowerToolsView() {
     entityIds?: string[],
     entityData?: Array<{ id: string; name: string | null }>
   ) => {
-    const selectedEntityIds = Array.from(selectedRows);
+    // Only apply to editable entities
+    const selectedEntityIds = Array.from(selectedRows).filter(id => editableEntityIds.has(id));
     const property = propertiesSchema?.[propertyId];
 
     if (!property) {
       console.error('Property not found:', propertyId);
+      return;
+    }
+
+    if (selectedEntityIds.length === 0) {
+      console.warn('No editable entities selected');
       return;
     }
 
@@ -676,7 +696,7 @@ export function PowerToolsView() {
       queryKey: GeoStore.queryKeys(where),
     });
     setSelectedRows(new Set());
-  }, [selectedRows, propertiesSchema, spaceId, queryClient, where]);
+  }, [selectedRows, editableEntityIds, propertiesSchema, spaceId, queryClient, where]);
 
   const handleRemoveRelations = React.useCallback((
     propertyId: string,
@@ -684,7 +704,13 @@ export function PowerToolsView() {
     entityIds?: string[],
     entityData?: Array<{ id: string; name: string | null }>
   ) => {
-    const selectedEntityIds = Array.from(selectedRows);
+    // Only apply to editable entities
+    const selectedEntityIds = Array.from(selectedRows).filter(id => editableEntityIds.has(id));
+
+    if (selectedEntityIds.length === 0) {
+      console.warn('No editable entities selected');
+      return;
+    }
 
     // Normalize input: extract entity IDs to remove (or undefined to remove all)
     let targetEntityIdsToRemove: string[] | undefined;
@@ -720,17 +746,16 @@ export function PowerToolsView() {
       queryKey: GeoStore.queryKeys(where),
     });
     setSelectedRows(new Set());
-  }, [selectedRows, spaceId, queryClient, where]);
+  }, [selectedRows, editableEntityIds, queryClient, where]);
 
   const handleAddProperty = React.useCallback((propertyId: string, propertyName: string) => {
-    const selectedEntityIds = Array.from(selectedRows);
+    // Only apply to editable entities
+    const selectedEntityIds = Array.from(selectedRows).filter(id => editableEntityIds.has(id));
 
     if (selectedEntityIds.length === 0) {
-      console.warn('No entities selected for property addition');
+      console.warn('No editable entities selected for property addition');
       return;
     }
-
-    console.log(`Adding property ${propertyName} (${propertyId}) to ${selectedEntityIds.length} entities`);
 
     // First, add the property to the block's PROPERTIES relation so it shows up in the table
     // Check if the property is already in the block's properties
@@ -784,7 +809,7 @@ export function PowerToolsView() {
 
     // Clear selection after adding property
     setSelectedRows(new Set());
-  }, [selectedRows, blockRelationEntity, relationId, spaceId, addPropertyToEntity, queryClient, where]);
+  }, [selectedRows, editableEntityIds, blockRelationEntity, relationId, spaceId, addPropertyToEntity, queryClient, where]);
 
   // Copy/Paste handlers
   const handleCopyRows = React.useCallback(async () => {
@@ -794,7 +819,6 @@ export function PowerToolsView() {
     const success = await copyRowsToClipboard(selectedRowData, properties);
 
     if (success) {
-      console.log(`Copied ${selectedRows.size} rows to clipboard`);
       // You could show a toast notification here
     }
   }, [selectedRows, loadedRows, properties, copyRowsToClipboard]);
@@ -802,8 +826,6 @@ export function PowerToolsView() {
   const handlePasteRows = React.useCallback(async () => {
     const clipboardData = await pasteRowsFromClipboard();
     if (!clipboardData) return;
-
-    console.log('Pasted data:', clipboardData);
 
     try {
       // Map headers to property IDs
@@ -970,13 +992,8 @@ export function PowerToolsView() {
         }
       }
 
-      console.log(`Created ${clipboardData.rows.length} new entities from pasted data`);
-
       // For queries (non-collection sources), invalidate the query cache to refresh results
       if (source.type !== 'COLLECTION') {
-        console.log('Created entities for query-based power tools:', newEntityIds);
-        console.log('Invalidating query cache to show new entities');
-
         // Invalidate the entities query to refresh and show new entities
         await queryClient.invalidateQueries({
           queryKey: GeoStore.queryKeys(where),
@@ -1166,8 +1183,6 @@ export function PowerToolsView() {
       return;
     }
 
-    console.log(`Adding property ${propertyName} (${propertyId}) to ${selectedEntityIds.length} entities`);
-
     // First, add the property to the block's PROPERTIES relation so it shows up in the table
     // Check if the property is already in the block's properties
     const isPropertyAlreadyShown = blockRelationEntity?.relations.some(
@@ -1312,9 +1327,9 @@ export function PowerToolsView() {
 
   return (
     <div
-      className="bg-white overflow-hidden"
+      className="fixed inset-0 z-50 bg-white overflow-hidden"
       style={{
-        height: 'calc(100vh - 60px)', // Account for potential browser chrome/navbar
+        top: '60px', // Account for navbar height
         display: 'grid',
         gridTemplateRows: 'auto auto 1fr'
       }}
@@ -1331,14 +1346,16 @@ export function PowerToolsView() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* Add new entity button */}
-          <button
-            onClick={handleAddPlaceholder}
-            className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
-            title="Add new entity"
-          >
-            <Plus />
-          </button>
+          {/* Add new entity button - only show when in edit mode */}
+          {isEditing && (
+            <button
+              onClick={handleAddPlaceholder}
+              className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
+              title="Add new entity"
+            >
+              <Plus />
+            </button>
+          )}
           <button
             onClick={handleClose}
             className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
@@ -1348,21 +1365,25 @@ export function PowerToolsView() {
         </div>
       </div>
 
-      {/* Bulk Actions Bar */}
-      <BulkActionsBar
-        selectedCount={selectedRows.size}
-        spaceId={spaceId}
-        properties={properties}
-        onClearSelection={handleClearSelection}
-        onAddValues={handleAddValues}
-        onRemoveValues={handleRemoveValues}
-        onAddRelations={handleAddRelations}
-        onRemoveRelations={handleRemoveRelations}
-        onAddProperty={handleAddProperty}
-        onCopyRows={handleCopyRows}
-        onPasteRows={handlePasteRows}
-        canPaste={canPaste && isClipboardSupported}
-      />
+      {/* Bulk Actions Bar - wrapper div ensures grid row is always occupied */}
+      <div>
+        <BulkActionsBar
+          selectedCount={selectedRows.size}
+          editableSelectedCount={editableSelectedCount}
+          spaceId={spaceId}
+          properties={properties}
+          canUserEdit={isEditing}
+          onClearSelection={handleClearSelection}
+          onAddValues={handleAddValues}
+          onRemoveValues={handleRemoveValues}
+          onAddRelations={handleAddRelations}
+          onRemoveRelations={handleRemoveRelations}
+          onAddProperty={handleAddProperty}
+          onCopyRows={handleCopyRows}
+          onPasteRows={handlePasteRows}
+          canPaste={canPaste && isClipboardSupported}
+        />
+      </div>
 
       {/* Content */}
       <div className="h-full overflow-hidden">
@@ -1376,6 +1397,7 @@ export function PowerToolsView() {
             propertiesSchema={propertiesSchema}
             spaceId={spaceId}
             selectedRows={selectedRows}
+            editableEntityIds={editableEntityIds}
             onSelectRow={handleSelectRow}
             onSelectAll={handleSelectAll}
             onSelectRange={handleSelectRange}

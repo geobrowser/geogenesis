@@ -24,8 +24,10 @@ type OperationType = 'add-values' | 'add-relations' | 'remove-values' | 'remove-
 
 interface Props {
   selectedCount: number;
+  editableSelectedCount: number;
   properties: Property[];
   spaceId: string;
+  canUserEdit: boolean;
   onOperation: (operation: OperationType, propertyId: string, value?: string, entityIds?: string[], entityData?: Array<{ id: string; name: string | null }>) => void;
   onAddProperty?: (propertyId: string, propertyName: string) => void;
   onCopy?: () => void;
@@ -35,8 +37,10 @@ interface Props {
 
 export function PowerToolsActionsPopover({
   selectedCount,
+  editableSelectedCount,
   properties,
   spaceId,
+  canUserEdit,
   onOperation,
   onAddProperty,
   onCopy,
@@ -135,13 +139,23 @@ export function PowerToolsActionsPopover({
           {currentView === 'main' && (
             <>
               <div className="border-b border-grey-02 px-4 py-3">
-                <Text variant="smallTitle">{selectedCount} selected</Text>
+                <Text variant="smallTitle">
+                  {selectedCount} selected
+                  {editableSelectedCount < selectedCount && (
+                    <span className="ml-1 text-grey-04 font-normal">
+                      ({editableSelectedCount} editable)
+                    </span>
+                  )}
+                </Text>
               </div>
 
               <MenuItem>
                 <button
                   onClick={handleAddClick}
-                  className="flex w-full items-center justify-between gap-2"
+                  disabled={!canUserEdit || editableSelectedCount === 0}
+                  className={`flex w-full items-center justify-between gap-2 ${
+                    !canUserEdit || editableSelectedCount === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
                   <span>Add</span>
                   <ChevronRight />
@@ -151,7 +165,10 @@ export function PowerToolsActionsPopover({
               <MenuItem>
                 <button
                   onClick={handleRemoveClick}
-                  className="flex w-full items-center justify-between gap-2"
+                  disabled={!canUserEdit || editableSelectedCount === 0}
+                  className={`flex w-full items-center justify-between gap-2 ${
+                    !canUserEdit || editableSelectedCount === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
                   <span>Remove</span>
                   <ChevronRight />
@@ -162,7 +179,10 @@ export function PowerToolsActionsPopover({
                 <MenuItem>
                   <button
                     onClick={handleAddPropertyClick}
-                    className="flex w-full items-center justify-between gap-2"
+                    disabled={!canUserEdit || editableSelectedCount === 0}
+                    className={`flex w-full items-center justify-between gap-2 ${
+                      !canUserEdit || editableSelectedCount === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   >
                     <span>Add Property</span>
                     <ChevronRight />
@@ -211,7 +231,7 @@ export function PowerToolsActionsPopover({
                   <ChevronLeft />
                   <span>Back</span>
                 </button>
-                <Text variant="smallTitle">Add to {selectedCount} items</Text>
+                <Text variant="smallTitle">Add to {editableSelectedCount} editable item{editableSelectedCount !== 1 ? 's' : ''}</Text>
               </div>
 
               <div className="space-y-3 p-4">
@@ -344,7 +364,7 @@ export function PowerToolsActionsPopover({
                   <ChevronLeft />
                   <span>Back</span>
                 </button>
-                <Text variant="smallTitle">Remove from {selectedCount} items</Text>
+                <Text variant="smallTitle">Remove from {editableSelectedCount} editable item{editableSelectedCount !== 1 ? 's' : ''}</Text>
               </div>
 
               <div className="space-y-3 p-4">
@@ -487,7 +507,7 @@ export function PowerToolsActionsPopover({
                   <ChevronLeft />
                   <span>Back</span>
                 </button>
-                <Text variant="smallTitle">Add property to {selectedCount} items</Text>
+                <Text variant="smallTitle">Add property to {editableSelectedCount} editable item{editableSelectedCount !== 1 ? 's' : ''}</Text>
               </div>
 
               <div className="space-y-3 p-4">

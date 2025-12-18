@@ -22,6 +22,7 @@ interface Props {
   propertiesSchema: Record<string, Property> | null;
   spaceId: string;
   selectedRows: Set<string>;
+  editableEntityIds: Set<string>;
   onSelectRow: (entityId: string, selected: boolean) => void;
   onSelectAll: (selected: boolean) => void;
   onSelectRange?: (startIndex: number, endIndex: number, selected: boolean) => void;
@@ -46,6 +47,7 @@ export function PowerToolsTableVirtual({
   propertiesSchema,
   spaceId,
   selectedRows,
+  editableEntityIds,
   onSelectRow,
   onSelectAll,
   onSelectRange,
@@ -279,7 +281,6 @@ export function PowerToolsTableVirtual({
             }`}
             onClick={(e) => {
               if (isSelectingAll) return; // Prevent clicks during loading
-              console.log('Header checkbox div clicked');
               e.preventDefault();
               onSelectAll(!isAllSelected);
             }}
@@ -337,6 +338,7 @@ export function PowerToolsTableVirtual({
           const rowId = row.entityId;
           const isSelected = selectedRows.has(rowId);
           const isPlaceholder = row.placeholder;
+          const isRowEditable = editableEntityIds.has(rowId);
 
           return (
             <div
@@ -344,7 +346,7 @@ export function PowerToolsTableVirtual({
               data-index={virtualRow.index}
               ref={(node) => virtualizer.measureElement(node)}
               className={`absolute left-0 top-0 ${
-                isPlaceholder ? 'bg-grey-01 z-40' : isSelected ? 'bg-action-bg' : 'hover:bg-grey-01'
+                isPlaceholder ? 'bg-grey-01 z-40' : isSelected ? 'bg-action-bg' : !isRowEditable ? 'bg-grey-01/50' : 'hover:bg-grey-01'
               }`}
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
@@ -477,6 +479,9 @@ export function PowerToolsTableVirtual({
                   const entityName = nameCell?.name || null;
                   const cellSpaceId = isNameProperty ? (nameCell?.space ?? spaceId) : spaceId;
 
+                  // Determine if this cell should be editable (edit mode AND row is editable)
+                  const canEditCell = isEditing && isRowEditable;
+
                   // For name property, use custom click handler to open side panel
                   if (isNameProperty) {
                     return (
@@ -486,7 +491,7 @@ export function PowerToolsTableVirtual({
                           !isLastColumn ? 'border-r border-grey-02' : ''
                         }`}
                       >
-                        {isEditing ? (
+                        {canEditCell ? (
                           <EditableEntityTableCell
                             entityId={row.entityId}
                             spaceId={cellSpaceId}
@@ -529,7 +534,7 @@ export function PowerToolsTableVirtual({
                         !isLastColumn ? 'border-r border-grey-02' : ''
                       }`}
                     >
-                      {isEditing ? (
+                      {canEditCell ? (
                         <EditableEntityTableCell
                           entityId={row.entityId}
                           spaceId={cellSpaceId}

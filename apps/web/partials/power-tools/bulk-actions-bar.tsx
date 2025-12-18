@@ -11,8 +11,10 @@ import { PowerToolsActionsPopover } from './power-tools-actions-popover';
 
 interface Props {
   selectedCount: number;
+  editableSelectedCount: number;
   spaceId: string;
   properties: Property[];
+  canUserEdit: boolean;
   onClearSelection: () => void;
   onAddValues: (propertyId: string, value?: string, entityIds?: string[], entityData?: Array<{ id: string; name: string | null }>) => void;
   onRemoveValues: (propertyId: string, value?: string, entityIds?: string[], entityData?: Array<{ id: string; name: string | null }>) => void;
@@ -26,8 +28,10 @@ interface Props {
 
 export function BulkActionsBar({
   selectedCount,
+  editableSelectedCount,
   spaceId,
   properties,
+  canUserEdit,
   onClearSelection,
   onAddValues,
   onRemoveValues,
@@ -38,8 +42,9 @@ export function BulkActionsBar({
   onPasteRows,
   canPaste,
 }: Props) {
-  // Show the bar if we have selections OR if paste is available
-  if (selectedCount === 0 && !canPaste) {
+  // Show the bar if we have selections OR if paste is available (and user can edit)
+  const showPasteOption = canPaste && canUserEdit;
+  if (selectedCount === 0 && !showPasteOption) {
     return null;
   }
 
@@ -72,7 +77,7 @@ export function BulkActionsBar({
         <div className="flex items-center gap-4">
           {selectedCount > 0 ? (
             <Text variant="body" color="grey-04">
-              {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
+              {selectedCount} selected{editableSelectedCount < selectedCount ? ` (${editableSelectedCount} editable)` : ''}
             </Text>
           ) : (
             <Text variant="body" color="grey-04">
@@ -100,13 +105,15 @@ export function BulkActionsBar({
           {selectedCount > 0 && (
             <PowerToolsActionsPopover
               selectedCount={selectedCount}
+              editableSelectedCount={editableSelectedCount}
               properties={properties}
               spaceId={spaceId}
+              canUserEdit={canUserEdit}
               onOperation={handleOperation}
               onAddProperty={onAddProperty}
               onCopy={onCopyRows}
-              onPaste={canPaste ? onPasteRows : undefined}
-              canPaste={canPaste}
+              onPaste={showPasteOption ? onPasteRows : undefined}
+              canPaste={showPasteOption}
             />
           )}
         </div>

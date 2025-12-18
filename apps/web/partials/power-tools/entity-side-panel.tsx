@@ -145,8 +145,6 @@ export function EntitySidePanel({ entityId, spaceId, isOpen, onClose }: Props) {
   const [isEditing, setIsEditing] = React.useState(false);
   const canUserEdit = useCanUserEdit(spaceId);
 
-  console.log('EntitySidePanel render:', { entityId, spaceId, isOpen, entity, isLoading, isEditing, canUserEdit });
-
   // Reset edit mode if user loses permission
   React.useEffect(() => {
     if (!canUserEdit && isEditing) {
