@@ -130,6 +130,10 @@ export function CreateSpaceDialog() {
             e.preventDefault();
           }}
         >
+          <Dialog.Title className="sr-only">Create a new space</Dialog.Title>
+          <Dialog.Description className="sr-only">
+            Create a new space by selecting a template and configuring governance settings
+          </Dialog.Description>
           <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
             <AnimatePresence initial={false} mode="wait">
               <motion.div
