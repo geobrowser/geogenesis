@@ -19,10 +19,6 @@ const nextConfig = {
     return config;
   },
   experimental: {
-    // Enable filesystem caching for `next dev`
-    turbopackFileSystemCacheForDev: true,
-    // Enable filesystem caching for `next build`
-    turbopackFileSystemCacheForBuild: false, // wait for 16.1
     optimizePackageImports: [
       'effect',
       'viem',
