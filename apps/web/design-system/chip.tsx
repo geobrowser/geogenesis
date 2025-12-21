@@ -64,6 +64,7 @@ type LinkableRelationChipProps = {
   onDone?: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
   small?: boolean;
   className?: string;
+  disableLink?: boolean;
   children: React.ReactNode;
 };
 
@@ -167,6 +168,7 @@ export function LinkableRelationChip({
   onDone,
   small = false,
   className = '',
+  disableLink = false,
   children,
 }: LinkableRelationChipProps) {
   const [isDotsHovered, setIsDotsHovered] = useState<boolean>(false);
@@ -193,13 +195,17 @@ export function LinkableRelationChip({
         className,
       })}
     >
-      <Link
-        entityId={entityId}
-        spaceId={spaceId ?? currentSpaceId}
-        href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
-      >
-        {children}
-      </Link>
+      {disableLink ? (
+        <span>{children}</span>
+      ) : (
+        <Link
+          entityId={entityId}
+          spaceId={spaceId ?? currentSpaceId}
+          href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
+        >
+          {children}
+        </Link>
+      )}
       {verified && (
         <span className="inline-block pl-1.5">
           <CheckCircle color="current" />

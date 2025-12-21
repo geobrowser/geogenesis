@@ -313,7 +313,6 @@ export function PowerToolsActionsPopover({
                                   }
                                 }}
                                 spaceId={spaceId}
-                                zIndex={1002}
                               />
                             </div>
                           </>
@@ -447,7 +446,6 @@ export function PowerToolsActionsPopover({
                                     }
                                   }}
                                   spaceId={spaceId}
-                                  zIndex={1002}
                                 />
                               </div>
                             </>

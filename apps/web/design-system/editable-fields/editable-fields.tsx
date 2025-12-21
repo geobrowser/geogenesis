@@ -63,7 +63,7 @@ type PageStringFieldProps = {
   onEnterKey?: () => void;
 };
 
-export function PageStringField({ ...props }: PageStringFieldProps) {
+export function PageStringField({ shouldDebounce, onChange, onEnterKey, ...props }: PageStringFieldProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const {
@@ -71,7 +71,7 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
     onChange: setLocalValue,
     flush,
   } = useOptimisticValueWithSideEffect({
-    callback: props.onChange,
+    callback: onChange,
     delay: 1500,
     initialValue: props.value || '',
   });
@@ -82,10 +82,10 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
       ref={textareaRef}
       value={localValue}
       onChange={e => {
-        if (props.shouldDebounce) {
+        if (shouldDebounce) {
           setLocalValue(e.currentTarget.value);
         } else {
-          props.onChange(e.currentTarget.value);
+          onChange(e.currentTarget.value);
         }
       }}
       onBlur={() => {
@@ -93,10 +93,10 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
         flush();
       }}
       onKeyDown={e => {
-        if (e.key === 'Enter' && props.onEnterKey) {
+        if (e.key === 'Enter' && onEnterKey) {
           e.preventDefault();
           flush(); // Flush pending changes immediately
-          props.onEnterKey?.();
+          onEnterKey();
         }
       }}
       className={textareaStyles({ variant: props.variant })}

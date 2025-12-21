@@ -21,7 +21,6 @@ type SelectEntityAsPopoverProps = {
   }) => void;
   relationValueTypes?: Property['relationValueTypes'];
   placeholder?: string;
-  zIndex?: number;
 };
 
 export function SelectEntityAsPopover({
@@ -31,7 +30,6 @@ export function SelectEntityAsPopover({
   spaceId,
   relationValueTypes,
   placeholder,
-  zIndex = 30,
 }: SelectEntityAsPopoverProps) {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -46,13 +44,7 @@ export function SelectEntityAsPopover({
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
       <Popover.Portal>
-        <Popover.Content
-          sideOffset={4}
-          align="start"
-          style={{ zIndex }}
-          collisionPadding={10}
-          avoidCollisions={true}
-        >
+        <Popover.Content sideOffset={4} align="start" className="z-30" collisionPadding={10} avoidCollisions={true}>
           <SelectEntity
             key={JSON.stringify(relationValueTypes)}
             withSearchIcon={true}

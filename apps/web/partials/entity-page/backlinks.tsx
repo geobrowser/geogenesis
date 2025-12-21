@@ -31,14 +31,14 @@ export const Backlinks = ({ backlinks }: BacklinksProps) => {
       <div className="mt-4 flex flex-col gap-6">
         {isExpanded || backlinks.length <= 3 ? (
           <>
-            {backlinks.map(backlink => (
-              <Backlink key={backlink.id} backlink={backlink} />
+            {backlinks.map((backlink, index) => (
+              <Backlink key={`${backlink.id}-${backlink.primarySpace.id}-${index}`} backlink={backlink} />
             ))}
           </>
         ) : (
           <>
-            {backlinks.slice(0, 3).map(backlink => (
-              <Backlink key={backlink.id} backlink={backlink} />
+            {backlinks.slice(0, 3).map((backlink, index) => (
+              <Backlink key={`${backlink.id}-${backlink.primarySpace.id}-${index}`} backlink={backlink} />
             ))}
             <div>
               <SmallButton variant="secondary" onClick={() => setIsExpanded(true)}>
