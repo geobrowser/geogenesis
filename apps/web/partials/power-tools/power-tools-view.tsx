@@ -70,41 +70,27 @@ export function PowerToolsView() {
     spaceId: spaceId,
     id: relationId,
   });
-  
+
+  // For collections, also query the collection entity to get ALL collection relations (not paginated)
+  // This is needed for select all functionality
+  const { entity: collectionEntity } = useQueryEntity({
+    spaceId: spaceId,
+    id: source.type === 'COLLECTION' ? source.value : undefined,
+    enabled: source.type === 'COLLECTION',
+  });
+
   // Get collection data with progressive pagination
-  const { collectionItems: cachedCollectionItems, collectionRelations: cachedCollectionRelations, isLoading: isCollectionLoading, collectionLength } = useCollection({
+  // useCollection already fetches entities via useQueryEntities which merges local + remote data
+  const { collectionItems, collectionRelations, isLoading: isCollectionLoading, collectionLength } = useCollection({
     first: displayLimit, // Pass the display limit to control server-side pagination
     skip: 0,
   });
 
-  // Also get collection relations directly from store to include local changes immediately
-  const liveCollectionRelations = useRelations({
-    selector: r =>
-      source.type === 'COLLECTION' &&
-      r.fromEntity.id === source.value &&
-      r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE &&
-      !r.isDeleted
-  });
-
-  // For collections, use live relations to get entity IDs (includes local changes)
+  // Get collection entity IDs from the collection relations
   const collectionEntityIds = React.useMemo(() => {
     if (source.type !== 'COLLECTION') return [];
-    return liveCollectionRelations.map(r => r.toEntity.id);
-  }, [source.type, liveCollectionRelations]);
-
-  // Query for collection items using live entity IDs
-  const { entities: liveCollectionItems, isLoading: isLiveCollectionLoading } = useQueryEntities({
-    enabled: source.type === 'COLLECTION' && collectionEntityIds.length > 0,
-    where: {
-      id: {
-        in: collectionEntityIds.slice(0, displayLimit), // Respect display limit
-      },
-    },
-  });
-
-  // Use live data for collections, cached for others
-  const collectionRelations = source.type === 'COLLECTION' ? liveCollectionRelations : cachedCollectionRelations;
-  const collectionItems = source.type === 'COLLECTION' ? liveCollectionItems : cachedCollectionItems;
+    return collectionRelations.map(r => r.toEntity.id);
+  }, [source.type, collectionRelations]);
   
   // For queries, use infinite scroll to handle large datasets
   const {
@@ -505,9 +491,14 @@ export function PowerToolsView() {
       setIsSelectingAll(true);
       setSelectAllState('all');
 
-      // For collections, we have all entities already
-      if (source.type === 'COLLECTION' && collectionItems) {
-        setSelectedRows(new Set(collectionItems.map(entity => entity.id)));
+      // For collections, get ALL entity IDs from the collection entity's relations (not paginated)
+      if (source.type === 'COLLECTION') {
+        // Get all collection item relations from the collection entity
+        const allCollectionRelations = collectionEntity?.relations.filter(
+          r => r.fromEntity.id === source.value && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE
+        ) ?? [];
+        const allEntityIds = allCollectionRelations.map(r => r.toEntity.id);
+        setSelectedRows(new Set(allEntityIds));
         setIsSelectingAll(false);
       } else if (source.type === 'GEO' || source.type === 'SPACES') {
         // For queries, we need to fetch ALL entities, not just loaded ones
@@ -535,7 +526,7 @@ export function PowerToolsView() {
       setSelectedRows(new Set());
       setSelectAllState('none');
     }
-  }, [loadedRows, source.type, collectionItems, where, queryEntitiesAsync]);
+  }, [loadedRows, source, collectionEntity, where, queryEntitiesAsync]);
   
   const handleSelectRange = React.useCallback((startIndex: number, endIndex: number, selected: boolean) => {
     setSelectedRows(prev => {
