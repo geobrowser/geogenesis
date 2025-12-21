@@ -25,7 +25,7 @@ type NavbarBreadcrumbProps = {
   entityId?: string;
 };
 
-const MotionContent = motion(Popover.Content);
+const MotionContent = motion.create(Popover.Content);
 
 export function NavbarBreadcrumb({ spaceId, entityId }: NavbarBreadcrumbProps) {
   if (!entityId) return <SpaceBreadcrumb spaceId={spaceId} />;

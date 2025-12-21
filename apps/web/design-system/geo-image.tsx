@@ -7,6 +7,15 @@ import type { ImgHTMLAttributes } from 'react';
 
 import { getImagePath, getImagePathFallback } from '~/core/utils/utils';
 
+/**
+ * Default responsive sizes for Next.js Image components with fill prop.
+ * Matches Tailwind breakpoints: sm (639px), lg (1023px)
+ * - Mobile (≤639px): 100vw
+ * - Tablet (639-1023px): 50vw
+ * - Desktop (>1023px): 25vw
+ */
+export const DEFAULT_IMAGE_SIZES = '(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 25vw';
+
 type GeoImageProps = Omit<ImageProps, 'src' | 'onError'> & {
   /** The raw image value (ipfs:// URI, http URL, or static path) */
   value: string;
@@ -28,8 +37,9 @@ export function GeoImage({ value, alt = '', ...props }: GeoImageProps) {
   }, [useFallback, value]);
 
   const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
+  const imageProps = props.fill && !props.sizes ? { ...props, sizes: DEFAULT_IMAGE_SIZES } : props;
 
-  return <Image {...props} src={src} alt={alt} onError={handleError} />;
+  return <Image {...imageProps} src={src} alt={alt} onError={handleError} />;
 }
 type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onError'> & {
   /** The raw image value (ipfs:// URI, http URL, or static path) */

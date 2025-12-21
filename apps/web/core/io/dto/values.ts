@@ -8,7 +8,7 @@ export function ValueDto(entity: { id: string; name: string | null }, remoteValu
   const mappedDataType = getAppDataTypeFromRemoteDataType(remoteValue.property.dataType);
   const value = getValueFromDataType(mappedDataType, remoteValue);
 
-  if (!value) {
+  if (value === null && mappedDataType !== 'RELATION') {
     console.error('Could not parse valid value for remote value. Defaulting to empty string.', remoteValue);
   }
 
@@ -55,6 +55,9 @@ function getValueFromDataType(dataType: DataType, remoteValue: RemoteValue): str
     }
     case 'POINT':
       return remoteValue.point;
+    case 'RELATION':
+      // Relations are handled separately via relationsList, not valuesList
+      return null;
 
     default:
       console.error('Invalid data type for value', remoteValue.property.dataType);

@@ -304,12 +304,6 @@ export function useEditorStore() {
     if (json.content.length === 0) {
       json.content.push({
         type: 'paragraph',
-        content: [
-          {
-            type: 'text',
-            text: '',
-          },
-        ],
       });
     }
 

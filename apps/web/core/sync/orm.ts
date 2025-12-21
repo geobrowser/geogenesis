@@ -188,7 +188,10 @@ export class E {
       })
     );
 
-    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
+    // Don't double-filter by spaces since remote query already handles space filtering
+    const localEntities = where.spaces
+      ? new EntityQuery(store.getEntities()).where({...where, spaces: undefined}).execute()
+      : new EntityQuery(store.getEntities()).where(where).execute();
 
     const mergedIds = [...new Set([...remoteEntities.map(e => e.id), ...localEntities.map(e => e.id)])];
 

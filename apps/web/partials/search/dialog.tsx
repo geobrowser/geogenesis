@@ -1,3 +1,4 @@
+import * as Dialog from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -107,6 +108,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
 
   return (
     <Command.Dialog open={open} onOpenChange={handleOpenChange} label="Entity search">
+      <Dialog.Title className="sr-only">Entity search</Dialog.Title>
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center">
         <div className="pointer-events-auto mt-32 w-full max-w-[434px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-dropdown">
           <Command.List>
@@ -285,8 +287,6 @@ type CreateNewEntityInSpaceProps = {
 };
 
 const CreateNewEntityInSpace = ({ entityId, setIsCreatingNewEntity, onDone }: CreateNewEntityInSpaceProps) => {
-  const router = useRouter();
-
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const spaces = useSpacesWhereMember(address);

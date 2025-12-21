@@ -19,10 +19,6 @@ const nextConfig = {
     return config;
   },
   experimental: {
-    // Activate new client-side router improvements
-    // clientSegmentCache: true,
-    // Enable persistent caching for the turbopack dev server and build.
-    // turbopackPersistentCaching: true, // canary-only feature, disabled for stable
     optimizePackageImports: [
       'effect',
       'viem',
@@ -43,6 +39,17 @@ const nextConfig = {
   },
   async redirects() {
     return [
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: 'testnet.geobrowser.io',
+          },
+        ],
+        destination: 'https://www.geobrowser.io/:path*',
+        permanent: false,
+      },
       {
         source: '/spaces',
         destination: '/root',
@@ -96,6 +103,14 @@ const nextConfig = {
           destination: 'https://geobrowser-v2.vercel.app/early-access',
         },
         {
+          source: '/curator-program',
+          destination: 'https://geobrowser-v2.vercel.app/curator-program',
+        },
+        {
+          source: '/curator-registration',
+          destination: 'https://geobrowser-v2.vercel.app/curator-registration',
+        },
+        {
           source: '/ending-homelessness',
           destination: 'https://geo.framer.website/ending-homelessness',
         },
@@ -103,16 +118,18 @@ const nextConfig = {
           source: '/blog',
           destination: 'https://geo-blog.vercel.app',
         },
-        {
-          source: '/:path*',
-          has: [
-            {
-              type: 'host',
-              value: 'testnet.geobrowser.io',
-            },
-          ],
-          destination: 'https://geogenesis-git-stream-v2-geo-browser.vercel.app/:path*',
-        },
+        // @TODO restore a testnet rewrite once we launch a mainnet and disable redirect above
+        // (see redirects section above)
+        // {
+        //   source: '/:path*',
+        //   has: [
+        //     {
+        //       type: 'host',
+        //       value: 'testnet.geobrowser.io',
+        //     },
+        //   ],
+        //   destination: 'https://geogenesis-git-XXX-geo-browser.vercel.app/:path*',
+        // },
       ],
       afterFiles: [],
       fallback: [

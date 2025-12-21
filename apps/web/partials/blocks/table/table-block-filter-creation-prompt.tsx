@@ -314,7 +314,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
 
   return (
     <Root open={state.open} onOpenChange={onOpenChange}>
-      <Trigger>{trigger}</Trigger>
+      <Trigger asChild>{trigger}</Trigger>
       <Portal>
         <AnimatePresence>
           {state.open && (
@@ -406,7 +406,7 @@ interface StaticRelationsFiltersProps {
 }
 
 function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }: StaticRelationsFiltersProps) {
-  const { setSource, source } = useSource();
+  const { setSource } = useSource();
   const { setFilterState, filterState } = useFilters();
 
   const onSetRelationType = (entity: { id: string; name: string | null }) => {
