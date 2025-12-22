@@ -261,7 +261,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET');
+      const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET', true);
       setAvatar(cid);
     }
   };
