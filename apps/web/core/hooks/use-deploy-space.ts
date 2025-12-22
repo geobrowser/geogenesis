@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { EntityId } from '~/core/io/schema';
-import { validateEntityId } from '~/core/utils/utils';
+import { getImagePath, validateEntityId } from '~/core/utils/utils';
 
 import { SpaceGovernanceType } from '../types';
 
@@ -58,7 +58,8 @@ export function useDeploySpace() {
 
         if (args.type === 'personal' || args.type === 'company') {
           if (args.spaceImage && args.spaceImage !== '') {
-            url.searchParams.set('spaceAvatarUri', args.spaceImage);
+            // Convert ipfs:// URI to gateway URL that the backend can fetch
+            url.searchParams.set('spaceAvatarUri', getImagePath(args.spaceImage));
           }
         } else if (
           args.type === 'default' ||
@@ -72,7 +73,8 @@ export function useDeploySpace() {
           args.type === 'interest'
         ) {
           if (args.spaceImage && args.spaceImage !== '') {
-            url.searchParams.set('spaceCoverUri', args.spaceImage);
+            // Convert ipfs:// URI to gateway URL that the backend can fetch
+            url.searchParams.set('spaceCoverUri', getImagePath(args.spaceImage));
           }
         }
 
