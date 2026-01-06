@@ -3,7 +3,6 @@ import { Editor, Range } from '@tiptap/core';
 
 import * as React from 'react';
 
-import { ID } from '~/core/id';
 import { getImagePath } from '~/core/utils/utils';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';

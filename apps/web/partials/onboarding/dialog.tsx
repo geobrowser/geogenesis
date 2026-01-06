@@ -41,8 +41,8 @@ export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
-const MotionContent = motion(Content);
-const MotionOverlay = motion(Overlay);
+const MotionContent = motion.create(Content);
+const MotionOverlay = motion.create(Overlay);
 
 export const OnboardingDialog = () => {
   const { isOnboardingVisible } = useOnboarding();
@@ -261,7 +261,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET');
+      const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET', true);
       setAvatar(cid);
     }
   };

@@ -27,7 +27,10 @@ interface NetworkResult {
 }
 
 export async function fetchOnchainProfileByEntityId(entityId: string): Promise<OnchainGeoProfile | null> {
-  const config = Environment.getConfig();
+  // Temporarily disabled until profile-subgraph endpoint is available
+  return null;
+
+  /* const config = Environment.getConfig();
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
     endpoint: config.api,
@@ -74,5 +77,5 @@ export async function fetchOnchainProfileByEntityId(entityId: string): Promise<O
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  return result.onchainProfile;
+  return result.onchainProfile; */
 }

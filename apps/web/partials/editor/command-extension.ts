@@ -10,7 +10,7 @@ import { CommandList } from './command-list';
 const CommandExtension = Extension.create<{
   suggestion: Omit<SuggestionOptions<CommandSuggestionItem>, 'editor'>;
 }>({
-  name: 'commands',
+  name: 'slashCommands',
 
   addOptions() {
     return {
