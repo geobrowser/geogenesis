@@ -118,18 +118,16 @@ const nextConfig = {
           source: '/blog',
           destination: 'https://geo-blog.vercel.app',
         },
-        // @TODO restore a testnet rewrite once we launch a mainnet and disable redirect above
-        // (see redirects section above)
-        // {
-        //   source: '/:path*',
-        //   has: [
-        //     {
-        //       type: 'host',
-        //       value: 'testnet.geobrowser.io',
-        //     },
-        //   ],
-        //   destination: 'https://geogenesis-git-XXX-geo-browser.vercel.app/:path*',
-        // },
+        {
+          source: '/:path*',
+          has: [
+            {
+              type: 'host',
+              value: 'testnet.geobrowser.io',
+            },
+          ],
+          destination: 'https://geogenesis-git-stream-v2-geo-browser.vercel.app/:path*',
+        },
       ],
       afterFiles: [],
       fallback: [
