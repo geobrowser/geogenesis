@@ -550,43 +550,25 @@ export const TableBlock = ({ spaceId }: Props) => {
           <>
             <Spacer height={12} />
             <PageNumberContainer>
-              {source.type === 'COLLECTION' ? (
-                getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
-                  return page === PagesPaginationPlaceholder.skip ? (
-                    <Text
-                      key={`ellipsis-${index}`}
-                      color="grey-03"
-                      className="flex justify-center"
-                      variant="metadataMedium"
-                    >
-                      ...
-                    </Text>
-                  ) : (
-                    <PageNumber
-                      key={`page-${page}`}
-                      number={page}
-                      onClick={() => setPage(page - 1)}
-                      isActive={page === pageNumber + 1}
-                    />
-                  );
-                })
-              ) : (
-                <>
-                  {pageNumber > 1 && (
-                    <>
-                      <PageNumber number={1} onClick={() => setPage(0)} />
-                      {pageNumber > 2 ? (
-                        <Text color="grey-03" variant="metadataMedium">
-                          ...
-                        </Text>
-                      ) : null}
-                    </>
-                  )}
-                  {hasPreviousPage && <PageNumber number={pageNumber} onClick={() => setPage('previous')} />}
-                  <PageNumber isActive number={pageNumber + 1} />
-                  {hasNextPage && <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />}
-                </>
-              )}
+              {getPaginationPages(totalPages, pageNumber + 1).map((page, index) => {
+                return page === PagesPaginationPlaceholder.skip ? (
+                  <Text
+                    key={`ellipsis-${index}`}
+                    color="grey-03"
+                    className="flex justify-center"
+                    variant="metadataMedium"
+                  >
+                    ...
+                  </Text>
+                ) : (
+                  <PageNumber
+                    key={`page-${page}`}
+                    number={page}
+                    onClick={() => setPage(page - 1)}
+                    isActive={page === pageNumber + 1}
+                  />
+                );
+              })}
               <Spacer width={8} />
               <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
               <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />

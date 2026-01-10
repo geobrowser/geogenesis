@@ -38,6 +38,7 @@ export type GeoEvent =
   | {
       type: typeof ENTITIES_SYNCED;
       entities: Entity[];
+      paginationKey?: string;
     }
   // Not sure if this revalidation event should be part of the stream or not.
   // We need a way to trigger re-syncs of data in some instances in order to

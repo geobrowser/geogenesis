@@ -5,7 +5,15 @@ import { dedupeWith } from 'effect/Array';
 import { convertWhereConditionToEntityFilter } from '~/core/io/v2/converters';
 
 import { readTypes } from '../database/entities';
-import { getAllEntities, getBatchEntities, getEntity, getRelation, getResults, getSpaces } from '../io/v2/queries';
+import {
+  getAllEntities,
+  getAllEntitiesWithCount,
+  getBatchEntities,
+  getEntity,
+  getRelation,
+  getResults,
+  getSpaces,
+} from '../io/v2/queries';
 import { OmitStrict } from '../types';
 import { Entities } from '../utils/entity';
 import { Values } from '../utils/value';
@@ -199,6 +207,75 @@ export class E {
     });
 
     return entities.filter(e => e !== null);
+  }
+
+  static async findManyWithCount({
+    store,
+    cache,
+    where,
+    first,
+    skip,
+  }: {
+    store: GeoStore;
+    cache: QueryClient;
+    where: WhereCondition;
+    first: number;
+    skip: number;
+  }) {
+    if (where?.id?.in) {
+      const entityIds = where.id.in;
+
+      const remoteEntities = await cache.fetchQuery({
+        queryKey: ['network', 'entities', entityIds],
+        queryFn: async ({ signal }) => {
+          // @TODO: error handle
+          const entities = await Effect.runPromise(getBatchEntities(entityIds, undefined, signal));
+          return entities;
+        },
+      });
+
+      const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+
+      const entities = entityIds.map(entityId => {
+        return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+      });
+
+      const nonNullEntities = entities.filter(e => e !== null);
+
+      // Apply additional filters (like name, values, etc.) if present
+      // Check if there are any filters beyond just id.in
+      const hasAdditionalFilters = Object.keys(where).some(key => key !== 'id');
+      if (hasAdditionalFilters) {
+        const localQuery = new EntityQuery(nonNullEntities).where(where);
+        return { entities: localQuery.execute(), totalCount: localQuery.execute().length };
+      }
+
+      return { entities: nonNullEntities, totalCount: nonNullEntities.length };
+    }
+
+    const limit = first;
+    const offset = skip;
+    const filter = convertWhereConditionToEntityFilter(where);
+
+    const remoteEntities = await Effect.runPromise(
+      getAllEntitiesWithCount({
+        limit,
+        offset,
+        filter,
+      })
+    );
+
+    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
+
+    const mergedIds = [...new Set([...remoteEntities.entities.map(e => e.id), ...localEntities.map(e => e.id)])];
+
+    const remoteById = new Map(remoteEntities.entities.map(e => [e.id as string, e]));
+
+    const entities = mergedIds.map(entityId => {
+      return this.merge({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+    });
+
+    return { entities: entities.filter(e => e !== null), totalCount: remoteEntities.totalCount };
   }
 
   static async findFuzzy({
