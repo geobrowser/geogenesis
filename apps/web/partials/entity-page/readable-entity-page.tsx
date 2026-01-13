@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { ADDRESS_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
-import { useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
+import { useHydrateEntity, useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { GeoNumber, GeoPoint, NavUtils, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/utils';
 import { sortRelations } from '~/core/utils/utils';
 import { DataType, RenderableType } from '~/core/v2.types';
@@ -244,6 +244,9 @@ export function RelationsGroup({
 }
 
 function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
+  // Hydrate the image entity from remote to populate the reactive store
+  useHydrateEntity({ id: linkedEntityId });
+
   // Use the efficient hook to get only the image URL for this specific entity
   const actualImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
 
@@ -251,6 +254,9 @@ function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; re
 }
 
 function VideoRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
+  // Hydrate the video entity from remote to populate the reactive store
+  useHydrateEntity({ id: linkedEntityId });
+
   // Use the efficient hook to get only the video URL for this specific entity
   const actualVideoSrc = useVideoUrlFromEntity(linkedEntityId, spaceId);
 
