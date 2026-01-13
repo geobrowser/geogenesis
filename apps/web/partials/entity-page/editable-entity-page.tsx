@@ -2,6 +2,7 @@
 
 import { ContentIds, IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 import { useAtom } from 'jotai';
+import * as React from 'react';
 
 import {
   DATA_TYPE_PROPERTY,
@@ -18,14 +19,14 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { useEntityTypes, useName, useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
-import { NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
+import { NavUtils, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/utils';
 import { Property, Relation, ValueOptions } from '~/core/v2.types';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
-import { LinkableRelationChip } from '~/design-system/chip';
+import { LinkableMediaChip, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, PageImageField, PageStringField, PageVideoField, VideoPlayer } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
@@ -78,11 +79,13 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
         {visiblePropertiesEntries.map(([propertyId, property]) => {
           const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
 
+          const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
+
           return (
             <div key={`${id}-${propertyId}`} className="break-words">
               <RenderedProperty spaceId={spaceId} property={property} />
 
-              {isRelation ? (
+              {isRelation || isVideo ? (
                 <RelationPropertyWithDelete
                   key={propertyId}
                   propertyId={propertyId}
@@ -197,6 +200,8 @@ type RelationsGroupProps = {
 export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps) {
   const { storage } = useMutate();
   const name = useName(id, spaceId);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = React.useState(false);
 
   // @TODO: Should just read from local property store instead of querying since
   // it should already be queried in useEditableProperties
@@ -212,6 +217,13 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   // Use the efficient hook to get only the image URL for this specific entity
   const imageSrc = useImageUrlFromEntity(imageEntityId, spaceId);
+
+  // For VIDEO properties, get the video URL from related video entities
+  const videoRelation = relations.find(r => r.renderableType === 'VIDEO');
+  const videoEntityId = videoRelation?.toEntity.id;
+
+  // Use the efficient hook to get only the video URL for this specific entity
+  const videoSrc = useVideoUrlFromEntity(videoEntityId, spaceId);
 
   if (!property) {
     return null;
@@ -232,6 +244,46 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   const valueType = relationValueTypes?.[0];
   const isEmpty = relations.length === 0;
 
+  // Handler for file upload (images and videos)
+  const handleFileUpload = async (file: File) => {
+    setIsUploading(true);
+    try {
+      if (property.renderableTypeStrict === 'VIDEO') {
+        await storage.videos.createAndLink({
+          file,
+          fromEntityId: id,
+          fromEntityName: name,
+          relationPropertyId: propertyId,
+          relationPropertyName: typeOfName,
+          spaceId,
+        });
+      } else {
+        await storage.images.createAndLink({
+          file,
+          fromEntityId: id,
+          fromEntityName: name,
+          relationPropertyId: propertyId,
+          relationPropertyName: typeOfName,
+          spaceId,
+        });
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      await handleFileUpload(e.target.files[0]);
+      // Reset input so same file can be selected again
+      e.target.value = '';
+    }
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
   if (isEmpty) {
     return (
       <div className="flex flex-wrap items-center gap-1 pr-1">
@@ -251,6 +303,24 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                 });
               }}
               onImageRemove={() => console.log(`remove`)}
+            />
+          </div>
+        ) : property.renderableTypeStrict === 'VIDEO' ? (
+          <div key="relation-upload-video">
+            <PageVideoField
+              videoSrc={videoSrc}
+              onFileChange={async file => {
+                // Use the consolidated helper to create and link the video
+                await storage.videos.createAndLink({
+                  file,
+                  fromEntityId: id,
+                  fromEntityName: name,
+                  relationPropertyId: propertyId,
+                  relationPropertyName: typeOfName,
+                  spaceId,
+                });
+              }}
+              onVideoRemove={() => console.log(`remove video`)}
             />
           </div>
         ) : propertyId === VENUE_PROPERTY ? (
@@ -399,35 +469,62 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   const shouldShowMap = (propertyId === ADDRESS_PROPERTY || propertyId === VENUE_PROPERTY) && relations.length > 0;
   const firstRelation = relations[0];
 
+  // Determine file accept type for upload
+  const fileAccept = property.renderableTypeStrict === 'VIDEO'
+    ? 'video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/webm,video/x-flv'
+    : 'image/png,image/jpeg';
+
   return (
     <div className="flex flex-wrap items-center gap-1 pr-1">
+      {/* Hidden file input for upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={fileAccept}
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
+
       {property.renderableTypeStrict === 'IMAGE' ? (
         relations.map(r => {
           const relationId = r.id;
-          const relationName = r.toEntity.name;
           const relationValue = r.toEntity.id;
 
           return (
-            <div key={`relation-${relationId}-${relationValue}`}>
-              <LinkableRelationChip
-                isEditing
-                onDelete={() => storage.relations.delete(r)}
-                onDone={result => {
-                  storage.relations.update(r, draft => {
-                    draft.toSpaceId = result.space;
-                    draft.verified = result.verified;
-                  });
-                }}
-                currentSpaceId={spaceId}
-                entityId={relationValue}
-                relationId={relationId}
-                relationEntityId={r.entityId}
-                spaceId={r.toSpaceId}
-                verified={r.verified}
-              >
-                {relationName ?? relationValue}
-              </LinkableRelationChip>
-            </div>
+            <ImageRelationChipWrapper
+              key={`relation-${relationId}-${relationValue}`}
+              relation={r}
+              spaceId={spaceId}
+              onDelete={() => storage.relations.delete(r)}
+              onDone={result => {
+                storage.relations.update(r, draft => {
+                  draft.toSpaceId = result.space;
+                  draft.verified = result.verified;
+                });
+              }}
+              onUpload={triggerFileUpload}
+            />
+          );
+        })
+      ) : property.renderableTypeStrict === 'VIDEO' ? (
+        relations.map(r => {
+          const relationId = r.id;
+          const relationValue = r.toEntity.id;
+
+          return (
+            <VideoRelationChipWrapper
+              key={`relation-${relationId}-${relationValue}`}
+              relation={r}
+              spaceId={spaceId}
+              onDelete={() => storage.relations.delete(r)}
+              onDone={result => {
+                storage.relations.update(r, draft => {
+                  draft.toSpaceId = result.space;
+                  draft.verified = result.verified;
+                });
+              }}
+              onUpload={triggerFileUpload}
+            />
           );
         })
       ) : (
@@ -442,7 +539,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         />
       )}
 
-      {property.renderableType !== SystemIds.IMAGE && (
+      {property.renderableType !== SystemIds.IMAGE && property.renderableTypeStrict !== 'VIDEO' && (
         <div>
           <SelectEntityAsPopover
             trigger={
@@ -559,6 +656,76 @@ function ImageRelation({ relationValue, spaceId }: { relationValue: string; spac
   const actualImageSrc = useImageUrlFromEntity(relationValue, spaceId);
 
   return <ImageZoom imageSrc={actualImageSrc || ''} />;
+}
+
+// Wrapper component for image relations in edit mode
+function ImageRelationChipWrapper({
+  relation,
+  spaceId,
+  onDelete,
+  onDone,
+  onUpload,
+}: {
+  relation: Relation;
+  spaceId: string;
+  onDelete: () => void;
+  onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
+  onUpload: () => void;
+}) {
+  const entityId = relation.toEntity.id;
+  const imageSrc = useImageUrlFromEntity(entityId, spaceId);
+
+  return (
+    <LinkableMediaChip
+      isEditing
+      mediaType="IMAGE"
+      mediaSrc={imageSrc}
+      currentSpaceId={spaceId}
+      entityId={entityId}
+      spaceId={relation.toSpaceId}
+      relationId={relation.id}
+      relationEntityId={relation.entityId}
+      verified={relation.verified}
+      onDelete={onDelete}
+      onDone={onDone}
+      onUpload={onUpload}
+    />
+  );
+}
+
+// Wrapper component for video relations in edit mode
+function VideoRelationChipWrapper({
+  relation,
+  spaceId,
+  onDelete,
+  onDone,
+  onUpload,
+}: {
+  relation: Relation;
+  spaceId: string;
+  onDelete: () => void;
+  onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
+  onUpload: () => void;
+}) {
+  const entityId = relation.toEntity.id;
+  const videoSrc = useVideoUrlFromEntity(entityId, spaceId);
+
+  return (
+    <LinkableMediaChip
+      isEditing
+      mediaType="VIDEO"
+      mediaSrc={videoSrc}
+      currentSpaceId={spaceId}
+      entityId={entityId}
+      spaceId={relation.toSpaceId}
+      relationId={relation.id}
+      relationEntityId={relation.entityId}
+      verified={relation.verified}
+      onDelete={onDelete}
+      onDone={onDone}
+      onUpload={onUpload}
+    />
+  );
 }
 
 function RenderedValue({

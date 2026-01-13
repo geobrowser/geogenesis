@@ -1,7 +1,7 @@
 import { Graph, Position, SystemIds } from '@graphprotocol/grc-20';
 import { Draft, produce } from 'immer';
 
-import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '../constants';
+import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VIDEO_TYPE, VIDEO_URL_PROPERTY } from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
 import { DataType, Relation, Value } from '../v2.types';
@@ -65,6 +65,16 @@ export interface Mutator {
       relationPropertyName: string | null;
       spaceId: string;
     }) => Promise<{ imageId: string; relationId: string }>;
+  };
+  videos: {
+    createAndLink: (params: {
+      file: File;
+      fromEntityId: string;
+      fromEntityName?: string | null;
+      relationPropertyId: string;
+      relationPropertyName: string | null;
+      spaceId: string;
+    }) => Promise<{ videoId: string; relationId: string }>;
   };
   setAsPublished: (valueIds: string[], relationIds: string[]) => void;
 }
@@ -337,6 +347,107 @@ function createMutator(store: GeoStore): Mutator {
         });
 
         return { imageId, relationId };
+      },
+    },
+    videos: {
+      createAndLink: async ({
+        file,
+        fromEntityId,
+        fromEntityName,
+        relationPropertyId,
+        relationPropertyName,
+        spaceId,
+      }) => {
+        // Create the video entity using the Graph API (uses same upload mechanism as images)
+        // Use TESTNET network to upload to Pinata via alternative gateway
+        const { id: videoId, ops: createVideoOps } = await Graph.createImage({
+          blob: file,
+          network: 'TESTNET',
+        });
+
+        // Extract the IPFS URL from the ops
+        let ipfsUrl: string | undefined;
+        for (const op of createVideoOps) {
+          if (op.type === 'UPDATE_ENTITY') {
+            const ipfsValue = op.entity.values.find(v => v.value.startsWith('ipfs://'));
+            if (ipfsValue) {
+              ipfsUrl = ipfsValue.value;
+              break;
+            }
+          }
+        }
+
+        // Create a video entity with VIDEO_URL_PROPERTY instead of IMAGE_URL_PROPERTY
+        if (ipfsUrl) {
+          store.setValue({
+            id: ID.createValueId({
+              entityId: videoId,
+              propertyId: VIDEO_URL_PROPERTY,
+              spaceId,
+            }),
+            entity: {
+              id: videoId,
+              name: null,
+            },
+            property: {
+              id: VIDEO_URL_PROPERTY,
+              name: 'Video URL',
+              dataType: 'TEXT',
+              renderableType: 'URL',
+            },
+            spaceId,
+            value: ipfsUrl,
+          });
+        }
+
+        // Add Types relation to mark the video entity as a Video type
+        store.setRelation({
+          id: ID.createEntityId(),
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: videoId,
+            name: null,
+          },
+          type: {
+            id: SystemIds.TYPES_PROPERTY,
+            name: 'Types',
+          },
+          toEntity: {
+            id: VIDEO_TYPE,
+            name: 'Video',
+            value: VIDEO_TYPE,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'RELATION',
+        });
+
+        // Create relation from parent entity to video entity
+        const relationId = ID.createEntityId();
+        store.setRelation({
+          id: relationId,
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: fromEntityId,
+            name: fromEntityName || '',
+          },
+          type: {
+            id: relationPropertyId,
+            name: relationPropertyName || '',
+          },
+          toEntity: {
+            id: videoId,
+            name: null,
+            value: videoId,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'VIDEO',
+        });
+
+        return { videoId, relationId };
       },
     },
     setAsPublished: (valueIds, relationIds) => {

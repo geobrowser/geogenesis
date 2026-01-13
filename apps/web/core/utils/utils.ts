@@ -451,6 +451,26 @@ export const getVideoPathFallback = (value: string) => {
   }
 };
 
+/**
+ * Hook to get the video URL from a video entity
+ * Similar to useImageUrlFromEntity but for video entities
+ * @param videoEntityId The entity ID of the video entity
+ * @param spaceId The space ID to query within
+ * @returns The IPFS URL string or undefined if not found
+ */
+export function useVideoUrlFromEntity(videoEntityId: string | undefined, spaceId: string): string | undefined {
+  const videoValues = useValues({
+    selector: v => v.entity.id === videoEntityId && v.spaceId === spaceId,
+  });
+
+  if (!videoEntityId || videoValues.length === 0) return undefined;
+
+  // Find the first value that is a string starting with 'ipfs://'
+  const videoUrlValue = videoValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+
+  return videoUrlValue?.value;
+}
+
 export function getRandomArrayItem(array: string[]) {
   const randomIndex = Math.floor(Math.random() * array.length);
   return array[randomIndex];
