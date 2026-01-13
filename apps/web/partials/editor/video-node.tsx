@@ -11,7 +11,6 @@ import { VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
-import { useEditorStore } from '~/core/state/editor/use-editor';
 import { storage } from '~/core/sync/use-mutate';
 import { useHydrateEntity, useRelations, useValues } from '~/core/sync/use-store';
 import { getVideoPath } from '~/core/utils/utils';
@@ -65,18 +64,10 @@ function VideoNodeComponent({ node, deleteNode }: NodeViewProps) {
   const { spaceId } = useEditorInstance();
   const { id } = node.attrs;
 
-  const { blockRelations } = useEditorStore();
-  const relation = blockRelations.find(b => b.block.id === id);
-
   return (
     <NodeViewWrapper>
       <div contentEditable="false" className="video-node my-4">
-        <VideoNodeChildren
-          spaceId={spaceId}
-          entityId={id}
-          relationId={relation?.entityId ?? ''}
-          onRemove={deleteNode}
-        />
+        <VideoNodeChildren spaceId={spaceId} entityId={id} onRemove={deleteNode} />
       </div>
     </NodeViewWrapper>
   );
@@ -91,12 +82,10 @@ function formatFileSize(bytes: number): string {
 function VideoNodeChildren({
   spaceId,
   entityId,
-  relationId,
   onRemove,
 }: {
   spaceId: string;
   entityId: string;
-  relationId: string;
   onRemove: () => void;
 }) {
   // Hydrate the video block entity from remote to populate the reactive store
@@ -425,14 +414,14 @@ function VideoNodeChildren({
           ) : isDragging ? (
             <div className="flex flex-col items-center">
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg" style={{ backgroundColor: '#002FD924' }}>
-                <VideoSmall color="#002FD9" variant="outline" />
+                <VideoSmall color="#002FD9" />
               </div>
               <p className="text-lg font-medium text-ctaPrimary">Drop video here</p>
             </div>
           ) : (
             <>
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg" style={{ backgroundColor: '#002FD924' }}>
-                <VideoSmall color="#002FD9" variant="outline" />
+                <VideoSmall color="#002FD9" />
               </div>
               <p
                 className="mb-1 font-semibold text-text"

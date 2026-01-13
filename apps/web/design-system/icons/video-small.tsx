@@ -3,11 +3,11 @@ import * as React from 'react';
 import { ColorName, colors } from '~/design-system/theme/colors';
 
 interface Props {
-  color?: ColorName | (string & {});
+  color?: ColorName | string;
   variant?: 'filled' | 'outline';
 }
 
-export function VideoSmall({ color, variant = 'filled' }: Props) {
+export function VideoSmall({ color, variant = 'outline' }: Props) {
   // Check if it's a theme color name or a raw color string
   const themeColor = color
     ? color in colors.light
