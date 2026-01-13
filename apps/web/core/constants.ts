@@ -15,7 +15,6 @@ export const VIDEO_URL_PROPERTY = '33da2ef5-bd55-4e91-af97-3e082e431a13';
 export const VIDEO_RENDERABLE_TYPE = '0fb6bbf0-2204-4db4-9f70-fa82c41570a4';
 export const VIDEO_TYPE = 'd7a4817c-9795-405b-93e2-12df759c43f8';
 export const VIDEO_BLOCK_TYPE = '809bc406-d0f3-4f3c-a8a1-aa265733c6ce';
-export const RECORDINGS_PROPERTY = '35c737c3-ce5a-4f89-9c0b-a84538bd1e52';
 
 export const DATA_TYPE_PROPERTY = '6d29d578-49bb-4959-baf7-2cc696b1671a';
 export const VALUE_TYPE_PROPERTY = 'ee26ef23-f7f1-4eb6-b742-3b0fa38c1fd8';
