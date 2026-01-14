@@ -318,8 +318,6 @@ function VideoNodeChildren({
     onRemove();
   };
 
-  console.log('VideoNodeChildren render', { storedVideoUrl });
-
   const hasVideo = Boolean(storedVideoUrl);
   const videoSrc = hasVideo ? getVideoPath(storedVideoUrl) : '';
   const uploadedBytes = Math.floor((uploadProgress / 100) * uploadFileSize);

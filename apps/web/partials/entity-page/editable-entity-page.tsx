@@ -302,7 +302,6 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                   spaceId,
                 });
               }}
-              onImageRemove={() => console.log(`remove`)}
             />
           </div>
         ) : property.renderableTypeStrict === 'VIDEO' ? (
@@ -320,7 +319,6 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                   spaceId,
                 });
               }}
-              onVideoRemove={() => console.log(`remove video`)}
             />
           </div>
         ) : propertyId === VENUE_PROPERTY ? (
