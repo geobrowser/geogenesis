@@ -1,6 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { GEO_LOCATION } from '~/core/constants';
+import { GEO_LOCATION, PDF_TYPE } from '~/core/constants';
 import { DataType as AppDataType, Property } from '~/core/v2.types';
 
 import { DataType, RemoteProperty } from '../v2/v2.schema';
@@ -29,6 +29,8 @@ export function getStrictRenderableType(renderableType: RemoteProperty['renderab
       return 'URL';
     case GEO_LOCATION:
       return 'GEO_LOCATION';
+    case PDF_TYPE:
+      return 'PDF';
     default:
       return undefined;
   }

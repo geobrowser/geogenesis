@@ -7,6 +7,7 @@ import {
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   IS_TYPE_PROPERTY,
+  PDF_TYPE,
   RENDERABLE_TYPE_PROPERTY,
   VALUE_TYPE_PROPERTY,
 } from '~/core/constants';
@@ -25,7 +26,7 @@ import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, PageImageField, PageStringField, PdfField } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
@@ -207,7 +208,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   });
 
   // For IMAGE properties, get the image URL from related image entities
-  const imageRelation = relations.find(r => r.renderableType === 'IMAGE');
+  const imageRelation = relations.find(r => r.renderableType === 'IMAGE' || r.renderableType === 'PDF');
   const imageEntityId = imageRelation?.toEntity.id;
 
   // Use the efficient hook to get only the image URL for this specific entity
@@ -242,6 +243,24 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               onFileChange={async file => {
                 // Use the consolidated helper to create and link the image
                 await storage.images.createAndLink({
+                  file,
+                  fromEntityId: id,
+                  fromEntityName: name,
+                  relationPropertyId: propertyId,
+                  relationPropertyName: typeOfName,
+                  spaceId,
+                });
+              }}
+              onImageRemove={() => console.log(`remove`)}
+            />
+          </div>
+        ) : property.renderableTypeStrict === 'PDF' ? (
+          <div key="relation-upload-pdf">
+            <PdfField
+              imageSrc={imageSrc}
+              onFileChange={async file => {
+                // Use the consolidated helper to create and link the image
+                await storage.pdfs.createAndLink({
                   file,
                   fromEntityId: id,
                   fromEntityName: name,
@@ -401,7 +420,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   return (
     <div className="flex flex-wrap items-center gap-1 pr-1">
-      {property.renderableTypeStrict === 'IMAGE' ? (
+      {property.renderableTypeStrict === 'IMAGE' || property.renderableTypeStrict === 'PDF' ? (
         relations.map(r => {
           const relationId = r.id;
           const relationName = r.toEntity.name;
@@ -442,7 +461,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
         />
       )}
 
-      {property.renderableType !== SystemIds.IMAGE && (
+      {property.renderableType === SystemIds.IMAGE || property.renderableType === PDF_TYPE ? null : (
         <div>
           <SelectEntityAsPopover
             trigger={

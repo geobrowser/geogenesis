@@ -17,6 +17,8 @@ export const ROOT_SPACE = '2a98e6b4-3728-44a4-9b8e-02e15f0677c8';
 export const GEO_LOCATION = '9cf5c1b0-15dc-451c-bfd2-97db64806aff';
 export const FORMAT_PROPERTY = '396f8c72-dfd0-4b57-91ea-09c1b9321b2f';
 
+export const PDF_TYPE = '14a39e59-d987-4596-956a-c2dd4165c210';
+export const PDF_URL = '9d69ac47-7023-43e2-b72a-91a335eb54d9';
 export const PLACE = '783bc688-e65f-4e54-b67f-a5643d78345e';
 export const ADDRESS = '5c6e72fb-8340-47c0-8281-8be159ecd495';
 export const VENUE_PROPERTY = 'f28bbb6b-f4e8-465d-9de7-a09085e224b9';

@@ -191,7 +191,7 @@ export function RelationsGroup({
             const relationEntityId = r.entityId;
             const relationId = r.id;
 
-            if (property.renderableTypeStrict === 'IMAGE') {
+            if (property.renderableTypeStrict === 'IMAGE' || property.renderableTypeStrict === 'PDF') {
               return (
                 <ImageRelation
                   key={`image-${relationId}-${linkedEntityId}`}
