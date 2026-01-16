@@ -177,7 +177,16 @@ function RelationPropertyWithDelete({ propertyId, entityId, spaceId, property }:
         <RelationsGroup key={propertyId} propertyId={propertyId} id={entityId} spaceId={spaceId} />
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <DataTypePill dataType={property.dataType} renderableType={null} spaceId={spaceId} iconOnly={true} />
+        <DataTypePill
+          dataType={property.dataType}
+          renderableType={
+            property.renderableTypeStrict
+              ? { id: property.renderableType ?? null, name: property.renderableTypeStrict }
+              : null
+          }
+          spaceId={spaceId}
+          iconOnly={true}
+        />
         {propertyRelations.length > 0 && (
           <SquareButton
             icon={<Trash />}
@@ -493,6 +502,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               key={`relation-${relationId}-${relationValue}`}
               relation={r}
               spaceId={spaceId}
+              isUploading={isUploading}
               onDelete={() => storage.relations.delete(r)}
               onDone={result => {
                 storage.relations.update(r, draft => {
@@ -514,6 +524,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
               key={`relation-${relationId}-${relationValue}`}
               relation={r}
               spaceId={spaceId}
+              isUploading={isUploading}
               onDelete={() => storage.relations.delete(r)}
               onDone={result => {
                 storage.relations.update(r, draft => {
@@ -660,12 +671,14 @@ function ImageRelation({ relationValue, spaceId }: { relationValue: string; spac
 function ImageRelationChipWrapper({
   relation,
   spaceId,
+  isUploading,
   onDelete,
   onDone,
   onUpload,
 }: {
   relation: Relation;
   spaceId: string;
+  isUploading?: boolean;
   onDelete: () => void;
   onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
   onUpload: () => void;
@@ -678,6 +691,7 @@ function ImageRelationChipWrapper({
       isEditing
       mediaType="IMAGE"
       mediaSrc={imageSrc}
+      isUploading={isUploading}
       currentSpaceId={spaceId}
       entityId={entityId}
       spaceId={relation.toSpaceId}
@@ -695,12 +709,14 @@ function ImageRelationChipWrapper({
 function VideoRelationChipWrapper({
   relation,
   spaceId,
+  isUploading,
   onDelete,
   onDone,
   onUpload,
 }: {
   relation: Relation;
   spaceId: string;
+  isUploading?: boolean;
   onDelete: () => void;
   onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
   onUpload: () => void;
@@ -713,6 +729,7 @@ function VideoRelationChipWrapper({
       isEditing
       mediaType="VIDEO"
       mediaSrc={videoSrc}
+      isUploading={isUploading}
       currentSpaceId={spaceId}
       entityId={entityId}
       spaceId={relation.toSpaceId}
@@ -906,7 +923,16 @@ function RenderedValue({
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0 flex-1">{renderField()}</div>
       <div className="flex shrink-0 items-center gap-1">
-        <DataTypePill dataType={property.dataType} renderableType={null} spaceId={spaceId} iconOnly={true} />
+        <DataTypePill
+          dataType={property.dataType}
+          renderableType={
+            property.renderableTypeStrict
+              ? { id: property.renderableType ?? null, name: property.renderableTypeStrict }
+              : null
+          }
+          spaceId={spaceId}
+          iconOnly={true}
+        />
         {rawValue && value && <SquareButton icon={<Trash />} onClick={onDelete} />}
       </div>
     </div>

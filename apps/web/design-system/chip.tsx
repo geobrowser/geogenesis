@@ -12,6 +12,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 
+import { Dots } from '~/design-system/dots';
 import { GeoImage } from '~/design-system/geo-image';
 import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
@@ -320,6 +321,7 @@ type LinkableMediaChipProps = {
   isEditing: boolean;
   mediaType: 'IMAGE' | 'VIDEO';
   mediaSrc?: string;
+  isUploading?: boolean;
 
   currentSpaceId: string;
   entityId: string;
@@ -363,6 +365,7 @@ export function LinkableMediaChip({
   isEditing,
   mediaType,
   mediaSrc,
+  isUploading,
   currentSpaceId,
   entityId,
   spaceId,
@@ -429,7 +432,7 @@ export function LinkableMediaChip({
       </Link>
 
       {/* Upload button overlay - only in edit mode */}
-      {isEditing && onUpload && (
+      {isEditing && onUpload && !isUploading && (
         <button
           onClick={e => {
             e.stopPropagation();
@@ -439,6 +442,13 @@ export function LinkableMediaChip({
         >
           <CreateIcon color="grey-04" className="h-3 w-3" />
         </button>
+      )}
+
+      {/* Uploading indicator overlay */}
+      {isUploading && (
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/80">
+          <Dots />
+        </div>
       )}
 
       {/* Verified badge */}

@@ -352,7 +352,7 @@ interface VideoPlayerProps {
 
 const videoStyles: Record<VideoVariant, React.CSSProperties> = {
   default: {
-    maxHeight: 200,
+    height: 80,
   },
   'table-cell': {
     maxWidth: 120,
