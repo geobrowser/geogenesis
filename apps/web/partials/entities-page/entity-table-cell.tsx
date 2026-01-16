@@ -4,6 +4,7 @@ import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useValue } from '~/core/sync/use-store';
+import { useImageUrlFromEntity } from '~/core/utils/utils';
 import { Property } from '~/core/v2.types';
 
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -107,8 +108,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
 
   return relations.map(relation => {
     if (property.renderableTypeStrict === 'IMAGE') {
-      const value = relation.toEntity.value;
-      return <ImageZoom key={value} variant="table-cell" imageSrc={value} />;
+      return <ImageRelation key={relation.id} linkedEntityId={relation.toEntity.id} spaceId={spaceId} />;
     }
 
     const value = relation.toEntity.value;
@@ -129,6 +129,13 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
       </LinkableRelationChip>
     );
   });
+}
+
+function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; spaceId: string }) {
+  // Get the IPFS URL from the image entity's values
+  const imageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+
+  return <ImageZoom variant="table-cell" imageSrc={imageSrc || ''} />;
 }
 
 type ValueGroupProps = {

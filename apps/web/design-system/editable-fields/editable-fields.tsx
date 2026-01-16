@@ -7,6 +7,9 @@ import { ChangeEvent, useRef } from 'react';
 
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
+import { useMutate } from '~/core/sync/use-mutate';
+import { useImageUrlFromEntity } from '~/core/utils/utils';
+import { Relation } from '~/core/v2.types';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 
@@ -286,11 +289,32 @@ export function PageImageField({ imageSrc, onFileChange, onImageRemove, variant 
   );
 }
 
-export function TableImageField({ imageSrc, onFileChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+interface TableImageFieldProps {
+  imageRelation: Relation | undefined;
+  spaceId: string;
+  entityId: string;
+  entityName?: string | null;
+  propertyId: string;
+  propertyName: string;
+}
+
+export function TableImageField({
+  imageRelation,
+  spaceId,
+  entityId,
+  entityName,
+  propertyId,
+  propertyName,
+}: TableImageFieldProps) {
+  const { storage } = useMutate();
   const [isUploading, setIsUploading] = React.useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Get the IPFS URL from the image entity's values
+  const imageEntityId = imageRelation?.toEntity.id;
+  const imageSrc = useImageUrlFromEntity(imageEntityId, spaceId);
+
   const handleFileInputClick = () => {
-    // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
@@ -301,18 +325,36 @@ export function TableImageField({ imageSrc, onFileChange, onImageRemove, variant
       const file = e.target.files[0];
       setIsUploading(true);
       try {
-        await onFileChange(file);
+        // Delete existing relation first, then create new one
+        if (imageRelation) {
+          storage.relations.delete(imageRelation);
+        }
+
+        await storage.images.createAndLink({
+          file,
+          fromEntityId: entityId,
+          fromEntityName: entityName ?? null,
+          relationPropertyId: propertyId,
+          relationPropertyName: propertyName,
+          spaceId,
+        });
       } finally {
         setIsUploading(false);
       }
     }
   };
 
+  const handleImageRemove = imageRelation
+    ? () => {
+        storage.relations.delete(imageRelation);
+      }
+    : undefined;
+
   return (
     <div className="group flex w-full justify-between">
       {imageSrc ? (
         <div>
-          <ImageZoom variant={variant} imageSrc={imageSrc} />
+          <ImageZoom variant="table-cell" imageSrc={imageSrc} />
         </div>
       ) : (
         <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
@@ -321,9 +363,9 @@ export function TableImageField({ imageSrc, onFileChange, onImageRemove, variant
       )}
 
       {imageSrc && (
-        <div className="flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex justify-center gap-2 pt-2 ml-1 opacity-0 transition-opacity group-hover:opacity-100">
           <SquareButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />} />
-          <SquareButton onClick={onImageRemove} icon={<Trash />} />
+          <SquareButton onClick={handleImageRemove} icon={<Trash />} />
         </div>
       )}
 

@@ -13,7 +13,7 @@ import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { TableImageField, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
@@ -126,6 +126,19 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
 
   const isEmpty = relations.length === 0;
 
+  // For IMAGE type properties, show an image upload field
+  if (property.renderableTypeStrict === 'IMAGE') {
+    return (
+      <TableImageField
+        imageRelation={relations[0]}
+        spaceId={spaceId}
+        entityId={entityId}
+        propertyId={property.id}
+        propertyName={property.name ?? 'Image'}
+      />
+    );
+  }
+
   if (isEmpty) {
     return (
       <div data-testid="select-entity" className="w-full">
@@ -192,16 +205,6 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
         const relationId = r.id;
         const relationName = r.toEntity.name;
         const relationValue = r.toEntity.value;
-
-        if (property.renderableTypeStrict === 'IMAGE') {
-          return (
-            <ImageZoom
-              variant="table-cell"
-              key={`image-${relationId}-${relationValue}`}
-              imageSrc={relationValue ?? ''}
-            />
-          );
-        }
 
         return (
           <div key={`relation-${relationId}-${relationValue}`} className="mt-2">

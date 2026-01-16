@@ -193,12 +193,7 @@ export function RelationsGroup({
 
             if (property.renderableTypeStrict === 'IMAGE') {
               return (
-                <ImageRelation
-                  key={`image-${relationId}-${linkedEntityId}`}
-                  linkedEntityId={linkedEntityId}
-                  relationId={relationId}
-                  spaceId={spaceId}
-                />
+                <ImageRelation key={`image-${relationId}-${linkedEntityId}`} linkedEntityId={linkedEntityId} spaceId={spaceId} />
               );
             }
 
@@ -232,11 +227,11 @@ export function RelationsGroup({
   );
 }
 
-function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
-  // Use the efficient hook to get only the image URL for this specific entity
-  const actualImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; spaceId: string }) {
+  // Get the IPFS URL from the image entity's values
+  const imageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
 
-  return <ImageZoom imageSrc={actualImageSrc || ''} />;
+  return <ImageZoom imageSrc={imageSrc || ''} />;
 }
 
 function RenderedValue({
