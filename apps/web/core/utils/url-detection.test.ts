@@ -88,4 +88,22 @@ describe('detectWeb2URLsInMarkdown', () => {
     const result = detectWeb2URLsInMarkdown(text);
     expect(result).toEqual([]);
   });
+
+  it('should detect standalone URLs without markdown format', () => {
+    const text = 'Visit https://www.markdownguide.org/basic-syntax/#links for more info';
+    const result = detectWeb2URLsInMarkdown(text);
+    expect(result).toEqual(['https://www.markdownguide.org/basic-syntax/#links']);
+  });
+
+  it('should detect multiple standalone URLs', () => {
+    const text = 'Check https://google.com and https://github.com for resources';
+    const result = detectWeb2URLsInMarkdown(text);
+    expect(result).toEqual(['https://google.com', 'https://github.com']);
+  });
+
+  it('should detect auto-generated markdown links', () => {
+    const text = '[https://www.markdownguide.org/basic-syntax/#links](https://www.markdownguide.org/basic-syntax/#links)';
+    const result = detectWeb2URLsInMarkdown(text);
+    expect(result).toEqual(['[https://www.markdownguide.org/basic-syntax/#links](https://www.markdownguide.org/basic-syntax/#links)']);
+  });
 });

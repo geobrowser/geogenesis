@@ -25,6 +25,7 @@ import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 export const tiptapExtensions = [
   Document,
   Text,
+  Web2URLExtension, // Process web2 URLs BEFORE Link extension
   Link.configure({
     defaultProtocol: 'graph',
     protocols: ['graph'],
@@ -70,7 +71,6 @@ export const tiptapExtensions = [
     },
   }),
   History,
-  Web2URLExtension,
   EntityMentionExtension,
   FloatingToolbarExtension,
 ];

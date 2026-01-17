@@ -28,6 +28,11 @@ export function detectWeb2URLsInMarkdown(text: string): string[] {
     return [];
   }
 
+  // Early exit if no potential markdown links or web2 URLs
+  if (!text.includes('[') && !text.includes('http')) {
+    return [];
+  }
+
   // Check if text is already inside an anchor tag with web2-url-highlight class
   const anchorWithClassRegex = /<a[^>]*class=['"][^'"]*web2-url-highlight[^'"]*['"][^>]*>.*?<\/a>/gi;
   if (anchorWithClassRegex.test(text)) {
@@ -36,14 +41,17 @@ export function detectWeb2URLsInMarkdown(text: string): string[] {
 
   const results: string[] = [];
 
-  // First, detect markdown links with web2 URLs and collect the URLs from them
+  // First, detect markdown links with web2 URLs
   const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s<>"{}|\\^`[\]()]+|www\.[^\s<>"{}|\\^`[\]()]+)\)/gi;
-  const usedUrls = new Set<string>();
+  const processedRanges: Array<{ start: number; end: number }> = [];
   let markdownMatch;
 
   while ((markdownMatch = markdownLinkRegex.exec(text)) !== null) {
     results.push(markdownMatch[0]); // Full markdown link
-    usedUrls.add(markdownMatch[2]); // The URL part
+    processedRanges.push({
+      start: markdownMatch.index,
+      end: markdownMatch.index + markdownMatch[0].length,
+    });
   }
 
   // Then detect standalone URLs that aren't already part of markdown links
@@ -52,7 +60,15 @@ export function detectWeb2URLsInMarkdown(text: string): string[] {
 
   while ((urlMatch = urlRegex.exec(text)) !== null) {
     const url = urlMatch[0];
-    if (!usedUrls.has(url)) {
+    const urlStart = urlMatch.index;
+    const urlEnd = urlMatch.index + url.length;
+
+    // Check if this URL is within any processed markdown link range
+    const isWithinMarkdownLink = processedRanges.some(range => 
+      urlStart >= range.start && urlEnd <= range.end
+    );
+
+    if (!isWithinMarkdownLink) {
       results.push(url);
     }
   }

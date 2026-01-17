@@ -95,9 +95,8 @@ describe('Parser', () => {
       });
 
       it('handles links with formatted text', () => {
-        expect(htmlToMarkdown('<a href="https://example.com"><strong>Bold Link</strong></a>')).toBe(
-          '[**Bold Link**](https://example.com)'
-        );
+        expect(htmlToMarkdown('<a href="https://example.com"><strong>Bold Link</strong></a>'))
+          .toBe('[**Bold Link**](https://example.com)');
       });
     });
 
@@ -154,7 +153,7 @@ describe('Parser', () => {
       it('preserves invalid entity links as spans not markdown links', () => {
         const invalidLinkHtml = '<span class="entity-link-invalid web2-url-mark" data-web2-url="true" data-url="https://example.com">Invalid Link</span>';
         const result = htmlToMarkdown(invalidLinkHtml);
-        
+
         // Should preserve as span, not convert to [Invalid Link](https://example.com)
         expect(result).toBe('<span class="entity-link-invalid web2-url-mark" data-web2-url="true" data-url="https://example.com">Invalid Link</span>');
         expect(result).not.toContain('[Invalid Link](https://example.com)');
@@ -228,16 +227,39 @@ describe('Parser', () => {
     });
 
     describe('Links', () => {
-      it('converts markdown links', () => {
-        expect(markdownToHtml('[Example](https://example.com)')).toBe(
-          '<p><a href="https://example.com">Example</a></p>'
-        );
+      it('converts only graph protocol links to anchor tags', () => {
+        expect(markdownToHtml('[Example](graph://entity-123)'))
+          .toBe('<p><a href="graph://entity-123">Example</a></p>');
       });
 
-      it('handles links with formatted text', () => {
-        expect(markdownToHtml('[**Bold Link**](https://example.com)')).toBe(
-          '<p><a href="https://example.com"><strong>Bold Link</strong></a></p>'
-        );
+      it('leaves HTTP/HTTPS links as markdown for Web2URLExtension', () => {
+        expect(markdownToHtml('[**Bold Link**](https://example.com)'))
+          .toBe('<p>[<strong>Bold Link</strong>](https://example.com)</p>');
+      });
+
+      it('converts graph protocol links in paragraphs', () => {
+        expect(markdownToHtml('Check out [this entity](graph://entity-123) for more'))
+          .toBe('<p>Check out <a href="graph://entity-123">this entity</a> for more</p>');
+      });
+
+      it('leaves web2 URLs as markdown for Web2URLExtension to process', () => {
+        expect(markdownToHtml('testing [Duck Duck Go](https://duckduckgo.com)'))
+          .toBe('<p>testing [Duck Duck Go](https://duckduckgo.com)</p>');
+      });
+
+      it('leaves www URLs as markdown for Web2URLExtension to process', () => {
+        expect(markdownToHtml('visit [Example](www.example.com) site'))
+          .toBe('<p>visit [Example](www.example.com) site</p>');
+      });
+
+      it('handles multiple links in paragraph', () => {
+        expect(markdownToHtml('Visit [First](graph://123) and [Second](graph://456) entity'))
+          .toBe('<p>Visit <a href="graph://123">First</a> and <a href="graph://456">Second</a> entity</p>');
+      });
+
+      it('handles mixed bold and links', () => {
+        expect(markdownToHtml('This is **bold** and [linked](graph://789) text'))
+          .toBe('<p>This is <strong>bold</strong> and <a href="graph://789">linked</a> text</p>');
       });
     });
 
@@ -332,7 +354,7 @@ describe('Parser', () => {
       const originalHtml = '<p>Text with <span data-web2-url="true" data-url="https://example.com">web2 link</span> preserved.</p>';
       const markdown = htmlToMarkdown(originalHtml);
       const resultHtml = markdownToHtml(markdown);
-      
+
       expect(markdown).toContain('<span data-web2-url="true" data-url="https://example.com">web2 link</span>');
       expect(resultHtml).toContain('<span data-web2-url="true" data-url="https://example.com">web2 link</span>');
     });
