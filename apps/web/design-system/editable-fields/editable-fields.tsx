@@ -9,6 +9,7 @@ import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-val
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
+import { UploadingPdfState } from '~/design-system/uploading-pdf-state';
 
 import { Dots } from '../dots';
 import { Trash } from '../icons/trash';
@@ -147,6 +148,16 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
         <img src={src} onError={onError} className="h-full rounded-lg object-cover" />
       </div>
     </Zoom>
+  );
+}
+
+export function PdfZoom({ pdfSrc }: { pdfSrc: string }) {
+  const { src, onError } = useImageWithFallback(pdfSrc);
+
+  return (
+    <div className="relative w-[173px] overflow-hidden">
+      <iframe src={`${src}#toolbar=0`} onError={onError} className="h-full w-full rounded-lg" />
+    </div>
   );
 }
 
@@ -308,6 +319,11 @@ export function PdfField({ imageSrc, onFileChange, onImageRemove, variant = 'ava
     }
   };
 
+  const cancelUploading = () => {
+    // TODO add cancel uploading logic
+    console.log('Cancel uploading PDF file');
+  };
+
   return (
     <div>
       {imageSrc && (
@@ -315,9 +331,10 @@ export function PdfField({ imageSrc, onFileChange, onImageRemove, variant = 'ava
           <ImageZoom variant={variant} imageSrc={imageSrc} />
         </div>
       )}
-      <div className="flex justify-center gap-2 pt-2">
-        <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
-          {isUploading ? 'Uploading...' : 'Upload'}
+      {isUploading && <UploadingPdfState cancelUploading={cancelUploading} />}
+      <div className="flex gap-2 pt-2">
+        <SmallButton onClick={handleFileInputClick} icon={<Upload />}>
+          Upload
         </SmallButton>
         {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash />} />}
       </div>

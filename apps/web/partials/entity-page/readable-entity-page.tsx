@@ -12,7 +12,7 @@ import { DataType, RenderableType } from '~/core/v2.types';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, PdfZoom } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
@@ -191,9 +191,20 @@ export function RelationsGroup({
             const relationEntityId = r.entityId;
             const relationId = r.id;
 
-            if (property.renderableTypeStrict === 'IMAGE' || property.renderableTypeStrict === 'PDF') {
+            if (property.renderableTypeStrict === 'IMAGE') {
               return (
                 <ImageRelation
+                  key={`image-${relationId}-${linkedEntityId}`}
+                  linkedEntityId={linkedEntityId}
+                  relationId={relationId}
+                  spaceId={spaceId}
+                />
+              );
+            }
+
+            if (property.renderableTypeStrict === 'PDF') {
+              return (
+                <PdfRelation
                   key={`image-${relationId}-${linkedEntityId}`}
                   linkedEntityId={linkedEntityId}
                   relationId={relationId}
@@ -237,6 +248,12 @@ function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; re
   const actualImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
 
   return <ImageZoom imageSrc={actualImageSrc || ''} />;
+}
+
+function PdfRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
+  const actualPdfSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+
+  return <PdfZoom pdfSrc={actualPdfSrc || ''} />;
 }
 
 function RenderedValue({

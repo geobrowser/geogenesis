@@ -259,7 +259,6 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
             <PdfField
               imageSrc={imageSrc}
               onFileChange={async file => {
-                // Use the consolidated helper to create and link the image
                 await storage.pdfs.createAndLink({
                   file,
                   fromEntityId: id,
