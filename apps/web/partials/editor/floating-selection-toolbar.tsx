@@ -1,39 +1,13 @@
 import { Editor } from '@tiptap/core';
+import { ReactRenderer } from '@tiptap/react';
+import tippy from 'tippy.js';
 
 import React from 'react';
 
 import { SquareButton } from '~/design-system/button';
 import { Link } from '~/design-system/icons/link';
+import { MentionList } from './mention-list';
 import { useSelectionFormatting } from './use-selection-formatting';
-
-// Global storage for selection link functionality
-let globalSelectionLinkCallback: ((entityId: string, entityName: string) => void) | null = null;
-let globalSelectionSpaceId: string = 'default';
-
-// Function to trigger entity search modal for selected text linking
-const showSelectionLinkModal = (
-  onSelectEntity: (entityId: string, entityName: string) => void,
-  spaceId = 'default'
-) => {
-  globalSelectionLinkCallback = onSelectEntity;
-  globalSelectionSpaceId = spaceId;
-
-  // Dispatch custom event for selection linking
-  const event = new CustomEvent('openSelectionLinkModal', {
-    detail: { spaceId },
-  });
-  window.dispatchEvent(event);
-};
-
-// Export function to be called from React components
-export const handleSelectionLinkSelect = (entityId: string, entityName: string) => {
-  if (globalSelectionLinkCallback) {
-    globalSelectionLinkCallback(entityId, entityName);
-    globalSelectionLinkCallback = null;
-  }
-};
-
-export const getGlobalSelectionSpaceId = () => globalSelectionSpaceId;
 
 // Toolbar component
 interface FloatingToolbarProps {
@@ -63,14 +37,76 @@ export const FloatingSelectionToolbar: React.FC<FloatingToolbarProps> = ({ edito
     const { from, to } = editor.state.selection;
     const selectedText = editor.state.doc.textBetween(from, to);
 
-    showSelectionLinkModal((entityId: string, entityName: string) => {
-      // Create link with selected text or entity name
-      const linkText = selectedText || entityName || entityId;
-      const linkUrl = `graph://${entityId}`;
+    // Create ReactRenderer for MentionList
+    const reactRenderer = new ReactRenderer(MentionList, {
+      props: {
+        spaceId: currentSpaceId,
+        editor: editor,
+        command: (entityId: string, entityName: string) => {
+          // Create link with selected text or entity name
+          const linkText = selectedText || entityName || entityId;
+          const linkUrl = `graph://${entityId}`;
 
-      // Replace selection with link
-      editor.chain().focus().setTextSelection({ from, to }).insertContent(`[${linkText}](${linkUrl})`).run();
-    }, currentSpaceId);
+          // Use TipTap's Link extension to create proper link node
+          if (selectedText) {
+            // If there's selected text, convert it to a link
+            editor.chain().focus().setTextSelection({ from, to }).setLink({ href: linkUrl }).run();
+          } else {
+            // If no selection, insert new link text
+            editor.chain().focus().insertContent({
+              type: 'text',
+              text: linkText,
+              marks: [{ type: 'link', attrs: { href: linkUrl } }]
+            }).run();
+          }
+          
+          // Hide the tippy
+          tippyInstance.hide();
+        },
+        onEscape: () => {
+          // Hide the tippy when escape is pressed
+          tippyInstance.hide();
+        },
+      },
+      editor,
+    });
+
+    // Create tippy instance for the mention list
+    const tippyInstance = tippy(document.body as Element, {
+      content: reactRenderer.element,
+      trigger: 'manual',
+      interactive: true,
+      placement: 'bottom',
+      theme: 'light-border',
+      arrow: false,
+      appendTo: document.body,
+      zIndex: 9999,
+      getReferenceClientRect: () => {
+        // Position the tippy near the current selection
+        const { view } = editor;
+        const { from } = view.state.selection;
+        const start = view.coordsAtPos(from);
+        
+        return {
+          width: 0,
+          height: 0,
+          top: start.top + 24,
+          bottom: start.bottom,
+          left: start.left + 24,
+          right: start.right,
+          x: start.left + 24,
+          y: start.top + 24,
+          toJSON: () => ({}),
+        } as DOMRect;
+      },
+      onHide: () => {
+        // Clean up ReactRenderer when hiding
+        reactRenderer.destroy();
+      },
+    });
+
+    // Show the tippy
+    tippyInstance.show();
   };
 
   // Don't render if editor is not ready
