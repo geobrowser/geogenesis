@@ -5,6 +5,7 @@ import Textarea from 'react-textarea-autosize';
 import * as React from 'react';
 import { ChangeEvent, useRef } from 'react';
 
+import { VIDEO_ACCEPT } from '~/core/constants';
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
@@ -384,17 +385,6 @@ interface VideoFieldProps {
   variant?: VideoVariant;
 }
 
-const validVideoTypes = [
-  'video/mp4',
-  'video/quicktime',
-  'video/x-msvideo',
-  'video/x-ms-wmv',
-  'video/webm',
-  'video/x-flv',
-];
-
-const videoAccept = validVideoTypes.join(',');
-
 export function PageVideoField({ videoSrc, onFileChange, onVideoRemove, variant = 'default' }: VideoFieldProps) {
   const [isUploading, setIsUploading] = React.useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -438,7 +428,7 @@ export function PageVideoField({ videoSrc, onFileChange, onVideoRemove, variant 
         {videoSrc && <SquareButton onClick={onVideoRemove} icon={<Trash />} />}
       </div>
 
-      <input ref={fileInputRef} accept={videoAccept} id="video-file" onChange={handleChange} type="file" className="hidden" />
+      <input ref={fileInputRef} accept={VIDEO_ACCEPT} id="video-file" onChange={handleChange} type="file" className="hidden" />
     </div>
   );
 }
@@ -483,7 +473,7 @@ export function TableVideoField({ videoSrc, onFileChange, onVideoRemove, variant
         </div>
       )}
 
-      <input ref={fileInputRef} accept={videoAccept} id="video-file" onChange={handleChange} type="file" className="hidden" />
+      <input ref={fileInputRef} accept={VIDEO_ACCEPT} id="video-file" onChange={handleChange} type="file" className="hidden" />
     </div>
   );
 }

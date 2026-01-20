@@ -7,7 +7,7 @@ import { Node, NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttri
 import * as React from 'react';
 import { useRef, useState } from 'react';
 
-import { VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
+import { MAX_VIDEO_SIZE_BYTES, VALID_VIDEO_TYPES, VIDEO_ACCEPT, VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -157,25 +157,15 @@ function VideoNodeChildren({
     }
   };
 
-  const validVideoTypes = [
-    'video/mp4',
-    'video/quicktime',
-    'video/x-msvideo',
-    'video/x-ms-wmv',
-    'video/webm',
-    'video/x-flv',
-  ];
-
   const uploadFile = async (file: File) => {
     // Check file type
-    if (!validVideoTypes.includes(file.type)) {
+    if (!VALID_VIDEO_TYPES.includes(file.type)) {
       setUploadError('Invalid file type. Please upload MP4, MOV, AVI, WMV, WebM, or FLV.');
       return;
     }
 
     // Check file size (100MB limit)
-    const maxSize = 100 * 1024 * 1024;
-    if (file.size > maxSize) {
+    if (file.size > MAX_VIDEO_SIZE_BYTES) {
       setUploadError('File size exceeds 100MB limit');
       return;
     }
@@ -188,9 +178,12 @@ function VideoNodeChildren({
 
     abortControllerRef.current = new AbortController();
 
+    // Track progress interval for cleanup
+    let progressInterval: NodeJS.Timeout | undefined;
+
     try {
       // Simulate progress while uploading
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         setUploadProgress(prev => Math.min(prev + 2, 90));
       }, 300);
 
@@ -200,7 +193,6 @@ function VideoNodeChildren({
         network: 'TESTNET',
       });
 
-      clearInterval(progressInterval);
       setUploadProgress(100);
 
       // Extract the IPFS URL from the ops
@@ -235,6 +227,10 @@ function VideoNodeChildren({
           storage.entities.name.set(entityId, spaceId, fileName);
           setLocalName(fileName);
         }
+      } else {
+        // IPFS URL extraction failed - show error to user
+        console.error('Failed to extract IPFS URL from upload response');
+        setUploadError('Upload succeeded but failed to process video URL. Please try again.');
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
@@ -242,6 +238,10 @@ function VideoNodeChildren({
         setUploadError('Failed to upload video. Please try again.');
       }
     } finally {
+      // Always clear the progress interval to prevent memory leak
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
       setIsUploading(false);
       abortControllerRef.current = null;
       // Reset the input so the same file can be selected again
@@ -382,7 +382,7 @@ function VideoNodeChildren({
           <input
             ref={fileInputRef}
             type="file"
-            accept="video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/webm,video/x-flv"
+            accept={VIDEO_ACCEPT}
             onChange={handleFileSelect}
             className="hidden"
           />
