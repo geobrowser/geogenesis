@@ -435,127 +435,128 @@ export const SelectEntity = ({
                         <div className="w-full bg-white px-3 py-2">
                           <div className="truncate text-resultTitle text-text">Loading...</div>
                         </div>
-                      ) : isEmpty ? (
-                      <div className="w-full bg-white px-3 py-2">
-                        <div className="truncate text-resultTitle text-text">No results.</div>
-                      </div>
+                      )}
+                      {isEmpty ? (
+                        <div className="w-full bg-white px-3 py-2">
+                          <div className="truncate text-resultTitle text-text">No results.</div>
+                        </div>
                       ) : (
-                      <div className="divide-y divide-divider bg-white">
-                        {results.map((result, index) => (
-                          <div key={index} className="w-full">
-                            <div className="p-1">
-                              <button
-                                onClick={() => {
-                                  setResult(null);
-                                  onDone?.({
-                                    id: result.id,
-                                    name: result.name,
-                                    primarySpace: result.spaces?.[0]?.spaceId ? result.spaces[0].spaceId : undefined,
-                                  });
-                                  onQueryChange('');
-                                  setSelectedIndex(0);
-                                }}
-                                id={`select-entity-result-${index}`}
-                                className={cx(
-                                  'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none',
-                                  index === selectedIndex && 'bg-grey-01'
-                                )}
-                              >
-                                {isShowingIds && (
-                                  <div className="mb-2 text-[0.6875rem] text-grey-04">ID · {result.id}</div>
-                                )}
-                                <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
-                                <div className="mt-1.5 flex items-center gap-1.5">
-                                  {withSelectSpace && (
-                                    <div className="flex shrink-0 items-center gap-1">
-                                      <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
-                                        {(result.spaces ?? []).length > 0 ? (
-                                          <>
+                        <div className="divide-y divide-divider bg-white">
+                          {results.map((result, index) => (
+                            <div key={index} className="w-full">
+                              <div className="p-1">
+                                <button
+                                  onClick={() => {
+                                    setResult(null);
+                                    onDone?.({
+                                      id: result.id,
+                                      name: result.name,
+                                      primarySpace: result.spaces?.[0]?.spaceId ? result.spaces[0].spaceId : undefined,
+                                    });
+                                    onQueryChange('');
+                                    setSelectedIndex(0);
+                                  }}
+                                  id={`select-entity-result-${index}`}
+                                  className={cx(
+                                    'relative z-10 flex w-full flex-col rounded-md px-3 py-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none',
+                                    index === selectedIndex && 'bg-grey-01'
+                                  )}
+                                >
+                                  {isShowingIds && (
+                                    <div className="mb-2 text-[0.6875rem] text-grey-04">ID · {result.id}</div>
+                                  )}
+                                  <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
+                                  <div className="mt-1.5 flex items-center gap-1.5">
+                                    {withSelectSpace && (
+                                      <div className="flex shrink-0 items-center gap-1">
+                                        <span className="inline-flex size-[12px] items-center justify-center rounded-sm border border-grey-04">
+                                          {(result.spaces ?? []).length > 0 ? (
+                                            <>
+                                              <NativeGeoImage
+                                                value={result.spaces[0].image}
+                                                alt=""
+                                                className="h-full w-full object-cover"
+                                              />
+                                            </>
+                                          ) : (
+                                            <TopRanked color="grey-04" />
+                                          )}
+                                        </span>
+                                        <span className="text-[0.875rem] text-text">Top-ranked</span>
+                                      </div>
+                                    )}
+                                    {result.types.length > 0 && (
+                                      <>
+                                        {withSelectSpace && (
+                                          <div className="shrink-0">
+                                            <svg
+                                              width="8"
+                                              height="9"
+                                              viewBox="0 0 8 9"
+                                              fill="none"
+                                              xmlns="http://www.w3.org/2000/svg"
+                                            >
+                                              <path
+                                                d="M2.25 8L5.75 4.5L2.25 1"
+                                                stroke="#606060"
+                                                strokeLinecap="round"
+                                              />
+                                            </svg>
+                                          </div>
+                                        )}
+                                        <div className="flex items-center gap-1.5">
+                                          {result.types.slice(0, 3).map(type => (
+                                            <Tag key={type.id}>{type.name}</Tag>
+                                          ))}
+                                          {result.types.length > 3 ? <Tag>{`+${result.types.length - 3}`}</Tag> : null}
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                  {result.description && (
+                                    <>
+                                      <Truncate maxLines={3} shouldTruncate variant="footnote" className="mt-2">
+                                        <p className="!text-[0.75rem] leading-[1.2] text-grey-04">
+                                          {result.description}
+                                        </p>
+                                      </Truncate>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                              {withSelectSpace && (
+                                <div className="-mt-2 p-1">
+                                  <button
+                                    onClick={() => setResult(result)}
+                                    className="relative z-0 flex w-full items-center justify-between rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-grey-01"
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <div className="inline-flex gap-0">
+                                        {(result.spaces ?? []).slice(0, 3).map(space => (
+                                          <div
+                                            key={space.spaceId}
+                                            className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
+                                          >
                                             <NativeGeoImage
-                                              value={result.spaces[0].image}
+                                              value={space.image}
                                               alt=""
                                               className="h-full w-full object-cover"
                                             />
-                                          </>
-                                        ) : (
-                                          <TopRanked color="grey-04" />
-                                        )}
-                                      </span>
-                                      <span className="text-[0.875rem] text-text">Top-ranked</span>
-                                    </div>
-                                  )}
-                                  {result.types.length > 0 && (
-                                    <>
-                                      {withSelectSpace && (
-                                        <div className="shrink-0">
-                                          <svg
-                                            width="8"
-                                            height="9"
-                                            viewBox="0 0 8 9"
-                                            fill="none"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                          >
-                                            <path
-                                              d="M2.25 8L5.75 4.5L2.25 1"
-                                              stroke="#606060"
-                                              strokeLinecap="round"
-                                            />
-                                          </svg>
-                                        </div>
-                                      )}
-                                      <div className="flex items-center gap-1.5">
-                                        {result.types.slice(0, 3).map(type => (
-                                          <Tag key={type.id}>{type.name}</Tag>
+                                          </div>
                                         ))}
-                                        {result.types.length > 3 ? <Tag>{`+${result.types.length - 3}`}</Tag> : null}
                                       </div>
-                                    </>
-                                  )}
+                                      <div className="text-[0.875rem] text-text">
+                                        {(result.spaces ?? []).length}{' '}
+                                        {pluralize('space', (result.spaces ?? []).length)}
+                                      </div>
+                                    </div>
+                                    <div className="text-[0.875rem] text-grey-04">Select space</div>
+                                  </button>
                                 </div>
-                                {result.description && (
-                                  <>
-                                    <Truncate maxLines={3} shouldTruncate variant="footnote" className="mt-2">
-                                      <p className="!text-[0.75rem] leading-[1.2] text-grey-04">
-                                        {result.description}
-                                      </p>
-                                    </Truncate>
-                                  </>
-                                )}
-                              </button>
+                              )}
                             </div>
-                            {withSelectSpace && (
-                              <div className="-mt-2 p-1">
-                                <button
-                                  onClick={() => setResult(result)}
-                                  className="relative z-0 flex w-full items-center justify-between rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-grey-01"
-                                >
-                                  <div className="flex items-center gap-1">
-                                    <div className="inline-flex gap-0">
-                                      {(result.spaces ?? []).slice(0, 3).map(space => (
-                                        <div
-                                          key={space.spaceId}
-                                          className="-ml-[4px] h-3 w-3 overflow-clip rounded-sm border border-white first:ml-0"
-                                        >
-                                          <NativeGeoImage
-                                            value={space.image}
-                                            alt=""
-                                            className="h-full w-full object-cover"
-                                          />
-                                        </div>
-                                      ))}
-                                    </div>
-                                    <div className="text-[0.875rem] text-text">
-                                      {(result.spaces ?? []).length}{' '}
-                                      {pluralize('space', (result.spaces ?? []).length)}
-                                    </div>
-                                  </div>
-                                  <div className="text-[0.875rem] text-grey-04">Select space</div>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </ResizableContainer>

@@ -10,6 +10,12 @@ import { Web2LinkHoverCard } from './web2-link-tooltip';
 const Web2URLMark = Mark.create({
   name: 'web2URL',
 
+  // Prevent mark from extending to new content (e.g., when pressing Enter)
+  inclusive: false,
+
+  // Exclude all other marks to prevent propagation
+  excludes: '_',
+
   addOptions() {
     return {
       HTMLAttributes: {},
@@ -92,8 +98,24 @@ export const Web2URLExtension = Extension.create({
           const tippyInstances = new Map<Element, Instance>();
           const reactRenderers = new Map<Element, ReactRenderer>();
 
+          // Timeout management for better hover stability
+          let showTimeout: NodeJS.Timeout | null = null;
+          let hideTimeout: NodeJS.Timeout | null = null;
+          let currentHoveredSpan: Element | null = null;
+
+          const clearTimeouts = () => {
+            if (showTimeout) {
+              clearTimeout(showTimeout);
+              showTimeout = null;
+            }
+            if (hideTimeout) {
+              clearTimeout(hideTimeout);
+              hideTimeout = null;
+            }
+          };
+
           const showHoverCard = (element: Element) => {
-            if (isDestroyed || !editorView) return;
+            if (isDestroyed) return;
 
             // Check if this element already has a tippy instance
             if (tippyInstances.has(element)) {
@@ -110,7 +132,7 @@ export const Web2URLExtension = Extension.create({
                 editor,
               });
 
-              // Create tippy instance
+              // Create tippy instance with improved configuration
               const tippyInstance = tippy(element as Element, {
                 content: reactRenderer.element,
                 trigger: 'manual',
@@ -120,13 +142,19 @@ export const Web2URLExtension = Extension.create({
                 arrow: true,
                 appendTo: document.body,
                 zIndex: 9999,
-                delay: [200, 150], // Show delay, hide delay
+                delay: [0, 100], // No show delay (handled by our timeout), short hide delay
+                // Add offset to prevent overlap issues
+                offset: [0, 3],
+                // Allow mouse to move between element and tooltip
+                interactiveBorder: 10,
                 onShow() {
                   // Component already rendered by ReactRenderer
                 },
                 onHide() {
                   // Clean up when hiding
-                  currentTippyInstance = null;
+                  if (currentTippyInstance === tippyInstance) {
+                    currentTippyInstance = null;
+                  }
                 },
               });
 
@@ -146,21 +174,47 @@ export const Web2URLExtension = Extension.create({
             }
           };
 
-          let currentHoveredSpan: Element | null = null;
-
           const handleMouseEnter = (event: Event) => {
-            // Only show hover card in read mode, not edit mode
-            if (editorView.editable) return;
 
             const target = event.target as Element;
             const web2Span = target.closest('span[data-web2-url]');
 
-            if (web2Span && web2Span !== currentHoveredSpan) {
-              // Hide any existing tippy instance before showing new one
-              hideCurrentHoverCard();
-              
-              currentHoveredSpan = web2Span;
-              showHoverCard(web2Span);
+            if (web2Span) {
+              // Clear any pending hide timeout
+              if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+              }
+
+              // If this is a different span or we don't have a current span
+              if (web2Span !== currentHoveredSpan) {
+                // Clear any pending show timeout
+                if (showTimeout) {
+                  clearTimeout(showTimeout);
+                  showTimeout = null;
+                }
+
+                // Hide current card immediately if showing different element
+                if (currentTippyInstance && currentHoveredSpan) {
+                  hideCurrentHoverCard();
+                }
+
+                currentHoveredSpan = web2Span;
+
+                // Debounce show to prevent flickering on rapid hover changes
+                showTimeout = setTimeout(() => {
+                  // Double-check the element is still hovered before showing
+                  if (web2Span.matches(':hover') && currentHoveredSpan === web2Span) {
+                    showHoverCard(web2Span);
+                  }
+                  showTimeout = null;
+                }, 100); // Short delay to stabilize hover
+              } else {
+                // Same element - ensure card is showing
+                if (currentTippyInstance) {
+                  currentTippyInstance.show();
+                }
+              }
             }
           };
 
@@ -169,12 +223,28 @@ export const Web2URLExtension = Extension.create({
             const web2Span = target.closest('span[data-web2-url]');
 
             if (web2Span === currentHoveredSpan) {
-              // Let Tippy handle the delay logic
-              setTimeout(() => {
-                if (currentTippyInstance && !web2Span?.matches(':hover')) {
+              // Clear any pending show timeout
+              if (showTimeout) {
+                clearTimeout(showTimeout);
+                showTimeout = null;
+              }
+
+              // Clear any existing hide timeout
+              if (hideTimeout) {
+                clearTimeout(hideTimeout);
+              }
+
+              // Add a grace period before hiding to allow mouse movement to tooltip
+              hideTimeout = setTimeout(() => {
+                // Check if mouse is over the span or the tooltip
+                const isStillHovering = web2Span?.matches(':hover');
+                const isTooltipHovered = currentTippyInstance?.popper?.matches(':hover');
+
+                if (!isStillHovering && !isTooltipHovered) {
                   hideCurrentHoverCard();
                   currentHoveredSpan = null;
                 }
+                hideTimeout = null;
               }, 150);
             }
           };
@@ -186,6 +256,9 @@ export const Web2URLExtension = Extension.create({
             destroy: () => {
               isDestroyed = true;
               try {
+                // Clear all pending timeouts
+                clearTimeouts();
+
                 editorView.dom.removeEventListener('mouseenter', handleMouseEnter, true);
                 editorView.dom.removeEventListener('mouseleave', handleMouseLeave, true);
 
@@ -244,177 +317,178 @@ export const Web2URLExtension = Extension.create({
 
               // Use requestAnimationFrame to avoid blocking
               rafId = requestAnimationFrame(() => {
-              try {
-                // Check if the editor view is still valid
-                if (isDestroyed || !editorView || !editorView.state || editorView.isDestroyed) {
-                  rafId = null;
-                  return;
-                }
+                try {
+                  // Check if the editor view is still valid
+                  if (isDestroyed || !editorView || !editorView.state || editorView.isDestroyed) {
+                    rafId = null;
+                    return;
+                  }
 
-                const { state } = editorView;
-                const { schema } = state;
-                let hasChanges = false;
+                  const { state } = editorView;
+                  const { schema } = state;
+                  let hasChanges = false;
 
-                // Create a new transaction to avoid conflicts
-                const newTr = state.tr;
+                  // Create a new transaction to avoid conflicts
+                  const newTr = state.tr;
 
-                // Process paragraph nodes to handle text that may be split across multiple text nodes
-                state.doc.descendants((node, pos) => {
-                  // Only process paragraph nodes
-                  if (node.type.name === 'paragraph') {
-                    // Early exit if paragraph has no content
-                    if (!node.content.size) {
-                      return;
-                    }
-
-                    // Collect all text content from the paragraph
-                    let paragraphText = '';
-                    const textNodePositions: Array<{ node: any; startPos: number; endPos: number }> = [];
-                    
-                    node.descendants((textNode, relativePos) => {
-                      if (textNode.isText && textNode.text) {
-                        const absolutePos = pos + 1 + relativePos; // +1 for paragraph node offset
-                        textNodePositions.push({
-                          node: textNode,
-                          startPos: absolutePos,
-                          endPos: absolutePos + textNode.nodeSize
-                        });
-                        paragraphText += textNode.text;
+                  // Process paragraph nodes to handle text that may be split across multiple text nodes
+                  state.doc.descendants((node, pos) => {
+                    // Only process paragraph nodes
+                    if (node.type.name === 'paragraph') {
+                      // Early exit if paragraph has no content
+                      if (!node.content.size) {
+                        return;
                       }
-                    });
 
-                    // Early exit if no text content or no potential markdown/URL syntax
-                    if (!paragraphText || (!paragraphText.includes('[') && !paragraphText.includes('http'))) {
-                      return;
-                    }
+                      // Collect all text content from the paragraph
+                      let paragraphText = '';
+                      const textNodePositions: Array<{ node: any; startPos: number; endPos: number }> = [];
 
-                    const urls = detectWeb2URLsInMarkdown(paragraphText);
+                      node.descendants((textNode, relativePos) => {
+                        if (textNode.isText && textNode.text) {
+                          const absolutePos = pos + 1 + relativePos; // +1 for paragraph node offset
+                          textNodePositions.push({
+                            node: textNode,
+                            startPos: absolutePos,
+                            endPos: absolutePos + textNode.nodeSize
+                          });
+                          paragraphText += textNode.text;
+                        }
+                      });
 
-                    if (urls.length > 0) {
-                      for (const url of urls) {
-                        const urlIndex = paragraphText.indexOf(url);
-                        if (urlIndex !== -1) {
-                          // Find the actual document positions for this URL span
-                          let currentTextPos = 0;
-                          let fromPos = -1;
-                          let toPos = -1;
-                          
-                          for (const textNodeInfo of textNodePositions) {
-                            const nodeText = textNodeInfo.node.text;
-                            const nodeEndPos = currentTextPos + nodeText.length;
-                            
-                            // Check if URL starts within this text node
-                            if (fromPos === -1 && urlIndex >= currentTextPos && urlIndex < nodeEndPos) {
-                              fromPos = textNodeInfo.startPos + (urlIndex - currentTextPos);
-                            }
-                            
-                            // Check if URL ends within this text node
-                            const urlEndIndex = urlIndex + url.length;
-                            if (toPos === -1 && urlEndIndex > currentTextPos && urlEndIndex <= nodeEndPos) {
-                              toPos = textNodeInfo.startPos + (urlEndIndex - currentTextPos);
-                              break;
-                            }
-                            
-                            currentTextPos = nodeEndPos;
-                          }
-                          
-                          if (fromPos !== -1 && toPos !== -1) {
-                            const from = fromPos;
-                            const to = toPos;
+                      // Early exit if no text content or no potential markdown/URL syntax
+                      if (!paragraphText || (!paragraphText.includes('[') && !paragraphText.includes('http'))) {
+                        return;
+                      }
 
-                            // Validate position bounds
-                            if (from < 0 || to > state.doc.content.size || from >= to) {
-                              continue;
-                            }
+                      const urls = detectWeb2URLsInMarkdown(paragraphText);
 
-                            // Check if this range already has a web2URL mark
-                            const hasWeb2Mark =
-                              schema.marks.web2URL && state.doc.rangeHasMark(from, to, schema.marks.web2URL);
-                            const hasLinkMark = state.doc.rangeHasMark(from, to, schema.marks.link);
+                      if (urls.length > 0) {
+                        for (const url of urls) {
+                          const urlIndex = paragraphText.indexOf(url);
+                          if (urlIndex !== -1) {
+                            // Find the actual document positions for this URL span
+                            let currentTextPos = 0;
+                            let fromPos = -1;
+                            let toPos = -1;
 
-                            // Process if no mark exists or if mode doesn't match current state
-                            let needsProcessing = !hasWeb2Mark;
+                            for (const textNodeInfo of textNodePositions) {
+                              const nodeText = textNodeInfo.node.text;
+                              const nodeEndPos = currentTextPos + nodeText.length;
 
-                            // If mark exists, check if it needs mode update
-                            if (hasWeb2Mark) {
-                              // Get existing mark to check its mode
-                              let existingMark: any = null;
-                              state.doc.nodesBetween(from, to, node => {
-                                if (node.isText) {
-                                  node.marks.forEach(mark => {
-                                    if (mark.type.name === 'web2URL') {
-                                      existingMark = mark;
-                                    }
-                                  });
-                                }
-                              });
-
-                              if (existingMark) {
-                                const isCurrentlyEditMode = !!existingMark.attrs?.editMode;
-                                const shouldBeEditMode = editorView.editable;
-                                
-                                // Extract current URL from markdown for comparison
-                                const markdownMatch = url.match(/\[([^\]]+)\]\(([^)]+)\)/);
-                                const currentUrl = markdownMatch ? markdownMatch[2] : url;
-                                const existingUrl = existingMark.attrs?.url || '';
-                                
-                                // Need to update if mode doesn't match OR URL has changed
-                                needsProcessing = isCurrentlyEditMode !== shouldBeEditMode || 
-                                                existingUrl !== (currentUrl.startsWith('http') ? currentUrl : `https://${currentUrl}`);
+                              // Check if URL starts within this text node
+                              if (fromPos === -1 && urlIndex >= currentTextPos && urlIndex < nodeEndPos) {
+                                fromPos = textNodeInfo.startPos + (urlIndex - currentTextPos);
                               }
+
+                              // Check if URL ends within this text node
+                              const urlEndIndex = urlIndex + url.length;
+                              if (toPos === -1 && urlEndIndex > currentTextPos && urlEndIndex <= nodeEndPos) {
+                                toPos = textNodeInfo.startPos + (urlEndIndex - currentTextPos);
+                                break;
+                              }
+
+                              currentTextPos = nodeEndPos;
                             }
 
-                            if (needsProcessing) {
-                              // Check if this is a markdown link or standalone URL
-                              const markdownMatch = url.match(/\[([^\]]+)\]\(([^)]+)\)/);
-                              const isMarkdownLink = !!markdownMatch;
-                              const actualUrl = markdownMatch ? markdownMatch[2] : url;
-                              const linkText = markdownMatch ? markdownMatch[1] : url;
+                            if (fromPos !== -1 && toPos !== -1) {
+                              const from = fromPos;
+                              const to = toPos;
 
-                              if (schema.marks.web2URL) {
-                                // Remove existing web2URL mark first if updating mode
-                                if (hasWeb2Mark) {
-                                  newTr.removeMark(from, to, schema.marks.web2URL);
+                              // Validate position bounds
+                              if (from < 0 || to > state.doc.content.size || from >= to) {
+                                continue;
+                              }
+
+                              // Check if this range already has a web2URL mark
+                              const hasWeb2Mark =
+                                schema.marks.web2URL && state.doc.rangeHasMark(from, to, schema.marks.web2URL);
+                              const hasLinkMark = state.doc.rangeHasMark(from, to, schema.marks.link);
+
+                              // Process if no mark exists or if mode doesn't match current state
+                              let needsProcessing = !hasWeb2Mark;
+
+                              // If mark exists, check if it needs mode update
+                              if (hasWeb2Mark) {
+                                // Get existing mark to check its mode
+                                let existingMark: any = null;
+                                state.doc.nodesBetween(from, to, node => {
+                                  if (node.isText) {
+                                    node.marks.forEach(mark => {
+                                      if (mark.type.name === 'web2URL') {
+                                        existingMark = mark;
+                                      }
+                                    });
+                                  }
+                                });
+
+                                if (existingMark) {
+                                  const isCurrentlyEditMode = !!existingMark.attrs?.editMode;
+                                  const shouldBeEditMode = editorView.editable;
+
+                                  // Extract current URL from markdown for comparison
+                                  const markdownMatch = url.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                                  const currentUrl = markdownMatch ? markdownMatch[2] : url;
+                                  const existingUrl = existingMark.attrs?.url || '';
+
+                                  // Need to update if mode doesn't match OR URL has changed
+                                  needsProcessing = isCurrentlyEditMode !== shouldBeEditMode ||
+                                    existingUrl !== (currentUrl.startsWith('http') ? currentUrl : `https://${currentUrl}`);
                                 }
+                              }
 
-                                // Remove any existing link mark
-                                if (hasLinkMark) {
-                                  newTr.removeMark(from, to, schema.marks.link);
-                                }
+                              if (needsProcessing) {
+                                // Check if this is a markdown link or standalone URL
+                                const markdownMatch = url.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                                const isMarkdownLink = !!markdownMatch;
+                                const actualUrl = markdownMatch ? markdownMatch[2] : url;
+                                const linkText = markdownMatch ? markdownMatch[1] : url;
 
-                                if (isMarkdownLink) {
-                                  // MARKDOWN LINK: Mode-aware rendering
-                                  if (!editorView.editable) {
-                                    // VIEW MODE: Convert to styled span
+                                if (schema.marks.web2URL) {
+                                  // Remove existing web2URL mark first if updating mode
+                                  if (hasWeb2Mark) {
+                                    newTr.removeMark(from, to, schema.marks.web2URL);
+                                  }
+
+                                  // Remove any existing link mark
+                                  if (hasLinkMark) {
+                                    newTr.removeMark(from, to, schema.marks.link);
+                                  }
+
+                                  if (isMarkdownLink) {
+                                    // MARKDOWN LINK: Mode-aware rendering
+                                    if (!editorView.editable) {
+                                      // VIEW MODE: Convert to styled span
+                                      const web2Mark = schema.marks.web2URL.create({
+                                        url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
+                                        editMode: false,
+                                      });
+
+                                      // Replace markdown with styled text
+                                      newTr.replaceWith(from, to, schema.text(linkText, [web2Mark]));
+                                      hasChanges = true;
+                                    } else {
+                                      // EDIT MODE: Keep as markdown but add subtle styling
+                                      const web2Mark = schema.marks.web2URL.create({
+                                        url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
+                                        editMode: true,
+                                      });
+
+                                      // Apply mark to the entire markdown text for subtle styling
+                                      newTr.addMark(from, to, web2Mark);
+                                      hasChanges = true;
+                                    }
+                                  } else {
+                                    // STANDALONE URL: Always convert to invalid link (no mode-aware behavior)
                                     const web2Mark = schema.marks.web2URL.create({
                                       url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
-                                      editMode: false,
+                                      editMode: false, // Always use view mode styling for standalone URLs
                                     });
 
-                                    // Replace markdown with styled text
+                                    // Replace standalone URL with styled text
                                     newTr.replaceWith(from, to, schema.text(linkText, [web2Mark]));
                                     hasChanges = true;
-                                  } else {
-                                    // EDIT MODE: Keep as markdown but add subtle styling
-                                    const web2Mark = schema.marks.web2URL.create({
-                                      url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
-                                      editMode: true,
-                                    });
-
-                                    // Apply mark to the entire markdown text for subtle styling
-                                    newTr.addMark(from, to, web2Mark);
-                                    hasChanges = true;
                                   }
-                                } else {
-                                  // STANDALONE URL: Always convert to invalid link (no mode-aware behavior)
-                                  const web2Mark = schema.marks.web2URL.create({
-                                    url: actualUrl.startsWith('http') ? actualUrl : `https://${actualUrl}`,
-                                    editMode: false, // Always use view mode styling for standalone URLs
-                                  });
-
-                                  // Replace standalone URL with styled text
-                                  newTr.replaceWith(from, to, schema.text(linkText, [web2Mark]));
-                                  hasChanges = true;
                                 }
                               }
                             }
@@ -422,19 +496,18 @@ export const Web2URLExtension = Extension.create({
                         }
                       }
                     }
-                  }
-                });
+                  });
 
-                // Apply changes if any were made and editor is still valid
-                if (hasChanges && !editorView.isDestroyed) {
-                  editorView.dispatch(newTr);
+                  // Apply changes if any were made and editor is still valid
+                  if (hasChanges && !editorView.isDestroyed) {
+                    editorView.dispatch(newTr);
+                  }
+                } catch (error) {
+                  console.warn('Web2URLExtension update error:', error);
+                } finally {
+                  rafId = null;
                 }
-              } catch (error) {
-                console.warn('Web2URLExtension update error:', error);
-              } finally {
-                rafId = null;
-              }
-            });
+              });
               updateTimeout = null;
             }, 150); // Debounce delay: 150ms
           };
@@ -449,7 +522,7 @@ export const Web2URLExtension = Extension.create({
               if (editableStateChanged) {
                 previousEditableState = view.editable;
               }
-              
+
               // Update if document changed OR if editable state changed (mode switching)
               if (!isDestroyed && (view.state.doc !== prevState.doc || editableStateChanged)) {
                 updateLinkClasses();

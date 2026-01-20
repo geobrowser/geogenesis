@@ -27,6 +27,7 @@ module.exports = {
       errorTertiary: '#FFE1DC',
       'red-01': '#FF523A',
       'red-02': '#FFEEEB',
+      'red-03': '#FFDAD4',
     },
     borderRadius: {
       none: '0',

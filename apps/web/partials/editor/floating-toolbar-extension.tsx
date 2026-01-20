@@ -38,8 +38,30 @@ export const FloatingToolbarExtension = Extension.create({
             const { selection } = state;
             const { from, to } = selection;
 
-            // Show only when text is selected (not just cursor position)
-            return from !== to && state.doc.textBetween(from, to).trim().length > 0;
+            // Don't show if no text is selected (just cursor position)
+            if (from === to || state.doc.textBetween(from, to).trim().length === 0) {
+              return false;
+            }
+
+            // Don't show if selection is within link elements (entity-link-valid, entity-link-invalid, web2-url-edit-mode)
+            try {
+              const { view } = editor;
+              const node = view.domAtPos(from).node;
+              const parentElement = node?.parentElement;
+
+              if (parentElement) {
+                // Check if parent or any ancestor has the link classes we want to exclude
+                const linkElement = parentElement.closest('a.entity-link-valid, span.entity-link-invalid, span.web2-url-edit-mode');
+                if (linkElement) {
+                  return false;
+                }
+              }
+            } catch (error) {
+              // If DOM checking fails, continue with default behavior
+              console.warn('Error checking link elements:', error);
+            }
+
+            return true;
           };
 
           const show = () => {
