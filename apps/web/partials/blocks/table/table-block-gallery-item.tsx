@@ -292,6 +292,7 @@ export function TableBlockGalleryItem({
                     property={property}
                     onChangeEntry={onChangeEntry}
                     source={source}
+                    entityName={name}
                   />
                 </div>
               );
@@ -369,6 +370,7 @@ export function TableBlockGalleryItem({
                 entityId={cellId}
                 onChangeEntry={onChangeEntry}
                 source={source}
+                entityName={name}
               />
             );
           })}
