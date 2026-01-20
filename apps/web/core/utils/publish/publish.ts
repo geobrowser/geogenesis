@@ -152,6 +152,8 @@ function getRemoteDataTypeFromAppDataType(dataType: string): DataType | null {
       return 'NUMBER';
     case 'TIME':
       return 'TIME';
+    case 'RELATION':
+      return 'RELATION';
 
     default:
       return null;

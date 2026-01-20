@@ -13,6 +13,7 @@ vi.mock('~/core/constants', () => ({
   GEO_LOCATION: 'GEO_LOCATION_ID',
   FORMAT_PROPERTY: 'FORMAT_PROPERTY_ID',
   UNIT_PROPERTY: 'UNIT_PROPERTY_ID',
+  VIDEO_RENDERABLE_TYPE: 'VIDEO_RENDERABLE_TYPE_ID',
 }));
 
 describe('Properties', () => {

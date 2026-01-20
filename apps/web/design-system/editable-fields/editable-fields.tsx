@@ -5,8 +5,10 @@ import Textarea from 'react-textarea-autosize';
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef } from 'react';
 
+import { VIDEO_ACCEPT } from '~/core/constants';
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
+import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useImageUrlFromEntity } from '~/core/utils/utils';
 import { Relation } from '~/core/v2.types';
@@ -16,6 +18,7 @@ import { SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '../dots';
 import { Trash } from '../icons/trash';
 import { Upload } from '../icons/upload';
+import { VideoSmall } from '../icons/video-small';
 
 const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height. We add a negative margin to compensate for this. This results in the correct line heights between both edit and browse modes. This only affects the editable titles of entity pages and editable titles of data blocks
@@ -382,6 +385,260 @@ export function TableImageField({
         type="file"
         className="hidden"
       />
+    </div>
+  );
+}
+
+// Video Field Components
+
+type VideoVariant = 'default' | 'table-cell';
+
+interface VideoPlayerProps {
+  videoSrc: string;
+  variant?: VideoVariant;
+}
+
+const videoStyles: Record<VideoVariant, React.CSSProperties> = {
+  default: {
+    height: 80,
+  },
+  'table-cell': {
+    maxWidth: 120,
+  },
+};
+
+export function VideoPlayer({ videoSrc, variant = 'default' }: VideoPlayerProps) {
+  const { src, onError } = useVideoWithFallback(videoSrc);
+
+  if (!src) {
+    return (
+      <div className="flex h-20 w-full items-center justify-center rounded-lg bg-grey-01">
+        <VideoSmall color="grey-04" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative" style={videoStyles[variant]}>
+      <video src={src} onError={onError} controls className="h-full w-full rounded-lg object-cover" />
+    </div>
+  );
+}
+
+interface VideoFieldProps {
+  videoSrc?: string;
+  onFileChange: (file: File) => Promise<void> | void;
+  onVideoRemove?: () => void;
+  variant?: VideoVariant;
+}
+
+export function PageVideoField({ videoSrc, onFileChange, onVideoRemove, variant = 'default' }: VideoFieldProps) {
+  const [isUploading, setIsUploading] = React.useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileInputClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && onFileChange) {
+      const file = e.target.files[0];
+      setIsUploading(true);
+      try {
+        await onFileChange(file);
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
+
+  return (
+    <div>
+      {videoSrc ? (
+        <div className="pt-1">
+          <VideoPlayer variant={variant} videoSrc={videoSrc} />
+        </div>
+      ) : (
+        <div className="flex min-h-[80px] items-center justify-center rounded-lg border border-dashed border-grey-02 p-4">
+          <div className="flex flex-col items-center gap-2">
+            <VideoSmall color="grey-04" />
+            <span className="text-sm text-grey-04">No video</span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-center gap-2 pt-2">
+        <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
+          {isUploading ? 'Uploading...' : 'Upload'}
+        </SmallButton>
+        {videoSrc && <SquareButton onClick={onVideoRemove} icon={<Trash />} />}
+      </div>
+
+      <input ref={fileInputRef} accept={VIDEO_ACCEPT} id="video-file" onChange={handleChange} type="file" className="hidden" />
+    </div>
+  );
+}
+
+export function TableVideoField({ videoSrc, onFileChange, onVideoRemove, variant = 'table-cell' }: VideoFieldProps) {
+  const [isUploading, setIsUploading] = React.useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileInputClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const file = e.target.files[0];
+      setIsUploading(true);
+      try {
+        await onFileChange(file);
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
+
+  return (
+    <div className="group flex w-full justify-between">
+      {videoSrc ? (
+        <div>
+          <VideoPlayer variant={variant} videoSrc={videoSrc} />
+        </div>
+      ) : (
+        <SmallButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />}>
+          {isUploading ? 'Uploading...' : 'Upload'}
+        </SmallButton>
+      )}
+
+      {videoSrc && (
+        <div className="flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <SquareButton onClick={handleFileInputClick} icon={isUploading ? <Dots /> : <Upload />} />
+          <SquareButton onClick={onVideoRemove} icon={<Trash />} />
+        </div>
+      )}
+
+      <input ref={fileInputRef} accept={VIDEO_ACCEPT} id="video-file" onChange={handleChange} type="file" className="hidden" />
+    </div>
+  );
+}
+
+// Video Thumbnail with Play Icon - for browse mode
+interface VideoThumbnailWithPlayProps {
+  videoSrc: string;
+  variant?: VideoVariant;
+}
+
+export function VideoThumbnailWithPlay({ videoSrc, variant = 'default' }: VideoThumbnailWithPlayProps) {
+  const [isFullscreenOpen, setIsFullscreenOpen] = React.useState(false);
+  const { src, onError } = useVideoWithFallback(videoSrc);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Pause video and show first frame as thumbnail
+  React.useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  }, [src]);
+
+  if (!src) {
+    return (
+      <div className="flex h-20 w-full items-center justify-center rounded-lg bg-grey-01">
+        <VideoSmall color="grey-04" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setIsFullscreenOpen(true)}
+        className="group relative cursor-pointer"
+        style={videoStyles[variant]}
+      >
+        {/* Video thumbnail (paused at first frame) */}
+        <video
+          ref={videoRef}
+          src={src}
+          onError={onError}
+          className="h-full w-full rounded-lg object-cover"
+          muted
+          playsInline
+          preload="metadata"
+        />
+        {/* Play icon overlay */}
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/20 transition-colors group-hover:bg-black/30">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-transform group-hover:scale-110">
+            <VideoSmall color="text" />
+          </div>
+        </div>
+      </button>
+
+      {/* Fullscreen video viewer modal */}
+      {isFullscreenOpen && (
+        <FullScreenVideoViewer videoSrc={src} onClose={() => setIsFullscreenOpen(false)} />
+      )}
+    </>
+  );
+}
+
+// Fullscreen Video Viewer Modal
+interface FullScreenVideoViewerProps {
+  videoSrc: string;
+  onClose: () => void;
+}
+
+export function FullScreenVideoViewer({ videoSrc, onClose }: FullScreenVideoViewerProps) {
+  // Close on escape key
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  // Prevent body scroll when modal is open
+  React.useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+      onClick={onClose}
+    >
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+        aria-label="Close video"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+
+      {/* Video player */}
+      <div
+        className="relative max-h-[90vh] max-w-[90vw]"
+        onClick={e => e.stopPropagation()}
+      >
+        <video
+          src={videoSrc}
+          controls
+          autoPlay
+          className="max-h-[90vh] max-w-[90vw] rounded-lg"
+        />
+      </div>
     </div>
   );
 }

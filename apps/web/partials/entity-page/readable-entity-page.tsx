@@ -4,15 +4,15 @@ import * as React from 'react';
 
 import { ADDRESS_PROPERTY, RENDERABLE_TYPE_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
 import { useRenderedProperties } from '~/core/hooks/use-renderables';
-import { useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
-import { GeoNumber, GeoPoint, NavUtils, useImageUrlFromEntity } from '~/core/utils/utils';
+import { useHydrateEntity, useQueryEntity, useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
+import { GeoNumber, GeoPoint, NavUtils, useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/utils';
 import { sortRelations } from '~/core/utils/utils';
 import { DataType, RenderableType } from '~/core/v2.types';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, VideoThumbnailWithPlay } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
@@ -197,6 +197,17 @@ export function RelationsGroup({
               );
             }
 
+            if (property.renderableTypeStrict === 'VIDEO') {
+              return (
+                <VideoRelation
+                  key={`video-${relationId}-${linkedEntityId}`}
+                  linkedEntityId={linkedEntityId}
+                  relationId={relationId}
+                  spaceId={spaceId}
+                />
+              );
+            }
+
             return (
               <div key={`relation-${relationId}-${linkedEntityId}`} className="mt-1">
                 <LinkableRelationChip
@@ -236,6 +247,20 @@ function ImageRelation({ linkedEntityId, directImageUrl, spaceId }: { linkedEnti
   const imageSrc = isValidImageUrl ? directImageUrl : lookedUpImageSrc;
 
   return <ImageZoom imageSrc={imageSrc || ''} />;
+}
+
+function VideoRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
+  // Hydrate the video entity from remote to populate the reactive store
+  useHydrateEntity({ id: linkedEntityId });
+
+  // Use the efficient hook to get only the video URL for this specific entity
+  const actualVideoSrc = useVideoUrlFromEntity(linkedEntityId, spaceId);
+
+  if (!actualVideoSrc) {
+    return null;
+  }
+
+  return <VideoThumbnailWithPlay videoSrc={actualVideoSrc} />;
 }
 
 function RenderedValue({

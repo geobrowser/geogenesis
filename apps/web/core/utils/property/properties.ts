@@ -7,6 +7,7 @@ import {
   PLACE,
   RENDERABLE_TYPE_PROPERTY,
   UNIT_PROPERTY,
+  VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/v2.types';
@@ -53,6 +54,11 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
         baseDataType: 'RELATION',
         renderableTypeId: SystemIds.IMAGE,
       };
+    case 'VIDEO':
+      return {
+        baseDataType: 'RELATION',
+        renderableTypeId: VIDEO_RENDERABLE_TYPE,
+      };
     case 'NUMBER':
       return {
         baseDataType: 'NUMBER',
@@ -98,6 +104,7 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   URL: 'TEXT',
   RELATION: 'RELATION',
   IMAGE: 'RELATION',
+  VIDEO: 'RELATION',
   NUMBER: 'NUMBER',
   CHECKBOX: 'CHECKBOX',
   TIME: 'TIME',
