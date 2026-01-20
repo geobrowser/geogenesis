@@ -18,6 +18,7 @@ module.exports = {
       'grey-02': '#DBDBDB',
       'grey-03': '#B6B6B6',
       'grey-04': '#606060',
+      'grey-05': '#35363A',
       link: '#8B8B8B',
       divider: '#F0F0F0',
       orange: '#FFA134',
@@ -26,6 +27,7 @@ module.exports = {
       errorTertiary: '#FFE1DC',
       'red-01': '#FF523A',
       'red-02': '#FFEEEB',
+      'red-03': '#FFDAD4',
     },
     borderRadius: {
       none: '0',

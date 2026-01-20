@@ -16,6 +16,7 @@ import { Spacer } from '~/design-system/spacer';
 
 import { NoContent } from '../space-tabs/no-content';
 import { tiptapExtensions } from './extensions';
+import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
 
@@ -41,8 +42,19 @@ interface Props {
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   const { upsertEditorState, editorJson, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
+  const [isTransitioning, setIsTransitioning] = React.useState(false);
 
-  const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
+  // Track when editable state is changing to prevent flushSync errors
+  React.useEffect(() => {
+    setIsTransitioning(true);
+    const timer = setTimeout(() => setIsTransitioning(false), 100);
+    return () => clearTimeout(timer);
+  }, [editable]);
+
+  const extensions = React.useMemo(
+    () => [...tiptapExtensions, createIdExtension(spaceId), createGraphLinkHoverExtension(spaceId)],
+    [spaceId]
+  );
 
   useInterceptEditorLinks(spaceId);
 
@@ -56,7 +68,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const editor = useEditor(
     {
       extensions,
-      editable: editable,
+      editable: true, // Keep editor always editable to prevent recreation
       content: editorJson,
       editorProps: {
         transformPastedHTML: html => {
@@ -76,28 +88,21 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
             // Get pasted content
             const clipboardData = event.clipboardData;
             if (clipboardData) {
+              const htmlData = clipboardData.getData('text/html');
               const textData = clipboardData.getData('text/plain');
+              // If there's HTML data that might contain emoji images, prevent default and handle manually
+              if (htmlData && (htmlData.includes('emoji') || htmlData.includes('twimg.com'))) {
+                event.preventDefault();
 
-              // Always prevent default and handle manually to avoid emoji conversion
-              event.preventDefault();
-
-              // Use plain text to preserve emoji as Unicode
-              if (textData) {
-                const lines = textData.split('\n');
-                let tr = view.state.tr;
-
-                lines.forEach((line, index) => {
-                  if (index > 0) {
-                    tr = tr.split(tr.selection.head);
-                  }
-                  if (line.trim()) {
-                    tr = tr.insertText(line);
-                  }
-                });
-
-                view.dispatch(tr);
+                // Insert as plain text to avoid emoji image conversion
+                if (textData) {
+                  view.dispatch(view.state.tr.insertText(textData));
+                }
                 return true;
               }
+              // For plain text or HTML without emoji images, let TipTap handle normally
+              // This allows lists and other formatted content to be processed correctly
+              return false;
             }
             return false;
           },
@@ -118,6 +123,18 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     },
     [editorJson, editable]
   );
+
+  // Update editor editable state without recreating the editor
+  React.useEffect(() => {
+    if (editor && !isTransitioning) {
+      // Use microtask to defer the editable state change completely outside React's render cycle
+      // queueMicrotask(() => {
+      //   if (editor && !editor.isDestroyed) {
+      editor.setEditable(editable);
+      // }
+      // });
+    }
+  }, [editor, editable, isTransitioning]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
