@@ -151,16 +151,6 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   );
 }
 
-export function PdfZoom({ pdfSrc }: { pdfSrc: string }) {
-  const { src, onError } = useImageWithFallback(pdfSrc);
-
-  return (
-    <div className="relative w-[173px] overflow-hidden">
-      <iframe src={`${src}#toolbar=0`} onError={onError} className="h-full w-full rounded-lg" />
-    </div>
-  );
-}
-
 const blockImagePlaceholderImgs: Record<string, Record<'default' | 'hover', string>> = {
   avatar: {
     default: '/images/placeholders/Avatar_Default.svg',

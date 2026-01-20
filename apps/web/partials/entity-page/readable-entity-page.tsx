@@ -1,4 +1,5 @@
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import dynamic from 'next/dynamic';
 
 import * as React from 'react';
 
@@ -12,12 +13,16 @@ import { DataType, RenderableType } from '~/core/v2.types';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, PdfZoom } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+
+const PdfZoom = dynamic(() => import('../../design-system/editable-fields/pdf-preview'), {
+  ssr: false,
+});
 
 interface Props {
   id: string;
