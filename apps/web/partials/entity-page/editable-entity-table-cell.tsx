@@ -9,7 +9,7 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { PageStringField, TableImageField } from '~/design-system/editable-fields/editable-fields';
-import { ImageZoom, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
