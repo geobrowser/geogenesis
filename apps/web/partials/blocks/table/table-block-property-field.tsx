@@ -28,8 +28,9 @@ export function TableBlockPropertyField(props: {
   onChangeEntry: onChangeEntryFn;
   source: Source;
   disableLink?: boolean;
+  entityName?: string | null;
 }) {
-  const { spaceId, entityId, property, source, disableLink = false } = props;
+  const { spaceId, entityId, property, source, disableLink = false, entityName } = props;
   const isEditing = useUserIsEditing(props.spaceId);
   const isRelation = property.dataType === 'RELATION';
 
@@ -38,7 +39,7 @@ export function TableBlockPropertyField(props: {
       return (
         <div className="space-y-1">
           <div className="text-metadata text-grey-04">{property.name}</div>
-          <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} />
+          <EditableRelationsGroup entityId={entityId} spaceId={spaceId} property={property} disableLink={disableLink} entityName={entityName} />
         </div>
       );
     }
@@ -110,9 +111,10 @@ type EditableRelationsGroupProps = {
   entityId: string;
   property: Property;
   disableLink?: boolean;
+  entityName?: string | null;
 };
 
-function EditableRelationsGroup({ entityId, spaceId, property, disableLink = false }: EditableRelationsGroupProps) {
+function EditableRelationsGroup({ entityId, spaceId, property, disableLink = false, entityName }: EditableRelationsGroupProps) {
   const { storage } = useMutate();
 
   const typeOfId = property.id;
@@ -133,6 +135,7 @@ function EditableRelationsGroup({ entityId, spaceId, property, disableLink = fal
         imageRelation={relations[0]}
         spaceId={spaceId}
         entityId={entityId}
+        entityName={entityName}
         propertyId={property.id}
         propertyName={property.name ?? 'Image'}
       />

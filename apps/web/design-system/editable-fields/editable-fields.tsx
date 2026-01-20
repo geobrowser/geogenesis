@@ -3,7 +3,7 @@ import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
 import * as React from 'react';
-import { ChangeEvent, useRef } from 'react';
+import { ChangeEvent, useCallback, useRef } from 'react';
 
 import { useOptimisticValueWithSideEffect } from '~/core/hooks/use-debounced-value';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
@@ -310,9 +310,14 @@ export function TableImageField({
   const [isUploading, setIsUploading] = React.useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get the IPFS URL from the image entity's values
+  // For published data, toEntity.value contains the IPFS URL directly
+  // For unpublished data, toEntity.value contains the entity ID (UUID), not a URL
+  // We need to check if it's a valid image URL before using it
+  const directImageUrl = imageRelation?.toEntity.value;
+  const isValidImageUrl = directImageUrl && (directImageUrl.startsWith('ipfs://') || directImageUrl.startsWith('http'));
   const imageEntityId = imageRelation?.toEntity.id;
-  const imageSrc = useImageUrlFromEntity(imageEntityId, spaceId);
+  const lookedUpImageSrc = useImageUrlFromEntity(imageEntityId, spaceId);
+  const imageSrc = isValidImageUrl ? directImageUrl : lookedUpImageSrc;
 
   const handleFileInputClick = () => {
     if (fileInputRef.current) {
@@ -344,11 +349,11 @@ export function TableImageField({
     }
   };
 
-  const handleImageRemove = imageRelation
-    ? () => {
-        storage.relations.delete(imageRelation);
-      }
-    : undefined;
+  const handleImageRemove = useCallback(() => {
+    if (imageRelation) {
+      storage.relations.delete(imageRelation);
+    }
+  }, [imageRelation, storage.relations]);
 
   return (
     <div className="group flex w-full justify-between">

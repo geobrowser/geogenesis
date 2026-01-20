@@ -108,7 +108,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
 
   return relations.map(relation => {
     if (property.renderableTypeStrict === 'IMAGE') {
-      return <ImageRelation key={relation.id} linkedEntityId={relation.toEntity.id} spaceId={spaceId} />;
+      return <ImageRelation key={relation.id} linkedEntityId={relation.toEntity.id} directImageUrl={relation.toEntity.value} spaceId={spaceId} />;
     }
 
     const value = relation.toEntity.value;
@@ -131,9 +131,13 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
   });
 }
 
-function ImageRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; spaceId: string }) {
-  // Get the IPFS URL from the image entity's values
-  const imageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+function ImageRelation({ linkedEntityId, directImageUrl, spaceId }: { linkedEntityId: string; directImageUrl?: string | null; spaceId: string }) {
+  // For published data, directImageUrl (from toEntity.value) contains the IPFS URL directly
+  // For unpublished data, directImageUrl contains the entity ID (UUID), not a URL
+  // We need to check if it's a valid image URL before using it
+  const isValidImageUrl = directImageUrl && (directImageUrl.startsWith('ipfs://') || directImageUrl.startsWith('http'));
+  const lookedUpImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+  const imageSrc = isValidImageUrl ? directImageUrl : lookedUpImageSrc;
 
   return <ImageZoom variant="table-cell" imageSrc={imageSrc || ''} />;
 }
