@@ -25,7 +25,7 @@ import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { Create } from '~/design-system/icons/create';
@@ -552,13 +552,6 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
       )}
     </div>
   );
-}
-
-function ImageRelation({ relationValue, spaceId }: { relationValue: string; spaceId: string }) {
-  // Use the efficient hook to get only the image URL for this specific entity
-  const actualImageSrc = useImageUrlFromEntity(relationValue, spaceId);
-
-  return <ImageZoom imageSrc={actualImageSrc || ''} />;
 }
 
 function RenderedValue({
