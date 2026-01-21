@@ -10,7 +10,7 @@ import * as React from 'react';
 
 import { VIDEO_BLOCK_TYPE, VIDEO_URL_PROPERTY } from '~/core/constants';
 import { storage } from '~/core/sync/use-mutate';
-import { getValues } from '~/core/sync/use-store';
+import { getValues, useValues } from '~/core/sync/use-store';
 import { getImageHash, getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 import { Relation, RenderableEntityType } from '~/core/v2.types';
 
@@ -238,6 +238,12 @@ export function useEditorStore() {
     return blocks.flatMap(b => b.values);
   }, [initialBlocks, initialTabs, isTab, tabId]);
 
+  // Subscribe to markdown content changes for all text blocks.
+  // This ensures editorJson re-computes when text content is edited.
+  const markdownValues = useValues({
+    selector: value => blockIds.includes(value.entity.id) && value.property.id === SystemIds.MARKDOWN_CONTENT,
+  });
+
   /**
    * Tiptap expects a JSON representation of the editor state, but we store our block state
    * in a Knowledge Graph-specific data model. We need to map from our KG representation
@@ -247,15 +253,13 @@ export function useEditorStore() {
     const json = {
       type: 'doc',
       content: blockRelations.map(block => {
-        // @TODO(migration): We should be using the sync store to read all data for
-        // the app. We need to be able to pre-hydrate the store with values based
-        // on the data from the server or else the store won't have any data.
-        const markdownValuesForBlockId = getValues({
-          mergeWith: initialBlockValues,
-          selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.MARKDOWN_CONTENT,
-        });
-
-        const markdownValueForBlockId = markdownValuesForBlockId?.[0];
+        // Find the markdown value for this block. Prefer local (reactive) values over initial server values.
+        // Local values from markdownValues take precedence since they reflect user edits.
+        const markdownValueForBlockId =
+          markdownValues.find(v => v.entity.id === block.block.id) ??
+          initialBlockValues.find(
+            v => v.entity.id === block.block.id && v.property.id === SystemIds.MARKDOWN_CONTENT
+          );
         const relationForBlockId = blockRelations.find(r => r.block.id === block.block.id);
 
         const toEntity = relationForBlockId?.block;
@@ -338,7 +342,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockRelations, spaceId, initialBlockValues]);
+  }, [blockRelations, spaceId, initialBlockValues, markdownValues]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
