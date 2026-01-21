@@ -337,6 +337,7 @@ export function TableBlockListItem({
                     property={property}
                     onChangeEntry={onChangeEntry}
                     source={source}
+                    entityName={name}
                   />
                 </div>
               );
@@ -410,6 +411,7 @@ export function TableBlockListItem({
                 onChangeEntry={onChangeEntry}
                 source={source}
                 disableLink={true}
+                entityName={name}
               />
             </div>
           );

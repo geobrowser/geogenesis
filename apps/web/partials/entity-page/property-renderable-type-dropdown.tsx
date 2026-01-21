@@ -16,6 +16,7 @@ import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
+import { VideoSmall } from '~/design-system/icons/video-small';
 import { ColorName } from '~/design-system/theme/colors';
 
 interface Props {
@@ -30,11 +31,14 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   URL: Url,
   RELATION: Relation,
   IMAGE: Image,
+  VIDEO: VideoSmall,
   CHECKBOX: CheckboxChecked,
   NUMBER: Number,
   POINT: GeoLocation,
   GEO_LOCATION: GeoLocation,
   PLACE: GeoLocation,
+  // TODO update icon for PDF
+  PDF: Date,
 };
 
 export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Props) => {
@@ -54,8 +58,8 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
         // TEXT dataType can be rendered as TEXT, URL, or GEO_LOCATION
         return ['TEXT', 'URL', 'GEO_LOCATION'] as SwitchableRenderableType[];
       case 'RELATION':
-        // RELATION dataType can be rendered as RELATION or IMAGE
-        return ['RELATION', 'IMAGE'] as SwitchableRenderableType[];
+        // RELATION dataType can be rendered as RELATION, IMAGE, or VIDEO
+        return ['RELATION', 'IMAGE', 'VIDEO'] as SwitchableRenderableType[];
       case 'NUMBER':
         return ['NUMBER'] as SwitchableRenderableType[];
       case 'CHECKBOX':

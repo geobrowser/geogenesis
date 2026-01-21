@@ -1,6 +1,6 @@
 import { SystemIds } from '@graphprotocol/grc-20';
 
-import { GEO_LOCATION, PDF_TYPE } from '~/core/constants';
+import { GEO_LOCATION, PDF_TYPE, VIDEO_RENDERABLE_TYPE } from '~/core/constants';
 import { DataType as AppDataType, Property } from '~/core/v2.types';
 
 import { DataType, RemoteProperty } from '../v2/v2.schema';
@@ -25,6 +25,8 @@ export function getStrictRenderableType(renderableType: RemoteProperty['renderab
   switch (renderableType) {
     case SystemIds.IMAGE:
       return 'IMAGE';
+    case VIDEO_RENDERABLE_TYPE:
+      return 'VIDEO';
     case SystemIds.URL:
       return 'URL';
     case GEO_LOCATION:

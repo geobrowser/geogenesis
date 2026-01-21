@@ -17,6 +17,7 @@ import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
+import { VideoSmall } from '~/design-system/icons/video-small';
 import { ColorName } from '~/design-system/theme/colors';
 
 interface Props {
@@ -31,6 +32,7 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   URL: Url,
   RELATION: Relation,
   IMAGE: Image,
+  VIDEO: VideoSmall,
   CHECKBOX: CheckboxChecked,
   NUMBER: Number,
   POINT: GeoLocation,

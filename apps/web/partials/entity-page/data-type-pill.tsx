@@ -13,6 +13,7 @@ import { Number } from '~/design-system/icons/number';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
+import { VideoSmall } from '~/design-system/icons/video-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ColorName } from '~/design-system/theme/colors';
 
@@ -39,7 +40,10 @@ const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: Col
   RELATION: Relation,
   URL: Url,
   IMAGE: Image,
+  VIDEO: VideoSmall,
   GEO_LOCATION: GeoLocation,
+  // TODO update icon
+  PDF: Date,
 };
 
 export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = false }: DataTypePillProps) {

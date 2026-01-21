@@ -115,6 +115,14 @@ const Block = ({ block }: BlockProps) => {
       return <img src={block.attrs.src} alt="" />;
     }
 
+    case 'video': {
+      return (
+        <video src={block.attrs.src} controls className="h-auto w-full rounded-lg">
+          Your browser does not support the video tag.
+        </video>
+      );
+    }
+
     case 'tableNode': {
       return (
         <>

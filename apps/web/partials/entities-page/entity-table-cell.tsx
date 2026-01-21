@@ -4,6 +4,7 @@ import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
 import { useRelations, useValue } from '~/core/sync/use-store';
+import { useImageUrlFromEntity } from '~/core/utils/utils';
 import { Property } from '~/core/v2.types';
 
 import { LinkableRelationChip } from '~/design-system/chip';
@@ -107,8 +108,7 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
 
   return relations.map(relation => {
     if (property.renderableTypeStrict === 'IMAGE') {
-      const value = relation.toEntity.value;
-      return <ImageZoom key={value} variant="table-cell" imageSrc={value} />;
+      return <ImageRelation key={relation.id} linkedEntityId={relation.toEntity.id} directImageUrl={relation.toEntity.value} spaceId={spaceId} />;
     }
 
     const value = relation.toEntity.value;
@@ -129,6 +129,17 @@ function RelationGroup({ entityId, property, spaceId }: RelationGroupProps) {
       </LinkableRelationChip>
     );
   });
+}
+
+function ImageRelation({ linkedEntityId, directImageUrl, spaceId }: { linkedEntityId: string; directImageUrl?: string | null; spaceId: string }) {
+  // For published data, directImageUrl (from toEntity.value) contains the IPFS URL directly
+  // For unpublished data, directImageUrl contains the entity ID (UUID), not a URL
+  // We need to check if it's a valid image URL before using it
+  const isValidImageUrl = directImageUrl && (directImageUrl.startsWith('ipfs://') || directImageUrl.startsWith('http'));
+  const lookedUpImageSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+  const imageSrc = isValidImageUrl ? directImageUrl : lookedUpImageSrc;
+
+  return <ImageZoom variant="table-cell" imageSrc={imageSrc || ''} />;
 }
 
 type ValueGroupProps = {
