@@ -2,12 +2,14 @@
 
 import { ContentIds, IdUtils, Position, SystemIds } from '@graphprotocol/grc-20';
 import { useAtom } from 'jotai';
+
 import * as React from 'react';
 
 import {
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   IS_TYPE_PROPERTY,
+  PDF_TYPE,
   RENDERABLE_TYPE_PROPERTY,
   VALUE_TYPE_PROPERTY,
 } from '~/core/constants';
@@ -26,9 +28,17 @@ import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableMediaChip, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom, PageImageField, PageStringField, PageVideoField, VideoPlayer } from '~/design-system/editable-fields/editable-fields';
+import {
+  ImageZoom,
+  PageImageField,
+  PageStringField,
+  PageVideoField,
+  PdfField,
+  VideoPlayer,
+} from '~/design-system/editable-fields/editable-fields';
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
+import PdfZoom from '~/design-system/editable-fields/pdf-preview';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { InputPlace } from '~/design-system/input-address';
@@ -221,7 +231,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   });
 
   // For IMAGE properties, get the image URL from related image entities
-  const imageRelation = relations.find(r => r.renderableType === 'IMAGE');
+  const imageRelation = relations.find(r => r.renderableType === 'IMAGE' || r.renderableType === 'PDF');
   const imageEntityId = imageRelation?.toEntity.id;
 
   // Use the efficient hook to get only the image URL for this specific entity
@@ -328,6 +338,23 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
                   spaceId,
                 });
               }}
+            />
+          </div>
+        ) : property.renderableTypeStrict === 'PDF' ? (
+          <div key="relation-upload-pdf">
+            <PdfField
+              imageSrc={imageSrc}
+              onFileChange={async file => {
+                await storage.pdfs.createAndLink({
+                  file,
+                  fromEntityId: id,
+                  fromEntityName: name,
+                  relationPropertyId: propertyId,
+                  relationPropertyName: typeOfName,
+                  spaceId,
+                });
+              }}
+              onImageRemove={() => console.log(`remove`)}
             />
           </div>
         ) : propertyId === VENUE_PROPERTY ? (
@@ -477,42 +504,62 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   const firstRelation = relations[0];
 
   // Determine file accept type for upload
-  const fileAccept = property.renderableTypeStrict === 'VIDEO'
-    ? 'video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/webm,video/x-flv'
-    : 'image/png,image/jpeg';
+  const fileAccept =
+    property.renderableTypeStrict === 'VIDEO'
+      ? 'video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv,video/webm,video/x-flv'
+      : 'image/png,image/jpeg';
 
   return (
     <div className="flex flex-wrap items-center gap-1 pr-1">
       {/* Hidden file input for upload */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept={fileAccept}
-        onChange={handleFileInputChange}
-        className="hidden"
-      />
+      <input ref={fileInputRef} type="file" accept={fileAccept} onChange={handleFileInputChange} className="hidden" />
 
-      {property.renderableTypeStrict === 'IMAGE' ? (
+      {property.renderableTypeStrict === 'IMAGE' || property.renderableTypeStrict === 'PDF' ? (
         relations.map(r => {
           const relationId = r.id;
           const relationValue = r.toEntity.id;
 
-          return (
-            <ImageRelationChipWrapper
-              key={`relation-${relationId}-${relationValue}`}
-              relation={r}
-              spaceId={spaceId}
-              isUploading={isUploading}
-              onDelete={() => storage.relations.delete(r)}
-              onDone={result => {
-                storage.relations.update(r, draft => {
-                  draft.toSpaceId = result.space;
-                  draft.verified = result.verified;
-                });
-              }}
-              onUpload={triggerFileUpload}
-            />
-          );
+          if (property.renderableTypeStrict === 'IMAGE') {
+            return (
+              <ImageRelationChipWrapper
+                key={`relation-${relationId}-${relationValue}`}
+                relation={r}
+                spaceId={spaceId}
+                isUploading={isUploading}
+                onDelete={() => storage.relations.delete(r)}
+                onDone={result => {
+                  storage.relations.update(r, draft => {
+                    draft.toSpaceId = result.space;
+                    draft.verified = result.verified;
+                  });
+                }}
+                onUpload={triggerFileUpload}
+              />
+            );
+          } else {
+            return (
+              <div key={`relation-${relationId}-${relationValue}`}>
+                <LinkableRelationChip
+                  isEditing
+                  onDelete={() => storage.relations.delete(r)}
+                  onDone={result => {
+                    storage.relations.update(r, draft => {
+                      draft.toSpaceId = result.space;
+                      draft.verified = result.verified;
+                    });
+                  }}
+                  currentSpaceId={spaceId}
+                  entityId={relationValue}
+                  relationId={relationId}
+                  relationEntityId={r.entityId}
+                  spaceId={r.toSpaceId}
+                  verified={r.verified}
+                >
+                  {relationValue}
+                </LinkableRelationChip>
+              </div>
+            );
+          }
         })
       ) : property.renderableTypeStrict === 'VIDEO' ? (
         relations.map(r => {

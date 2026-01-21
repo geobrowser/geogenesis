@@ -1,7 +1,14 @@
 import { Graph, Position, SystemIds } from '@graphprotocol/grc-20';
 import { Draft, produce } from 'immer';
 
-import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY, VIDEO_TYPE, VIDEO_URL_PROPERTY } from '../constants';
+import {
+  DATA_TYPE_PROPERTY,
+  PDF_TYPE,
+  PDF_URL,
+  RENDERABLE_TYPE_PROPERTY,
+  VIDEO_TYPE,
+  VIDEO_URL_PROPERTY,
+} from '../constants';
 import { ID } from '../id';
 import { OmitStrict } from '../types';
 import { DataType, Relation, Value } from '../v2.types';
@@ -75,6 +82,16 @@ export interface Mutator {
       relationPropertyName: string | null;
       spaceId: string;
     }) => Promise<{ videoId: string; relationId: string }>;
+  };
+  pdfs: {
+    createAndLink: (params: {
+      file: File;
+      fromEntityId: string;
+      fromEntityName?: string | null;
+      relationPropertyId: string;
+      relationPropertyName: string | null;
+      spaceId: string;
+    }) => Promise<{ imageId: string; relationId: string }>;
   };
   setAsPublished: (valueIds: string[], relationIds: string[]) => void;
 }
@@ -448,6 +465,99 @@ function createMutator(store: GeoStore): Mutator {
         });
 
         return { videoId, relationId };
+      },
+    },
+    pdfs: {
+      createAndLink: async ({
+        file,
+        fromEntityId,
+        fromEntityName,
+        relationPropertyId,
+        relationPropertyName,
+        spaceId,
+      }) => {
+        // Create the image entity using the Graph API
+        // Use TESTNET network to upload to Pinata via alternative gateway
+        const { id: pdfId, ops: createImageOps } = await Graph.createImage({
+          blob: file,
+          network: 'TESTNET',
+        });
+
+        // Process the operations returned by Graph.createImage
+        for (const op of createImageOps) {
+          if (op.type === 'CREATE_RELATION') {
+            store.setRelation({
+              id: op.relation.id,
+              entityId: op.relation.entity,
+              fromEntity: {
+                id: op.relation.fromEntity,
+                name: null,
+              },
+              type: {
+                id: op.relation.type,
+                name: 'PDF',
+              },
+              toEntity: {
+                id: PDF_TYPE,
+                name: 'PDF',
+                value: PDF_TYPE,
+              },
+              spaceId,
+              position: Position.generate(),
+              verified: false,
+              renderableType: 'RELATION',
+            });
+          } else if (op.type === 'UPDATE_ENTITY') {
+            // Create values for each property in the entity update
+            for (const value of op.entity.values) {
+              store.setValue({
+                id: ID.createValueId({
+                  entityId: op.entity.id,
+                  propertyId: PDF_URL,
+                  spaceId,
+                }),
+                entity: {
+                  id: op.entity.id,
+                  name: null,
+                },
+                property: {
+                  id: PDF_URL,
+                  name: 'PDF Property',
+                  dataType: 'TEXT',
+                  renderableType: 'URL',
+                },
+                spaceId,
+                value: value.value,
+              });
+            }
+          }
+        }
+
+        // Create relation from parent entity to image entity
+        const relationId = ID.createEntityId();
+        store.setRelation({
+          id: relationId,
+          entityId: ID.createEntityId(),
+          fromEntity: {
+            id: fromEntityId,
+            name: fromEntityName || '',
+          },
+          type: {
+            id: relationPropertyId,
+            name: relationPropertyName || '',
+          },
+          toEntity: {
+            id: pdfId,
+            name: null,
+            value: pdfId,
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'PDF',
+        });
+
+        return { imageId: pdfId, relationId };
       },
     },
     setAsPublished: (valueIds, relationIds) => {

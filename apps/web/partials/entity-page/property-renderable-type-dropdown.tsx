@@ -37,6 +37,8 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   POINT: GeoLocation,
   GEO_LOCATION: GeoLocation,
   PLACE: GeoLocation,
+  // TODO update icon for PDF
+  PDF: Date,
 };
 
 export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Props) => {

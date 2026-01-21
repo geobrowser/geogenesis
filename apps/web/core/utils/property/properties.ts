@@ -4,6 +4,7 @@ import {
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   GEO_LOCATION,
+  PDF_TYPE,
   PLACE,
   RENDERABLE_TYPE_PROPERTY,
   UNIT_PROPERTY,
@@ -84,6 +85,11 @@ export function mapPropertyType(type: SwitchableRenderableType): PropertyTypeMap
         baseDataType: 'RELATION',
         renderableTypeId: PLACE,
       };
+    case 'PDF':
+      return {
+        baseDataType: 'RELATION',
+        renderableTypeId: PDF_TYPE,
+      };
     default: {
       // This ensures exhaustive type checking
       const _exhaustiveCheck: never = type;
@@ -111,6 +117,7 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
   POINT: 'POINT',
   GEO_LOCATION: 'POINT',
   PLACE: 'RELATION',
+  PDF: 'RELATION',
 } as const;
 
 /**

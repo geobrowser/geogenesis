@@ -1,5 +1,5 @@
 export type DataType = 'TEXT' | 'NUMBER' | 'CHECKBOX' | 'TIME' | 'POINT' | 'RELATION';
-export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION'; // GEO_LOCATION needs to be migrated to SDK
+export type RenderableType = 'IMAGE' | 'VIDEO' | 'URL' | 'GEO_LOCATION' | 'PDF'; // GEO_LOCATION needs to be migrated to SDK
 export type RawRenderableType = string; // UUIDs of renderable types
 
 export type Property = {
@@ -104,7 +104,7 @@ export type Entity = {
 
 export type EntityWithSchema = Entity & { schema: Property[] };
 
-export type RenderableEntityType = 'IMAGE' | 'VIDEO' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT';
+export type RenderableEntityType = 'IMAGE' | 'VIDEO' | 'RELATION' | 'DATA' | 'TEXT' | 'POINT' | 'PDF';
 
 // Renderable fields are a special data model to represent us rendering both
 // triples and relations in the same way. This is used across tables and entity
@@ -123,6 +123,7 @@ export type FlattenedRenderType =
   | 'GEO_LOCATION'
   | 'RELATION'
   | 'IMAGE'
+  | 'PDF'
   | 'VIDEO';
 
 // The types of renderables don't map 1:1 to the triple value types. We might
@@ -139,7 +140,8 @@ export type SwitchableRenderableType =
   | 'NUMBER'
   | 'POINT'
   | 'GEO_LOCATION'
-  | 'PLACE';
+  | 'PLACE'
+  | 'PDF';
 
 /**
  * Human-readable labels for switchable renderable types
@@ -156,6 +158,7 @@ export const SWITCHABLE_RENDERABLE_TYPE_LABELS: Record<SwitchableRenderableType,
   POINT: 'Point',
   GEO_LOCATION: 'Geo Location',
   PLACE: 'Place',
+  PDF: 'PDF',
 };
 
 export type SearchResult = {

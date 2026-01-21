@@ -1,4 +1,5 @@
 import { ContentIds, SystemIds } from '@graphprotocol/grc-20';
+import dynamic from 'next/dynamic';
 
 import * as React from 'react';
 
@@ -18,6 +19,10 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Map } from '~/design-system/map';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+
+const PdfZoom = dynamic(() => import('../../design-system/editable-fields/pdf-preview'), {
+  ssr: false,
+});
 
 interface Props {
   id: string;
@@ -208,6 +213,17 @@ export function RelationsGroup({
               );
             }
 
+            if (property.renderableTypeStrict === 'PDF') {
+              return (
+                <PdfRelation
+                  key={`image-${relationId}-${linkedEntityId}`}
+                  linkedEntityId={linkedEntityId}
+                  relationId={relationId}
+                  spaceId={spaceId}
+                />
+              );
+            }
+
             return (
               <div key={`relation-${relationId}-${linkedEntityId}`} className="mt-1">
                 <LinkableRelationChip
@@ -261,6 +277,12 @@ function VideoRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; re
   }
 
   return <VideoThumbnailWithPlay videoSrc={actualVideoSrc} />;
+}
+
+function PdfRelation({ linkedEntityId, spaceId }: { linkedEntityId: string; relationId: string; spaceId: string }) {
+  const actualPdfSrc = useImageUrlFromEntity(linkedEntityId, spaceId);
+
+  return <PdfZoom pdfSrc={actualPdfSrc || ''} />;
 }
 
 function RenderedValue({

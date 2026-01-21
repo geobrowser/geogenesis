@@ -42,6 +42,8 @@ const TYPE_ICONS: Record<UppercaseDisplayType, React.ComponentType<{ color?: Col
   IMAGE: Image,
   VIDEO: VideoSmall,
   GEO_LOCATION: GeoLocation,
+  // TODO update icon
+  PDF: Date,
 };
 
 export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = false }: DataTypePillProps) {
